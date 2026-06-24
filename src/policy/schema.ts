@@ -29,6 +29,7 @@ import parseSpdx from "spdx-expression-parse";
 import { orLeaves, type ExpressionNode } from "../normalize/expression";
 import { PolicyRoot, TOP_LEVEL_KEYS } from "../validate/policy";
 import { recordOf, stringOf } from "../validate/record";
+import { BUILTIN_DENY_RULES } from "./builtinDenylist";
 import type { DenyRule } from "./denylist";
 
 export type { DenyRule } from "./denylist";
@@ -143,6 +144,18 @@ export interface DockerConfig {
   ignore: ReadonlyArray<string>;
 }
 
+/**
+ * One [[allow_source_available]] exemption (ADR-0021): a built-in
+ * source-available licence the consumer has explicitly, auditably accepted, so it
+ * surfaces as a warn instead of failing the gate by default.
+ */
+export interface AllowSourceAvailable {
+  /** A built-in source-available SPDX id (BUSL-1.1, SSPL-1.0, Elastic-2.0). */
+  license: string;
+  /** Mandatory documentation: why this source-available licence is accepted. */
+  reason: string;
+}
+
 export interface Policy {
   /** Default "warn" when the [unknown] table is absent. */
   unknownHandling: "warn" | "fail";
@@ -159,6 +172,13 @@ export interface Policy {
    * [[deny]] table yields [].
    */
   deny: ReadonlyArray<DenyRule>;
+  /**
+   * Per-licence exemptions from the shipped source-available deny defaults
+   * (ADR-0021). A listed licence is no longer force-failed by the default — the
+   * package surfaces as a WARN citing the exemption, never silently. Does NOT
+   * affect a consumer's own [[deny]] (an explicit deny still wins). Absent → [].
+   */
+  allowSourceAvailable: ReadonlyArray<AllowSourceAvailable>;
   /**
    * Author-supplied document presentation (07-09). Absent [document] table
    * yields undefined; an empty [document] yields {} (both keys optional).
@@ -677,6 +697,53 @@ function validateDeny(
   return deny;
 }
 
+/** The shipped source-available licence ids — the only ones an exemption may name. */
+const BUILTIN_DENY_PATTERNS: ReadonlyArray<string> = BUILTIN_DENY_RULES.filter(
+  (rule) => rule.match === "license",
+).map((rule) => rule.pattern);
+
+/**
+ * Parse [[allow_source_available]] (ADR-0021 opt-out): each entry exempts ONE
+ * built-in source-available licence from the shipped deny default. `license` must
+ * be one of the shipped patterns (a consumer's own [[deny]] is absolute and not
+ * exempted here); `reason` is mandatory documentation. An absent table yields [].
+ */
+function validateAllowSourceAvailable(
+  root: Record<string, unknown>,
+  problems: string[],
+): AllowSourceAvailable[] {
+  const exemptions: AllowSourceAvailable[] = [];
+  const raw = root["allow_source_available"];
+  if (raw === undefined) return exemptions;
+  if (!Array.isArray(raw)) {
+    problems.push(
+      "allow_source_available: must be an array of tables ([[allow_source_available]])",
+    );
+    return exemptions;
+  }
+  raw.forEach((rawEntry, index) => {
+    const where = `allow_source_available[${index}]`;
+    const entry = recordOf(rawEntry);
+    if (entry === undefined) {
+      problems.push(`${where}: must be a table`);
+      return;
+    }
+    checkKeys(entry, ["license", "reason"], where, problems);
+    const license = requireText(entry, "license", where, problems);
+    const reason = requireText(entry, "reason", where, problems);
+    if (license !== undefined && !BUILTIN_DENY_PATTERNS.includes(license)) {
+      problems.push(
+        `${where}: license "${license}" is not a built-in source-available default — only ${BUILTIN_DENY_PATTERNS.join(", ")} can be exempted (a consumer's own [[deny]] is absolute and not exempted here)`,
+      );
+      return;
+    }
+    if (license !== undefined && reason !== undefined) {
+      exemptions.push({ license, reason });
+    }
+  });
+  return exemptions;
+}
+
 function validateUnknown(
   root: Record<string, unknown>,
   problems: string[],
@@ -796,6 +863,7 @@ export function parsePolicy(text: string): Policy {
   const osDependencies = validateOsDependencies(root, problems);
   const document = validateDocument(root, problems);
   const docker = validateDocker(root, problems);
+  const allowSourceAvailable = validateAllowSourceAvailable(root, problems);
 
   if (problems.length > 0) throw new PolicyError(problems);
   return {
@@ -806,6 +874,7 @@ export function parsePolicy(text: string): Policy {
     compatible,
     clarify,
     deny,
+    allowSourceAvailable,
     ...(document !== undefined ? { document } : {}),
     ...(docker !== undefined ? { docker } : {}),
   };

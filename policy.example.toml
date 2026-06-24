@@ -301,3 +301,22 @@ handling = "warn"
 
 [os_dependencies]
 handling = "warn"
+
+# ---------------------------------------------------------------------------
+# Exempting a built-in source-available deny (ADR-0022)
+#
+# BUSL-1.1, SSPL-1.0, and Elastic-2.0 are DENIED BY DEFAULT. If you have a
+# legitimate, reviewed reason to ship one anyway -- an internal-only build tool
+# that is never redistributed, or a component you hold a separate licence for --
+# list it here. The package then SURFACES AS A WARNING (visible, non-gating)
+# instead of failing, so the accepted source-available licence never silently
+# passes review. `reason` is mandatory: it is the audit trail.
+#
+# Scope: only the built-in defaults can be exempted. A licence YOU deny via
+# [[deny]] is absolute and is never softened here, and a non-default licence is
+# rejected (exempting something that was never denied by default is a mistake).
+# ---------------------------------------------------------------------------
+
+# [[allow_source_available]]
+# license = "BUSL-1.1"
+# reason = "Used only in the internal release tool that is never shipped to clients; reviewed and accepted by legal on 2026-06-24."

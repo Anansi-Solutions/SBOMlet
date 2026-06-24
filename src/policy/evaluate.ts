@@ -73,6 +73,7 @@ import {
   renderNode,
   type ExpressionNode,
 } from "../normalize/expression";
+import { BUILTIN_DENY_RULE_ID } from "./builtinDenylist";
 import { COPYLEFT_FAMILY } from "./copyleft";
 import {
   COULD_BE_COPYLEFT_FAMILIES,
@@ -547,6 +548,66 @@ function denyVerdict(
 }
 
 /**
+ * Source-available exemption (ADR-0021). When the terminal-0 deny that matched is
+ * a SHIPPED source-available default (cited default:source-available — NOT the
+ * consumer's own [[deny]]) AND the consumer listed that licence under
+ * [[allow_source_available]], the package is NOT force-failed: it surfaces as a
+ * WARN citing the exemption, so an accepted source-available licence stays visible
+ * rather than silently passing. An explicit [[deny]] still wins — denyRuleFor
+ * attributes a policy deny first (policy-first order), so denyRule is never the
+ * builtin id when the consumer also denied the licence themselves.
+ */
+function sourceAvailableExemption(
+  policy: Policy,
+  denyRule: IndexedDenyRule,
+): { index: number; license: string; reason: string } | undefined {
+  if (
+    denyRule.ruleId !== BUILTIN_DENY_RULE_ID ||
+    denyRule.rule.match !== "license"
+  ) {
+    return undefined;
+  }
+  const license = denyRule.rule.pattern;
+  const index = policy.allowSourceAvailable.findIndex(
+    (entry) => entry.license === license,
+  );
+  if (index === -1) return undefined;
+  return { index, license, reason: policy.allowSourceAvailable[index]!.reason };
+}
+
+/** Warn verdict for an exempted source-available licence (ADR-0021). */
+function exemptionVerdict(
+  base: { purl: string; occurrenceTarget: string },
+  exemption: { index: number; license: string; reason: string },
+): Verdict {
+  return {
+    ...base,
+    status: "warn",
+    rule: `allow_source_available[${exemption.index}]`,
+    reason:
+      `source-available license "${exemption.license}" is ALLOWED by an ` +
+      `explicit policy exemption: ${exemption.reason} — surfaced as a warning ` +
+      `because it is source-available and would otherwise fail by default.`,
+  };
+}
+
+/**
+ * Terminal-0 verdict for a matched deny: a force-fail, UNLESS the match is a
+ * shipped source-available default the consumer exempted (ADR-0021), which
+ * surfaces as a warn instead. An explicit [[deny]] is never the builtin id (it is
+ * attributed first), so this never softens a deny the consumer authored.
+ */
+function denyOrExemptVerdict(
+  base: { purl: string; occurrenceTarget: string },
+  policy: Policy,
+  denyRule: IndexedDenyRule,
+): Verdict {
+  const exemption = sourceAvailableExemption(policy, denyRule);
+  if (exemption !== undefined) return exemptionVerdict(base, exemption);
+  return denyVerdict(base, denyRule);
+}
+
+/**
  * Default:unknown verdict for a null-expression finding. The dev-scope
  * downgrade applies ONLY to a would-be FAIL: a default:unknown already "warn"
  * (unknownHandling="warn") is non-gating and is never downgraded.
@@ -581,8 +642,12 @@ function verdictFor(
   const target = occurrence.target;
   const base = { purl: entry.purl, occurrenceTarget: target };
 
-  // Terminal-0: a denied license/rider can never be licensed back in.
-  if (denyRule !== undefined) return denyVerdict(base, denyRule);
+  // Terminal-0: a denied license/rider can never be licensed back in — UNLESS the
+  // matched deny is a shipped source-available default the consumer exempted via
+  // [[allow_source_available]] (ADR-0021), which surfaces as a warn instead.
+  if (denyRule !== undefined) {
+    return denyOrExemptVerdict(base, policy, denyRule);
+  }
 
   const stale = entry.finding?.staleOverride;
   if (stale !== undefined) return staleVerdict(base, entry, stale);

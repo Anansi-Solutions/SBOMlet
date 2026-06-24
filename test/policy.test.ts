@@ -2825,3 +2825,76 @@ describe("[docker] ignore parsing", () => {
     expect(err.problems.some((p) => p.includes("bogus"))).toBe(true);
   });
 });
+
+describe("evaluate — [[allow_source_available]] exemption (ADR-0021 opt-out)", () => {
+  const exemptBusl = [
+    "[[allow_source_available]]",
+    'license = "BUSL-1.1"',
+    'reason = "internal-only build tool, never redistributed; counsel-approved"',
+  ].join("\n");
+
+  test("an exempted source-available license WARNS (allowed), not fail", () => {
+    const { verdicts } = runEngine(
+      [pkgSpec("busl-pkg", "BUSL-1.1", ["backend"])],
+      exemptBusl,
+    );
+    expect(verdicts[0].status).toBe("warn");
+    expect(verdicts[0].rule).toBe("allow_source_available[0]");
+  });
+
+  test("a non-exempted source-available license still FAILS by default", () => {
+    const { verdicts } = runEngine(
+      [pkgSpec("sspl-pkg", "SSPL-1.0", ["backend"])],
+      exemptBusl,
+    );
+    expect(verdicts[0].status).toBe("fail");
+    expect(verdicts[0].rule).toBe("default:source-available");
+  });
+
+  test("an explicit [[deny]] wins over an exemption (the consumer's own choice)", () => {
+    const policyText = [
+      "[[deny]]",
+      'match = "license"',
+      'pattern = "BUSL-1.1"',
+      'reason = "we deny it regardless of the default"',
+      "",
+      exemptBusl,
+    ].join("\n");
+    const { verdicts } = runEngine(
+      [pkgSpec("busl-pkg", "BUSL-1.1", ["backend"])],
+      policyText,
+    );
+    expect(verdicts[0].status).toBe("fail");
+    expect(verdicts[0].rule).toBe("denied[0]");
+  });
+});
+
+describe("policy — [[allow_source_available]] validation", () => {
+  test("rejects a licence that is not a built-in source-available default", () => {
+    const error = expectPolicyError(
+      ["[[allow_source_available]]", 'license = "MIT"', 'reason = "x"'].join(
+        "\n",
+      ),
+    );
+    expect(error.message).toContain("not a built-in source-available default");
+  });
+
+  test("rejects a missing reason", () => {
+    const error = expectPolicyError(
+      ["[[allow_source_available]]", 'license = "BUSL-1.1"'].join("\n"),
+    );
+    expect(error.message).toContain('missing required key "reason"');
+  });
+
+  test("accepts a valid exemption", () => {
+    expect(() =>
+      parsePolicy(
+        [
+          "[[allow_source_available]]",
+          'license = "BUSL-1.1"',
+          'reason = "internal-only tool"',
+        ].join("\n"),
+      ),
+    ).not.toThrow();
+  });
+});

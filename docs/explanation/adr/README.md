@@ -54,3 +54,4 @@ summaries and research notes.
 | [0019](0019-adoption-git-clone-taskfile.md) | Adoption by git clone + Taskfile include; single-binary deferred | Accepted |
 | [0020](0020-distribution-git-bun.md) | Distribution stays git + Taskfile + mise-pinned bun; compiled binary declined | Accepted |
 | [0021](0021-source-available-deny-defaults.md) | Source-available licences ship as deny defaults | Accepted |
+| [0022](0022-source-available-opt-out.md) | Opting out of a source-available deny via [[allow_source_available]] | Accepted |

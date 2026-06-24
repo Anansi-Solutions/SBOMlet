@@ -19,6 +19,7 @@ const EMPTY_POLICY: Policy = {
   compatible: [],
   clarify: [],
   deny: [],
+  allowSourceAvailable: [],
 };
 
 // The same spdx-license-ids data spdx-expression-parse matches against — a typo

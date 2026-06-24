@@ -83,7 +83,16 @@ An array of tables. Each entry force-fails any matching package in any
 occurrence, ranking above dev/OS scope, above compatible, above suppression, and
 above a stale clarify. This is the lane for a
 [source-available](../glossary.md#source-available) licence or a use-restriction
-rider that can never ship. Absent table: no denies.
+rider that can never ship.
+
+**Shipped defaults.** BUSL-1.1, SSPL-1.0, and Elastic-2.0 are denied by default —
+they ship with the tool
+([ADR-0021](../explanation/adr/0021-source-available-deny-defaults.md)), so every
+repository denies them without authoring an entry here. This table ADDS to that
+set: a default-denied licence is cited `default:source-available`, a licence you
+list is cited `denied[i]`. To ALLOW a default-denied licence for a reviewed
+exception, see [`[[allow_source_available]]`](#allow_source_available). Absent
+table: only the shipped defaults apply.
 
 Exactly one of two match modes per entry.
 
@@ -106,6 +115,24 @@ rides alongside another licence (`MIT AND Commons-Clause`) and is not a
 parseable SPDX value, and a licence like RSAL has no registered id at all. Name
 mode matches the package by exact name, so it catches these even on a package
 whose finding is unknown.
+
+## `[[allow_source_available]]`
+
+An array of tables. Each entry exempts ONE built-in source-available licence from
+the [shipped deny defaults](#deny) for a reviewed exception — an internal-only tool
+that is never redistributed, or a component you hold a separate licence for. The
+package then surfaces as a **warn** (visible, non-gating) citing the exemption,
+rather than failing, so an accepted source-available licence never silently passes
+review.
+
+| Field | Type | Required | Meaning |
+|-------|------|----------|---------|
+| `license` | string | yes | One of the built-in defaults — `BUSL-1.1`, `SSPL-1.0`, `Elastic-2.0`. Any other id is rejected. |
+| `reason` | string (non-empty) | yes | Why this source-available licence is accepted — the audit trail. |
+
+The exemption is scoped to the defaults only. A licence you deny yourself via
+`[[deny]]` is absolute and is never softened here — an explicit deny still wins.
+See [ADR-0022](../explanation/adr/0022-source-available-opt-out.md).
 
 ## `[[clarify]]`
 
