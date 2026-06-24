@@ -9,6 +9,7 @@ import {
   type BuiltinOverrideInput,
 } from "../src/normalize/normalize";
 import { evaluate, unusedRuleIds } from "../src/policy/evaluate";
+import { BUILTIN_DENY_RULES } from "../src/policy/builtinDenylist";
 import { denyRuleFor } from "../src/policy/denylist";
 import {
   COULD_BE_COPYLEFT_FAMILIES,
@@ -2384,10 +2385,10 @@ describe("policy.example.toml — the shipped [[deny]] block (POL-09)", () => {
   );
   const examplePolicy = parsePolicy(exampleText);
 
-  test("ships the source-available set BUSL-1.1, SSPL-1.0, Elastic-2.0", () => {
-    const licensePatterns = examplePolicy.deny
-      .filter((r) => r.match === "license")
-      .map((r) => r.pattern);
+  test("ships the source-available set BUSL-1.1, SSPL-1.0, Elastic-2.0 as built-in defaults", () => {
+    const licensePatterns = BUILTIN_DENY_RULES.filter(
+      (r) => r.match === "license",
+    ).map((r) => r.pattern);
     for (const id of ["BUSL-1.1", "SSPL-1.0", "Elastic-2.0"]) {
       expect(licensePatterns.some((p) => p.includes(id))).toBe(true);
     }
