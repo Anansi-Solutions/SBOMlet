@@ -1,0 +1,53 @@
+name: SBOMlet
+description: Generate or gate a third-party licence inventory (SBOM) for the repository.
+branding:
+  icon: shield
+  color: green
+
+inputs:
+  mode:
+    description: "`check` to gate the committed inventory (default), or `generate` to write it."
+    required: false
+    default: check
+  policy:
+    description: "Path to the policy.toml, relative to the repo root. Omit for an inventory with no gate."
+    required: false
+    default: policy.toml
+
+runs:
+  using: composite
+  steps:
+    # Installs the toolchain SBOMlet pins in its own mise.toml (bun + syft). mise
+    # is then on PATH; the SBOMlet steps below resolve the pinned bun from the
+    # action's directory, independent of whatever the consumer's repo pins.
+    - name: Set up the SBOMlet toolchain
+      uses: jdx/mise-action@v4
+
+    - name: Install SBOMlet
+      shell: bash
+      working-directory: ${{ github.action_path }}
+      run: |
+        mise install
+        mise x -- bun install --frozen-lockfile
+
+    # Inputs flow in through the ENVIRONMENT, never template interpolation, so a
+    # value can never ride into shell parsing (the same data-only posture as the
+    # Taskfile). --policy is added only when the file exists.
+    - name: Run SBOMlet
+      shell: bash
+      working-directory: ${{ github.action_path }}
+      env:
+        SBOMLET_MODE: ${{ inputs.mode }}
+        SBOMLET_POLICY: ${{ inputs.policy }}
+        SBOMLET_WS: ${{ github.workspace }}
+      run: |
+        args=(
+          --base-dir "$SBOMLET_WS"
+          --repo-root "$SBOMLET_WS"
+          --output "$SBOMLET_WS/THIRD_PARTY_LICENSES.md"
+          --notices "$SBOMLET_WS/THIRD_PARTY_NOTICES.md"
+        )
+        if [ -n "$SBOMLET_POLICY" ] && [ -f "$SBOMLET_WS/$SBOMLET_POLICY" ]; then
+          args+=(--policy "$SBOMLET_WS/$SBOMLET_POLICY")
+        fi
+        mise x -- bun src/cli.ts "$SBOMLET_MODE" "${args[@]}"

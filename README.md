@@ -110,6 +110,27 @@ output, wiring CI — is in [getting-started](docs/getting-started.md). For a re
 configured example, see
 [`examples/crt25-collimator-policy.toml`](examples/crt25-collimator-policy.toml).
 
+## GitHub Action
+
+For one-line CI, use the composite action instead of wiring the Taskfile yourself —
+it sets up the toolchain, installs SBOMlet, and runs the gate against your checkout:
+
+```yaml
+# .github/workflows/licences.yml
+on: [push, pull_request]
+jobs:
+  licences:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: Anansi-Solutions/SBOMlet@main # pin a tag or SHA in production
+        with:
+          policy: policy.toml
+```
+
+Pass `mode: generate` to write the inventory instead of gating it. The action runs
+the same `mise + bun` pipeline as the Taskfile path — pick whichever fits your CI.
+
 ## Supported ecosystems
 
 | Ecosystem | Read from |

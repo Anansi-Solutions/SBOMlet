@@ -1,0 +1,32 @@
+name: Action
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Dogfood the composite action end-to-end: run it in `generate` mode against this
+# repository's own lockfile and assert it produced an inventory. This is the only
+# place the action.yml is exercised, so it gates changes to the action.
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Run the SBOMlet action (generate)
+        uses: ./
+        with:
+          mode: generate
+
+      - name: Assert the inventory and notices were written
+        shell: bash
+        run: |
+          test -s THIRD_PARTY_LICENSES.md
+          test -s THIRD_PARTY_NOTICES.md
+          echo "--- THIRD_PARTY_LICENSES.md (head) ---"
+          head -20 THIRD_PARTY_LICENSES.md
