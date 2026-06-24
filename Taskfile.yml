@@ -139,3 +139,13 @@ tasks:
       LT_ADR_TITLE: '{{.TITLE | default ""}}'
     cmds:
       - mise x -- bun scripts/new-adr.ts
+
+  install:
+    desc: Install dependencies from the committed lockfile (CI-safe)
+    cmds:
+      - mise x -- bun install --frozen-lockfile
+
+  test:
+    desc: Run the test suite
+    cmds:
+      - mise x -- bun test
