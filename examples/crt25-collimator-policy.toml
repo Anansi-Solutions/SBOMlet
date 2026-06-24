@@ -1,0 +1,57 @@
+# Example SBOMlet policy for the open-source Collimator monorepo:
+#   https://github.com/crt25/collimator
+#
+# Collimator is a yarn-workspaces monorepo (backend, frontend, apps/*,
+# libraries/*, e2e) with Python notebooks, Terraform, and Docker images. This is
+# a realistic starting point — copy it to policy.toml at the repo root and adjust
+# as the dependency set evolves. See policy.example.toml for the fully annotated
+# schema and every available knob.
+
+[document]
+title = "Collimator — Third-Party Licenses"
+
+# --- Source-available denies (terminal, highest precedence) ---------------------
+# These licences are source-available, not open source: they can never appear in a
+# distributed third-party set. A [[deny]] force-fails regardless of scope or any
+# accept lever below. Generic across repositories — keep them as a baseline.
+
+[[deny]]
+match = "license"
+pattern = "BUSL-1.1"
+reason = "Business Source License 1.1 is source-available, not open source — it forbids production/competing use until the change date and can never ship in a distributed inventory."
+
+[[deny]]
+match = "license"
+pattern = "SSPL-1.0"
+reason = "Server Side Public License 1.0 is source-available (OSI-rejected); its service-source copyleft makes it unredistributable in shipped artifacts."
+
+[[deny]]
+match = "license"
+pattern = "Elastic-2.0"
+reason = "Elastic License 2.0 is source-available with use restrictions (no managed-service resale); cannot ship in a distributed inventory."
+
+# --- Workspace copyleft suppression --------------------------------------------
+# apps/scratch is the Scratch block editor — itself distributed under AGPL-3.0, so
+# its in-family AGPL/GPL/LGPL dependencies impose no additional obligation WITHIN
+# that workspace. Suppression is per occurrence: the same package used elsewhere
+# in a non-AGPL workspace still flags.
+
+[[workspace.copyleft_suppressed]]
+path = "apps/scratch"
+license = "AGPL-3.0-only"
+description = "apps/scratch and its scratch-editor submodule are distributed under AGPL-3.0-only; the bundled scratch-* AGPL dependencies are in-family copyleft and impose no additional obligations within this workspace."
+
+# --- Scope handling ------------------------------------------------------------
+# Production occurrences always gate. Dev/build-time and Docker base-image OS
+# copyleft are listed, not gated, by default — a build-time tool or the base
+# distro carries no distribution obligation. Start unknowns at "warn" while the
+# inventory has gaps, then switch to "fail" once it is clean.
+
+[unknown]
+handling = "warn"
+
+[dev_dependencies]
+handling = "warn"
+
+[os_dependencies]
+handling = "warn"
