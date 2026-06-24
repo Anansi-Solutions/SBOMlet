@@ -1,0 +1,5 @@
+# SBOMlet is LF-only by design: the determinism contract and the gate's
+# byte-for-byte comparison both depend on stable LF bytes. Normalize every text
+# file to LF on commit and checkout, on every platform.
+* text=auto eol=lf
+*.png binary

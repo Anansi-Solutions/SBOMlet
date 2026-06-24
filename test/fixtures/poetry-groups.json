@@ -1,0 +1,66 @@
+{
+  "$schema": "http://cyclonedx.org/schema/bom-1.6.schema.json",
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.6",
+  "version": 1,
+  "metadata": {
+    "component": {
+      "type": "application",
+      "name": "jupyter-app",
+      "version": "1.0.0",
+      "purl": "pkg:pypi/jupyter-app@1.0.0"
+    }
+  },
+  "components": [
+    {
+      "type": "library",
+      "name": "pytest",
+      "version": "8.3.4",
+      "purl": "pkg:pypi/pytest@8.3.4",
+      "scope": "optional",
+      "properties": [
+        {
+          "name": "SrcFile",
+          "value": "/repo/apps/jupyter/poetry.lock"
+        },
+        {
+          "name": "cdx:pyproject:group",
+          "value": "dev"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "sphinx",
+      "version": "8.1.3",
+      "purl": "pkg:pypi/sphinx@8.1.3",
+      "scope": "optional",
+      "properties": [
+        {
+          "name": "SrcFile",
+          "value": "/repo/apps/jupyter/poetry.lock"
+        },
+        {
+          "name": "cdx:pyproject:group",
+          "value": "docs"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "anyio",
+      "version": "4.8.0",
+      "purl": "pkg:pypi/anyio@4.8.0",
+      "properties": [
+        {
+          "name": "SrcFile",
+          "value": "/repo/apps/jupyter/poetry.lock"
+        },
+        {
+          "name": "cdx:pypi:requiresPython",
+          "value": ">=3.9"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,55 @@
+{
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.6",
+  "metadata": {
+    "component": {
+      "name": "npm-ws-root",
+      "version": "1.0.0",
+      "type": "application",
+      "purl": "pkg:npm/npm-ws-root@1.0.0"
+    }
+  },
+  "components": [
+    {
+      "name": "liba",
+      "version": "0.1.0",
+      "type": "library",
+      "purl": "pkg:npm/liba@0.1.0",
+      "properties": [
+        { "name": "SrcFile", "value": "package-lock.json" },
+        { "name": "cdx:npm:isWorkspace", "value": "true" }
+      ]
+    },
+    {
+      "name": "generator-marker-pkg",
+      "version": "1.0.0",
+      "type": "library",
+      "purl": "pkg:npm/generator-marker-pkg@1.0.0",
+      "licenses": [{ "license": { "id": "MIT" } }],
+      "properties": [
+        { "name": "SrcFile", "value": "package-lock.json" },
+        { "name": "cdx:npm:isWorkspace", "value": "true" }
+      ]
+    },
+    {
+      "name": "liba",
+      "version": "9.9.9",
+      "type": "library",
+      "purl": "pkg:npm/liba@9.9.9",
+      "licenses": [{ "license": { "id": "ISC" } }],
+      "properties": [
+        { "name": "SrcFile", "value": "package-lock.json" }
+      ]
+    },
+    {
+      "name": "ordinary-pkg",
+      "version": "2.0.0",
+      "type": "library",
+      "purl": "pkg:npm/ordinary-pkg@2.0.0",
+      "licenses": [{ "license": { "id": "MIT" } }],
+      "properties": [
+        { "name": "SrcFile", "value": "package-lock.json" }
+      ]
+    }
+  ]
+}

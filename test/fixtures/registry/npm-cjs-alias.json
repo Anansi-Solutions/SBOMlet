@@ -1,0 +1,11 @@
+{
+  "name": "supports-color-cjs",
+  "dist-tags": { "latest": "8.1.1" },
+  "license": { "type": "ISC" },
+  "versions": {
+    "8.1.1": {
+      "name": "supports-color-cjs",
+      "version": "8.1.1"
+    }
+  }
+}

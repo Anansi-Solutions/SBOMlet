@@ -1,0 +1,5 @@
+test/golden/
+test/fixtures/
+.cache/
+node_modules/
+bun.lock

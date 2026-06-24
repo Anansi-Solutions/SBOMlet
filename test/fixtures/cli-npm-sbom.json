@@ -1,0 +1,42 @@
+{
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.6",
+  "components": [
+    {
+      "name": "express",
+      "version": "5.2.1",
+      "type": "library",
+      "purl": "pkg:npm/express@5.2.1",
+      "licenses": [
+        { "license": { "id": "MIT", "url": "https://opensource.org/licenses/MIT" } }
+      ],
+      "scope": "excluded",
+      "properties": [
+        { "name": "SrcFile", "value": "package-lock.json" },
+        { "name": "cdx:npm:package:type-only", "value": "true" }
+      ]
+    },
+    {
+      "name": "fsevents",
+      "version": "2.3.3",
+      "type": "library",
+      "purl": "pkg:npm/fsevents@2.3.3",
+      "licenses": [{ "license": { "id": "MIT" } }],
+      "properties": [
+        { "name": "SrcFile", "value": "package-lock.json" },
+        { "name": "cdx:npm:package:development", "value": "true" },
+        { "name": "cdx:npm:package:optional", "value": "true" }
+      ]
+    },
+    {
+      "name": "liba",
+      "version": "0.1.0",
+      "type": "library",
+      "purl": "pkg:npm/liba@0.1.0",
+      "properties": [
+        { "name": "SrcFile", "value": "package-lock.json" },
+        { "name": "cdx:npm:isWorkspace", "value": "true" }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,150 @@
+{
+  "packages": [
+    {
+      "licenseClaims": [
+        {
+          "kind": "name",
+          "raw": "Apache License 2.0",
+          "source": "generator"
+        }
+      ],
+      "name": "apache-name-pkg",
+      "occurrences": [
+        {
+          "isDevDependency": false,
+          "target": "apps/synthetic"
+        }
+      ],
+      "purl": "pkg:npm/apache-name-pkg@2.0.0",
+      "scope": "app",
+      "version": "2.0.0"
+    },
+    {
+      "licenseClaims": [
+        {
+          "kind": "spdx-id",
+          "raw": "MIT",
+          "source": "generator"
+        }
+      ],
+      "name": "dup-pkg",
+      "occurrences": [
+        {
+          "isDevDependency": false,
+          "target": "apps/synthetic"
+        }
+      ],
+      "purl": "pkg:npm/dup-pkg@1.2.3",
+      "scope": "app",
+      "version": "1.2.3"
+    },
+    {
+      "licenseClaims": [
+        {
+          "kind": "spdx-id",
+          "raw": "BSD-3-Clause",
+          "source": "generator"
+        }
+      ],
+      "name": "empty-group-pkg",
+      "occurrences": [
+        {
+          "isDevDependency": false,
+          "target": "apps/synthetic"
+        }
+      ],
+      "purl": "pkg:npm/empty-group-pkg@1.0.0",
+      "scope": "app",
+      "version": "1.0.0"
+    },
+    {
+      "licenseClaims": [
+        {
+          "kind": "spdx-id",
+          "raw": "MIT",
+          "source": "generator"
+        }
+      ],
+      "name": "evil<img src=x>[click me](https://evil.example)pkg",
+      "occurrences": [
+        {
+          "isDevDependency": false,
+          "target": "apps/synthetic"
+        }
+      ],
+      "purl": "pkg:npm/evil-inject-pkg@1.0.0",
+      "scope": "app",
+      "version": "1.0.0"
+    },
+    {
+      "licenseClaims": [
+        {
+          "kind": "expression",
+          "raw": "MIT OR Apache-2.0",
+          "source": "generator"
+        }
+      ],
+      "name": "expr-pkg",
+      "occurrences": [
+        {
+          "isDevDependency": false,
+          "target": "apps/synthetic"
+        }
+      ],
+      "purl": "pkg:npm/expr-pkg@3.0.0",
+      "scope": "app",
+      "version": "3.0.0"
+    },
+    {
+      "licenseClaims": [
+        {
+          "kind": "spdx-id",
+          "raw": "MIT",
+          "source": "generator"
+        }
+      ],
+      "name": "mit-pkg",
+      "occurrences": [
+        {
+          "isDevDependency": false,
+          "target": "apps/synthetic"
+        }
+      ],
+      "purl": "pkg:npm/mit-pkg@1.0.0",
+      "scope": "app",
+      "version": "1.0.0"
+    },
+    {
+      "licenseClaims": [],
+      "name": "no-license-pkg",
+      "occurrences": [
+        {
+          "isDevDependency": false,
+          "target": "apps/synthetic"
+        }
+      ],
+      "purl": "pkg:npm/no-license-pkg@0.1.0",
+      "scope": "app",
+      "version": "0.1.0"
+    },
+    {
+      "licenseClaims": [
+        {
+          "kind": "spdx-id",
+          "raw": "ISC",
+          "source": "generator"
+        }
+      ],
+      "name": "pipe|tick`pkg",
+      "occurrences": [
+        {
+          "isDevDependency": false,
+          "target": "apps/synthetic"
+        }
+      ],
+      "purl": "pkg:npm/pipe-tick-pkg@1.0.0",
+      "scope": "app",
+      "version": "1.0.0"
+    }
+  ]
+}

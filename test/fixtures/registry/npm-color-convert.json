@@ -1,0 +1,17 @@
+{
+  "name": "color-convert",
+  "dist-tags": { "latest": "2.0.1" },
+  "license": "MIT",
+  "versions": {
+    "1.9.3": {
+      "name": "color-convert",
+      "version": "1.9.3",
+      "license": "MIT"
+    },
+    "2.0.1": {
+      "name": "color-convert",
+      "version": "2.0.1",
+      "license": "MIT"
+    }
+  }
+}

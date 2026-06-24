@@ -1,0 +1,116 @@
+{
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.6",
+  "version": 1,
+  "metadata": {
+    "lifecycles": [{ "phase": "pre-build" }],
+    "component": {
+      "name": "synthetic-root",
+      "purl": "pkg:npm/synthetic-root@1.0.0",
+      "type": "application",
+      "bom-ref": "pkg:npm/synthetic-root@1.0.0"
+    }
+  },
+  "components": [
+    {
+      "name": "mit-pkg",
+      "version": "1.0.0",
+      "purl": "pkg:npm/mit-pkg@1.0.0",
+      "type": "library",
+      "bom-ref": "pkg:npm/mit-pkg@1.0.0",
+      "licenses": [{ "license": { "id": "MIT" } }],
+      "properties": [{ "name": "SrcFile", "value": "yarn.lock" }]
+    },
+    {
+      "name": "apache-name-pkg",
+      "version": "2.0.0",
+      "purl": "pkg:npm/apache-name-pkg@2.0.0",
+      "type": "library",
+      "bom-ref": "pkg:npm/apache-name-pkg@2.0.0",
+      "licenses": [{ "license": { "name": "Apache License 2.0" } }],
+      "properties": [{ "name": "SrcFile", "value": "yarn.lock" }]
+    },
+    {
+      "name": "expr-pkg",
+      "version": "3.0.0",
+      "purl": "pkg:npm/expr-pkg@3.0.0",
+      "type": "library",
+      "bom-ref": "pkg:npm/expr-pkg@3.0.0",
+      "licenses": [{ "expression": "MIT OR Apache-2.0" }],
+      "properties": [{ "name": "SrcFile", "value": "yarn.lock" }]
+    },
+    {
+      "name": "evil<img src=x>[click me](https://evil.example)pkg",
+      "version": "1.0.0",
+      "purl": "pkg:npm/evil-inject-pkg@1.0.0",
+      "type": "library",
+      "bom-ref": "pkg:npm/evil-inject-pkg@1.0.0",
+      "licenses": [{ "license": { "id": "MIT" } }],
+      "properties": [{ "name": "SrcFile", "value": "yarn.lock" }]
+    },
+    {
+      "name": "no-license-pkg",
+      "version": "0.1.0",
+      "purl": "pkg:npm/no-license-pkg@0.1.0",
+      "type": "library",
+      "bom-ref": "pkg:npm/no-license-pkg@0.1.0",
+      "properties": [{ "name": "SrcFile", "value": "yarn.lock" }]
+    },
+    {
+      "name": "dup-pkg",
+      "version": "1.2.3",
+      "purl": "pkg:npm/dup-pkg@1.2.3",
+      "type": "library",
+      "bom-ref": "pkg:npm/dup-pkg@1.2.3",
+      "properties": [
+        { "name": "SrcFile", "value": "yarn.lock" },
+        { "name": "cdx:npm:package:development", "value": "true" }
+      ]
+    },
+    {
+      "name": "dup-pkg",
+      "version": "1.2.3",
+      "purl": "pkg:npm/dup-pkg@1.2.3",
+      "type": "library",
+      "bom-ref": "pkg:npm/dup-pkg@1.2.3",
+      "licenses": [{ "license": { "id": "MIT" } }],
+      "properties": [{ "name": "SrcFile", "value": "package.json" }]
+    },
+    {
+      "name": "empty-group-pkg",
+      "version": "1.0.0",
+      "group": "",
+      "purl": "pkg:npm/empty-group-pkg@1.0.0",
+      "type": "library",
+      "bom-ref": "pkg:npm/empty-group-pkg@1.0.0",
+      "licenses": [{ "license": { "id": "BSD-3-Clause" } }],
+      "properties": [{ "name": "SrcFile", "value": "yarn.lock" }]
+    },
+    {
+      "name": "synthetic-root",
+      "version": "1.0.0",
+      "purl": "pkg:npm/synthetic-root@1.0.0",
+      "type": "application",
+      "bom-ref": "pkg:npm/synthetic-root@1.0.0",
+      "licenses": [{ "license": { "id": "MIT" } }]
+    },
+    {
+      "name": "pipe|tick`pkg",
+      "version": "1.0.0",
+      "purl": "pkg:npm/pipe-tick-pkg@1.0.0",
+      "type": "library",
+      "bom-ref": "pkg:npm/pipe-tick-pkg@1.0.0",
+      "licenses": [{ "license": { "id": "ISC" } }],
+      "properties": [{ "name": "SrcFile", "value": "yarn.lock" }]
+    },
+    {
+      "name": "missing-everything"
+    },
+    {
+      "name": "bad-version",
+      "version": 7,
+      "purl": "pkg:npm/bad-version@7",
+      "type": "library"
+    }
+  ]
+}

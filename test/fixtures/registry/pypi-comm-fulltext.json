@@ -1,0 +1,12 @@
+{
+  "info": {
+    "name": "comm",
+    "version": "0.2.2",
+    "license_expression": "",
+    "license": "BSD 3-Clause License\n\nCopyright (c) 2022, Jupyter\nAll rights reserved.\n\nRedistribution and use in source and binary forms, with or without\nmodification, are permitted provided that the following conditions are met:\n\n1. Redistributions of source code must retain the above copyright notice, this\n   list of conditions and the following disclaimer.",
+    "classifiers": [
+      "Programming Language :: Python :: 3",
+      "License :: OSI Approved :: BSD License"
+    ]
+  }
+}

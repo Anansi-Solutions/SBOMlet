@@ -1,0 +1,71 @@
+{
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.6",
+  "metadata": {
+    "component": {
+      "name": "npm-scope-root",
+      "version": "1.0.0",
+      "type": "application",
+      "purl": "pkg:npm/npm-scope-root@1.0.0"
+    }
+  },
+  "components": [
+    {
+      "name": "dev-only-pkg",
+      "version": "1.0.0",
+      "type": "library",
+      "purl": "pkg:npm/dev-only-pkg@1.0.0",
+      "licenses": [{ "license": { "id": "MIT" } }],
+      "properties": [
+        { "name": "SrcFile", "value": "package-lock.json" },
+        { "name": "cdx:npm:package:development", "value": "true" }
+      ]
+    },
+    {
+      "group": "@next",
+      "name": "swc-win32-x64-msvc",
+      "version": "16.0.10",
+      "type": "library",
+      "purl": "pkg:npm/%40next/swc-win32-x64-msvc@16.0.10",
+      "licenses": [{ "license": { "id": "MIT" } }],
+      "scope": "excluded",
+      "properties": [
+        { "name": "SrcFile", "value": "package-lock.json" },
+        { "name": "cdx:npm:package:development", "value": "true" },
+        { "name": "cdx:npm:package:optional", "value": "true" }
+      ]
+    },
+    {
+      "name": "optional-only-pkg",
+      "version": "2.0.0",
+      "type": "library",
+      "purl": "pkg:npm/optional-only-pkg@2.0.0",
+      "licenses": [{ "license": { "id": "ISC" } }],
+      "properties": [
+        { "name": "SrcFile", "value": "package-lock.json" },
+        { "name": "cdx:npm:package:optional", "value": "true" }
+      ]
+    },
+    {
+      "name": "optional-first-pkg",
+      "version": "3.0.0",
+      "type": "library",
+      "purl": "pkg:npm/optional-first-pkg@3.0.0",
+      "licenses": [{ "license": { "id": "MIT" } }],
+      "properties": [
+        { "name": "cdx:npm:package:optional", "value": "true" },
+        { "name": "cdx:npm:package:development", "value": "true" }
+      ]
+    },
+    {
+      "name": "pydev-pkg",
+      "version": "1.0.0",
+      "type": "library",
+      "purl": "pkg:pypi/pydev-pkg@1.0.0",
+      "licenses": [{ "license": { "id": "BSD-3-Clause" } }],
+      "properties": [
+        { "name": "cdx:pyproject:group", "value": "dev" }
+      ]
+    }
+  ]
+}

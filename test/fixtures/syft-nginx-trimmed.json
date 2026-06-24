@@ -1,0 +1,127 @@
+{
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.6",
+  "serialNumber": "urn:uuid:f3e868d5-a2f9-430c-82cd-b6ade6ffb1fb",
+  "metadata": {
+    "timestamp": "2026-06-15T16:20:40+02:00"
+  },
+  "components": [
+    {
+      "type": "library",
+      "name": "alpine-baselayout",
+      "version": "3.7.2-r0",
+      "licenses": [
+        {
+          "license": {
+            "id": "GPL-2.0-only"
+          }
+        }
+      ],
+      "purl": "pkg:apk/alpine/alpine-baselayout@3.7.2-r0?arch=x86_64&distro=alpine-3.23.4",
+      "bom-ref": "pkg:apk/alpine/alpine-baselayout@3.7.2-r0?arch=x86_64&distro=alpine-3.23.4&package-id=307598d85e573e0f"
+    },
+    {
+      "type": "library",
+      "name": "alpine-baselayout-data",
+      "version": "3.7.2-r0",
+      "licenses": [
+        {
+          "license": {
+            "id": "GPL-2.0-only"
+          }
+        }
+      ],
+      "purl": "pkg:apk/alpine/alpine-baselayout-data@3.7.2-r0?arch=x86_64&distro=alpine-3.23.4&upstream=alpine-baselayout",
+      "bom-ref": "pkg:apk/alpine/alpine-baselayout-data@3.7.2-r0?arch=x86_64&distro=alpine-3.23.4&package-id=1c56775a8069ec5f&upstream=alpine-baselayout"
+    },
+    {
+      "type": "library",
+      "name": "alpine-keys",
+      "version": "2.6-r0",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "purl": "pkg:apk/alpine/alpine-keys@2.6-r0?arch=x86_64&distro=alpine-3.23.4",
+      "bom-ref": "pkg:apk/alpine/alpine-keys@2.6-r0?arch=x86_64&distro=alpine-3.23.4&package-id=afad29d3ea43d3cb"
+    },
+    {
+      "type": "library",
+      "name": "alpine-release",
+      "version": "3.23.4-r0",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "purl": "pkg:apk/alpine/alpine-release@3.23.4-r0?arch=x86_64&distro=alpine-3.23.4&upstream=alpine-base",
+      "bom-ref": "pkg:apk/alpine/alpine-release@3.23.4-r0?arch=x86_64&distro=alpine-3.23.4&package-id=54eb61870e16b46d&upstream=alpine-base"
+    },
+    {
+      "type": "library",
+      "name": "aom-libs",
+      "version": "3.13.1-r1",
+      "licenses": [
+        {
+          "license": {
+            "id": "BSD-2-Clause"
+          }
+        },
+        {
+          "license": {
+            "name": "AND"
+          }
+        },
+        {
+          "license": {
+            "name": "custom"
+          }
+        }
+      ],
+      "purl": "pkg:apk/alpine/aom-libs@3.13.1-r1?arch=x86_64&distro=alpine-3.23.4&upstream=aom",
+      "bom-ref": "pkg:apk/alpine/aom-libs@3.13.1-r1?arch=x86_64&distro=alpine-3.23.4&package-id=18205f3a70d11bbc&upstream=aom"
+    },
+    {
+      "type": "library",
+      "name": "apk-tools",
+      "version": "3.0.6-r0",
+      "licenses": [
+        {
+          "license": {
+            "id": "GPL-2.0-only"
+          }
+        }
+      ],
+      "purl": "pkg:apk/alpine/apk-tools@3.0.6-r0?arch=x86_64&distro=alpine-3.23.4",
+      "bom-ref": "pkg:apk/alpine/apk-tools@3.0.6-r0?arch=x86_64&distro=alpine-3.23.4&package-id=c0f1d1dce995c0da"
+    },
+    {
+      "type": "library",
+      "name": "ca-certificates",
+      "version": "20260413-r0",
+      "licenses": [
+        {
+          "expression": "MPL-2.0 AND MIT"
+        }
+      ],
+      "purl": "pkg:apk/alpine/ca-certificates@20260413-r0?arch=x86_64&distro=alpine-3.23.4",
+      "bom-ref": "pkg:apk/alpine/ca-certificates@20260413-r0?arch=x86_64&distro=alpine-3.23.4&package-id=a5d9eec75c31a8ba"
+    },
+    {
+      "type": "file",
+      "name": "/bin/busybox",
+      "bom-ref": "43c34f41485efa3f"
+    },
+    {
+      "type": "operating-system",
+      "name": "alpine",
+      "version": "3.23.4",
+      "bom-ref": "os:alpine@3.23.4"
+    }
+  ]
+}

@@ -1,0 +1,408 @@
+/**
+ * Generic lockfile target discovery.
+ *
+ * Recursively walks `--repo-root` with a hand-rolled `node:fs` walk (zero new
+ * dependencies) looking for yarn.lock / package-lock.json / pnpm-lock.yaml /
+ * bun.lock / poetry.lock / uv.lock. Universal excludes only — node_modules,
+ * .git, hidden directories, and the tool's own directory — with no
+ * repository-specific paths anywhere. Discovery output is authoritative over
+ * any human-maintained workspace list.
+ *
+ * Identities are forward-slash repo-relative directory paths, copying
+ * target.ts's idiom; results sort deterministically by (identity, lockfile
+ * kind) using compareCodeUnits, the only comparator allowed tool-wide.
+ *
+ * Two pure post-steps over the sorted walk output:
+ * - Same-dir JS lockfile collisions collapse to one target by precedence
+ *   bun > pnpm > yarn > npm with a warning naming the chosen and every ignored
+ *   lockfile; cross-ecosystem pairs (a JS lockfile plus poetry/uv in one
+ *   directory) still yield two targets.
+ * - Binary bun.lockb is observed during the walk but never becomes a target: a
+ *   bun.lockb without a surviving bun.lock target warns naming `bun install
+ *   --save-text-lockfile`; beside a bun.lock it is silent (the text lockfile is
+ *   authoritative).
+ *
+ * This module is pure walk + classify: it never exits, never writes to stderr,
+ * and returns an empty array for a lockfile-less root — the CLI owns the
+ * zero-targets error and prints the warnings returned as data here.
+ */
+
+import { readdirSync, statSync } from "node:fs";
+import { join, relative, resolve, sep } from "node:path";
+
+import { compareCodeUnits } from "../model/dependencies";
+import type { Target } from "./target";
+
+export type LockfileKind =
+  | "yarn"
+  | "npm"
+  | "pnpm"
+  | "bun"
+  | "poetry"
+  | "uv"
+  | "terraform";
+
+export interface DiscoveredTarget extends Target {
+  /** Which lockfile produced this target. One DiscoveredTarget per lockfile found. */
+  lockfile: LockfileKind;
+}
+
+export interface DiscoverOptions {
+  /** Absolute path of this tool's own directory (excluded from the walk). */
+  toolDir?: string;
+  /** Repeatable --exclude glob patterns, matched against the identity. */
+  excludes?: readonly string[];
+}
+
+const LOCKFILES = new Map<string, LockfileKind>([
+  ["yarn.lock", "yarn"],
+  ["package-lock.json", "npm"],
+  ["pnpm-lock.yaml", "pnpm"],
+  ["bun.lock", "bun"],
+  ["poetry.lock", "poetry"],
+  ["uv.lock", "uv"],
+  [".terraform.lock.hcl", "terraform"],
+]);
+
+/**
+ * Same-directory JS lockfile precedence: lower rank wins. A stray
+ * package-lock.json is the most common accident (npm auto-writes it), so npm
+ * ranks last; bun emits a derived yarn.lock for compatibility, so bun outranks
+ * yarn; migration tooling leaves the older-generation file behind, so the
+ * newest-generation package manager's lockfile is the deliberate artifact.
+ */
+const JS_PRECEDENCE = new Map<LockfileKind, number>([
+  ["bun", 0],
+  ["pnpm", 1],
+  ["yarn", 2],
+  ["npm", 3],
+]);
+
+/** Inverse of the discovery map: lockfile kind → file name. */
+export function lockfileNameFor(kind: LockfileKind): string {
+  for (const [name, k] of LOCKFILES) {
+    if (k === kind) {
+      return name;
+    }
+  }
+  // Unreachable: LockfileKind is a closed union covered by LOCKFILES.
+  throw new Error(`unknown lockfile kind: ${kind}`);
+}
+
+const REGEX_SPECIALS = new Set("\\^$.|?+()[]{}");
+
+/**
+ * The directories the walk NEVER descends into — the SINGLE source of truth for
+ * the universal discovery exclusion set, shared verbatim by lockfile discovery
+ * here and Dockerfile discovery (src/collectors/dockerfile.ts) so the two can
+ * never drift to divergent skip lists. node_modules and .git are named
+ * explicitly; every other dotfile/dot-directory (.terraform, .yarn, .cache, …)
+ * is excluded by the leading-"." rule below in {@link shouldDescendDir}.
+ * Exported so the reuse is by reference, not by re-hardcoding.
+ */
+export const EXCLUDED_DIR_NAMES: ReadonlySet<string> = new Set([
+  // Dependency trees (findings shared with Dockerfile discovery).
+  "node_modules",
+  ".git",
+  // Documented BUILD-OUTPUT dir (finding #2): a generated artifact tree (this
+  // repo's documented `dist/`) must never be descended — a Dockerfile or
+  // lockfile copied into it is a build product, not a source target. Members are
+  // compared CASE-INSENSITIVELY (finding #3) so Windows `Dist`/`NODE_MODULES`
+  // (the same on-disk tree) are pruned identically.
+  //
+  // 07-28 REVERT: the 07-26 addition of {build, out, target, vendor} was
+  // over-broad. Those are GENERIC names that are routinely legitimate SOURCE /
+  // service dirs (a service literally named `target`, a Go `vendor/` whose
+  // contents ship in the image), so pruning them silently DROPPED real app
+  // Dockerfiles / lockfiles — under-coverage, the inverse of a leak. Only
+  // `dist` survives here: it is the documented, low-ambiguity build-output dir.
+  "dist",
+]);
+
+/**
+ * Dot-directories the DOCKERFILE lane is allowed to descend (finding #4): the
+ * conventional homes of real Dockerfiles. The leading-"." prune is right for the
+ * lockfile lane (it keeps .terraform/.yarn/.cache out) but wrongly drops these
+ * two; the Dockerfile lane opts into them via {@link shouldDescendDir}'s
+ * allowlist param while STILL pruning .git/.terraform/every other dot-dir.
+ * Compared case-insensitively for Windows parity.
+ */
+export const DOCKERFILE_DOT_DIR_ALLOWLIST: ReadonlySet<string> = new Set([
+  ".docker",
+  ".devcontainer",
+]);
+
+/**
+ * The universal walk descent predicate, shared by lockfile and Dockerfile
+ * discovery: skip the {@link EXCLUDED_DIR_NAMES} (node_modules/.git/build-output
+ * dirs, matched case-insensitively — findings #2/#3), every hidden (leading-".")
+ * directory (which covers .terraform, .yarn, .cache, …), and the tool's own
+ * directory. `sub` is the child path; `name` its basename; `toolDir` (if given)
+ * the tool directory in any form — BOTH `sub` and `toolDir` are resolve()'d here
+ * before comparison so a caller passing a forward-slash or relative toolDir on
+ * Windows still matches (the comparison is canonical, not string-literal).
+ *
+ * `dotDirAllowlist` (finding #4) decouples the lanes for dot-dirs: when given, a
+ * dot-dir whose lower-cased name is in the allowlist (.docker/.devcontainer) is
+ * descended even though it starts with "." — the Dockerfile lane passes it; the
+ * lockfile lane omits it and keeps pruning ALL dot-dirs unchanged. `.git` is
+ * never allowlistable: it is excluded by EXCLUDED_DIR_NAMES BEFORE the dot rule.
+ *
+ * GIT-SUBMODULE PRUNE (finding #2): a git-submodule root is an ORDINARY-named
+ * directory (its name is not in EXCLUDED_DIR_NAMES and does not start with ".")
+ * whose `.git` entry is a FILE (a `gitdir: …` gitlink), not a directory — so none
+ * of the rules above fire and the walk would descend into VENDORED third-party
+ * code, attributing its lockfiles/Dockerfiles to OUR distribution. A submodule is
+ * detected by testing whether `<sub>/.git` exists as a FILE; if so, descent is
+ * skipped. This covers nested submodules and needs no `.gitmodules` parsing, and
+ * applies to BOTH lanes (the prune is shared). A normal dir whose `.git` is a
+ * DIRECTORY (a real nested git repo's root, unusual inside a checkout) is NOT a
+ * gitlink and is unaffected by this rule — only the gitlink-FILE case prunes.
+ */
+export function shouldDescendDir(
+  sub: string,
+  name: string,
+  toolDir?: string,
+  dotDirAllowlist?: ReadonlySet<string>,
+): boolean {
+  const lower = name.toLowerCase();
+  if (EXCLUDED_DIR_NAMES.has(name) || EXCLUDED_DIR_NAMES.has(lower)) {
+    return false;
+  }
+  if (name.startsWith(".")) {
+    // Lockfile lane (no allowlist): every dot-dir is pruned. Dockerfile lane:
+    // descend only the explicitly-allowlisted Dockerfile homes.
+    if (dotDirAllowlist === undefined || !dotDirAllowlist.has(lower)) {
+      return false;
+    }
+  }
+  if (toolDir !== undefined && resolve(sub) === resolve(toolDir)) return false;
+  // Git-submodule prune (finding #2): a `.git` FILE (gitlink) marks a submodule
+  // root — vendored third-party code that is not our distribution. Skip descent.
+  if (isGitSubmoduleRoot(sub)) return false;
+  return true;
+}
+
+/**
+ * True iff `dir` is a git-submodule root — i.e. `<dir>/.git` exists and is a
+ * FILE (a `gitdir: …` gitlink), as git records for submodule working trees. A
+ * `.git` DIRECTORY (a top-level repo / linked worktree) is NOT a gitlink and
+ * returns false. statSync is wrapped so a missing `.git` (the common case) and
+ * any transient stat error are treated as "not a submodule" — fail-open to
+ * descend, since the leak we guard is over-INCLUSION, and a stat failure here
+ * never silently DROPS a legitimate source dir.
+ */
+function isGitSubmoduleRoot(dir: string): boolean {
+  try {
+    return statSync(join(dir, ".git")).isFile();
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Translate one exclude glob into an anchored RegExp over the WHOLE identity.
+ *
+ * Two wildcard semantics (documented contract for the --exclude flag):
+ * - `*`  matches within a single path segment (any run of non-`/` chars):
+ *        "a/*" excludes "a/b" but NOT "a/b/c".
+ * - `**` matches across segments (any run of chars including `/`):
+ *        "a/**" excludes everything under "a" but not "a" itself.
+ *
+ * All other characters are regex-escaped literally; `**` is translated before
+ * the remaining single `*` so the two semantics never overlap. Exported so
+ * Dockerfile discovery applies byte-identical glob semantics to --exclude and
+ * [docker] ignore globs.
+ *
+ * The regex is CASE-INSENSITIVE (the `i` flag, finding #3): the platform is
+ * Windows (a case-insensitive filesystem) and the literal dir-name exclusion was
+ * already made case-insensitive (07-26). A mis-cased `--exclude` / `[docker]
+ * ignore` glob (`Dist/**`, `NODE_MODULES/**`) must still match the on-disk
+ * identity for consistency across both the lockfile and Dockerfile lanes.
+ */
+export function globToRegExp(glob: string): RegExp {
+  let out = "";
+  let i = 0;
+  while (i < glob.length) {
+    if (glob.startsWith("**", i)) {
+      out += ".*";
+      i += 2;
+    } else if (glob[i] === "*") {
+      out += "[^/]*";
+      i += 1;
+    } else {
+      const ch = glob[i] as string;
+      out += REGEX_SPECIALS.has(ch) ? `\\${ch}` : ch;
+      i += 1;
+    }
+  }
+  return new RegExp(`^${out}$`, "i");
+}
+
+export function isExcluded(
+  identity: string,
+  matchers: readonly RegExp[],
+): boolean {
+  return matchers.some((re) => re.test(identity));
+}
+
+/** Discovery output: collision-resolved targets plus warning data. */
+export interface DiscoveryResult {
+  targets: DiscoveredTarget[];
+  /**
+   * Deterministic (compareCodeUnits-sorted) warning strings, without any
+   * "warning: " prefix — the CLI prefixes and prints them; this module stays
+   * pure.
+   */
+  warnings: string[];
+}
+
+/**
+ * Walk `repoRoot` and return collision-resolved targets plus warnings:
+ *
+ * - One DiscoveredTarget per lockfile found, sorted by (identity, lockfile
+ *   kind). A directory holding lockfiles of DIFFERENT ecosystems (e.g.
+ *   bun.lock and poetry.lock) yields two targets with the same identity
+ *   (deterministic via the kind tiebreak).
+ * - A directory holding multiple JS lockfiles collapses to exactly one target
+ *   by precedence bun > pnpm > yarn > npm, with a warning naming the chosen
+ *   lockfile and every ignored one.
+ * - A bun.lockb sighting with no surviving bun target in its directory yields a
+ *   warning naming the migration command; beside a bun.lock target it is
+ *   silent. Excluded identities produce neither targets nor bun.lockb
+ *   warnings.
+ */
+export function discoverTargetsWithWarnings(
+  repoRoot: string,
+  opts?: DiscoverOptions,
+): DiscoveryResult {
+  const toolDir =
+    opts?.toolDir === undefined ? undefined : resolve(opts.toolDir);
+  const matchers = (opts?.excludes ?? []).map(globToRegExp);
+  const found: DiscoveredTarget[] = [];
+  const bunLockbIdentities = new Set<string>();
+
+  const identityOf = (dir: string): string =>
+    relative(repoRoot, dir).split(sep).join("/") || ".";
+
+  // True when this subdirectory should be descended into: skip node_modules,
+  // .git, hidden dirs (.yarn/.cache/...), and the tool's own directory. Shared
+  // verbatim with Dockerfile discovery via shouldDescendDir.
+  const shouldDescend = (sub: string, name: string): boolean =>
+    shouldDescendDir(sub, name, toolDir);
+
+  const recordLockfile = (dir: string, fileName: string): void => {
+    // Identity: forward-slash on every platform — raw path.relative output
+    // contains backslashes on Windows.
+    const identity = identityOf(dir);
+    if (isExcluded(identity, matchers)) return;
+    found.push({
+      dir,
+      identity,
+      lockfile: LOCKFILES.get(fileName) as LockfileKind,
+    });
+  };
+
+  const recordBunLockb = (dir: string): void => {
+    // Observed, never a target: binary lockfiles are out of scope; the
+    // post-step below decides whether the sighting warrants a migration
+    // warning.
+    const identity = identityOf(dir);
+    if (isExcluded(identity, matchers)) return;
+    bunLockbIdentities.add(identity);
+  };
+
+  const walk = (dir: string): void => {
+    // Symlinks report isDirectory() === false on Dirent entries, so they are
+    // never followed — no cycle traversal, no escape from repoRoot. Do not add
+    // a followSymlinks option.
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      if (entry.isDirectory()) {
+        const sub = join(dir, entry.name);
+        if (shouldDescend(sub, entry.name)) walk(sub);
+      } else if (entry.isFile() && LOCKFILES.has(entry.name)) {
+        recordLockfile(dir, entry.name);
+      } else if (entry.isFile() && entry.name === "bun.lockb") {
+        recordBunLockb(dir);
+      }
+    }
+  };
+
+  walk(repoRoot);
+  const sorted = found.sort(
+    (a, b) =>
+      compareCodeUnits(a.identity, b.identity) ||
+      compareCodeUnits(a.lockfile, b.lockfile),
+  );
+
+  const warnings: string[] = [];
+
+  // Post-step 1: collapse same-dir JS lockfile collisions to the single
+  // highest-precedence kind. Python kinds in the same directory are untouched —
+  // cross-ecosystem pairs remain two targets.
+  const jsByIdentity = new Map<string, DiscoveredTarget[]>();
+  for (const target of sorted) {
+    if (JS_PRECEDENCE.has(target.lockfile)) {
+      const group = jsByIdentity.get(target.identity) ?? [];
+      group.push(target);
+      jsByIdentity.set(target.identity, group);
+    }
+  }
+  const losers = new Set<DiscoveredTarget>();
+  for (const [identity, group] of jsByIdentity) {
+    if (group.length < 2) {
+      continue;
+    }
+    const winner = group.reduce((best, candidate) =>
+      (JS_PRECEDENCE.get(candidate.lockfile) as number) <
+      (JS_PRECEDENCE.get(best.lockfile) as number)
+        ? candidate
+        : best,
+    );
+    const ignoredNames = group
+      .filter((target) => target !== winner)
+      .map((target) => lockfileNameFor(target.lockfile))
+      .sort(compareCodeUnits);
+    for (const target of group) {
+      if (target !== winner) {
+        losers.add(target);
+      }
+    }
+    warnings.push(
+      `target "${identity}" has multiple JS lockfiles — scanning ` +
+        `${lockfileNameFor(winner.lockfile)} (precedence bun > pnpm > yarn > npm); ` +
+        `ignoring ${ignoredNames.join(", ")}`,
+    );
+  }
+  const targets = sorted.filter((target) => !losers.has(target));
+
+  // Post-step 2: bun.lockb sightings. Silent when a bun.lock target survived in
+  // the same directory (the text lockfile is authoritative); otherwise warn
+  // naming the migration command.
+  for (const identity of bunLockbIdentities) {
+    const hasBunTarget = targets.some(
+      (target) => target.identity === identity && target.lockfile === "bun",
+    );
+    if (!hasBunTarget) {
+      warnings.push(
+        `target "${identity}" has a binary bun.lockb, which is unsupported — ` +
+          "run `bun install --save-text-lockfile` in that project to migrate, " +
+          "then re-scan",
+      );
+    }
+  }
+
+  warnings.sort(compareCodeUnits);
+  return { targets, warnings };
+}
+
+/**
+ * Collision-resolved target list only — thin wrapper over
+ * discoverTargetsWithWarnings for callers that do not surface warnings.
+ */
+export function discoverTargets(
+  repoRoot: string,
+  opts?: DiscoverOptions,
+): DiscoveredTarget[] {
+  return discoverTargetsWithWarnings(repoRoot, opts).targets;
+}

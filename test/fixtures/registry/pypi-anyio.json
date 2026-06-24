@@ -1,0 +1,15 @@
+{
+  "info": {
+    "name": "anyio",
+    "version": "4.12.1",
+    "license_expression": "MIT",
+    "license": "",
+    "classifiers": [
+      "Development Status :: 5 - Production/Stable",
+      "Framework :: AnyIO",
+      "License :: OSI Approved :: MIT License",
+      "Programming Language :: Python",
+      "Programming Language :: Python :: 3"
+    ]
+  }
+}

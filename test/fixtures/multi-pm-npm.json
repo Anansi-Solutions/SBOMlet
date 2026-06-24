@@ -1,0 +1,35 @@
+{
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.6",
+  "metadata": {
+    "component": {
+      "name": "npm-app-root",
+      "version": "1.0.0",
+      "type": "application",
+      "purl": "pkg:npm/npm-app-root@1.0.0"
+    }
+  },
+  "components": [
+    {
+      "name": "shared-lib",
+      "version": "1.0.0",
+      "type": "library",
+      "purl": "pkg:npm/shared-lib@1.0.0",
+      "licenses": [{ "license": { "id": "MIT" } }],
+      "properties": [
+        { "name": "SrcFile", "value": "package-lock.json" },
+        { "name": "cdx:npm:package:development", "value": "true" }
+      ]
+    },
+    {
+      "name": "npm-only-pkg",
+      "version": "2.2.0",
+      "type": "library",
+      "purl": "pkg:npm/npm-only-pkg@2.2.0",
+      "licenses": [{ "license": { "id": "Apache-2.0" } }],
+      "properties": [
+        { "name": "SrcFile", "value": "package-lock.json" }
+      ]
+    }
+  ]
+}

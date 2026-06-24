@@ -1,0 +1,159 @@
+{
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.6",
+  "serialNumber": "urn:uuid:167693fe-45d4-460d-abc6-b2c0b03e4501",
+  "metadata": {
+    "timestamp": "2026-06-15T16:20:17+02:00"
+  },
+  "components": [
+    {
+      "type": "library",
+      "name": "adduser",
+      "version": "3.152",
+      "licenses": [
+        {
+          "license": {
+            "id": "GPL-2.0-only"
+          }
+        },
+        {
+          "license": {
+            "id": "GPL-2.0-or-later"
+          }
+        }
+      ],
+      "purl": "pkg:deb/debian/adduser@3.152?arch=all&distro=debian-13",
+      "bom-ref": "pkg:deb/debian/adduser@3.152?arch=all&distro=debian-13&package-id=28c3c1bd0d4f48db"
+    },
+    {
+      "type": "library",
+      "name": "apt",
+      "version": "3.0.3",
+      "licenses": [
+        {
+          "license": {
+            "id": "BSD-3-Clause"
+          }
+        },
+        {
+          "license": {
+            "id": "GPL-2.0-only"
+          }
+        },
+        {
+          "license": {
+            "id": "GPL-2.0-or-later"
+          }
+        },
+        {
+          "license": {
+            "id": "curl"
+          }
+        },
+        {
+          "license": {
+            "name": "Expat"
+          }
+        }
+      ],
+      "purl": "pkg:deb/debian/apt@3.0.3?arch=amd64&distro=debian-13",
+      "bom-ref": "pkg:deb/debian/apt@3.0.3?arch=amd64&distro=debian-13&package-id=538a004ef5cf1609"
+    },
+    {
+      "type": "library",
+      "name": "base-files",
+      "version": "13.8+deb13u5",
+      "licenses": [
+        {
+          "license": {
+            "id": "GPL-2.0-or-later"
+          }
+        },
+        {
+          "license": {
+            "name": "GPL"
+          }
+        },
+        {
+          "license": {
+            "name": "verbatim"
+          }
+        }
+      ],
+      "purl": "pkg:deb/debian/base-files@13.8%2Bdeb13u5?arch=amd64&distro=debian-13",
+      "bom-ref": "pkg:deb/debian/base-files@13.8%2Bdeb13u5?arch=amd64&distro=debian-13&package-id=35ba0d66a157e765"
+    },
+    {
+      "type": "library",
+      "name": "base-passwd",
+      "version": "3.6.7",
+      "licenses": [
+        {
+          "license": {
+            "id": "GPL-2.0-only"
+          }
+        },
+        {
+          "license": {
+            "name": "public-domain"
+          }
+        }
+      ],
+      "purl": "pkg:deb/debian/base-passwd@3.6.7?arch=amd64&distro=debian-13",
+      "bom-ref": "pkg:deb/debian/base-passwd@3.6.7?arch=amd64&distro=debian-13&package-id=2e32fd1cf9077c07"
+    },
+    {
+      "type": "library",
+      "name": "debian-archive-keyring",
+      "version": "2025.1",
+      "licenses": [
+        {
+          "license": {
+            "name": "sha256:8f918c0bebd1454a084698a95c09d9a03cec8453dad1fc6eab9e6427da9d33a9"
+          }
+        }
+      ],
+      "purl": "pkg:deb/debian/debian-archive-keyring@2025.1?arch=all&distro=debian-13",
+      "bom-ref": "pkg:deb/debian/debian-archive-keyring@2025.1?arch=all&distro=debian-13&package-id=933201b57aa11d8b"
+    },
+    {
+      "type": "library",
+      "name": "gcc-14",
+      "version": "14.2.0-19",
+      "purl": "pkg:deb/debian/gcc-14@14.2.0-19?distro=debian",
+      "bom-ref": "pkg:deb/debian/gcc-14@14.2.0-19?distro=debian&package-id=07fa1a0b8a548c80"
+    },
+    {
+      "type": "library",
+      "name": "libzstd",
+      "version": "1.5.7+dfsg-1",
+      "purl": "pkg:deb/Debian/libzstd@1.5.7%2Bdfsg-1?distro=Debian",
+      "bom-ref": "pkg:deb/debian/libzstd@1.5.7%2Bdfsg-1?distro=Debian&package-id=519daad7b635b3dc"
+    },
+    {
+      "type": "application",
+      "name": "bash",
+      "version": "5.2.37",
+      "purl": "pkg:generic/bash@5.2.37",
+      "bom-ref": "pkg:generic/bash@5.2.37?package-id=9ebbe5d363ec5564"
+    },
+    {
+      "type": "library",
+      "name": "github.com/moby/sys/user",
+      "version": "v0.1.0",
+      "purl": "pkg:golang/github.com/moby/sys/user@v0.1.0",
+      "bom-ref": "pkg:golang/github.com/moby/sys/user@v0.1.0?package-id=172cdea5a0bf8dce"
+    },
+    {
+      "type": "file",
+      "name": "/etc/alternatives/README",
+      "bom-ref": "17c326bcfc9fed65"
+    },
+    {
+      "type": "operating-system",
+      "name": "debian",
+      "version": "13",
+      "bom-ref": "os:debian@13"
+    }
+  ]
+}

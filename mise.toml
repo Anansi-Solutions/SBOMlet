@@ -1,0 +1,7 @@
+[tools]
+bun = "1.3.14"
+# Orchestrated by src/collectors/dockerOs.ts on the generate-docker path ONLY —
+# never required on the check path (the committed docker-os-sbom.json is the
+# check input). Pinned + checksummed via aqua (the project's no-curl|bash tool
+# mechanism). The version MUST equal SYFT_TOOL.version in dockerOs.ts.
+"aqua:anchore/syft" = "1.45.1"

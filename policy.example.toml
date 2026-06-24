@@ -1,0 +1,313 @@
+# policy.example.toml -- starter policy for the third-party license tool.
+#
+# Copy this file (e.g. to policy.toml at your repo root) and pass it to the
+# generator:
+#
+#     generate --policy policy.toml ...
+#
+# Without --policy the tool only inventories licenses; with it, every
+# (package x workspace) occurrence gets a verdict: ok, warn, fail, or
+# suppressed.
+#
+# Validation is strict: unknown keys, missing reasons/descriptions, invalid
+# SPDX patterns, and malformed paths reject the whole file with ONE
+# aggregated error report naming each problem's table path. Every override
+# in this file requires written justification -- the reasons below are the
+# audit trail your future self (or your lawyer) reads.
+#
+# Rule precedence (highest to lowest):
+#   [[deny]]  -- TERMINAL: force-fails, beats every accept lever below
+#   [[clarify]] override
+#   [[compatible]] match = "package"
+#   [[compatible]] match = "license"
+#   [[workspace.copyleft_suppressed]]
+#   category default (copyleft flag / [unknown] handling)
+
+# ---------------------------------------------------------------------------
+# Deny-list (POL-09) -- the HIGHEST-precedence, TERMINAL lane
+#
+# A [[deny]] entry FORCE-FAILS any matching (package x occurrence) regardless
+# of dev/prod scope, workspace suppression, OR a [[compatible]] rule, or a
+# stale override. It sits ABOVE everything else: a use-restricted
+# ("source-available") license legally cannot be redistributed in
+# client-shipped artifacts (including the IaC, container images, and modules
+# this tool inventories), so no other policy lever may license it back in.
+#
+# Two match modes (exactly one per entry, mirroring [[compatible]]):
+#   match = "license"  -- pattern is an SPDX ID or an OR of IDs, matched via
+#                         spdx-satisfies on a pre-decomposed allowlist (never
+#                         substring). AND patterns are rejected at validation.
+#   match = "name"     -- pattern is an EXACT package NAME. The escape hatch for
+#                         non-SPDX USE-RESTRICTION RIDERS like Commons-Clause,
+#                         which is not a registered SPDX license and rides
+#                         alongside another (e.g. "MIT AND Commons-Clause").
+#                         Name-mode does NOT need a parseable license, so it
+#                         catches a rider even on an unknown-finding package.
+#
+# OR-FINDING-vs-DENY ELECTION: a deny license-match is OR-election-consistent
+# with [[compatible]]. An OR finding is denied ONLY when it cannot elect out of
+# the deny set -- i.e. EVERY branch is denied. If ANY branch is acceptable, the
+# dep elects it and is NOT denied: with a deny for "BUSL-1.1",
+# "MIT OR BUSL-1.1" is NOT denied (MIT is electable), while a finding whose
+# every branch is denied IS denied.
+#
+# Every license-mode SPDX id is validated against spdx-license-ids in the tests.
+# RSAL (Redis Source Available License) has NO registered SPDX id, so it ships
+# in NAME mode below, not license mode.
+# ---------------------------------------------------------------------------
+
+[[deny]]
+match = "license"
+pattern = "BUSL-1.1"
+reason = "Business Source License 1.1 is source-available, NOT open source: it forbids production/competing use until the change date. It can never appear in a distributed THIRD_PARTY set -- deny is terminal and overrides every accept lever."
+
+[[deny]]
+match = "license"
+pattern = "SSPL-1.0"
+reason = "Server Side Public License 1.0 is source-available (OSI-rejected): its service-source copyleft makes it unredistributable in client-shipped artifacts. Force-fail unconditionally."
+
+[[deny]]
+match = "license"
+pattern = "Elastic-2.0"
+reason = "Elastic License 2.0 is source-available with use restrictions (no managed-service resale, no circumvention). Cannot ship in a distributed inventory -- terminal deny."
+
+[[deny]]
+match = "name"
+# RSAL (Redis Source Available License) has NO registered SPDX id, so it is
+# matched by PACKAGE NAME, not license. Adjust the name to the package(s) your
+# inventory reports under this license (e.g. "redis"). Documented as name-mode
+# precisely because the SPDX-satisfies path cannot catch a non-SPDX license.
+pattern = "redis"
+reason = "Redis Source Available License (RSAL/RSALv2) is source-available with use restrictions and has no registered SPDX id; matched by package name. Use-restricted -- cannot be redistributed, terminal deny. Replace/extend the name to match the RSAL-licensed package(s) in your inventory."
+
+[[deny]]
+match = "name"
+# Commons-Clause is a USE-RESTRICTION RIDER, not an SPDX license: it rides on
+# top of another license (e.g. "MIT AND Commons-Clause") and removes the right
+# to SELL the software. The SPDX-satisfies path cannot catch a non-SPDX rider,
+# so it is matched by PACKAGE NAME. Set this to the package(s) your inventory
+# reports carrying the Commons-Clause rider.
+pattern = "commons-clause-licensed-package"
+reason = "Commons-Clause is a use-restriction rider (no resale) layered onto another license; it is not a registered SPDX id and rides alongside its base license, so it is matched by name. Use-restricted -- terminal deny. Replace the name with the Commons-Clause-encumbered package(s) in your inventory."
+
+# ---------------------------------------------------------------------------
+# Workspace copyleft suppression
+#
+# When a workspace is ITSELF distributed under a copyleft license, in-family
+# copyleft dependencies impose no additional obligations within it. Each
+# entry suppresses copyleft findings for occurrences whose target is `path`
+# or lives under it (segment-aware: "apps/scratch" never matches a
+# hypothetical "apps/scratch-helper"). An occurrence of the same package in
+# a NON-suppressed workspace still flags -- suppression is per occurrence,
+# never per package.
+#
+# Suppression is FAMILY-AWARE: a finding is only suppressed when its
+# elected expression satisfies the workspace `license` itself, OR every
+# copyleft obligation in it belongs to the same license family as the
+# workspace license. The GNU family spans AGPL/GPL/LGPL, so an
+# AGPL-3.0-only workspace suppresses AGPL, GPL, and LGPL findings -- but
+# never SSPL, CC-BY-SA, MPL, or any other out-of-family copyleft finding,
+# which falls through to the normal fail default instead. The generated
+# verdict reason records WHICH relationship was verified (the audit
+# trail). Family grouping is deliberately coarse; use [[compatible]] for
+# precise per-license or per-package judgment calls.
+# ---------------------------------------------------------------------------
+
+[[workspace.copyleft_suppressed]]
+# Repo-relative workspace path: forward slashes only, no leading/trailing
+# slash, no ".." segments. An empty path would suppress everything and is
+# rejected.
+path = "apps/scratch"
+# The SPDX license this workspace is distributed under (validated eagerly).
+# Must be a SINGLE license ID, not an expression: it anchors the in-family
+# check above.
+license = "AGPL-3.0-only"
+# Mandatory documentation: WHY suppression is justified here.
+description = "apps/scratch and its scratch-editor submodule are themselves distributed under AGPL-3.0-only; the bundled scratch-* AGPL dependencies are in-family copyleft and impose no additional obligations within this workspace."
+
+# ---------------------------------------------------------------------------
+# Compatible overrides
+#
+# Two match modes, both excluded from copyleft flagging EVERYWHERE (not per
+# workspace). Use sparingly and document the judgment call in `reason`.
+#
+#   match = "license"  -- pattern is an SPDX ID or an OR of IDs, matched via
+#                         spdx-satisfies semantics (never substring). AND
+#                         patterns are rejected: an AND cannot be satisfied
+#                         by a single allowlist entry.
+#   match = "package"  -- exact package name, optionally pinned to a version.
+# ---------------------------------------------------------------------------
+
+[[compatible]]
+match = "license"
+# A single SPDX ID; "(MPL-2.0 OR MPL-1.1)" would also be accepted, while
+# "MPL-2.0 AND MIT" would be rejected at validation time.
+pattern = "MPL-2.0"
+# Mandatory: the documented judgment call.
+reason = "Weak copyleft; compatible under AGPL-3.0 and Apache License v2.0"
+
+[[compatible]]
+match = "package"
+# Exact package name (the inventory's name, e.g. the npm name).
+name = "@img/sharp-win32-x64"
+# Optional: pin the exception to one version; omit to cover all versions.
+version = "0.34.5"
+reason = "Dual-licensed Apache-2.0 AND LGPL-3.0-or-later; the LGPL obligations are reviewed and accepted for these prebuilt sharp binaries."
+
+# ---------------------------------------------------------------------------
+# Clarify overrides (two-level, staleness-guarded — POL-07)
+#
+# Overrides come at TWO levels:
+#   1. TOOL-LEVEL defaults ship WITH the tool (src/policy/builtinOverrides.ts):
+#      curated disambiguations for commonly-ambiguous well-known projects (the
+#      Jupyter/IPython BSD stack -> BSD-3-Clause, python-dateutil's "Dual
+#      License" -> "Apache-2.0 OR BSD-3-Clause"). You benefit from these WITHOUT
+#      re-authoring them.
+#   2. PROJECT-LEVEL overrides are the [[clarify]] entries below.
+# On conflict for the same package, the PROJECT level WINS (you can always
+# override a shipped default).
+#
+# Two flavours of [[clarify]]:
+#
+#   (a) Misdetection correction (no `expects`): the finding is REPLACED by
+#       `expression` blindly (source "override", highest precedence). Use this
+#       to fix garbage/missing upstream metadata.
+#
+#   (b) Staleness-guarded disambiguation (with `expects`): an override is a
+#       PRECONDITIONED assertion. `expects` records the value you are
+#       disambiguating FROM. The override applies ONLY when the dependency's
+#       currently-observed license still matches `expects`. If it no longer
+#       matches (a relicense, e.g. a "BSD"->BSD-3-Clause override on a package
+#       now reporting GPL-3.0), the override is STALE and the gate FAILS LOUDLY
+#       naming the package, the expected value, and the now-observed value --
+#       the stale assertion is NEVER applied, so an old override can never
+#       silently mask a relicense.
+#
+# `expression` must be valid SPDX -- parsed at validation time, so a typo fails
+# fast instead of mid-evaluation.
+# ---------------------------------------------------------------------------
+
+[[clarify]]
+# Misdetection correction (no `expects`): apply blindly.
+# Inline table: name is required, version is optional (omit = all versions).
+package = { name = "jsonify", version = "0.0.1" }
+# The corrected SPDX expression for this package.
+expression = "Unlicense"
+# Mandatory: where the correction comes from.
+reason = "Upstream declares the non-SPDX value 'Public Domain'; jsonify's README dedicates it to the public domain, mapped to Unlicense deliberately."
+
+# [[clarify]]
+# Staleness-guarded disambiguation: applies only while the observed value still
+# matches `expects`; a mismatch fails the gate loudly (never masks a relicense).
+# package = { name = "some-package" }
+# expects = "BSD"                 # the imprecise value we are disambiguating FROM
+# expression = "BSD-3-Clause"     # the precise SPDX expression we assert
+# reason = "Confirmed BSD-3-Clause in the upstream LICENSE file."
+
+# ---------------------------------------------------------------------------
+# Unknown-license handling
+#
+# Governs packages whose license could not be determined (no claim at all,
+# or a garbage value that neither parses nor corrects).
+#
+#   handling = "warn"  -- report unknowns but do not fail the gate.
+#   handling = "fail"  -- treat every unknown as a violation.
+#
+# Start with "warn" while burning down the unknown population, then switch
+# to "fail" once the inventory is clean. Per-ecosystem handling (e.g. fail
+# for npm, warn for python) is future scope; this knob is global. Omitting
+# the whole [unknown] table defaults to "warn".
+# ---------------------------------------------------------------------------
+
+[unknown]
+handling = "warn"
+
+# ---------------------------------------------------------------------------
+# Development / build-time dependency handling (POL-08)
+#
+# Distinguishes development/build-time dependencies from production (distributed)
+# ones IN THE GATE. A would-be FAIL (a copyleft license, or an unknown license
+# under [unknown] handling = "fail") on a DEV-only occurrence is downgraded —
+# because a build-time-only copyleft tool carries no distribution obligation,
+# unlike a shipped library.
+#
+#   handling = "warn"    -- a dev would-be-fail downgrades to WARN (the default).
+#   handling = "fail"    -- NO downgrade; gate dev EXACTLY like prod (the
+#                           pre-POL-08 behavior, for strict projects).
+#   handling = "ignore"  -- a dev would-be-fail becomes OK (an EXPLICIT,
+#                           documented opt-out — use deliberately).
+#
+# This is PER-OCCURRENCE, never package-level: the SAME package used as a dev
+# dependency in workspace A and a production dependency in workspace B still
+# FAILS on the B (production) occurrence under "warn"/"ignore". A shipped
+# copyleft can NEVER be dev-downgraded — production occurrences ALWAYS fail.
+#
+# Omitting the whole [dev_dependencies] table defaults to "warn".
+# ---------------------------------------------------------------------------
+
+[dev_dependencies]
+handling = "warn"
+
+# ---------------------------------------------------------------------------
+# Docker base-image OS-package handling (COLL-04)
+#
+# Governs the deb/apk OS packages scanned out of your Docker base images (the
+# committed docker-os-sbom.json, produced by the maintainer-run
+# `generate-docker-sbom` subcommand and threaded into the merge as scope "os").
+# A would-be FAIL on an OS package downgrades to WARN under "warn".
+#
+# WHY a separate, non-failing scope by default: the EXPECTED copyleft in a
+# Debian/Alpine base image -- glibc (LGPL), bash/coreutils (GPL), and the rest
+# of the distro -- is the operating system the container ships ON, not code your
+# project authored or redistributes as a library. Those obligations are
+# satisfied by shipping the image (the base distro handles its own compliance),
+# so the gate LISTS the OS packages in a dedicated
+# "## Docker base-image OS packages" section for the inventory rather than
+# FAILING your build on every standard base image. Mirrors [dev_dependencies]:
+# a scope whose would-be fails are a list, not a gate, by default.
+#
+#   handling = "warn"    -- an OS would-be-fail downgrades to WARN (the default).
+#   handling = "fail"    -- NO downgrade; gate OS packages EXACTLY like prod app
+#                           code (for projects that vendor / rebuild their base
+#                           and want every OS copyleft reviewed).
+#   handling = "ignore"  -- an OS would-be-fail becomes OK (an EXPLICIT,
+#                           documented opt-out).
+#
+# The [[deny]] terminal ALWAYS wins: a source-available / use-restricted license
+# (BUSL, SSPL, Elastic, RSAL) in an OS package STILL FAILS the gate
+# unconditionally, regardless of this knob -- deny sits above os_dependencies
+# just as it sits above dev_dependencies. Omitting the whole [os_dependencies]
+# table defaults to "warn".
+#
+# ---------------------------------------------------------------------------
+# HOW the docker-os-sbom.json is produced -- TWO modes (the second is the
+# state-of-the-art standard for CI):
+#
+#   1. Live scan (maintainer, requires docker):
+#        bun run src/cli.ts generate-docker-sbom --image postgres:18 \
+#          --image nginx:stable-alpine
+#      Spawns the pinned syft over each LOCALLY-PRESENT image and digest-pins
+#      it. Good for a one-off local dogfood; needs a docker daemon.
+#
+#   2. Consume a pre-made SBOM (CI attestation -- PREFERRED):
+#        bun run src/cli.ts generate-docker-sbom \
+#          --from-sbom build/postgres.cdx.json \
+#          --from-sbom build/app.cdx.json
+#      Ingests syft/CycloneDX SBOMs your BUILD PIPELINE already produced, with
+#      NO docker and NO network. The standard flow: the build CI runs syft
+#      against the image it just pushed, BY REGISTRY DIGEST -- e.g.
+#        syft registry.example/app@sha256:... -o cyclonedx-json=app.cdx.json
+#      -- as a build attestation, then this tool consumes that attested SBOM.
+#      This captures the BUILT image's real OS surface (including apt/apk
+#      deltas layered over the base, such as a backend's extra openssl) that a
+#      base-image-only scan would miss, and keeps the compliance tool a thin
+#      CONSUMER of standard SBOM tooling rather than a docker orchestrator.
+#
+# Either mode writes the SAME deterministic committed docker-os-sbom.json,
+# carrying each OS package's syft-resolved licenses, which generate/check then
+# read OFFLINE (never re-scanning). --image and --from-sbom are mutually
+# exclusive -- a run is one mode or the other.
+# ---------------------------------------------------------------------------
+
+[os_dependencies]
+handling = "warn"

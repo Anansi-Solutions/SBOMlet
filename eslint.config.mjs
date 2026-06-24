@@ -1,0 +1,48 @@
+import js from "@eslint/js";
+import tseslint from "typescript-eslint";
+import importX from "eslint-plugin-import-x";
+import eslintConfigPrettier from "eslint-config-prettier/flat";
+
+export default tseslint.config(
+  {
+    // Goldens and fixtures are contract bytes — lint must never see them.
+    ignores: [".cache/", "test/golden/", "test/fixtures/", "node_modules/"],
+  },
+  js.configs.recommended,
+  ...tseslint.configs.recommended,
+  {
+    files: ["**/*.ts"],
+    plugins: { "import-x": importX },
+    rules: {
+      "@typescript-eslint/explicit-function-return-type": "error",
+      "@typescript-eslint/no-explicit-any": "error",
+      "@typescript-eslint/no-unused-vars": [
+        "error",
+        {
+          argsIgnorePattern: "^_",
+          varsIgnorePattern: "^_",
+          caughtErrorsIgnorePattern: "^_",
+        },
+      ],
+      "import-x/no-duplicates": ["error", { "prefer-inline": true }],
+      "import-x/order": [
+        "error",
+        {
+          groups: [
+            "builtin",
+            "external",
+            "internal",
+            "parent",
+            "sibling",
+            "index",
+            "object",
+            "type",
+          ],
+        },
+      ],
+      "max-depth": ["error", 3],
+      complexity: ["error", 15],
+    },
+  },
+  eslintConfigPrettier, // last — disables formatting rules
+);

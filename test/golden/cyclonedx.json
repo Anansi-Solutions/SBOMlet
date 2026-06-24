@@ -1,0 +1,121 @@
+{
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.6",
+  "version": 1,
+  "metadata": {
+    "tools": {
+      "components": [
+        {
+          "type": "application",
+          "name": "licenses-tool"
+        }
+      ]
+    }
+  },
+  "components": [
+    {
+      "type": "library",
+      "name": "expr-pkg",
+      "version": "3.0.0",
+      "purl": "pkg:npm/expr-pkg@3.0.0",
+      "bom-ref": "pkg:npm/expr-pkg@3.0.0",
+      "licenses": [
+        {
+          "expression": "MIT OR Apache-2.0"
+        }
+      ],
+      "properties": [
+        {
+          "name": "licenses-tool:used-in",
+          "value": "apps/a"
+        },
+        {
+          "name": "licenses-tool:scope:apps/a",
+          "value": "prod"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "jsonify",
+      "version": "0.0.1",
+      "purl": "pkg:npm/jsonify@0.0.1",
+      "bom-ref": "pkg:npm/jsonify@0.0.1",
+      "licenses": [
+        {
+          "license": {
+            "name": "Public Domain"
+          }
+        }
+      ],
+      "properties": [
+        {
+          "name": "licenses-tool:used-in",
+          "value": "apps/a"
+        },
+        {
+          "name": "licenses-tool:scope:apps/a",
+          "value": "prod"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "no-license-pkg",
+      "version": "1.0.0",
+      "purl": "pkg:npm/no-license-pkg@1.0.0",
+      "bom-ref": "pkg:npm/no-license-pkg@1.0.0",
+      "properties": [
+        {
+          "name": "licenses-tool:used-in",
+          "value": "apps/a"
+        },
+        {
+          "name": "licenses-tool:scope:apps/a",
+          "value": "prod"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "sharp",
+      "version": "0.33.0",
+      "purl": "pkg:npm/sharp@0.33.0",
+      "bom-ref": "pkg:npm/sharp@0.33.0",
+      "properties": [
+        {
+          "name": "licenses-tool:used-in",
+          "value": "backend"
+        },
+        {
+          "name": "licenses-tool:used-in",
+          "value": "frontend"
+        },
+        {
+          "name": "licenses-tool:scope:backend",
+          "value": "prod"
+        },
+        {
+          "name": "licenses-tool:scope:frontend",
+          "value": "dev"
+        },
+        {
+          "name": "licenses-tool:verdict:backend",
+          "value": "ok"
+        },
+        {
+          "name": "licenses-tool:rule:backend",
+          "value": "default:ok"
+        },
+        {
+          "name": "licenses-tool:verdict:frontend",
+          "value": "fail"
+        },
+        {
+          "name": "licenses-tool:rule:frontend",
+          "value": "default:copyleft"
+        }
+      ]
+    }
+  ]
+}

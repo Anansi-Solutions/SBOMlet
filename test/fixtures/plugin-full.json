@@ -1,0 +1,107 @@
+{
+  "$schema": "http://cyclonedx.org/schema/bom-1.6.schema.json",
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.6",
+  "version": 1,
+  "metadata": {
+    "component": {
+      "type": "application",
+      "name": "synthetic-plugin-root",
+      "purl": "pkg:npm/synthetic-plugin-root"
+    },
+    "tools": {
+      "components": [
+        {
+          "type": "application",
+          "name": "yarn",
+          "version": "4.9.1"
+        },
+        {
+          "type": "library",
+          "group": "@cyclonedx",
+          "name": "yarn-plugin-cyclonedx",
+          "version": "3.3.1"
+        }
+      ]
+    }
+  },
+  "components": [
+    {
+      "type": "library",
+      "group": "@eslint",
+      "name": "eslintrc",
+      "version": "3.3.3",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT",
+            "acknowledgement": "declared"
+          }
+        }
+      ],
+      "purl": "pkg:npm/%40eslint/eslintrc@3.3.3",
+      "bom-ref": "@eslint/eslintrc@npm:3.3.3"
+    },
+    {
+      "type": "library",
+      "name": "type-fest",
+      "version": "4.26.1",
+      "licenses": [
+        {
+          "expression": "(MIT OR CC0-1.0)"
+        }
+      ],
+      "purl": "pkg:npm/type-fest@4.26.1",
+      "bom-ref": "type-fest@npm:4.26.1"
+    },
+    {
+      "type": "library",
+      "name": "type-fest",
+      "version": "4.26.1",
+      "licenses": [
+        {
+          "expression": "(MIT OR CC0-1.0)"
+        }
+      ],
+      "purl": "pkg:npm/type-fest@4.26.1",
+      "bom-ref": "type-fest@virtual:a1b2c3#npm:4.26.1"
+    },
+    {
+      "type": "library",
+      "name": "semver",
+      "version": "7.7.1",
+      "licenses": [
+        {
+          "license": {
+            "id": "ISC",
+            "acknowledgement": "declared"
+          }
+        }
+      ],
+      "purl": "pkg:npm/semver@7.7.1",
+      "bom-ref": "semver@npm:7.7.1"
+    },
+    {
+      "type": "library",
+      "name": "argparse",
+      "version": "2.0.1",
+      "licenses": [
+        {
+          "license": {
+            "name": "Python style license"
+          }
+        }
+      ],
+      "purl": "pkg:npm/argparse@2.0.1",
+      "bom-ref": "argparse@npm:2.0.1"
+    },
+    {
+      "type": "library",
+      "name": "iframe-rpc-react",
+      "version": "0.0.0-use.local",
+      "licenses": [],
+      "purl": "pkg:npm/iframe-rpc-react@0.0.0-use.local",
+      "bom-ref": "iframe-rpc-react@portal:../libraries/iframe-rpc-react"
+    }
+  ]
+}

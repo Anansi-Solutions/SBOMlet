@@ -1,0 +1,22 @@
+{
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.6",
+  "serialNumber": "urn:uuid:00000000-0000-0000-0000-000000000999",
+  "metadata": {
+    "component": {
+      "type": "container",
+      "name": "postgres:18-bookworm",
+      "version": "18-bookworm"
+    }
+  },
+  "components": [
+    {
+      "type": "library",
+      "name": "tagref-libc6",
+      "version": "2.41-12",
+      "licenses": [{ "license": { "id": "LGPL-2.1-only" } }],
+      "purl": "pkg:deb/debian/tagref-libc6@2.41-12?arch=amd64&distro=debian-13",
+      "bom-ref": "pkg:deb/debian/tagref-libc6@2.41-12?package-id=tag1"
+    }
+  ]
+}
