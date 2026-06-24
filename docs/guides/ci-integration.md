@@ -53,6 +53,23 @@ compares the same files. The variables are caller-overridable:
 task licenses:check POLICY=policy.toml CYCLONEDX=sbom.cdx.json
 ```
 
+## Or: the GitHub Action
+
+On GitHub Actions specifically, the composite action collapses the whole setup —
+toolchain, install, run — into one step, so you don't put mise or Task on the
+runner yourself:
+
+```yaml
+- uses: actions/checkout@v6
+- uses: Anansi-Solutions/SBOMlet@main # pin a tag or SHA in production
+  with:
+    policy: policy.toml
+```
+
+It runs `check` by default (the exit codes below apply); pass `mode: generate` to
+write the inventory instead. It is exactly the `mise + bun` pipeline above, wrapped
+— use it on GitHub Actions and the Taskfile step everywhere else.
+
 ## What the exit code means
 
 The step passes or fails on the process exit code, and the code tells you which

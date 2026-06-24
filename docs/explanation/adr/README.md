@@ -55,3 +55,4 @@ summaries and research notes.
 | [0020](0020-distribution-git-bun.md) | Distribution stays git + Taskfile + mise-pinned bun; compiled binary declined | Accepted |
 | [0021](0021-source-available-deny-defaults.md) | Source-available licences ship as deny defaults | Accepted |
 | [0022](0022-source-available-opt-out.md) | Opting out of a source-available deny via [[allow_source_available]] | Accepted |
+| [0023](0023-composite-github-action.md) | A composite GitHub Action for one-line CI adoption | Accepted |
