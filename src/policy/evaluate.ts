@@ -529,7 +529,7 @@ function denyVerdict(
   base: { purl: string; occurrenceTarget: string },
   denyRule: IndexedDenyRule,
 ): Verdict {
-  const { index, rule } = denyRule;
+  const { ruleId, rule } = denyRule;
   const what =
     rule.match === "license"
       ? `license pattern "${rule.pattern}"`
@@ -537,7 +537,7 @@ function denyVerdict(
   return {
     ...base,
     status: "fail",
-    rule: `denied[${index}]`,
+    rule: ruleId,
     reason:
       `DENIED by ${what}: ${rule.reason} — a use-restricted / ` +
       `source-available license cannot be redistributed in client-shipped ` +

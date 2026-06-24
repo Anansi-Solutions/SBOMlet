@@ -1,13 +1,22 @@
 /**
  * POL-09 terminal deny-list matcher.
  *
- * A [[deny]] entry FORCE-FAILS a matching package at the very top of verdictFor
- * — above stale, compatible, workspace suppression, and the dev-scope
- * downgrade. A use-restricted ("source-available") license (BUSL/SSPL/Elastic/
- * RSAL) or a use-restriction rider (Commons-Clause) legally cannot be
- * redistributed in client-shipped artifacts, so no other policy lever may
- * license it back in. Deny is the mirror of compatible: where compatible elects
- * a package IN, deny elects it OUT.
+ * A deny entry FORCE-FAILS a matching package at the very top of verdictFor —
+ * above stale, compatible, workspace suppression, and the dev-scope downgrade. A
+ * use-restricted ("source-available") license (BUSL/SSPL/Elastic/RSAL) or a
+ * use-restriction rider (Commons-Clause) legally cannot be redistributed in
+ * client-shipped artifacts, so no other policy lever may license it back in. Deny
+ * is the mirror of compatible: where compatible elects a package IN, deny elects
+ * it OUT.
+ *
+ * TWO SOURCES, ONE PRECEDENCE LANE. The effective deny set is the consumer's
+ * policy [[deny]] entries PLUS the shipped source-available defaults
+ * (builtinDenylist.ts) — a source-available license fails out of the box, with no
+ * policy authored, exactly like the shipped copyleft families and clarify
+ * defaults. effectiveDenyRules orders policy entries first so a license a consumer
+ * ALSO lists wins attribution to their explicit `denied[i]`; a license only the
+ * defaults catch is cited `default:source-available`. The OR-election union spans
+ * both sets, so the two compose correctly.
  *
  * Two match modes (exactly one per entry, mirroring the [[compatible]] shape):
  *
@@ -26,7 +35,8 @@
  *     Name-mode deliberately does NOT require a parseable license expression —
  *     a package with an unknown (null) finding can still be name-denied. It is
  *     an EXACT compare, never a broad regex/substring, so a typo'd or unrelated
- *     name can never be denied.
+ *     name can never be denied. The shipped defaults are license-mode only — a
+ *     name-mode default would have to guess encumbered package names.
  *
  * OR-FINDING-vs-DENY ELECTION SEMANTICS (plan-check W1 — load-bearing):
  * spdx-satisfies(finding, allowlist) is the WRONG primitive for deny because it
@@ -40,7 +50,7 @@
  *                  branch defeats the denial);
  *   - AND (l, r) → denied iff EITHER side is denied (an AND conjunct cannot be
  *                  elected away — every obligation applies).
- * Concretely, with [[deny]] match="license" pattern covering BUSL-1.1:
+ * Concretely, with BUSL-1.1 in the deny set:
  *   - "MIT OR BUSL-1.1"      → NOT denied (MIT is an electable acceptable
  *                              branch — mirrors compatible OR-election).
  *   - "GPL-3.0 OR BUSL-1.1"  → denied ONLY when the deny set covers BOTH
@@ -50,16 +60,16 @@
  *
  * UNION-ELECTION ACROSS SEPARATE LICENSE RULES (C#6 — load-bearing):
  * The election above must run against the UNION of EVERY match="license" deny
- * allowlist, not each rule's allowlist in isolation. The shipped policy lists
- * BUSL-1.1, SSPL-1.0, Elastic-2.0 as THREE separate match="license" entries, so
- * an isolated per-rule election sees only ONE branch of "BUSL-1.1 OR SSPL-1.0"
- * and never denies it (each rule finds the other branch "electable"). The
- * correct decision builds the combined allowlist once and asks nodeDenied
- * against it; "BUSL-1.1 OR SSPL-1.0" then has NO electable branch and is denied,
- * while "MIT OR BUSL-1.1" stays electable (MIT is in neither allowlist). When
- * the union denies, the verdict is attributed to the FIRST license rule that
- * contributes a denied LEAF (for the rule-id/reason). Name-mode rules stay
- * per-rule (an exact name compare has no election).
+ * allowlist, not each rule's allowlist in isolation. The shipped defaults provide
+ * BUSL-1.1, SSPL-1.0, Elastic-2.0 as SEPARATE match="license" rules, so an
+ * isolated per-rule election sees only ONE branch of
+ * "BUSL-1.1 OR SSPL-1.0" and never denies it (each rule finds the other branch
+ * "electable"). The correct decision builds the combined allowlist once and asks
+ * nodeDenied against it; "BUSL-1.1 OR SSPL-1.0" then has NO electable branch and
+ * is denied, while "MIT OR BUSL-1.1" stays electable (MIT is in neither
+ * allowlist). When the union denies, the verdict is attributed to the FIRST
+ * license rule that contributes a denied LEAF (for the rule-id/reason). Name-mode
+ * rules stay per-rule (an exact name compare has no election).
  *
  * Pure functions, no I/O, no logging; the satisfies calls are wrapped in a
  * defensive catch to preserve the engine's never-throws posture.
@@ -69,6 +79,7 @@ import satisfies from "spdx-satisfies";
 import parseSpdx from "spdx-expression-parse";
 
 import { type ExpressionNode } from "../normalize/expression";
+import { BUILTIN_DENY_RULES, BUILTIN_DENY_RULE_ID } from "./builtinDenylist";
 import type { Policy } from "./schema";
 
 /**
@@ -86,10 +97,31 @@ export type DenyRule =
     }
   | { match: "name"; pattern: string; reason: string };
 
-/** A matched deny rule plus its index, for the `denied[i]` rule id. */
+/**
+ * A matched deny rule plus the rule id it is cited under: `denied[i]` for a
+ * consumer policy rule, `default:source-available` for a shipped default.
+ */
 export interface IndexedDenyRule {
-  index: number;
+  ruleId: string;
   rule: DenyRule;
+}
+
+/**
+ * The effective deny rules in precedence order: the consumer's policy denies
+ * first (cited `denied[i]`), then the shipped source-available defaults (cited
+ * `default:source-available`). Policy-first ordering means a license a consumer
+ * ALSO lists wins attribution to their explicit rule; the OR-election union
+ * (unionLicenseDeny) spans both sets regardless of order, so the two compose.
+ */
+function effectiveDenyRules(policy: Policy): IndexedDenyRule[] {
+  const rules: IndexedDenyRule[] = [];
+  policy.deny.forEach((rule, index) =>
+    rules.push({ ruleId: `denied[${index}]`, rule }),
+  );
+  for (const rule of BUILTIN_DENY_RULES) {
+    rules.push({ ruleId: BUILTIN_DENY_RULE_ID, rule });
+  }
+  return rules;
 }
 
 /** True iff a single leaf id satisfies the deny allowlist (defensive catch). */
@@ -144,24 +176,23 @@ function anyLeafDenied(
 
 /**
  * License-mode union election (C#6): build the combined allowlist of EVERY
- * match="license" deny rule once and ask nodeDenied against it. When denied,
- * attribute to the FIRST license rule that contributes a denied leaf (so the
- * rule-id/reason names a real rule). A null/unparseable expression can never be
+ * match="license" rule (policy + shipped defaults) once and ask nodeDenied
+ * against it. When denied, attribute to the FIRST license rule that contributes a
+ * denied leaf (so the rule-id/reason names a real rule — policy first per
+ * effectiveDenyRules order). A null/unparseable expression can never be
  * license-denied. Returns undefined when no license rule (or no electable-out
  * branch) applies.
  */
 function unionLicenseDeny(
-  policy: Policy,
+  rules: ReadonlyArray<IndexedDenyRule>,
   expression: string,
 ): IndexedDenyRule | undefined {
-  const licenseRules: IndexedDenyRule[] = [];
+  const licenseRules = rules.filter((r) => r.rule.match === "license");
+  if (licenseRules.length === 0) return undefined;
   const union: string[] = [];
-  for (const [index, rule] of policy.deny.entries()) {
-    if (rule.match !== "license") continue;
-    licenseRules.push({ index, rule });
-    union.push(...rule.allowlist);
+  for (const r of licenseRules) {
+    if (r.rule.match === "license") union.push(...r.rule.allowlist);
   }
-  if (union.length === 0) return undefined;
   let node: ExpressionNode;
   try {
     node = parseSpdx(expression) as ExpressionNode;
@@ -182,33 +213,38 @@ function unionLicenseDeny(
 }
 
 /**
- * First deny rule that matches, or undefined. Name-mode matches the exact
- * package `name` per-rule (no election) and does NOT need a parseable
- * expression. License-mode matches against the finding's (already-normalized)
- * `expression` with OR-election semantics over the UNION of all license deny
- * allowlists (C#6); a null expression (unknown/imprecise) can never be
- * license-denied.
+ * First deny rule that matches, or undefined, over the effective deny set (policy
+ * denies then shipped source-available defaults). Name-mode matches the exact
+ * package `name` per-rule (no election) and does NOT need a parseable expression.
+ * License-mode matches against the finding's (already-normalized) `expression`
+ * with OR-election semantics over the UNION of all license deny allowlists (C#6);
+ * a null expression (unknown/imprecise) can never be license-denied.
  *
- * Name-mode and license-mode are checked in rule order so the lowest-index
- * matching rule wins — a name rule before a contributing license rule is cited
- * first, matching the documented "first deny rule" precedence.
+ * Name-mode and license-mode are reconciled by effective order so the
+ * earliest-listed matching rule wins — a name rule before a contributing license
+ * rule is cited first, matching the documented "first deny rule" precedence.
  */
 export function denyRuleFor(
   policy: Policy,
   expression: string | null,
   name: string,
 ): IndexedDenyRule | undefined {
+  const rules = effectiveDenyRules(policy);
   let nameMatch: IndexedDenyRule | undefined;
-  for (const [index, rule] of policy.deny.entries()) {
-    if (rule.match === "name" && rule.pattern === name) {
-      nameMatch = { index, rule };
+  let namePosition = -1;
+  for (const [position, r] of rules.entries()) {
+    if (r.rule.match === "name" && r.rule.pattern === name) {
+      nameMatch = r;
+      namePosition = position;
       break;
     }
   }
   const licenseMatch =
-    expression === null ? undefined : unionLicenseDeny(policy, expression);
+    expression === null ? undefined : unionLicenseDeny(rules, expression);
   if (nameMatch === undefined) return licenseMatch;
   if (licenseMatch === undefined) return nameMatch;
-  // Both matched: the lower index (earlier rule) wins.
-  return nameMatch.index <= licenseMatch.index ? nameMatch : licenseMatch;
+  // Both matched: the earlier rule in effective order wins (mirrors the prior
+  // lowest-index precedence). licenseMatch is a reference into `rules`.
+  const licensePosition = rules.indexOf(licenseMatch);
+  return namePosition <= licensePosition ? nameMatch : licenseMatch;
 }

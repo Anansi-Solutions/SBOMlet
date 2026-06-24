@@ -798,7 +798,7 @@ describe("evaluate — family-aware suppression", () => {
   });
 
   test("out-of-family copyleft under the suppressed path falls through to default:copyleft", () => {
-    // SSPL and CC-BY-SA are not in the GNU family: a path match alone must
+    // CC-BY-SA is out-of-family copyleft; SSPL is now a source-available deny default: a path match alone must
     // never suppress them — that would assert a legally false in-family
     // justification.
     const { verdicts } = runEngine(
@@ -810,14 +810,14 @@ describe("evaluate — family-aware suppression", () => {
     );
     expect(verdicts.map((v) => [v.status, v.rule])).toEqual([
       ["fail", "default:copyleft"],
-      ["fail", "default:copyleft"],
+      ["fail", "default:source-available"],
     ]);
   });
 
   test("mixed AND with an out-of-family copyleft leaf is NOT suppressed", () => {
     const { verdicts } = runEngine(
       [
-        pkgSpec("mixed-pkg", "LGPL-3.0-or-later AND SSPL-1.0", [
+        pkgSpec("mixed-pkg", "LGPL-3.0-or-later AND CC-BY-SA-4.0", [
           "apps/scratch",
         ]),
       ],
@@ -887,7 +887,7 @@ describe("evaluate — absorb-all-copyleft suppression (revision F)", () => {
   });
 
   test("it STILL does NOT suppress SSPL-1.0 or CC-BY-SA (the safety floor)", () => {
-    // SSPL/CC-BY-SA are NOT in the GNU absorbed set — absence is the floor.
+    // CC-BY-SA falls to copyleft (out-of-family); SSPL-1.0 is now a source-available deny default — both prove the floor (neither is suppressed).
     const { verdicts } = runEngine(
       [
         pkgSpec("cc-sa-pkg", "CC-BY-SA-4.0", ["apps/scratch"]),
@@ -897,7 +897,7 @@ describe("evaluate — absorb-all-copyleft suppression (revision F)", () => {
     );
     expect(verdicts.map((v) => [v.status, v.rule])).toEqual([
       ["fail", "default:copyleft"],
-      ["fail", "default:copyleft"],
+      ["fail", "default:source-available"],
     ]);
   });
 
@@ -1970,7 +1970,7 @@ describe("denyRuleFor — pure matcher (SPDX + name + OR-election)", () => {
 
   test("license-mode matches an exact denied finding", () => {
     const hit = denyRuleFor(denyBusl, "BUSL-1.1", "anything");
-    expect(hit?.index).toBe(0);
+    expect(hit?.ruleId).toBe("denied[0]");
   });
 
   test("license-mode does NOT match a non-denied finding", () => {
@@ -1979,8 +1979,8 @@ describe("denyRuleFor — pure matcher (SPDX + name + OR-election)", () => {
 
   test("an OR pattern matches either denied branch", () => {
     const policy = parsePolicy(denyLicenseFixture("(SSPL-1.0 OR Elastic-2.0)"));
-    expect(denyRuleFor(policy, "SSPL-1.0", "x")?.index).toBe(0);
-    expect(denyRuleFor(policy, "Elastic-2.0", "x")?.index).toBe(0);
+    expect(denyRuleFor(policy, "SSPL-1.0", "x")?.ruleId).toBe("denied[0]");
+    expect(denyRuleFor(policy, "Elastic-2.0", "x")?.ruleId).toBe("denied[0]");
   });
 
   test("W1: an OR finding with an electable acceptable branch is NOT denied", () => {
@@ -1992,14 +1992,18 @@ describe("denyRuleFor — pure matcher (SPDX + name + OR-election)", () => {
   test("W1: an OR finding with NO acceptable branch IS denied", () => {
     // Deny set covers BOTH branches → the dep cannot elect out → denied.
     const policy = parsePolicy(denyLicenseFixture("(GPL-3.0 OR BUSL-1.1)"));
-    expect(denyRuleFor(policy, "GPL-3.0 OR BUSL-1.1", "x")?.index).toBe(0);
+    expect(denyRuleFor(policy, "GPL-3.0 OR BUSL-1.1", "x")?.ruleId).toBe(
+      "denied[0]",
+    );
   });
 
   test("name-mode matches the target package name (verbatim, non-SPDX rider)", () => {
     const policy = parsePolicy(denyNameFixture("commons-clause-pkg"));
     // name-mode matches on the PACKAGE NAME and does not require a parseable
     // license expression (the Commons-Clause rider rides a non-SPDX value).
-    expect(denyRuleFor(policy, null, "commons-clause-pkg")?.index).toBe(0);
+    expect(denyRuleFor(policy, null, "commons-clause-pkg")?.ruleId).toBe(
+      "denied[0]",
+    );
     expect(denyRuleFor(policy, null, "unrelated-pkg")).toBeUndefined();
   });
 
@@ -2228,7 +2232,7 @@ describe("evaluate — deny election across SEPARATE [[deny]] entries (C#6: unio
     const hit = denyRuleFor(policy, "SSPL-1.0 OR Elastic-2.0", "x");
     // Both branches denied via the union; attribute to the FIRST license rule
     // that contributes a denied leaf (SSPL-1.0 at index 1 here).
-    expect(hit?.index).toBe(1);
+    expect(hit?.ruleId).toBe("denied[1]");
   });
 });
 
