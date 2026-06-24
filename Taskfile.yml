@@ -1,42 +1,41 @@
-# Taskfile for the third-party license compliance tool.
+# Taskfile for SBOMlet, the third-party license compliance tool — the single
+# interface to the tool for local use, CI, and consumer repositories.
 #
-# Included from a consumer repository's root Taskfile.yml:
+# A consumer includes it from their root Taskfile.yml. `flatten: true` exposes the
+# tasks unprefixed (`task generate`, `task check`); `dir` is MANDATORY so that
+# `mise x -- bun` resolves THIS directory's pinned bun, not the consumer's root:
 #
 #   includes:
-#     licenses:
-#       taskfile: ./Taskfile.yml
+#     sbomlet:
+#       taskfile: ./tools/sbomlet/Taskfile.yml
 #       dir: ./tools/sbomlet
+#       flatten: true
 #
-# `dir` is MANDATORY: tasks must run inside tools/sbomlet so that
-# `mise x -- bun` resolves THIS directory's mise.toml bun pin (without it
-# the tasks would run at the repo root, where no bun pin exists).
-# Namespacing is automatic: the include name `licenses` yields
-# `task generate` and `task check` — no alias tasks.
+# Overridable variables (e.g. `task generate REPO_ROOT=/path/to/repo`):
+#   REPO_ROOT       repository to scan              (default: this Taskfile's dir)
+#   OUTPUT          THIRD_PARTY_LICENSES.md path    (default: beside REPO_ROOT)
+#   NOTICES         THIRD_PARTY_NOTICES.md path     (default: beside REPO_ROOT)
+#   POLICY          policy file; --policy is added only when set
+#                   (default unset: the tool auto-discovers .sbomlet.toml)
+#   CYCLONEDX       CycloneDX export path; --cyclonedx is added only when set
+#   IMAGES          space-separated image refs for generate-docker-sbom
+#                   (default: the CLI's built-in image set)
+#   DOCKER_OS_SBOM  docker-os-sbom.json path        (default: beside REPO_ROOT)
+#   TITLE           decision title for adr:new
+#
+# Variable values reach the CLI through the ENVIRONMENT, never command-line
+# template interpolation, so a value like '$(...)' is inert data, never executed.
 version: '3'
 
 vars:
-  # Vars declared in an included Taskfile take precedence over the
-  # includer's, so the `default` idiom keeps every var caller-overridable:
-  #   task generate REPO_ROOT=/some/other/repo
-  # ROOT_DIR is the ROOT Taskfile's directory — the repo root by default.
   REPO_ROOT: '{{.REPO_ROOT | default .ROOT_DIR}}'
-  # Output paths default BESIDE the repo root: tasks run in tools/sbomlet
-  # via the include `dir`, so bare relative defaults would land the files
-  # in the wrong directory.
   OUTPUT: '{{.OUTPUT | default (printf "%s/THIRD_PARTY_LICENSES.md" .REPO_ROOT)}}'
   NOTICES: '{{.NOTICES | default (printf "%s/THIRD_PARTY_NOTICES.md" .REPO_ROOT)}}'
-  # POLICY and CYCLONEDX deliberately have NO default — the corresponding
-  # flags are appended only when the caller sets the var.
 
 tasks:
   generate:
     desc: Generate THIRD_PARTY_LICENSES.md and THIRD_PARTY_NOTICES.md (plus an optional CycloneDX export); commit the outputs
     env:
-      # Var values flow to the CLI through the ENVIRONMENT, never through
-      # template interpolation on the command line: inside POSIX double quotes
-      # $, backticks, and backslash stay active, so an interpolated value like
-      # '$(touch pwned)' would execute. As an env value it is inert data —
-      # "$LT_OUTPUT" expands to the exact bytes of the value as one word.
       LT_BASE_DIR: '{{.USER_WORKING_DIR}}'
       LT_REPO_ROOT: '{{.REPO_ROOT}}'
       LT_OUTPUT: '{{.OUTPUT}}'
@@ -44,22 +43,11 @@ tasks:
       LT_POLICY: '{{.POLICY | default ""}}'
       LT_CYCLONEDX: '{{.CYCLONEDX | default ""}}'
     cmds:
-      # No pipelines, no eval, no dynamic task names. The {{if .VAR}}
-      # conditionals emit literal flag text only — no value rides the template
-      # into shell parsing.
-      #
-      # --base-dir: tasks run inside tools/sbomlet (the include `dir`), so
-      # relative caller-supplied paths (POLICY=.sbomlet.toml, ...) would resolve
-      # against tools/sbomlet, not the directory the user invoked `task` from.
-      # USER_WORKING_DIR is that invocation directory; the CLI anchors every
-      # relative path flag to it.
       - mise x -- bun src/cli.ts generate --base-dir "$LT_BASE_DIR" --repo-root "$LT_REPO_ROOT" --output "$LT_OUTPUT" --notices "$LT_NOTICES"{{if .POLICY}} --policy "$LT_POLICY"{{end}}{{if .CYCLONEDX}} --cyclonedx "$LT_CYCLONEDX"{{end}}
 
   check:
     desc: 'CI gate — exit 0 clean, 1 policy violation (beats stale), 2 stale/missing output, 3+ tool error'
     env:
-      # Same env-passing posture as generate: values are data, never
-      # shell-parsed template output.
       LT_BASE_DIR: '{{.USER_WORKING_DIR}}'
       LT_REPO_ROOT: '{{.REPO_ROOT}}'
       LT_OUTPUT: '{{.OUTPUT}}'
@@ -67,56 +55,25 @@ tasks:
       LT_POLICY: '{{.POLICY | default ""}}'
       LT_CYCLONEDX: '{{.CYCLONEDX | default ""}}'
     cmds:
-      # Exit taxonomy:
-      #   0  clean — committed outputs match the regenerated inventory
-      #   1  policy violation — at least one fail verdict (beats stale)
-      #   2  stale — a committed output differs from the regenerated bytes,
-      #      or is missing; regenerate with `task generate`, commit
-      #   3+ tool/config error — bad flags, invalid policy, scan failure
-      # Warn verdicts and unused-policy-entry warnings print but never gate.
-      #
-      # --base-dir: same anchoring as generate — check must compare the same
-      # files generate wrote, or a relative CYCLONEDX would make the gate
-      # "verify" a misplaced export while the expected one does not exist.
       - mise x -- bun src/cli.ts check --base-dir "$LT_BASE_DIR" --repo-root "$LT_REPO_ROOT" --output "$LT_OUTPUT" --notices "$LT_NOTICES"{{if .POLICY}} --policy "$LT_POLICY"{{end}}{{if .CYCLONEDX}} --cyclonedx "$LT_CYCLONEDX"{{end}}
 
   verify-cache:
-    desc: 'ONLINE cache-integrity audit — re-resolve every committed enrichment-cache entry against its registry and report any divergence from the stored license; run before a release/audit or when the cache changes (needs network). Exit 0 all match, 1 mismatch, 3 tool/network error'
+    desc: 'ONLINE cache-integrity audit — re-resolve every committed cache entry against its registry and report divergence from the stored license; run before a release/audit or when the cache changes (needs network). Exit 0 all match, 1 mismatch, 3 tool/network error'
     env:
-      # Same data-only env-passing posture as generate/check: the value is inert
-      # data, never interpolated into a shell command line.
       LT_BASE_DIR: '{{.USER_WORKING_DIR}}'
     cmds:
-      # --base-dir anchors the committed .sbomlet.cache.json to the invocation
-      # directory EXACTLY as generate/check do, so the audit targets the same file
-      # the gate trusts offline. GITHUB_TOKEN, when present in the environment, is
-      # inherited by the child and read by the terraform/github resolver for a
-      # higher rate limit (unauth works, just slower).
       - mise x -- bun src/cli.ts verify-cache --base-dir "$LT_BASE_DIR"
 
   generate-docker-sbom:
     desc: 'MAINTAINER + DOCKER ONLY — scan the image set with syft and write the committed docker-os-sbom.json; NOT part of check (check reads the committed bytes offline)'
     env:
-      # Same injection-safe env-passing posture as generate/check: every value
-      # flows to the CLI through the ENVIRONMENT as inert data, never
-      # interpolated into the command line where $, backticks, or backslash
-      # would stay shell-active. An image ref like '$(touch pwned):latest'
-      # is one inert operand word here, never executed.
       LT_BASE_DIR: '{{.USER_WORKING_DIR}}'
       LT_DOCKER_OS_SBOM: '{{.DOCKER_OS_SBOM | default (printf "%s/docker-os-sbom.json" .REPO_ROOT)}}'
-      # IMAGES is a SPACE-SEPARATED override list; when unset the CLI falls back
-      # to its documented default image set (DEFAULT_IMAGES).
-      # The maintainer must have pulled/built each image (docker daemon required)
-      # before this runs — the scanner hard-fails loud on an absent image.
       LT_IMAGES: '{{.IMAGES | default ""}}'
     cmds:
-      # Build the argv with `set --` so each image ref becomes its OWN positional
-      # operand (no eval, no re-quoting): the for-loop appends a literal --image
-      # token then the ref as data, and "$@" expands to exactly those words. With
-      # no IMAGES override the loop runs zero times and the CLI uses its default
-      # image set. --base-dir anchors docker-os-sbom.json to the repo root like
-      # the other committed artifacts. Same no-eval, data-only posture as the
-      # generate/check tasks — an injected ref can never reach shell parsing.
+      # `set --` makes each image ref its own positional operand (no eval, no
+      # re-quoting); with no IMAGES override the loop runs zero times and the CLI
+      # falls back to its built-in image set.
       - >-
         set -- --base-dir "$LT_BASE_DIR" --docker-os-sbom "$LT_DOCKER_OS_SBOM";
         for ref in $LT_IMAGES; do set -- "$@" --image "$ref"; done;
@@ -125,8 +82,6 @@ tasks:
   quality:
     desc: Quality gate — lint + format-check + typecheck
     cmds:
-      # `bun run <script>` resolves node_modules/.bin under the mise-pinned
-      # bun — same resolution model as the other tasks.
       - mise x -- bun run lint
       - mise x -- bun run format:check
       - mise x -- bun run typecheck
@@ -134,8 +89,6 @@ tasks:
   adr:new:
     desc: 'Scaffold an architecture decision record from the MADR template (TITLE="Short decision title")'
     env:
-      # Same data-only posture as the other tasks: the title flows to the script
-      # through the environment, never interpolated into a shell command line.
       LT_ADR_TITLE: '{{.TITLE | default ""}}'
     cmds:
       - mise x -- bun scripts/new-adr.ts

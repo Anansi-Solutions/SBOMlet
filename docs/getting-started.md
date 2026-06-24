@@ -56,7 +56,7 @@ version: "3"
 
 includes:
   sbomlet:
-    taskfile: ./Taskfile.yml
+    taskfile: ./tools/sbomlet/Taskfile.yml
     dir: ./tools/sbomlet
     flatten: true
 ```

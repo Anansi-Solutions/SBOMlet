@@ -167,7 +167,7 @@ this Taskfile from its root:
 ```yaml
 includes:
   sbomlet:
-    taskfile: ./Taskfile.yml
+    taskfile: ./tools/sbomlet/Taskfile.yml
     dir: ./tools/sbomlet
     flatten: true
 ```
