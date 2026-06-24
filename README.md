@@ -163,3 +163,9 @@ THIRD_PARTY_NOTICES.md  text eol=lf
 enrichment-cache.json   text eol=lf
 docker-os-sbom.json     text eol=lf
 ```
+
+---
+
+<p align="center">
+  <sub>The <strong>SBOMelette</strong> mascot is by Anansi Solutions, licensed under <a href="https://creativecommons.org/licenses/by/4.0/">Creative Commons Attribution 4.0 (CC BY 4.0)</a>.</sub>
+</p>
