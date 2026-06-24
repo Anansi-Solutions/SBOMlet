@@ -19,6 +19,7 @@ import { BUILTIN_OVERRIDES } from "../policy/builtinOverrides";
 import { evaluate } from "../policy/evaluate";
 import { parsePolicy, type Policy } from "../policy/schema";
 import { renderCyclonedx } from "../render/cyclonedx";
+import { alignTables } from "../render/alignTables";
 import { renderMarkdown, type PolicyView } from "../render/markdown";
 import { renderNotices } from "../render/notices";
 import { resolveFrom } from "./paths";
@@ -302,7 +303,7 @@ export async function buildOutputs(
   const dumpJson = toSortedDependenciesJson(evaluated ?? annotated);
 
   return {
-    licensesMd: renderMarkdown(annotated, policyView),
+    licensesMd: alignTables(renderMarkdown(annotated, policyView)),
     noticesMd: renderNotices(annotated),
     ...(opts.cyclonedxPath !== undefined
       ? { cyclonedxJson: renderCyclonedx(annotated, verdicts) }

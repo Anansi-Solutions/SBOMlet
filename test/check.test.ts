@@ -174,6 +174,8 @@ const WARN_ONLY_POLICY = [
   "",
 ].join("\n");
 
+const squish = (s: string): string => s.replace(/ {2,}/g, " ");
+
 describe("runCheck + exitCodeFor — the CI gate (GATE-01, GATE-02)", () => {
   // These pre-enrichment tests must stay offline now that generate runs the
   // ENRICH stage: stub globalThis.fetch to a clean 200-empty registry response
@@ -644,7 +646,9 @@ describe("COLL-04 committed docker-os-sbom.json as a scope:os merge input", () =
     // rows — proof the committed SBOM crossed into the merge as scope:os.
     const md = outputs!.licensesMd;
     expect(md.includes("## Docker base-image OS packages")).toBe(true);
-    const osSection = md.slice(md.indexOf("## Docker base-image OS packages"));
+    const osSection = squish(
+      md.slice(md.indexOf("## Docker base-image OS packages")),
+    );
     expect(osSection.includes("| libc6 | deb | 2.36-9 |")).toBe(true);
     expect(osSection.includes("| musl | apk | 1.2.4-r2 |")).toBe(true);
   });
@@ -668,7 +672,9 @@ describe("COLL-04 committed docker-os-sbom.json as a scope:os merge input", () =
 
     const md = outputs!.licensesMd;
     // The OS section heading still renders (stable shape) but carries NO rows.
-    const osSection = md.slice(md.indexOf("## Docker base-image OS packages"));
+    const osSection = squish(
+      md.slice(md.indexOf("## Docker base-image OS packages")),
+    );
     expect(osSection.includes("libc6")).toBe(false);
     expect(osSection.includes("musl")).toBe(false);
     expect(osSection.includes("pkg:deb/")).toBe(false);

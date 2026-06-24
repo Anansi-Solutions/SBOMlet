@@ -87,6 +87,8 @@ function makeEmptyLockfileTree(): { root: string; identity: string } {
   return { root, identity: "proj" };
 }
 
+const squish = (s: string): string => s.replace(/ {2,}/g, " ");
+
 describe("classifyCoverage — coverage policy (pure)", () => {
   test("empty lockfile text classifies as skip", () => {
     expect(classifyCoverage("apps/x", "yarn.lock", "", 0)).toBe("skip");
@@ -1300,7 +1302,7 @@ describe("buildOutputs and the generate output set (04-05)", () => {
     });
 
     // The named raw "Apache License 2.0" was normalized for display.
-    expect(md).toContain("| apache-lib | npm | 4.0.0 | Apache-2.0 |");
+    expect(squish(md)).toContain("| apache-lib | npm | 4.0.0 | Apache-2.0 |");
     expect(md).not.toContain("Apache License 2.0");
 
     // Dump packages all carry finding objects; no verdicts key without a
@@ -1414,7 +1416,7 @@ describe("buildOutputs and the generate output set (04-05)", () => {
     // The policy was read from the base dir (the pointer line proves a
     // policy run happened) and the document keeps the RAW relative path —
     // never a machine-specific absolute path in committed bytes.
-    expect(md).toContain(
+    expect(squish(md)).toContain(
       "Copyleft notice rules are configured in policy.toml.",
     );
     expect(md).not.toContain(root);
@@ -1861,11 +1863,17 @@ describe("dispatch wiring: bun branch + per-kind firstPartyNames (04.5-04)", () 
 
     const md = readFileSync(outputPath, "utf8");
     // Third-party rows at the correct versions, used-in = target identity.
-    expect(md).toContain("| smol-toml | npm | 1.6.1 | unknown | bunproj |");
-    expect(md).toContain("| spdx-compare | npm | 1.0.0 | unknown | bunproj |");
-    expect(md).toContain("| typescript | npm | 5.9.3 | unknown | bunproj |");
+    expect(squish(md)).toContain(
+      "| smol-toml | npm | 1.6.1 | unknown | bunproj |",
+    );
+    expect(squish(md)).toContain(
+      "| spdx-compare | npm | 1.0.0 | unknown | bunproj |",
+    );
+    expect(squish(md)).toContain(
+      "| typescript | npm | 5.9.3 | unknown | bunproj |",
+    );
     // The nested-conflict purl folded to exactly ONE row (Pitfall 4).
-    expect(md).toContain(
+    expect(squish(md)).toContain(
       "| spdx-expression-parse | npm | 3.0.1 | unknown | bunproj |",
     );
     expect(md.match(/\| spdx-expression-parse \|/g)!.length).toBe(1);
@@ -1942,8 +1950,8 @@ describe("dispatch wiring: bun branch + per-kind firstPartyNames (04.5-04)", () 
     // the fixture's cdx:npm:isWorkspace marker (the double signal).
     expect(md).not.toContain("| liba |");
     // Licensed third-party rows survive (npm lockfile-embedded fill).
-    expect(md).toContain("| express | npm | 5.2.1 | MIT | npm-app |");
-    expect(md).toContain("| fsevents | npm | 2.3.3 | MIT | npm-app |");
+    expect(squish(md)).toContain("| express | npm | 5.2.1 | MIT | npm-app |");
+    expect(squish(md)).toContain("| fsevents | npm | 2.3.3 | MIT | npm-app |");
     expect(md).toContain("- Total packages: 2");
 
     // Through the CLI: development+optional pair merges PROD.
@@ -1976,8 +1984,12 @@ describe("dispatch wiring: bun branch + per-kind firstPartyNames (04.5-04)", () 
     expect(stderr).toContain("collecting pnpm-app via");
 
     const md = readFileSync(outputPath, "utf8");
-    expect(md).toContain("| smol-toml | npm | 1.6.1 | unknown | pnpm-app |");
-    expect(md).toContain("| typescript | npm | 5.9.3 | unknown | pnpm-app |");
+    expect(squish(md)).toContain(
+      "| smol-toml | npm | 1.6.1 | unknown | pnpm-app |",
+    );
+    expect(squish(md)).toContain(
+      "| typescript | npm | 5.9.3 | unknown | pnpm-app |",
+    );
     // No first-party leakage: cdxgen omits pnpm members; the importer-name
     // belt-and-braces wiring must not surface anything either.
     expect(md).not.toContain("| liba |");
