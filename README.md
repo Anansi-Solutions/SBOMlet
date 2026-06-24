@@ -43,11 +43,11 @@ The inventory looks like this:
 
 ## Production dependencies
 
-| Name | Ecosystem | Version | License | Used in |
-| --- | --- | --- | --- | --- |
-| react | npm | 19.2.0 | MIT | apps/web |
-| cryptography | pypi | 44.0.1 | Apache-2.0 OR BSD-3-Clause | services/api |
-| hashicorp/aws | terraform | 5.92.0 | MPL-2.0 | infra |
+| Name          | Ecosystem | Version | License                    | Used in      |
+| ------------- | --------- | ------- | -------------------------- | ------------ |
+| react         | npm       | 19.2.0  | MIT                        | apps/web     |
+| cryptography  | pypi      | 44.0.1  | Apache-2.0 OR BSD-3-Clause | services/api |
+| hashicorp/aws | terraform | 5.92.0  | MPL-2.0                    | infra        |
 ```
 
 ## The gate
