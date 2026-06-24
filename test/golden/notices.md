@@ -1,6 +1,6 @@
 # Third-Party Notices
 
-<!-- AUTO-GENERATED - do not edit. Regenerate with: task licenses:generate -->
+<!-- AUTO-GENERATED - do not edit. Regenerate with: task generate -->
 
 Attribution is grouped to avoid duplication: the per-package sections below reproduce extracted copyright lines, NOTICE file contents, and verbatim license texts for packages without a standard SPDX license; the License texts appendix then carries one canonical text per referenced SPDX license identifier. Every canonical appendix entry is marked "(canonical SPDX text — package-specific copyright not located)" so fallback gaps stay auditable; packages whose license could not be determined are listed separately with no text.
 

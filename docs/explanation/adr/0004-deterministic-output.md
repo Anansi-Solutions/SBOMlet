@@ -61,7 +61,7 @@ normalizes CRLF to LF on the committed text it reads, which absorbs an unpinned
 consumer checkout without ever weakening the byte-for-byte test.
 
 Nothing carries a timestamp. The Markdown header records *how to regenerate the
-file* — `task licenses:generate` — in place of a date, which only changes when
+file* — `task generate` — in place of a date, which only changes when
 the command does. The CycloneDX export omits the two fields the spec would
 otherwise fill with run-specific values, the document serial number and the
 metadata timestamp; both are optional, so the document stays schema-valid by

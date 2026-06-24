@@ -1343,6 +1343,7 @@ describe("buildOutputs and the generate output set (04-05)", () => {
     expect(readFileSync(explicit, "utf8")).toContain("# Third-Party Notices");
     expect(listTree(root)).toEqual(
       [
+        ".sbomlet.cache.json",
         "custom-notices.md",
         "out.md",
         join("proj", "package.json"),
@@ -1364,7 +1365,7 @@ describe("buildOutputs and the generate output set (04-05)", () => {
   });
 
   test("Test 6: relative path options resolve against --base-dir, not the cwd (CR-01)", async () => {
-    // The Taskfile runs the CLI inside tools/licenses with
+    // The Taskfile runs the CLI inside tools/sbomlet with
     // --base-dir {{.USER_WORKING_DIR}}: every relative path flag must anchor
     // to that base. The cwd during this test is the tool directory — assert
     // nothing lands there.

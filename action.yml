@@ -10,9 +10,9 @@ inputs:
     required: false
     default: check
   policy:
-    description: "Path to the policy.toml, relative to the repo root. Omit for an inventory with no gate."
+    description: "Path to the policy file, relative to the repo root. Defaults to .sbomlet.toml (also auto-discovered when present); omit or point elsewhere for a custom path or no gate."
     required: false
-    default: policy.toml
+    default: .sbomlet.toml
 
 runs:
   using: composite

@@ -38,7 +38,7 @@ import { leafIds, type ExpressionNode } from "../normalize/expression";
 import { escapeCell } from "./markdown";
 
 const HEADER_LINE =
-  "<!-- AUTO-GENERATED - do not edit. Regenerate with: task licenses:generate -->";
+  "<!-- AUTO-GENERATED - do not edit. Regenerate with: task generate -->";
 
 const CANONICAL_MARKER =
   "(canonical SPDX text — package-specific copyright not located)";

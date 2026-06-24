@@ -53,7 +53,7 @@ runs the enrichment stage in generate mode — on a cache miss it fetches the
 registry, resolves the raw licence, appends it as a `registry`-sourced claim,
 and records the result. `check` runs the same stage in check mode, where a miss
 never fetches: an unknown package with no cache entry is treated as stale, the
-gate names the package and prints the `task licenses:generate` remedy, and exits
+gate names the package and prints the `task generate` remedy, and exits
 2. There is one write site for the cache, and it is gated on generate mode, so
 `check` cannot fetch and cannot write even by accident.
 

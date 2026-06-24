@@ -1,6 +1,6 @@
 # Third-Party Licenses
 
-<!-- AUTO-GENERATED - do not edit. Regenerate with: task licenses:generate -->
+<!-- AUTO-GENERATED - do not edit. Regenerate with: task generate -->
 
 **Package counts:**
 

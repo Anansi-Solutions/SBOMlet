@@ -525,7 +525,7 @@ describe("offline check contract — enrichment staleness (INTG-03, GATE-02)", (
     expect(exitCodeFor(result!)).toBe(2);
     expect(stderr).toContain(
       "check stale: pkg:npm/no-claims@2.0.0 needs enrichment — " +
-        "run task licenses:generate to refresh the committed cache",
+        "run task generate to refresh the committed cache",
     );
   });
 

@@ -4,7 +4,7 @@ This guide is for an operator who has a committed inventory and wants CI to
 fail the build when it drifts or when a dependency breaks the policy. It assumes
 you've been through [getting-started](../getting-started.md) and already have a
 `THIRD_PARTY_LICENSES.md`, a `THIRD_PARTY_NOTICES.md`, and an
-`enrichment-cache.json` committed at your repository root.
+`.sbomlet.cache.json` committed at your repository root.
 
 The CI integration is one step. The rest of this page covers what makes that
 step reliable: the exit codes it returns, the workflow of committing what
@@ -19,7 +19,7 @@ before a release, and the maintainer-only Docker scan.
 CI-vendor features. Wherever your pipeline runs its checks, add one step:
 
 ```sh
-task licenses:check POLICY=policy.toml
+task check POLICY=.sbomlet.toml
 ```
 
 That is the entire integration. It works the same on GitHub Actions, GitLab CI,
@@ -30,14 +30,14 @@ Some concrete shapes, so you can paste the right one:
 
 ```yaml
 # GitHub Actions — a step inside a job that has mise and Task available
-- run: task licenses:check POLICY=policy.toml
+- run: task check POLICY=.sbomlet.toml
 ```
 
 ```yaml
 # GitLab CI — a job
 licenses:
   script:
-    - task licenses:check POLICY=policy.toml
+    - task check POLICY=.sbomlet.toml
 ```
 
 The runner needs [mise](https://mise.jdx.dev) and [Task](https://taskfile.dev)
@@ -50,7 +50,7 @@ CycloneDX export, pass the same flags you pass to `generate` so the gate
 compares the same files. The variables are caller-overridable:
 
 ```sh
-task licenses:check POLICY=policy.toml CYCLONEDX=sbom.cdx.json
+task check POLICY=.sbomlet.toml CYCLONEDX=sbom.cdx.json
 ```
 
 ## Or: the GitHub Action
@@ -63,7 +63,7 @@ runner yourself:
 - uses: actions/checkout@v6
 - uses: Anansi-Solutions/SBOMlet@main # pin a tag or SHA in production
   with:
-    policy: policy.toml
+    policy: .sbomlet.toml
 ```
 
 It runs `check` by default (the exit codes below apply); pass `mode: generate` to
@@ -79,7 +79,7 @@ different problems with different fixes, and the code distinguishes them.
 | Exit code | Meaning | What to do |
 | --------- | ------- | ---------- |
 | `0` | Clean — the committed outputs match the regenerated inventory, and no dependency tripped a `fail` [verdict](../glossary.md#verdict) | Nothing; the gate passes |
-| `1` | A dependency tripped a `fail` verdict | Fix the dependency, or add a documented override to `policy.toml` |
+| `1` | A dependency tripped a `fail` verdict | Fix the dependency, or add a documented override to `.sbomlet.toml` |
 | `2` | A committed output is [stale](../glossary.md#staleness) or missing | Re-run `generate`, review the diff, commit |
 | `3` (and above) | Tool or config error — a bad flag, an invalid policy file, a pipeline failure | Fix the invocation or the policy |
 
@@ -104,8 +104,8 @@ your first run.
 When a dependency changes, regenerate and commit:
 
 ```sh
-task licenses:generate POLICY=policy.toml
-git add THIRD_PARTY_LICENSES.md THIRD_PARTY_NOTICES.md enrichment-cache.json
+task generate POLICY=.sbomlet.toml
+git add THIRD_PARTY_LICENSES.md THIRD_PARTY_NOTICES.md .sbomlet.cache.json
 git commit -m "chore: refresh third-party license inventory"
 ```
 
@@ -114,7 +114,7 @@ cache only when it has to fetch. Commit whichever ones it produced:
 
 - `THIRD_PARTY_LICENSES.md` — the inventory. Written on every run.
 - `THIRD_PARTY_NOTICES.md` — the attribution companion. Written on every run.
-- `enrichment-cache.json` — the licenses fetched from registries during
+- `.sbomlet.cache.json` — the licenses fetched from registries during
   [enrichment](../glossary.md#enrichment-and-the-enrichment-cache), committed so
   the gate can run offline. Written only when `generate` fetches a new license; a
   warm run that answers every gap from the committed cache leaves the file
@@ -125,7 +125,7 @@ cache only when it has to fetch. Commit whichever ones it produced:
 A run with `--dump-model` also writes a sorted-key JSON dump of the model. That
 is a debugging aid for golden-file tests, not something you commit.
 
-So an adopter running plain `task licenses:generate` gets three files at most:
+So an adopter running plain `task generate` gets three files at most:
 the inventory, the companion, and the cache when the run had a gap to fill.
 
 `generate` does not write `docker-os-sbom.json`. That file is produced by a
@@ -161,7 +161,7 @@ root, so git can't rewrite them on any platform:
 ```gitattributes
 THIRD_PARTY_LICENSES.md text eol=lf
 THIRD_PARTY_NOTICES.md text eol=lf
-enrichment-cache.json text eol=lf
+.sbomlet.cache.json text eol=lf
 docker-os-sbom.json text eol=lf
 ```
 
@@ -186,7 +186,7 @@ The gate never touches the network, and this is enforced rather than configured.
 
 `check` runs the pipeline in a mode that forbids the enrich step from fetching
 or writing. Every license it needs comes from the committed
-`enrichment-cache.json`. If the inventory contains a package whose license
+`.sbomlet.cache.json`. If the inventory contains a package whose license
 isn't in the cache and would otherwise require a registry lookup, the gate does
 not reach out for it. It reports that package as stale (exit `2`) and names the
 remedy, which is to run `generate` to refresh the committed cache. A missing
@@ -205,7 +205,7 @@ runner with no outbound access still passes the gate.
 
 ## Verify the cache before a release
 
-The gate trusts the committed `enrichment-cache.json` completely: every license
+The gate trusts the committed `.sbomlet.cache.json` completely: every license
 it can't read from a lockfile comes from that file, offline. That is what keeps
 `check` fast and network-free, but it also means a wrong value in the cache — an
 edit that flips a copyleft license to a permissive one, an entry for a package
@@ -219,7 +219,7 @@ tampering or a genuine upstream license change; either way it wants a person's
 eyes before you ship.
 
 ```sh
-task licenses:verify-cache
+task verify-cache
 ```
 
 Unlike `check`, this command needs the network — it is the one place the tool
@@ -245,9 +245,9 @@ touched, and never otherwise. On GitHub Actions a path filter does this:
 name: License cache integrity
 on:
   push:
-    paths: ["enrichment-cache.json"]
+    paths: [".sbomlet.cache.json"]
   pull_request:
-    paths: ["enrichment-cache.json"]
+    paths: [".sbomlet.cache.json"]
 permissions:
   contents: read
 jobs:
@@ -256,7 +256,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: jdx/mise-action@v2
-      - run: task licenses:verify-cache
+      - run: task verify-cache
         env:
           # Lifts the GitHub License API rate limit for Terraform entries; the
           # audit works unauthenticated too, just slower.
@@ -282,7 +282,7 @@ images.
 You run the scan when a base image changes, not on every CI run:
 
 ```sh
-task licenses:generate-docker-sbom
+task generate-docker-sbom
 ```
 
 The command has three mutually exclusive modes. The right one depends on whether
@@ -299,7 +299,7 @@ your image pipeline.
 image by content digest so the committed file is stable across machines. With no
 `--image` and no other mode, the command falls back to the maintainer's
 documented default image set, which is why the bare
-`task licenses:generate-docker-sbom` above works for the project that ships the
+`task generate-docker-sbom` above works for the project that ships the
 tool. Pull or build each image first, since the scanner fails loudly on an image
 that isn't present locally.
 

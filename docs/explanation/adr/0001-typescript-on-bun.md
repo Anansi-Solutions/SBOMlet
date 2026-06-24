@@ -78,5 +78,5 @@ aggregation, which is out of scope.
 
 - Research: `.planning/research/STACK.md`, `.planning/research/SUMMARY.md`
 - Plan summary: `.planning/phases/01-pipeline-spine/01-01-SUMMARY.md`
-- Code: `tools/licenses/mise.toml`, `tools/licenses/package.json`,
-  `tools/licenses/src/cli.ts`
+- Code: `mise.toml`, `package.json`,
+  `src/cli.ts`

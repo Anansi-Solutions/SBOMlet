@@ -19,7 +19,7 @@ it for you.
 | Tool | Why you need it | Install |
 | ---- | --------------- | ------- |
 | [mise](https://mise.jdx.dev) | Resolves and runs the pinned Bun the tool ships with | `curl https://mise.run \| sh` (or your package manager) |
-| [Task](https://taskfile.dev) | Runs `task licenses:generate` and `task licenses:check` | `mise use -g task` (or your package manager) |
+| [Task](https://taskfile.dev) | Runs `task generate` and `task check` | `mise use -g task` (or your package manager) |
 
 That's the whole list. The tool keeps a small dependency footprint, since it
 audits dependencies. There's no Node install, no build step, and nothing to
@@ -34,17 +34,17 @@ task --version
 
 ## Step 1 — Put the tool in your repository
 
-The tool lives in one self-contained directory. Copy `tools/licenses/` into your
+The tool lives in one self-contained directory. Copy `` into your
 repository, keeping that path:
 
 ```sh
 # from your repository root
-cp -r /path/to/tools/licenses tools/licenses
+cp -r /path/to/tools/sbomlet tools/sbomlet
 ```
 
 It carries its own `mise.toml` with the Bun pin, so it works the same on every
 machine. You don't need to install anything inside it yet. The first
-`task licenses:generate` will do that.
+`task generate` will do that.
 
 ## Step 2 — Add the Taskfile include
 
@@ -55,15 +55,16 @@ add the include:
 version: "3"
 
 includes:
-  licenses:
-    taskfile: ./tools/licenses/Taskfile.yml
-    dir: ./tools/licenses
+  sbomlet:
+    taskfile: ./Taskfile.yml
+    dir: ./tools/sbomlet
+    flatten: true
 ```
 
-The `dir:` line is required. The tasks have to run inside `tools/licenses` so
+The `dir:` line is required. The tasks have to run inside `tools/sbomlet` so
 that mise resolves that directory's Bun pin. Without it, Task would run at your
-repository root, where there's no pin. The `licenses:` name is what gives you
-`task licenses:generate` and `task licenses:check`; nothing else is wired in.
+repository root, where there's no pin. `flatten: true` exposes SBOMlet's tasks unprefixed, so you run
+`task generate` and `task check`; nothing else is wired in.
 
 To check the include took:
 
@@ -71,7 +72,7 @@ To check the include took:
 task --list
 ```
 
-You should see `licenses:generate` and `licenses:check` among the tasks.
+You should see `generate` and `check` among the tasks.
 
 ## Step 3 — Copy the example policy
 
@@ -81,7 +82,7 @@ that inventory into a gate by attaching a [verdict](./glossary.md#verdict) of
 commented example and rename it:
 
 ```sh
-cp tools/licenses/policy.example.toml policy.toml
+cp policy.example.toml .sbomlet.toml
 ```
 
 `policy.example.toml` is heavily annotated and a reasonable default to begin
@@ -96,7 +97,7 @@ requires a written reason, because the policy file doubles as your audit trail.
 Now run it:
 
 ```sh
-task licenses:generate POLICY=policy.toml
+task generate POLICY=.sbomlet.toml
 ```
 
 The first run is the slow one. The tool walks your repository for every
@@ -111,8 +112,8 @@ blank. That step is
 [enrichment](./glossary.md#enrichment-and-the-enrichment-cache), and its answers
 are written to a cache so later runs don't repeat the network calls.
 
-`POLICY=policy.toml` is a relative path, and it resolves against the directory
-you ran `task` from, not against `tools/licenses`, even though the task executes
+`POLICY=.sbomlet.toml` is a relative path, and it resolves against the directory
+you ran `task` from, not against `tools/sbomlet`, even though the task executes
 in there. So you can run this from your repository root and point at a policy
 file there.
 
@@ -124,7 +125,7 @@ When it finishes, you'll have three new files at your repository root:
 | ---- | ---------- |
 | `THIRD_PARTY_LICENSES.md` | The inventory: every dependency, its license, its version, where it's used, and why it's present |
 | `THIRD_PARTY_NOTICES.md` | The attribution companion: copyright lines, NOTICE contents, and full license texts |
-| `enrichment-cache.json` | The licenses fetched from registries during enrichment, so `check` can run offline |
+| `.sbomlet.cache.json` | The licenses fetched from registries during enrichment, so `check` can run offline |
 
 The cache is written only when `generate` fetches something new. Your first run
 fills it from empty, so you'll have it; a later run that finds every license in
@@ -149,7 +150,7 @@ makes sense.
 You generated the documents a moment ago, so the gate should be clean. Run it:
 
 ```sh
-task licenses:check POLICY=policy.toml
+task check POLICY=.sbomlet.toml
 echo "exit code: $?"
 ```
 
@@ -160,7 +161,7 @@ and no dependency tripped a `fail` verdict in your policy.
 `check` works differently from `generate`. It regenerates the inventory in
 memory and compares it byte-for-byte against the files on disk. It writes
 nothing, and it never touches the network; every license it needs comes from the
-committed `enrichment-cache.json`. That's what lets it run in CI
+committed `.sbomlet.cache.json`. That's what lets it run in CI
 deterministically.
 
 The exit code tells you which class of thing is wrong, if anything:
@@ -169,7 +170,7 @@ The exit code tells you which class of thing is wrong, if anything:
 | --------- | ------- | ---------- |
 | `0` | Clean — documents match, no violations | Nothing; the gate passes |
 | `1` | A dependency tripped a `fail` verdict | Fix the dependency, or add a documented policy override |
-| `2` | A committed document is [stale](./glossary.md#staleness) or missing | Re-run `task licenses:generate`, review the diff, commit |
+| `2` | A committed document is [stale](./glossary.md#staleness) or missing | Re-run `task generate`, review the diff, commit |
 | `3+` | Tool or config error — bad flag, invalid policy | Fix the invocation or the policy file |
 
 A `fail` verdict (exit 1) takes precedence over staleness (exit 2), so a real
@@ -191,7 +192,7 @@ Pin the committed outputs to LF so git can't rewrite them. Add these lines to a
 ```gitattributes
 THIRD_PARTY_LICENSES.md text eol=lf
 THIRD_PARTY_NOTICES.md text eol=lf
-enrichment-cache.json text eol=lf
+.sbomlet.cache.json text eol=lf
 ```
 
 This matters even if you develop on macOS or Linux: a teammate on Windows would
@@ -202,13 +203,13 @@ hit the stale gate without it.
 Commit the generated outputs, the policy, and the pins together:
 
 ```sh
-git add THIRD_PARTY_LICENSES.md THIRD_PARTY_NOTICES.md enrichment-cache.json
-git add policy.toml .gitattributes
-git add tools/licenses
+git add THIRD_PARTY_LICENSES.md THIRD_PARTY_NOTICES.md .sbomlet.cache.json
+git add .sbomlet.toml .gitattributes
+git add tools/sbomlet
 git commit -m "docs: add third-party license inventory and CI gate"
 ```
 
-The `enrichment-cache.json` is committed on purpose, because it's what lets
+The `.sbomlet.cache.json` is committed on purpose, because it's what lets
 `check` run offline in CI.
 
 ## Step 9 — Wire it into CI
@@ -217,7 +218,7 @@ The gate is one command, and it works on any CI vendor because it has nothing
 vendor-specific. Wherever your pipeline runs checks, add:
 
 ```sh
-task licenses:check POLICY=policy.toml
+task check POLICY=.sbomlet.toml
 ```
 
 It passes when the committed inventory is current and your policy is satisfied,
@@ -226,7 +227,7 @@ A reviewer who sees the build go red on exit 2 knows someone needs to
 regenerate; on exit 1, that a dependency needs attention.
 
 From here on, the routine task is the one you already know: when a dependency
-changes, run `task licenses:generate POLICY=policy.toml`, review the diff, and
+changes, run `task generate POLICY=.sbomlet.toml`, review the diff, and
 commit it.
 
 ## Where to go next

@@ -1,6 +1,6 @@
 # Writing your policy
 
-This guide is for the policy author — the person who writes `policy.toml`, reads
+This guide is for the policy author — the person who writes `.sbomlet.toml`, reads
 the generated documents, and decides what to do about a flagged dependency.
 
 Each section below is a recipe: a task you have in mind, the TOML to paste, and a
@@ -17,10 +17,10 @@ discover the next on the following run.
 
 You can start from the shipped [`policy.example.toml`](../../policy.example.toml),
 which carries a working entry for each table with the rules inline as comments.
-Copy it to `policy.toml` at your repo root and pass it with `--policy`:
+Copy it to `.sbomlet.toml` at your repo root and pass it with `--policy`:
 
 ```sh
-bun run src/cli.ts generate --policy policy.toml --repo-root . --output THIRD_PARTY_LICENSES.md
+bun run src/cli.ts generate --policy .sbomlet.toml --repo-root . --output THIRD_PARTY_LICENSES.md
 ```
 
 Without `--policy` the tool only inventories licences. With it, every package in

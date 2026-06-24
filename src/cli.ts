@@ -36,6 +36,7 @@
  *      surface as 0/1/2.
  */
 
+import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { parseArgs } from "node:util";
 
@@ -44,7 +45,7 @@ import {
   type GenerateDockerSbomOptions,
 } from "./pipeline/dockerSbom";
 import { exitCodeFor, runCheck, type CheckResult } from "./gate/check";
-import { defaultNoticesPath } from "./pipeline/paths";
+import { defaultNoticesPath, resolveFrom } from "./pipeline/paths";
 import { runGenerate, type GenerateOptions } from "./pipeline/pipeline";
 import { runVerifyCache } from "./pipeline/verifyCache";
 import type { VerifyResult } from "./enrich/verify";
@@ -142,6 +143,22 @@ interface CliValues {
 }
 
 /**
+ * The recommended default policy file. When --policy is omitted, a .sbomlet.toml
+ * at the repo root is adopted automatically; an absent default is silently
+ * skipped (no policy means no gate). An explicit --policy always wins, and errors
+ * if its file is missing. The anchor is the repo root (not --base-dir), so the
+ * default is found in the scanned repo, including from the GitHub Action, which
+ * runs from its own directory.
+ */
+const DEFAULT_POLICY = ".sbomlet.toml";
+
+function discoverDefaultPolicy(values: CliValues): string | undefined {
+  const anchor = resolveFrom(values["base-dir"], values["repo-root"] ?? ".");
+  const candidate = resolveFrom(anchor, DEFAULT_POLICY);
+  return existsSync(candidate) ? candidate : undefined;
+}
+
+/**
  * Validate the shared flag constraints and assemble the pipeline options —
  * generate and check parse the same flags, so the comparison set is exactly
  * the configured output set.
@@ -161,7 +178,7 @@ function optionsFrom(values: CliValues): GenerateOptions {
     noticesPath: values.notices ?? defaultNoticesPath(outputPath),
     cyclonedxPath: values.cyclonedx,
     dumpModelPath: values["dump-model"],
-    policyPath: values.policy,
+    policyPath: values.policy ?? discoverDefaultPolicy(values),
     baseDir: values["base-dir"],
     enrichmentCachePath: values["enrichment-cache"],
     verbose: values.verbose ?? false,

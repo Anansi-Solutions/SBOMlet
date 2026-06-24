@@ -36,8 +36,8 @@ adopt on reflex.
 ## Considered options
 
 1. **Copied directory + Taskfile include + policy file** — the consumer copies
-   `tools/licenses/`, adds a Taskfile `includes:` entry, and writes one
-   `policy.toml`.
+   ``, adds a Taskfile `includes:` entry, and writes one
+   `.sbomlet.toml`.
 2. **Publish to npm (or a mise plugin registry)** — consumers install a
    versioned package and invoke a published binary.
 3. **Ship a compiled single binary** — `bun build --compile` produces a
@@ -47,13 +47,13 @@ adopt on reflex.
 
 ## Decision
 
-A consumer adopts the tool by copying the `tools/licenses/` directory into their
+A consumer adopts the tool by copying the `` directory into their
 repository, adding one Taskfile include, and copying `policy.example.toml` to
-`policy.toml`. There is no `npm publish`, no registry, and no install step beyond
+`.sbomlet.toml`. There is no `npm publish`, no registry, and no install step beyond
 mise and Task, which the consumer already needs. The include points Task at the
 tool's own Taskfile and pins its working directory so the pinned Bun resolves
-from the tool's `mise.toml`; from there `task licenses:generate` and
-`task licenses:check` are the whole interface.
+from the tool's `mise.toml`; from there `task generate` and
+`task check` are the whole interface.
 
 This holds the independence driver directly. A copied directory belongs to the
 consumer — they can read it, pin it, patch it, and never wait on a release of
@@ -107,5 +107,5 @@ does not need, since the CLI is one `parseArgs` call and a subcommand switch.
 - Research: `.planning/research/FEATURES.md` (npm/mise-registry distribution
   deferred to v2+), `.planning/research/STACK.md`
 - Related: [ADR-0001](0001-typescript-on-bun.md)
-- Code: `tools/licenses/Taskfile.yml`, `tools/licenses/README.md`,
-  `tools/licenses/policy.example.toml`
+- Code: `Taskfile.yml`, `README.md`,
+  `policy.example.toml`

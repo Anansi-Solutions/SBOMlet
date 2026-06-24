@@ -11,7 +11,7 @@ If you only want to run the tool against a repository, read the top-level
 instead. For the reasoning behind the design, see the explanation docs under
 [`docs/explanation/`](./explanation/) and the [ADRs](./explanation/adr/).
 
-Every command below runs from `tools/licenses/`.
+Every command below runs from ``.
 
 ## Prerequisites
 
@@ -24,7 +24,7 @@ ESLint, and Prettier are dev dependencies you install below, not host tools.
 | ---- | ------- | --------- | ---------- |
 | [mise](https://mise.jdx.dev) | any recent | — | resolving the pinned `bun` |
 | [bun](https://bun.sh) | `1.3.14` | `mise.toml` | the runtime and the test runner |
-| [Task](https://taskfile.dev) | v3 | the consumer repo | running `task licenses:*` |
+| [Task](https://taskfile.dev) | v3 | the consumer repo | running `task generate`, `task check` |
 | [syft](https://github.com/anchore/syft) | `1.45.1` | `mise.toml` | `generate-docker-sbom` only |
 
 `mise.toml` in this directory pins exactly two versions: `bun = "1.3.14"` and
@@ -110,7 +110,7 @@ Without `RUN_E2E=1` those tests are skipped.
 Three checks gate every change: lint, format, and typecheck. Run them together:
 
 ```sh
-task licenses:quality
+task quality
 ```
 
 That runs the three under the pinned bun:
@@ -130,7 +130,7 @@ guard-claused functions); and Prettier with double quotes and trailing commas.
 `eslint-config-prettier` runs last, so formatting is owned by Prettier alone.
 Goldens and fixtures are excluded from both.
 
-Run `bun test` and `task licenses:quality` before you commit.
+Run `bun test` and `task quality` before you commit.
 
 ## Adding a new collector
 

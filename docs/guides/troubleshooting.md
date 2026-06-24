@@ -28,9 +28,9 @@ and you get exit 2.
 To fix it, regenerate, look at the diff, and commit it:
 
 ```sh
-task licenses:generate POLICY=policy.toml
+task generate POLICY=.sbomlet.toml
 git diff THIRD_PARTY_LICENSES.md THIRD_PARTY_NOTICES.md
-git add THIRD_PARTY_LICENSES.md THIRD_PARTY_NOTICES.md enrichment-cache.json
+git add THIRD_PARTY_LICENSES.md THIRD_PARTY_NOTICES.md .sbomlet.cache.json
 git commit -m "chore: regenerate license inventory"
 ```
 
@@ -70,8 +70,8 @@ the run is slow. This is expected once. Run `generate`, commit the cache, and
 the next run reads from it instead of the network:
 
 ```sh
-task licenses:generate POLICY=policy.toml
-git add enrichment-cache.json
+task generate POLICY=.sbomlet.toml
+git add .sbomlet.cache.json
 git commit -m "chore: commit enrichment cache"
 ```
 
@@ -103,7 +103,7 @@ a locked-down CI runner. If it fails complaining that a package needs enrichment
 you'll see a line naming the package and the remedy:
 
 ```text
-check stale: pkg:npm/some-package@1.2.3 needs enrichment — run task licenses:generate to refresh the committed cache
+check stale: pkg:npm/some-package@1.2.3 needs enrichment — run task generate to refresh the committed cache
 ```
 
 The cause is a missing cache entry. `check` never fetches anything; when it finds
@@ -118,8 +118,8 @@ To fix it, run `generate` (which is allowed to fetch and write) and commit the
 refreshed cache:
 
 ```sh
-task licenses:generate POLICY=policy.toml
-git add enrichment-cache.json THIRD_PARTY_LICENSES.md THIRD_PARTY_NOTICES.md
+task generate POLICY=.sbomlet.toml
+git add .sbomlet.cache.json THIRD_PARTY_LICENSES.md THIRD_PARTY_NOTICES.md
 git commit -m "chore: refresh enrichment cache"
 ```
 
@@ -254,7 +254,7 @@ lines to a `.gitattributes` file at your repository root:
 ```gitattributes
 THIRD_PARTY_LICENSES.md text eol=lf
 THIRD_PARTY_NOTICES.md text eol=lf
-enrichment-cache.json text eol=lf
+.sbomlet.cache.json text eol=lf
 docker-os-sbom.json text eol=lf
 ```
 

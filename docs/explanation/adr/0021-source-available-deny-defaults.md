@@ -8,7 +8,7 @@
 [ADR-0015](0015-source-available-deny-list.md) gave the engine a terminal deny
 lane and named the licences it exists for — BUSL, SSPL, Elastic. But the actual
 deny ENTRIES lived only in `policy.example.toml`, as boilerplate a consumer
-copies. A repository that adopts the tool and writes its own `policy.toml` — or
+copies. A repository that adopts the tool and writes its own `.sbomlet.toml` — or
 never copies those entries — got ZERO source-available protection.
 
 That is backwards. A source-available licence is the one exposure the gate should

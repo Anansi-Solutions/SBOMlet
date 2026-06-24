@@ -11,11 +11,11 @@ them byte-for-byte against the committed files. `generate` writes them:
 | --- | --- | --- |
 | `THIRD_PARTY_LICENSES.md` | always | `--output`, defaults to `THIRD_PARTY_LICENSES.md` |
 | `THIRD_PARTY_NOTICES.md` | always | `--notices`, defaults to `THIRD_PARTY_NOTICES.md` beside the output |
-| the [enrichment cache](../glossary.md#enrichment-and-the-enrichment-cache) | only when it fetches a new licence | `--enrichment-cache`, defaults to `enrichment-cache.json` at the base dir |
+| the [enrichment cache](../glossary.md#enrichment-and-the-enrichment-cache) | only when it fetches a new licence | `--enrichment-cache`, defaults to `.sbomlet.cache.json` at the base dir |
 | a [CycloneDX](../glossary.md#cyclonedx) export | only with `--cyclonedx` | `--cyclonedx <path>` (no default) |
 | a model dump | only with `--dump-model` | `--dump-model <path>` (no default) |
 
-An adopter running only `task licenses:generate` gets three files: the two
+An adopter running only `task generate` gets three files: the two
 Markdown documents and, on the first run that has a licence to fetch, the
 enrichment cache. A warm run that finds every licence already in the cache does
 not touch it. The CycloneDX export and the model dump appear only when their flag
@@ -36,10 +36,10 @@ regenerate it instead.
 
 ```sh
 # Regenerate every committed artifact (the command in every auto-generated header)
-task licenses:generate
+task generate
 
 # Regenerate including the CycloneDX export
-bun run src/cli.ts generate --policy policy.toml --cyclonedx bom.cdx.json
+bun run src/cli.ts generate --policy .sbomlet.toml --cyclonedx bom.cdx.json
 ```
 
 ## THIRD_PARTY_LICENSES.md
@@ -308,7 +308,7 @@ follow the same determinism contract (sorted keys, two-space indent, LF, a
 trailing newline, no timestamp), so they diff cleanly and `check` can compare
 them byte-for-byte.
 
-`enrichment-cache.json` records the licences fetched from registries during
+`.sbomlet.cache.json` records the licences fetched from registries during
 [enrichment](../glossary.md#enrichment-and-the-enrichment-cache). It is keyed by
 the verbatim purl and committed on purpose, not gitignored, because it lets
 [`check`](../glossary.md#the-gate-check) run with no network. `generate` reads

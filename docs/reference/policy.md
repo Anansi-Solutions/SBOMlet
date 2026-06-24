@@ -1,21 +1,21 @@
-# `policy.toml` reference
+# `.sbomlet.toml` reference
 
 This page is for the policy author. It lists every table and field in
-`policy.toml`, with types, whether each is required, and what it means. The
+`.sbomlet.toml`, with types, whether each is required, and what it means. The
 narrative, covering when to reach for each lane and why the precedence is
 ordered the way it is, lives in the
 [explanation pages](../explanation/design-principles.md); this page is the
 lookup table.
 
-A `policy.toml` is optional. Without it, the tool inventories licences and
+A `.sbomlet.toml` is optional. Without it, the tool inventories licences and
 writes the documents but assigns no [verdicts](../glossary.md#verdict). With it,
 every (package × occurrence) gets a verdict of `ok`, `warn`, `fail`, or
 `suppressed`, and `check` becomes a gate that can fail your build. You pass the
 file to either command:
 
 ```sh
-bun run src/cli.ts generate --policy policy.toml
-bun run src/cli.ts check --policy policy.toml
+bun run src/cli.ts generate --policy .sbomlet.toml
+bun run src/cli.ts check --policy .sbomlet.toml
 ```
 
 A starter file ships as `policy.example.toml`. Copy it to your repo root and

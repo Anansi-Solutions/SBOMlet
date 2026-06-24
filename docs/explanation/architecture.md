@@ -32,7 +32,7 @@ rather than a framework, which keeps the tool's own dependency footprint small.
 - **`generate`** runs the full pipeline and writes `THIRD_PARTY_LICENSES.md`, its
   `THIRD_PARTY_NOTICES.md` companion, and the committed
   [enrichment cache](../glossary.md#enrichment-and-the-enrichment-cache) — three
-  files for an adopter running only `task licenses:generate`. The cache is
+  files for an adopter running only `task generate`. The cache is
   written only when enrichment fetches a new licence, so a warm run that resolves
   every unknown from the committed cache leaves it untouched. With `--cyclonedx`
   it also writes a [CycloneDX](../glossary.md#cyclonedx) 1.6 export, and with
@@ -47,9 +47,9 @@ rather than a framework, which keeps the tool's own dependency footprint small.
   `check` themselves never produce this file.
 
 All process exit codes live in the CLI module. The tool runs through mise and a
-Taskfile (`task licenses:generate`, `task licenses:check`), and the Taskfile
+Taskfile (`task generate`, `task check`), and the Taskfile
 passes `--base-dir` so that relative artifact paths resolve against the directory
-you invoked it from rather than against `tools/licenses`.
+you invoked it from rather than against `tools/sbomlet`.
 
 Source: `src/cli.ts`, `src/pipeline/pipeline.ts`.
 
@@ -102,7 +102,7 @@ and byte-compares instead.
 ```mermaid
 flowchart TD
     subgraph GEN["generate (runGenerate)"]
-        G1["buildOutputs(mode: generate)"] --> G2["ENRICH may fetch PyPI/npm/GitHub<br/>on a cache miss + write enrichment-cache.json"]
+        G1["buildOutputs(mode: generate)"] --> G2["ENRICH may fetch PyPI/npm/GitHub<br/>on a cache miss + write .sbomlet.cache.json"]
         G2 --> G3["writeFileSync: LICENSES.md, NOTICES.md,<br/>CycloneDX (--cyclonedx), dump-model (--dump-model)"]
         G3 --> G4["exit 0<br/>(document always written,<br/>even with failing verdicts)"]
     end
@@ -306,7 +306,7 @@ The appended claim flows through the same normalizer as a generator claim, so th
 `clarify > registry > generator` precedence holds downstream without extra work.
 The cache file is serialized with the tool-wide sorted-key, LF, indent-2
 contract. It resolves against `--base-dir`, so for the dogfood run it
-lives at the repo root as `enrichment-cache.json`, committed rather than
+lives at the repo root as `.sbomlet.cache.json`, committed rather than
 gitignored, and that is the file `check` reads to regenerate fully offline. The
 one write site is gated on `generate` mode, which keeps the core write-free in
 either mode.
@@ -318,7 +318,7 @@ Source: `src/enrich/enrich.ts`, `src/enrich/cache.ts`.
 The policy engine is a pure producer of [verdicts](../glossary.md#verdict). It
 decides; the documents and the gate only read what it decided.
 
-Loading a `policy.toml` rejects rather than skips. Every semantic problem is
+Loading a `.sbomlet.toml` rejects rather than skips. Every semantic problem is
 collected into one error that names the offending table path, and every SPDX
 pattern, clarify expression, and workspace license is parsed at load time, so
 evaluation never meets an unparseable rule. Compatible and deny patterns are

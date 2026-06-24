@@ -119,7 +119,7 @@ One dependency in the merged inventory: its name, version, [purl](#purl),
 
 ### policy lanes
 
-The ordered rules in `policy.toml`, highest precedence first:
+The ordered rules in `.sbomlet.toml`, highest precedence first:
 **deny** (force-fail a source-available or named licence — terminal),
 **clarify** (correct a package's finding to a precise expression),
 **compatible** (allow a licence or an exact package), and

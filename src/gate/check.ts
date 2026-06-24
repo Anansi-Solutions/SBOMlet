@@ -92,7 +92,7 @@ export async function runCheck(opts: GenerateOptions): Promise<CheckResult> {
     staleFiles.push(purl);
     process.stderr.write(
       `check stale: ${sanitizeForLog(purl)} needs enrichment — ` +
-        `run task licenses:generate to refresh the committed cache\n`,
+        `run task generate to refresh the committed cache\n`,
     );
   }
 

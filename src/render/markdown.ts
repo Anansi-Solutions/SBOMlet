@@ -31,7 +31,7 @@ import {
 import type { SuppressedWorkspace } from "../policy/schema";
 
 const HEADER_LINE =
-  "<!-- AUTO-GENERATED - do not edit. Regenerate with: task licenses:generate -->";
+  "<!-- AUTO-GENERATED - do not edit. Regenerate with: task generate -->";
 
 /**
  * Policy projection for the document renderer. Verdicts drive copyleft-section

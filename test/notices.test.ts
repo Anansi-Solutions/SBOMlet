@@ -492,7 +492,7 @@ describe("renderNotices — determinism contract", () => {
     const lines = output.split("\n");
     expect(lines[0]).toBe("# Third-Party Notices");
     expect(lines[2]).toBe(
-      "<!-- AUTO-GENERATED - do not edit. Regenerate with: task licenses:generate -->",
+      "<!-- AUTO-GENERATED - do not edit. Regenerate with: task generate -->",
     );
     expect(/\b20\d\d\b.*generated/i.test(output)).toBe(false);
   });

@@ -24,13 +24,11 @@ jobs:
         uses: ./
         with:
           mode: check
-          policy: policy.toml
 
       - name: Regenerate the inventory (generate)
         uses: ./
         with:
           mode: generate
-          policy: policy.toml
 
       - name: Working tree must be unchanged — generate is deterministic
         shell: bash

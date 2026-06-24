@@ -5,7 +5,7 @@
  * commonly-ambiguous well-known projects. Any repo consuming this tool benefits
  * from these defaults WITHOUT re-authoring them — that is POL-07's acceptance
  * criterion. The set is GENERAL (well-known projects), NOT a per-consumer data
- * dump: project-specific judgments live in the consuming repo's policy.toml
+ * dump: project-specific judgments live in the consuming repo's .sbomlet.toml
  * `[[clarify]]` table, which WINS over this set on conflict (project-wins).
  *
  * Each entry is a PRECONDITIONED assertion, never a blind replacement. `expects`
@@ -27,7 +27,7 @@
  * ambiguous value. No entry pins a version.
  *
  * DELIBERATE SCOPE: a project-specific copier / jinja2-ansible-filters
- * GPL-3.0 judgment is DEFERRED to the Phase-6 dogfood policy.toml — it is a
+ * GPL-3.0 judgment is DEFERRED to the Phase-6 dogfood .sbomlet.toml — it is a
  * project-specific call, not a general well-known disambiguation, so it does
  * NOT belong here.
  */

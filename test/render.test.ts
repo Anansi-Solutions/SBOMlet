@@ -50,7 +50,7 @@ const annotatedTrimmed = annotateFindings(trimmedModel, []).model;
  * escaping-relevant character class.
  */
 const goldenPolicyView: PolicyView = {
-  policyPath: "tools/licenses/policy.toml",
+  policyPath: "policy.toml",
   suppressedWorkspaces: [
     {
       path: "apps/scratch",
@@ -123,11 +123,11 @@ describe("renderMarkdown — determinism contract", () => {
 
   test("header carries the regenerate command, never a date", () => {
     // The title is line 1; the dateless auto-generated comment follows,
-    // naming `task licenses:generate` as the regenerate command.
+    // naming `task generate` as the regenerate command.
     const lines = renderMarkdown(shapesModel).split("\n");
     expect(lines[0]).toBe("# Third-Party Licenses");
     expect(lines[2]).toBe(
-      "<!-- AUTO-GENERATED - do not edit. Regenerate with: task licenses:generate -->",
+      "<!-- AUTO-GENERATED - do not edit. Regenerate with: task generate -->",
     );
   });
 });
@@ -336,7 +336,7 @@ const sharpEntry = entry({
 const policyModel: CanonicalDependencies = { packages: [sharpEntry] };
 
 const basicView: PolicyView = {
-  policyPath: "tools/licenses/policy.toml",
+  policyPath: "policy.toml",
   suppressedWorkspaces: [
     {
       path: "apps/scratch",
@@ -371,8 +371,8 @@ describe("renderMarkdown — full OUT-01 document (04-02)", () => {
     // Document order: header comment with the regenerate command, policy
     // pointer, counts block, copyleft section, summary table.
     const markers = [
-      "task licenses:generate",
-      "Copyleft notice rules are configured in tools/licenses/policy.toml.",
+      "task generate",
+      "Copyleft notice rules are configured in policy.toml.",
       "**Package counts:**",
       "## Copyleft and special notices",
       // POL-08: the single summary table split into prod + dev-only sections,
@@ -394,7 +394,7 @@ describe("renderMarkdown — full OUT-01 document (04-02)", () => {
     expect(output.includes("Copyleft notice rules")).toBe(false);
     expect(output.includes("## Copyleft and special notices")).toBe(false);
     // ...but the header, counts block, and summary are all present.
-    expect(output.includes("task licenses:generate")).toBe(true);
+    expect(output.includes("task generate")).toBe(true);
     expect(output.includes("**Package counts:**")).toBe(true);
     // POL-08: both summary sections render even without a policy view.
     expect(output.includes("## Production dependencies")).toBe(true);
@@ -1312,7 +1312,7 @@ describe("renderMarkdown — [document] title + preamble (07-09 COMMIT 2)", () =
     const preamble = "First line.\n\nSecond paragraph with **bold**.";
     const output = renderMarkdown(model, viewWith({ preamble }));
     const headerIdx = output.indexOf(
-      "<!-- AUTO-GENERATED - do not edit. Regenerate with: task licenses:generate -->",
+      "<!-- AUTO-GENERATED - do not edit. Regenerate with: task generate -->",
     );
     const preambleIdx = output.indexOf("First line.");
     const pointerIdx = output.indexOf("Copyleft notice rules are configured");

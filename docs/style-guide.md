@@ -11,7 +11,7 @@ say, near the top, who that is.
 - **Operator** — adds the tool to a repository, runs it, wires it into CI. Wants
   to get a working inventory and a passing gate, and to fix things when they
   break.
-- **Policy author / compliance reviewer** — writes `policy.toml`, reads the
+- **Policy author / compliance reviewer** — writes `.sbomlet.toml`, reads the
   generated documents, and decides what to do about a flagged dependency. Cares
   about licences and obligations, not about the tool's internals.
 - **Contributor** — changes the tool itself. Wants the architecture, the data
@@ -69,7 +69,7 @@ Structure any implementation-bearing passage in three moves, in order:
 Avoid this (idea, exception, and citation all mashed together):
 
 > **No timestamps.** The Markdown header carries the **regenerate command**, not
-> a date (`task licenses:generate`; markdown.ts:33-34). The CycloneDX document
+> a date (`task generate`; markdown.ts:33-34). The CycloneDX document
 > omits `serialNumber` and `metadata.timestamp` (cyclonedx.ts:164-174). The
 > docker SBOM is digest-pinned, not time-stamped.
 

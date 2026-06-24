@@ -1,8 +1,8 @@
 # Third-Party Licenses
 
-<!-- AUTO-GENERATED - do not edit. Regenerate with: task licenses:generate -->
+<!-- AUTO-GENERATED - do not edit. Regenerate with: task generate -->
 
-Copyleft notice rules are configured in tools/licenses/policy.toml.
+Copyleft notice rules are configured in policy.toml.
 
 **Package counts:**
 

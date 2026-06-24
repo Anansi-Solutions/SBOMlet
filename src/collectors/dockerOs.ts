@@ -40,7 +40,7 @@ import { execTool } from "./exec";
 
 /**
  * Collector tool identity. The literal version is the pin — it is mirrored in
- * tools/licenses/mise.toml (`aqua:anchore/syft@1.45.1`) and asserted by
+ * mise.toml (`aqua:anchore/syft@1.45.1`) and asserted by
  * test/dockerOs.test.ts so a version bump must be conscious. Re-verify against
  * `mise x -- syft version` when refreshing (07-RESEARCH "valid until
  * ~2026-07-15").

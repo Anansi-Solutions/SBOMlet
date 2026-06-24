@@ -1,0 +1,30 @@
+name: Verify cache
+
+# The committed enrichment cache (.sbomlet.cache.json) is the offline source of
+# truth that `check` regenerates from. This audits every entry against the live
+# registries -- but ONLY when the cache itself changes on main, since re-resolving
+# needs the network and would be wasted work on unrelated pushes.
+on:
+  push:
+    branches: [main]
+    paths:
+      - .sbomlet.cache.json
+
+jobs:
+  verify-cache:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v6
+
+      - name: Set up the SBOMlet toolchain
+        uses: jdx/mise-action@v4
+
+      - name: Install dependencies
+        run: mise x -- bun install --frozen-lockfile
+
+      - name: Audit the committed cache against the live registries
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: mise x -- task verify-cache

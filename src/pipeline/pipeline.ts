@@ -5,6 +5,7 @@
  */
 
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { basename, relative } from "node:path";
 
 import { assertSyftSbomSize } from "../collectors/dockerOs";
 import { enrichUnknowns } from "../enrich/enrich";
@@ -18,8 +19,8 @@ import { annotateFindings } from "../normalize/normalize";
 import { BUILTIN_OVERRIDES } from "../policy/builtinOverrides";
 import { evaluate } from "../policy/evaluate";
 import { parsePolicy, type Policy } from "../policy/schema";
-import { renderCyclonedx } from "../render/cyclonedx";
 import { alignTables } from "../render/alignTables";
+import { renderCyclonedx } from "../render/cyclonedx";
 import { renderMarkdown, type PolicyView } from "../render/markdown";
 import { renderNotices } from "../render/notices";
 import { resolveFrom } from "./paths";
@@ -27,17 +28,13 @@ import { sanitizeForLog, writePolicySummary } from "./summary";
 import { collectTargets } from "./targets";
 
 /**
- * The committed enrichment cache filename, resolved against --base-dir like
- * every other relative path (resolveFrom(opts.baseDir, ...)). The Taskfile sets
- * --base-dir to the INVOCATION directory (USER_WORKING_DIR), so for the
- * dogfood run the cache resolves to the REPO ROOT
- * (`<repo-root>/enrichment-cache.json`, committed, NOT gitignored) — NOT to
- * tools/licenses. That repo-root cache is the canonical one `check` reads to
- * regenerate fully offline. (There is no tool-root cache: a stale
- * tools/licenses/enrichment-cache.json was a pre-dogfood orphan, deleted in
- * 06-06 — I#5/#7.)
+ * The committed enrichment cache filename, resolved against --base-dir like every
+ * other relative path (resolveFrom(opts.baseDir, ...)). The Taskfile sets
+ * --base-dir to the INVOCATION directory (USER_WORKING_DIR), so the cache resolves
+ * to the REPO ROOT (`<repo-root>/.sbomlet.cache.json`, committed, NOT gitignored) —
+ * the canonical cache `check` reads to regenerate fully offline.
  */
-export const DEFAULT_ENRICHMENT_CACHE = "enrichment-cache.json";
+export const DEFAULT_ENRICHMENT_CACHE = ".sbomlet.cache.json";
 
 /**
  * The committed Docker OS-package SBOM filename (COLL-04), resolved against
@@ -86,10 +83,10 @@ export interface GenerateOptions {
    * --dump-model). Defaults to the current working directory, so direct CLI
    * invocations resolve relative to cwd. The Taskfile passes the task
    * invocation directory ({{.USER_WORKING_DIR}}): tasks run inside
-   * tools/licenses (the include `dir`, mandated by the mise bun pin), so
-   * without this anchor a `task licenses:generate POLICY=policy.toml` would
-   * look for tools/licenses/policy.toml — and a relative CYCLONEDX would
-   * silently write (then "verify") the export inside tools/licenses. Display
+   * tools/sbomlet (the include `dir`, mandated by the mise bun pin), so
+   * without this anchor a `task generate POLICY=.sbomlet.toml` would
+   * look for tools/sbomlet/.sbomlet.toml — and a relative CYCLONEDX would
+   * silently write (then "verify") the export inside tools/sbomlet. Display
    * surfaces keep the raw path: the policy pointer line in the rendered
    * document must stay deterministic across machines, never embedding an
    * absolute machine-specific path.
@@ -191,13 +188,51 @@ function readCommittedDockerOsSbom(
 }
 
 /**
- * Project the PolicyView the document renderer consumes. The raw user-supplied
- * policyPath is used verbatim (never the base-dir-resolved one): the pointer
- * line lands in the committed document, and an absolute machine-specific path
- * would make the bytes differ per checkout. 07-09: the author-supplied
- * [document] title + preamble flow into the licenses-document renderer only
- * (never the notices companion), via conditional spread so "absent" stays
- * observable.
+ * The policy path as it lands in the committed document's pointer line:
+ * repo-root-relative and forward-slash, so the bytes are identical on every
+ * checkout and never leak an absolute machine path. (Using the raw --policy value
+ * broke determinism when an absolute path was passed — e.g. from the GitHub
+ * Action, which must run from its own directory, not the repo root.)
+ */
+function policyPointerPath(opts: GenerateOptions): string {
+  const policyFile = resolveFrom(opts.baseDir, opts.policyPath!);
+  const repoRoot = resolvedRepoRoot(opts);
+  if (repoRoot === undefined) return basename(policyFile);
+  return relative(repoRoot, policyFile).replaceAll("\\", "/");
+}
+
+/**
+ * The scanned repo's absolute root, or undefined in single-target mode (no
+ * --repo-root). Committed artifacts — the enrichment cache and the policy pointer
+ * line — anchor here so they bind to the repo being scanned, not the invocation
+ * directory (--base-dir), which diverges for in-process callers and the Action.
+ */
+function resolvedRepoRoot(opts: GenerateOptions): string | undefined {
+  return opts.repoRoot === undefined
+    ? undefined
+    : resolveFrom(opts.baseDir, opts.repoRoot);
+}
+
+/**
+ * The committed enrichment cache path. It belongs to the SCANNED repo, so it
+ * anchors to --repo-root, not --base-dir — they coincide for the CLI (invoked
+ * from the repo root) but diverge for in-process callers and the GitHub Action
+ * (which runs from its own directory), where base-dir would read the WRONG repo's
+ * cache. Single-target mode (no --repo-root) falls back to base-dir.
+ */
+function enrichmentCachePath(opts: GenerateOptions): string {
+  return resolveFrom(
+    resolvedRepoRoot(opts) ?? opts.baseDir,
+    opts.enrichmentCachePath ?? DEFAULT_ENRICHMENT_CACHE,
+  );
+}
+
+/**
+ * Project the PolicyView the document renderer consumes. The policy pointer path
+ * is repo-root-relative (policyPointerPath) so the committed bytes stay stable
+ * across platforms. 07-09: the author-supplied [document] title + preamble flow
+ * into the licenses-document renderer only (never the notices companion), via
+ * conditional spread so "absent" stays observable.
  */
 function projectPolicyView(
   policy: Policy,
@@ -262,10 +297,7 @@ export async function buildOutputs(
   const mode = opts.mode ?? "check";
   const { model: enriched, staleUnknowns } = await enrichUnknowns(model, {
     mode,
-    cachePath: resolveFrom(
-      opts.baseDir,
-      opts.enrichmentCachePath ?? DEFAULT_ENRICHMENT_CACHE,
-    ),
+    cachePath: enrichmentCachePath(opts),
     verbose: opts.verbose,
   });
 
@@ -291,7 +323,7 @@ export async function buildOutputs(
   if (policy !== undefined && opts.policyPath !== undefined) {
     verdicts = evaluate(annotated, policy);
     writePolicySummary(policy, verdicts, usedClarifyIndices);
-    policyView = projectPolicyView(policy, opts.policyPath, verdicts);
+    policyView = projectPolicyView(policy, policyPointerPath(opts), verdicts);
   }
 
   // Dump surface: with a policy run the dump is the EvaluatedDependencies

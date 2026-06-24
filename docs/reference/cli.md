@@ -106,7 +106,7 @@ never a silent pass.
 
 | Flag | Meaning | Default |
 | --- | --- | --- |
-| `--enrichment-cache <path>` | The committed cache to audit. | `enrichment-cache.json` at `--base-dir` |
+| `--enrichment-cache <path>` | The committed cache to audit. | `.sbomlet.cache.json` at `--base-dir` |
 | `--base-dir <path>` | Anchor the cache path to this directory instead of the working directory. | working directory |
 | `--verbose` | Print per-stage progress to stderr. | off |
 
@@ -166,29 +166,30 @@ this Taskfile from its root:
 
 ```yaml
 includes:
-  licenses:
-    taskfile: ./tools/licenses/Taskfile.yml
-    dir: ./tools/licenses
+  sbomlet:
+    taskfile: ./Taskfile.yml
+    dir: ./tools/sbomlet
+    flatten: true
 ```
 
-The `dir` key is required, so the tasks run inside `tools/licenses` and pick up that
-directory's pinned `bun`. The include name `licenses` namespaces the tasks.
+The `dir` key is required, so the tasks run inside `tools/sbomlet` and pick up that
+directory's pinned `bun`. With `flatten: true` SBOMlet's tasks are exposed unprefixed, so you run `task generate`, not `task sbomlet:generate`.
 
 | Task | What it runs | When |
 | --- | --- | --- |
-| `task licenses:generate` | `generate` over the repository; writes the committed documents. | After a dependency changes; commit the result. |
-| `task licenses:check` | `check`; the CI gate. | In CI, and locally before you push. |
-| `task licenses:verify-cache` | `verify-cache`; the online cache-integrity audit. | Before a release/audit, or when the cache changes; needs the network. |
-| `task licenses:generate-docker-sbom` | `generate-docker-sbom`; scans the image set and writes `docker-os-sbom.json`. | Maintainer-only, needs Docker; not part of `check`. |
-| `task licenses:quality` | Lint, format check, and typecheck for the tool itself. | When changing the tool. |
+| `task generate` | `generate` over the repository; writes the committed documents. | After a dependency changes; commit the result. |
+| `task check` | `check`; the CI gate. | In CI, and locally before you push. |
+| `task verify-cache` | `verify-cache`; the online cache-integrity audit. | Before a release/audit, or when the cache changes; needs the network. |
+| `task generate-docker-sbom` | `generate-docker-sbom`; scans the image set and writes `docker-os-sbom.json`. | Maintainer-only, needs Docker; not part of `check`. |
+| `task quality` | Lint, format check, and typecheck for the tool itself. | When changing the tool. |
 
 Each task reads variables you can override on the command line. Set a variable by
 appending `NAME=value`:
 
 ```
-task licenses:generate POLICY=policy.toml
-task licenses:check REPO_ROOT=/path/to/some/other/repo
-task licenses:generate-docker-sbom IMAGES="app:latest worker:latest"
+task generate POLICY=.sbomlet.toml
+task check REPO_ROOT=/path/to/some/other/repo
+task generate-docker-sbom IMAGES="app:latest worker:latest"
 ```
 
 | Var | Used by | Meaning | Default |
@@ -202,7 +203,7 @@ task licenses:generate-docker-sbom IMAGES="app:latest worker:latest"
 | `DOCKER_OS_SBOM` | `generate-docker-sbom` | `docker-os-sbom.json` output path. | `docker-os-sbom.json` beside `REPO_ROOT` |
 
 Relative paths you pass are anchored to the directory you ran `task` from, not to
-`tools/licenses`, because each task forwards `--base-dir` set to your invocation
+`tools/sbomlet`, because each task forwards `--base-dir` set to your invocation
 directory.
 
 ## Exit codes
