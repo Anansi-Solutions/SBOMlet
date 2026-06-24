@@ -29,5 +29,4 @@
 
 ## Docker base-image OS packages
 
-| Name | Ecosystem | Version | License | Used in |
-| --- | --- | --- | --- | --- |
+✅ No Docker base images are currently tracked.

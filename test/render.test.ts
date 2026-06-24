@@ -917,14 +917,18 @@ describe("renderMarkdown — COLL-04 Docker base-image OS packages section", () 
     expect(dev.includes("| app-dev | npm | 1.0.0 |")).toBe(true);
   });
 
-  test("the OS section renders heading + TABLE_HEAD even when there are NO OS packages (stable shape)", () => {
+  test("the OS section renders heading + an empty-state line when there are NO OS packages (stable shape)", () => {
     const model: CanonicalDependencies = { packages: [appProd] };
     const output = renderMarkdown(model);
     const osSection = output.slice(output.indexOf(HEADING));
     expect(output.includes(HEADING)).toBe(true);
     expect(
-      osSection.includes("| Name | Ecosystem | Version | License | Used in |"),
+      osSection.includes("✅ No Docker base images are currently tracked."),
     ).toBe(true);
+    // The empty section shows the message in place of a bare table head.
+    expect(
+      osSection.includes("| Name | Ecosystem | Version | License | Used in |"),
+    ).toBe(false);
   });
 
   test("section order is fixed/deterministic: Production, Development-only, then Docker OS", () => {
@@ -1186,14 +1190,15 @@ describe("renderMarkdown — Ecosystem column (07-09 COMMIT 1)", () => {
 
   test("every table head carries the Ecosystem column after Name", () => {
     const output = renderMarkdown(mixed);
-    // Every TABLE_HEAD now carries the column. Three app/os summary sections
-    // always render their head; the column appears in each.
+    // Every rendered TABLE_HEAD carries the column. Non-empty summary sections
+    // render their head; an empty one shows a checkmark line instead, so the
+    // count is the non-empty sections (mixed: Production + Docker OS), not three.
     const headCount = output
       .split("\n")
       .filter(
         (line) => line === "| Name | Ecosystem | Version | License | Used in |",
       ).length;
-    expect(headCount).toBeGreaterThanOrEqual(3);
+    expect(headCount).toBeGreaterThanOrEqual(2);
     // The OLD 4-column head must never survive anywhere.
     expect(output.includes("| Name | Version | License | Used in |")).toBe(
       false,

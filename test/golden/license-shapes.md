@@ -26,10 +26,8 @@
 
 ## Development-only dependencies
 
-| Name | Ecosystem | Version | License | Used in |
-| --- | --- | --- | --- | --- |
+✅ No development-only dependencies.
 
 ## Docker base-image OS packages
 
-| Name | Ecosystem | Version | License | Used in |
-| --- | --- | --- | --- | --- |
+✅ No Docker base images are currently tracked.

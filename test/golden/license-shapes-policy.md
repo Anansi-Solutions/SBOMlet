@@ -21,11 +21,11 @@ Copyleft notice rules are configured in policy.toml.
 
 ## Copyleft and special notices
 
-The packages listed below carry copyleft or special license obligations in at least one non-suppressed workspace.
-
 Workspaces that are themselves distributed under a copyleft license are suppressed by policy:
 
 - apps/scratch (AGPL-3.0-only) — Scratch fork is itself AGPL-distributed \| upstream \`scratch-gui\` \[GPL-compatible\]
+
+The packages listed below carry copyleft or special license obligations in at least one non-suppressed workspace.
 
 | Name | Ecosystem | Version | License | Used in | Why |
 | --- | --- | --- | --- | --- | --- |
@@ -46,10 +46,8 @@ Workspaces that are themselves distributed under a copyleft license are suppress
 
 ## Development-only dependencies
 
-| Name | Ecosystem | Version | License | Used in |
-| --- | --- | --- | --- | --- |
+✅ No development-only dependencies.
 
 ## Docker base-image OS packages
 
-| Name | Ecosystem | Version | License | Used in |
-| --- | --- | --- | --- | --- |
+✅ No Docker base images are currently tracked.

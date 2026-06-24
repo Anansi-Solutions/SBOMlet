@@ -304,14 +304,17 @@ const TABLE_HEAD = [
 
 /**
  * One summary section (heading + table) over a pre-classified, already-sorted
- * package list. An empty section still renders its heading + table head (no
- * rows) so both sections are always present and the document shape is stable
- * regardless of the dev/prod mix — deterministic and legible.
+ * package list. The heading always renders so the document shape is stable
+ * regardless of the dev/prod mix; an EMPTY section renders the heading plus a
+ * one-line ✅ message instead of a bare table head — friendlier than a header
+ * with no rows, and still deterministic.
  */
 function summarySection(
   heading: string,
   packages: readonly PackageEntry[],
+  emptyMessage: string,
 ): string[] {
+  if (packages.length === 0) return [heading, "", emptyMessage];
   const lines: string[] = [heading, "", ...TABLE_HEAD];
   for (const pkg of packages) {
     lines.push(tableRow(pkg, pkg.occurrences.map((o) => o.target).join(", ")));
@@ -625,16 +628,32 @@ export function renderMarkdown(
       else list.push(verdict);
     }
 
-    lines.push(
-      "## Copyleft and special notices",
-      "",
-      "The packages listed below carry copyleft or special license obligations in at least one non-suppressed workspace.",
-      "",
-    );
+    // Collect the flagged copyleft rows first so the EMPTY state can be a ✅ line
+    // rather than a bare table head. Membership = at least one fail/warn verdict
+    // whose rule is exactly "default:copyleft" (the engine's only copyleft-
+    // flagging rule). The Used-in cell lists only the flagged occurrence targets
+    // — how the elected branch surfaces: the non-suppressed leaking workspaces
+    // are named. The Why column (07-13) carries the per-row provenance.
+    const copyleftRows: string[] = [];
+    for (const pkg of sorted) {
+      const flagged = (verdictsByPurl.get(pkg.purl) ?? []).filter(
+        (verdict) =>
+          (verdict.status === "fail" || verdict.status === "warn") &&
+          verdict.rule === "default:copyleft",
+      );
+      if (flagged.length === 0) continue;
+      const targets = [
+        ...new Set(flagged.map((verdict) => verdict.occurrenceTarget)),
+      ].sort(compareCodeUnits);
+      copyleftRows.push(copyleftRow(pkg, targets));
+    }
+
+    lines.push("## Copyleft and special notices", "");
 
     // Suppressed-workspaces list: every field is policy-authored and routes
     // through escapeCell. Sorted by path (compareCodeUnits) for determinism
-    // regardless of policy-file order.
+    // regardless of policy-file order. Shown whenever configured — it explains
+    // the suppression even when nothing leaks.
     const suppressed = [...policyView.suppressedWorkspaces].sort((a, b) =>
       compareCodeUnits(a.path, b.path),
     );
@@ -651,26 +670,20 @@ export function renderMarkdown(
       lines.push("");
     }
 
-    // Copyleft table: membership = at least one fail/warn verdict whose rule
-    // is exactly "default:copyleft" (the engine's only copyleft-flagging
-    // rule). The Used-in cell lists only the flagged occurrence targets — this
-    // is how the elected branch surfaces in rendered output: the
-    // non-suppressed leaking workspaces are named. The Why column (07-13) carries
-    // the per-row provenance ("direct" / introducer path / "—").
-    lines.push(...COPYLEFT_HEAD);
-    for (const pkg of sorted) {
-      const flagged = (verdictsByPurl.get(pkg.purl) ?? []).filter(
-        (verdict) =>
-          (verdict.status === "fail" || verdict.status === "warn") &&
-          verdict.rule === "default:copyleft",
+    if (copyleftRows.length > 0) {
+      lines.push(
+        "The packages listed below carry copyleft or special license obligations in at least one non-suppressed workspace.",
+        "",
+        ...COPYLEFT_HEAD,
+        ...copyleftRows,
+        "",
       );
-      if (flagged.length === 0) continue;
-      const targets = [
-        ...new Set(flagged.map((verdict) => verdict.occurrenceTarget)),
-      ].sort(compareCodeUnits);
-      lines.push(copyleftRow(pkg, targets));
+    } else {
+      lines.push(
+        "✅ No package carries copyleft or special license obligations.",
+        "",
+      );
     }
-    lines.push("");
   }
 
   // Imprecise-licenses review section — finding-level (rendered with or without
@@ -680,8 +693,8 @@ export function renderMarkdown(
   // Summary tables, split by package-level dev/prod classification (POL-08) for
   // APP-scope packages, then a dedicated Docker base-image OS section (COLL-04).
   // Fixed order — production, development-only, then Docker OS — for
-  // determinism; each section always renders (heading + table head) even when
-  // empty. The Used-in cell stays the full occurrence-target list; the split is
+  // determinism; each section always renders its heading (a ✅ line replaces the
+  // table when empty). The Used-in cell stays the full occurrence-target list; the split is
   // by package classification, not per-occurrence. OS packages are excluded from
   // both app sections (the dev/prod split is an app concept). Lockfile-only
   // scans carry no licenses — "unknown" is correct pre-annotation behavior, not
@@ -690,13 +703,29 @@ export function renderMarkdown(
   const osPackages = sorted.filter(isOsPackage);
   const developmentOnly = appPackages.filter(isDevelopmentOnly);
   const production = appPackages.filter((pkg) => !isDevelopmentOnly(pkg));
-  lines.push(...summarySection("## Production dependencies", production));
-  lines.push("");
   lines.push(
-    ...summarySection("## Development-only dependencies", developmentOnly),
+    ...summarySection(
+      "## Production dependencies",
+      production,
+      "✅ No production dependencies.",
+    ),
   );
   lines.push("");
-  lines.push(...summarySection("## Docker base-image OS packages", osPackages));
+  lines.push(
+    ...summarySection(
+      "## Development-only dependencies",
+      developmentOnly,
+      "✅ No development-only dependencies.",
+    ),
+  );
+  lines.push("");
+  lines.push(
+    ...summarySection(
+      "## Docker base-image OS packages",
+      osPackages,
+      "✅ No Docker base images are currently tracked.",
+    ),
+  );
 
   return lines.join("\n") + "\n";
 }

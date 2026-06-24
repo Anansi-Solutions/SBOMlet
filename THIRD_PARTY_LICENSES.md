@@ -19,10 +19,7 @@ Copyleft notice rules are configured in .sbomlet.toml.
 
 ## Copyleft and special notices
 
-The packages listed below carry copyleft or special license obligations in at least one non-suppressed workspace.
-
-| Name | Ecosystem | Version | License | Used in | Why |
-| ---- | --------- | ------- | ------- | ------- | --- |
+✅ No package carries copyleft or special license obligations.
 
 ## Production dependencies
 
@@ -185,5 +182,4 @@ The packages listed below carry copyleft or special license obligations in at le
 
 ## Docker base-image OS packages
 
-| Name | Ecosystem | Version | License | Used in |
-| ---- | --------- | ------- | ------- | ------- |
+✅ No Docker base images are currently tracked.
