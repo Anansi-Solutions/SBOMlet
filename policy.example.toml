@@ -56,20 +56,10 @@
 # in NAME mode below, not license mode.
 # ---------------------------------------------------------------------------
 
-[[deny]]
-match = "license"
-pattern = "BUSL-1.1"
-reason = "Business Source License 1.1 is source-available, NOT open source: it forbids production/competing use until the change date. It can never appear in a distributed THIRD_PARTY set -- deny is terminal and overrides every accept lever."
-
-[[deny]]
-match = "license"
-pattern = "SSPL-1.0"
-reason = "Server Side Public License 1.0 is source-available (OSI-rejected): its service-source copyleft makes it unredistributable in client-shipped artifacts. Force-fail unconditionally."
-
-[[deny]]
-match = "license"
-pattern = "Elastic-2.0"
-reason = "Elastic License 2.0 is source-available with use restrictions (no managed-service resale, no circumvention). Cannot ship in a distributed inventory -- terminal deny."
+# NOTE: BUSL-1.1, SSPL-1.0, and Elastic-2.0 are DENIED BY DEFAULT — they ship with
+# the tool (src/policy/builtinDenylist.ts), so you do NOT need to list them. Add a
+# `[[deny]] match = "license"` entry only for ANOTHER source-available SPDX licence
+# the defaults don't cover; the syntax mirrors the name-mode entries below.
 
 [[deny]]
 match = "name"

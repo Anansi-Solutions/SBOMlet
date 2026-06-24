@@ -53,3 +53,4 @@ summaries and research notes.
 | [0018](0018-adversarial-review-gate.md) | Adversarial review before completion as a release gate | Accepted |
 | [0019](0019-adoption-git-clone-taskfile.md) | Adoption by git clone + Taskfile include; single-binary deferred | Accepted |
 | [0020](0020-distribution-git-bun.md) | Distribution stays git + Taskfile + mise-pinned bun; compiled binary declined | Accepted |
+| [0021](0021-source-available-deny-defaults.md) | Source-available licences ship as deny defaults | Accepted |
