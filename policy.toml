@@ -1,0 +1,17 @@
+# SBOMlet's own licence policy — the tool gates its own dependency inventory.
+#
+# The shipped source-available denies (BUSL/SSPL/Elastic) apply by default. Beyond
+# that: unknown licences fail (the tool must always resolve its own), and a
+# build-time-only copyleft downgrades to a warning since it is never redistributed.
+
+[document]
+title = "SBOMlet — Third-Party Licenses"
+
+[unknown]
+handling = "fail"
+
+[dev_dependencies]
+handling = "warn"
+
+[os_dependencies]
+handling = "warn"
