@@ -578,7 +578,7 @@ describe("offline check contract — enrichment staleness (INTG-03, GATE-02)", (
 
 // ===========================================================================
 // COLL-04: the committed docker-os-sbom.json is threaded into the merge as a
-// scope:"os" INPUT (07-01's emitter output), base-dir-resolved. A MISSING file
+// scope:"os" INPUT (07-01's emitter output), repo-root-resolved. A MISSING file
 // is the enrichment-cache-miss equivalent: NO os entries, NO scan, NO docker.
 // buildOutputs is write-free so these run directly against a temp base dir.
 // ===========================================================================
@@ -622,7 +622,7 @@ describe("COLL-04 committed docker-os-sbom.json as a scope:os merge input", () =
     mock.module("../src/collectors/cdxgen", () => REAL_CDXGEN);
   });
 
-  test("a committed docker-os-sbom.json at the base dir threads os-scope deb/apk entries into the merged model", async () => {
+  test("a committed docker-os-sbom.json at the repo root threads os-scope deb/apk entries into the merged model", async () => {
     const { root } = makeScannableTree();
     writeFileSync(
       join(root, "docker-os-sbom.json"),
@@ -651,6 +651,74 @@ describe("COLL-04 committed docker-os-sbom.json as a scope:os merge input", () =
     );
     expect(osSection.includes("| libc6 | deb | 2.36-9 |")).toBe(true);
     expect(osSection.includes("| musl | apk | 1.2.4-r2 |")).toBe(true);
+  });
+
+  test("the committed docker-os-sbom.json is read from the REPO ROOT, not the base dir (the Action's divergent-dir case)", async () => {
+    const { root } = makeScannableTree();
+    // The Action shape: `task` runs from the action's own directory, so
+    // base-dir is NOT the scanned repo; the consumer commits the SBOM at
+    // THEIR repo root.
+    const baseDir = mkdtempSync(join(tmpdir(), "licenses-check-basedir-"));
+    writeFileSync(
+      join(root, "docker-os-sbom.json"),
+      JSON.stringify(DOCKER_OS_SBOM),
+    );
+    const paths = pathsFor(root, false);
+
+    let outputs: Awaited<ReturnType<typeof buildOutputs>> | undefined;
+    await withFetch(EMPTY_FETCH, () =>
+      withCapturedStderr(async () => {
+        outputs = await buildOutputs({
+          repoRoot: root,
+          baseDir,
+          ...paths,
+          verbose: false,
+        });
+      }),
+    );
+
+    // Read from the repo root, so the OS section and deb/apk rows are present.
+    const md = outputs!.licensesMd;
+    expect(md.includes("## Docker base-image OS packages")).toBe(true);
+    const osSection = squish(
+      md.slice(md.indexOf("## Docker base-image OS packages")),
+    );
+    expect(osSection.includes("| libc6 | deb | 2.36-9 |")).toBe(true);
+    expect(osSection.includes("| musl | apk | 1.2.4-r2 |")).toBe(true);
+  });
+
+  test("a docker-os-sbom.json beside the base dir is IGNORED when the base dir differs from the repo root (no base-dir leakage)", async () => {
+    const { root } = makeScannableTree();
+    const baseDir = mkdtempSync(join(tmpdir(), "licenses-check-basedir-"));
+    // A stray SBOM in the invocation dir (e.g. the action's own checkout)
+    // must NOT leak into a scan of a different repo root.
+    writeFileSync(
+      join(baseDir, "docker-os-sbom.json"),
+      JSON.stringify(DOCKER_OS_SBOM),
+    );
+    const paths = pathsFor(root, false);
+
+    let outputs: Awaited<ReturnType<typeof buildOutputs>> | undefined;
+    await withFetch(EMPTY_FETCH, () =>
+      withCapturedStderr(async () => {
+        outputs = await buildOutputs({
+          repoRoot: root,
+          baseDir,
+          ...paths,
+          verbose: false,
+        });
+      }),
+    );
+
+    const md = outputs!.licensesMd;
+    // The OS section heading still renders, but the base-dir SBOM did NOT leak
+    // in: none of its rows appear and the count is zero.
+    const osSection = squish(
+      md.slice(md.indexOf("## Docker base-image OS packages")),
+    );
+    expect(osSection.includes("libc6")).toBe(false);
+    expect(osSection.includes("musl")).toBe(false);
+    expect(md.includes("- Docker OS packages: 0")).toBe(true);
   });
 
   test("NO committed file → NO os entries and NO docker/syft scan (offline, the cache-miss equivalent)", async () => {

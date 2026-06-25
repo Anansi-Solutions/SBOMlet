@@ -99,8 +99,10 @@ export interface GenerateOptions {
    */
   enrichmentCachePath?: string;
   /**
-   * The committed Docker OS-package SBOM path (base-dir-resolved). Defaults to
-   * {@link DEFAULT_DOCKER_OS_SBOM} at the base dir. When the file exists it is
+   * The committed Docker OS-package SBOM path. A relative value (the default,
+   * {@link DEFAULT_DOCKER_OS_SBOM}) anchors to the SCANNED repo (--repo-root),
+   * not --base-dir, so it sits beside the other committed artifacts and the
+   * Action reads the consumer repo's SBOM. When the file exists it is
    * size-gated, parsed, and threaded into the merge as a scope:"os" input
    * (COLL-04); when absent there are no os entries (the offline cache-miss
    * equivalent — never a live docker/syft scan).
@@ -162,7 +164,11 @@ export interface BuiltOutputs {
 /**
  * Read the committed Docker OS-package SBOM as a scope:"os" merge input, or
  * undefined when it does not exist (the offline cache-miss equivalent — no os
- * entries, never a live scan). The file is size-gated BEFORE any read (DoS
+ * entries, never a live scan). The path anchors to the scanned repo
+ * (--repo-root) like the enrichment cache, not --base-dir, so the Action,
+ * running from its own directory, reads the consumer repo's committed SBOM
+ * rather than a stray file beside the action (they coincide for the CLI, where
+ * base-dir = repo root). The file is size-gated BEFORE any read (DoS
  * bound, T-07-04, reusing the collector's assertSyftSbomSize), then parsed. The
  * parse is tolerant: a malformed committed file yields no os entries rather than
  * aborting the whole pipeline (mergeSboms's arktype narrow already skips
@@ -173,7 +179,7 @@ function readCommittedDockerOsSbom(
   opts: GenerateOptions,
 ): CollectedSbom | undefined {
   const osSbomPath = resolveFrom(
-    opts.baseDir,
+    resolvedRepoRoot(opts) ?? opts.baseDir,
     opts.dockerOsSbomPath ?? DEFAULT_DOCKER_OS_SBOM,
   );
   if (!existsSync(osSbomPath)) return undefined;
