@@ -24,10 +24,12 @@
 #   DOCKER_OS_SBOM  docker-os-sbom.json path        (default: beside REPO_ROOT)
 #   TITLE           decision title for adr:new
 #
-# `task test -- <args>` forwards args to the test runner (one file, a
-# `--test-name-pattern`, …). Variable values reach the CLI through the
-# ENVIRONMENT, never command-line template interpolation, so a value like
-# '$(...)' is inert data, never executed.
+# Task runs every command through its own embedded POSIX shell (mvdan/sh), so they
+# behave identically on Windows, macOS, and Linux — never PowerShell or cmd. Every
+# interpolated variable is piped through `| q` (Task's shellQuote): a value
+# containing a space, `$(...)`, or a backtick is quoted into ONE inert argument and
+# can never break out into the shell. `task test -- <args>` forwards args verbatim
+# to the test runner (a file path, a --test-name-pattern, …).
 version: '3'
 
 vars:
@@ -38,53 +40,23 @@ vars:
 tasks:
   generate:
     desc: Generate THIRD_PARTY_LICENSES.md and THIRD_PARTY_NOTICES.md (plus an optional CycloneDX export); commit the outputs
-    env:
-      LT_BASE_DIR: '{{.USER_WORKING_DIR}}'
-      LT_REPO_ROOT: '{{.REPO_ROOT}}'
-      LT_OUTPUT: '{{.OUTPUT}}'
-      LT_NOTICES: '{{.NOTICES}}'
-      LT_POLICY: '{{.POLICY | default ""}}'
-      LT_CYCLONEDX: '{{.CYCLONEDX | default ""}}'
     cmds:
-      - mise x -- bun src/cli.ts generate --base-dir "$LT_BASE_DIR" --repo-root "$LT_REPO_ROOT" --output "$LT_OUTPUT" --notices "$LT_NOTICES"{{if .POLICY}} --policy "$LT_POLICY"{{end}}{{if .CYCLONEDX}} --cyclonedx "$LT_CYCLONEDX"{{end}}
+      - mise x -- bun src/cli.ts generate --base-dir {{.USER_WORKING_DIR | q}} --repo-root {{.REPO_ROOT | q}} --output {{.OUTPUT | q}} --notices {{.NOTICES | q}}{{if .POLICY}} --policy {{.POLICY | q}}{{end}}{{if .CYCLONEDX}} --cyclonedx {{.CYCLONEDX | q}}{{end}}
 
   check:
     desc: 'CI gate — exit 0 clean, 1 policy violation (beats stale), 2 stale/missing output, 3+ tool error'
-    env:
-      LT_BASE_DIR: '{{.USER_WORKING_DIR}}'
-      LT_REPO_ROOT: '{{.REPO_ROOT}}'
-      LT_OUTPUT: '{{.OUTPUT}}'
-      LT_NOTICES: '{{.NOTICES}}'
-      LT_POLICY: '{{.POLICY | default ""}}'
-      LT_CYCLONEDX: '{{.CYCLONEDX | default ""}}'
     cmds:
-      - mise x -- bun src/cli.ts check --base-dir "$LT_BASE_DIR" --repo-root "$LT_REPO_ROOT" --output "$LT_OUTPUT" --notices "$LT_NOTICES"{{if .POLICY}} --policy "$LT_POLICY"{{end}}{{if .CYCLONEDX}} --cyclonedx "$LT_CYCLONEDX"{{end}}
+      - mise x -- bun src/cli.ts check --base-dir {{.USER_WORKING_DIR | q}} --repo-root {{.REPO_ROOT | q}} --output {{.OUTPUT | q}} --notices {{.NOTICES | q}}{{if .POLICY}} --policy {{.POLICY | q}}{{end}}{{if .CYCLONEDX}} --cyclonedx {{.CYCLONEDX | q}}{{end}}
 
   verify-cache:
     desc: 'ONLINE cache-integrity audit — re-resolve every committed cache entry against its registry and report divergence from the stored license; run before a release/audit or when the cache changes (needs network). Exit 0 all match, 1 mismatch, 3 tool/network error'
-    env:
-      LT_BASE_DIR: '{{.USER_WORKING_DIR}}'
     cmds:
-      - mise x -- bun src/cli.ts verify-cache --base-dir "$LT_BASE_DIR"
+      - mise x -- bun src/cli.ts verify-cache --base-dir {{.USER_WORKING_DIR | q}}
 
   generate-docker-sbom:
     desc: 'MAINTAINER + DOCKER ONLY — produce the committed docker-os-sbom.json. IMAGES="a:1 b:2" live-scans those refs; FROM_SBOM="x.json y.json" ingests pre-built syft SBOMs (no daemon); DISCOVER_ROOT=. derives bases from the repo Dockerfiles. NOT part of check (check reads the committed bytes offline).'
-    env:
-      LT_BASE_DIR: '{{.USER_WORKING_DIR}}'
-      LT_DOCKER_OS_SBOM: '{{.DOCKER_OS_SBOM | default (printf "%s/docker-os-sbom.json" .REPO_ROOT)}}'
-      LT_IMAGES: '{{.IMAGES | default ""}}'
-      LT_FROM_SBOM: '{{.FROM_SBOM | default ""}}'
-      LT_DISCOVER_ROOT: '{{.DISCOVER_ROOT | default ""}}'
     cmds:
-      # `set --` makes each ref its own positional operand (no eval, no re-quoting).
-      # With none of IMAGES / FROM_SBOM / DISCOVER_ROOT set, the loops run zero times
-      # and the CLI falls back to its built-in image set.
-      - >-
-        set -- --base-dir "$LT_BASE_DIR" --docker-os-sbom "$LT_DOCKER_OS_SBOM";
-        if [ -n "$LT_DISCOVER_ROOT" ]; then set -- "$@" --repo-root "$LT_DISCOVER_ROOT"; fi;
-        for ref in $LT_IMAGES; do set -- "$@" --image "$ref"; done;
-        for sbom in $LT_FROM_SBOM; do set -- "$@" --from-sbom "$sbom"; done;
-        mise x -- bun src/cli.ts generate-docker-sbom "$@"
+      - mise x -- bun src/cli.ts generate-docker-sbom --base-dir {{.USER_WORKING_DIR | q}} --docker-os-sbom {{.DOCKER_OS_SBOM | default (printf "%s/docker-os-sbom.json" .REPO_ROOT) | q}}{{if .DISCOVER_ROOT}} --repo-root {{.DISCOVER_ROOT | q}}{{end}}{{range .IMAGES | default "" | splitList " "}}{{if .}} --image {{. | q}}{{end}}{{end}}{{range .FROM_SBOM | default "" | splitList " "}}{{if .}} --from-sbom {{. | q}}{{end}}{{end}}
 
   quality:
     desc: Quality gate — lint + format-check + typecheck
@@ -100,10 +72,8 @@ tasks:
 
   adr:new:
     desc: 'Scaffold an architecture decision record from the MADR template (TITLE="Short decision title")'
-    env:
-      LT_ADR_TITLE: '{{.TITLE | default ""}}'
     cmds:
-      - mise x -- bun scripts/new-adr.ts
+      - mise x -- bun scripts/new-adr.ts {{.TITLE | default "" | q}}
 
   install:
     desc: Install dependencies from the committed lockfile (CI-safe)

@@ -1,9 +1,9 @@
 /**
  * Scaffold a new architecture decision record from the MADR template.
  *
- * Run via `task adr:new TITLE="..."`. The title arrives as the LT_ADR_TITLE
- * environment variable (inert data — never interpolated into a shell command),
- * matching the env-passing posture of the other tasks. The next ADR number is
+ * Run via `task adr:new TITLE="..."`. The title arrives as argv[2]; Task passes
+ * it through `| q` (shellQuote), so it is one inert argument, never re-parsed by
+ * the shell. The next ADR number is
  * the highest existing NNNN plus one; the slug is the lower-cased title with
  * non-alphanumeric runs collapsed to single dashes.
  */
@@ -13,7 +13,7 @@ import { join } from "node:path";
 const ADR_DIR = join(import.meta.dir, "..", "docs", "explanation", "adr");
 const TEMPLATE = join(ADR_DIR, "0000-template.md");
 
-const title = (process.env.LT_ADR_TITLE ?? "").trim();
+const title = (process.argv[2] ?? "").trim();
 if (title === "") {
   console.error('A title is required: task adr:new TITLE="Short decision title"');
   process.exit(2);
