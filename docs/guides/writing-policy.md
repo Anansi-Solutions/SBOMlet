@@ -20,7 +20,7 @@ which carries a working entry for each table with the rules inline as comments.
 Copy it to `.sbomlet.toml` at your repo root and pass it with `--policy`:
 
 ```sh
-bun run src/cli.ts generate --policy .sbomlet.toml --repo-root . --output THIRD_PARTY_LICENSES.md
+task generate POLICY=.sbomlet.toml
 ```
 
 Without `--policy` the tool only inventories licences. With it, every package in

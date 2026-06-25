@@ -16,7 +16,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      # Installs the tools pinned in mise.toml — bun, syft, and Task. `task` is
+      # Installs the tools pinned in mise.toml: the runtime, syft, and Task. `task` is
       # then the single interface for every step below.
       - name: Set up mise toolchain
         uses: jdx/mise-action@v4

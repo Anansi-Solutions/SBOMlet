@@ -16,14 +16,9 @@ The tool has four subcommands:
   `docker-os-sbom.json` that `generate` and `check` read as an
   [OS-scope](../glossary.md#scope-app-and-os) input.
 
-You normally run the tool through the Taskfile rather than calling `bun` directly.
-The [Taskfile entry points](#taskfile-entry-points) are at the bottom of this page.
-
-Invoked directly, the form is:
-
-```
-bun run src/cli.ts <generate|check|generate-docker-sbom> [options]
-```
+You run the tool through the Taskfile; the [Taskfile entry points](#taskfile-entry-points)
+are at the bottom of this page. The flags documented below are what each `task`
+forwards to the CLI.
 
 ## generate
 
@@ -173,7 +168,7 @@ includes:
 ```
 
 The `dir` key is required, so the tasks run inside `tools/sbomlet` and pick up that
-directory's pinned `bun`. With `flatten: true` SBOMlet's tasks are exposed unprefixed, so you run `task generate`, not `task sbomlet:generate`.
+directory's pinned runtime. With `flatten: true` SBOMlet's tasks are exposed unprefixed, so you run `task generate`, not `task sbomlet:generate`.
 
 | Task | What it runs | When |
 | --- | --- | --- |

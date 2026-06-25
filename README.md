@@ -129,7 +129,7 @@ jobs:
 ```
 
 Pass `mode: generate` to write the inventory instead of gating it. The action runs
-the same `mise + bun` pipeline as the Taskfile path — pick whichever fits your CI.
+the same mise + Task pipeline as the Taskfile path — pick whichever fits your CI.
 
 ## Supported ecosystems
 

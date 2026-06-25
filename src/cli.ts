@@ -51,7 +51,7 @@ import { runVerifyCache } from "./pipeline/verifyCache";
 import type { VerifyResult } from "./enrich/verify";
 
 const USAGE =
-  "usage: bun run src/cli.ts <generate|check|verify-cache|generate-docker-sbom> [options]\n" +
+  "usage: sbomlet <generate|check|verify-cache|generate-docker-sbom> [options]\n" +
   "  generate [--repo-root <path> | --target <path>] [--exclude <glob>]... " +
   "[--policy <path>] [--output <path>] [--notices <path>] " +
   "[--cyclonedx <path>] [--dump-model <path>] [--base-dir <path>] " +

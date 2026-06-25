@@ -18,13 +18,16 @@
 #   POLICY          policy file; --policy is added only when set
 #                   (default unset: the tool auto-discovers .sbomlet.toml)
 #   CYCLONEDX       CycloneDX export path; --cyclonedx is added only when set
-#   IMAGES          space-separated image refs for generate-docker-sbom
-#                   (default: the CLI's built-in image set)
+#   IMAGES          space-separated image refs to live-scan (generate-docker-sbom)
+#   FROM_SBOM       space-separated pre-built syft SBOMs to ingest (generate-docker-sbom)
+#   DISCOVER_ROOT   repo root whose Dockerfile bases to derive (generate-docker-sbom)
 #   DOCKER_OS_SBOM  docker-os-sbom.json path        (default: beside REPO_ROOT)
 #   TITLE           decision title for adr:new
 #
-# Variable values reach the CLI through the ENVIRONMENT, never command-line
-# template interpolation, so a value like '$(...)' is inert data, never executed.
+# `task test -- <args>` forwards args to the test runner (one file, a
+# `--test-name-pattern`, …). Variable values reach the CLI through the
+# ENVIRONMENT, never command-line template interpolation, so a value like
+# '$(...)' is inert data, never executed.
 version: '3'
 
 vars:
@@ -65,18 +68,22 @@ tasks:
       - mise x -- bun src/cli.ts verify-cache --base-dir "$LT_BASE_DIR"
 
   generate-docker-sbom:
-    desc: 'MAINTAINER + DOCKER ONLY — scan the image set with syft and write the committed docker-os-sbom.json; NOT part of check (check reads the committed bytes offline)'
+    desc: 'MAINTAINER + DOCKER ONLY — produce the committed docker-os-sbom.json. IMAGES="a:1 b:2" live-scans those refs; FROM_SBOM="x.json y.json" ingests pre-built syft SBOMs (no daemon); DISCOVER_ROOT=. derives bases from the repo Dockerfiles. NOT part of check (check reads the committed bytes offline).'
     env:
       LT_BASE_DIR: '{{.USER_WORKING_DIR}}'
       LT_DOCKER_OS_SBOM: '{{.DOCKER_OS_SBOM | default (printf "%s/docker-os-sbom.json" .REPO_ROOT)}}'
       LT_IMAGES: '{{.IMAGES | default ""}}'
+      LT_FROM_SBOM: '{{.FROM_SBOM | default ""}}'
+      LT_DISCOVER_ROOT: '{{.DISCOVER_ROOT | default ""}}'
     cmds:
-      # `set --` makes each image ref its own positional operand (no eval, no
-      # re-quoting); with no IMAGES override the loop runs zero times and the CLI
-      # falls back to its built-in image set.
+      # `set --` makes each ref its own positional operand (no eval, no re-quoting).
+      # With none of IMAGES / FROM_SBOM / DISCOVER_ROOT set, the loops run zero times
+      # and the CLI falls back to its built-in image set.
       - >-
         set -- --base-dir "$LT_BASE_DIR" --docker-os-sbom "$LT_DOCKER_OS_SBOM";
+        if [ -n "$LT_DISCOVER_ROOT" ]; then set -- "$@" --repo-root "$LT_DISCOVER_ROOT"; fi;
         for ref in $LT_IMAGES; do set -- "$@" --image "$ref"; done;
+        for sbom in $LT_FROM_SBOM; do set -- "$@" --from-sbom "$sbom"; done;
         mise x -- bun src/cli.ts generate-docker-sbom "$@"
 
   quality:
@@ -85,6 +92,11 @@ tasks:
       - mise x -- bun run lint
       - mise x -- bun run format:check
       - mise x -- bun run typecheck
+
+  format:
+    desc: Rewrite source formatting with Prettier (the fix when format-check fails)
+    cmds:
+      - mise x -- bun run format
 
   adr:new:
     desc: 'Scaffold an architecture decision record from the MADR template (TITLE="Short decision title")'
@@ -99,6 +111,6 @@ tasks:
       - mise x -- bun install --frozen-lockfile
 
   test:
-    desc: Run the test suite
+    desc: 'Run the test suite (`task test -- <file | --test-name-pattern ...>` forwards args)'
     cmds:
-      - mise x -- bun test
+      - mise x -- bun test {{.CLI_ARGS}}

@@ -197,7 +197,7 @@ the Dockerfile. Pass the resolved base ref to `--image` when you produce the
 Docker OS SBOM:
 
 ```sh
-mise x -- bun src/cli.ts generate-docker-sbom --image debian:12 --image node:22-slim
+task generate-docker-sbom IMAGES="debian:12 node:22-slim"
 ```
 
 This is the maintainer-only `generate-docker-sbom` subcommand, and what touches

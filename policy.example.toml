@@ -274,15 +274,12 @@ handling = "warn"
 # state-of-the-art standard for CI):
 #
 #   1. Live scan (maintainer, requires docker):
-#        bun run src/cli.ts generate-docker-sbom --image postgres:18 \
-#          --image nginx:stable-alpine
+#        task generate-docker-sbom IMAGES="postgres:18 nginx:stable-alpine"
 #      Spawns the pinned syft over each LOCALLY-PRESENT image and digest-pins
 #      it. Good for a one-off local dogfood; needs a docker daemon.
 #
 #   2. Consume a pre-made SBOM (CI attestation -- PREFERRED):
-#        bun run src/cli.ts generate-docker-sbom \
-#          --from-sbom build/postgres.cdx.json \
-#          --from-sbom build/app.cdx.json
+#        task generate-docker-sbom FROM_SBOM="build/postgres.cdx.json build/app.cdx.json"
 #      Ingests syft/CycloneDX SBOMs your BUILD PIPELINE already produced, with
 #      NO docker and NO network. The standard flow: the build CI runs syft
 #      against the image it just pushed, BY REGISTRY DIGEST -- e.g.

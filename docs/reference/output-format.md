@@ -39,7 +39,7 @@ regenerate it instead.
 task generate
 
 # Regenerate including the CycloneDX export
-bun run src/cli.ts generate --policy .sbomlet.toml --cyclonedx bom.cdx.json
+task generate POLICY=.sbomlet.toml CYCLONEDX=bom.cdx.json
 ```
 
 ## THIRD_PARTY_LICENSES.md
@@ -332,7 +332,7 @@ identified by content, which is stable.
 
 ```sh
 # Maintainer-only: scan the configured images and write the OS sidecar
-bun run src/cli.ts generate-docker-sbom --image postgres:18 --image nginx:stable-alpine
+task generate-docker-sbom IMAGES="postgres:18 nginx:stable-alpine"
 ```
 
 ## Related

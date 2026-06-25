@@ -12,13 +12,13 @@ tool itself, start from [`contributing.md`](./contributing.md) instead.
 
 ## Before you start
 
-You need two things on your machine. The tool runs on Bun, but you don't install
-Bun yourself; [mise](https://mise.jdx.dev) reads the pinned version and fetches
+You need two things on your machine. The tool runs on a pinned runtime, but you don't install
+it yourself; [mise](https://mise.jdx.dev) reads the pinned version and fetches
 it for you.
 
 | Tool | Why you need it | Install |
 | ---- | --------------- | ------- |
-| [mise](https://mise.jdx.dev) | Resolves and runs the pinned Bun the tool ships with | `curl https://mise.run \| sh` (or your package manager) |
+| [mise](https://mise.jdx.dev) | Resolves and runs the pinned runtime the tool ships with | `curl https://mise.run \| sh` (or your package manager) |
 | [Task](https://taskfile.dev) | Runs `task generate` and `task check` | `mise use -g task` (or your package manager) |
 
 That's the whole list. The tool keeps a small dependency footprint, since it
@@ -42,7 +42,7 @@ repository, keeping that path:
 cp -r /path/to/tools/sbomlet tools/sbomlet
 ```
 
-It carries its own `mise.toml` with the Bun pin, so it works the same on every
+It carries its own `mise.toml` with the runtime pin, so it works the same on every
 machine. You don't need to install anything inside it yet. The first
 `task generate` will do that.
 
@@ -62,7 +62,7 @@ includes:
 ```
 
 The `dir:` line is required. The tasks have to run inside `tools/sbomlet` so
-that mise resolves that directory's Bun pin. Without it, Task would run at your
+that mise resolves that directory's runtime pin. Without it, Task would run at your
 repository root, where there's no pin. `flatten: true` exposes SBOMlet's tasks unprefixed, so you run
 `task generate` and `task check`; nothing else is wired in.
 

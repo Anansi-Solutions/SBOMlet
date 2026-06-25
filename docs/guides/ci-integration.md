@@ -41,8 +41,8 @@ licenses:
 ```
 
 The runner needs [mise](https://mise.jdx.dev) and [Task](https://taskfile.dev)
-on `PATH`, the same as a local run. mise resolves the pinned Bun the tool ships
-with, so you don't install Bun in CI either. Beyond that there is nothing to
+on `PATH`, the same as a local run. mise resolves the pinned runtime the tool ships
+with, so you don't install it in CI either. Beyond that there is nothing to
 configure, and no API key, service container, or network allowance.
 
 If your repository keeps its outputs somewhere other than the root, or uses a
@@ -67,7 +67,7 @@ runner yourself:
 ```
 
 It runs `check` by default (the exit codes below apply); pass `mode: generate` to
-write the inventory instead. It is exactly the `mise + bun` pipeline above, wrapped
+write the inventory instead. It is exactly the mise + Task pipeline above, wrapped
 — use it on GitHub Actions and the Taskfile step everywhere else.
 
 ## What the exit code means
@@ -314,8 +314,7 @@ a built image, which is what `--image` and `--from-sbom` are for.
 
 ```sh
 # Discover Dockerfiles under the repo and scan their bases, plus an explicit one
-mise x -- bun src/cli.ts generate-docker-sbom \
-  --repo-root . --image postgres:18
+task generate-docker-sbom DISCOVER_ROOT=. IMAGES="postgres:18"
 ```
 
 `--from-sbom` is the daemon-free consumer path, and the one to use in a mature
@@ -327,8 +326,7 @@ manifest-list digest.
 
 ```sh
 # Ingest pre-built, attested SBOMs — no daemon, no network
-mise x -- bun src/cli.ts generate-docker-sbom \
-  --from-sbom build/backend.cdx.json --from-sbom build/frontend.cdx.json
+task generate-docker-sbom FROM_SBOM="build/backend.cdx.json build/frontend.cdx.json"
 ```
 
 Whichever mode you use, the result is one committed `docker-os-sbom.json`. A

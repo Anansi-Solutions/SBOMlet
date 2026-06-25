@@ -17,7 +17,7 @@ Every command below runs from ``.
 
 The tool needs few host tools, because a tool that audits dependencies should
 not add a build chain of its own. There is no Node build step, no transpile, no
-`dist/`. The CLI runs from TypeScript source via `bun src/cli.ts`. TypeScript,
+`dist/`. The CLI runs from TypeScript source with no build step. TypeScript,
 ESLint, and Prettier are dev dependencies you install below, not host tools.
 
 | Tool | Version | Pinned in | Needed for |
@@ -39,7 +39,7 @@ Source: `collectors/dockerOs.ts` (`SYFT_TOOL.version`), `mise.toml`.
 ## Install
 
 ```sh
-mise x -- bun install
+task install
 ```
 
 This reads the committed `bun.lock` and `package.json` under the pinned bun. The
@@ -82,9 +82,9 @@ Tests run on Bun's built-in runner. Everything lives under `test/`, one
 `*.test.ts` file per unit of behaviour, with no co-located specs.
 
 ```sh
-mise x -- bun test                              # the whole suite
-mise x -- bun test test/merge.test.ts           # one file
-mise x -- bun test --test-name-pattern merge    # by test-name substring
+task test                              # the whole suite
+task test -- test/merge.test.ts           # one file
+task test -- --test-name-pattern merge    # by test-name substring
 ```
 
 Two support directories sit alongside the test files. `test/golden/` holds
@@ -100,7 +100,7 @@ variable, because they spawn the real pinned generators (a cold Yarn-plugin run
 on a large target can take over a minute, and the first fetch needs the network):
 
 ```sh
-RUN_E2E=1 mise x -- bun test test/e2e.test.ts
+RUN_E2E=1 task test -- test/e2e.test.ts
 ```
 
 Without `RUN_E2E=1` those tests are skipped.
@@ -113,15 +113,8 @@ Three checks gate every change: lint, format, and typecheck. Run them together:
 task quality
 ```
 
-That runs the three under the pinned bun:
-
-```sh
-mise x -- bun run lint          # eslint .
-mise x -- bun run format:check  # prettier --check
-mise x -- bun run typecheck     # tsc --noEmit
-```
-
-To fix formatting instead of only checking it, run `mise x -- bun run format`.
+That runs ESLint, a Prettier format-check, and `tsc --noEmit` in sequence. To fix
+formatting instead of only checking it, run `task format`.
 
 The gates enforce TypeScript strict mode with no emit; the recommended ESLint and
 typescript-eslint rule sets plus project rules (an explicit return type and no
@@ -130,7 +123,7 @@ guard-claused functions); and Prettier with double quotes and trailing commas.
 `eslint-config-prettier` runs last, so formatting is owned by Prettier alone.
 Goldens and fixtures are excluded from both.
 
-Run `bun test` and `task quality` before you commit.
+Run `task test` and `task quality` before you commit.
 
 ## Adding a new collector
 

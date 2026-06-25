@@ -22,7 +22,7 @@ jobs:
         uses: jdx/mise-action@v4
 
       - name: Install dependencies
-        run: mise x -- bun install --frozen-lockfile
+        run: mise x -- task install
 
       - name: Audit the committed cache against the live registries
         env:
