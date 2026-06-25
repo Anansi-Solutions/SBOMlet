@@ -2826,7 +2826,7 @@ describe("[docker] ignore parsing", () => {
   });
 });
 
-describe("evaluate — [[allow_source_available]] exemption (ADR-0021 opt-out)", () => {
+describe("evaluate — [[allow_source_available]] exemption (ADR-0015 opt-out)", () => {
   const exemptBusl = [
     "[[allow_source_available]]",
     'license = "BUSL-1.1"',

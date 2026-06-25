@@ -360,7 +360,6 @@ easy to regress silently.
 Source: `collectors/terraform.ts`, `model/dependencies.ts`,
 `collectors/poetryProvenance.ts`, `policy/evaluate.ts`, `policy/denylist.ts`,
 `render/markdown.ts`, `collectors/dockerfile.ts`.
-See [ADR-0018](adr/) (adversarial review before completion).
 
 ---
 

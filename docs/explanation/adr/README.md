@@ -47,12 +47,8 @@ summaries and research notes.
 | [0012](0012-python-cdxgen-poetry.md) | Python via cdxgen, with prod/dev recovered from `poetry.lock` | Accepted |
 | [0013](0013-terraform-filesystem-signal-gate.md) | The Terraform gate keys on the `.terraform/` filesystem signal, not HCL parsing | Accepted |
 | [0014](0014-docker-syft-consumer.md) | Docker OS packages via syft, consumed as a committed digest-pinned SBOM | Accepted |
-| [0015](0015-source-available-deny-list.md) | A source-available deny-list as the top-precedence terminal | Accepted |
+| [0015](0015-source-available-deny-list.md) | Source-available licences: a terminal deny lane, shipped defaults, and an opt-out | Accepted |
 | [0016](0016-provenance-root-reachable.md) | Dependency provenance: root-reachable introducers, honest residual otherwise | Accepted |
 | [0017](0017-dockerfile-base-abstain.md) | Dockerfile base derivation abstains on ambiguity | Accepted |
-| [0018](0018-adversarial-review-gate.md) | Adversarial review before completion as a release gate | Accepted |
-| [0019](0019-adoption-git-clone-taskfile.md) | Adoption by git clone + Taskfile include; single-binary deferred | Accepted |
-| [0020](0020-distribution-git-bun.md) | Distribution stays git + Taskfile + mise-pinned bun; compiled binary declined | Accepted |
-| [0021](0021-source-available-deny-defaults.md) | Source-available licences ship as deny defaults | Accepted |
-| [0022](0022-source-available-opt-out.md) | Opting out of a source-available deny via [[allow_source_available]] | Accepted |
+| [0019](0019-adoption-git-clone-taskfile.md) | Adoption by git clone + Taskfile include; a compiled binary declined | Accepted |
 | [0023](0023-composite-github-action.md) | A composite GitHub Action for one-line CI adoption | Accepted |
