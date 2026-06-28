@@ -11,7 +11,7 @@ them byte-for-byte against the committed files. `generate` writes them:
 | --- | --- | --- |
 | `THIRD_PARTY_LICENSES.md` | always | `--output`, defaults to `THIRD_PARTY_LICENSES.md` |
 | `THIRD_PARTY_NOTICES.md` | always | `--notices`, defaults to `THIRD_PARTY_NOTICES.md` beside the output |
-| the [enrichment cache](../glossary.md#enrichment-and-the-enrichment-cache) | only when it fetches a new licence | `--enrichment-cache`, defaults to `.sbomlet.cache.json` at the base dir |
+| the [enrichment cache](../glossary.md#enrichment-and-the-enrichment-cache) | only when it fetches a new licence | `--enrichment-cache`, defaults to `.sbomlet.cache/licenses.cache.json` at the base dir |
 | a [CycloneDX](../glossary.md#cyclonedx) export | only with `--cyclonedx` | `--cyclonedx <path>` (no default) |
 | a model dump | only with `--dump-model` | `--dump-model <path>` (no default) |
 
@@ -21,7 +21,7 @@ enrichment cache. A warm run that finds every licence already in the cache does
 not touch it. The CycloneDX export and the model dump appear only when their flag
 is passed; the dump is a debug artifact and is not committed.
 
-`generate` does **not** write `docker-os-sbom.json`. That sidecar is produced by
+`generate` does **not** write `.sbomlet.cache/docker-os.sbom.json`. That sidecar is produced by
 the separate, maintainer-only `generate-docker-sbom` subcommand and committed by
 hand; `generate` and `check` only read it as a [`scope:os`](../glossary.md#scope-app-and-os)
 [merge](../glossary.md#merge) input. See [the committed sidecars](#the-committed-sidecars)
@@ -39,7 +39,7 @@ regenerate it instead.
 task generate
 
 # Regenerate including the CycloneDX export
-task generate POLICY=.sbomlet.toml CYCLONEDX=bom.cdx.json
+task generate POLICY=.sbomlet.policy.toml CYCLONEDX=bom.cdx.json
 ```
 
 ## THIRD_PARTY_LICENSES.md
@@ -308,7 +308,7 @@ follow the same determinism contract (sorted keys, two-space indent, LF, a
 trailing newline, no timestamp), so they diff cleanly and `check` can compare
 them byte-for-byte.
 
-`.sbomlet.cache.json` records the licences fetched from registries during
+`.sbomlet.cache/licenses.cache.json` records the licences fetched from registries during
 [enrichment](../glossary.md#enrichment-and-the-enrichment-cache). It is keyed by
 the verbatim purl and committed on purpose, not gitignored, because it lets
 [`check`](../glossary.md#the-gate-check) run with no network. `generate` reads
@@ -319,7 +319,7 @@ registry answered, and whether the package is resolvable. `generate` writes the
 file only when a run fetches at least one new licence; a warm run that satisfies
 every lookup from the cache leaves it untouched.
 
-`docker-os-sbom.json` is the operating-system package inventory for the Docker
+`.sbomlet.cache/docker-os.sbom.json` is the operating-system package inventory for the Docker
 base images, the [`scope:os`](../glossary.md#scope-app-and-os) merge input. It is a
 minimal CycloneDX-shaped document holding `bomFormat`, `specVersion`,
 `components`, and a `dockerImages` array pinning each scanned image to its

@@ -322,7 +322,7 @@ disappears.
 
 The second is to add the right policy lane. If the dependency is acceptable and
 the failure is the policy being stricter than your situation warrants, encode
-that decision in `.sbomlet.toml`. The lane depends on the case:
+that decision in `.sbomlet.policy.toml`. The lane depends on the case:
 
 - the license is fine to allow: a
   [`[[compatible]]`](../glossary.md#policy-lanes) rule;

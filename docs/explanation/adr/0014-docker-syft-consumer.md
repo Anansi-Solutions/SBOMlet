@@ -53,7 +53,7 @@ For where it runs:
 ## Decision
 
 We use syft for the extraction and consume a separately committed,
-digest-pinned `docker-os-sbom.json` rather than scanning on the gate path.
+digest-pinned `.sbomlet.cache/docker-os.sbom.json` rather than scanning on the gate path.
 
 syft won on the licence-fill measurement, which was not close. On `postgres:18`
 cdxgen `-t docker` resolved 210 Debian packages and zero licences; syft resolved
@@ -70,7 +70,7 @@ as docker and tofu.
 The second half of the decision keeps the daemon off the check path. The OS
 scan is a generate-only step: the maintainer runs `generate-docker-sbom`, which
 builds or pulls the images, scans them with syft, and writes
-`docker-os-sbom.json`. CI's `check` reads that committed file as one more merge
+`.sbomlet.cache/docker-os.sbom.json`. CI's `check` reads that committed file as one more merge
 input and never scans. This is the same split the enrichment cache already uses
 — `generate` writes committed bytes, `check` only reads them. A missing file
 means no OS entries and no scan, never a silent attempt to reach a daemon. The
@@ -95,7 +95,7 @@ and the committed bytes differ.
   `metadata.timestamp`, with the image identified by its content digest rather
   than scan time.
 - **Bad / cost:** the inventory is only as fresh as the last commit of
-  `docker-os-sbom.json`. A base-image bump that is not followed by a regenerate
+  `.sbomlet.cache/docker-os.sbom.json`. A base-image bump that is not followed by a regenerate
   leaves the committed OS packages stale until the maintainer reruns the scan —
   the digest pin makes the staleness visible at regenerate time, but does not
   refresh it on its own. The OS scope is also informational by policy

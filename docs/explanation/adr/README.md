@@ -52,3 +52,4 @@ summaries and research notes.
 | [0017](0017-dockerfile-base-abstain.md) | Dockerfile base derivation abstains on ambiguity | Accepted |
 | [0019](0019-adoption-git-clone-taskfile.md) | Adoption by git clone + Taskfile include; a compiled binary declined | Accepted |
 | [0023](0023-composite-github-action.md) | A composite GitHub Action for one-line CI adoption | Accepted |
+| [0024](0024-cache-directory-layout.md) | Committed artifacts in one configurable cache directory; policy renamed .sbomlet.policy.toml | Accepted |

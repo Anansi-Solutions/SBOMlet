@@ -1,6 +1,6 @@
 # Writing your policy
 
-This guide is for the policy author — the person who writes `.sbomlet.toml`, reads
+This guide is for the policy author — the person who writes `.sbomlet.policy.toml`, reads
 the generated documents, and decides what to do about a flagged dependency.
 
 Each section below is a recipe: a task you have in mind, the TOML to paste, and a
@@ -17,10 +17,10 @@ discover the next on the following run.
 
 You can start from the shipped [`policy.example.toml`](../../policy.example.toml),
 which carries a working entry for each table with the rules inline as comments.
-Copy it to `.sbomlet.toml` at your repo root and pass it with `--policy`:
+Copy it to `.sbomlet.policy.toml` at your repo root and pass it with `--policy`:
 
 ```sh
-task generate POLICY=.sbomlet.toml
+task generate POLICY=.sbomlet.policy.toml
 ```
 
 Without `--policy` the tool only inventories licences. With it, every package in
@@ -260,7 +260,7 @@ that rebuild their base and want every OS copyleft reviewed, and `ignore` opts
 out explicitly. A `[[deny]]` licence in an OS package still fails regardless,
 because deny sits above this knob.
 
-These packages reach the merge only if a `docker-os-sbom.json` is present in your
+These packages reach the merge only if a `.sbomlet.cache/docker-os.sbom.json` is present in your
 repo, produced separately by the maintainer-run `generate-docker-sbom`
 subcommand. `generate` and `check` never scan images themselves; they only read
 that committed file as an OS-scope input. See the

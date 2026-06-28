@@ -1,21 +1,21 @@
-# `.sbomlet.toml` reference
+# `.sbomlet.policy.toml` reference
 
 This page is for the policy author. It lists every table and field in
-`.sbomlet.toml`, with types, whether each is required, and what it means. The
+`.sbomlet.policy.toml`, with types, whether each is required, and what it means. The
 narrative, covering when to reach for each lane and why the precedence is
 ordered the way it is, lives in the
 [explanation pages](../explanation/design-principles.md); this page is the
 lookup table.
 
-A `.sbomlet.toml` is optional. Without it, the tool inventories licences and
+A `.sbomlet.policy.toml` is optional. Without it, the tool inventories licences and
 writes the documents but assigns no [verdicts](../glossary.md#verdict). With it,
 every (package × occurrence) gets a verdict of `ok`, `warn`, `fail`, or
 `suppressed`, and `check` becomes a gate that can fail your build. You pass the
 file to either command:
 
 ```sh
-task generate POLICY=.sbomlet.toml
-task check POLICY=.sbomlet.toml
+task generate POLICY=.sbomlet.policy.toml
+task check POLICY=.sbomlet.policy.toml
 ```
 
 A starter file ships as `policy.example.toml`. Copy it to your repo root and
@@ -259,7 +259,7 @@ deny still wins above this lane.
 A table governing what a would-be-fail does on an
 [OS-scope](../glossary.md#scope-app-and-os) package, meaning a `pkg:deb` or
 `pkg:apk` row from a Docker base image, read from the committed
-`docker-os-sbom.json`. Absent table: defaults to `warn`.
+`.sbomlet.cache/docker-os.sbom.json`. Absent table: defaults to `warn`.
 
 | Field | Type | Required | Meaning |
 |-------|------|----------|---------|
@@ -274,7 +274,7 @@ or rebuild your base and want every OS copyleft reviewed. As with
 `[dev_dependencies]`, deny still wins, so a source-available licence in an OS
 package fails regardless of this knob.
 
-The `docker-os-sbom.json` this lane reads is produced separately by the
+The `.sbomlet.cache/docker-os.sbom.json` this lane reads is produced separately by the
 maintainer-only `generate-docker-sbom` subcommand and committed; `generate` and
 `check` only read it as a `scope:os` merge input. They never discover or scan
 Docker images themselves. See the
@@ -312,6 +312,24 @@ table without `ignore` is the same as an empty list.
 Each glob is validated like a suppression path, with forward slashes only, no
 `..` segment, and no leading or trailing slash, so a crafted glob cannot reach
 outside the repo.
+
+## `[cache]`
+
+An optional table choosing where the tool writes its generated committed
+artifacts: the registry-resolved license cache (`licenses.cache.json`) and the
+Docker base-image OS SBOM (`docker-os.sbom.json`). Absent table: they live in
+`.sbomlet.cache/` at the repo root. Set `dir` to relocate the directory and keep
+your root clean (a .NET shop's `eng/`, a `.cache/` convention, and so on).
+
+| Field | Type | Required | Meaning |
+|-------|------|----------|---------|
+| `dir` | string | no | Repo-relative directory for committed artifacts; defaults to `.sbomlet.cache`. |
+
+`dir` is validated like a suppression path (forward slashes only, no `..`
+segment, no leading or trailing slash), so a committed-artifact directory can
+never escape the repo. Whatever directory you choose is committed; `check` reads
+it offline. The location resolves against the scanned repo, so it is the same
+under the GitHub Action as locally.
 
 ## Related pages
 

@@ -41,7 +41,7 @@ flowchart TD
         direction TB
         S1["1. DISCOVER targets<br/>src/targets/discover.ts → src/pipeline/targets.ts"]
         S2["2. COLLECT per target<br/>collector registry → raw CycloneDX docs<br/>(CollectedSbom[])"]
-        S2b["+ committed docker-os-sbom.json<br/>read as scope:&quot;os&quot; merge input"]
+        S2b["+ committed .sbomlet.cache/docker-os.sbom.json<br/>read as scope:&quot;os&quot; merge input"]
         S3["3. MERGE purl-keyed<br/>src/merge/merge.ts → CanonicalDependencies"]
         S4["4. ENRICH unknowns<br/>src/enrich/enrich.ts (cache; fetch only in generate)"]
         S5["5. NORMALIZE + annotate<br/>src/normalize/normalize.ts → finding per package"]
@@ -52,10 +52,10 @@ flowchart TD
 
     GEN -->|mode: generate| CORE
     CHK -->|mode: check| CORE
-    DOCK -.writes.-> OSF["docker-os-sbom.json<br/>(committed)"]
+    DOCK -.writes.-> OSF[".sbomlet.cache/docker-os.sbom.json<br/>(committed)"]
     OSF -.read by.-> S2b
 
-    CORE -->|generate: writeFileSync| OUT["always: THIRD_PARTY_LICENSES.md + THIRD_PARTY_NOTICES.md<br/>.sbomlet.cache.json (only when it fetches)<br/>*.cdx.json (only with --cyclonedx)<br/>dump JSON (only with --dump-model)"]
+    CORE -->|generate: writeFileSync| OUT["always: THIRD_PARTY_LICENSES.md + THIRD_PARTY_NOTICES.md<br/>.sbomlet.cache/licenses.cache.json (only when it fetches)<br/>*.cdx.json (only with --cyclonedx)<br/>dump JSON (only with --dump-model)"]
     CORE -->|check: byte-compare| CMP{committed == rendered?}
     CMP -->|all match, no fail verdict| E0["exit 0"]
     CMP -->|≥1 fail verdict| E1["exit 1"]
@@ -140,7 +140,7 @@ loudly with a thrown coverage assertion (exit 3). A silent incomplete inventory
 is the failure this tool exists to prevent, so the broken case never degrades to
 a quiet skip.
 
-After the collect loop, `buildOutputs` reads the committed `docker-os-sbom.json`,
+After the collect loop, `buildOutputs` reads the committed `.sbomlet.cache/docker-os.sbom.json`,
 if present, as a [scope `os`](../glossary.md#scope-app-and-os) merge input. This file
 is never scanned per run. It is produced separately by the maintainer-only
 `generate-docker-sbom` subcommand, the only path in the tool that touches a
@@ -198,7 +198,7 @@ purpose, so an appended registry claim flows through the same normalizer as a
 generator claim and the precedence between sources falls out for free.
 
 `enrichUnknowns` finds every package whose current claims still resolve to
-unknown and consults the committed `.sbomlet.cache.json`. The behavior splits
+unknown and consults the committed `.sbomlet.cache/licenses.cache.json`. The behavior splits
 by what the cache says and which mode is running:
 
 | Situation | What happens |

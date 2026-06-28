@@ -42,7 +42,7 @@ rather than a framework, which keeps the tool's own dependency footprint small.
   the policy, and exits with a code that says which class of thing is wrong. It
   writes nothing.
 - **`generate-docker-sbom`** is the only path that touches the Docker daemon or
-  syft. It scans Docker base images into a committed `docker-os-sbom.json`, which
+  syft. It scans Docker base images into a committed `.sbomlet.cache/docker-os.sbom.json`, which
   `generate` and `check` then read as an ordinary merge input. `generate` and
   `check` themselves never produce this file.
 
@@ -64,7 +64,7 @@ The stages run in a fixed order:
 flowchart TD
     A["Discover targets<br/>(walk --repo-root for lockfiles,<br/>or single --target)"] --> B
     B["Collect per target<br/>(Collector registry: cdxgen / yarn-plugin /<br/>bunLock / poetryLock / terraform)"] --> C
-    OS["Committed docker-os-sbom.json<br/>(scope: os merge input, when present)"] --> D
+    OS["Committed .sbomlet.cache/docker-os.sbom.json<br/>(scope: os merge input, when present)"] --> D
     B --> C["Each collector emits a CollectedSbom<br/>(per-target CycloneDX doc + scope)"]
     C --> D["Merge (purl-keyed)<br/>mergeSboms → CanonicalDependencies"]
     D --> E["Enrich unknowns<br/>(PyPI / npm / GitHub via committed cache)"]
@@ -102,7 +102,7 @@ and byte-compares instead.
 ```mermaid
 flowchart TD
     subgraph GEN["generate (runGenerate)"]
-        G1["buildOutputs(mode: generate)"] --> G2["ENRICH may fetch PyPI/npm/GitHub<br/>on a cache miss + write .sbomlet.cache.json"]
+        G1["buildOutputs(mode: generate)"] --> G2["ENRICH may fetch PyPI/npm/GitHub<br/>on a cache miss + write .sbomlet.cache/licenses.cache.json"]
         G2 --> G3["writeFileSync: LICENSES.md, NOTICES.md,<br/>CycloneDX (--cyclonedx), dump-model (--dump-model)"]
         G3 --> G4["exit 0<br/>(document always written,<br/>even with failing verdicts)"]
     end
@@ -306,7 +306,7 @@ The appended claim flows through the same normalizer as a generator claim, so th
 `clarify > registry > generator` precedence holds downstream without extra work.
 The cache file is serialized with the tool-wide sorted-key, LF, indent-2
 contract. It resolves against `--base-dir`, so for the dogfood run it
-lives at the repo root as `.sbomlet.cache.json`, committed rather than
+lives at the repo root as `.sbomlet.cache/licenses.cache.json`, committed rather than
 gitignored, and that is the file `check` reads to regenerate fully offline. The
 one write site is gated on `generate` mode, which keeps the core write-free in
 either mode.
@@ -318,7 +318,7 @@ Source: `src/enrich/enrich.ts`, `src/enrich/cache.ts`.
 The policy engine is a pure producer of [verdicts](../glossary.md#verdict). It
 decides; the documents and the gate only read what it decided.
 
-Loading a `.sbomlet.toml` rejects rather than skips. Every semantic problem is
+Loading a `.sbomlet.policy.toml` rejects rather than skips. Every semantic problem is
 collected into one error that names the offending table path, and every SPDX
 pattern, clarify expression, and workspace license is parsed at load time, so
 evaluation never meets an unparseable rule. Compatible and deny patterns are
@@ -430,7 +430,7 @@ daemon onto every CI check. Keeping it generate-only and outside the registry
 lets `check` stay offline. Its output is consumed instead as a committed merge
 input.
 
-That committed `docker-os-sbom.json` is the contract surface between the two
+That committed `.sbomlet.cache/docker-os.sbom.json` is the contract surface between the two
 worlds. The pipeline reads it as an `os`-scope input when it exists, size-gated
 before any read; a missing file means no OS entries, the offline cache-miss
 equivalent rather than a live scan. `generate` and `check` read the same

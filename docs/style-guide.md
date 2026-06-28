@@ -11,7 +11,7 @@ say, near the top, who that is.
 - **Operator** — adds the tool to a repository, runs it, wires it into CI. Wants
   to get a working inventory and a passing gate, and to fix things when they
   break.
-- **Policy author / compliance reviewer** — writes `.sbomlet.toml`, reads the
+- **Policy author / compliance reviewer** — writes `.sbomlet.policy.toml`, reads the
   generated documents, and decides what to do about a flagged dependency. Cares
   about licences and obligations, not about the tool's internals.
 - **Contributor** — changes the tool itself. Wants the architecture, the data

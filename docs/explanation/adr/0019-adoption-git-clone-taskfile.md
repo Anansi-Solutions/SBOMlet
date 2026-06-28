@@ -39,7 +39,7 @@ built and measured before deciding.
 ## Considered options
 
 1. **Copied directory + Taskfile include + policy file** — the consumer vendors the
-   source, adds a Taskfile `includes:` entry, and writes one `.sbomlet.toml`.
+   source, adds a Taskfile `includes:` entry, and writes one `.sbomlet.policy.toml`.
 2. **Publish to npm (or a mise plugin registry)** — consumers install a versioned
    package and invoke a published binary.
 3. **Ship a compiled per-platform binary** (`bun build --compile`) + a release
@@ -52,7 +52,7 @@ built and measured before deciding.
 
 **Adoption is git clone + a Taskfile include.** A consumer vendors the tool's
 directory, adds one Taskfile include, and copies `policy.example.toml` to
-`.sbomlet.toml`. There is no `npm publish`, no registry, and no install step beyond
+`.sbomlet.policy.toml`. There is no `npm publish`, no registry, and no install step beyond
 mise and Task, which the consumer already needs. The include points Task at the
 tool's own Taskfile and pins its working directory so the pinned Bun resolves from
 the tool's `mise.toml`; from there `task generate` and `task check` are the whole

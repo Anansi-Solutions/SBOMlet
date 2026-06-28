@@ -13,7 +13,7 @@ The tool has four subcommands:
   [enrichment cache](../glossary.md#enrichment-and-the-enrichment-cache) entry
   against its registry and report any divergence from the stored licence.
 - `generate-docker-sbom` — maintainer-only; produce the committed
-  `docker-os-sbom.json` that `generate` and `check` read as an
+  `.sbomlet.cache/docker-os.sbom.json` that `generate` and `check` read as an
   [OS-scope](../glossary.md#scope-app-and-os) input.
 
 You run the tool through the Taskfile; the [Taskfile entry points](#taskfile-entry-points)
@@ -25,7 +25,7 @@ forwards to the CLI.
 Scans the repository and writes `THIRD_PARTY_LICENSES.md`,
 `THIRD_PARTY_NOTICES.md`, and the [enrichment cache](../glossary.md#enrichment-and-the-enrichment-cache),
 plus a [CycloneDX](../glossary.md#cyclonedx) export when you ask for one. It does
-not write `docker-os-sbom.json` — that is the maintainer-only
+not write `.sbomlet.cache/docker-os.sbom.json` — that is the maintainer-only
 [`generate-docker-sbom`](#generate-docker-sbom) subcommand.
 
 `generate` always writes the documents whatever the policy verdicts say. The policy
@@ -101,7 +101,7 @@ never a silent pass.
 
 | Flag | Meaning | Default |
 | --- | --- | --- |
-| `--enrichment-cache <path>` | The committed cache to audit. | `.sbomlet.cache.json` at `--base-dir` |
+| `--enrichment-cache <path>` | The committed cache to audit. | `.sbomlet.cache/licenses.cache.json` at `--base-dir` |
 | `--base-dir <path>` | Anchor the cache path to this directory instead of the working directory. | working directory |
 | `--verbose` | Print per-stage progress to stderr. | off |
 
@@ -115,7 +115,7 @@ Terraform entries; the audit works without it, just slower.
 ## generate-docker-sbom
 
 Maintainer-only. This is the only subcommand that touches Docker. It produces the
-`docker-os-sbom.json` that you commit to the repository, and that `generate` and
+`.sbomlet.cache/docker-os.sbom.json` that you commit to the repository, and that `generate` and
 `check` later read as an OS-scope merge input. Neither of those subcommands runs
 this one or touches Docker; they read the bytes this subcommand writes.
 
@@ -145,7 +145,7 @@ the real image digest rather than a multi-arch manifest-list digest.
 | `--repo-root <path>` | Discovery mode: derive base images from the repository's Dockerfiles. | — |
 | `--exclude <glob>` | Drop targets whose identity matches the glob. Repeatable. | none |
 | `--policy <path>` | TOML policy; its `[docker]` ignore globs prune Dockerfiles in discovery mode. | none |
-| `--docker-os-sbom <path>` | Where to write the committed `docker-os-sbom.json`. | tool default |
+| `--docker-os-sbom <path>` | Where to write the committed `.sbomlet.cache/docker-os.sbom.json`. | tool default |
 | `--base-dir <path>` | Anchor every relative path flag to this directory. | working directory |
 | `--verbose` | Print per-stage progress to stderr. | off |
 
@@ -175,14 +175,14 @@ directory's pinned runtime. With `flatten: true` SBOMlet's tasks are exposed unp
 | `task generate` | `generate` over the repository; writes the committed documents. | After a dependency changes; commit the result. |
 | `task check` | `check`; the CI gate. | In CI, and locally before you push. |
 | `task verify-cache` | `verify-cache`; the online cache-integrity audit. | Before a release/audit, or when the cache changes; needs the network. |
-| `task generate-docker-sbom` | `generate-docker-sbom`; scans the image set and writes `docker-os-sbom.json`. | Maintainer-only, needs Docker; not part of `check`. |
+| `task generate-docker-sbom` | `generate-docker-sbom`; scans the image set and writes `.sbomlet.cache/docker-os.sbom.json`. | Maintainer-only, needs Docker; not part of `check`. |
 | `task quality` | Lint, format check, and typecheck for the tool itself. | When changing the tool. |
 
 Each task reads variables you can override on the command line. Set a variable by
 appending `NAME=value`:
 
 ```
-task generate POLICY=.sbomlet.toml
+task generate POLICY=.sbomlet.policy.toml
 task check REPO_ROOT=/path/to/some/other/repo
 task generate-docker-sbom IMAGES="app:latest worker:latest"
 ```
@@ -195,7 +195,7 @@ task generate-docker-sbom IMAGES="app:latest worker:latest"
 | `POLICY` | `generate`, `check` | Policy file; the `--policy` flag is added only when set. | unset (no policy) |
 | `CYCLONEDX` | `generate`, `check` | CycloneDX export path; the `--cyclonedx` flag is added only when set. | unset (no export) |
 | `IMAGES` | `generate-docker-sbom` | Space-separated image references to scan. | unset (built-in default image set) |
-| `DOCKER_OS_SBOM` | `generate-docker-sbom` | `docker-os-sbom.json` output path. | `docker-os-sbom.json` beside `REPO_ROOT` |
+| `DOCKER_OS_SBOM` | `generate-docker-sbom` | `.sbomlet.cache/docker-os.sbom.json` output path. | `.sbomlet.cache/docker-os.sbom.json` beside `REPO_ROOT` |
 
 Relative paths you pass are anchored to the directory you ran `task` from, not to
 `tools/sbomlet`, because each task forwards `--base-dir` set to your invocation

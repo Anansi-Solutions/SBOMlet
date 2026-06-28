@@ -4,7 +4,7 @@ This guide is for an operator who has a committed inventory and wants CI to
 fail the build when it drifts or when a dependency breaks the policy. It assumes
 you've been through [getting-started](../getting-started.md) and already have a
 `THIRD_PARTY_LICENSES.md`, a `THIRD_PARTY_NOTICES.md`, and an
-`.sbomlet.cache.json` committed at your repository root.
+`.sbomlet.cache/licenses.cache.json` committed at your repository root.
 
 The CI integration is one step. The rest of this page covers what makes that
 step reliable: the exit codes it returns, the workflow of committing what
@@ -19,7 +19,7 @@ before a release, and the maintainer-only Docker scan.
 CI-vendor features. Wherever your pipeline runs its checks, add one step:
 
 ```sh
-task check POLICY=.sbomlet.toml
+task check POLICY=.sbomlet.policy.toml
 ```
 
 That is the entire integration. It works the same on GitHub Actions, GitLab CI,
@@ -30,14 +30,14 @@ Some concrete shapes, so you can paste the right one:
 
 ```yaml
 # GitHub Actions — a step inside a job that has mise and Task available
-- run: task check POLICY=.sbomlet.toml
+- run: task check POLICY=.sbomlet.policy.toml
 ```
 
 ```yaml
 # GitLab CI — a job
 licenses:
   script:
-    - task check POLICY=.sbomlet.toml
+    - task check POLICY=.sbomlet.policy.toml
 ```
 
 The runner needs [mise](https://mise.jdx.dev) and [Task](https://taskfile.dev)
@@ -50,7 +50,7 @@ CycloneDX export, pass the same flags you pass to `generate` so the gate
 compares the same files. The variables are caller-overridable:
 
 ```sh
-task check POLICY=.sbomlet.toml CYCLONEDX=sbom.cdx.json
+task check POLICY=.sbomlet.policy.toml CYCLONEDX=sbom.cdx.json
 ```
 
 ## Or: the GitHub Action
@@ -63,7 +63,7 @@ runner yourself:
 - uses: actions/checkout@v6
 - uses: Anansi-Solutions/SBOMlet@main # pin a tag or SHA in production
   with:
-    policy: .sbomlet.toml
+    policy: .sbomlet.policy.toml
 ```
 
 It runs `check` by default (the exit codes below apply); pass `mode: generate` to
@@ -79,7 +79,7 @@ different problems with different fixes, and the code distinguishes them.
 | Exit code | Meaning | What to do |
 | --------- | ------- | ---------- |
 | `0` | Clean — the committed outputs match the regenerated inventory, and no dependency tripped a `fail` [verdict](../glossary.md#verdict) | Nothing; the gate passes |
-| `1` | A dependency tripped a `fail` verdict | Fix the dependency, or add a documented override to `.sbomlet.toml` |
+| `1` | A dependency tripped a `fail` verdict | Fix the dependency, or add a documented override to `.sbomlet.policy.toml` |
 | `2` | A committed output is [stale](../glossary.md#staleness) or missing | Re-run `generate`, review the diff, commit |
 | `3` (and above) | Tool or config error — a bad flag, an invalid policy file, a pipeline failure | Fix the invocation or the policy |
 
@@ -104,8 +104,8 @@ your first run.
 When a dependency changes, regenerate and commit:
 
 ```sh
-task generate POLICY=.sbomlet.toml
-git add THIRD_PARTY_LICENSES.md THIRD_PARTY_NOTICES.md .sbomlet.cache.json
+task generate POLICY=.sbomlet.policy.toml
+git add THIRD_PARTY_LICENSES.md THIRD_PARTY_NOTICES.md .sbomlet.cache/licenses.cache.json
 git commit -m "chore: refresh third-party license inventory"
 ```
 
@@ -114,7 +114,7 @@ cache only when it has to fetch. Commit whichever ones it produced:
 
 - `THIRD_PARTY_LICENSES.md` — the inventory. Written on every run.
 - `THIRD_PARTY_NOTICES.md` — the attribution companion. Written on every run.
-- `.sbomlet.cache.json` — the licenses fetched from registries during
+- `.sbomlet.cache/licenses.cache.json` — the licenses fetched from registries during
   [enrichment](../glossary.md#enrichment-and-the-enrichment-cache), committed so
   the gate can run offline. Written only when `generate` fetches a new license; a
   warm run that answers every gap from the committed cache leaves the file
@@ -128,7 +128,7 @@ is a debugging aid for golden-file tests, not something you commit.
 So an adopter running plain `task generate` gets three files at most:
 the inventory, the companion, and the cache when the run had a gap to fill.
 
-`generate` does not write `docker-os-sbom.json`. That file is produced by a
+`generate` does not write `.sbomlet.cache/docker-os.sbom.json`. That file is produced by a
 separate maintainer-only command, described at the end of this page, and is
 committed like any other input the gate reads.
 
@@ -161,12 +161,12 @@ root, so git can't rewrite them on any platform:
 ```gitattributes
 THIRD_PARTY_LICENSES.md text eol=lf
 THIRD_PARTY_NOTICES.md text eol=lf
-.sbomlet.cache.json text eol=lf
-docker-os-sbom.json text eol=lf
+.sbomlet.cache/licenses.cache.json text eol=lf
+.sbomlet.cache/docker-os.sbom.json text eol=lf
 ```
 
 Keep all four lines even if your repository doesn't ship Docker base images.
-The `docker-os-sbom.json` line is harmless when the file is absent and saves a
+The `.sbomlet.cache/docker-os.sbom.json` line is harmless when the file is absent and saves a
 surprise if you add one later.
 
 This matters even when nobody on the team develops on Windows today. The pins
@@ -186,7 +186,7 @@ The gate never touches the network, and this is enforced rather than configured.
 
 `check` runs the pipeline in a mode that forbids the enrich step from fetching
 or writing. Every license it needs comes from the committed
-`.sbomlet.cache.json`. If the inventory contains a package whose license
+`.sbomlet.cache/licenses.cache.json`. If the inventory contains a package whose license
 isn't in the cache and would otherwise require a registry lookup, the gate does
 not reach out for it. It reports that package as stale (exit `2`) and names the
 remedy, which is to run `generate` to refresh the committed cache. A missing
@@ -205,7 +205,7 @@ runner with no outbound access still passes the gate.
 
 ## Verify the cache before a release
 
-The gate trusts the committed `.sbomlet.cache.json` completely: every license
+The gate trusts the committed `.sbomlet.cache/licenses.cache.json` completely: every license
 it can't read from a lockfile comes from that file, offline. That is what keeps
 `check` fast and network-free, but it also means a wrong value in the cache — an
 edit that flips a copyleft license to a permissive one, an entry for a package
@@ -245,9 +245,9 @@ touched, and never otherwise. On GitHub Actions a path filter does this:
 name: License cache integrity
 on:
   push:
-    paths: [".sbomlet.cache.json"]
+    paths: [".sbomlet.cache/licenses.cache.json"]
   pull_request:
-    paths: [".sbomlet.cache.json"]
+    paths: [".sbomlet.cache/licenses.cache.json"]
 permissions:
   contents: read
 jobs:
@@ -273,7 +273,7 @@ root.
 The OS packages inside a Docker base image, the [os-scope](../glossary.md#scope-app-and-os)
 half of the inventory, are not discovered or scanned by `generate` or `check`.
 Neither command runs Docker or [syft](../glossary.md#generator). Instead, a
-maintainer produces a `docker-os-sbom.json` ahead of time with a separate
+maintainer produces a `.sbomlet.cache/docker-os.sbom.json` ahead of time with a separate
 command, commits it, and from then on `generate` and `check` read it as a merge
 input the same way they read a lockfile. This keeps a Docker daemon off the gate
 path: a CI `check` never needs Docker, even for a repository that ships container
@@ -329,12 +329,12 @@ manifest-list digest.
 task generate-docker-sbom FROM_SBOM="build/backend.cdx.json build/frontend.cdx.json"
 ```
 
-Whichever mode you use, the result is one committed `docker-os-sbom.json`. A
+Whichever mode you use, the result is one committed `.sbomlet.cache/docker-os.sbom.json`. A
 scan or build failure exits `3`, the same tool-error code as a bad flag. It is
 never a gate verdict, because this command is not the gate. After you commit the
 file, the os-scope packages flow into the merged inventory, and `generate` and
 `check` go on reading the committed bytes offline. Remember to add
-`docker-os-sbom.json` to your `.gitattributes` LF pins so it byte-compares the
+`.sbomlet.cache/docker-os.sbom.json` to your `.gitattributes` LF pins so it byte-compares the
 same way on every checkout.
 
 ## See also

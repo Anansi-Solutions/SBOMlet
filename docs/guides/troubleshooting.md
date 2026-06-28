@@ -28,9 +28,9 @@ and you get exit 2.
 To fix it, regenerate, look at the diff, and commit it:
 
 ```sh
-task generate POLICY=.sbomlet.toml
+task generate POLICY=.sbomlet.policy.toml
 git diff THIRD_PARTY_LICENSES.md THIRD_PARTY_NOTICES.md
-git add THIRD_PARTY_LICENSES.md THIRD_PARTY_NOTICES.md .sbomlet.cache.json
+git add THIRD_PARTY_LICENSES.md THIRD_PARTY_NOTICES.md .sbomlet.cache/licenses.cache.json
 git commit -m "chore: regenerate license inventory"
 ```
 
@@ -70,8 +70,8 @@ the run is slow. This is expected once. Run `generate`, commit the cache, and
 the next run reads from it instead of the network:
 
 ```sh
-task generate POLICY=.sbomlet.toml
-git add .sbomlet.cache.json
+task generate POLICY=.sbomlet.policy.toml
+git add .sbomlet.cache/licenses.cache.json
 git commit -m "chore: commit enrichment cache"
 ```
 
@@ -118,8 +118,8 @@ To fix it, run `generate` (which is allowed to fetch and write) and commit the
 refreshed cache:
 
 ```sh
-task generate POLICY=.sbomlet.toml
-git add .sbomlet.cache.json THIRD_PARTY_LICENSES.md THIRD_PARTY_NOTICES.md
+task generate POLICY=.sbomlet.policy.toml
+git add .sbomlet.cache/licenses.cache.json THIRD_PARTY_LICENSES.md THIRD_PARTY_NOTICES.md
 git commit -m "chore: refresh enrichment cache"
 ```
 
@@ -202,11 +202,11 @@ task generate-docker-sbom IMAGES="debian:12 node:22-slim"
 
 This is the maintainer-only `generate-docker-sbom` subcommand, and what touches
 Docker and what doesn't matters here. `generate` and `check` never run Docker and
-never scan an image. They only read a separately committed `docker-os-sbom.json`
+never scan an image. They only read a separately committed `.sbomlet.cache/docker-os.sbom.json`
 as a [scope (os)](../glossary.md#scope-app-and-os) input. That file is produced
 ahead of time by a maintainer running `generate-docker-sbom`, which requires a
 Docker daemon and uses syft to scan the images. So when a base shows unresolved,
-you pin it with `--image`, regenerate `docker-os-sbom.json`, commit it, and from
+you pin it with `--image`, regenerate `.sbomlet.cache/docker-os.sbom.json`, commit it, and from
 then on the offline `generate`/`check` flow reads those committed bytes.
 
 If you'd rather not have the tool try to derive a particular Dockerfile's base at
@@ -254,8 +254,8 @@ lines to a `.gitattributes` file at your repository root:
 ```gitattributes
 THIRD_PARTY_LICENSES.md text eol=lf
 THIRD_PARTY_NOTICES.md text eol=lf
-.sbomlet.cache.json text eol=lf
-docker-os-sbom.json text eol=lf
+.sbomlet.cache/licenses.cache.json text eol=lf
+.sbomlet.cache/docker-os.sbom.json text eol=lf
 ```
 
 Then renormalize the files already in the working tree and commit:

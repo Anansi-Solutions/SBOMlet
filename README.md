@@ -53,7 +53,7 @@ The inventory looks like this:
 ## The gate
 
 `check` regenerates the inventory offline, byte-compares it against the committed
-copy so it can't drift, and evaluates your `.sbomlet.toml`. A clean run:
+copy so it can't drift, and evaluates your `.sbomlet.policy.toml`. A clean run:
 
 ```console
 $ task sbomlet:check
@@ -77,7 +77,7 @@ policy fail: pkg:npm/some-agpl-tool@2.1.0 in services/api — deny: AGPL-3.0 is 
    ([cdxgen](https://github.com/CycloneDX/cdxgen),
    [syft](https://github.com/anchore/syft)) or a small in-house parser, and the
    results merge into one inventory keyed by [package URL](docs/glossary.md#purl).
-3. **Gate.** Your `.sbomlet.toml` decides what's allowed; `check` fails on the first
+3. **Gate.** Your `.sbomlet.policy.toml` decides what's allowed; `check` fails on the first
    violation.
 
 When a licence is ambiguous, SBOMlet records it as `unknown` rather than guessing
@@ -97,18 +97,18 @@ includes:
     dir: ./tools/sbomlet
 ```
 
-Copy [`policy.example.toml`](policy.example.toml) to `.sbomlet.toml`, then:
+Copy [`policy.example.toml`](policy.example.toml) to `.sbomlet.policy.toml`, then:
 
 ```sh
-task sbomlet:generate POLICY=.sbomlet.toml   # write the inventory
-task sbomlet:check    POLICY=.sbomlet.toml   # run the gate
+task sbomlet:generate POLICY=.sbomlet.policy.toml   # write the inventory
+task sbomlet:check    POLICY=.sbomlet.policy.toml   # run the gate
 ```
 
-Commit the generated `THIRD_PARTY_*.md` and `.sbomlet.cache.json`, then run
+Commit the generated `THIRD_PARTY_*.md` and `.sbomlet.cache/licenses.cache.json`, then run
 `task sbomlet:check` in CI. The full walkthrough — install, first run, reading the
 output, wiring CI — is in [getting-started](docs/getting-started.md). For a real
 configured example, see
-[`examples/crt25-collimator-.sbomlet.toml`](examples/crt25-collimator-.sbomlet.toml).
+[`examples/crt25-collimator-.sbomlet.policy.toml`](examples/crt25-collimator-.sbomlet.policy.toml).
 
 ## GitHub Action
 
@@ -125,7 +125,7 @@ jobs:
       - uses: actions/checkout@v6
       - uses: Anansi-Solutions/SBOMlet@main # pin a tag or SHA in production
         with:
-          policy: .sbomlet.toml
+          policy: .sbomlet.policy.toml
 ```
 
 Pass `mode: generate` to write the inventory instead of gating it. The action runs
@@ -138,7 +138,7 @@ the same mise + Task pipeline as the Taskfile path — pick whichever fits your 
 | JS / TypeScript | `yarn.lock`, `package-lock.json`, `pnpm-lock.yaml`, `bun.lock` |
 | Python | `poetry.lock`, `uv.lock` |
 | Terraform / OpenTofu | `.terraform.lock.hcl` |
-| Docker base images (OS packages) | a committed `docker-os-sbom.json` (see below) |
+| Docker base images (OS packages) | a committed `.sbomlet.cache/docker-os.sbom.json` (see below) |
 
 Discovery walks the repository and hands each [target](docs/glossary.md#target) to
 its [collector](docs/glossary.md#collector). The per-ecosystem detail — which
@@ -155,8 +155,8 @@ way it is.
 | Read this if you want to… | Page |
 | --- | --- |
 | Install SBOMlet and get a first inventory and a passing gate | [getting-started](docs/getting-started.md) |
-| Look up a command, flag, exit code, or the `.sbomlet.toml` schema | [CLI reference](docs/reference/cli.md) |
-| Write a `.sbomlet.toml` — add a `[[deny]]` rule, clarify an imprecise licence | [writing-policy](docs/guides/writing-policy.md) |
+| Look up a command, flag, exit code, or the `.sbomlet.policy.toml` schema | [CLI reference](docs/reference/cli.md) |
+| Write a `.sbomlet.policy.toml` — add a `[[deny]]` rule, clarify an imprecise licence | [writing-policy](docs/guides/writing-policy.md) |
 | Understand the determinism, honest-residual, and safety properties | [design-principles](docs/explanation/design-principles.md) |
 | See the module layout and the collector registry | [architecture](docs/explanation/architecture.md) |
 | Follow the discover → merge → enrich → normalize → evaluate → render pipeline | [data-flow](docs/explanation/data-flow.md) |
@@ -166,12 +166,12 @@ way it is.
 ## Good to know
 
 - **Docker OS packages** aren't discovered from lockfiles. A maintainer runs
-  `generate-docker-sbom` once to produce a committed `docker-os-sbom.json`, and
+  `generate-docker-sbom` once to produce a committed `.sbomlet.cache/docker-os.sbom.json`, and
   `generate`/`check` merge it in. It's the only subcommand that talks to a Docker
   daemon or registry; `generate` and `check` never do.
 - **The network.** `generate` reaches out only to fill a gap a cold cache can't
   answer — a registry lookup for an otherwise-unknown licence. Once
-  `.sbomlet.cache.json` is committed it serves every claim, and `check` never
+  `.sbomlet.cache/licenses.cache.json` is committed it serves every claim, and `check` never
   goes online. To re-validate the warm cache against upstream before a release,
   run `task sbomlet:verify-cache`.
 - **Line endings.** SBOMlet writes LF-only bytes so `check` can byte-compare. On
@@ -181,8 +181,8 @@ way it is.
 ```gitattributes
 THIRD_PARTY_LICENSES.md text eol=lf
 THIRD_PARTY_NOTICES.md  text eol=lf
-.sbomlet.cache.json   text eol=lf
-docker-os-sbom.json     text eol=lf
+.sbomlet.cache/licenses.cache.json   text eol=lf
+.sbomlet.cache/docker-os.sbom.json     text eol=lf
 ```
 
 ---
