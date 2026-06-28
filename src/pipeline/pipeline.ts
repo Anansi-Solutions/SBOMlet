@@ -88,8 +88,8 @@ export interface GenerateOptions {
    * invocations resolve relative to cwd. The Taskfile passes the task
    * invocation directory ({{.USER_WORKING_DIR}}): tasks run inside
    * tools/sbomlet (the include `dir`, mandated by the mise bun pin), so
-   * without this anchor a `task generate POLICY=.sbomlet.toml` would
-   * look for tools/sbomlet/.sbomlet.toml — and a relative CYCLONEDX would
+   * without this anchor a `task generate POLICY=.sbomlet.policy.toml` would
+   * look for tools/sbomlet/.sbomlet.policy.toml — and a relative CYCLONEDX would
    * silently write (then "verify") the export inside tools/sbomlet. Display
    * surfaces keep the raw path: the policy pointer line in the rendered
    * document must stay deterministic across machines, never embedding an
