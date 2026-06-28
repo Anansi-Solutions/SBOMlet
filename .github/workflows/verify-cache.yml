@@ -1,6 +1,6 @@
 name: Verify cache
 
-# The committed enrichment cache (.sbomlet.cache.json) is the offline source of
+# The committed enrichment cache (.sbomlet.cache/licenses.cache.json) is the offline source of
 # truth that `check` regenerates from. This audits every entry against the live
 # registries -- but ONLY when the cache itself changes on main, since re-resolving
 # needs the network and would be wasted work on unrelated pushes.
@@ -8,7 +8,7 @@ on:
   push:
     branches: [main]
     paths:
-      - .sbomlet.cache.json
+      - .sbomlet.cache/**
 
 jobs:
   verify-cache:

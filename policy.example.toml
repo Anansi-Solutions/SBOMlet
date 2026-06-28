@@ -239,10 +239,24 @@ handling = "warn"
 handling = "warn"
 
 # ---------------------------------------------------------------------------
+# Where the tool's generated artifacts live ([cache])
+#
+# The enrichment cache and the committed Docker OS SBOM are written under one
+# repo-root-relative directory, so they never scatter across your repo root.
+# Omit the whole [cache] table to use the default `.sbomlet.cache/`. Point `dir`
+# elsewhere (repo-relative, no "..") to keep the root pristine -- e.g. a .NET
+# shop's `eng/` convention. Commit whatever directory you choose; `check` reads
+# it offline.
+#
+#   [cache]
+#   dir = "eng/.sbomlet.cache"
+# ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
 # Docker base-image OS-package handling (COLL-04)
 #
 # Governs the deb/apk OS packages scanned out of your Docker base images (the
-# committed docker-os-sbom.json, produced by the maintainer-run
+# committed .sbomlet.cache/docker-os.sbom.json, produced by the maintainer-run
 # `generate-docker-sbom` subcommand and threaded into the merge as scope "os").
 # A would-be FAIL on an OS package downgrades to WARN under "warn".
 #
@@ -270,7 +284,7 @@ handling = "warn"
 # table defaults to "warn".
 #
 # ---------------------------------------------------------------------------
-# HOW the docker-os-sbom.json is produced -- TWO modes (the second is the
+# HOW the .sbomlet.cache/docker-os.sbom.json is produced -- TWO modes (the second is the
 # state-of-the-art standard for CI):
 #
 #   1. Live scan (maintainer, requires docker):
@@ -290,7 +304,7 @@ handling = "warn"
 #      base-image-only scan would miss, and keeps the compliance tool a thin
 #      CONSUMER of standard SBOM tooling rather than a docker orchestrator.
 #
-# Either mode writes the SAME deterministic committed docker-os-sbom.json,
+# Either mode writes the SAME deterministic committed .sbomlet.cache/docker-os.sbom.json,
 # carrying each OS package's syft-resolved licenses, which generate/check then
 # read OFFLINE (never re-scanning). --image and --from-sbom are mutually
 # exclusive -- a run is one mode or the other.

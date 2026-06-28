@@ -21,9 +21,8 @@
  * holds for free via annotateFindings downstream. The input model is never
  * mutated: new entries are produced via object spread, like annotateFindings.
  */
-import { writeFileSync } from "node:fs";
-
 import { normalizeRaw } from "../normalize/normalize";
+import { writeArtifact } from "../pipeline/paths";
 import {
   getEntry,
   putEntry,
@@ -226,7 +225,7 @@ export async function enrichUnknowns(
   if (opts.mode === "generate" && misses.length > 0) {
     await fetchMisses(misses, packages, cache, opts);
     // The ONLY enrichment write site, gated on generate mode.
-    writeFileSync(opts.cachePath, serializeCache(cache));
+    writeArtifact(opts.cachePath, serializeCache(cache));
   }
 
   return { model: { packages }, staleUnknowns };

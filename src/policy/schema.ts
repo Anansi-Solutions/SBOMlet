@@ -145,6 +145,21 @@ export interface DockerConfig {
 }
 
 /**
+ * The optional [cache] table: the directory holding all tool-generated committed
+ * artifacts (the enrichment cache, the Docker OS SBOM, and any added later), so
+ * they live in one place instead of scattering across the repo root. `dir` is a
+ * repo-root-relative forward-slash path, validated like a suppression path (no
+ * "..", no leading/trailing slash) so a committed artifact directory can never
+ * escape the repo: a project that keeps its root clean can point it at e.g.
+ * "eng/.sbomlet.cache". An absent table, or an absent `dir`, falls back to the
+ * DEFAULT_CACHE_DIR default at resolution time.
+ */
+export interface CacheConfig {
+  /** Repo-root-relative dir for committed artifacts; default applies when absent. */
+  dir?: string;
+}
+
+/**
  * One [[allow_source_available]] exemption (ADR-0015): a built-in
  * source-available licence the consumer has explicitly, auditably accepted, so it
  * surfaces as a warn instead of failing the gate by default.
@@ -190,6 +205,11 @@ export interface Policy {
    * DockerConfig whose `ignore` defaults to [].
    */
   docker?: DockerConfig;
+  /**
+   * Where tool-generated committed artifacts live (the enrichment cache, the
+   * Docker OS SBOM, and any added later). Absent maps to DEFAULT_CACHE_DIR.
+   */
+  cache?: CacheConfig;
 }
 
 /** All semantic problems aggregated; message = problems joined with "\n". */
@@ -337,6 +357,34 @@ function validateDocker(
     if (problems.length === before) ignore.push(value);
   });
   return { ignore };
+}
+
+/**
+ * Parse the optional [cache] table: an absent table yields undefined; a non-table
+ * rejects; a present table with no `dir` yields {} (the default applies later).
+ * `dir`, when present, must be a non-empty repo-root-relative forward-slash path
+ * (validatePath: no "..", no leading/trailing slash), so a committed artifact
+ * directory can never escape the repo. A malformed `dir` drops to {} after
+ * recording the aggregated PolicyError naming cache.dir.
+ */
+function validateCache(
+  root: Record<string, unknown>,
+  problems: string[],
+): CacheConfig | undefined {
+  if (!("cache" in root)) return undefined;
+  const table = recordOf(root["cache"]);
+  if (table === undefined) {
+    problems.push("cache: must be a table ([cache])");
+    return undefined;
+  }
+  checkKeys(table, ["dir"], "cache", problems);
+  if (!("dir" in table)) return {};
+  const dir = requireText(table, "dir", "cache", problems);
+  if (dir === undefined) return {};
+  const before = problems.length;
+  validatePath(dir, "cache.dir", problems);
+  if (problems.length !== before) return {};
+  return { dir };
 }
 
 /** Eager SPDX parse; a problem is recorded on failure. */
@@ -863,6 +911,7 @@ export function parsePolicy(text: string): Policy {
   const osDependencies = validateOsDependencies(root, problems);
   const document = validateDocument(root, problems);
   const docker = validateDocker(root, problems);
+  const cache = validateCache(root, problems);
   const allowSourceAvailable = validateAllowSourceAvailable(root, problems);
 
   if (problems.length > 0) throw new PolicyError(problems);
@@ -877,5 +926,6 @@ export function parsePolicy(text: string): Policy {
     allowSourceAvailable,
     ...(document !== undefined ? { document } : {}),
     ...(docker !== undefined ? { docker } : {}),
+    ...(cache !== undefined ? { cache } : {}),
   };
 }

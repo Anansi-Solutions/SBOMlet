@@ -69,7 +69,7 @@ const USAGE =
   "  generate-docker-sbom (--image <ref>... | --from-sbom <path>... | " +
   "--repo-root <dir> [--policy <file>] [--exclude <glob>]... [--image <ref>]...) " +
   "[--docker-os-sbom <path>] [--base-dir <path>] [--verbose]\n" +
-  "           Writes the committed docker-os-sbom.json. THREE modes:\n" +
+  "           Writes the committed docker-os.sbom.json. THREE modes:\n" +
   "           --image <ref>...: MAINTAINER-ONLY, REQUIRES A DOCKER DAEMON — " +
   "scans the image set (default: the documented image set) with the pinned " +
   "syft and digest-pins each.\n" +
@@ -143,14 +143,14 @@ interface CliValues {
 }
 
 /**
- * The recommended default policy file. When --policy is omitted, a .sbomlet.toml
- * at the repo root is adopted automatically; an absent default is silently
- * skipped (no policy means no gate). An explicit --policy always wins, and errors
- * if its file is missing. The anchor is the repo root (not --base-dir), so the
- * default is found in the scanned repo, including from the GitHub Action, which
- * runs from its own directory.
+ * The recommended default policy file. When --policy is omitted, a
+ * .sbomlet.policy.toml at the repo root is adopted automatically; an absent
+ * default is silently skipped (no policy means no gate). An explicit --policy
+ * always wins, and errors if its file is missing. The anchor is the repo root
+ * (not --base-dir), so the default is found in the scanned repo, including from
+ * the GitHub Action, which runs from its own directory.
  */
-const DEFAULT_POLICY = ".sbomlet.toml";
+const DEFAULT_POLICY = ".sbomlet.policy.toml";
 
 function discoverDefaultPolicy(values: CliValues): string | undefined {
   const anchor = resolveFrom(values["base-dir"], values["repo-root"] ?? ".");
@@ -215,12 +215,15 @@ function dockerSbomOptionsFrom(values: CliValues): GenerateDockerSbomOptions {
       `--repo-root (discovery) and --from-sbom (ingest) are mutually exclusive\n${USAGE}`,
     );
   }
+  // Discover the policy even without --policy so its `[cache] dir` steers the
+  // committed-SBOM output to the same cache dir generate/check read from.
+  const policyPath = values.policy ?? discoverDefaultPolicy(values);
   return {
     ...(hasImage ? { images: values.image } : {}),
     ...(hasFromSbom ? { fromSbomPaths: values["from-sbom"] } : {}),
     ...(hasRepoRoot ? { repoRoot: values["repo-root"] } : {}),
     ...(values.exclude !== undefined ? { excludes: values.exclude } : {}),
-    ...(values.policy !== undefined ? { policyPath: values.policy } : {}),
+    ...(policyPath !== undefined ? { policyPath } : {}),
     // The tool's OWN directory, so Dockerfile discovery prunes it from the walk
     // exactly as lockfile discovery does (targets.ts:53). cli.ts lives in src/,
     // so one level up is the tool root. Computed with zero hardcoded paths.
@@ -277,6 +280,8 @@ async function runVerifyCacheCommand(values: CliValues): Promise<never> {
   try {
     result = await runVerifyCache({
       baseDir: values["base-dir"],
+      repoRoot: values["repo-root"],
+      policyPath: values.policy ?? discoverDefaultPolicy(values),
       enrichmentCachePath: values["enrichment-cache"],
       verbose: values.verbose ?? false,
     });

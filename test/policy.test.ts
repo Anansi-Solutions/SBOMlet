@@ -2898,3 +2898,40 @@ describe("policy — [[allow_source_available]] validation", () => {
     ).not.toThrow();
   });
 });
+
+describe("parsePolicy — [cache] table", () => {
+  test("dir is captured", () => {
+    const policy = parsePolicy('[cache]\ndir = "eng/.sbomlet.cache"\n');
+    expect(policy.cache).toEqual({ dir: "eng/.sbomlet.cache" });
+  });
+
+  test("an empty [cache] table yields {} (the default applies at resolution)", () => {
+    expect(parsePolicy("[cache]\n").cache).toEqual({});
+  });
+
+  test("an absent [cache] table yields undefined", () => {
+    expect(parsePolicy('[unknown]\nhandling = "warn"\n').cache).toBeUndefined();
+  });
+
+  test('a ".." segment is rejected (a committed dir cannot escape the repo)', () => {
+    expect(
+      expectPolicyError('[cache]\ndir = "../outside"\n').message,
+    ).toContain("cache.dir");
+  });
+
+  test("a leading slash is rejected", () => {
+    expect(expectPolicyError('[cache]\ndir = "/abs"\n').message).toContain(
+      "cache.dir",
+    );
+  });
+
+  test("an unknown key is rejected", () => {
+    expect(expectPolicyError('[cache]\nfolder = "x"\n').message).toContain(
+      'unknown key "folder"',
+    );
+  });
+
+  test("an empty dir is rejected", () => {
+    expect(expectPolicyError('[cache]\ndir = ""\n').message).toContain("cache");
+  });
+});

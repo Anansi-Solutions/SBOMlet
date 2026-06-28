@@ -3,14 +3,14 @@
 # file to LF on commit and checkout, on every platform.
 * text=auto eol=lf
 
-# The committed inventory, notices, and enrichment cache ARE the gate's
+# The committed inventory, notices, and the cache directory ARE the gate's
 # byte-for-byte comparison targets. Pin them to LF text explicitly so they are
 # never auto-classified as binary (which would skip normalization and let a CRLF
 # checkout break the gate) -- the same guidance SBOMlet gives consumers for their
 # own generated THIRD_PARTY_*.md.
 THIRD_PARTY_LICENSES.md text eol=lf
 THIRD_PARTY_NOTICES.md text eol=lf
-.sbomlet.cache.json text eol=lf
+.sbomlet.cache/** text eol=lf
 
 # Binary assets are never normalized.
 *.png binary

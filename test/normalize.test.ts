@@ -1067,7 +1067,7 @@ const DEBIAN_SHORTHAND_CASES: ReadonlyArray<
   ["LGPL-3+", "LGPL-3.0-or-later", "corrected"],
   ["BSD-2-clause", "BSD-2-Clause", "corrected"],
   ["BSD-3-clause", "BSD-3-Clause", "corrected"],
-  // Observed in the committed docker-os-sbom.json: ncurses' "MIT/X11" Debian-ism.
+  // Observed in the committed docker-os.sbom.json: ncurses' "MIT/X11" Debian-ism.
   ["MIT/X11", "MIT", "corrected"],
 ];
 
@@ -1166,7 +1166,7 @@ describe("normalizeRaw — Debian/DEP-5 shorthand map (07-05)", () => {
 
 describe("annotateFindings — OS packages render real licenses for mapped shorthands (07-05)", () => {
   test("an Expat-sole OS package lifts from unknown to MIT", () => {
-    // Mirrors apt / libz3-4 in the committed docker-os-sbom.json.
+    // Mirrors apt / libz3-4 in the committed docker-os.sbom.json.
     const entry = pkg("apt", "2.6.1", [claim("Expat", "name")]);
     const { model } = annotateFindings(modelOf(entry), []);
     const finding = model.packages[0]!.finding!;

@@ -2,7 +2,7 @@
 
 <!-- AUTO-GENERATED - do not edit. Regenerate with: task generate -->
 
-Copyleft notice rules are configured in .sbomlet.toml.
+Copyleft notice rules are configured in .sbomlet.policy.toml.
 
 **Package counts:**
 

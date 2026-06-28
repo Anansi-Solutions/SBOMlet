@@ -16,12 +16,12 @@
 #   OUTPUT          THIRD_PARTY_LICENSES.md path    (default: beside REPO_ROOT)
 #   NOTICES         THIRD_PARTY_NOTICES.md path     (default: beside REPO_ROOT)
 #   POLICY          policy file; --policy is added only when set
-#                   (default unset: the tool auto-discovers .sbomlet.toml)
+#                   (default unset: the tool auto-discovers .sbomlet.policy.toml)
 #   CYCLONEDX       CycloneDX export path; --cyclonedx is added only when set
 #   IMAGES          space-separated image refs to live-scan (generate-docker-sbom)
 #   FROM_SBOM       space-separated pre-built syft SBOMs to ingest (generate-docker-sbom)
 #   DISCOVER_ROOT   repo root whose Dockerfile bases to derive (generate-docker-sbom)
-#   DOCKER_OS_SBOM  docker-os-sbom.json path        (default: beside REPO_ROOT)
+#   DOCKER_OS_SBOM  override the committed SBOM path (default: in the cache dir)
 #   TITLE           decision title for adr:new
 #
 # Task runs every command through its own embedded POSIX shell (mvdan/sh), so they
@@ -51,12 +51,12 @@ tasks:
   verify-cache:
     desc: 'ONLINE cache-integrity audit — re-resolve every committed cache entry against its registry and report divergence from the stored license; run before a release/audit or when the cache changes (needs network). Exit 0 all match, 1 mismatch, 3 tool/network error'
     cmds:
-      - mise x -- bun src/cli.ts verify-cache --base-dir {{.USER_WORKING_DIR | q}}
+      - mise x -- bun src/cli.ts verify-cache --base-dir {{.USER_WORKING_DIR | q}} --repo-root {{.REPO_ROOT | q}}
 
   generate-docker-sbom:
-    desc: 'MAINTAINER + DOCKER ONLY — produce the committed docker-os-sbom.json. IMAGES="a:1 b:2" live-scans those refs; FROM_SBOM="x.json y.json" ingests pre-built syft SBOMs (no daemon); DISCOVER_ROOT=. derives bases from the repo Dockerfiles. NOT part of check (check reads the committed bytes offline).'
+    desc: 'MAINTAINER + DOCKER ONLY — produce the committed docker-os.sbom.json. IMAGES="a:1 b:2" live-scans those refs; FROM_SBOM="x.json y.json" ingests pre-built syft SBOMs (no daemon); DISCOVER_ROOT=. derives bases from the repo Dockerfiles. NOT part of check (check reads the committed bytes offline).'
     cmds:
-      - mise x -- bun src/cli.ts generate-docker-sbom --base-dir {{.USER_WORKING_DIR | q}} --docker-os-sbom {{.DOCKER_OS_SBOM | default (printf "%s/docker-os-sbom.json" .REPO_ROOT) | q}}{{if .DISCOVER_ROOT}} --repo-root {{.DISCOVER_ROOT | q}}{{end}}{{range .IMAGES | default "" | splitList " "}}{{if .}} --image {{. | q}}{{end}}{{end}}{{range .FROM_SBOM | default "" | splitList " "}}{{if .}} --from-sbom {{. | q}}{{end}}{{end}}
+      - mise x -- bun src/cli.ts generate-docker-sbom --base-dir {{.USER_WORKING_DIR | q}}{{if .DOCKER_OS_SBOM}} --docker-os-sbom {{.DOCKER_OS_SBOM | q}}{{end}}{{if .DISCOVER_ROOT}} --repo-root {{.DISCOVER_ROOT | q}}{{end}}{{range .IMAGES | default "" | splitList " "}}{{if .}} --image {{. | q}}{{end}}{{end}}{{range .FROM_SBOM | default "" | splitList " "}}{{if .}} --from-sbom {{. | q}}{{end}}{{end}}
 
   quality:
     desc: Quality gate — lint + format-check + typecheck

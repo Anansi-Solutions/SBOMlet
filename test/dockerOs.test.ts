@@ -321,7 +321,7 @@ describe("assertSyftSbomSize (DoS size gate)", () => {
 // selectDigest (finding #2, 07-31) — deterministic RepoDigest selection. An
 // image pulled from / pushed to multiple registries has multiple RepoDigests
 // in a daemon-order-dependent array; selecting digests[0] makes the committed
-// docker-os-sbom.json vary by machine (byte-determinism break). selectDigest
+// docker-os.sbom.json vary by machine (byte-determinism break). selectDigest
 // is a pure function of the digest SET, NOT of daemon emission order: it
 // prefers the digest whose repository matches the requested image ref, else
 // the compareCodeUnits-smallest.

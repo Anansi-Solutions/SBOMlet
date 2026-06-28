@@ -93,7 +93,7 @@ describe("consumeDockerOsSbom (--from-sbom ingest)", () => {
 
   test("#6: digest-less SBOM with NO metadata.component → image is the path-free BASENAME (deterministic)", async () => {
     // A digest-less SBOM still ingests; the recorded identity must be
-    // PATH-INDEPENDENT so the committed docker-os-sbom.json is byte-identical
+    // PATH-INDEPENDENT so the committed docker-os.sbom.json is byte-identical
     // across machines. With no metadata.component (postgres fixture), the last
     // resort is the file BASENAME — never the machine-specific absolute path.
     const noDigestFixture = join(
@@ -194,10 +194,10 @@ describe("runGenerateDockerSbom (--from-sbom orchestration, NO docker)", () => {
       // baseDir-resolve: pass an ABSOLUTE fromSbom path + a relative output.
       await runGenerateDockerSbom({
         fromSbomPaths: [FIXTURE],
-        dockerOsSbomPath: "docker-os-sbom.json",
+        dockerOsSbomPath: "docker-os.sbom.json",
         baseDir: outDir,
       });
-      const written = readFileSync(join(outDir, "docker-os-sbom.json"), "utf8");
+      const written = readFileSync(join(outDir, "docker-os.sbom.json"), "utf8");
       const parsed = JSON.parse(written) as {
         components: Array<{ name: string; licenses?: unknown }>;
         dockerImages: Array<{ digest: string }>;

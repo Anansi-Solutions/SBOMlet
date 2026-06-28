@@ -28,25 +28,29 @@ import { sanitizeForLog, writePolicySummary } from "./summary";
 import { collectTargets } from "./targets";
 
 /**
- * The committed enrichment cache filename, resolved against --base-dir like every
- * other relative path (resolveFrom(opts.baseDir, ...)). The Taskfile sets
- * --base-dir to the INVOCATION directory (USER_WORKING_DIR), so the cache resolves
- * to the REPO ROOT (`<repo-root>/.sbomlet.cache.json`, committed, NOT gitignored) —
- * the canonical cache `check` reads to regenerate fully offline.
+ * The default directory for tool-generated committed artifacts — the enrichment
+ * cache and the Docker OS SBOM. It resolves against the SCANNED repo (--repo-root;
+ * --base-dir only in single-target mode), so the generated state binds to the repo
+ * being scanned, never the invocation dir: the CLI, in-process callers, and the
+ * GitHub Action all read the same committed files. A policy `[cache] dir` overrides
+ * the subdirectory (validated repo-relative, so it can never escape); the anchor
+ * stays the repo root. Collecting the artifacts in one hidden dir — instead of
+ * scattering dotfiles across the repo root — is the whole point of the [cache] table.
  */
-export const DEFAULT_ENRICHMENT_CACHE = ".sbomlet.cache.json";
+export const DEFAULT_CACHE_DIR = ".sbomlet.cache";
+
+/** The enrichment cache filename inside the resolved cache dir. */
+export const ENRICHMENT_CACHE_FILE = "licenses.cache.json";
 
 /**
- * The committed Docker OS-package SBOM filename (COLL-04), resolved against
- * --base-dir exactly like {@link DEFAULT_ENRICHMENT_CACHE}. It is 07-01's
- * deterministic emitter output, committed at the repo root and consumed here as
- * a scope:"os" MERGE INPUT — never scanned per-run. A MISSING file is the
- * enrichment-cache-miss equivalent: NO os entries, NO docker, NO syft, fully
- * offline. The live scan that POPULATES this file is the dedicated 07-03
- * subcommand; both generate and check read the same committed bytes, so
- * determinism is trivial.
+ * The committed Docker OS-package SBOM filename inside the cache dir (COLL-04):
+ * 07-01's deterministic emitter output, committed and consumed as a scope:"os"
+ * MERGE INPUT, never scanned per-run. A MISSING file is the enrichment-cache-miss
+ * equivalent (NO os entries, NO docker, NO syft, fully offline). The live scan that
+ * POPULATES it is the dedicated generate-docker-sbom subcommand; generate and check
+ * read the same committed bytes, so determinism is trivial.
  */
-const DEFAULT_DOCKER_OS_SBOM = "docker-os-sbom.json";
+export const DOCKER_OS_SBOM_FILE = "docker-os.sbom.json";
 
 export interface GenerateOptions {
   /** Single-target debug mode; mutually exclusive with repoRoot. */
@@ -93,19 +97,17 @@ export interface GenerateOptions {
    */
   baseDir?: string;
   /**
-   * The committed enrichment cache path (base-dir-resolved). Defaults to
-   * {@link DEFAULT_ENRICHMENT_CACHE} at the base dir; overridable via
-   * --enrichment-cache.
+   * Optional override for the enrichment cache path (--enrichment-cache). When
+   * unset it defaults to {@link ENRICHMENT_CACHE_FILE} inside the resolved cache
+   * dir ({@link DEFAULT_CACHE_DIR}, or the policy `[cache] dir`).
    */
   enrichmentCachePath?: string;
   /**
-   * The committed Docker OS-package SBOM path. A relative value (the default,
-   * {@link DEFAULT_DOCKER_OS_SBOM}) anchors to the SCANNED repo (--repo-root),
-   * not --base-dir, so it sits beside the other committed artifacts and the
-   * Action reads the consumer repo's SBOM. When the file exists it is
-   * size-gated, parsed, and threaded into the merge as a scope:"os" input
-   * (COLL-04); when absent there are no os entries (the offline cache-miss
-   * equivalent — never a live docker/syft scan).
+   * Optional override for the committed Docker OS SBOM path (--docker-os-sbom).
+   * When unset it defaults to {@link DOCKER_OS_SBOM_FILE} inside the resolved cache
+   * dir. When the file exists it is size-gated, parsed, and threaded into the merge
+   * as a scope:"os" input (COLL-04); when absent there are no os entries (the
+   * offline cache-miss equivalent, never a live docker/syft scan).
    */
   dockerOsSbomPath?: string;
   /**
@@ -164,11 +166,11 @@ export interface BuiltOutputs {
 /**
  * Read the committed Docker OS-package SBOM as a scope:"os" merge input, or
  * undefined when it does not exist (the offline cache-miss equivalent — no os
- * entries, never a live scan). The path anchors to the scanned repo
- * (--repo-root) like the enrichment cache, not --base-dir, so the Action,
- * running from its own directory, reads the consumer repo's committed SBOM
- * rather than a stray file beside the action (they coincide for the CLI, where
- * base-dir = repo root). The file is size-gated BEFORE any read (DoS
+ * entries, never a live scan). The default path is {@link DOCKER_OS_SBOM_FILE}
+ * inside the resolved cache `dir` (repo-root-anchored), so the Action — running
+ * from its own directory — reads the consumer repo's committed SBOM, not a stray
+ * file beside the action; an explicit --docker-os-sbom overrides it. The file is
+ * size-gated BEFORE any read (DoS
  * bound, T-07-04, reusing the collector's assertSyftSbomSize), then parsed. The
  * parse is tolerant: a malformed committed file yields no os entries rather than
  * aborting the whole pipeline (mergeSboms's arktype narrow already skips
@@ -177,11 +179,15 @@ export interface BuiltOutputs {
  */
 function readCommittedDockerOsSbom(
   opts: GenerateOptions,
+  dir: string,
 ): CollectedSbom | undefined {
-  const osSbomPath = resolveFrom(
-    resolvedRepoRoot(opts) ?? opts.baseDir,
-    opts.dockerOsSbomPath ?? DEFAULT_DOCKER_OS_SBOM,
-  );
+  const osSbomPath =
+    opts.dockerOsSbomPath !== undefined
+      ? resolveFrom(
+          resolvedRepoRoot(opts) ?? opts.baseDir,
+          opts.dockerOsSbomPath,
+        )
+      : resolveFrom(dir, DOCKER_OS_SBOM_FILE);
   if (!existsSync(osSbomPath)) return undefined;
   // Size gate BEFORE read (DoS bound, T-07-04).
   assertSyftSbomSize(osSbomPath);
@@ -209,8 +215,8 @@ function policyPointerPath(opts: GenerateOptions): string {
 
 /**
  * The scanned repo's absolute root, or undefined in single-target mode (no
- * --repo-root). Committed artifacts — the enrichment cache and the policy pointer
- * line — anchor here so they bind to the repo being scanned, not the invocation
+ * --repo-root). Committed artifacts — the cache dir and the policy pointer line —
+ * anchor here so they bind to the repo being scanned, not the invocation
  * directory (--base-dir), which diverges for in-process callers and the Action.
  */
 function resolvedRepoRoot(opts: GenerateOptions): string | undefined {
@@ -220,17 +226,59 @@ function resolvedRepoRoot(opts: GenerateOptions): string | undefined {
 }
 
 /**
- * The committed enrichment cache path. It belongs to the SCANNED repo, so it
- * anchors to --repo-root, not --base-dir — they coincide for the CLI (invoked
- * from the repo root) but diverge for in-process callers and the GitHub Action
- * (which runs from its own directory), where base-dir would read the WRONG repo's
- * cache. Single-target mode (no --repo-root) falls back to base-dir.
+ * The resolved cache directory: where tool-generated committed artifacts live
+ * (the enrichment cache, the Docker OS SBOM). It anchors to the SCANNED repo
+ * (--repo-root; --base-dir in single-target mode), so it binds to the repo being
+ * scanned, not the invocation dir — which diverges for in-process callers and the
+ * GitHub Action. A policy `[cache] dir` overrides the subdirectory (validated
+ * repo-relative, so it can never escape); DEFAULT_CACHE_DIR otherwise.
  */
-function enrichmentCachePath(opts: GenerateOptions): string {
+function cacheDir(opts: GenerateOptions, policy: Policy | undefined): string {
   return resolveFrom(
     resolvedRepoRoot(opts) ?? opts.baseDir,
-    opts.enrichmentCachePath ?? DEFAULT_ENRICHMENT_CACHE,
+    policy?.cache?.dir ?? DEFAULT_CACHE_DIR,
   );
+}
+
+/**
+ * Resolve the cache directory for a caller that has NOT already parsed the policy
+ * (verify-cache, generate-docker-sbom). Reads the policy file — when given and
+ * present — for its `[cache] dir`, then anchors to the scanned repo exactly as the
+ * in-process {@link cacheDir} does. A malformed policy throws PolicyError, the same
+ * exit-3 config error the gate raises, so the audit never runs against a half-read
+ * policy.
+ */
+export function resolveCacheDir(opts: {
+  baseDir?: string;
+  repoRoot?: string;
+  policyPath?: string;
+}): string {
+  const repoRoot =
+    opts.repoRoot === undefined
+      ? undefined
+      : resolveFrom(opts.baseDir, opts.repoRoot);
+  let dirSetting: string | undefined;
+  if (opts.policyPath !== undefined) {
+    const file = resolveFrom(opts.baseDir, opts.policyPath);
+    if (existsSync(file)) {
+      dirSetting = parsePolicy(readFileSync(file, "utf8")).cache?.dir;
+    }
+  }
+  return resolveFrom(repoRoot ?? opts.baseDir, dirSetting ?? DEFAULT_CACHE_DIR);
+}
+
+/**
+ * The committed enrichment cache path: {@link ENRICHMENT_CACHE_FILE} inside the
+ * cache `dir`, unless --enrichment-cache overrides it (resolved against the repo
+ * root, as before). check reads it offline; generate may write it on a miss.
+ */
+function enrichmentCachePath(opts: GenerateOptions, dir: string): string {
+  return opts.enrichmentCachePath !== undefined
+    ? resolveFrom(
+        resolvedRepoRoot(opts) ?? opts.baseDir,
+        opts.enrichmentCachePath,
+      )
+    : resolveFrom(dir, ENRICHMENT_CACHE_FILE);
 }
 
 /**
@@ -279,6 +327,11 @@ export async function buildOutputs(
     policy = parsePolicy(policyText);
   }
 
+  // The committed-artifact directory (the enrichment cache + Docker OS SBOM),
+  // resolved once from the parsed policy's `[cache] dir` (or the default) so the
+  // cache read and the Docker-SBOM read below agree on one location.
+  const dir = cacheDir(opts, policy);
+
   // The collect loop owns the per-target stderr lines; the sink is provided
   // here so the pipeline stays the single place wiring stderr.
   const inputs: CollectedSbom[] = await collectTargets(opts, (line): void => {
@@ -288,7 +341,7 @@ export async function buildOutputs(
   // COLL-04: thread the committed Docker OS-package SBOM (07-01's emitter
   // output) into the merge as a scope:"os" input when it exists. A missing file
   // is the offline cache-miss equivalent — no os entries, no docker, no syft.
-  const osInput = readCommittedDockerOsSbom(opts);
+  const osInput = readCommittedDockerOsSbom(opts, dir);
   if (osInput !== undefined) inputs.push(osInput);
 
   // One merged model from all targets: shared packages appear once with every
@@ -303,7 +356,7 @@ export async function buildOutputs(
   const mode = opts.mode ?? "check";
   const { model: enriched, staleUnknowns } = await enrichUnknowns(model, {
     mode,
-    cachePath: enrichmentCachePath(opts),
+    cachePath: enrichmentCachePath(opts, dir),
     verbose: opts.verbose,
   });
 

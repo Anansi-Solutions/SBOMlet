@@ -3,7 +3,7 @@
  * that touches the docker daemon / syft. It pulls (and, for app images, builds)
  * the configured image set, scans each with the 07-01 syft collector
  * (collectDockerOsSbom), digest-pins it, and writes the deterministic committed
- * `docker-os-sbom.json` at the base-dir-resolved output path.
+ * `docker-os.sbom.json` at the base-dir-resolved output path.
  *
  * DECISION (Open Question 1, LOCKED): this is a SEPARATE subcommand, not a
  * `--scan-docker` flag on `generate` — the everyday generate/check stay
@@ -24,7 +24,7 @@
  * via emitDockerOsDoc).
  */
 
-import { readFileSync, writeFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 
 import {
   collectDockerOsSbom,
@@ -33,15 +33,9 @@ import {
 import { discoverDockerfiles } from "../collectors/dockerfile";
 import { compareCodeUnits } from "../model/dependencies";
 import { parsePolicy } from "../policy/schema";
-import { resolveFrom } from "./paths";
+import { resolveFrom, writeArtifact } from "./paths";
+import { DOCKER_OS_SBOM_FILE, resolveCacheDir } from "./pipeline";
 import { sanitizeForLog } from "./summary";
-
-/**
- * The committed Docker OS-package SBOM filename — mirrors DEFAULT_DOCKER_OS_SBOM
- * in pipeline.ts so the file this command WRITES is exactly the one generate and
- * check READ. Resolved against --base-dir like every other committed artifact.
- */
-export const DEFAULT_DOCKER_OS_SBOM = "docker-os-sbom.json";
 
 /**
  * The DOCUMENTED DEFAULT image set: a documented default image set. This is
@@ -250,15 +244,15 @@ export interface GenerateDockerSbomOptions {
    */
   policyPath?: string;
   /**
-   * Output path for the committed OS-SBOM, base-dir-resolved. Defaults to
-   * DEFAULT_DOCKER_OS_SBOM at the base dir (the repo root for the dogfood).
+   * Optional override for the committed OS-SBOM output path. When unset it
+   * defaults to DOCKER_OS_SBOM_FILE inside the resolved cache dir (the policy
+   * `[cache] dir`, or DEFAULT_CACHE_DIR), the same file generate and check read.
    */
   dockerOsSbomPath?: string;
   /**
-   * Base directory for resolving the relative output path — same anchoring as
-   * runGenerate. The Taskfile sets it to the invocation directory so
-   * docker-os-sbom.json lands at the repo root alongside the other committed
-   * artifacts.
+   * Base directory for resolving relative paths — same anchoring as runGenerate.
+   * The default output lands in the resolved cache dir (repo-root-anchored)
+   * alongside the other committed artifacts.
    */
   baseDir?: string;
   /**
@@ -289,10 +283,21 @@ export async function runGenerateDockerSbom(
   opts: GenerateDockerSbomOptions,
 ): Promise<void> {
   const fromSbomPaths = opts.fromSbomPaths;
-  const outputPath = resolveFrom(
-    opts.baseDir,
-    opts.dockerOsSbomPath ?? DEFAULT_DOCKER_OS_SBOM,
-  );
+  // Default output: DOCKER_OS_SBOM_FILE inside the resolved cache dir (the policy
+  // `[cache] dir`, or the default, anchored to the scanned repo), so the file this
+  // command WRITES is exactly the one generate and check READ; --docker-os-sbom
+  // overrides it.
+  const outputPath =
+    opts.dockerOsSbomPath !== undefined
+      ? resolveFrom(opts.baseDir, opts.dockerOsSbomPath)
+      : resolveFrom(
+          resolveCacheDir({
+            baseDir: opts.baseDir,
+            repoRoot: opts.repoRoot,
+            policyPath: opts.policyPath,
+          }),
+          DOCKER_OS_SBOM_FILE,
+        );
 
   // CONSUMER PATH: ingest pre-made syft/CycloneDX SBOMs — NO docker, NO syft.
   // This is the CI-attestation flow: the build pipeline produces the SBOM by
@@ -302,7 +307,7 @@ export async function runGenerateDockerSbom(
     const { doc } = await consumeDockerOsSbom(resolved, {
       verbose: opts.verbose ?? false,
     });
-    writeFileSync(outputPath, doc);
+    writeArtifact(outputPath, doc);
     process.stderr.write(
       `wrote ${sanitizeForLog(outputPath)} ` +
         `(${resolved.length} pre-made SBOM(s) consumed, no docker)\n`,
@@ -337,7 +342,7 @@ export async function runGenerateDockerSbom(
     const { doc } = await collectDockerOsSbom(discovered, {
       verbose: opts.verbose ?? false,
     });
-    writeFileSync(outputPath, doc);
+    writeArtifact(outputPath, doc);
     process.stderr.write(
       `wrote ${sanitizeForLog(outputPath)} ` +
         `(${discovered.length} discovered base image(s) scanned)\n`,
@@ -355,7 +360,7 @@ export async function runGenerateDockerSbom(
     verbose: opts.verbose ?? false,
   });
 
-  writeFileSync(outputPath, doc);
+  writeArtifact(outputPath, doc);
   process.stderr.write(
     `wrote ${sanitizeForLog(outputPath)} (${requested.length} images scanned)\n`,
   );

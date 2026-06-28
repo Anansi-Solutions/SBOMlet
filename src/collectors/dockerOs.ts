@@ -358,7 +358,7 @@ function parseSyftOutput(
  * `docker inspect --format '{{json .RepoDigests}}'`. Selects ONE digest
  * DETERMINISTICALLY from the daemon-returned set via {@link selectDigest}
  * (repo-match, else compareCodeUnits-smallest) so the committed
- * docker-os-sbom.json is byte-stable across machines (finding #2) — NOT the
+ * docker-os.sbom.json is byte-stable across machines (finding #2) — NOT the
  * daemon-order-dependent `digests[0]`, and NOT the manifest-list digest a
  * `buildx imagetools inspect` would return (T-07-03).
  */
@@ -390,7 +390,7 @@ async function resolveDigest(
  * #2, 07-31). `docker inspect --format '{{json .RepoDigests}}'` returns a
  * daemon-ORDER-dependent array: an image pulled from / pushed to multiple
  * registries carries multiple RepoDigests whose array order varies by machine.
- * Selecting `digests[0]` therefore makes the committed docker-os-sbom.json
+ * Selecting `digests[0]` therefore makes the committed docker-os.sbom.json
  * machine-dependent, breaking byte-determinism (the check would flag a stale
  * artifact). This selects a pure function of the digest SET, never of emission
  * order:
@@ -532,7 +532,7 @@ export function digestFromSbom(sbom: unknown): string | undefined {
  * Path-INDEPENDENT image identity for a digest-less SBOM (#6 determinism). A
  * digest-less SBOM (produced from a tag, not a registry digest) must never be
  * identified by its machine-specific ABSOLUTE source path — that drifts per
- * machine and makes the committed docker-os-sbom.json non-deterministic.
+ * machine and makes the committed docker-os.sbom.json non-deterministic.
  * Instead:
  *   1. prefer metadata.component.name (the image ref/tag — path-free and the
  *      most meaningful identity, e.g. "postgres:18-bookworm");
@@ -604,7 +604,7 @@ export async function consumeDockerOsSbom(
     const digest = digestFromSbom(sbom);
     // When the SBOM carries a digest, the image identity IS that digest; when it
     // does not, record a PATH-INDEPENDENT identity (metadata.component.name, else
-    // the file basename — #6) so the committed docker-os-sbom.json is
+    // the file basename — #6) so the committed docker-os.sbom.json is
     // byte-identical across machines. Provenance is preserved without leaking the
     // machine-specific absolute path; the digest is never fabricated (left "").
     dockerImages.push(

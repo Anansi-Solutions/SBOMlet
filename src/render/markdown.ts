@@ -290,7 +290,7 @@ function isDevelopmentOnly(pkg: PackageEntry): boolean {
 /**
  * Package-level Docker base-image classification (COLL-04): an OS package is one
  * whose scope is "os" (a pkg:deb/pkg:apk row threaded in from the committed
- * docker-os-sbom.json). OS packages render in their OWN section and are excluded
+ * docker-os.sbom.json). OS packages render in their OWN section and are excluded
  * from the prod/dev app sections — the dev/prod split is an app-scope concept.
  */
 function isOsPackage(pkg: PackageEntry): boolean {

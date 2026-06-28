@@ -3,6 +3,7 @@
  * user-supplied relative paths here so the resolution rule can never drift.
  */
 
+import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 
 /**
@@ -21,4 +22,16 @@ export function resolveFrom(baseDir: string | undefined, path: string): string {
  */
 export function defaultNoticesPath(outputPath: string): string {
   return join(dirname(outputPath), "THIRD_PARTY_NOTICES.md");
+}
+
+/**
+ * Write a committed artifact, creating its parent directory first. The cache dir
+ * (e.g. `.sbomlet.cache/`) need not exist on the first generate, and writeFileSync
+ * does not create parents, so every committed-artifact write (the enrichment
+ * cache, the Docker OS SBOM) routes through here. Idempotent: a recursive mkdir is
+ * a no-op when the directory already exists.
+ */
+export function writeArtifact(path: string, data: string): void {
+  mkdirSync(dirname(path), { recursive: true });
+  writeFileSync(path, data);
 }

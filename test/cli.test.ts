@@ -1343,7 +1343,7 @@ describe("buildOutputs and the generate output set (04-05)", () => {
     expect(readFileSync(explicit, "utf8")).toContain("# Third-Party Notices");
     expect(listTree(root)).toEqual(
       [
-        ".sbomlet.cache.json",
+        join(".sbomlet.cache", "licenses.cache.json"),
         "custom-notices.md",
         "out.md",
         join("proj", "package.json"),
