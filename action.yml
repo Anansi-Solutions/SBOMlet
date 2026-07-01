@@ -21,6 +21,10 @@ runs:
     - name: Set up the SBOMlet toolchain
       uses: jdx/mise-action@v4
 
+    - name: Enable Corepack
+      shell: bash
+      run: corepack enable
+
     - name: Install SBOMlet
       shell: bash
       working-directory: ${{ github.action_path }}
