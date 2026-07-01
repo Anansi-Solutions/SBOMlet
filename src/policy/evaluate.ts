@@ -548,7 +548,7 @@ function denyVerdict(
 }
 
 /**
- * Source-available exemption (ADR-0015). When the terminal-0 deny that matched is
+ * Source-available exemption (ADR-0013). When the terminal-0 deny that matched is
  * a SHIPPED source-available default (cited default:source-available — NOT the
  * consumer's own [[deny]]) AND the consumer listed that licence under
  * [[allow_source_available]], the package is NOT force-failed: it surfaces as a
@@ -575,7 +575,7 @@ function sourceAvailableExemption(
   return { index, license, reason: policy.allowSourceAvailable[index]!.reason };
 }
 
-/** Warn verdict for an exempted source-available licence (ADR-0015). */
+/** Warn verdict for an exempted source-available licence (ADR-0013). */
 function exemptionVerdict(
   base: { purl: string; occurrenceTarget: string },
   exemption: { index: number; license: string; reason: string },
@@ -593,7 +593,7 @@ function exemptionVerdict(
 
 /**
  * Terminal-0 verdict for a matched deny: a force-fail, UNLESS the match is a
- * shipped source-available default the consumer exempted (ADR-0015), which
+ * shipped source-available default the consumer exempted (ADR-0013), which
  * surfaces as a warn instead. An explicit [[deny]] is never the builtin id (it is
  * attributed first), so this never softens a deny the consumer authored.
  */
@@ -644,7 +644,7 @@ function verdictFor(
 
   // Terminal-0: a denied license/rider can never be licensed back in — UNLESS the
   // matched deny is a shipped source-available default the consumer exempted via
-  // [[allow_source_available]] (ADR-0015), which surfaces as a warn instead.
+  // [[allow_source_available]] (ADR-0013), which surfaces as a warn instead.
   if (denyRule !== undefined) {
     return denyOrExemptVerdict(base, policy, denyRule);
   }

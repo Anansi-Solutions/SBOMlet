@@ -87,7 +87,7 @@ rider that can never ship.
 
 **Shipped defaults.** BUSL-1.1, SSPL-1.0, and Elastic-2.0 are denied by default —
 they ship with the tool
-([ADR-0015](../explanation/adr/0015-source-available-deny-list.md)), so every
+([ADR-0013](../explanation/adr/0013-source-available-deny.md)), so every
 repository denies them without authoring an entry here. This table ADDS to that
 set: a default-denied licence is cited `default:source-available`, a licence you
 list is cited `denied[i]`. To ALLOW a default-denied licence for a reviewed
@@ -132,7 +132,7 @@ review.
 
 The exemption is scoped to the defaults only. A licence you deny yourself via
 `[[deny]]` is absolute and is never softened here — an explicit deny still wins.
-See [ADR-0015](../explanation/adr/0015-source-available-deny-list.md).
+See [ADR-0013](../explanation/adr/0013-source-available-deny.md).
 
 ## `[[clarify]]`
 

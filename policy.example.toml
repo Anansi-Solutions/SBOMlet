@@ -314,7 +314,7 @@ handling = "warn"
 handling = "warn"
 
 # ---------------------------------------------------------------------------
-# Exempting a built-in source-available deny (ADR-0015)
+# Exempting a built-in source-available deny (ADR-0013)
 #
 # BUSL-1.1, SSPL-1.0, and Elastic-2.0 are DENIED BY DEFAULT. If you have a
 # legitimate, reviewed reason to ship one anyway -- an internal-only build tool

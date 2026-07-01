@@ -160,7 +160,7 @@ export interface CacheConfig {
 }
 
 /**
- * One [[allow_source_available]] exemption (ADR-0015): a built-in
+ * One [[allow_source_available]] exemption (ADR-0013): a built-in
  * source-available licence the consumer has explicitly, auditably accepted, so it
  * surfaces as a warn instead of failing the gate by default.
  */
@@ -189,7 +189,7 @@ export interface Policy {
   deny: ReadonlyArray<DenyRule>;
   /**
    * Per-licence exemptions from the shipped source-available deny defaults
-   * (ADR-0015). A listed licence is no longer force-failed by the default — the
+   * (ADR-0013). A listed licence is no longer force-failed by the default — the
    * package surfaces as a WARN citing the exemption, never silently. Does NOT
    * affect a consumer's own [[deny]] (an explicit deny still wins). Absent → [].
    */
@@ -751,7 +751,7 @@ const BUILTIN_DENY_PATTERNS: ReadonlyArray<string> = BUILTIN_DENY_RULES.filter(
 ).map((rule) => rule.pattern);
 
 /**
- * Parse [[allow_source_available]] (ADR-0015 opt-out): each entry exempts ONE
+ * Parse [[allow_source_available]] (ADR-0013 opt-out): each entry exempts ONE
  * built-in source-available licence from the shipped deny default. `license` must
  * be one of the shipped patterns (a consumer's own [[deny]] is absolute and not
  * exempted here); `reason` is mandatory documentation. An absent table yields [].

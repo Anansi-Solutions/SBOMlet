@@ -119,8 +119,8 @@ module header, the way the Terraform and `bun.lock` collectors do.
 
 Source: `cli.ts`, `package.json`, `collectors/cdxgen.ts`,
 `collectors/dockerOs.ts` (`SYFT_TOOL`), `collectors/terraform.ts`.
-See [ADR-0002](adr/) (orchestrate generators), [ADR-0011](adr/) (JS generator
-routing), [ADR-0012](adr/) (Python via cdxgen), [ADR-0001](adr/) (TypeScript on
+See [ADR-0002](adr/) (orchestrate generators), [ADR-0010](adr/) (JS generator
+routing), [ADR-0011](adr/) (Python via cdxgen), [ADR-0001](adr/) (TypeScript on
 Bun).
 
 ---
@@ -230,9 +230,9 @@ Source: `normalize/normalize.ts` (`AMBIGUOUS_FAMILY`, `findingFromClaims`),
 `isValidImageRef`), `collectors/provenanceGraph.ts` (`reachableFromRoots`),
 `collectors/npmProvenance.ts`, `render/markdown.ts` (`whyCellOf`,
 `licenseCellOf`).
-See [ADR-0008](adr/) (imprecise families surfaced), [ADR-0013](adr/) (Terraform
-filesystem gate), [ADR-0017](adr/) (Dockerfile base abstains),
-[ADR-0016](adr/) (root-reachable provenance).
+See [ADR-0007](adr/) (imprecise families surfaced), [ADR-0015](adr/) (Terraform
+and Dockerfile abstain rather than parse),
+[ADR-0014](adr/) (root-reachable provenance).
 
 ---
 
@@ -284,8 +284,8 @@ property.
 Source: `policy/evaluate.ts` (`verdictFor`, `firstDeny`, `applyDevScope`,
 `applyOsScope`), `policy/denylist.ts`, `normalize/normalize.ts`
 (`observedExpressions`).
-See [ADR-0007](adr/) and [ADR-0015](adr/) (deny terminal at precedence 0),
-[ADR-0010](adr/) (a production occurrence always gates).
+See [ADR-0013](adr/) (deny terminal at precedence 0),
+[ADR-0009](adr/) (a production occurrence always gates).
 
 ---
 
