@@ -26,8 +26,11 @@ syft, and tofu. The tool drives those, normalizes their output to
 deterministic documents. The only in-process parsers exist where no upstream tool
 does the job.
 
-There are three subcommands. The CLI parses them with `node:util`'s `parseArgs`
-rather than a framework, which keeps the tool's own dependency footprint small.
+Three subcommands run the pipeline and are described here; a fourth,
+`verify-cache`, is an online audit of the committed cache and lives in the
+[CLI reference](../reference/cli.md). The CLI parses them with `node:util`'s
+`parseArgs` rather than a framework, which keeps the tool's own dependency
+footprint small.
 
 - **`generate`** runs the full pipeline and writes `THIRD_PARTY_LICENSES.md`, its
   `THIRD_PARTY_NOTICES.md` companion, and the committed

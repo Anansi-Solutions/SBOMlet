@@ -35,7 +35,7 @@ flags copyleft dependencies because they carry an obligation when you distribute
 Why a dependency is present: whether your project depends on it **directly** (you
 declared it) or **transitively** (something you declared pulls it in), and which
 parent — the **introducer** — does the pulling. Shown in the "Why" column.
-Available for npm and Python; other ecosystems show "—".
+Available for Yarn 4 workspaces and Python (poetry); other ecosystems show "—".
 
 ### development-only and production
 

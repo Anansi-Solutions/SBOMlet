@@ -34,8 +34,8 @@ task --version
 
 ## Step 1 — Put the tool in your repository
 
-The tool lives in one self-contained directory. Copy `` into your
-repository, keeping that path:
+The tool lives in one self-contained directory. Copy it into your repository as
+`tools/sbomlet`:
 
 ```sh
 # from your repository root
@@ -101,8 +101,8 @@ task generate POLICY=.sbomlet.policy.toml
 ```
 
 The first run is the slow one. The tool walks your repository for every
-dependency [target](./glossary.md#target), meaning each `yarn.lock`,
-`poetry.lock`, `.terraform.lock.hcl` directory, and so on. Each target goes to
+dependency [target](./glossary.md#target), meaning each directory
+that holds a `yarn.lock`, `poetry.lock`, `.terraform.lock.hcl`, and so on. Each target goes to
 its [collector](./glossary.md#collector), which either drives a standard SBOM
 [generator](./glossary.md#generator) or reads the lockfile itself. A large
 JavaScript workspace can take a minute or so on a cold run, partly because the

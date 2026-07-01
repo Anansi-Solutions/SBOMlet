@@ -108,7 +108,7 @@ Commit the generated `THIRD_PARTY_*.md` and `.sbomlet.cache/licenses.cache.json`
 `task sbomlet:check` in CI. The full walkthrough — install, first run, reading the
 output, wiring CI — is in [getting-started](docs/getting-started.md). For a real
 configured example, see
-[`examples/crt25-collimator-.sbomlet.policy.toml`](examples/crt25-collimator-.sbomlet.policy.toml).
+[`examples/crt25-collimator-policy.toml`](examples/crt25-collimator-policy.toml).
 
 ## GitHub Action
 

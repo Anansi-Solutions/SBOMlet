@@ -136,9 +136,8 @@ it draws is deliberate. A legitimately empty lockfile (whitespace only, a
 workspace-only `yarn.lock`, a `poetry.lock` with no package tables) is
 skip-classified: the loop warns loudly and moves on. A non-empty lockfile that
 nonetheless scans to zero components is the genuinely broken case, and it fails
-loudly with a thrown coverage assertion (exit 3). A silent incomplete inventory
-is the failure this tool exists to prevent, so the broken case never degrades to
-a quiet skip.
+loudly with a thrown coverage assertion (exit 3) rather than degrading to a quiet
+skip that would hide an incomplete inventory.
 
 After the collect loop, `buildOutputs` reads the committed `.sbomlet.cache/docker-os.sbom.json`,
 if present, as a [scope `os`](../glossary.md#scope-app-and-os) merge input. This file

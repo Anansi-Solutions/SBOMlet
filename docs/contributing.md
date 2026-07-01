@@ -11,7 +11,7 @@ If you only want to run the tool against a repository, read the top-level
 instead. For the reasoning behind the design, see the explanation docs under
 [`docs/explanation/`](./explanation/) and the [ADRs](./explanation/adr/).
 
-Every command below runs from ``.
+Every command below runs from the repository root.
 
 ## Prerequisites
 

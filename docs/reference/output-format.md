@@ -47,7 +47,7 @@ task generate POLICY=.sbomlet.policy.toml CYCLONEDX=bom.cdx.json
 The human-readable inventory. Its section order is fixed, so a diff shows a
 content change rather than a reordering.
 
-The first two lines are the title (`# Third-Party Licenses`, taken from
+The first two non-blank lines are the title (`# Third-Party Licenses`, taken from
 `[document].title` or the default) and the auto-generated header comment that
 names the regenerate command. When the policy sets `[document].preamble`, that
 paragraph follows. On a policy run a line then points at the policy file:

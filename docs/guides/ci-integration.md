@@ -259,7 +259,7 @@ jobs:
       - run: task verify-cache
         env:
           # Lifts the GitHub License API rate limit for Terraform entries; the
-          # audit works unauthenticated too, just slower.
+          # audit works unauthenticated too, only slower.
           GITHUB_TOKEN: ${{ github.token }}
 ```
 
