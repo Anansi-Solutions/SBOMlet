@@ -8,7 +8,9 @@ on:
 # Dogfood the action end-to-end against this repository's own committed inventory:
 #   - `check` must pass the gate (the committed inventory is current and policy-clean);
 #   - `generate` must reproduce the committed files byte-for-byte — a clean working
-#     tree afterwards proves the output is deterministic and the inventory is current.
+#     tree afterwards proves the output is deterministic and the inventory is current;
+#   - after that, the committed enrichment cache is deleted and `generate` must
+#     recreate it byte-identically from a cache-less state.
 # This gates both the action and SBOMlet's own committed inventory on every push.
 jobs:
   dogfood:
@@ -39,3 +41,22 @@ jobs:
             exit 1
           fi
           echo "generate reproduced the committed inventory byte-for-byte."
+
+      - name: Remove the committed enrichment cache
+        shell: bash
+        run: rm .sbomlet.cache/licenses.cache.json
+
+      - name: Regenerate from a cache-less state (generate)
+        uses: ./
+        with:
+          mode: generate
+
+      - name: Cache must reappear byte-identical to the committed one
+        shell: bash
+        run: |
+          test -f .sbomlet.cache/licenses.cache.json
+          if ! git diff --quiet; then
+            echo "::error::cache-less generate did not reproduce the committed inventory"
+            git --no-pager diff --stat
+            exit 1
+          fi
