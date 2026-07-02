@@ -49,9 +49,9 @@ distribution obligation, so the policy can treat the two differently.
 Some lockfiles don't record a licence. **Enrichment** fills those gaps by asking
 the package registry (npm, PyPI). The answers are written to a committed
 **enrichment cache** so that [check](#the-gate-check) never needs the network.
-`generate` reads the cache and, when it has to fetch a licence the cache doesn't
-already hold, writes the new answer back; a warm run that fetches nothing leaves
-the cache untouched. `check` only ever reads it.
+`generate` writes this cache on every run, even one where nothing needed
+enriching (an empty cache is still a cache); the bytes change only when it
+fetches a licence the cache doesn't already hold. `check` only ever reads it.
 
 ### the gate (`check`)
 

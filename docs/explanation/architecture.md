@@ -32,11 +32,12 @@ rather than a framework, which keeps the tool's own dependency footprint small.
 - **`generate`** runs the full pipeline and writes `THIRD_PARTY_LICENSES.md`, its
   `THIRD_PARTY_NOTICES.md` companion, and the committed
   [enrichment cache](../glossary.md#enrichment-and-the-enrichment-cache) — three
-  files for an adopter running only `task generate`. The cache is
-  written only when enrichment fetches a new licence, so a warm run that resolves
-  every unknown from the committed cache leaves it untouched. With `--cyclonedx`
-  it also writes a [CycloneDX](../glossary.md#cyclonedx) 1.6 export, and with
-  `--dump-model` a debug model dump that is not committed.
+  files for an adopter running only `task generate`, on every run. Even a run
+  where nothing needed enriching still writes an empty cache; the bytes change
+  only when enrichment fetches a new licence, so a warm run rewrites identical
+  bytes. With `--cyclonedx` it also writes a
+  [CycloneDX](../glossary.md#cyclonedx) 1.6 export, and with `--dump-model` a
+  debug model dump that is not committed.
 - **`check`** is the CI gate. It re-runs the *same* pipeline entirely offline
   against the committed caches, byte-compares every configured output, evaluates
   the policy, and exits with a code that says which class of thing is wrong. It

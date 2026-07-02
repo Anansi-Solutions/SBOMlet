@@ -105,6 +105,18 @@ said, never what a timeout implied.
   so there is one place that turns text into an SPDX expression, and the cache
   never becomes a second resolution authority.
 
+## Amendment, 2026-07-02
+
+The write condition described above changed. `generate` used to write the cache
+only after fetching at least one new license, so a repository with nothing left
+to enrich never got the file at all — a first-time adopter with an all-resolved
+dependency tree ran `generate`, found no committed cache on disk, and had nothing
+to commit for `check` to read offline. `generate` now writes the cache on every
+run, recording an empty envelope when there was nothing to fetch. An empty cache
+is a valid answer: it means enrichment ran and needed nothing, not that
+enrichment never happened. The rest of this record still holds — there is one
+write site, gated on generate mode, and `check` still never fetches or writes.
+
 ## See also
 
 - Plan summaries: `.planning/phases/05-enrichment-committed-cache/05-03-SUMMARY.md`,

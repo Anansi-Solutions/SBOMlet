@@ -55,7 +55,7 @@ flowchart TD
     DOCK -.writes.-> OSF[".sbomlet.cache/docker-os.sbom.json<br/>(committed)"]
     OSF -.read by.-> S2b
 
-    CORE -->|generate: writeFileSync| OUT["always: THIRD_PARTY_LICENSES.md + THIRD_PARTY_NOTICES.md<br/>.sbomlet.cache/licenses.cache.json (only when it fetches)<br/>*.cdx.json (only with --cyclonedx)<br/>dump JSON (only with --dump-model)"]
+    CORE -->|generate: writeFileSync| OUT["always: THIRD_PARTY_LICENSES.md + THIRD_PARTY_NOTICES.md<br/>.sbomlet.cache/licenses.cache.json (always)<br/>*.cdx.json (only with --cyclonedx)<br/>dump JSON (only with --dump-model)"]
     CORE -->|check: byte-compare| CMP{committed == rendered?}
     CMP -->|all match, no fail verdict| E0["exit 0"]
     CMP -->|≥1 fail verdict| E1["exit 1"]

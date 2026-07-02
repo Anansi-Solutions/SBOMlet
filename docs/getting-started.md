@@ -127,9 +127,10 @@ When it finishes, you'll have three new files at your repository root:
 | `THIRD_PARTY_NOTICES.md` | The attribution companion: copyright lines, NOTICE contents, and full license texts |
 | `.sbomlet.cache/licenses.cache.json` | The licenses fetched from registries during enrichment, so `check` can run offline |
 
-The cache is written only when `generate` fetches something new. Your first run
-fills it from empty, so you'll have it; a later run that finds every license in
-the cache leaves it untouched.
+Your first run always produces this file, even if every dependency's license
+came straight from a lockfile and there was nothing to look up — an empty cache
+is still a cache. A later run rewrites it with the same bytes unless it fetches
+a new license.
 
 Open `THIRD_PARTY_LICENSES.md` and read the top. The header doesn't carry a
 date; it carries the command that regenerates the file. A date would change on

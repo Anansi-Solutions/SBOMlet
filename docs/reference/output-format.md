@@ -11,15 +11,16 @@ them byte-for-byte against the committed files. `generate` writes them:
 | --- | --- | --- |
 | `THIRD_PARTY_LICENSES.md` | always | `--output`, defaults to `THIRD_PARTY_LICENSES.md` |
 | `THIRD_PARTY_NOTICES.md` | always | `--notices`, defaults to `THIRD_PARTY_NOTICES.md` beside the output |
-| the [enrichment cache](../glossary.md#enrichment-and-the-enrichment-cache) | only when it fetches a new licence | `--enrichment-cache`, defaults to `.sbomlet.cache/licenses.cache.json` at the base dir |
+| the [enrichment cache](../glossary.md#enrichment-and-the-enrichment-cache) | always | `--enrichment-cache`, defaults to `.sbomlet.cache/licenses.cache.json` at the base dir |
 | a [CycloneDX](../glossary.md#cyclonedx) export | only with `--cyclonedx` | `--cyclonedx <path>` (no default) |
 | a model dump | only with `--dump-model` | `--dump-model <path>` (no default) |
 
-An adopter running only `task generate` gets three files: the two
-Markdown documents and, on the first run that has a licence to fetch, the
-enrichment cache. A warm run that finds every licence already in the cache does
-not touch it. The CycloneDX export and the model dump appear only when their flag
-is passed; the dump is a debug artifact and is not committed.
+An adopter running only `task generate` gets all three files on every run: the
+two Markdown documents and the enrichment cache, even when nothing needed
+enriching (an empty cache is still a cache). The cache's bytes change only when a
+fetch resolves something new; a warm run rewrites identical bytes. The
+CycloneDX export and the model dump appear only when their flag is passed; the
+dump is a debug artifact and is not committed.
 
 `generate` does **not** write `.sbomlet.cache/docker-os.sbom.json`. That sidecar is produced by
 the separate, maintainer-only `generate-docker-sbom` subcommand and committed by
@@ -316,8 +317,8 @@ it, fetches on a miss, and writes the results back, including negative entries,
 so a package known to have no registry licence is never re-fetched. `check` only
 reads it. Each entry records the raw registry licence string (or null), which
 registry answered, and whether the package is resolvable. `generate` writes the
-file only when a run fetches at least one new licence; a warm run that satisfies
-every lookup from the cache leaves it untouched.
+file on every run, even when nothing needed enriching; the bytes change only
+when a fetch resolves a new licence, so a warm run rewrites identical bytes.
 
 `.sbomlet.cache/docker-os.sbom.json` is the operating-system package inventory for the Docker
 base images, the [`scope:os`](../glossary.md#scope-app-and-os) merge input. It is a
