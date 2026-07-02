@@ -4,6 +4,10 @@
 - **Date:** 2026-06-14; observed-claim mechanics, shipped defaults, and opt-out added
   2026-06-19–24 (consolidates the earlier deny-mechanics, shipped-defaults, and opt-out records)
 
+> **In short —** a source-available licence (BUSL, SSPL, Elastic) can never ship in
+> a client-handed artifact, so `[[deny]]` is a terminal, top-precedence lane that no
+> accept rule, suppression, scope downgrade, or override can reverse.
+
 ## Context and problem
 
 The output is a `THIRD_PARTY_LICENSES.md` that travels with software handed to
