@@ -163,6 +163,52 @@ describe("enrichment cache creation on generate", () => {
     expect(readFileSync(cachePath, "utf8")).toBe(serializeCache(new Map()));
   });
 
+  test("a consumer who commits the empty envelope, then adds a dependency needing enrichment, gets a loud stale check — not a silent pass on the stale empty cache", async () => {
+    // First commit: nothing to enrich, so generate writes the empty envelope
+    // ({version:1, entries:{}}) — exactly the artifact this fix now produces.
+    fixtureSbom = ALL_LICENSED_SBOM;
+    globalThis.fetch = (async (): Promise<Response> => {
+      throw new Error("network must not be touched");
+    }) as unknown as typeof fetch;
+
+    const { root } = makeScannableTree();
+    const outputPath = join(root, "THIRD_PARTY_LICENSES.md");
+    const noticesPath = join(root, "THIRD_PARTY_NOTICES.md");
+
+    await withCapturedStderr(async () => {
+      await runGenerate({
+        repoRoot: root,
+        outputPath,
+        noticesPath,
+        verbose: false,
+      });
+    });
+
+    const cachePath = join(root, ".sbomlet.cache", "licenses.cache.json");
+    expect(readFileSync(cachePath, "utf8")).toBe(serializeCache(new Map()));
+
+    // The consumer's lockfile later adds a dependency needing enrichment,
+    // but the committed cache is still the empty envelope from before —
+    // never re-fetched by check.
+    fixtureSbom = ONE_MISS_SBOM;
+
+    let result: Awaited<ReturnType<typeof runCheck>> | undefined;
+    await withCapturedStderr(async () => {
+      result = await runCheck({
+        repoRoot: root,
+        outputPath,
+        noticesPath,
+        verbose: false,
+      });
+    });
+
+    // The stale-empty-cache shape must fail loud (exit 2 territory via
+    // staleUnknowns), never pass silently because the file merely exists.
+    expect(result?.staleFiles).toContain("pkg:npm/no-claims@2.0.0");
+    // The empty envelope itself is untouched — check never fetches or writes.
+    expect(readFileSync(cachePath, "utf8")).toBe(serializeCache(new Map()));
+  });
+
   test("a generate with a cache miss creates the cache at the default path with the fetched entry, and check accepts it", async () => {
     fixtureSbom = ONE_MISS_SBOM;
     globalThis.fetch = fetchReturning(() => ({
