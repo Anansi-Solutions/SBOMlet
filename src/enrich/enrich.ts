@@ -173,8 +173,10 @@ interface Unknown {
  * Enrich every unknown package. In generate mode a cache miss fetches (bounded,
  * loud on failure), appends the resolved registry claim, and records the result
  * (positive, or negative ONLY on a clean 200-empty answer); the updated cache
- * is written once at the end (the only enrichment write site, gated on generate
- * mode). In check mode a miss is a stale unknown — no fetch, no write.
+ * is written unconditionally at the end (the only enrichment write site, gated
+ * on generate mode) — generate always materializes the committed artifact, and
+ * an empty envelope is a valid answer when nothing needed enrichment. In check
+ * mode a miss is a stale unknown — no fetch, no write.
  */
 export async function enrichUnknowns(
   model: CanonicalDependencies,
@@ -222,9 +224,10 @@ export async function enrichUnknowns(
     misses.push(unknown);
   }
 
-  if (opts.mode === "generate" && misses.length > 0) {
-    await fetchMisses(misses, packages, cache, opts);
-    // The ONLY enrichment write site, gated on generate mode.
+  if (opts.mode === "generate") {
+    if (misses.length > 0) await fetchMisses(misses, packages, cache, opts);
+    // The ONLY enrichment write site, gated on generate mode: generate always
+    // materializes the committed artifact; an empty envelope is a valid answer.
     writeArtifact(opts.cachePath, serializeCache(cache));
   }
 
