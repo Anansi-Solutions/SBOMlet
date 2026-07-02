@@ -109,24 +109,24 @@ git add THIRD_PARTY_LICENSES.md THIRD_PARTY_NOTICES.md .sbomlet.cache/licenses.c
 git commit -m "chore: refresh third-party license inventory"
 ```
 
-`generate` writes the inventory and its companion every run, and touches the
-cache only when it has to fetch. Commit whichever ones it produced:
+`generate` writes the inventory, its companion, and the enrichment cache on
+every run. Commit all three:
 
 - `THIRD_PARTY_LICENSES.md` — the inventory. Written on every run.
 - `THIRD_PARTY_NOTICES.md` — the attribution companion. Written on every run.
 - `.sbomlet.cache/licenses.cache.json` — the licenses fetched from registries during
   [enrichment](../glossary.md#enrichment-and-the-enrichment-cache), committed so
-  the gate can run offline. Written only when `generate` fetches a new license; a
-  warm run that answers every gap from the committed cache leaves the file
-  untouched.
+  the gate can run offline. Written on every run, even one with nothing to
+  enrich; its bytes change only when `generate` fetches a new license, so a warm
+  run rewrites identical bytes.
 - A [CycloneDX](../glossary.md#cyclonedx) export — only when you pass
   `--cyclonedx` (the `CYCLONEDX` Task variable).
 
 A run with `--dump-model` also writes a sorted-key JSON dump of the model. That
 is a debugging aid for golden-file tests, not something you commit.
 
-So an adopter running plain `task generate` gets three files at most:
-the inventory, the companion, and the cache when the run had a gap to fill.
+So an adopter running plain `task generate` always gets three files:
+the inventory, the companion, and the cache.
 
 `generate` does not write `.sbomlet.cache/docker-os.sbom.json`. That file is produced by a
 separate maintainer-only command, described at the end of this page, and is
