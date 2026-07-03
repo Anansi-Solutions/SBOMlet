@@ -105,18 +105,24 @@ jobs:
             exit 0
           fi
           head_oid="$(git rev-parse HEAD)"
-          additions='[]'
+          # Every changed/untracked artifact's base64 content is written to its
+          # OWN small file (never passed as a jq/gh CLI argument -- a full-image
+          # SBOM's base64 payload is large enough to exceed the OS argv limit).
+          rm -rf /tmp/gsd-commit-additions && mkdir -p /tmp/gsd-commit-additions
+          i=0
           while IFS= read -r f; do
-            base64 -w0 "$f" > /tmp/gsd-commit-content.b64
-            entry="$(jq -n --arg p "$f" --rawfile c /tmp/gsd-commit-content.b64 '{path:$p, contents:$c}')"
-            additions="$(jq --argjson e "$entry" '. += [$e]' <<<"$additions")"
-            rm -f /tmp/gsd-commit-content.b64
+            base64 -w0 "$f" > /tmp/gsd-commit-additions/content-$i.b64
+            jq -n --arg p "$f" --rawfile c /tmp/gsd-commit-additions/content-$i.b64 \
+              '{path:$p, contents:$c}' > /tmp/gsd-commit-additions/entry-$i.json
+            i=$((i + 1))
           done < <(git status --porcelain | cut -c4-)
-          jq -n --arg repo "$GITHUB_REPOSITORY" --arg branch "$BRANCH" --arg oid "$head_oid" --argjson adds "$additions" \
-            '{branch:{repositoryNameWithOwner:$repo, branchName:$branch}, expectedHeadOid:$oid, message:{headline:"chore: refresh docker scan artifacts"}, fileChanges:{additions:$adds}}' \
+          jq -s '.' /tmp/gsd-commit-additions/entry-*.json > /tmp/gsd-commit-additions.json
+          jq -n --arg repo "$GITHUB_REPOSITORY" --arg branch "$BRANCH" --arg oid "$head_oid" \
+            --slurpfile adds /tmp/gsd-commit-additions.json \
+            '{branch:{repositoryNameWithOwner:$repo, branchName:$branch}, expectedHeadOid:$oid, message:{headline:"chore: refresh docker scan artifacts"}, fileChanges:{additions:$adds[0]}}' \
             > /tmp/gsd-commit-input.json
           gh api graphql -f query='mutation($input: CreateCommitOnBranchInput!) { createCommitOnBranch(input: $input) { commit { oid } } }' -F input=@/tmp/gsd-commit-input.json
-          rm -f /tmp/gsd-commit-input.json
+          rm -rf /tmp/gsd-commit-additions /tmp/gsd-commit-additions.json /tmp/gsd-commit-input.json
 
       - name: Scan artifacts must be committed
         if: github.event_name == 'pull_request'
