@@ -117,11 +117,16 @@ jobs:
             i=$((i + 1))
           done < <(git status --porcelain | cut -c4-)
           jq -s '.' /tmp/gsd-commit-additions/entry-*.json > /tmp/gsd-commit-additions.json
+          # gh api's -F/--field @file reads the file as a raw STRING value; it
+          # does not parse it as JSON. The full GraphQL request body (query +
+          # variables) is built here and sent whole via --input, the flag that
+          # treats the file as the literal HTTP request body.
           jq -n --arg repo "$GITHUB_REPOSITORY" --arg branch "$BRANCH" --arg oid "$head_oid" \
             --slurpfile adds /tmp/gsd-commit-additions.json \
-            '{branch:{repositoryNameWithOwner:$repo, branchName:$branch}, expectedHeadOid:$oid, message:{headline:"chore: refresh docker scan artifacts"}, fileChanges:{additions:$adds[0]}}' \
+            '{query:"mutation($input: CreateCommitOnBranchInput!) { createCommitOnBranch(input: $input) { commit { oid } } }",
+              variables:{input:{branch:{repositoryNameWithOwner:$repo, branchName:$branch}, expectedHeadOid:$oid, message:{headline:"chore: refresh docker scan artifacts"}, fileChanges:{additions:$adds[0]}}}}' \
             > /tmp/gsd-commit-input.json
-          gh api graphql -f query='mutation($input: CreateCommitOnBranchInput!) { createCommitOnBranch(input: $input) { commit { oid } } }' -F input=@/tmp/gsd-commit-input.json
+          gh api graphql --input /tmp/gsd-commit-input.json
           rm -rf /tmp/gsd-commit-additions /tmp/gsd-commit-additions.json /tmp/gsd-commit-input.json
 
       - name: Scan artifacts must be committed
