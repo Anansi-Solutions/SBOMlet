@@ -6,20 +6,38 @@ Copyleft notice rules are configured in .sbomlet.policy.toml.
 
 **Package counts:**
 
-- Total packages: 149
-- npm: 149
+- Total packages: 168
+- apk: 17
+- npm: 150
+- pypi: 1
 - Production packages: 15
 - Development-only packages: 134
-- Docker image packages: 0
+- Docker image packages: 19
 - Unknown license: 0
 
 ## Problematic licenses
 
 ✅ No blocking policy violations.
 
+_Non-blocking: 11 copyleft warning(s) (dev/os-downgraded or suppressed). See the sections below._
+
 ## Copyleft and special notices
 
-✅ No package carries copyleft or special license obligations.
+The packages listed below carry copyleft or special license obligations in at least one non-suppressed workspace.
+
+| Name                   | Ecosystem | Version     | License                                   | Used in            | Why |
+| ---------------------- | --------- | ----------- | ----------------------------------------- | ------------------ | --- |
+| alpine-baselayout      | apk       | 3.7.0-r0    | GPL-2.0-only                              | docker:os-packages | —   |
+| alpine-baselayout-data | apk       | 3.7.0-r0    | GPL-2.0-only                              | docker:os-packages | —   |
+| apk-tools              | apk       | 2.14.10-r0  | GPL-2.0-only                              | docker:os-packages | —   |
+| busybox                | apk       | 1.37.0-r20  | GPL-2.0-only                              | docker:os-packages | —   |
+| busybox-binsh          | apk       | 1.37.0-r20  | GPL-2.0-only                              | docker:os-packages | —   |
+| ca-certificates        | apk       | 20260611-r0 | MPL-2.0 AND MIT                           | docker:os-packages | —   |
+| ca-certificates-bundle | apk       | 20260611-r0 | MPL-2.0 AND MIT                           | docker:os-packages | —   |
+| libapk2                | apk       | 2.14.10-r0  | GPL-2.0-only                              | docker:os-packages | —   |
+| musl-utils             | apk       | 1.2.5-r12   | MIT AND BSD-2-Clause AND GPL-2.0-or-later | docker:os-packages | —   |
+| scanelf                | apk       | 1.3.8-r1    | GPL-2.0-only                              | docker:os-packages | —   |
+| ssl_client             | apk       | 1.37.0-r20  | GPL-2.0-only                              | docker:os-packages | —   |
 
 ## Production dependencies
 
@@ -182,4 +200,24 @@ Copyleft notice rules are configured in .sbomlet.policy.toml.
 
 ## Docker image packages
 
-✅ No Docker images are currently tracked.
+| Name                   | Ecosystem | Version     | License                                   | Used in            |
+| ---------------------- | --------- | ----------- | ----------------------------------------- | ------------------ |
+| alpine-baselayout      | apk       | 3.7.0-r0    | GPL-2.0-only                              | docker:os-packages |
+| alpine-baselayout-data | apk       | 3.7.0-r0    | GPL-2.0-only                              | docker:os-packages |
+| alpine-keys            | apk       | 2.5-r0      | MIT                                       | docker:os-packages |
+| alpine-release         | apk       | 3.22.5-r0   | MIT                                       | docker:os-packages |
+| apk-tools              | apk       | 2.14.10-r0  | GPL-2.0-only                              | docker:os-packages |
+| busybox                | apk       | 1.37.0-r20  | GPL-2.0-only                              | docker:os-packages |
+| busybox-binsh          | apk       | 1.37.0-r20  | GPL-2.0-only                              | docker:os-packages |
+| ca-certificates        | apk       | 20260611-r0 | MPL-2.0 AND MIT                           | docker:os-packages |
+| ca-certificates-bundle | apk       | 20260611-r0 | MPL-2.0 AND MIT                           | docker:os-packages |
+| is-odd                 | npm       | 3.0.1       | MIT                                       | docker:os-packages |
+| libapk2                | apk       | 2.14.10-r0  | GPL-2.0-only                              | docker:os-packages |
+| libcrypto3             | apk       | 3.5.7-r0    | Apache-2.0                                | docker:os-packages |
+| libssl3                | apk       | 3.5.7-r0    | Apache-2.0                                | docker:os-packages |
+| musl                   | apk       | 1.2.5-r12   | MIT                                       | docker:os-packages |
+| musl-utils             | apk       | 1.2.5-r12   | MIT AND BSD-2-Clause AND GPL-2.0-or-later | docker:os-packages |
+| scanelf                | apk       | 1.3.8-r1    | GPL-2.0-only                              | docker:os-packages |
+| ssl_client             | apk       | 1.37.0-r20  | GPL-2.0-only                              | docker:os-packages |
+| typing-extensions      | pypi      | 4.12.2      | PSF-2.0                                   | docker:os-packages |
+| zlib                   | apk       | 1.3.2-r0    | Zlib                                      | docker:os-packages |
