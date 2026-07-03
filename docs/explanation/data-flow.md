@@ -34,7 +34,7 @@ flowchart TD
     subgraph CLI["src/cli.ts — owns process exit codes"]
         GEN["generate"]
         CHK["check"]
-        DOCK["generate-docker-sbom<br/>(maintainer-only, touches docker/syft)"]
+        DOCK["generate-docker-sbom<br/>(the only subcommand that touches docker/syft)"]
     end
 
     subgraph CORE["buildOutputs — write-free pipeline core (src/pipeline/pipeline.ts)"]
@@ -317,8 +317,8 @@ completely.
 the dateless auto-generated header, an optional author preamble, the policy
 pointer line on a policy run, the package counts, the problematic-licenses
 roll-up, the copyleft section, the imprecise-licenses review section, and finally
-the summary tables split into Production, Development-only, and Docker base-image
-OS. Each table carries `Name`, `Ecosystem`, `Version`, `License`, and `Used in`;
+the summary tables split into Production, Development-only, and Docker image
+packages. Each table carries `Name`, `Ecosystem`, `Version`, `License`, and `Used in`;
 the copyleft and problematic tables add a `Why` column carrying per-row
 [provenance](../glossary.md#dependency-provenance) — `direct`, an introducer
 chain like `a → b → c`, or the "—" residual when the source carried no usable

@@ -11,7 +11,7 @@ step reliable: the exit codes it returns, the workflow of committing what
 `generate` writes, the line-ending pins that keep the comparison stable across
 operating systems, and why the gate never needs the network. Two later sections
 cover commands that run outside the gate: the cache-integrity audit you run
-before a release, and the maintainer-only Docker scan.
+before a release, and the Docker scan.
 
 ## Add the check step
 
@@ -128,9 +128,9 @@ is a debugging aid for golden-file tests, not something you commit.
 So an adopter running plain `task generate` always gets three files:
 the inventory, the companion, and the cache.
 
-`generate` does not write `.sbomlet.cache/docker-os.sbom.json`. That file is produced by a
-separate maintainer-only command, described at the end of this page, and is
-committed like any other input the gate reads.
+`generate` does not write `.sbomlet.cache/docker-os.sbom.json`. That file is produced by the
+separate `generate-docker-sbom` command, described at the end of this page, and
+is committed like any other input the gate reads.
 
 The way `check` works is what makes this workflow safe. It runs the same
 discover, collect, merge, enrich, normalize, evaluate, render pipeline as
@@ -195,7 +195,7 @@ committed state is behind what the tool would produce today.
 
 `generate` is the command that may use the network, and only to fill gaps a cold
 cache can't answer: registry enrichment for otherwise-unknown licenses, and the
-maintainer-only Docker scan. Once the committed caches are warm, `generate`
+Docker scan (when run in its live, daemon-using modes). Once the committed caches are warm, `generate`
 serves every license claim from them and runs offline too. So after the first
 warm `generate`, steady-state runs of both commands need no network, and the
 gate needs none ever.
@@ -268,26 +268,31 @@ bad entry — a commit that edits the cache — and stays idle the rest of the t
 Point the filter at wherever your repository keeps the cache if it isn't at the
 root.
 
-## The Docker scan is a maintainer command, not a gate step
+## The Docker scan is a separate step from the gate
 
-The OS packages inside a Docker base image, the [os-scope](../glossary.md#scope-app-and-os)
-half of the inventory, are not discovered or scanned by `generate` or `check`.
-Neither command runs Docker or [syft](../glossary.md#generator). Instead, a
-maintainer produces a `.sbomlet.cache/docker-os.sbom.json` ahead of time with a separate
-command, commits it, and from then on `generate` and `check` read it as a merge
-input the same way they read a lockfile. This keeps a Docker daemon off the gate
-path: a CI `check` never needs Docker, even for a repository that ships container
-images.
+Docker packages, the [os-scope](../glossary.md#scope-app-and-os) half of the
+inventory, are not discovered or scanned by `generate` or `check`. Neither
+command runs Docker or [syft](../glossary.md#generator). Instead, a
+`.sbomlet.cache/docker-os.sbom.json` is produced ahead of time by the separate
+`generate-docker-sbom` subcommand and committed, and from then on `generate`
+and `check` read it as a merge input the same way they read a lockfile. This
+keeps a Docker daemon off the gate path: a CI `check` never needs Docker, even
+for a repository that ships container images.
 
-You run the scan when a base image changes, not on every CI run:
+There are two ways to run it: by hand against a project's base images, or as a
+CI job that builds and scans the images the repository actually produces.
+
+### By hand: scan the images you name or discover
+
+You run this when a base image changes, not on every CI run:
 
 ```sh
 task generate-docker-sbom
 ```
 
-The command has three mutually exclusive modes. The right one depends on whether
-you have a daemon, a repository full of Dockerfiles, or a pre-built SBOM from
-your image pipeline.
+The command's manual modes are mutually exclusive. The right one depends on
+whether you have a daemon, a repository full of Dockerfiles, or a pre-built SBOM
+from your image pipeline.
 
 | Mode | When to use it | Needs a Docker daemon |
 | ---- | -------------- | --------------------- |
@@ -310,7 +315,7 @@ build argument, a heredoc, a Windows escape directive) contributes no image and
 is skipped loudly rather than guessed at, so you can pin that base with an
 explicit `--image`. Discovery derives the base image's own OS packages, not the
 packages a Dockerfile's `RUN apt install` lines add on top; capturing those needs
-a built image, which is what `--image` and `--from-sbom` are for.
+a built image, which is what the CI lane below and `--from-sbom` are for.
 
 ```sh
 # Discover Dockerfiles under the repo and scan their bases, plus an explicit one
@@ -329,13 +334,42 @@ manifest-list digest.
 task generate-docker-sbom FROM_SBOM="build/backend.cdx.json build/frontend.cdx.json"
 ```
 
-Whichever mode you use, the result is one committed `.sbomlet.cache/docker-os.sbom.json`. A
-scan or build failure exits `3`, the same tool-error code as a bad flag. It is
-never a gate verdict, because this command is not the gate. After you commit the
-file, the os-scope packages flow into the merged inventory, and `generate` and
-`check` go on reading the committed bytes offline. Remember to add
-`.sbomlet.cache/docker-os.sbom.json` to your `.gitattributes` LF pins so it byte-compares the
-same way on every checkout.
+### In CI: build and scan the images the repository produces
+
+The manual modes above all scan a base image — what a Dockerfile builds `FROM`,
+not what it ships. To also capture the packages a Dockerfile's own `RUN` steps
+install and the application layered on top, build the image and scan the result
+with `--built-image`. This is what this repository's own
+`.github/workflows/docker-scan.yml` does on a path-filtered push or pull
+request: it lists the repository's Dockerfiles with `--list-dockerfiles`,
+builds each one to a local, never-pushed tag, scans those tags with
+`--built-image`, and regenerates the inventory.
+
+```sh
+# List the Dockerfiles a CI job should build (no Docker, no writes)
+task list-dockerfiles
+
+# Scan already-built local tags — full contents, no daemon digest to pin
+task generate-docker-sbom BUILT_IMAGES="myapp:ci myworker:ci"
+```
+
+A locally built, never-pushed tag has no registry digest, so the sidecar records
+an empty one for it — that is expected, not a gap. On a push, the workflow commits
+the regenerated artifacts back with a signed bot commit; on a pull request, it
+fails the check red instead and uploads the regenerated artifacts, so a
+contributor commits them deliberately. See
+[ADR-0018](../explanation/adr/0018-docker-generated-image-scan.md) for why the
+two events take different lanes.
+
+### Whichever way you produce it
+
+The result is one committed `.sbomlet.cache/docker-os.sbom.json`, whether it came
+from a manual base-image scan or a CI built-image scan. A scan or build failure
+exits `3`, the same tool-error code as a bad flag. It is never a gate verdict,
+because this command is not the gate. After the file is committed, its packages
+flow into the merged inventory, and `generate` and `check` go on reading the
+committed bytes offline. Remember to add `.sbomlet.cache/docker-os.sbom.json` to
+your `.gitattributes` LF pins so it byte-compares the same way on every checkout.
 
 ## See also
 

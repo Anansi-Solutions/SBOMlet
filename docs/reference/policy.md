@@ -257,9 +257,10 @@ deny still wins above this lane.
 ## `[os_dependencies]`
 
 A table governing what a would-be-fail does on an
-[OS-scope](../glossary.md#scope-app-and-os) package, meaning a `pkg:deb` or
-`pkg:apk` row from a Docker base image, read from the committed
-`.sbomlet.cache/docker-os.sbom.json`. Absent table: defaults to `warn`.
+[OS-scope](../glossary.md#scope-app-and-os) package: a row from the committed
+`.sbomlet.cache/docker-os.sbom.json` that isn't also seen at the application level —
+usually `pkg:deb`/`pkg:apk` from a base image, or any ecosystem a built-image scan
+found that the project doesn't also declare directly. Absent table: defaults to `warn`.
 
 | Field | Type | Required | Meaning |
 |-------|------|----------|---------|
@@ -269,15 +270,19 @@ The expected copyleft in a Debian or Alpine base image, such as glibc under LGPL
 or bash and coreutils under GPL, is the operating system the container ships on,
 not code your project authored. Those obligations are satisfied by shipping the
 image, so by default the gate lists the OS packages in their own section rather
-than failing your build on every standard base image. Use `fail` if you vendor
-or rebuild your base and want every OS copyleft reviewed. As with
-`[dev_dependencies]`, deny still wins, so a source-available licence in an OS
-package fails regardless of this knob.
+than failing your build on every standard base image. The same downgrade applies
+to an application package a built-image scan found that the project doesn't
+declare directly — it entered the inventory only because it ships inside the
+image, so it is judged as an image package, not app code. Use `fail` if you
+vendor or rebuild your base, or you want every image-sourced copyleft reviewed.
+As with `[dev_dependencies]`, deny still wins, so a source-available licence in
+an OS-scope package fails regardless of this knob.
 
 The `.sbomlet.cache/docker-os.sbom.json` this lane reads is produced separately by the
-maintainer-only `generate-docker-sbom` subcommand and committed; `generate` and
-`check` only read it as a `scope:os` merge input. They never discover or scan
-Docker images themselves. See the
+`generate-docker-sbom` subcommand — run by hand for a base-image scan, or by CI
+for a built-image scan of the images a project actually ships — and committed;
+`generate` and `check` only read it as a `scope:os` merge input. They never
+discover or scan Docker images themselves. See the
 [`generate-docker-sbom` reference](cli.md) for how that file is
 built.
 
@@ -317,7 +322,7 @@ outside the repo.
 
 An optional table choosing where the tool writes its generated committed
 artifacts: the registry-resolved license cache (`licenses.cache.json`) and the
-Docker base-image OS SBOM (`docker-os.sbom.json`). Absent table: they live in
+Docker image package SBOM (`docker-os.sbom.json`). Absent table: they live in
 `.sbomlet.cache/` at the repo root. Set `dir` to relocate the directory and keep
 your root clean (a .NET shop's `eng/`, a `.cache/` convention, and so on).
 

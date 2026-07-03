@@ -33,7 +33,7 @@ where to look. From the top:
 | `## Imprecise licenses` | Which licenses the tool couldn't pin to a precise id, and wants a human to resolve |
 | `## Production dependencies` | The full inventory of everything you ship |
 | `## Development-only dependencies` | The full inventory of build- and test-time-only packages |
-| `## Docker base-image OS packages` | The operating-system packages inside your Docker base images |
+| `## Docker image packages` | The OS and application packages inside your scanned Docker images |
 
 The header is a comment that names the regenerate command instead of a date.
 There is no timestamp anywhere in the file. A date would change on every run, and
@@ -61,7 +61,7 @@ Right under the header is a short list:
 - terraform: 19
 - Production packages: 2248
 - Development-only packages: 1388
-- Docker OS packages: 310
+- Docker image packages: 310
 - Unknown license: 42
 ```
 
@@ -79,12 +79,13 @@ The next three lines partition that total exactly:
   split.
 - Development-only packages are ones whose every use is a dev dependency: build
   tools, test runners, and the like.
-- Docker OS packages come from inside a Docker base image
-  ([`os` scope](../glossary.md#scope-app-and-os)). They are counted on their own
-  because the dev/prod distinction is an application concept that doesn't apply
-  to them.
+- Docker image packages come from inside a scanned Docker image — the base
+  image's OS packages always, plus the application packages a built-image scan
+  adds on top ([`os` scope](../glossary.md#scope-app-and-os)). They are counted
+  on their own because a package that also ships at the application level keeps
+  its production/development-only classification there instead.
 
-Production plus development-only plus Docker OS equals the total. The last line,
+Production plus development-only plus Docker image packages equals the total. The last line,
 **Unknown license**, is a separate tally that cuts across all three: it counts
 packages where the tool could determine no license at all. An
 [imprecise](../glossary.md#imprecise-family) license, such as `BSD` with no
@@ -227,7 +228,8 @@ them:
 
 - Production dependencies are everything you ship.
 - Development-only dependencies are build- and test-time packages only.
-- Docker base-image OS packages are the OS packages from your Docker images.
+- Docker image packages are the packages from your scanned Docker images — OS
+  packages always, plus application packages when the scan was a built-image scan.
 
 All three always render, even when empty, so the document's shape is stable. They
 share five columns:
@@ -246,11 +248,14 @@ Adding it to the full 3,900-row inventory would be noise. How an ordinary
 production package got pulled in is a question you ask when it's flagged, not for
 every row.
 
-A note on the **License** column for OS packages: a Docker OS row often shows a
-long `AND`-joined expression, sometimes with a `(+ …)` suffix. The expression is
-every license the base distribution recorded for that package. The `(+ …)` suffix
-lists license tokens the tool recognized but couldn't map to a precise SPDX id,
-surfaced rather than dropped.
+A note on the **License** column for Docker image packages: an OS-family row
+often shows a long `AND`-joined expression, sometimes with a `(+ …)` suffix. The
+expression is every license the base distribution recorded for that package. The
+`(+ …)` suffix lists license tokens the tool recognized but couldn't map to a
+precise SPDX id, surfaced rather than dropped. A package the scan also finds at
+the application level does not get a second row here — it keeps its application
+scope and lists the image only in its **Used in** cell, so a row in this table is
+always one this scan uniquely contributes.
 
 ### The Why column, read in detail
 
@@ -265,7 +270,7 @@ answers one question: how did this package end up in the workspaces named in
   chain is the path from a thing you declared down to it. A very long path or a
   wide set of parents is truncated with a stable `(+N more)`.
 - `—` means the tool has no usable provenance for this package in these
-  workspaces. This is the expected value for Docker OS packages, Terraform
+  workspaces. This is the expected value for Docker image packages, Terraform
   modules, and bun, not a failure. [Provenance](../glossary.md#dependency-provenance)
   is available for npm (from the Yarn-4 plugin) and Python (from `poetry.lock`);
   elsewhere you'll see the dash.

@@ -95,10 +95,10 @@ There is no CLI framework; the CLI parses its arguments with Node's built-in
 constraint. Detection is orchestrated: per-ecosystem collection delegates to
 pinned external generators. Yarn-4 lockfiles route to the Yarn CycloneDX plugin;
 other npm and pnpm lockfiles and all Python lockfiles route to cdxgen, which is
-where Poetry licences come from. Docker OS packages are scanned by syft, but only
-in the maintainer-only `generate-docker-sbom` subcommand, which writes a committed
-`.sbomlet.cache/docker-os.sbom.json`; `generate` and `check` never run a docker daemon — they
-read that file as an `os`-scope merge input. The version tag inside each argv is
+where Poetry licences come from. Docker images are scanned by syft, but only in the `generate-docker-sbom`
+subcommand, which writes a committed `.sbomlet.cache/docker-os.sbom.json`;
+`generate` and `check` never run a docker daemon — they read that file as an
+`os`-scope merge input. The version tag inside each argv is
 the pin, floating tags are forbidden, and each argv is locked byte-for-byte by a
 test, so changing a flag must consciously break that test and invalidate the
 goldens.

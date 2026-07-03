@@ -64,7 +64,7 @@ Sections appear in this order:
 | Imprecise licenses | `## Imprecise licenses (review / disambiguate)` | any [imprecise](../glossary.md#imprecise-family) package exists |
 | Production dependencies | `## Production dependencies` | always |
 | Development-only dependencies | `## Development-only dependencies` | always |
-| Docker base-image OS packages | `## Docker base-image OS packages` | always |
+| Docker image packages | `## Docker image packages` | always |
 
 A run without a policy omits the policy pointer line, the Problematic section,
 and the Copyleft section. The three summary sections always render their heading
@@ -84,7 +84,7 @@ A bullet list: the total, then one line per ecosystem (`npm`, `pypi`, `deb`,
 - pypi: 114
 - Production packages: 3100
 - Development-only packages: 516
-- Docker OS packages: 0
+- Docker image packages: 0
 - Unknown license: 502
 ```
 
@@ -125,9 +125,11 @@ variations:
   deduplicated raw [license claims](../glossary.md#license-claim) joined with
   commas.
 
-OS packages appear only in the Docker base-image section, never in the app
-sections. Lockfile-only scans that were never enriched will show `unknown` in
-the License column; that is correct pre-annotation behavior, not a defect.
+Docker image packages appear only in the Docker image packages section, never in
+the app sections — an application package that also ships inside a scanned image
+keeps its application scope and is only cross-referenced there via Used in.
+Lockfile-only scans that were never enriched will show `unknown` in the License
+column; that is correct pre-annotation behavior, not a defect.
 
 ### Problematic licenses
 
@@ -320,16 +322,21 @@ registry answered, and whether the package is resolvable. `generate` writes the
 file on every run, even when nothing needed enriching; the bytes change only
 when a fetch resolves a new licence, so a warm run rewrites identical bytes.
 
-`.sbomlet.cache/docker-os.sbom.json` is the operating-system package inventory for the Docker
-base images, the [`scope:os`](../glossary.md#scope-app-and-os) merge input. It is a
-minimal CycloneDX-shaped document holding `bomFormat`, `specVersion`,
-`components`, and a `dockerImages` array pinning each scanned image to its
-content digest, and nothing else. It is **not** written by `generate`. It is
-produced by the maintainer-only `generate-docker-sbom` subcommand, the only path
-in the tool that touches Docker or syft, and committed by hand. `generate` and
-`check` never run Docker; they read these committed bytes as one more merge
-input. The digest pin is why the file carries no timestamp: the image is
-identified by content, which is stable.
+`.sbomlet.cache/docker-os.sbom.json` is the Docker image package inventory, the
+[`scope:os`](../glossary.md#scope-app-and-os) merge input. Despite the filename, it
+holds more than OS packages when it was produced from a built-image scan: a base-image
+scan keeps only `deb`/`apk` packages, a built-image scan keeps every component the
+image carries, application packages included. It is a minimal CycloneDX-shaped
+document holding `bomFormat`, `specVersion`, `components`, and a `dockerImages`
+array pinning each scanned image to its content digest (empty for a locally built,
+never-pushed image, which has none), and nothing else. It is **not** written by
+`generate`. It is produced by the `generate-docker-sbom` subcommand, the only path
+in the tool that touches Docker or syft — run by hand for a maintainer-driven base-image
+scan, or by CI for the built-image scan of each discovered Dockerfile — and
+committed separately from `generate`'s own outputs. `generate` and `check` never
+run Docker; they read these committed bytes as one more merge input. The digest
+pin is why a pulled base image carries no timestamp: it is identified by content,
+which is stable.
 
 ```sh
 # Maintainer-only: scan the configured images and write the OS sidecar

@@ -17,9 +17,10 @@ Point it at a repository and it inventories every dependency and its licence,
 writes the attribution files you redistribute, and runs as a CI gate that fails
 the build when a licence breaks your policy.
 
-It covers JS/TS, Python, Terraform/OpenTofu, and the OS packages in your Docker
-base images. It has no dependency on the project it audits — you add it as one
-directory and one policy file.
+It covers JS/TS, Python, Terraform/OpenTofu, and the packages in your Docker
+images — base-image OS packages always, plus the application packages a
+built-image scan finds. It has no dependency on the project it audits — you add
+it as one directory and one policy file.
 
 ## What you get
 
@@ -138,7 +139,7 @@ the same mise + Task pipeline as the Taskfile path — pick whichever fits your 
 | JS / TypeScript | `yarn.lock`, `package-lock.json`, `pnpm-lock.yaml`, `bun.lock` |
 | Python | `poetry.lock`, `uv.lock` |
 | Terraform / OpenTofu | `.terraform.lock.hcl` |
-| Docker base images (OS packages) | a committed `.sbomlet.cache/docker-os.sbom.json` (see below) |
+| Docker images (OS and, for a built-image scan, application packages) | a committed `.sbomlet.cache/docker-os.sbom.json` (see below) |
 
 Discovery walks the repository and hands each [target](docs/glossary.md#target) to
 its [collector](docs/glossary.md#collector). The per-ecosystem detail — which
@@ -165,10 +166,12 @@ way it is.
 
 ## Good to know
 
-- **Docker OS packages** aren't discovered from lockfiles. A maintainer runs
-  `generate-docker-sbom` once to produce a committed `.sbomlet.cache/docker-os.sbom.json`, and
-  `generate`/`check` merge it in. It's the only subcommand that talks to a Docker
-  daemon or registry; `generate` and `check` never do.
+- **Docker image packages** aren't discovered from lockfiles. Run
+  `generate-docker-sbom` — by hand against a base image, or wired into CI to
+  build and scan the images the repository ships — to produce a committed
+  `.sbomlet.cache/docker-os.sbom.json`, and `generate`/`check` merge it in. It's
+  the only subcommand that talks to a Docker daemon or registry; `generate` and
+  `check` never do.
 - **The network.** `generate` reaches out only to fill a gap a cold cache can't
   answer — a registry lookup for an otherwise-unknown licence. Once
   `.sbomlet.cache/licenses.cache.json` is committed it serves every claim, and `check` never

@@ -141,9 +141,11 @@ software is built from. The tool produces one and consumes several (see
 ### scope: app and os
 
 Where a package comes from. **App** scope is your declared dependencies (npm,
-Python, Terraform). **OS** scope is the operating-system packages inside a Docker
-base image. They're listed separately and the policy can gate them differently —
-base-image GPL is expected and isn't a violation.
+Python, Terraform). **OS** scope is the packages a Docker image scan finds that
+aren't also declared as an app dependency — the base image's OS packages always,
+plus any application package a built-image scan finds that the project doesn't
+declare directly. They're listed separately and the policy can gate them
+differently — base-image GPL is expected and isn't a violation.
 
 ### source-available
 
