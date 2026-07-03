@@ -1,0 +1,138 @@
+name: Docker scan
+
+# Builds the repository's Dockerfile-derived images locally, scans the BUILT
+# images so the committed SBOM covers application-layer packages in addition
+# to OS packages, and commits the regenerated artifacts back. Paths-filtered
+# because an image build-and-scan is expensive, and only a change to an image
+# source (a Dockerfile, the example image, or this workflow) can alter the
+# result.
+#
+# On a same-repo pull request, a branch push behind the PR fires BOTH runs: the
+# push run commits refreshed artifacts back, the PR run red-diffs against the
+# pre-refresh tree. The bot commit does not retrigger either run (GITHUB_TOKEN
+# events are not treated as new pushes), so a PR check that went red against
+# stale artifacts clears on the PR branch's next push or a manual rerun. The
+# committed artifact paths (.sbomlet.cache/**, THIRD_PARTY_*.md) are
+# deliberately absent from the trigger paths below, so the bot's own commit-back
+# can never re-trigger this workflow -- a structural loop impossibility on top
+# of the GITHUB_TOKEN non-retrigger behavior.
+on:
+  workflow_dispatch:
+    inputs:
+      dockerfiles:
+        description: "Optional space-separated Dockerfile paths (default: discover all)"
+        required: false
+        default: ""
+  push:
+    paths:
+      - "**/Dockerfile*"
+      - "**/*.dockerfile"
+      - "examples/docker-scan/**"
+      - ".github/workflows/docker-scan.yml"
+  pull_request:
+    paths:
+      - "**/Dockerfile*"
+      - "**/*.dockerfile"
+      - "examples/docker-scan/**"
+      - ".github/workflows/docker-scan.yml"
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: write
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v6
+
+      - name: Set up the SBOMlet toolchain
+        uses: jdx/mise-action@v4
+
+      - name: Install dependencies
+        run: mise x -- task install
+
+      - name: Resolve the Dockerfile set
+        id: resolve
+        env:
+          SCAN_DOCKERFILES: ${{ inputs.dockerfiles }}
+        shell: bash
+        run: |
+          if [ -n "$SCAN_DOCKERFILES" ]; then
+            set="$SCAN_DOCKERFILES"
+          else
+            set="$(mise x -- task --silent list-dockerfiles | tr '\n' ' ')"
+          fi
+          set="$(echo "$set" | xargs)"
+          if [ -z "$set" ]; then
+            echo "::error::no Dockerfiles to scan"
+            exit 1
+          fi
+          echo "set=$set" >> "$GITHUB_OUTPUT"
+
+      - name: Build the images
+        id: build
+        env:
+          DOCKERFILE_SET: ${{ steps.resolve.outputs.set }}
+        shell: bash
+        run: |
+          tags=""
+          for df in $DOCKERFILE_SET; do
+            tag="sbomlet-scan/$(echo "$df" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9._-]/-/g')"
+            docker buildx build --load --provenance=false -f "$df" -t "$tag" "$(dirname "$df")"
+            tags="$tags $tag"
+          done
+          tags="$(echo "$tags" | xargs)"
+          echo "tags=$tags" >> "$GITHUB_OUTPUT"
+
+      - name: Scan the built images
+        env:
+          TAGS: ${{ steps.build.outputs.tags }}
+        run: mise x -- task generate-docker-sbom BUILT_IMAGES="$TAGS"
+
+      - name: Regenerate the inventory
+        run: mise x -- task generate
+
+      - name: Commit regenerated scan artifacts
+        if: github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BRANCH: ${{ github.ref_name }}
+        shell: bash
+        run: |
+          if [ -z "$(git status --porcelain)" ]; then
+            echo "artifacts unchanged"
+            exit 0
+          fi
+          head_oid="$(git rev-parse HEAD)"
+          additions='[]'
+          while IFS= read -r f; do
+            additions="$(jq --arg p "$f" --arg c "$(base64 -w0 "$f")" '. += [{path:$p, contents:$c}]' <<<"$additions")"
+          done < <(git status --porcelain | cut -c4-)
+          gh api graphql -f query='mutation($input: CreateCommitOnBranchInput!) { createCommitOnBranch(input: $input) { commit { oid } } }' -F input="$(jq -n --arg repo "$GITHUB_REPOSITORY" --arg branch "$BRANCH" --arg oid "$head_oid" --argjson adds "$additions" '{branch:{repositoryNameWithOwner:$repo, branchName:$branch}, expectedHeadOid:$oid, message:{headline:"chore: refresh docker scan artifacts"}, fileChanges:{additions:$adds}}')"
+
+      - name: Scan artifacts must be committed
+        if: github.event_name == 'pull_request'
+        shell: bash
+        run: |
+          if [ -n "$(git status --porcelain)" ]; then
+            echo "::error::regenerated scan artifacts are not committed -- run generate and commit the result"
+            git --no-pager diff --stat
+            echo "diverged=true" >> "$GITHUB_OUTPUT"
+          fi
+        id: divergence
+
+      - name: Upload the regenerated scan artifacts
+        if: github.event_name == 'pull_request' && steps.divergence.outputs.diverged == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: docker-scan-artifacts
+          path: |
+            .sbomlet.cache/docker-os.sbom.json
+            THIRD_PARTY_LICENSES.md
+            THIRD_PARTY_NOTICES.md
+
+      - name: Fail on divergence
+        if: github.event_name == 'pull_request' && steps.divergence.outputs.diverged == 'true'
+        run: exit 1
+

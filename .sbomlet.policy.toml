@@ -15,3 +15,11 @@ handling = "warn"
 
 [os_dependencies]
 handling = "warn"
+
+[docker]
+# The Dockerfile-name-pattern walk is intentionally name-only (no content
+# sniffing), so it also matches the tool's own source files that merely SHARE
+# the "dockerfile.<suffix>" naming convention (the discovery module itself and
+# its test). Neither is a real Dockerfile; both resolve to no FROM instruction
+# and would abort a build. Excluded from the Docker-scan workflow's build set.
+ignore = ["src/collectors/dockerfile.ts", "test/dockerfile.test.ts"]
