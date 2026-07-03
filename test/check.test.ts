@@ -646,10 +646,8 @@ describe("COLL-04 committed docker-os.sbom.json as a scope:os merge input", () =
     // The rendered document carries the dedicated OS section AND the deb/apk
     // rows — proof the committed SBOM crossed into the merge as scope:os.
     const md = outputs!.licensesMd;
-    expect(md.includes("## Docker base-image OS packages")).toBe(true);
-    const osSection = squish(
-      md.slice(md.indexOf("## Docker base-image OS packages")),
-    );
+    expect(md.includes("## Docker image packages")).toBe(true);
+    const osSection = squish(md.slice(md.indexOf("## Docker image packages")));
     expect(osSection.includes("| libc6 | deb | 2.36-9 |")).toBe(true);
     expect(osSection.includes("| musl | apk | 1.2.4-r2 |")).toBe(true);
   });
@@ -681,10 +679,8 @@ describe("COLL-04 committed docker-os.sbom.json as a scope:os merge input", () =
 
     // Read from the repo root, so the OS section and deb/apk rows are present.
     const md = outputs!.licensesMd;
-    expect(md.includes("## Docker base-image OS packages")).toBe(true);
-    const osSection = squish(
-      md.slice(md.indexOf("## Docker base-image OS packages")),
-    );
+    expect(md.includes("## Docker image packages")).toBe(true);
+    const osSection = squish(md.slice(md.indexOf("## Docker image packages")));
     expect(osSection.includes("| libc6 | deb | 2.36-9 |")).toBe(true);
     expect(osSection.includes("| musl | apk | 1.2.4-r2 |")).toBe(true);
   });
@@ -716,12 +712,10 @@ describe("COLL-04 committed docker-os.sbom.json as a scope:os merge input", () =
     const md = outputs!.licensesMd;
     // The OS section heading still renders, but the base-dir SBOM did NOT leak
     // in: none of its rows appear and the count is zero.
-    const osSection = squish(
-      md.slice(md.indexOf("## Docker base-image OS packages")),
-    );
+    const osSection = squish(md.slice(md.indexOf("## Docker image packages")));
     expect(osSection.includes("libc6")).toBe(false);
     expect(osSection.includes("musl")).toBe(false);
-    expect(md.includes("- Docker OS packages: 0")).toBe(true);
+    expect(md.includes("- Docker image packages: 0")).toBe(true);
   });
 
   test("NO committed file → NO os entries and NO docker/syft scan (offline, the cache-miss equivalent)", async () => {
@@ -743,14 +737,12 @@ describe("COLL-04 committed docker-os.sbom.json as a scope:os merge input", () =
 
     const md = outputs!.licensesMd;
     // The OS section heading still renders (stable shape) but carries NO rows.
-    const osSection = squish(
-      md.slice(md.indexOf("## Docker base-image OS packages")),
-    );
+    const osSection = squish(md.slice(md.indexOf("## Docker image packages")));
     expect(osSection.includes("libc6")).toBe(false);
     expect(osSection.includes("musl")).toBe(false);
     expect(osSection.includes("pkg:deb/")).toBe(false);
     expect(osSection.includes("pkg:apk/")).toBe(false);
     // No docker base-image packages counted.
-    expect(md.includes("- Docker OS packages: 0")).toBe(true);
+    expect(md.includes("- Docker image packages: 0")).toBe(true);
   });
 });

@@ -10,7 +10,7 @@ Copyleft notice rules are configured in .sbomlet.policy.toml.
 - npm: 149
 - Production packages: 15
 - Development-only packages: 134
-- Docker OS packages: 0
+- Docker image packages: 0
 - Unknown license: 0
 
 ## Problematic licenses
@@ -180,6 +180,6 @@ Copyleft notice rules are configured in .sbomlet.policy.toml.
 | word-wrap                                   | npm       | 1.2.5   | MIT           | .       |
 | yocto-queue                                 | npm       | 0.1.0   | MIT           | .       |
 
-## Docker base-image OS packages
+## Docker image packages
 
-✅ No Docker base images are currently tracked.
+✅ No Docker images are currently tracked.

@@ -848,7 +848,7 @@ describe("renderMarkdown — POL-08 prod/dev document split", () => {
   });
 });
 
-describe("renderMarkdown — COLL-04 Docker base-image OS packages section", () => {
+describe("renderMarkdown — COLL-04 Docker image packages section", () => {
   const appProd = entry({
     purl: "pkg:npm/app-prod@1.0.0",
     name: "app-prod",
@@ -881,7 +881,7 @@ describe("renderMarkdown — COLL-04 Docker base-image OS packages section", () 
     scope: "os",
   });
 
-  const HEADING = "## Docker base-image OS packages";
+  const HEADING = "## Docker image packages";
 
   test("OS packages render under the dedicated heading", () => {
     const model: CanonicalDependencies = { packages: [appProd, osDeb, osApk] };
@@ -923,7 +923,7 @@ describe("renderMarkdown — COLL-04 Docker base-image OS packages section", () 
     const osSection = output.slice(output.indexOf(HEADING));
     expect(output.includes(HEADING)).toBe(true);
     expect(
-      osSection.includes("✅ No Docker base images are currently tracked."),
+      osSection.includes("✅ No Docker images are currently tracked."),
     ).toBe(true);
     // The empty section shows the message in place of a bare table head.
     expect(
@@ -931,7 +931,7 @@ describe("renderMarkdown — COLL-04 Docker base-image OS packages section", () 
     ).toBe(false);
   });
 
-  test("section order is fixed/deterministic: Production, Development-only, then Docker OS", () => {
+  test("section order is fixed/deterministic: Production, Development-only, then Docker image packages", () => {
     const model: CanonicalDependencies = {
       packages: [appProd, appDev, osDeb],
     };
@@ -958,12 +958,12 @@ describe("renderMarkdown — COLL-04 Docker base-image OS packages section", () 
     expect(output.includes("evil|pkg`x")).toBe(false);
   });
 
-  test("the counts block carries a Docker OS packages count", () => {
+  test("the counts block carries a Docker image packages count", () => {
     const model: CanonicalDependencies = {
       packages: [appProd, osDeb, osApk],
     };
     const output = renderMarkdown(model);
-    expect(output.includes("- Docker OS packages: 2")).toBe(true);
+    expect(output.includes("- Docker image packages: 2")).toBe(true);
     // Total still counts every package across scopes.
     expect(output.includes("- Total packages: 3")).toBe(true);
   });
@@ -996,7 +996,7 @@ describe("renderMarkdown — os-scope partial-license cell (07-06)", () => {
     },
   });
 
-  const HEADING = "## Docker base-image OS packages";
+  const HEADING = "## Docker image packages";
 
   test("LOCKED FORMAT: expression (+ remainder) in the License cell", () => {
     const output = renderMarkdown({ packages: [osPartial] });

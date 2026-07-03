@@ -288,10 +288,11 @@ function isDevelopmentOnly(pkg: PackageEntry): boolean {
 }
 
 /**
- * Package-level Docker base-image classification (COLL-04): an OS package is one
- * whose scope is "os" (a pkg:deb/pkg:apk row threaded in from the committed
- * docker-os.sbom.json). OS packages render in their OWN section and are excluded
- * from the prod/dev app sections — the dev/prod split is an app-scope concept.
+ * Package-level Docker image-package classification (COLL-04): an OS package is
+ * one whose scope is "os" (a row threaded in from the committed docker-os.sbom.json,
+ * now covering full generated-image contents, not only base-image OS packages).
+ * OS packages render in their OWN section and are excluded from the prod/dev app
+ * sections — the dev/prod split is an app-scope concept.
  */
 function isOsPackage(pkg: PackageEntry): boolean {
   return pkg.scope === "os";
@@ -409,7 +410,7 @@ function packageCountsLines(sorted: readonly PackageEntry[]): string[] {
   lines.push(
     `- Production packages: ${prodCount}`,
     `- Development-only packages: ${devOnlyCount}`,
-    `- Docker OS packages: ${osCount}`,
+    `- Docker image packages: ${osCount}`,
     `- Unknown license: ${unknownCount}`,
     "",
   );
@@ -691,8 +692,8 @@ export function renderMarkdown(
   lines.push(...impreciseSectionLines(sorted));
 
   // Summary tables, split by package-level dev/prod classification (POL-08) for
-  // APP-scope packages, then a dedicated Docker base-image OS section (COLL-04).
-  // Fixed order — production, development-only, then Docker OS — for
+  // APP-scope packages, then a dedicated Docker image packages section (COLL-04).
+  // Fixed order — production, development-only, then Docker image packages — for
   // determinism; each section always renders its heading (a ✅ line replaces the
   // table when empty). The Used-in cell stays the full occurrence-target list; the split is
   // by package classification, not per-occurrence. OS packages are excluded from
@@ -721,9 +722,9 @@ export function renderMarkdown(
   lines.push("");
   lines.push(
     ...summarySection(
-      "## Docker base-image OS packages",
+      "## Docker image packages",
       osPackages,
-      "✅ No Docker base images are currently tracked.",
+      "✅ No Docker images are currently tracked.",
     ),
   );
 
