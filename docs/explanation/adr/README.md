@@ -39,9 +39,10 @@ something we no longer do but haven't replaced.
 | [0009](0009-dev-prod-os-scopes.md) | dev/prod and OS scopes; a production occurrence always gates | Accepted |
 | [0010](0010-js-generator-routing.md) | JS generator routing: yarn-plugin, cdxgen, custom bun.lock parser | Accepted |
 | [0011](0011-python-cdxgen-poetry.md) | Python via cdxgen, prod/dev recovered from poetry.lock | Accepted |
-| [0012](0012-docker-os-via-syft.md) | Docker OS packages via syft, a committed digest-pinned SBOM | Accepted |
+| [0012](0012-docker-os-via-syft.md) | Docker OS packages via syft, a committed digest-pinned SBOM | Accepted, evolved by ADR-0018 |
 | [0013](0013-source-available-deny.md) | Source-available licences are a terminal deny lane | Accepted |
 | [0014](0014-dependency-provenance.md) | Dependency provenance: root-reachable introducers, honest residual | Accepted |
 | [0015](0015-abstain-over-fragile-parsing.md) | Abstain rather than parse a fragile grammar (Terraform, Dockerfile) | Accepted |
 | [0016](0016-adoption-and-distribution.md) | Adoption and distribution: git clone + Taskfile, no binary, a composite Action | Accepted |
 | [0017](0017-cache-directory-layout.md) | Committed artifacts in one configurable cache directory | Accepted |
+| [0018](0018-docker-generated-image-scan.md) | Scan the generated images in CI, evolving the base-image consumer model | Accepted |

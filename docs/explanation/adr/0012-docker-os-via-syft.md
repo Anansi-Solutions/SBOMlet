@@ -1,6 +1,6 @@
 # ADR-0012: Docker OS packages via syft, consumed as a committed digest-pinned SBOM
 
-- **Status:** Accepted
+- **Status:** Accepted, evolved by ADR-0018
 - **Date:** 2026-06-15
 
 ## Context and problem
@@ -95,6 +95,18 @@ committed bytes differ.
   elsewhere without running Docker locally — the build attests, the tool consumes.
   Produce it from a single-arch image so the recorded digest pins the layers actually
   inventoried.
+
+## Amendment, 2026-07-03
+
+The consumer model widened. The base-image scan this record describes — deriving
+or pulling a base image and keeping only its `deb`/`apk` packages — still runs
+exactly as written here. Alongside it, CI now builds each discovered Dockerfile
+and scans the BUILT result through a new built-image mode, which keeps every
+component the image carries, application packages included, not only the OS
+layer. The committed sidecar is the same file and the same digest-pinned shape
+for pulled base images; a locally built, never-pushed tag simply has no digest
+to pin. See [ADR-0018](0018-docker-generated-image-scan.md) for the generated-image
+model, the identity and commit-back mechanics, and the dedup consequence.
 
 ## See also
 
