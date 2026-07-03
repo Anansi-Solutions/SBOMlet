@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { afterEach, describe, expect, test } from "bun:test";
 
 import {
+  dockerfileListing,
   resolveDiscoveredImages,
   safeLiveScanImages,
 } from "../src/pipeline/dockerSbom";
@@ -132,5 +133,29 @@ describe("safeLiveScanImages (PURE live-scan --image hardening, finding #5)", ()
 
   test("a wholly-unsafe set collapses to empty (loud-skip downstream)", () => {
     expect(safeLiveScanImages(["-x", "--y", "  "])).toEqual([]);
+  });
+});
+
+describe("dockerfileListing (--list-dockerfiles, NO docker, NO writes)", () => {
+  test("returns sorted repo-relative identities, excluding an ignored Dockerfile", () => {
+    const root = makeTempRoot();
+    writeFile(root, "backend/Dockerfile", "FROM node:22-slim\n");
+    writeFile(root, "worker/build.dockerfile", "FROM alpine:3.20\n");
+    writeFile(root, "ops/Dockerfile", "FROM ubuntu:24.04\n");
+
+    const identities = dockerfileListing(root, {
+      dockerIgnore: ["ops/**"],
+    });
+    expect(identities).toEqual([
+      "backend/Dockerfile",
+      "worker/build.dockerfile",
+    ]);
+  });
+
+  test("returns [] for a tree with no Dockerfile name-matches", () => {
+    const root = makeTempRoot();
+    writeFile(root, "README.md", "nothing here\n");
+
+    expect(dockerfileListing(root)).toEqual([]);
   });
 });

@@ -22,6 +22,7 @@
 #   FROM_SBOM       space-separated pre-built syft SBOMs to ingest (generate-docker-sbom)
 #   DISCOVER_ROOT   repo root whose Dockerfile bases to derive (generate-docker-sbom)
 #   DOCKERFILES     space-separated Dockerfile paths to target (generate-docker-sbom)
+#   BUILT_IMAGES    space-separated locally built image tags to scan (generate-docker-sbom)
 #   PULL            docker pull each resolved image before scanning (generate-docker-sbom)
 #   DOCKER_OS_SBOM  override the committed SBOM path (default: in the cache dir)
 #   TITLE           decision title for adr:new
@@ -56,9 +57,15 @@ tasks:
       - mise x -- bun src/cli.ts verify-cache --base-dir {{.USER_WORKING_DIR | q}} --repo-root {{.REPO_ROOT | q}}
 
   generate-docker-sbom:
-    desc: 'MAINTAINER + DOCKER ONLY — produce the committed docker-os.sbom.json. IMAGES="a:1 b:2" live-scans those refs; FROM_SBOM="x.json y.json" ingests pre-built syft SBOMs (no daemon); DISCOVER_ROOT=. derives bases from the repo Dockerfiles; DOCKERFILES="a/Dockerfile b/Dockerfile" targets an explicit list; PULL=1 pulls each image first. NOT part of check (check reads the committed bytes offline).'
+    desc: 'MAINTAINER + DOCKER ONLY — produce the committed docker-os.sbom.json. IMAGES="a:1 b:2" live-scans those refs; FROM_SBOM="x.json y.json" ingests pre-built syft SBOMs (no daemon); DISCOVER_ROOT=. derives bases from the repo Dockerfiles; DOCKERFILES="a/Dockerfile b/Dockerfile" targets an explicit list; BUILT_IMAGES="myapp:ci worker:ci" scans locally built never-pushed tags (full contents, digest-less, never with PULL); PULL=1 pulls each image first. NOT part of check (check reads the committed bytes offline).'
     cmds:
-      - mise x -- bun src/cli.ts generate-docker-sbom --base-dir {{.USER_WORKING_DIR | q}}{{if .DOCKER_OS_SBOM}} --docker-os-sbom {{.DOCKER_OS_SBOM | q}}{{end}}{{if .DISCOVER_ROOT}} --repo-root {{.DISCOVER_ROOT | q}}{{end}}{{if .PULL}} --pull{{end}}{{range .DOCKERFILES | default "" | splitList " "}}{{if .}} --dockerfile {{. | q}}{{end}}{{end}}{{range .IMAGES | default "" | splitList " "}}{{if .}} --image {{. | q}}{{end}}{{end}}{{range .FROM_SBOM | default "" | splitList " "}}{{if .}} --from-sbom {{. | q}}{{end}}{{end}}
+      - mise x -- bun src/cli.ts generate-docker-sbom --base-dir {{.USER_WORKING_DIR | q}}{{if .DOCKER_OS_SBOM}} --docker-os-sbom {{.DOCKER_OS_SBOM | q}}{{end}}{{if .DISCOVER_ROOT}} --repo-root {{.DISCOVER_ROOT | q}}{{end}}{{if .PULL}} --pull{{end}}{{range .DOCKERFILES | default "" | splitList " "}}{{if .}} --dockerfile {{. | q}}{{end}}{{end}}{{range .IMAGES | default "" | splitList " "}}{{if .}} --image {{. | q}}{{end}}{{end}}{{range .FROM_SBOM | default "" | splitList " "}}{{if .}} --from-sbom {{. | q}}{{end}}{{end}}{{range .BUILT_IMAGES | default "" | splitList " "}}{{if .}} --built-image {{. | q}}{{end}}{{end}}
+
+  list-dockerfiles:
+    desc: "Print the repository's discovered Dockerfile paths (policy-aware), one per line — the Docker-scan workflow's build set"
+    silent: true
+    cmds:
+      - mise x -- bun src/cli.ts generate-docker-sbom --list-dockerfiles --base-dir {{.USER_WORKING_DIR | q}} --repo-root {{.DISCOVER_ROOT | default .ROOT_DIR | q}}{{if .POLICY}} --policy {{.POLICY | q}}{{end}}
 
   quality:
     desc: Quality gate — lint + format-check + typecheck

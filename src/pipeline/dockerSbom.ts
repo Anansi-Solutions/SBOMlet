@@ -195,6 +195,37 @@ export function resolveDiscoveredImages(
   return { images, summary: summaryParts.join("\n") };
 }
 
+/** Options for the pure --list-dockerfiles resolution. */
+export interface DockerfileListingOptions {
+  /** This tool's own directory, excluded from the walk. */
+  toolDir?: string;
+  /** Repeatable --exclude globs forwarded to discovery. */
+  excludes?: readonly string[];
+  /** The `[docker] ignore` globs from the policy. */
+  dockerIgnore?: readonly string[];
+}
+
+/**
+ * PURE --list-dockerfiles resolution (NO docker, NO syft, NO writes): walk
+ * `repoRoot` and return every discovered Dockerfile's repo-relative identity,
+ * sorted (discoverDockerfiles already sorts the walk). This is the CI
+ * workflow's discovery surface, so the build set is the tool's own
+ * policy-aware walk, never a shell find. Ignored (by `[docker] ignore`)
+ * identities are deliberately excluded — a policy-ignored Dockerfile must
+ * never be built by CI.
+ */
+export function dockerfileListing(
+  repoRoot: string,
+  opts: DockerfileListingOptions = {},
+): string[] {
+  const { dockerfiles } = discoverDockerfiles(repoRoot, {
+    ...(opts.toolDir !== undefined ? { toolDir: opts.toolDir } : {}),
+    ...(opts.excludes !== undefined ? { excludes: opts.excludes } : {}),
+    dockerIgnore: opts.dockerIgnore ?? [],
+  });
+  return dockerfiles.map((d) => d.identity);
+}
+
 /** One explicitly targeted Dockerfile: its display identity + absolute path. */
 export interface TargetedDockerfile {
   /** The path as the caller gave it — used (sanitized) in the stderr summary. */
@@ -397,6 +428,24 @@ export interface GenerateDockerSbomOptions {
   pull?: boolean;
   /** Pass syft/docker child stdout/stderr through to process.stderr. */
   verbose?: boolean;
+  /**
+   * Repeatable --built-image refs: BUILT-IMAGE mode (explicit, never inferred,
+   * never combined with --pull). This is the CI build+scan set — scanned with
+   * collectDockerOsSbom built:true (full contents, digest-less identity).
+   * Identity = the ref exactly as given, so a caller (the Docker-scan CI
+   * workflow) must pass DETERMINISTIC tags derived from each Dockerfile path
+   * — the identity is what gets committed to the sidecar. Mutually exclusive
+   * with images/fromSbomPaths/dockerfilePaths/pull (validated in the CLI).
+   */
+  builtImages?: string[];
+  /**
+   * --list-dockerfiles: print the policy-aware discovered Dockerfile identities
+   * to stdout, one per line, and return before any scan or write. This is the
+   * CI workflow's discovery surface, so the build set comes from the tool's
+   * own walk, never a hand-rolled shell find. Requires repoRoot (validated in
+   * the CLI).
+   */
+  listDockerfiles?: boolean;
 }
 
 /**
@@ -458,6 +507,45 @@ async function runTargetedMode(
   process.stderr.write(
     `wrote ${sanitizeForLog(outputPath)} ` +
       `(${derived.length} targeted base image(s) scanned)\n`,
+  );
+}
+
+/**
+ * BUILT-IMAGE PATH: scan an EXPLICIT, never-inferred set of locally built,
+ * never-pushed image tags (--built-image) with the built posture (full
+ * contents, digest-less sidecar identity, no docker inspect/pull — the 09-02
+ * collector posture). The refs are guarded through safeLiveScanImages
+ * (finding #5 symmetry) before reaching syft/docker as operands; the whole
+ * set being unsafe is a loud throw, never a silent empty scan. The summary
+ * prints to stderr BEFORE the scan, mirroring every other mode. pull is NEVER
+ * forwarded — built images are local-only and cannot be pulled (the CLI
+ * already rejects --built-image + --pull, this is defense-in-depth).
+ * Extracted from runGenerateDockerSbom to keep that orchestrator under the
+ * complexity bound.
+ */
+async function runBuiltImageMode(
+  opts: GenerateDockerSbomOptions,
+  outputPath: string,
+): Promise<void> {
+  const requested = opts.builtImages ?? [];
+  const safe = safeLiveScanImages(requested);
+  if (safe.length === 0) {
+    throw new Error(
+      "no safe --built-image refs to scan — every explicit --built-image ref " +
+        "was empty, whitespace-only, or dash-prefixed (such tokens are " +
+        "rejected so they can never be parsed by syft/docker as a flag)",
+    );
+  }
+  process.stderr.write(
+    `scanning ${safe.length} built image(s): ${safe.map(sanitizeForLog).join(", ")}\n`,
+  );
+  const { doc } = await collectDockerOsSbom(safe, {
+    verbose: opts.verbose ?? false,
+    built: true,
+  });
+  writeArtifact(outputPath, doc);
+  process.stderr.write(
+    `wrote ${sanitizeForLog(outputPath)} (${safe.length} built image(s) scanned)\n`,
   );
 }
 
@@ -549,6 +637,28 @@ async function runLiveScanMode(
 export async function runGenerateDockerSbom(
   opts: GenerateDockerSbomOptions,
 ): Promise<void> {
+  // LISTING PATH (--list-dockerfiles): returns BEFORE any outputPath
+  // resolution or artifact write — this mode scans nothing and writes
+  // nothing, it only prints the tool's own policy-aware Dockerfile walk to
+  // stdout (the machine channel) for the CI workflow's build loop to consume.
+  // The CLI conflict guard guarantees repoRoot is set when listDockerfiles is.
+  if (opts.listDockerfiles === true && opts.repoRoot !== undefined) {
+    const repoRoot = resolveFrom(opts.baseDir, opts.repoRoot);
+    const dockerIgnore =
+      opts.policyPath !== undefined
+        ? dockerIgnoreFromPolicy(opts.policyPath, opts.baseDir)
+        : [];
+    const identities = dockerfileListing(repoRoot, {
+      ...(opts.toolDir !== undefined ? { toolDir: opts.toolDir } : {}),
+      ...(opts.excludes !== undefined ? { excludes: opts.excludes } : {}),
+      dockerIgnore,
+    });
+    for (const identity of identities) {
+      process.stdout.write(`${identity}\n`);
+    }
+    return;
+  }
+
   // Default output: DOCKER_OS_SBOM_FILE inside the resolved cache dir (the policy
   // `[cache] dir`, or the default, anchored to the scanned repo), so the file this
   // command WRITES is exactly the one generate and check READ; --docker-os-sbom
@@ -568,6 +678,12 @@ export async function runGenerateDockerSbom(
   // CONSUMER PATH takes priority when set.
   if (opts.fromSbomPaths !== undefined && opts.fromSbomPaths.length > 0) {
     return runIngestMode(opts, outputPath);
+  }
+
+  // BUILT-IMAGE PATH: an explicit --built-image set is the most specific live
+  // mode (never inferred, never combined with the other scan modes).
+  if (opts.builtImages !== undefined && opts.builtImages.length > 0) {
+    return runBuiltImageMode(opts, outputPath);
   }
 
   // TARGETED PATH.

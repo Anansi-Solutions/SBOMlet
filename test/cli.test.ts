@@ -2137,4 +2137,136 @@ describe("generate-docker-sbom mode contract", () => {
       rmSync(base, { recursive: true, force: true });
     }
   });
+
+  test("--built-image and --from-sbom conflict, naming both flags", () => {
+    const message = dockerSbomModeConflict({
+      "built-image": ["myapp:ci"],
+      "from-sbom": ["sbom.json"],
+    });
+    expect(message).toBeDefined();
+    expect(message).toContain("--built-image");
+    expect(message).toContain("--from-sbom");
+  });
+
+  test("--built-image and --image conflict, naming both flags", () => {
+    const message = dockerSbomModeConflict({
+      "built-image": ["myapp:ci"],
+      image: ["postgres:18"],
+    });
+    expect(message).toBeDefined();
+    expect(message).toContain("--built-image");
+    expect(message).toContain("--image");
+  });
+
+  test("--built-image and --dockerfile conflict, naming both flags", () => {
+    const message = dockerSbomModeConflict({
+      "built-image": ["myapp:ci"],
+      dockerfile: ["Dockerfile"],
+    });
+    expect(message).toBeDefined();
+    expect(message).toContain("--built-image");
+    expect(message).toContain("--dockerfile");
+  });
+
+  test("--built-image and --pull conflict, naming both flags", () => {
+    const message = dockerSbomModeConflict({
+      "built-image": ["myapp:ci"],
+      pull: true,
+    });
+    expect(message).toBeDefined();
+    expect(message).toContain("--built-image");
+    expect(message).toContain("--pull");
+  });
+
+  test("--built-image alone is NOT a conflict", () => {
+    expect(
+      dockerSbomModeConflict({
+        "built-image": ["myapp:ci"],
+      }),
+    ).toBeUndefined();
+  });
+
+  test("--built-image + --repo-root is NOT a conflict (anchor degradation)", () => {
+    expect(
+      dockerSbomModeConflict({
+        "built-image": ["myapp:ci"],
+        "repo-root": ".",
+      }),
+    ).toBeUndefined();
+  });
+
+  test("dockerSbomOptionsFrom maps repeatable --built-image values to builtImages verbatim, never sets pull", () => {
+    const base = neutralBaseDir();
+    try {
+      const options = dockerSbomOptionsFrom({
+        "built-image": ["myapp:ci", "worker:ci"],
+        "base-dir": base,
+      });
+      expect(options.builtImages).toEqual(["myapp:ci", "worker:ci"]);
+      expect(options.pull).toBeUndefined();
+    } finally {
+      rmSync(base, { recursive: true, force: true });
+    }
+  });
+
+  test("--list-dockerfiles and --image conflict", () => {
+    const message = dockerSbomModeConflict({
+      "list-dockerfiles": true,
+      "repo-root": ".",
+      image: ["postgres:18"],
+    });
+    expect(message).toBeDefined();
+    expect(message).toContain("--list-dockerfiles");
+    expect(message).toContain("--image");
+  });
+
+  test("--list-dockerfiles and --from-sbom conflict", () => {
+    const message = dockerSbomModeConflict({
+      "list-dockerfiles": true,
+      "from-sbom": ["sbom.json"],
+    });
+    expect(message).toBeDefined();
+    expect(message).toContain("--list-dockerfiles");
+    expect(message).toContain("--from-sbom");
+  });
+
+  test("--list-dockerfiles and --dockerfile conflict", () => {
+    const message = dockerSbomModeConflict({
+      "list-dockerfiles": true,
+      "repo-root": ".",
+      dockerfile: ["Dockerfile"],
+    });
+    expect(message).toBeDefined();
+    expect(message).toContain("--list-dockerfiles");
+    expect(message).toContain("--dockerfile");
+  });
+
+  test("--list-dockerfiles and --built-image conflict", () => {
+    const message = dockerSbomModeConflict({
+      "list-dockerfiles": true,
+      "repo-root": ".",
+      "built-image": ["myapp:ci"],
+    });
+    expect(message).toBeDefined();
+    expect(message).toContain("--list-dockerfiles");
+    expect(message).toContain("--built-image");
+  });
+
+  test("--list-dockerfiles without --repo-root fails loudly", () => {
+    const message = dockerSbomModeConflict({
+      "list-dockerfiles": true,
+    });
+    expect(message).toBeDefined();
+    expect(message).toContain("--list-dockerfiles");
+    expect(message).toContain("--repo-root");
+  });
+
+  test("--list-dockerfiles + --repo-root alone is NOT a conflict", () => {
+    expect(
+      dockerSbomModeConflict({
+        "list-dockerfiles": true,
+        "repo-root": ".",
+      }),
+    ).toBeUndefined();
+  });
 });
