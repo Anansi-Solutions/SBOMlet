@@ -28,6 +28,7 @@ import { tmpdir } from "node:os";
 import { join, relative, resolve } from "node:path";
 import { afterAll, beforeAll, describe, expect, mock, test } from "bun:test";
 
+import { dockerSbomOptionsFrom, dockerSbomModeConflict } from "../src/cli";
 import { exitCodeFor, runCheck } from "../src/gate/check";
 import { classifyCoverage, coverageSkipReason } from "../src/pipeline/coverage";
 import { defaultNoticesPath, resolveFrom } from "../src/pipeline/paths";
@@ -2034,5 +2035,106 @@ describe("dispatch wiring: bun branch + per-kind firstPartyNames (04.5-04)", () 
     expect(thrown).toBeDefined();
     expect(thrown!.message).toContain("v1-app");
     expect(thrown!.message).toContain("coverage assertion failed");
+  });
+});
+
+describe("generate-docker-sbom mode contract", () => {
+  /**
+   * A fresh temp dir with no .sbomlet.policy.toml, passed as --base-dir so
+   * discoverDefaultPolicy (invoked internally by dockerSbomOptionsFrom) never
+   * discovers a real policy file from this repo's working tree.
+   */
+  function neutralBaseDir(): string {
+    return mkdtempSync(join(tmpdir(), "licenses-cli-docker-"));
+  }
+
+  test("--image and --from-sbom conflict, naming both flags", () => {
+    const message = dockerSbomModeConflict({
+      image: ["postgres:18"],
+      "from-sbom": ["sbom.json"],
+    });
+    expect(message).toBeDefined();
+    expect(message).toContain("--image");
+    expect(message).toContain("--from-sbom");
+  });
+
+  test("--repo-root (discovery) and --from-sbom conflict, naming both flags", () => {
+    const message = dockerSbomModeConflict({
+      "repo-root": ".",
+      "from-sbom": ["sbom.json"],
+    });
+    expect(message).toBeDefined();
+    expect(message).toContain("--repo-root");
+    expect(message).toContain("--from-sbom");
+  });
+
+  test("--dockerfile (targeted) and --from-sbom conflict, naming both flags", () => {
+    const message = dockerSbomModeConflict({
+      dockerfile: ["Dockerfile"],
+      "from-sbom": ["sbom.json"],
+    });
+    expect(message).toBeDefined();
+    expect(message).toContain("--dockerfile");
+    expect(message).toContain("--from-sbom");
+  });
+
+  test("--dockerfile + --repo-root is NOT a conflict (anchor degradation)", () => {
+    expect(
+      dockerSbomModeConflict({
+        dockerfile: ["Dockerfile"],
+        "repo-root": ".",
+      }),
+    ).toBeUndefined();
+  });
+
+  test("--dockerfile + --image is NOT a conflict (union)", () => {
+    expect(
+      dockerSbomModeConflict({
+        dockerfile: ["Dockerfile"],
+        image: ["postgres:18"],
+      }),
+    ).toBeUndefined();
+  });
+
+  test("dockerSbomOptionsFrom maps a repeatable --dockerfile list to dockerfilePaths verbatim, no pull field", () => {
+    const base = neutralBaseDir();
+    try {
+      const options = dockerSbomOptionsFrom({
+        dockerfile: ["a/Dockerfile", "b/Dockerfile"],
+        "base-dir": base,
+      });
+      expect(options.dockerfilePaths).toEqual(["a/Dockerfile", "b/Dockerfile"]);
+      expect(options.pull).toBeUndefined();
+    } finally {
+      rmSync(base, { recursive: true, force: true });
+    }
+  });
+
+  test("dockerSbomOptionsFrom sets pull:true only when --pull is passed", () => {
+    const base = neutralBaseDir();
+    try {
+      const options = dockerSbomOptionsFrom({
+        dockerfile: ["a/Dockerfile"],
+        pull: true,
+        "base-dir": base,
+      });
+      expect(options.pull).toBe(true);
+    } finally {
+      rmSync(base, { recursive: true, force: true });
+    }
+  });
+
+  test("--pull defaults to false/absent through parseArgs (option table default)", () => {
+    const base = neutralBaseDir();
+    try {
+      const options = dockerSbomOptionsFrom({
+        dockerfile: ["a/Dockerfile"],
+        pull: false,
+        "base-dir": base,
+      });
+      expect(options.pull).toBeUndefined();
+    } finally {
+      rmSync(base, { recursive: true, force: true });
+    }
   });
 });

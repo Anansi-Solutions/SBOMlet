@@ -67,9 +67,10 @@ const USAGE =
   "           exit codes: 0 all match, 1 at least one mismatch, 3 tool/network " +
   "error\n" +
   "  generate-docker-sbom (--image <ref>... | --from-sbom <path>... | " +
-  "--repo-root <dir> [--policy <file>] [--exclude <glob>]... [--image <ref>]...) " +
-  "[--docker-os-sbom <path>] [--base-dir <path>] [--verbose]\n" +
-  "           Writes the committed docker-os.sbom.json. THREE modes:\n" +
+  "--repo-root <dir> [--policy <file>] [--exclude <glob>]... [--image <ref>]... | " +
+  "--dockerfile <path>... [--image <ref>]...) " +
+  "[--pull] [--docker-os-sbom <path>] [--base-dir <path>] [--verbose]\n" +
+  "           Writes the committed docker-os.sbom.json. FOUR modes:\n" +
   "           --image <ref>...: MAINTAINER-ONLY, REQUIRES A DOCKER DAEMON — " +
   "scans the image set (default: the documented image set) with the pinned " +
   "syft and digest-pins each.\n" +
@@ -78,6 +79,12 @@ const USAGE =
   "with any explicit --image). --policy reads [docker] ignore globs; scratch/" +
   "unresolved/ignored Dockerfiles contribute no image. Derives the BASE image's " +
   "OS packages only (not the Dockerfile's own RUN apt/apk installs).\n" +
+  "           --dockerfile <path>...: TARGETED — same derive+scan as discovery " +
+  "but over an explicit Dockerfile list instead of a repo walk (union with any " +
+  "explicit --image). --repo-root, if also given, is only the cache-dir anchor.\n" +
+  "           --pull: docker pull each resolved image before scanning it (live " +
+  "modes only) — off by default; used by the GitHub Action for its runtime-" +
+  "derived base set.\n" +
   "           --from-sbom <path>...: CI-ATTESTATION CONSUMER — ingests pre-made " +
   "syft/CycloneDX SBOMs (NO docker, NO network); the standard flow is the build " +
   "CI attests the image SBOM by registry digest and this tool consumes it. " +
@@ -138,6 +145,18 @@ interface CliValues {
   image?: string[];
   /** Repeatable --from-sbom paths: pre-made SBOMs to ingest (consumer path). */
   "from-sbom"?: string[];
+  /**
+   * Repeatable --dockerfile paths for generate-docker-sbom (targeted mode):
+   * derive + scan the shipped base of each named Dockerfile instead of walking
+   * the repo. Base-dir-resolved.
+   */
+  dockerfile?: string[];
+  /**
+   * generate-docker-sbom --pull: `docker pull` each resolved image before
+   * scanning it. Off by default (the standard path fails loudly on an absent
+   * image); the GitHub Action turns it on for the runtime-derived base set.
+   */
+  pull?: boolean;
   /** generate-docker-sbom output path; base-dir-resolved like every artifact. */
   "docker-os-sbom"?: string;
 }
@@ -186,35 +205,53 @@ function optionsFrom(values: CliValues): GenerateOptions {
 }
 
 /**
+ * Compute the first generate-docker-sbom mode-conflict message, or undefined
+ * when the requested mode combination is valid. EXACTLY one of --image (live
+ * scan) / --from-sbom (pre-made ingest) may be active, and --repo-root
+ * (discovery) / --dockerfile (targeted) each cannot combine with --from-sbom —
+ * a pre-made ingest is never a live scan or derive+scan. --dockerfile MAY
+ * combine with --repo-root (the latter then serves only as the cache-dir
+ * anchor) and with --image (union). Extracted from dockerSbomOptionsFrom to
+ * keep that function under the complexity bound.
+ */
+export function dockerSbomModeConflict(values: CliValues): string | undefined {
+  const hasImage = values.image !== undefined && values.image.length > 0;
+  const hasFromSbom =
+    values["from-sbom"] !== undefined && values["from-sbom"].length > 0;
+  const hasRepoRoot = values["repo-root"] !== undefined;
+  const hasDockerfile =
+    values.dockerfile !== undefined && values.dockerfile.length > 0;
+  if (hasImage && hasFromSbom) {
+    return "--image and --from-sbom are mutually exclusive — pass one mode";
+  }
+  if (hasRepoRoot && hasFromSbom) {
+    return "--repo-root (discovery) and --from-sbom (ingest) are mutually exclusive";
+  }
+  if (hasDockerfile && hasFromSbom) {
+    return "--dockerfile (targeted) and --from-sbom (ingest) are mutually exclusive";
+  }
+  return undefined;
+}
+
+/**
  * Assemble the generate-docker-sbom options. The repeatable --image flags are
  * the configurable image set; when none are passed, runGenerateDockerSbom
  * falls back to its documented default image set (the defaults live in
  * the dogfood layer, never in core — the independence constraint).
  */
-function dockerSbomOptionsFrom(values: CliValues): GenerateDockerSbomOptions {
+export function dockerSbomOptionsFrom(
+  values: CliValues,
+): GenerateDockerSbomOptions {
+  const conflict = dockerSbomModeConflict(values);
+  if (conflict !== undefined) {
+    fail(`${conflict}\n${USAGE}`);
+  }
   const hasImage = values.image !== undefined && values.image.length > 0;
   const hasFromSbom =
     values["from-sbom"] !== undefined && values["from-sbom"].length > 0;
-  // EXACTLY one mode: a live syft scan (--image) OR a pre-made ingest
-  // (--from-sbom) — never both (ambiguous: one run is a scan or an ingest, not
-  // a mix). With NEITHER, the live-scan path falls back to the documented
-  // dogfood default image set (DEFAULT_IMAGES), so "at least one
-  // mode" always resolves to a non-empty live scan — the Taskfile relies on
-  // this zero-flag default.
   const hasRepoRoot = values["repo-root"] !== undefined;
-  if (hasImage && hasFromSbom) {
-    fail(
-      `--image and --from-sbom are mutually exclusive — pass one mode\n${USAGE}`,
-    );
-  }
-  // Discovery mode (--repo-root) is its own mode: it derives the image set from
-  // the repo's Dockerfiles and may UNION explicit --image refs, but it cannot be
-  // combined with --from-sbom (a pre-made ingest is not a live discovery scan).
-  if (hasRepoRoot && hasFromSbom) {
-    fail(
-      `--repo-root (discovery) and --from-sbom (ingest) are mutually exclusive\n${USAGE}`,
-    );
-  }
+  const hasDockerfile =
+    values.dockerfile !== undefined && values.dockerfile.length > 0;
   // Discover the policy even without --policy so its `[cache] dir` steers the
   // committed-SBOM output to the same cache dir generate/check read from.
   const policyPath = values.policy ?? discoverDefaultPolicy(values);
@@ -222,6 +259,8 @@ function dockerSbomOptionsFrom(values: CliValues): GenerateDockerSbomOptions {
     ...(hasImage ? { images: values.image } : {}),
     ...(hasFromSbom ? { fromSbomPaths: values["from-sbom"] } : {}),
     ...(hasRepoRoot ? { repoRoot: values["repo-root"] } : {}),
+    ...(hasDockerfile ? { dockerfilePaths: values.dockerfile } : {}),
+    ...(values.pull === true ? { pull: true } : {}),
     ...(values.exclude !== undefined ? { excludes: values.exclude } : {}),
     ...(policyPath !== undefined ? { policyPath } : {}),
     // The tool's OWN directory, so Dockerfile discovery prunes it from the walk
@@ -313,6 +352,8 @@ async function main(argv: string[]): Promise<void> {
         verbose: { type: "boolean", default: false },
         image: { type: "string", multiple: true },
         "from-sbom": { type: "string", multiple: true },
+        dockerfile: { type: "string", multiple: true },
+        pull: { type: "boolean", default: false },
         "docker-os-sbom": { type: "string" },
       },
       allowPositionals: true,

@@ -28,6 +28,7 @@ import {
   assertSyftSbomSize,
   syftArgs,
   dockerInspectArgs,
+  dockerPullArgs,
   filterOsComponents,
   emitDockerOsDoc,
   parseRepoDigests,
@@ -84,6 +85,25 @@ describe("dockerInspectArgs (argv lock, finding #5)", () => {
   test("the literal SYFT_TOOL.version pin matches the spike-captured version", () => {
     // Grep-detectable pin: 07-RESEARCH captured syft at this exact version.
     expect(SYFT_TOOL).toEqual({ name: "syft", version: "1.45.1" });
+  });
+});
+
+describe("dockerPullArgs (argv lock, opt-in --pull)", () => {
+  test("the image operand is placed AFTER a `--` end-of-options separator", () => {
+    const args = dockerPullArgs("postgres:18");
+    const sepIndex = args.indexOf("--");
+    expect(sepIndex).toBeGreaterThanOrEqual(0);
+    // A dash-prefixed operand can never be parsed by docker pull as a flag.
+    expect(args[sepIndex + 1]).toBe("postgres:18");
+    expect(args[args.length - 1]).toBe("postgres:18");
+  });
+
+  test("returns exactly the `pull -- <image>` invocation", () => {
+    expect(dockerPullArgs("nginx:stable-alpine")).toEqual([
+      "pull",
+      "--",
+      "nginx:stable-alpine",
+    ]);
   });
 });
 

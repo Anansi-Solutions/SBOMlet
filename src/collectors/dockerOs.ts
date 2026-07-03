@@ -103,6 +103,21 @@ export function dockerInspectArgs(image: string): string[] {
 }
 
 /**
+ * docker pull argv (opt-in `--pull` path). The image is the OPERAND after a `--`
+ * END-OF-OPTIONS separator (symmetry with dockerInspectArgs/syftArgs): a
+ * dash-prefixed operand can never be parsed by `docker pull` as a flag, and the
+ * ref is always an argv operand, never a shell string. Pulling is OPT-IN because
+ * the digest-pin contract (resolveDigest) needs the image present in the daemon,
+ * yet the default path deliberately does NOT pull — a missing image surfaces
+ * loudly rather than racing a network fetch into the determinism contract. The
+ * discovery/targeted GitHub Action, which derives its base set only at runtime,
+ * turns it on so the resolved bases are present before the scan.
+ */
+export function dockerPullArgs(image: string): string[] {
+  return ["pull", "--", image];
+}
+
+/**
  * The three CycloneDX license-claim shapes syft emits per OS package. These are
  * EXACTLY the shapes the merge's `licenseClaimsOf` reads (validate/sbom.ts:
  * SbomExpressionClaim / SbomIdClaim / SbomNameClaim), so preserving them
@@ -285,6 +300,13 @@ export interface DockerOsCollectOptions {
   dockerBin?: string;
   /** Per-run temp directory; defaults to a fresh mkdtemp under os tmpdir. */
   tempDir?: string;
+  /**
+   * `docker pull` each image before scanning it (opt-in). Off by default so the
+   * standard maintainer path fails loudly on an absent image rather than
+   * silently fetching; the discovery/targeted GitHub Action turns it on because
+   * it only knows the resolved base set at runtime and cannot pre-pull.
+   */
+  pull?: boolean;
 }
 
 /** The collector result: the serialized doc plus the per-image SBOM temp paths. */
@@ -472,6 +494,7 @@ export async function collectDockerOsSbom(
   const verbose = opts.verbose ?? false;
   const syftBin = opts.syftBin ?? "syft";
   const dockerBin = opts.dockerBin ?? "docker";
+  const pull = opts.pull ?? false;
   const tempDir = opts.tempDir ?? mkdtempSync(join(tmpdir(), "licenses-syft-"));
   const spawnOpts = { timeoutMs, verbose };
 
@@ -483,6 +506,12 @@ export async function collectDockerOsSbom(
   for (const image of images) {
     const outFile = join(tempDir, `syft-${index}.json`);
     index += 1;
+    // Opt-in pull BEFORE the scan so the image is in the daemon for both the
+    // syft scan and the resolveDigest `docker inspect` — an absent image on the
+    // no-pull default still fails loudly in resolveDigest.
+    if (pull) {
+      await execTool(dockerBin, dockerPullArgs(image), spawnOpts);
+    }
     const sbom = await scanImage(image, outFile, syftBin, spawnOpts);
     sbomPaths.push(outFile);
 

@@ -24,13 +24,18 @@
  * via emitDockerOsDoc).
  */
 
-import { readFileSync } from "node:fs";
+import { readFileSync, statSync } from "node:fs";
 
 import {
   collectDockerOsSbom,
   consumeDockerOsSbom,
 } from "../collectors/dockerOs";
-import { discoverDockerfiles } from "../collectors/dockerfile";
+import {
+  type DerivedBase,
+  deriveBaseImage,
+  discoverDockerfiles,
+  MAX_DOCKERFILE_BYTES,
+} from "../collectors/dockerfile";
 import { compareCodeUnits } from "../model/dependencies";
 import { parsePolicy } from "../policy/schema";
 import { resolveFrom, writeArtifact } from "./paths";
@@ -190,6 +195,115 @@ export function resolveDiscoveredImages(
   return { images, summary: summaryParts.join("\n") };
 }
 
+/** One explicitly targeted Dockerfile: its display identity + absolute path. */
+export interface TargetedDockerfile {
+  /** The path as the caller gave it — used (sanitized) in the stderr summary. */
+  identity: string;
+  /** Absolute, base-dir-resolved path the base is derived from. */
+  path: string;
+}
+
+/** Options for the pure targeted-Dockerfile image-set resolution. */
+export interface ResolveTargetedDockerfilesOptions {
+  /** Explicit --image refs, unioned + deduped with the derived bases. */
+  extraImages?: readonly string[];
+}
+
+/** The result of targeted resolution: the scan set + a stderr summary. */
+export interface ResolveTargetedDockerfilesResult {
+  /** The deduped, compareCodeUnits-sorted image refs to scan. */
+  images: string[];
+  /** A concise human-readable summary (multi-line, no trailing newline). */
+  summary: string;
+}
+
+/**
+ * Derive the shipped base of ONE explicitly targeted Dockerfile. Reuses the same
+ * size gate and honest-residual {@link deriveBaseImage} the discovery walk does,
+ * so a targeted Dockerfile resolves identically to how it would when discovered.
+ * A MISSING/unreadable path THROWS (unlike discovery's walked-and-therefore-
+ * present files, an explicitly named path that is absent is a caller typo — fail
+ * fast rather than silently drop the image it stands for); an oversized file
+ * loud-skips as unresolved, exactly as discovery does.
+ */
+function deriveTargetedBase(path: string): DerivedBase {
+  let size: number;
+  try {
+    size = statSync(path).size;
+  } catch {
+    throw new Error(
+      `--dockerfile path is missing or unreadable: expected ${path}`,
+    );
+  }
+  if (size > MAX_DOCKERFILE_BYTES) {
+    return {
+      kind: "unresolved",
+      reason:
+        `exceeds the ${MAX_DOCKERFILE_BYTES}-byte size cap — not parsed; ` +
+        `pin the base via --image if this is a real Dockerfile`,
+    };
+  }
+  return deriveBaseImage(readFileSync(path, "utf8"));
+}
+
+/**
+ * PURE targeted-mode resolution (NO docker, NO syft): derive each EXPLICITLY
+ * named Dockerfile's shipped base (07-23 dockerfile.ts) and build the image set
+ * to scan — the UNION of every RESOLVED `image` base and the explicit
+ * `extraImages`, deduped and compareCodeUnits-sorted. This is the file-list
+ * counterpart to {@link resolveDiscoveredImages}: same derivation and honest
+ * residual, but over a caller-supplied Dockerfile list instead of a repo walk.
+ * scratch and unresolved Dockerfiles contribute NO image (scratch has no OS
+ * packages; unresolved is loud-skipped — never guessed). The summary names, in
+ * sorted order, every targeted Dockerfile and its disposition. Identities are
+ * routed through sanitizeForLog because they originate in `--dockerfile` input.
+ */
+export function resolveTargetedDockerfiles(
+  dockerfiles: readonly TargetedDockerfile[],
+  opts: ResolveTargetedDockerfilesOptions = {},
+): ResolveTargetedDockerfilesResult {
+  const sorted = [...dockerfiles].sort((a, b) =>
+    compareCodeUnits(a.identity, b.identity),
+  );
+
+  // Defense-in-depth (#8): NEVER add an empty/whitespace/dash-prefixed ref to
+  // the scan set — mirrors the discovery extraImages guard.
+  const imageSet = new Set<string>(
+    (opts.extraImages ?? []).filter(isSafeImageRef),
+  );
+  const lines: string[] = [];
+  for (const df of sorted) {
+    const base = deriveTargetedBase(df.path);
+    const id = sanitizeForLog(df.identity);
+    if (base.kind === "image") {
+      imageSet.add(base.ref);
+      lines.push(`  ${id}: ${base.ref}`);
+    } else if (base.kind === "scratch") {
+      lines.push(`  ${id}: scratch (no OS packages, skipped)`);
+    } else {
+      lines.push(`  ${id}: unresolved: ${base.reason} (skipped)`);
+    }
+  }
+
+  const images = [...imageSet].sort(compareCodeUnits);
+
+  const summaryParts = [
+    `targeted ${dockerfiles.length} Dockerfile(s):`,
+    ...lines,
+  ];
+  if (opts.extraImages !== undefined && opts.extraImages.length > 0) {
+    const sanitized = opts.extraImages.map(sanitizeForLog).join(", ");
+    summaryParts.push(`  (explicit --image: ${sanitized})`);
+  }
+  summaryParts.push(
+    images.length > 0
+      ? `scan set (${images.length}): ${images.join(", ")}`
+      : "scan set is EMPTY (no resolvable external base images)",
+  );
+
+  return { images, summary: summaryParts.join("\n") };
+}
+
 /** Read + parse a policy file's `[docker] ignore` globs; [] when absent/unset. */
 function dockerIgnoreFromPolicy(
   policyPath: string,
@@ -235,6 +349,15 @@ export interface GenerateDockerSbomOptions {
    * (explicit --image set or the documented default). Base-dir-resolved.
    */
   repoRoot?: string;
+  /**
+   * Targeted mode: derive + scan the shipped base of each EXPLICITLY named
+   * Dockerfile (base-dir-resolved), rather than walking a repo. The file-list
+   * counterpart to `repoRoot` discovery — same derivation, honest residual, and
+   * `--image` union. When `repoRoot` is ALSO set it is used only as the cache-dir
+   * anchor, never as a discovery root: the explicit list wins. Mutually exclusive
+   * with `fromSbomPaths` (a pre-made ingest is not a live derive+scan).
+   */
+  dockerfilePaths?: string[];
   /** --exclude globs forwarded to Dockerfile discovery (discovery mode only). */
   excludes?: string[];
   /**
@@ -264,8 +387,148 @@ export interface GenerateDockerSbomOptions {
    * resolveDiscoveredImages → discoverDockerfiles.
    */
   toolDir?: string;
+  /**
+   * `docker pull` each resolved image before scanning it (opt-in, live paths
+   * only — targeted/discovery/live-scan; never the daemon-free `fromSbomPaths`
+   * ingest). Off by default so the standard maintainer path fails loudly on an
+   * absent image; the GitHub Action turns it on because it derives its base set
+   * only at runtime and cannot pre-pull.
+   */
+  pull?: boolean;
   /** Pass syft/docker child stdout/stderr through to process.stderr. */
   verbose?: boolean;
+}
+
+/**
+ * CONSUMER PATH: ingest pre-made syft/CycloneDX SBOMs — NO docker, NO syft.
+ * This is the CI-attestation flow: the build pipeline produces the SBOM by
+ * registry digest, this command consumes it. Extracted from
+ * runGenerateDockerSbom to keep that orchestrator under the complexity bound.
+ */
+async function runIngestMode(
+  opts: GenerateDockerSbomOptions,
+  outputPath: string,
+): Promise<void> {
+  const fromSbomPaths = opts.fromSbomPaths ?? [];
+  const resolved = fromSbomPaths.map((p) => resolveFrom(opts.baseDir, p));
+  const { doc } = await consumeDockerOsSbom(resolved, {
+    verbose: opts.verbose ?? false,
+  });
+  writeArtifact(outputPath, doc);
+  process.stderr.write(
+    `wrote ${sanitizeForLog(outputPath)} ` +
+      `(${resolved.length} pre-made SBOM(s) consumed, no docker)\n`,
+  );
+}
+
+/**
+ * TARGETED PATH: derive + scan the shipped base of an EXPLICIT Dockerfile list
+ * (--dockerfile), rather than walking a repo. --repo-root, if also given,
+ * serves only as the cache-dir anchor (outputPath, resolved by the caller) and
+ * is NOT a discovery root here — the explicit list wins. The summary prints to
+ * stderr BEFORE the scan so the resolved set is visible even if a later scan
+ * fails. Extracted from runGenerateDockerSbom to keep that orchestrator under
+ * the complexity bound.
+ */
+async function runTargetedMode(
+  opts: GenerateDockerSbomOptions,
+  outputPath: string,
+): Promise<void> {
+  const dockerfilePaths = opts.dockerfilePaths ?? [];
+  const targeted = dockerfilePaths.map((p) => ({
+    identity: p,
+    path: resolveFrom(opts.baseDir, p),
+  }));
+  const { images: derived, summary } = resolveTargetedDockerfiles(targeted, {
+    ...(opts.images !== undefined ? { extraImages: opts.images } : {}),
+  });
+  process.stderr.write(`${summary}\n`);
+  if (derived.length === 0) {
+    throw new Error(
+      "the targeted Dockerfile(s) resolved no external base images to scan " +
+        "— every one is scratch, unresolved, or oversized (pass --image to " +
+        "add an explicit base)",
+    );
+  }
+  const { doc } = await collectDockerOsSbom(derived, {
+    verbose: opts.verbose ?? false,
+    pull: opts.pull ?? false,
+  });
+  writeArtifact(outputPath, doc);
+  process.stderr.write(
+    `wrote ${sanitizeForLog(outputPath)} ` +
+      `(${derived.length} targeted base image(s) scanned)\n`,
+  );
+}
+
+/**
+ * DISCOVERY PATH (07-23): walk --repo-root for Dockerfiles, derive each
+ * shipped base, and scan the resolved bases (union+dedup with explicit
+ * --image). The summary is printed to stderr BEFORE the scan so the
+ * discovered set is visible even if a later scan step fails. Extracted from
+ * runGenerateDockerSbom to keep that orchestrator under the complexity bound;
+ * repoRootOpt is threaded as its own (non-optional) parameter rather than
+ * read off opts, since the dispatch guard narrows opts.repoRoot only at the
+ * call site, not across the function boundary.
+ */
+async function runDiscoveryMode(
+  opts: GenerateDockerSbomOptions,
+  outputPath: string,
+  repoRootOpt: string,
+): Promise<void> {
+  const repoRoot = resolveFrom(opts.baseDir, repoRootOpt);
+  const dockerIgnore =
+    opts.policyPath !== undefined
+      ? dockerIgnoreFromPolicy(opts.policyPath, opts.baseDir)
+      : [];
+  const { images: discovered, summary } = resolveDiscoveredImages(repoRoot, {
+    ...(opts.toolDir !== undefined ? { toolDir: opts.toolDir } : {}),
+    ...(opts.excludes !== undefined ? { excludes: opts.excludes } : {}),
+    dockerIgnore,
+    ...(opts.images !== undefined ? { extraImages: opts.images } : {}),
+  });
+  process.stderr.write(`${summary}\n`);
+  if (discovered.length === 0) {
+    throw new Error(
+      "discovery resolved no external base images to scan — every " +
+        "Dockerfile is scratch, unresolved, or ignored (pass --image to " +
+        "scan an explicit set, or check the [docker] ignore globs)",
+    );
+  }
+  const { doc } = await collectDockerOsSbom(discovered, {
+    verbose: opts.verbose ?? false,
+    pull: opts.pull ?? false,
+  });
+  writeArtifact(outputPath, doc);
+  process.stderr.write(
+    `wrote ${sanitizeForLog(outputPath)} ` +
+      `(${discovered.length} discovered base image(s) scanned)\n`,
+  );
+}
+
+/**
+ * LIVE-SCAN PATH: spawn the pinned syft + docker over the image set. The
+ * explicit --image set is routed through safeLiveScanImages (finding #5) so a
+ * hostile/garbage dash-prefixed or empty ref is dropped before it reaches
+ * syft/docker as an operand — symmetry with the discovery extraImages guard.
+ * Extracted from runGenerateDockerSbom to keep that orchestrator under the
+ * complexity bound.
+ */
+async function runLiveScanMode(
+  opts: GenerateDockerSbomOptions,
+  outputPath: string,
+): Promise<void> {
+  const requested = resolveLiveScanImages(opts.images);
+
+  const { doc } = await collectDockerOsSbom(requested, {
+    verbose: opts.verbose ?? false,
+    pull: opts.pull ?? false,
+  });
+
+  writeArtifact(outputPath, doc);
+  process.stderr.write(
+    `wrote ${sanitizeForLog(outputPath)} (${requested.length} images scanned)\n`,
+  );
 }
 
 /**
@@ -278,11 +541,14 @@ export interface GenerateDockerSbomOptions {
  * builds (or base-image-falls-back) the app images before invoking this; this
  * orchestrator does not silently pull, so a missing image surfaces loudly rather
  * than racing a network fetch into the determinism contract.
+ *
+ * Kept to outputPath resolution + a dispatch ladder — each mode's logic lives
+ * in its own extracted helper (runIngestMode/runTargetedMode/runDiscoveryMode/
+ * runLiveScanMode) so this orchestrator stays under the complexity bound.
  */
 export async function runGenerateDockerSbom(
   opts: GenerateDockerSbomOptions,
 ): Promise<void> {
-  const fromSbomPaths = opts.fromSbomPaths;
   // Default output: DOCKER_OS_SBOM_FILE inside the resolved cache dir (the policy
   // `[cache] dir`, or the default, anchored to the scanned repo), so the file this
   // command WRITES is exactly the one generate and check READ; --docker-os-sbom
@@ -299,69 +565,21 @@ export async function runGenerateDockerSbom(
           DOCKER_OS_SBOM_FILE,
         );
 
-  // CONSUMER PATH: ingest pre-made syft/CycloneDX SBOMs — NO docker, NO syft.
-  // This is the CI-attestation flow: the build pipeline produces the SBOM by
-  // registry digest, this command consumes it. Takes priority when set.
-  if (fromSbomPaths !== undefined && fromSbomPaths.length > 0) {
-    const resolved = fromSbomPaths.map((p) => resolveFrom(opts.baseDir, p));
-    const { doc } = await consumeDockerOsSbom(resolved, {
-      verbose: opts.verbose ?? false,
-    });
-    writeArtifact(outputPath, doc);
-    process.stderr.write(
-      `wrote ${sanitizeForLog(outputPath)} ` +
-        `(${resolved.length} pre-made SBOM(s) consumed, no docker)\n`,
-    );
-    return;
+  // CONSUMER PATH takes priority when set.
+  if (opts.fromSbomPaths !== undefined && opts.fromSbomPaths.length > 0) {
+    return runIngestMode(opts, outputPath);
   }
 
-  // DISCOVERY PATH (07-23): walk --repo-root for Dockerfiles, derive each
-  // shipped base, and scan the resolved bases (union+dedup with explicit
-  // --image). The summary is printed to stderr BEFORE the scan so the
-  // discovered set is visible even if a later scan step fails.
+  // TARGETED PATH.
+  if (opts.dockerfilePaths !== undefined && opts.dockerfilePaths.length > 0) {
+    return runTargetedMode(opts, outputPath);
+  }
+
+  // DISCOVERY PATH (07-23).
   if (opts.repoRoot !== undefined) {
-    const repoRoot = resolveFrom(opts.baseDir, opts.repoRoot);
-    const dockerIgnore =
-      opts.policyPath !== undefined
-        ? dockerIgnoreFromPolicy(opts.policyPath, opts.baseDir)
-        : [];
-    const { images: discovered, summary } = resolveDiscoveredImages(repoRoot, {
-      ...(opts.toolDir !== undefined ? { toolDir: opts.toolDir } : {}),
-      ...(opts.excludes !== undefined ? { excludes: opts.excludes } : {}),
-      dockerIgnore,
-      ...(opts.images !== undefined ? { extraImages: opts.images } : {}),
-    });
-    process.stderr.write(`${summary}\n`);
-    if (discovered.length === 0) {
-      throw new Error(
-        "discovery resolved no external base images to scan — every " +
-          "Dockerfile is scratch, unresolved, or ignored (pass --image to " +
-          "scan an explicit set, or check the [docker] ignore globs)",
-      );
-    }
-    const { doc } = await collectDockerOsSbom(discovered, {
-      verbose: opts.verbose ?? false,
-    });
-    writeArtifact(outputPath, doc);
-    process.stderr.write(
-      `wrote ${sanitizeForLog(outputPath)} ` +
-        `(${discovered.length} discovered base image(s) scanned)\n`,
-    );
-    return;
+    return runDiscoveryMode(opts, outputPath, opts.repoRoot);
   }
 
-  // LIVE-SCAN PATH: spawn the pinned syft + docker over the image set. The
-  // explicit --image set is routed through safeLiveScanImages (finding #5) so a
-  // hostile/garbage dash-prefixed or empty ref is dropped before it reaches
-  // syft/docker as an operand — symmetry with the discovery extraImages guard.
-  const requested = resolveLiveScanImages(opts.images);
-
-  const { doc } = await collectDockerOsSbom(requested, {
-    verbose: opts.verbose ?? false,
-  });
-
-  writeArtifact(outputPath, doc);
-  process.stderr.write(
-    `wrote ${sanitizeForLog(outputPath)} (${requested.length} images scanned)\n`,
-  );
+  // LIVE-SCAN PATH (the default when none of the above modes apply).
+  return runLiveScanMode(opts, outputPath);
 }
