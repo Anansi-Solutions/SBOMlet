@@ -237,18 +237,53 @@ function isOsComponent(raw: RawComponent): raw is {
 }
 
 /**
- * Keep ONLY pkg:deb/pkg:apk components carrying name+version+purl; drop syft's
- * file/operating-system/generic/golang entries. The result is purl-sorted via
- * compareCodeUnits and purl-deduped first-wins (mirrors terraform.ts
- * componentsOf) — the whole emission is a pure function of bytes.
+ * True iff the raw component carries a non-empty string name+version+purl,
+ * with NO pattern gate — the "maximal honesty" fullContents predicate (the
+ * research-chosen option over a per-ecosystem allowlist). Still drops syft's
+ * purl-less file/operating-system noise and any component with an empty
+ * name/version, exactly like isOsComponent, just without the deb/apk gate.
  */
-export function filterOsComponents(sbom: unknown): OsComponent[] {
+function isPurlComponent(raw: RawComponent): raw is {
+  name: string;
+  version: string;
+  purl: string;
+} {
+  const { name, version, purl } = raw;
+  if (typeof name !== "string" || name.length === 0) return false;
+  if (typeof version !== "string" || version.length === 0) return false;
+  if (typeof purl !== "string" || purl.length === 0) return false;
+  return true;
+}
+
+/**
+ * Filter syft's raw components down to the retained set, purl-sorted and
+ * purl-deduped first-wins (mirrors terraform.ts componentsOf) — the whole
+ * emission is a pure function of bytes.
+ *
+ * Default (no options, or fullContents: false): keep ONLY pkg:deb/pkg:apk
+ * components carrying name+version+purl — the OS-package gate for base-image
+ * scans. Byte-identical to the pre-fullContents behavior; zero call-site edits
+ * required outside this file.
+ *
+ * fullContents: true: keep ANY component carrying a non-empty string
+ * name+version+purl, with no ecosystem pattern gate — the generated-image
+ * posture (DOCK-01), so application-layer packages (npm/pypi/golang/...)
+ * survive alongside the OS packages. Both modes still drop syft's purl-less
+ * file/operating-system/generic noise and empty-name/version/purl entries.
+ */
+export function filterOsComponents(
+  sbom: unknown,
+  opts?: { fullContents?: boolean },
+): OsComponent[] {
   const components = (sbom as RawSyftSbom).components;
   if (!Array.isArray(components)) return [];
 
+  const predicate =
+    opts?.fullContents === true ? isPurlComponent : isOsComponent;
+
   const byPurl = new Map<string, OsComponent>();
   for (const raw of components as RawComponent[]) {
-    if (!isOsComponent(raw)) continue;
+    if (!predicate(raw)) continue;
     // First-wins keying by purl: a duplicate purl collapses to one row.
     if (byPurl.has(raw.purl)) continue;
     const licenses = osLicensesOf(raw);
@@ -307,6 +342,19 @@ export interface DockerOsCollectOptions {
    * it only knows the resolved base set at runtime and cannot pre-pull.
    */
   pull?: boolean;
+  /**
+   * Collect from LOCALLY BUILT, never-pushed images (opt-in). Off by default —
+   * turned on by built-image scan callers: the CLI's built mode and the
+   * Docker-scan CI workflow. Why: a built never-pushed image has no
+   * RepoDigests (resolveDigest throws by design, never weakened), and any
+   * per-build digest (image ID, buildx digest) varies per rebuild — so the
+   * committed identity is the stable ref with digest "" (the
+   * consumeDockerOsSbom digest-less posture, #6). Built collection also
+   * applies fullContents: true (the generated-image posture, DOCK-01) and
+   * skips resolveDigest and docker inspect entirely; built + pull is rejected
+   * synchronously (a built image is local-only and cannot be pulled).
+   */
+  built?: boolean;
 }
 
 /** The collector result: the serialized doc plus the per-image SBOM temp paths. */
@@ -486,6 +534,52 @@ export function parseRepoDigests(stdout: string, invocation: string): string[] {
  * return the deterministic doc plus the per-image SBOM temp paths. Async for
  * interface symmetry with the other collectors.
  */
+/**
+ * Scan + filter + identify ONE image, applying the pulled-image or
+ * built-image posture. Extracted from collectDockerOsSbom to keep that
+ * orchestrator under the complexity bound (mirrors the resolveLiveScanImages
+ * / run*Mode extraction precedent, 09-01). Pull is a no-op when built (the
+ * caller already rejected built+pull); the built branch skips resolveDigest
+ * entirely and applies fullContents: true.
+ */
+async function collectOneImage(
+  image: string,
+  outFile: string,
+  opts: {
+    syftBin: string;
+    dockerBin: string;
+    pull: boolean;
+    built: boolean;
+    spawnOpts: { timeoutMs: number; verbose: boolean };
+  },
+): Promise<{
+  components: OsComponent[];
+  digest: DockerImageDigest;
+  sbomPath: string;
+}> {
+  // Opt-in pull BEFORE the scan so the image is in the daemon for both the
+  // syft scan and the resolveDigest `docker inspect` — an absent image on the
+  // no-pull default still fails loudly in resolveDigest. Unreachable when
+  // built (rejected by the caller), kept as the pulled-image posture only.
+  if (opts.pull) {
+    await execTool(opts.dockerBin, dockerPullArgs(image), opts.spawnOpts);
+  }
+  const sbom = await scanImage(image, outFile, opts.syftBin, opts.spawnOpts);
+
+  const filterOpts = opts.built ? { fullContents: true } : undefined;
+  const components = filterOsComponents(sbom, filterOpts);
+
+  if (opts.built) {
+    // Never resolveDigest for a built image — it has no RepoDigests by
+    // construction and any per-build digest is volatile (WR-01 lesson).
+    // Record the stable, digest-less identity (consumeDockerOsSbom #6
+    // posture) instead.
+    return { components, digest: { image, digest: "" }, sbomPath: outFile };
+  }
+  const digest = await resolveDigest(image, opts.dockerBin, opts.spawnOpts);
+  return { components, digest: { image, digest }, sbomPath: outFile };
+}
+
 export async function collectDockerOsSbom(
   images: string[],
   opts: DockerOsCollectOptions = {},
@@ -495,6 +589,12 @@ export async function collectDockerOsSbom(
   const syftBin = opts.syftBin ?? "syft";
   const dockerBin = opts.dockerBin ?? "docker";
   const pull = opts.pull ?? false;
+  const built = opts.built ?? false;
+  // Built images are local-only: reject synchronously BEFORE the temp-dir
+  // mkdtemp or any loop iteration — no execTool call ever happens on this path.
+  if (built && pull) {
+    throw new Error("built images are local-only and cannot be pulled");
+  }
   const tempDir = opts.tempDir ?? mkdtempSync(join(tmpdir(), "licenses-syft-"));
   const spawnOpts = { timeoutMs, verbose };
 
@@ -506,22 +606,19 @@ export async function collectDockerOsSbom(
   for (const image of images) {
     const outFile = join(tempDir, `syft-${index}.json`);
     index += 1;
-    // Opt-in pull BEFORE the scan so the image is in the daemon for both the
-    // syft scan and the resolveDigest `docker inspect` — an absent image on the
-    // no-pull default still fails loudly in resolveDigest.
-    if (pull) {
-      await execTool(dockerBin, dockerPullArgs(image), spawnOpts);
-    }
-    const sbom = await scanImage(image, outFile, syftBin, spawnOpts);
-    sbomPaths.push(outFile);
-
-    for (const component of filterOsComponents(sbom)) {
+    const result = await collectOneImage(image, outFile, {
+      syftBin,
+      dockerBin,
+      pull,
+      built,
+      spawnOpts,
+    });
+    sbomPaths.push(result.sbomPath);
+    for (const component of result.components) {
       // First-wins across images: a package shared between images is one row.
       if (!byPurl.has(component.purl)) byPurl.set(component.purl, component);
     }
-
-    const digest = await resolveDigest(image, dockerBin, spawnOpts);
-    dockerImages.push({ image, digest });
+    dockerImages.push(result.digest);
   }
 
   const components = [...byPurl.values()].sort((a, b) =>

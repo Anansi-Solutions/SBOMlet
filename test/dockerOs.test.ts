@@ -37,6 +37,7 @@ import {
 
 import postgresFixture from "./fixtures/syft-postgres-trimmed.json";
 import nginxFixture from "./fixtures/syft-nginx-trimmed.json";
+import builtFixture from "./fixtures/syft-built-image-trimmed.json";
 
 describe("syftArgs (argv lock)", () => {
   test("returns exactly the verified syft 1.45.1 cyclonedx-json invocation", () => {
@@ -252,6 +253,82 @@ describe("filterOsComponents (OS-purl filter)", () => {
     };
     const os = filterOsComponents(dup);
     expect(os.map((c) => c.purl)).toEqual(["pkg:deb/a@1", "pkg:deb/b@2"]);
+  });
+});
+
+describe("filterOsComponents fullContents (widened purl gate, DOCK-01)", () => {
+  test("fullContents keeps apk AND npm AND pypi components, purl-sorted, licenses preserved", () => {
+    const full = filterOsComponents(builtFixture, { fullContents: true });
+    const purls = full.map((c) => c.purl);
+    const sorted = [...purls].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
+    expect(purls).toEqual(sorted);
+
+    const byName = new Map(full.map((c) => [c.name, c]));
+    expect(byName.get("musl")?.purl).toBe(
+      "pkg:apk/alpine/musl@1.2.5-r9?arch=x86_64&distro=alpine-3.23.4",
+    );
+    expect(byName.get("busybox")?.purl).toBe(
+      "pkg:apk/alpine/busybox@1.37.0-r19?arch=x86_64&distro=alpine-3.23.4",
+    );
+    // Scoped npm component, purl-encoded, licenses preserved through narrowLicense.
+    const scoped = byName.get("@scope/pkg");
+    expect(scoped?.purl).toBe("pkg:npm/%40scope/pkg@1.0.0");
+    expect(scoped?.licenses).toEqual([{ license: { id: "MIT" } }]);
+    // Unscoped npm component.
+    const leftPad = byName.get("left-pad");
+    expect(leftPad?.purl).toBe("pkg:npm/left-pad@1.3.0");
+    expect(leftPad?.licenses).toEqual([{ license: { id: "MIT" } }]);
+    // pypi component (hyphenated PEP-503 form).
+    const pypi = byName.get("typing-extensions");
+    expect(pypi?.purl).toBe("pkg:pypi/typing-extensions@4.12.2");
+    expect(pypi?.licenses).toEqual([{ license: { name: "PSF-2.0" } }]);
+  });
+
+  test("fullContents still drops purl-less noise and empty-name/version/purl entries", () => {
+    const full = filterOsComponents(builtFixture, { fullContents: true });
+    const names = full.map((c) => c.name);
+    // syft's purl-less file/operating-system noise never survives.
+    expect(names).not.toContain("/etc/os-release");
+    expect(names).not.toContain("alpine");
+    // A component with an empty version is dropped even though it carries a purl.
+    expect(names).not.toContain("empty-version-pkg");
+    // Every retained component carries non-empty name+version+purl.
+    expect(
+      full.every(
+        (c) =>
+          typeof c.name === "string" &&
+          c.name.length > 0 &&
+          typeof c.version === "string" &&
+          c.version.length > 0 &&
+          typeof c.purl === "string" &&
+          c.purl.length > 0,
+      ),
+    ).toBe(true);
+  });
+
+  test("regression: the default call (no options) stays deb/apk-only on the SAME fixture", () => {
+    const defaultFiltered = filterOsComponents(builtFixture);
+    expect(defaultFiltered.length).toBeGreaterThan(0);
+    expect(defaultFiltered.every((c) => c.purl.startsWith("pkg:apk/"))).toBe(
+      true,
+    );
+    // No npm/pypi entries leak into the default (unwidened) gate.
+    expect(defaultFiltered.some((c) => c.purl.startsWith("pkg:npm/"))).toBe(
+      false,
+    );
+    expect(defaultFiltered.some((c) => c.purl.startsWith("pkg:pypi/"))).toBe(
+      false,
+    );
+  });
+
+  test("double-emit of the widened fullContents doc is byte-identical, with no volatile fields", () => {
+    const full = filterOsComponents(builtFixture, { fullContents: true });
+    const digests = [{ image: "local/scan-image:built", digest: "" }];
+    const first = emitDockerOsDoc(full, digests);
+    const second = emitDockerOsDoc(full, digests);
+    expect(first).toBe(second);
+    expect(first).not.toContain("serialNumber");
+    expect(first).not.toContain("timestamp");
   });
 });
 
