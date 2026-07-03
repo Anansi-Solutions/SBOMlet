@@ -669,6 +669,172 @@ describe("mergeSboms — CollectedSbom.scope threading (COLL-04)", () => {
   });
 });
 
+// DOCK-03: full-image scan collision semantics. These are PROOF tests — the
+// dedup behavior is already implemented by mergeInto's #4 app-wins scope
+// reconciliation (merge.ts:458-465) and its prod-wins occurrence fold
+// (merge.ts:424-441), plus mergeSboms' purl-verbatim byPurl key. Nothing here
+// changes src/merge/merge.ts; a red test in this describe is a real finding.
+describe("mergeSboms — full-image scope collision (app wins, image occurrence annotated)", () => {
+  // A %40-scoped npm purl — the verified purl-encoding-compatible case between
+  // the app generators (cdxgen/yarn plugin) and syft's image scan.
+  const SHARED_NPM = "pkg:npm/%40scope/shared@1.0.0";
+
+  const appDoc = {
+    bomFormat: "CycloneDX",
+    specVersion: "1.6",
+    components: [
+      {
+        type: "library",
+        name: "shared",
+        group: "@scope",
+        version: "1.0.0",
+        purl: SHARED_NPM,
+      },
+    ],
+  };
+
+  const imageDoc = {
+    bomFormat: "CycloneDX",
+    specVersion: "1.6",
+    components: [
+      {
+        type: "library",
+        name: "shared",
+        group: "@scope",
+        version: "1.0.0",
+        purl: SHARED_NPM,
+      },
+    ],
+  };
+
+  test("an npm purl shared between an app input and the image input folds to one app-scope row with the docker occurrence in Used-in — os-first order", () => {
+    const model = mergeSboms([
+      { sbom: imageDoc, targetIdentity: "docker:os-packages", scope: "os" },
+      { sbom: appDoc, targetIdentity: "backend" },
+    ]);
+    const shared = model.packages.filter((p) => p.purl === SHARED_NPM);
+
+    // ONE row, never two — the D-10 "annotated, never duplicated" posture.
+    expect(shared.length).toBe(1);
+    expect(shared[0]?.scope).toBe("app");
+    expect(shared[0]?.occurrences).toEqual([
+      { target: "backend", isDevDependency: false },
+      { target: "docker:os-packages", isDevDependency: false },
+    ]);
+  });
+
+  test("an npm purl shared between an app input and the image input folds to one app-scope row with the docker occurrence in Used-in — app-first order (#4 makes order irrelevant)", () => {
+    const model = mergeSboms([
+      { sbom: appDoc, targetIdentity: "backend" },
+      { sbom: imageDoc, targetIdentity: "docker:os-packages", scope: "os" },
+    ]);
+    const shared = model.packages.filter((p) => p.purl === SHARED_NPM);
+
+    expect(shared.length).toBe(1);
+    expect(shared[0]?.scope).toBe("app");
+    expect(shared[0]?.occurrences).toEqual([
+      { target: "backend", isDevDependency: false },
+      { target: "docker:os-packages", isDevDependency: false },
+    ]);
+  });
+
+  // Pitfall 5, Option 1 (annotate): a package the app lockfile marks dev-only
+  // still ships in the built image. The image occurrence is never dev (syft
+  // carries no dev/prod concept), so mergeInto's prod-wins occurrence fold
+  // NEVER collapses the two into one dev-only occurrence — each target keeps
+  // its own flag. The package-level classification (render/markdown.ts
+  // isDevelopmentOnly: production iff ANY occurrence is non-dev) therefore
+  // reads production. This is the conscious, locked consequence: a package
+  // shipped in a distributed image carries production distribution
+  // obligations even when the app lockfile marks it dev.
+  test("a dev-only app package that also ships in the image classifies as production (annotate decision)", () => {
+    const devAppDoc = {
+      bomFormat: "CycloneDX",
+      specVersion: "1.6",
+      components: [
+        {
+          type: "library",
+          name: "shared",
+          group: "@scope",
+          version: "1.0.0",
+          purl: SHARED_NPM,
+          properties: [{ name: "cdx:npm:package:development", value: "true" }],
+        },
+      ],
+    };
+    const model = mergeSboms([
+      { sbom: devAppDoc, targetIdentity: "backend" },
+      { sbom: imageDoc, targetIdentity: "docker:os-packages", scope: "os" },
+    ]);
+    const shared = model.packages.find((p) => p.purl === SHARED_NPM);
+
+    // Occurrence-level flags per target — the shape that drives the
+    // package-level classification (isDevelopmentOnly requires EVERY
+    // occurrence dev; here one is not, so the package is production).
+    expect(shared?.occurrences).toEqual([
+      { target: "backend", isDevDependency: true },
+      { target: "docker:os-packages", isDevDependency: false },
+    ]);
+    expect(shared?.occurrences.every((o) => o.isDevDependency)).toBe(false);
+  });
+
+  test("an image-only package keeps scope os", () => {
+    const osOnlyDoc = {
+      bomFormat: "CycloneDX",
+      specVersion: "1.6",
+      components: [
+        {
+          type: "library",
+          name: "libc6",
+          version: "2.36-9",
+          purl: "pkg:deb/debian/libc6@2.36-9",
+        },
+      ],
+    };
+    const model = mergeSboms([
+      { sbom: osOnlyDoc, targetIdentity: "docker:os-packages", scope: "os" },
+    ]);
+    const os = model.packages.find(
+      (p) => p.purl === "pkg:deb/debian/libc6@2.36-9",
+    );
+
+    expect(os?.scope).toBe("os");
+  });
+
+  // Documented limitation of the generated-image model: a component whose
+  // name/purl matches the scanning repo's own package, arriving ONLY via the
+  // image input, has no rootPurl to exclude it against (the docker OS-SBOM
+  // input carries no metadata.component — rootPurlOf reads undefined for it),
+  // so the self-reference is retained as a normal os-scope row rather than
+  // filtered as first-party. A built image containing the app itself lists it
+  // under the image scope.
+  test("a component named like the scanning repo arriving only via the image input is retained as an os row (documented limitation)", () => {
+    const selfInImageDoc = {
+      bomFormat: "CycloneDX",
+      specVersion: "1.6",
+      components: [
+        {
+          type: "library",
+          name: "sbomlet",
+          version: "1.0.0",
+          purl: "pkg:npm/sbomlet@1.0.0",
+        },
+      ],
+    };
+    const model = mergeSboms([
+      {
+        sbom: selfInImageDoc,
+        targetIdentity: "docker:os-packages",
+        scope: "os",
+      },
+    ]);
+    const self = model.packages.find((p) => p.purl === "pkg:npm/sbomlet@1.0.0");
+
+    expect(self).toBeDefined();
+    expect(self?.scope).toBe("os");
+  });
+});
+
 describe("mergeSboms — plugin dual-run prod diff", () => {
   // The plugin emits NO properties and NO scope on any component (verified
   // live); dev/prod is derived exclusively from the dual-run set diff:
