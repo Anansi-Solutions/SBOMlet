@@ -107,9 +107,16 @@ jobs:
           head_oid="$(git rev-parse HEAD)"
           additions='[]'
           while IFS= read -r f; do
-            additions="$(jq --arg p "$f" --arg c "$(base64 -w0 "$f")" '. += [{path:$p, contents:$c}]' <<<"$additions")"
+            base64 -w0 "$f" > /tmp/gsd-commit-content.b64
+            entry="$(jq -n --arg p "$f" --rawfile c /tmp/gsd-commit-content.b64 '{path:$p, contents:$c}')"
+            additions="$(jq --argjson e "$entry" '. += [$e]' <<<"$additions")"
+            rm -f /tmp/gsd-commit-content.b64
           done < <(git status --porcelain | cut -c4-)
-          gh api graphql -f query='mutation($input: CreateCommitOnBranchInput!) { createCommitOnBranch(input: $input) { commit { oid } } }' -F input="$(jq -n --arg repo "$GITHUB_REPOSITORY" --arg branch "$BRANCH" --arg oid "$head_oid" --argjson adds "$additions" '{branch:{repositoryNameWithOwner:$repo, branchName:$branch}, expectedHeadOid:$oid, message:{headline:"chore: refresh docker scan artifacts"}, fileChanges:{additions:$adds}}')"
+          jq -n --arg repo "$GITHUB_REPOSITORY" --arg branch "$BRANCH" --arg oid "$head_oid" --argjson adds "$additions" \
+            '{branch:{repositoryNameWithOwner:$repo, branchName:$branch}, expectedHeadOid:$oid, message:{headline:"chore: refresh docker scan artifacts"}, fileChanges:{additions:$adds}}' \
+            > /tmp/gsd-commit-input.json
+          gh api graphql -f query='mutation($input: CreateCommitOnBranchInput!) { createCommitOnBranch(input: $input) { commit { oid } } }' -F input=@/tmp/gsd-commit-input.json
+          rm -f /tmp/gsd-commit-input.json
 
       - name: Scan artifacts must be committed
         if: github.event_name == 'pull_request'
