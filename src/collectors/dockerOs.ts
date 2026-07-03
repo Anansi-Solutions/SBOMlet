@@ -533,6 +533,17 @@ export function parseRepoDigests(stdout: string, invocation: string): string[] {
  * into one purl-deduped sorted list, build the sorted dockerImages sidecar, and
  * return the deterministic doc plus the per-image SBOM temp paths. Async for
  * interface symmetry with the other collectors.
+ *
+ * Images are scanned in compareCodeUnits-SORTED order (never the caller's
+ * argv order): the cross-image purl dedup below is first-wins, so when two
+ * images share a purl with DIFFERENT license claims, whichever image is
+ * scanned first decides the committed license — an unsorted walk makes that
+ * choice a function of argv order, breaking the byte-determinism contract
+ * (D-14) for `--built-image b a` vs `--built-image a b` over the identical
+ * image SET. Sorting here matches the existing resolveDiscoveredImages /
+ * resolveTargetedDockerfiles convention (both already compareCodeUnits-sort
+ * before scanning); this closes the one caller path (--built-image, --image)
+ * that did not (adversarial review, 09-07, Lens 2).
  */
 /**
  * Scan + filter + identify ONE image, applying the pulled-image or
@@ -602,8 +613,9 @@ export async function collectDockerOsSbom(
   const dockerImages: DockerImageDigest[] = [];
   const sbomPaths: string[] = [];
 
+  const sortedImages = [...images].sort(compareCodeUnits);
   let index = 0;
-  for (const image of images) {
+  for (const image of sortedImages) {
     const outFile = join(tempDir, `syft-${index}.json`);
     index += 1;
     const result = await collectOneImage(image, outFile, {

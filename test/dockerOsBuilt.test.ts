@@ -10,7 +10,7 @@
  * afterAll so no other suite observes the stub.
  */
 
-import { copyFileSync, mkdtempSync, rmSync } from "node:fs";
+import { copyFileSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -52,6 +52,46 @@ function fakeExecTool(
     );
   }
   return Promise.resolve({ stdout: "[]", stderr: "" });
+}
+
+/**
+ * A per-image execTool stub: writes a distinct one-component doc keyed by the
+ * scanned image ref (the last argv operand, after the `--` separator), so a
+ * shared purl across two images can carry DIFFERENT license claims per image —
+ * the adversarial-review Lens 2 probe (09-07). Only the syft invocation (argv
+ * carrying "cyclonedx-json=<file>") writes; built collection never calls
+ * docker inspect/pull, so every recorded invocation here is a syft scan.
+ */
+function makePerImageExecTool(
+  licenseByImage: Readonly<Record<string, string>>,
+): (
+  cmd: string,
+  args: string[],
+) => Promise<{ stdout: string; stderr: string }> {
+  return (cmd: string, args: string[]) => {
+    invocations.push([cmd, ...args]);
+    const cyclonedxArg = args.find((a) => a.startsWith("cyclonedx-json="));
+    if (cyclonedxArg !== undefined) {
+      const outFile = cyclonedxArg.slice("cyclonedx-json=".length);
+      const image = args[args.length - 1] as string;
+      const license = licenseByImage[image];
+      const doc = {
+        bomFormat: "CycloneDX",
+        specVersion: "1.6",
+        components: [
+          {
+            type: "library",
+            name: "shared",
+            version: "1.0.0",
+            purl: "pkg:npm/shared@1.0.0",
+            licenses: [{ license: { id: license } }],
+          },
+        ],
+      };
+      writeFileSync(outFile, JSON.stringify(doc));
+    }
+    return Promise.resolve({ stdout: "[]", stderr: "" });
+  };
 }
 
 describe("collectDockerOsSbom built-image collection posture (DOCK-01)", () => {
@@ -117,5 +157,62 @@ describe("collectDockerOsSbom built-image collection posture (DOCK-01)", () => {
       }),
     ).rejects.toThrow("built images are local-only and cannot be pulled");
     expect(invocations).toEqual([]);
+  });
+
+  // Adversarial review (09-07), Lens 2: two built images sharing a purl with
+  // DIFFERENT licenses — is the result order-dependent on the images argument?
+  // filterOsComponents dedupes first-wins WITHIN one syft doc, but the
+  // cross-image fold in collectDockerOsSbom walks `images` in the CALLER'S
+  // order (unlike resolveDiscoveredImages/resolveTargetedDockerfiles, which
+  // both compareCodeUnits-sort before scanning) — so the license claim
+  // attached to a shared purl must be a pure function of the image SET, never
+  // of argv order, for the committed artifact to stay byte-deterministic
+  // (D-14) regardless of how a caller lists --built-image refs.
+  test("a purl shared between two built images resolves the SAME license regardless of images argument order", async () => {
+    const licenseByImage = {
+      "local/scan-mit": "MIT",
+      "local/scan-gpl": "GPL-3.0-only",
+    };
+    mock.module("../src/collectors/exec", () => ({
+      ...REAL_EXEC,
+      execTool: makePerImageExecTool(licenseByImage),
+    }));
+
+    const tempDirAB = mkdtempSync(join(tmpdir(), "licenses-docker-built-"));
+    const { doc: docAB } = await collectDockerOsSbom(
+      ["local/scan-mit", "local/scan-gpl"],
+      { built: true, tempDir: tempDirAB },
+    );
+    rmSync(tempDirAB, { recursive: true, force: true });
+
+    const tempDirBA = mkdtempSync(join(tmpdir(), "licenses-docker-built-"));
+    const { doc: docBA } = await collectDockerOsSbom(
+      ["local/scan-gpl", "local/scan-mit"],
+      { built: true, tempDir: tempDirBA },
+    );
+    rmSync(tempDirBA, { recursive: true, force: true });
+
+    const licenseOf = (doc: string): unknown => {
+      const parsed = JSON.parse(doc) as {
+        components: {
+          purl: string;
+          licenses?: { license?: { id?: string } }[];
+        }[];
+      };
+      const shared = parsed.components.find(
+        (c) => c.purl === "pkg:npm/shared@1.0.0",
+      );
+      return shared?.licenses?.[0]?.license?.id;
+    };
+
+    expect(licenseOf(docAB)).toBe(licenseOf(docBA));
+
+    // Restore the shared fixture-based stub for every subsequent test in this
+    // file (beforeAll only runs once; each test after this one relies on the
+    // fixture-copying fakeExecTool, not this test's per-image stub).
+    mock.module("../src/collectors/exec", () => ({
+      ...REAL_EXEC,
+      execTool: fakeExecTool,
+    }));
   });
 });
