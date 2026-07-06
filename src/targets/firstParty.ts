@@ -102,6 +102,11 @@ export function yarnWorkspaceMembers(
   const members: { name: string; relPath: string; hasDependencies: boolean }[] =
     [];
   let candidate: { name: string; relPath: string } | undefined;
+  // Per-BLOCK flag, independent of whether the resolution: line has been
+  // seen yet: key order within an entry is not this parser's assumption
+  // (a YAML normalizer sorting keys alphabetically emits dependencies:
+  // before resolution:), so the flag is recorded whenever the line appears
+  // inside the current block and paired with the candidate at flush time.
   let hasDependencies = false;
 
   const flush = (): void => {
@@ -128,7 +133,7 @@ export function yarnWorkspaceMembers(
       };
       continue;
     }
-    if (candidate !== undefined && DEPENDENCIES_BLOCK_RE.test(line)) {
+    if (DEPENDENCIES_BLOCK_RE.test(line)) {
       hasDependencies = true;
     }
   }

@@ -614,6 +614,29 @@ describe("yarnWorkspaceMembers — @workspace: resolution body lines", () => {
     ]);
   });
 
+  test("unusual key order — dependencies: BEFORE resolution: (alphabetically sorted keys) — still records hasDependencies (the flag belongs to the BLOCK, not to lines after the resolution)", () => {
+    // Yarn itself emits resolution: before dependencies:, but the parser
+    // claims order within an entry is not its assumption (the test above
+    // locks the mirror case). A YAML normalizer sorting keys puts
+    // dependencies before resolution — losing the flag there would warn
+    // and skip a workspace that DOES declare dependencies, a false
+    // "declares no dependencies" under-coverage.
+    const lockfile = [
+      '"backend@workspace:backend":',
+      "  dependencies:",
+      '    ms: "npm:2.1.3"',
+      "  languageName: unknown",
+      "  linkType: soft",
+      '  resolution: "backend@workspace:backend"',
+      "  version: 0.0.0-use.local",
+      "",
+    ].join("\n");
+
+    expect(yarnWorkspaceMembers(lockfile)).toEqual([
+      { name: "backend", relPath: "backend", hasDependencies: true },
+    ]);
+  });
+
   test("CRLF lockfile text parses identically (trimEnd tolerance)", () => {
     const lockfile = [
       '"backend@workspace:backend":',
