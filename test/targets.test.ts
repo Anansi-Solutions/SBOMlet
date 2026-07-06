@@ -406,6 +406,85 @@ describe("collectTargets — yarn workspace expansion edge behavior", () => {
     ]);
   });
 
+  test("two workspace lock entries declaring the SAME relPath (a malformed/hand-edited lock) never silently misattribute the zero-dep skip decision", async () => {
+    // pkg-a@workspace:backend HAS a dependencies: block; pkg-b@workspace:backend
+    // (a second, different member NAME resolving to the identical path) has
+    // NONE. Both parse as distinct entries from yarnWorkspaceMembers, but
+    // expansion collapses them to units sharing the same identity/dir —
+    // the property under test is that the run completes deterministically
+    // (no crash, no NaN/undefined identity) and never SILENTLY drops the
+    // workspace's real production dependency because a later, dep-less
+    // duplicate entry's flag won the lookup.
+    const root = mkdtempSync(join(tmpdir(), "licenses-yarnws-duprelpath-"));
+    writeFileSync(
+      join(root, "package.json"),
+      JSON.stringify({ name: "demo-root", workspaces: ["backend"] }) + "\n",
+    );
+    const backendDir = join(root, "backend");
+    mkdirSync(backendDir);
+    writeFileSync(
+      join(backendDir, "package.json"),
+      JSON.stringify({ name: "backend", dependencies: { ms: "2.1.3" } }) + "\n",
+    );
+    writeFileSync(
+      join(root, "yarn.lock"),
+      [
+        "__metadata:",
+        "  version: 8",
+        "  cacheKey: 10c0",
+        "",
+        '"demo-root@workspace:.":',
+        "  version: 0.0.0-use.local",
+        '  resolution: "demo-root@workspace:."',
+        "  dependencies:",
+        '    left-pad: "npm:1.3.0"',
+        "  languageName: unknown",
+        "  linkType: soft",
+        "",
+        '"pkg-a@workspace:backend":',
+        "  version: 0.0.0-use.local",
+        '  resolution: "pkg-a@workspace:backend"',
+        "  dependencies:",
+        '    ms: "npm:2.1.3"',
+        "  languageName: unknown",
+        "  linkType: soft",
+        "",
+        '"pkg-b@workspace:backend":',
+        "  version: 0.0.0-use.local",
+        '  resolution: "pkg-b@workspace:backend"',
+        "  languageName: unknown",
+        "  linkType: soft",
+        "",
+        '"ms@npm:2.1.3":',
+        "  version: 2.1.3",
+        '  resolution: "ms@npm:2.1.3"',
+        "  languageName: node",
+        "  linkType: hard",
+        "",
+        '"left-pad@npm:1.3.0":',
+        "  version: 1.3.0",
+        '  resolution: "left-pad@npm:1.3.0"',
+        "  languageName: node",
+        "  linkType: hard",
+        "",
+      ].join("\n"),
+    );
+
+    const log: string[] = [];
+    const result = await collectTargets(baseOpts(root), (line) => {
+      log.push(line);
+    });
+
+    // The run completes without throwing. Both duplicate-relPath units
+    // resolve to the SAME identity/dir, so the collected inputs list may
+    // legitimately contain a repeated identity (a redundant re-scan of the
+    // same directory) — the safety property is that a real production
+    // dependency (ms) is never lost from the merged model as a result.
+    const model = mergeSboms(result.inputs);
+    const ms = model.packages.find((pkg) => pkg.purl === "pkg:npm/ms@2.1.3");
+    expect(ms?.occurrences.some((o) => !o.isDevDependency)).toBe(true);
+  });
+
   test("zero-dep workspace (including the dep-less root): skip is loud, the run completes, other workspaces still scan", async () => {
     const root = mkdtempSync(join(tmpdir(), "licenses-yarnws-zerodep-"));
     writeFileSync(

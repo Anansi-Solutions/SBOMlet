@@ -103,6 +103,21 @@ export interface CollectResult {
 type WorkspaceScanUnit = DiscoveredTarget;
 
 /**
+ * A scan unit paired with the hasDependencies flag OF THE EXACT LOCK ENTRY
+ * that produced it, captured at construction time. Never re-derive this by
+ * looking the unit's workspacePath back up in a relPath-keyed Map: two lock
+ * entries can legally declare the SAME relPath under different member names
+ * (a malformed/hand-edited lock, or two historical package renames left
+ * stale) — a lookup Map collapses to one (last-wins) entry and would then
+ * apply the WRONG entry's flag to an EARLIER unit sharing that path,
+ * silently skipping a workspace that actually declares dependencies.
+ */
+interface ExpandedUnit {
+  unit: WorkspaceScanUnit;
+  hasDependencies: boolean;
+}
+
+/**
  * Enumerate a yarn-plugin-routed target's workspace members into scan units,
  * or return undefined when expansion does not apply — never invents a unit
  * the lock does not declare (comment at the call site names the exact
@@ -115,7 +130,7 @@ type WorkspaceScanUnit = DiscoveredTarget;
 function expandYarnWorkspaceUnits(
   target: DiscoveredTarget,
   lockfileText: string,
-): WorkspaceScanUnit[] | undefined {
+): ExpandedUnit[] | undefined {
   if (
     target.lockfile !== "yarn" ||
     selectJsGenerator(lockfileText) !== "yarn-plugin"
@@ -134,10 +149,10 @@ function expandYarnWorkspaceUnits(
   }
 
   const targetRoot = resolve(target.dir);
-  const units: WorkspaceScanUnit[] = [];
+  const units: ExpandedUnit[] = [];
   for (const member of members) {
     if (member.relPath === ".") {
-      units.push(target);
+      units.push({ unit: target, hasDependencies: member.hasDependencies });
       continue;
     }
     const memberDir = resolve(target.dir, member.relPath);
@@ -173,17 +188,22 @@ function expandYarnWorkspaceUnits(
       }
     }
     units.push({
-      ...target,
-      dir: memberDir,
-      identity:
-        target.identity === "."
-          ? member.relPath
-          : `${target.identity}/${member.relPath}`,
-      lockfileDir: target.dir,
-      workspacePath: member.relPath,
+      unit: {
+        ...target,
+        dir: memberDir,
+        identity:
+          target.identity === "."
+            ? member.relPath
+            : `${target.identity}/${member.relPath}`,
+        lockfileDir: target.dir,
+        workspacePath: member.relPath,
+      },
+      hasDependencies: member.hasDependencies,
     });
   }
-  return units.sort((a, b) => compareCodeUnits(a.identity, b.identity));
+  return units.sort((a, b) =>
+    compareCodeUnits(a.unit.identity, b.unit.identity),
+  );
 }
 
 /**
@@ -269,26 +289,22 @@ function assertManifestsExist(
 
 /**
  * Scan every expanded workspace unit in sorted order: per-unit zero-dep
- * skip (covers the dep-less root unit too), the
+ * skip (keyed on each unit's OWN captured hasDependencies flag from
+ * expansion time, covering the dep-less root unit too), the
  * re-routed manifest pre-check (only the unit's own package.json; the root
  * yarn.lock was already proven to exist by the caller's read), then the
  * shared dispatch+coverage path with the ROOT lock text.
  */
 async function scanWorkspaceUnits(
-  units: readonly WorkspaceScanUnit[],
-  members: ReturnType<typeof yarnWorkspaceMembers>,
+  expandedUnits: readonly ExpandedUnit[],
   rootLockfileText: string,
   lockfileName: string,
   opts: GenerateOptions,
   log: (line: string) => void,
 ): Promise<CollectedSbom[]> {
-  const membersByPath = new Map(
-    members.map((member) => [member.relPath, member]),
-  );
   const results: CollectedSbom[] = [];
-  for (const unit of units) {
-    const member = membersByPath.get(unit.workspacePath ?? ".");
-    if (member !== undefined && !member.hasDependencies) {
+  for (const { unit, hasDependencies } of expandedUnits) {
+    if (!hasDependencies) {
       // Loud, never silent — covers the dep-less root unit as well as any
       // dep-less workspace.
       log(
@@ -316,11 +332,13 @@ async function scanWorkspaceUnits(
  */
 function absorbUnitInputs(
   unitInputs: readonly CollectedSbom[],
-  units: readonly WorkspaceScanUnit[],
+  expandedUnits: readonly ExpandedUnit[],
   inputs: CollectedSbom[],
   dirs: Set<string>,
 ): void {
-  const dirByIdentity = new Map(units.map((unit) => [unit.identity, unit.dir]));
+  const dirByIdentity = new Map(
+    expandedUnits.map(({ unit }) => [unit.identity, unit.dir]),
+  );
   for (const input of unitInputs) {
     inputs.push(input);
     const unitDir = dirByIdentity.get(input.targetIdentity);
@@ -363,17 +381,16 @@ export async function collectTargets(
     // and the first-party member set.
     const lockfileText = readFileSync(lockfilePath, "utf8");
 
-    const units = expandYarnWorkspaceUnits(target, lockfileText);
-    if (units !== undefined) {
+    const expandedUnits = expandYarnWorkspaceUnits(target, lockfileText);
+    if (expandedUnits !== undefined) {
       const unitInputs = await scanWorkspaceUnits(
-        units,
-        yarnWorkspaceMembers(lockfileText),
+        expandedUnits,
         lockfileText,
         lockfileName,
         opts,
         log,
       );
-      absorbUnitInputs(unitInputs, units, inputs, dirs);
+      absorbUnitInputs(unitInputs, expandedUnits, inputs, dirs);
       continue;
     }
 
