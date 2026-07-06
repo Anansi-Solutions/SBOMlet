@@ -694,6 +694,60 @@ describe("committed purl-keyed cache", () => {
       rmSync(dir, { recursive: true, force: true });
     }
   });
+
+  test("a scancode entry (with copyrights) round-trips field-for-field; double-serialize is byte-identical (D-04)", () => {
+    const dir = tempDir();
+    try {
+      const path = join(dir, "enrichment-cache.json");
+      const scancodeEntry: CacheEntry = {
+        license: "Apache-2.0",
+        source: "scancode",
+        fetchedFrom: "scancode",
+        via: "scancode-toolkit@32.5.0/license-file",
+        resolvable: true,
+        copyrights: ["Copyright (c) 2020 Example Author"],
+      };
+      const cache = new Map<string, CacheEntry>();
+      putEntry(cache, "pkg:pypi/local-only@1.0.0", scancodeEntry);
+      const bytes = serializeCache(cache);
+      expect(serializeCache(cache)).toBe(bytes); // double-serialize byte-identical
+
+      writeFileSync(path, bytes);
+      const loaded = readCache(path);
+      expect(getEntry(loaded, "pkg:pypi/local-only@1.0.0")).toEqual(
+        scancodeEntry,
+      );
+      // CACHE_VERSION untouched.
+      expect(bytes).toContain('  "version": 1');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("a cache serialized WITHOUT copyrights contains no 'copyrights' key (optional-field zero-churn)", () => {
+    const cache = new Map<string, CacheEntry>();
+    putEntry(cache, "pkg:npm/node-clone@0.1.1", negative);
+    putEntry(cache, "pkg:pypi/anyio@4.12.1", positive);
+    const bytes = serializeCache(cache);
+    expect(bytes).not.toContain("copyrights");
+  });
+
+  test("an existing registry-shaped envelope (no copyrights) reads and re-serializes byte-identically (regression)", () => {
+    const dir = tempDir();
+    try {
+      const path = join(dir, "enrichment-cache.json");
+      const cache = new Map<string, CacheEntry>();
+      putEntry(cache, "pkg:npm/node-clone@0.1.1", negative);
+      putEntry(cache, "pkg:pypi/anyio@4.12.1", positive);
+      const bytes = serializeCache(cache);
+      writeFileSync(path, bytes);
+
+      const loaded = readCache(path);
+      expect(serializeCache(loaded)).toBe(bytes);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
 });
 
 describe("enrichUnknowns orchestrator (cache-first, generate-fetch, check-stale)", () => {
@@ -863,6 +917,150 @@ describe("enrichUnknowns orchestrator (cache-first, generate-fetch, check-stale)
         expect(result.staleUnknowns).toEqual([]);
         expect(registryClaim(result.model.packages[0])).toBeUndefined();
       }
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("a scancode cache HIT appends a claim with source 'scancode' (replay contract, either mode)", async () => {
+    const { dir, path } = tempCachePath();
+    try {
+      const cache = new Map<string, CacheEntry>();
+      putEntry(cache, "pkg:npm/no-claims@2.0.0", {
+        license: "Apache-2.0",
+        source: "scancode",
+        fetchedFrom: "scancode",
+        via: "scancode-toolkit@32.5.0/license-file",
+        resolvable: true,
+      });
+      writeFileSync(path, serializeCache(cache));
+
+      for (const mode of ["generate", "check"] as const) {
+        const { fetch, calls } = fetchReturning(() => ({}));
+        const result = await withFetch(fetch, () =>
+          enrichUnknowns(model(unknownNpm()), {
+            mode,
+            cachePath: path,
+            verbose: false,
+          }),
+        );
+        expect(calls).toEqual([]);
+        expect(result.staleUnknowns).toEqual([]);
+        const claim = result.model.packages[0]?.licenseClaims.find(
+          (c) => c.source === "scancode",
+        );
+        expect(claim).toEqual({
+          raw: "Apache-2.0",
+          kind: "expression",
+          source: "scancode",
+        });
+      }
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("a scancode hit with copyrights attaches attribution to a package with NO attribution", async () => {
+    const { dir, path } = tempCachePath();
+    try {
+      const cache = new Map<string, CacheEntry>();
+      putEntry(cache, "pkg:npm/no-claims@2.0.0", {
+        license: "Apache-2.0",
+        source: "scancode",
+        fetchedFrom: "scancode",
+        via: "scancode-toolkit@32.5.0/license-file",
+        resolvable: true,
+        copyrights: [
+          "Copyright (c) 2020 Zeta Corp",
+          "Copyright (c) 2019 Alpha Author",
+        ],
+      });
+      writeFileSync(path, serializeCache(cache));
+
+      const { fetch } = fetchReturning(() => ({}));
+      const result = await withFetch(fetch, () =>
+        enrichUnknowns(model(unknownNpm()), {
+          mode: "generate",
+          cachePath: path,
+          verbose: false,
+        }),
+      );
+      const pkg = result.model.packages[0];
+      expect(pkg?.attribution).toEqual({
+        copyrightLines: [
+          "Copyright (c) 2019 Alpha Author",
+          "Copyright (c) 2020 Zeta Corp",
+        ],
+        noticeTexts: [],
+        hasVerbatimText: false,
+      });
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("a scancode hit never overwrites EXISTING attribution (absent-not-empty invariant)", async () => {
+    const { dir, path } = tempCachePath();
+    try {
+      const cache = new Map<string, CacheEntry>();
+      putEntry(cache, "pkg:npm/no-claims@2.0.0", {
+        license: "Apache-2.0",
+        source: "scancode",
+        fetchedFrom: "scancode",
+        via: "scancode-toolkit@32.5.0/license-file",
+        resolvable: true,
+        copyrights: ["Copyright (c) 2020 Zeta Corp"],
+      });
+      writeFileSync(path, serializeCache(cache));
+
+      const withExistingAttribution = {
+        ...unknownNpm(),
+        attribution: {
+          copyrightLines: ["Copyright (c) 1999 Original Holder"],
+          noticeTexts: [],
+          hasVerbatimText: false,
+        },
+      };
+      const { fetch } = fetchReturning(() => ({}));
+      const result = await withFetch(fetch, () =>
+        enrichUnknowns(model(withExistingAttribution), {
+          mode: "generate",
+          cachePath: path,
+          verbose: false,
+        }),
+      );
+      expect(result.model.packages[0]?.attribution).toEqual({
+        copyrightLines: ["Copyright (c) 1999 Original Holder"],
+        noticeTexts: [],
+        hasVerbatimText: false,
+      });
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("a scancode hit WITHOUT copyrights attaches no attribution (absent-not-empty)", async () => {
+    const { dir, path } = tempCachePath();
+    try {
+      const cache = new Map<string, CacheEntry>();
+      putEntry(cache, "pkg:npm/no-claims@2.0.0", {
+        license: "Apache-2.0",
+        source: "scancode",
+        fetchedFrom: "scancode",
+        via: "scancode-toolkit@32.5.0/license-file",
+        resolvable: true,
+      });
+      writeFileSync(path, serializeCache(cache));
+
+      const { fetch } = fetchReturning(() => ({}));
+      const result = await withFetch(fetch, () =>
+        enrichUnknowns(model(unknownNpm()), {
+          mode: "generate",
+          cachePath: path,
+          verbose: false,
+        }),
+      );
+      expect(result.model.packages[0]?.attribution).toBeUndefined();
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

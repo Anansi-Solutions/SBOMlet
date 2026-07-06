@@ -150,7 +150,7 @@ const MAX_COPYRIGHT_LINES = 20;
  * (normalized to LF) and control characters (flattened to spaces) — the model,
  * the dump goldens, and the rendered notices all carry LF-only text.
  */
-function sanitizeEvidenceText(value: string): string {
+export function sanitizeEvidenceText(value: string): string {
   return value.replace(/\r\n|\r/g, "\n").replace(
     // eslint-disable-next-line no-control-regex -- deliberate control-character class: sanitizer
     /[\u0000-\u0008\u000b-\u001f\u007f-\u009f]/g,

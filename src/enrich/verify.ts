@@ -1,14 +1,20 @@
 /**
- * Cache-integrity audit: re-resolve every committed enrichment-cache entry
- * against its registry and compare the stored raw license.
+ * Cache-integrity audit: re-resolve every re-resolvable committed
+ * enrichment-cache entry against its registry and compare the stored raw
+ * license.
  *
  * The committed cache is what `check` trusts OFFLINE, so a hand-edited entry —
  * a flipped license, a fabricated package, or a `resolvable:false` hiding a real
  * copyleft license — would pass the gate silently. `verify-cache` is the ONLINE
- * counterpart: for every entry it re-derives the registry's current answer with
- * the SAME resolvers `generate` uses (enrich.ts) and flags any divergence. A
- * divergence is either tampering or a genuine upstream license change; both
- * warrant a human look before a release or audit.
+ * counterpart: for every registry-sourced entry it re-derives the registry's
+ * current answer with the SAME resolvers `generate` uses (enrich.ts) and flags
+ * any divergence. A divergence is either tampering or a genuine upstream
+ * license change; both warrant a human look before a release or audit.
+ *
+ * A "scancode"-provenance entry (Phase 10) is SKIPPED, not re-resolved: it
+ * exists precisely because the registry had no (or an imprecise) answer, so
+ * re-querying the registry would either repeat the original silence or produce
+ * a false MISMATCH against a source this audit was never meant to check.
  *
  * The comparison is a single equality on the raw license string: a cached value
  * (string for a positive entry, null for a negative one) versus the freshly
@@ -130,6 +136,12 @@ async function auditEntry(
   fetchDoc: FetchDoc,
   fetchOpts: { backoffBaseMs?: number },
 ): Promise<CacheMismatch | null> {
+  // A scancode entry is not registry-auditable: it exists precisely because
+  // the registry had no (or an imprecise) answer when generate ran, so
+  // re-resolving it here would either repeat that silence or report a false
+  // MISMATCH the moment this audit runs (Pitfall 3). Skip before any fetch.
+  if (entry.source === "scancode") return null;
+
   const parsed = parsePurl(purl);
   if (parsed === undefined || !VERIFIABLE_TYPES.has(parsed.type)) {
     return {

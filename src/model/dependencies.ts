@@ -11,14 +11,19 @@
  * collectors; "registry" is appended by the enrichment stage when a registry
  * (PyPI/npm) JSON response supplies a license for an otherwise-unknown package,
  * so a registry-sourced finding is auditable in the dump and rendered output.
- * "corrected" / "curated" / "override" are reserved.
+ * "scancode" is appended by the enrichment stage when the intensive ScanCode
+ * collector supplies a license the registry could not (or only imprecisely) —
+ * see Phase 10; it replays from the committed cache exactly like "registry"
+ * does, so it is auditable the same way. "corrected" / "curated" / "override"
+ * are reserved.
  */
 export type LicenseClaimSource =
   | "generator"
   | "corrected"
   | "curated"
   | "override"
-  | "registry";
+  | "registry"
+  | "scancode";
 
 export type LicenseClaimKind = "spdx-id" | "name" | "expression";
 

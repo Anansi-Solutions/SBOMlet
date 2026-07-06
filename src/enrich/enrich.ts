@@ -21,6 +21,14 @@
  * holds for free via annotateFindings downstream. The input model is never
  * mutated: new entries are produced via object spread, like annotateFindings.
  */
+import { sanitizeEvidenceText } from "../merge/merge";
+import {
+  compareCodeUnits,
+  type CanonicalDependencies,
+  type LicenseClaim,
+  type LicenseClaimSource,
+  type PackageEntry,
+} from "../model/dependencies";
 import { normalizeRaw } from "../normalize/normalize";
 import { writeArtifact } from "../pipeline/paths";
 import {
@@ -38,11 +46,9 @@ import {
 } from "./github";
 import { resolveNpmLicense } from "./npm";
 import { resolvePypiLicense } from "./pypi";
-import type {
-  CanonicalDependencies,
-  LicenseClaim,
-  PackageEntry,
-} from "../model/dependencies";
+
+/** Cap on copyright lines attached from a scancode replay (matches the extractor/merge cap). */
+const MAX_REPLAY_COPYRIGHT_LINES = 20;
 
 /** Bounded concurrency over the generate-miss fetch set. */
 const FETCH_CONCURRENCY = 8;
@@ -152,14 +158,48 @@ export function resolveFromDocument(
     : { raw: resolution.raw, via: resolution.via, fetchedFrom: "npm" };
 }
 
-/** Append a registry claim to a package via spread (input never mutated). */
-function withRegistryClaim(entry: PackageEntry, raw: string): PackageEntry {
-  const claim: LicenseClaim = {
-    raw,
-    kind: "expression",
-    source: "registry",
-  };
+/**
+ * Append a cache-sourced claim to a package via spread (input never mutated).
+ * `source` flows from the caller — a registry resolution appends "registry",
+ * a cache hit appends whatever provenance the entry carries (D-04: replay is
+ * exact in every mode, never hardcoded).
+ */
+function withCacheClaim(
+  entry: PackageEntry,
+  raw: string,
+  source: LicenseClaimSource,
+): PackageEntry {
+  const claim: LicenseClaim = { raw, kind: "expression", source };
   return { ...entry, licenseClaims: [...entry.licenseClaims, claim] };
+}
+
+/**
+ * Attach ScanCode-derived copyright lines as attribution on replay, ONLY when
+ * the package has NO existing attribution (absent-not-empty invariant,
+ * dependencies.ts:274-279 — an evidence-derived attribution is never
+ * overwritten). Lines are sanitized via the same control-char intake rule
+ * evidence text uses (merge.ts's sanitizeEvidenceText), deduped, sorted by
+ * {@link compareCodeUnits}, and capped — idempotent by construction, so a
+ * second replay of the same cache entry produces byte-identical output.
+ */
+function withReplayAttribution(
+  entry: PackageEntry,
+  hit: CacheEntry,
+): PackageEntry {
+  if (entry.attribution !== undefined) return entry;
+  if (hit.copyrights === undefined || hit.copyrights.length === 0) return entry;
+
+  const sanitized = new Set<string>();
+  for (const line of hit.copyrights) {
+    if (sanitized.size >= MAX_REPLAY_COPYRIGHT_LINES) break;
+    sanitized.add(sanitizeEvidenceText(line));
+  }
+  const copyrightLines = [...sanitized].sort(compareCodeUnits);
+
+  return {
+    ...entry,
+    attribution: { copyrightLines, noticeTexts: [], hasVerbatimText: false },
+  };
 }
 
 /** One unknown package to enrich, with its parsed purl. */
@@ -212,7 +252,12 @@ export async function enrichUnknowns(
     const hit = getEntry(cache, unknown.entry.purl);
     if (hit !== undefined) {
       if (hit.resolvable && hit.license !== null) {
-        packages[unknown.index] = withRegistryClaim(unknown.entry, hit.license);
+        const withClaim = withCacheClaim(
+          unknown.entry,
+          hit.license,
+          hit.source,
+        );
+        packages[unknown.index] = withReplayAttribution(withClaim, hit);
       }
       // A negative hit (resolvable:false) leaves the package unknown, no fetch.
       continue;
@@ -345,7 +390,11 @@ async function fetchTerraformMisses(
       const resolved = resolveGithubLicense(result.body);
       if (resolved === null) continue; // NOASSERTION/null at this ref → next
       const viaRef = ref ?? "default";
-      packages[miss.index] = withRegistryClaim(miss.entry, resolved.raw);
+      packages[miss.index] = withCacheClaim(
+        miss.entry,
+        resolved.raw,
+        "registry",
+      );
       putEntry(cache, miss.entry.purl, {
         license: resolved.raw,
         source: "registry",
@@ -392,7 +441,7 @@ function applyResolution(
 ): void {
   const resolved = resolveFromDocument(miss.parsed, document);
   if (resolved !== null) {
-    packages[miss.index] = withRegistryClaim(miss.entry, resolved.raw);
+    packages[miss.index] = withCacheClaim(miss.entry, resolved.raw, "registry");
     putEntry(cache, miss.entry.purl, {
       license: resolved.raw,
       source: "registry",
