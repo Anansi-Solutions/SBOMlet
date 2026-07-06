@@ -554,6 +554,66 @@ describe("yarnWorkspaceMembers — @workspace: resolution body lines", () => {
     );
   });
 
+  test("dependenciesMeta: preceding dependencies: in the same entry does not confuse hasDependencies", () => {
+    // dependenciesMeta always ACCOMPANIES a real dependencies: block in real
+    // Yarn output, but the ORDER within the entry is not the parser's
+    // assumption to break: dependenciesMeta appearing BEFORE dependencies:
+    // must not suppress the true detection, and must not itself be mistaken
+    // for a dependencies: line (DEPENDENCIES_BLOCK_RE is anchored to the
+    // exact "dependencies:" line, never a prefix match).
+    const lockfile = [
+      '"backend@workspace:backend":',
+      "  version: 0.0.0-use.local",
+      '  resolution: "backend@workspace:backend"',
+      "  dependenciesMeta:",
+      "    ms:",
+      "      optional: false",
+      "  dependencies:",
+      '    ms: "npm:2.1.3"',
+      "  languageName: unknown",
+      "  linkType: soft",
+      "",
+    ].join("\n");
+
+    expect(yarnWorkspaceMembers(lockfile)).toEqual([
+      { name: "backend", relPath: "backend", hasDependencies: true },
+    ]);
+  });
+
+  test("a peer-dependencies-only entry (no dependencies: block) reports hasDependencies false, never a silent scan", () => {
+    const lockfile = [
+      '"peerlib@workspace:libs/peerlib":',
+      "  version: 0.0.0-use.local",
+      '  resolution: "peerlib@workspace:libs/peerlib"',
+      "  peerDependencies:",
+      '    react: "npm:^18.0.0"',
+      "  languageName: unknown",
+      "  linkType: soft",
+      "",
+    ].join("\n");
+
+    expect(yarnWorkspaceMembers(lockfile)).toEqual([
+      { name: "peerlib", relPath: "libs/peerlib", hasDependencies: false },
+    ]);
+  });
+
+  test("unusual key order — languageName/linkType BEFORE resolution: — still yields the member (order within an entry is not assumed)", () => {
+    const lockfile = [
+      '"backend@workspace:backend":',
+      "  languageName: unknown",
+      "  linkType: soft",
+      "  version: 0.0.0-use.local",
+      '  resolution: "backend@workspace:backend"',
+      "  dependencies:",
+      '    ms: "npm:2.1.3"',
+      "",
+    ].join("\n");
+
+    expect(yarnWorkspaceMembers(lockfile)).toEqual([
+      { name: "backend", relPath: "backend", hasDependencies: true },
+    ]);
+  });
+
   test("CRLF lockfile text parses identically (trimEnd tolerance)", () => {
     const lockfile = [
       '"backend@workspace:backend":',

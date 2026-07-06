@@ -1047,6 +1047,44 @@ describe("mergeSboms — per-workspace inputs (yarn workspace units)", () => {
     ]);
   });
 
+  test("the root unit's own EMPTY prod set never suppresses a shared purl's production occurrence contributed by a sibling workspace unit", () => {
+    // A dev-only root (its --production run legitimately yields an empty
+    // set) also carries the SAME purl in its full run (a plausible shared
+    // transitive) AND, independently, that purl is a genuine production
+    // dependency of "backend". The root's empty prodPurlSet must never
+    // leak into backend's occurrence: mergeSboms reads each
+    // occurrence's isDevDependency from ONLY its own input's
+    // prodPurlSet — there is no shared/global state a wrong (or merely
+    // empty) unit could poison.
+    const sharedPurl = "pkg:npm/shared-lib@1.0.0";
+    const rootDoc = {
+      components: [{ name: "shared-lib", version: "1.0.0", purl: sharedPurl }],
+    };
+    const backendDoc = {
+      components: [{ name: "shared-lib", version: "1.0.0", purl: sharedPurl }],
+    };
+    const model = mergeSboms([
+      {
+        sbom: rootDoc,
+        targetIdentity: ".",
+        prodPurlSet: new Set(), // the dev-only root's empty --production run
+      },
+      {
+        sbom: backendDoc,
+        targetIdentity: "backend",
+        prodPurlSet: new Set([sharedPurl]),
+      },
+    ]);
+    const shared = model.packages.find((p) => p.purl === sharedPurl);
+
+    // Two occurrences: root correctly dev, backend correctly production —
+    // root's empty set decided ONLY root's own occurrence.
+    expect(shared?.occurrences).toEqual([
+      { target: ".", isDevDependency: true },
+      { target: "backend", isDevDependency: false },
+    ]);
+  });
+
   test("a cross-workspace dependency (member depending on a sibling workspace) is filtered by the existing two-signal first-party rule fed with root-lock firstPartyNames", () => {
     // "backend" is a first-party workspace member (root-lock firstPartyNames)
     // and, when it appears INSIDE frontend's own SBOM as a workspace-linked

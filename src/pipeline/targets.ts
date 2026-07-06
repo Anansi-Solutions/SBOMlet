@@ -4,7 +4,7 @@
  * caller-provided log sink (collectors never write stderr themselves).
  */
 
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, realpathSync } from "node:fs";
 import { join, relative, resolve, sep } from "node:path";
 
 import { assertBunLockSize } from "../collectors/bunLock";
@@ -151,6 +151,26 @@ function expandYarnWorkspaceUnits(
       throw new Error(
         `target "${target.identity}/${member.relPath}" escapes the workspace root — refusing to scan ${memberDir}`,
       );
+    }
+    // Real-filesystem containment (symlink escape): a lock-declared
+    // relPath can be lexically fine yet point, via a symlink, at a
+    // directory outside the repo. Only checked when the member directory
+    // already exists — a missing directory is not this check's job
+    // (assertManifestsExist fails loud on that separately, after
+    // expansion).
+    if (existsSync(memberDir)) {
+      const realMemberDir = realpathSync(memberDir);
+      const realTargetRoot = realpathSync(targetRoot);
+      const realRelFromRoot = relative(realTargetRoot, realMemberDir);
+      if (
+        realRelFromRoot === ".." ||
+        realRelFromRoot.startsWith(".." + sep) ||
+        resolve(realRelFromRoot) === realRelFromRoot
+      ) {
+        throw new Error(
+          `target "${target.identity}/${member.relPath}" escapes the workspace root via a symlink — refusing to scan ${memberDir} (resolves to ${realMemberDir})`,
+        );
+      }
     }
     units.push({
       ...target,

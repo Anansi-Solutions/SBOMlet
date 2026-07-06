@@ -17,6 +17,7 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  symlinkSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -472,6 +473,92 @@ describe("collectTargets — yarn workspace expansion edge behavior", () => {
       ...REAL_YARN_PLUGIN,
       collectWithYarnPlugin: fakeCollectWithYarnPlugin,
     }));
+  });
+
+  test("containment: a workspace member directory that is a SYMLINK escaping the repo root must never spawn with cwd resolving outside the repo", async () => {
+    // The lexical resolve()/relative() containment check never touches
+    // the filesystem, so a lock-declared relPath that resolves INSIDE
+    // target.dir LEXICALLY, but is ON DISK a symlink pointing OUTSIDE the
+    // repo, is not caught by path-string comparison alone. Discovery's own
+    // walk never follows symlinks (Dirent.isDirectory() is false for a
+    // symlink entry) — this test proves whether the unit-expansion path
+    // holds the same REAL-filesystem guarantee, comparing realpathSync
+    // (what the OS actually resolves at spawn time), not just the lexical
+    // string.
+    const root = mkdtempSync(join(tmpdir(), "licenses-yarnws-symlink-"));
+    const outside = mkdtempSync(join(tmpdir(), "licenses-yarnws-outside-"));
+    writeFileSync(
+      join(outside, "package.json"),
+      JSON.stringify({ name: "escaped", dependencies: { ms: "2.1.3" } }) + "\n",
+    );
+    writeFileSync(
+      join(root, "package.json"),
+      JSON.stringify({ name: "demo-root", workspaces: ["escape-link"] }) + "\n",
+    );
+    const linkPath = join(root, "escape-link");
+    try {
+      symlinkSync(outside, linkPath, "junction");
+    } catch {
+      // Symlink privileges unavailable in this environment (e.g.
+      // non-admin Windows without Developer Mode) — skip rather than
+      // false-fail; the property is proven wherever symlinks ARE
+      // available (CI, most dev machines with Developer Mode on).
+      return;
+    }
+    writeFileSync(
+      join(root, "yarn.lock"),
+      [
+        "__metadata:",
+        "  version: 8",
+        "  cacheKey: 10c0",
+        "",
+        '"demo-root@workspace:.":',
+        "  version: 0.0.0-use.local",
+        '  resolution: "demo-root@workspace:."',
+        "  languageName: unknown",
+        "  linkType: soft",
+        "",
+        '"escaped@workspace:escape-link":',
+        "  version: 0.0.0-use.local",
+        '  resolution: "escaped@workspace:escape-link"',
+        "  dependencies:",
+        '    ms: "npm:2.1.3"',
+        "  languageName: unknown",
+        "  linkType: soft",
+        "",
+        '"ms@npm:2.1.3":',
+        "  version: 2.1.3",
+        '  resolution: "ms@npm:2.1.3"',
+        "  languageName: node",
+        "  linkType: hard",
+        "",
+      ].join("\n"),
+    );
+
+    let spawnCount = 0;
+    mock.module("../src/collectors/yarnPlugin", () => ({
+      ...REAL_YARN_PLUGIN,
+      collectWithYarnPlugin: async (
+        target: Target,
+      ): Promise<yarnPluginModule.YarnPluginScanResult> => {
+        spawnCount += 1;
+        return fakeCollectWithYarnPlugin(target);
+      },
+    }));
+
+    try {
+      // GREEN: the real-filesystem containment check throws before ANY
+      // spawn, exactly like the lexical traversal/absolute checks above.
+      await expect(collectTargets(baseOpts(root), () => {})).rejects.toThrow(
+        /symlink/,
+      );
+      expect(spawnCount).toBe(0);
+    } finally {
+      mock.module("../src/collectors/yarnPlugin", () => ({
+        ...REAL_YARN_PLUGIN,
+        collectWithYarnPlugin: fakeCollectWithYarnPlugin,
+      }));
+    }
   });
 
   test("containment: an absolute @workspace: path throws before any spawn, naming the identity and offending path", async () => {
