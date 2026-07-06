@@ -123,6 +123,23 @@ describe("resolveTargetedDockerfiles (targeted mode, NO docker)", () => {
     expect(images).toEqual(["alpine:3.20", "postgres:18"]);
   });
 
+  test("WR-07: the scan set summary line routes refs through sanitizeForLog", () => {
+    // Same invariant as the discovery-mode summary: refs joined into the
+    // `scan set (N): ...` line must be sanitized, not just the
+    // `(explicit --image: ...)` line.
+    const root = makeTempRoot();
+    const a = writeFile(root, "app/Dockerfile", "FROM alpine:3.20\n");
+    const crafted = `evil${String.fromCharCode(7)}:1.0`; // embedded BEL (U+0007)
+    const { summary } = resolveTargetedDockerfiles(
+      [{ identity: "app/Dockerfile", path: a }],
+      { extraImages: [crafted] },
+    );
+    const scanSetLine = summary.split("\n").find((l) => l.includes("scan set"));
+    expect(scanSetLine).toBeDefined();
+    expect(scanSetLine).not.toContain(String.fromCharCode(7));
+    expect(scanSetLine).toContain("evil :1.0");
+  });
+
   test("a missing/unreadable targeted path throws naming the path (caller typo, fail fast)", () => {
     const root = makeTempRoot();
     const missing = join(root, "nope", "Dockerfile");

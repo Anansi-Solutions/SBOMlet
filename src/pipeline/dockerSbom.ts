@@ -188,7 +188,10 @@ export function resolveDiscoveredImages(
   }
   summaryParts.push(
     images.length > 0
-      ? `scan set (${images.length}): ${images.join(", ")}`
+      ? // Same sanitization as the explicit --image line above: a ref with an
+        // embedded control char passes isSafeImageRef, so the joined scan-set
+        // line must be routed through sanitizeForLog too.
+        `scan set (${images.length}): ${images.map(sanitizeForLog).join(", ")}`
       : "scan set is EMPTY (no resolvable external base images)",
   );
 
@@ -328,7 +331,9 @@ export function resolveTargetedDockerfiles(
   }
   summaryParts.push(
     images.length > 0
-      ? `scan set (${images.length}): ${images.join(", ")}`
+      ? // Same sanitization as the explicit --image line above (parity with
+        // the discovery-mode summary).
+        `scan set (${images.length}): ${images.map(sanitizeForLog).join(", ")}`
       : "scan set is EMPTY (no resolvable external base images)",
   );
 

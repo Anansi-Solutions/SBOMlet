@@ -115,6 +115,23 @@ describe("resolveDiscoveredImages (discovery mode, NO docker)", () => {
     });
     expect(images).toEqual(["alpine:3.20", "postgres:18"]);
   });
+
+  test("WR-07: the scan set summary line routes refs through sanitizeForLog", () => {
+    // Parity with the finding-#3 fix above: the `scan set (N): ...` line
+    // joins the SAME refs, so a control char that passes isSafeImageRef
+    // (non-empty, non-dash-prefixed) must not reach stderr verbatim there
+    // either.
+    const root = makeTempRoot();
+    writeFile(root, "app/Dockerfile", "FROM alpine:3.20\n");
+    const crafted = `evil${String.fromCharCode(7)}:1.0`; // embedded BEL (U+0007)
+    const { summary } = resolveDiscoveredImages(root, {
+      extraImages: [crafted],
+    });
+    const scanSetLine = summary.split("\n").find((l) => l.includes("scan set"));
+    expect(scanSetLine).toBeDefined();
+    expect(scanSetLine).not.toContain(String.fromCharCode(7));
+    expect(scanSetLine).toContain("evil :1.0");
+  });
 });
 
 describe("safeLiveScanImages (PURE live-scan --image hardening, finding #5)", () => {
