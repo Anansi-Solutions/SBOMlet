@@ -71,7 +71,7 @@ lists the stages; the sections after it walk each row.
 | Stage | Input | Output | Module |
 | --- | --- | --- | --- |
 | Discover | repo root | sorted `DiscoveredTarget[]` | `targets/discover.ts` |
-| Collect | one target | raw CycloneDX (`CollectedSbom`) | `collectors/` via `registry.ts` |
+| Collect | one target (one-or-many scan units for an expanded Yarn workspace) | raw CycloneDX (`CollectedSbom`) | `collectors/` via `registry.ts` |
 | Merge | `CollectedSbom[]` | `CanonicalDependencies` | `merge/merge.ts` |
 | Enrich | model + committed cache | model with registry claims appended | `enrich/enrich.ts` |
 | Normalize | claims per package | a `LicenseFinding` per package | `normalize/normalize.ts` |
@@ -114,6 +114,14 @@ The registry holds the per-ecosystem choices:
 | bun | An in-process `bun.lock` parser — no upstream generator preserves `bun.lock` identity. |
 | poetry | cdxgen for the inventory, with dev/prod scope derived from the `poetry.lock` group arrays because cdxgen emits no poetry group markers. |
 | terraform | An in-process collector reading `.terraform/modules/modules.json`. |
+
+Before dispatch, a Yarn target whose lockfile declares workspace members expands
+into one scan unit per member ([ADR-0020](adr/0020-yarn-workspace-scan-units.md)):
+the loop reads the lockfile's own `resolution: "<name>@workspace:<path>"`
+entries and runs the dual-run adapter once per unit, its working directory set
+to that workspace's own directory, so each unit's `--production` run sees only
+that workspace's own dependencies. A lockfile declaring only the root workspace
+takes the single-scan path in the table above, unchanged.
 
 Each collector returns a `CollectedSbom`: the raw parsed CycloneDX document
 (treated as an untrusted shape), a forward-slash target identity, and optional

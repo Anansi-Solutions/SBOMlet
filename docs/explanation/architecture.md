@@ -170,6 +170,15 @@ precedence `bun > pnpm > yarn > npm`, with a warning. A leftover binary
 `bun.lockb` with no surviving `bun.lock` warns you to migrate. Discovery itself
 writes no stderr; the warnings come back as data, and the pipeline prints them.
 
+A Yarn-4 target whose lockfile declares workspace members expands into one scan
+unit per workspace inside the collect loop, after discovery: the workspace paths
+come from the lockfile's own `resolution: "<name>@workspace:<path>"` entries, not
+from a second directory walk. Each unit gets its own identity
+(`<target>/<workspace-path>`) and its own dual-run scan, so a monorepo with one
+root lockfile still gets a complete, per-workspace inventory. A lockfile
+declaring only the root workspace (`@workspace:.`) is unaffected: the loop finds
+no non-root member to expand and scans the target exactly as it always has.
+
 Source: `src/targets/discover.ts`, `src/pipeline/targets.ts`.
 
 ### The collector registry
@@ -202,6 +211,13 @@ to cdxgen. The plugin runs twice, full and `--production`, and the production
 [purl](../glossary.md#purl) set decides
 [development-only versus production](../glossary.md#development-only-and-production)
 scope downstream.
+
+A Yarn-4 lockfile that declares workspace members runs the dual run once per
+workspace, its working directory set to that workspace's own directory
+([ADR-0020](adr/0020-yarn-workspace-scan-units.md)) — the plugin only ever reads
+the dependencies of the directory it runs in, so a single root-anchored run
+cannot see inside a workspace. A single-workspace lockfile (`@workspace:.` only)
+runs exactly once, at the target root, as before.
 
 cdxgen handles JS and Python, pinned to a single version and driven through an
 argv array that a test locks byte-for-byte. Its raw SBOM lands in a per-run temp
