@@ -205,14 +205,19 @@ function sitePackagesDir(venvDir: string): string {
  * its `top_level.txt` (sorted, first entry that exists as a sibling dir)
  * names the actual package dir to scan. Absent venv, absent dist-info,
  * absent/empty top_level.txt, or no existing named sibling -> undefined
- * (honest skip, never a fabricated guess).
+ * (honest skip, never a fabricated guess). top_level.txt content is fully
+ * controlled by the installed package, so a `..`-shaped or
+ * absolute-path-shaped line can never name a directory outside
+ * site-packages (resolve + strict prefix-check, the npmSourceDir guard).
  */
 function pypiSourceDir(
   purl: EcosystemPurl,
   targetDir: string,
 ): string | undefined {
   const venvDir = join(targetDir, ".venv");
-  const sitePackages = sitePackagesDir(venvDir);
+  // Resolved once up front so both sides of the containment check below
+  // compare canonical absolute paths.
+  const sitePackages = resolve(sitePackagesDir(venvDir));
   if (!existsSync(sitePackages)) return undefined;
 
   const name = decodeURIComponent(purl.encodedName);
@@ -241,8 +246,16 @@ function pypiSourceDir(
     .filter((line) => line.length > 0)
     .sort(compareCodeUnits);
 
+  // Strict prefix-check under the RESOLVED site-packages root: an
+  // attacker-controlled top_level.txt line can never produce a non-null
+  // result outside it (or site-packages itself). The separator-suffixed
+  // prefix guards against a sibling false-positive ("site-packages-evil").
+  const rootWithSep = sitePackages.endsWith(sep)
+    ? sitePackages
+    : `${sitePackages}${sep}`;
   for (const candidate of candidates) {
-    const packageDir = join(sitePackages, candidate);
+    const packageDir = resolve(sitePackages, candidate);
+    if (!packageDir.startsWith(rootWithSep)) continue; // escape attempt: skip
     if (existsSync(packageDir)) return packageDir;
   }
   return undefined;

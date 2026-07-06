@@ -574,6 +574,37 @@ describe("sourceDirFor — pypi mapping", () => {
     ]);
     expect(result).toBeUndefined();
   });
+
+  test("a hostile top_level.txt line containing '..' never escapes site-packages (mirrors the npm traversal guard)", () => {
+    targetDir = mkdtempSync(join(tmpdir(), "scancode-pypi-traversal-"));
+    const sitePackages = venvSitePackagesDir(targetDir);
+    mkdirSync(sitePackages, { recursive: true });
+    const distInfoDir = join(sitePackages, "evil-1.0.0.dist-info");
+    mkdirSync(distInfoDir, { recursive: true });
+    // top_level.txt is fully controlled by the installed package: a "../"
+    // line joined naively resolves OUTSIDE site-packages.
+    writeFileSync(join(distInfoDir, "top_level.txt"), "../escape\n");
+    // Create the dir a naive join() would reach, so ONLY the escape guard —
+    // not a failing existsSync — can produce the undefined below.
+    mkdirSync(join(sitePackages, "..", "escape"), { recursive: true });
+
+    const result = sourceDirFor("pkg:pypi/evil@1.0.0", [targetDir]);
+    expect(result).toBeUndefined();
+  });
+
+  test("an absolute-path-shaped top_level.txt line never resolves outside site-packages", () => {
+    targetDir = mkdtempSync(join(tmpdir(), "scancode-pypi-absline-"));
+    const sitePackages = venvSitePackagesDir(targetDir);
+    mkdirSync(sitePackages, { recursive: true });
+    const distInfoDir = join(sitePackages, "evil-1.0.0.dist-info");
+    mkdirSync(distInfoDir, { recursive: true });
+    // An absolute path resolves to itself under resolve(); targetDir exists,
+    // so only the containment guard can reject it.
+    writeFileSync(join(distInfoDir, "top_level.txt"), `${targetDir}\n`);
+
+    const result = sourceDirFor("pkg:pypi/evil@1.0.0", [targetDir]);
+    expect(result).toBeUndefined();
+  });
 });
 
 describe("sourceDirFor — unsupported ecosystems and malformed purls", () => {
