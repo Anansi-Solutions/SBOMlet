@@ -66,7 +66,20 @@ jobs:
           BRANCH: ${{ github.ref_name }}
         shell: bash
         run: |
-          if [ -z "$(git status --porcelain)" ]; then
+          # The scan may only ever touch the committed artifacts below --
+          # the enrichment cache dir and the two rendered documents. Anything
+          # else dirty in the tree is an earlier step's bug, and committing
+          # it under this message would hide it: fail loudly instead of
+          # sweeping arbitrary workspace drift into the commit.
+          artifact_status() {
+            git status --porcelain -- .sbomlet.cache THIRD_PARTY_LICENSES.md THIRD_PARTY_NOTICES.md
+          }
+          if [ "$(git status --porcelain)" != "$(artifact_status)" ]; then
+            echo "::error::workspace drift outside the intensive-scan artifacts; refusing to commit:"
+            git status --porcelain
+            exit 1
+          fi
+          if [ -z "$(artifact_status)" ]; then
             echo "artifacts unchanged"
             exit 0
           fi
@@ -92,18 +105,20 @@ jobs:
                 exit 1
                 ;;
             esac
-          done < <(git status --porcelain)
+          done < <(artifact_status)
           # Every changed/untracked artifact's base64 content is written to its
           # OWN small file (never passed as a jq/gh CLI argument -- a full-image
           # SBOM's base64 payload is large enough to exceed the OS argv limit).
           rm -rf /tmp/gsd-commit-additions && mkdir -p /tmp/gsd-commit-additions
           i=0
           while IFS= read -r f; do
-            base64 -w0 "$f" > /tmp/gsd-commit-additions/content-$i.b64
+            # -- ends option parsing: a dash-prefixed path must never be
+            # read as a base64 option (or as stdin).
+            base64 -w0 -- "$f" > /tmp/gsd-commit-additions/content-$i.b64
             jq -n --arg p "$f" --rawfile c /tmp/gsd-commit-additions/content-$i.b64 \
               '{path:$p, contents:$c}' > /tmp/gsd-commit-additions/entry-$i.json
             i=$((i + 1))
-          done < <(git status --porcelain | cut -c4-)
+          done < <(artifact_status | cut -c4-)
           jq -s '.' /tmp/gsd-commit-additions/entry-*.json > /tmp/gsd-commit-additions.json
           # gh api's -F/--field @file reads the file as a raw STRING value; it
           # does not parse it as JSON. The full GraphQL request body (query +
