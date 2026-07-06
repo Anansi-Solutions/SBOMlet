@@ -268,6 +268,56 @@ bad entry — a commit that edits the cache — and stays idle the rest of the t
 Point the filter at wherever your repository keeps the cache if it isn't at the
 root.
 
+## Run an intensive scan for stubborn licenses
+
+Registry enrichment answers most licenses, but not all of them. A package with
+no machine-readable license field anywhere the registry looks stays unknown or
+imprecise, and that gap either blocks the gate or gets a manual policy
+override. `--intensive` closes some of those gaps by scanning the package's
+actual source with [ScanCode](https://github.com/aboutcode-org/scancode-toolkit),
+the same detector suite the wider license-scanning ecosystem is built on,
+instead of asking a person to open the source and read the license by hand.
+
+It only looks at what registry enrichment left unresolved, and only at
+directories `generate` already collected for this run. A package the registry
+already answered is never rescanned, and a clean tree with nothing left
+unresolved makes this flag a no-op.
+
+```sh
+task generate INTENSIVE=1
+```
+
+This is occasional/scheduled CI, not every build. ScanCode needs its own
+install and takes real time to run, so the right place for it is a scheduled
+job, not a step on every push:
+
+- Installing the scanner (`pipx install "scancode-toolkit[full]==32.5.0"`) took
+  about 90 seconds in a one-time measurement — a cost the default `generate`
+  and `check` runs never pay, since the scanner isn't part of the tool's own
+  toolchain.
+- The scanner's own first-run self-check took about 2 seconds.
+- Scanning a single unresolved package's source tree took about 37 seconds
+  wall-clock for a 92-file dependency in this project's own measurements —
+  call it on the order of a couple of files per second, so cost scales with
+  the size of the package, not with the size of your repository.
+
+A repository with several unresolved packages in a single run pays that
+per-package cost several times over, which is the other reason this belongs on
+a schedule: a monthly run absorbs it once, off the critical path of every
+commit.
+
+Wire it up the same way as the [cache-integrity audit](#verify-the-cache-before-a-release) —
+a separate scheduled workflow, not the gate. This repository's own
+`.github/workflows/intensive-scan.yml` runs it monthly and on manual dispatch
+only, then commits any refreshed cache entries back the same way the Docker
+scan below does. Results land in the same committed enrichment cache
+`generate` and `check` already read, so once a scan resolves a package, every
+later run — including the offline gate — reuses the answer without scanning
+again.
+
+`--intensive` is generate-only; passing it to `check` is a config error,
+because the gate never scans anything.
+
 ## The Docker scan is a separate step from the gate
 
 Docker packages, the [os-scope](../glossary.md#scope-app-and-os) half of the
@@ -379,3 +429,5 @@ your `.gitattributes` LF pins so it byte-compares the same way on every checkout
   enrichment, scope, verdict.
 - [design-principles](../explanation/design-principles.md) — why the gate is
   built on determinism, an offline check, and honest residuals.
+- [ADR-0019](../explanation/adr/0019-scancode-intensive-collector.md) — why
+  the intensive scan installs its own way and shares the enrichment cache.

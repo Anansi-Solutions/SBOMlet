@@ -44,10 +44,23 @@ is evaluated and its verdicts print to stderr, but the gate is `check`, never
 | `--dump-model <path>` | Write the internal merged model as JSON, for inspecting what the tool built. | not written |
 | `--base-dir <path>` | Anchor every relative path flag to this directory instead of the working directory. | working directory |
 | `--enrichment-cache <path>` | Where to read and write the enrichment cache. | tool default |
+| `--intensive` | Scan the local sources of packages still unresolved after registry enrichment, with ScanCode. Generate-only; meant for occasional, scheduled CI, not every build. | off |
 | `--verbose` | Print per-stage progress to stderr. | off |
 
 `--target` and `--repo-root` are mutually exclusive; pass at most one. With
 neither, discovery runs from the current directory.
+
+`--intensive` runs after registry enrichment, against whatever [target](../glossary.md#target)
+directories `generate` already collected — it never triggers a second discovery
+walk. It has no effect on a package the registry already resolved; it only
+scans the local source tree of a package still unknown or imprecise once
+enrichment finishes, and if nothing is left unresolved it does nothing. When
+requested but the scanner isn't on `PATH`, the run fails loudly rather than
+skipping the scan silently:
+
+```
+scancode binary not found on PATH — install it with pipx install "scancode-toolkit[full]==32.5.0"
+```
 
 ## check
 
@@ -58,9 +71,10 @@ gap is answered from the committed enrichment cache, and a gap the cache does no
 cover is reported as [stale](../glossary.md#staleness), not fetched.
 
 `check` accepts the same flags as `generate` so that the set of files it verifies
-is exactly the set `generate` writes. The one flag it rejects is `--dump-model`:
+is exactly the set `generate` writes. Two flags it rejects: `--dump-model`, because
 the gate performs no writes, so it will not let you point a dump path at the files
-it is meant to verify. Passing it is a config error (exit 3).
+it is meant to verify; and `--intensive`, because the gate never scans. Passing
+either is a config error (exit 3).
 
 | Flag | Meaning | Default |
 | --- | --- | --- |
@@ -75,6 +89,7 @@ it is meant to verify. Passing it is a config error (exit 3).
 | `--enrichment-cache <path>` | The committed enrichment cache to read. | tool default |
 | `--verbose` | Print per-stage progress to stderr. | off |
 | `--dump-model <path>` | Rejected — valid only on `generate`. | — |
+| `--intensive` | Rejected — the gate never scans; valid only on `generate`. | — |
 
 `--target` and `--repo-root` are mutually exclusive here too.
 

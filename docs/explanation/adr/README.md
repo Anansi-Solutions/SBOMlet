@@ -46,3 +46,4 @@ something we no longer do but haven't replaced.
 | [0016](0016-adoption-and-distribution.md) | Adoption and distribution: git clone + Taskfile, no binary, a composite Action | Accepted |
 | [0017](0017-cache-directory-layout.md) | Committed artifacts in one configurable cache directory | Accepted |
 | [0018](0018-docker-generated-image-scan.md) | Scan the generated images in CI, evolving the base-image consumer model | Accepted |
+| [0019](0019-scancode-intensive-collector.md) | ScanCode intensive collector: occasional CI install, one cache envelope, fail-safe refinement | Accepted |
