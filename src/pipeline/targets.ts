@@ -118,6 +118,25 @@ interface ExpandedUnit {
 }
 
 /**
+ * Lexical containment predicate for a lock-declared workspace member path:
+ * true when the path escapes the workspace root. The fourth disjunct
+ * mirrors the realpath branch's third: on win32 a cross-drive lock path
+ * ("C:/evil" scanned from another drive) or a drive-relative one ("C:evil")
+ * slips past the first three — resolve() normalizes separators so the
+ * string-equality absolute check misses, and relative() across roots
+ * returns an ABSOLUTE path, never a ".."-prefixed one. An absolute
+ * relative() result is by definition outside target.dir, on any platform.
+ */
+function escapesWorkspaceRoot(relPath: string, relFromRoot: string): boolean {
+  return (
+    resolve(relPath) === relPath ||
+    relFromRoot === ".." ||
+    relFromRoot.startsWith(".." + sep) ||
+    resolve(relFromRoot) === relFromRoot
+  );
+}
+
+/**
  * Enumerate a yarn-plugin-routed target's workspace members into scan units,
  * or return undefined when expansion does not apply — never invents a unit
  * the lock does not declare (comment at the call site names the exact
@@ -158,11 +177,7 @@ function expandYarnWorkspaceUnits(
     const memberDir = resolve(target.dir, member.relPath);
     const relFromRoot = relative(targetRoot, memberDir);
     // Containment: neither absolute nor a traversal outside target.dir.
-    if (
-      resolve(member.relPath) === member.relPath ||
-      relFromRoot === ".." ||
-      relFromRoot.startsWith(".." + sep)
-    ) {
+    if (escapesWorkspaceRoot(member.relPath, relFromRoot)) {
       throw new Error(
         `target "${target.identity}/${member.relPath}" escapes the workspace root — refusing to scan ${memberDir}`,
       );

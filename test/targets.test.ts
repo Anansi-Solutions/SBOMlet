@@ -597,6 +597,50 @@ const ABSOLUTE_LOCK_LINES =
         "  linkType: hard",
         "",
       ];
+/**
+ * Lock lines with a parametric hostile @workspace: path — the cross-drive
+ * containment arms below need drive letters chosen at runtime (relative to
+ * whatever drive the temp tree landed on), so this cannot be a constant.
+ * The npm entries keep the lock's third-party count positive: containment
+ * must fire on its own, never shadowed by a zero-third-party skip.
+ */
+function evilPathLockLines(evilPath: string): string[] {
+  return [
+    "__metadata:",
+    "  version: 8",
+    "  cacheKey: 10c0",
+    "",
+    '"demo-root@workspace:.":',
+    "  version: 0.0.0-use.local",
+    '  resolution: "demo-root@workspace:."',
+    "  dependencies:",
+    '    left-pad: "npm:1.3.0"',
+    "  languageName: unknown",
+    "  linkType: soft",
+    "",
+    `"evil@workspace:${evilPath}":`,
+    "  version: 0.0.0-use.local",
+    `  resolution: "evil@workspace:${evilPath}"`,
+    "  dependencies:",
+    '    ms: "npm:2.1.3"',
+    "  languageName: unknown",
+    "  linkType: soft",
+    "",
+    '"left-pad@npm:1.3.0":',
+    "  version: 1.3.0",
+    '  resolution: "left-pad@npm:1.3.0"',
+    "  languageName: node",
+    "  linkType: hard",
+    "",
+    '"ms@npm:2.1.3":',
+    "  version: 2.1.3",
+    '  resolution: "ms@npm:2.1.3"',
+    "  languageName: node",
+    "  linkType: hard",
+    "",
+  ];
+}
+
 describe("collectTargets — yarn workspace expansion edge behavior", () => {
   beforeAll(() => {
     mock.module("../src/collectors/yarnPlugin", () => ({
@@ -1075,6 +1119,99 @@ describe("collectTargets — yarn workspace expansion edge behavior", () => {
       collectWithYarnPlugin: fakeCollectWithYarnPlugin,
     }));
   });
+
+  test.if(process.platform === "win32")(
+    "containment: a CROSS-DRIVE absolute @workspace: path throws the containment error before any spawn — never the missing-manifest fallback",
+    async () => {
+      // win32 path semantics gap: for a lock path on ANOTHER drive,
+      // resolve("Q:/evil") returns "Q:\evil" (separator normalization), so
+      // the string-equality absolute check is false, and relative(root,
+      // "Q:\evil") returns the ABSOLUTE "Q:\evil" — neither ".." nor
+      // "..\\"-prefixed. The lexical gate itself must reject that shape:
+      // the directory does not exist, so the realpath branch never runs,
+      // and falling through to assertManifestsExist would burn the root
+      // unit's spawn first and report a misleading missing-package.json
+      // error. resolve()/relative() are purely lexical — the drive letter
+      // need not exist on the machine.
+      const root = mkdtempSync(join(tmpdir(), "licenses-yarnws-xdrive-"));
+      writeFileSync(
+        join(root, "package.json"),
+        JSON.stringify({ name: "demo-root" }) + "\n",
+      );
+      const otherDrive = root[0]?.toUpperCase() === "Q" ? "Z" : "Q";
+      writeFileSync(
+        join(root, "yarn.lock"),
+        evilPathLockLines(`${otherDrive}:/evil`).join("\n"),
+      );
+
+      let spawnCount = 0;
+      mock.module("../src/collectors/yarnPlugin", () => ({
+        ...REAL_YARN_PLUGIN,
+        collectWithYarnPlugin: async (
+          target: Target,
+        ): Promise<yarnPluginModule.YarnPluginScanResult> => {
+          spawnCount += 1;
+          return fakeCollectWithYarnPlugin(target);
+        },
+      }));
+
+      try {
+        await expect(collectTargets(baseOpts(root), () => {})).rejects.toThrow(
+          /escapes the workspace root — refusing/,
+        );
+        expect(spawnCount).toBe(0);
+      } finally {
+        mock.module("../src/collectors/yarnPlugin", () => ({
+          ...REAL_YARN_PLUGIN,
+          collectWithYarnPlugin: fakeCollectWithYarnPlugin,
+        }));
+      }
+    },
+  );
+
+  test.if(process.platform === "win32")(
+    "containment: a DRIVE-RELATIVE @workspace: path (Q:evil) throws the containment error before any spawn",
+    async () => {
+      // "Q:evil" is drive-relative: isAbsolute() is FALSE for it, and
+      // resolve() sends it to drive Q's current directory ("Q:\evil" when
+      // the drive is not the process's own) — outside the repo root on
+      // another drive entirely. Same lexical-gate obligation as the
+      // cross-drive absolute arm above.
+      const root = mkdtempSync(join(tmpdir(), "licenses-yarnws-drvrel-"));
+      writeFileSync(
+        join(root, "package.json"),
+        JSON.stringify({ name: "demo-root" }) + "\n",
+      );
+      const otherDrive = root[0]?.toUpperCase() === "Q" ? "Z" : "Q";
+      writeFileSync(
+        join(root, "yarn.lock"),
+        evilPathLockLines(`${otherDrive}:evil`).join("\n"),
+      );
+
+      let spawnCount = 0;
+      mock.module("../src/collectors/yarnPlugin", () => ({
+        ...REAL_YARN_PLUGIN,
+        collectWithYarnPlugin: async (
+          target: Target,
+        ): Promise<yarnPluginModule.YarnPluginScanResult> => {
+          spawnCount += 1;
+          return fakeCollectWithYarnPlugin(target);
+        },
+      }));
+
+      try {
+        await expect(collectTargets(baseOpts(root), () => {})).rejects.toThrow(
+          /escapes the workspace root — refusing/,
+        );
+        expect(spawnCount).toBe(0);
+      } finally {
+        mock.module("../src/collectors/yarnPlugin", () => ({
+          ...REAL_YARN_PLUGIN,
+          collectWithYarnPlugin: fakeCollectWithYarnPlugin,
+        }));
+      }
+    },
+  );
 });
 
 /**
