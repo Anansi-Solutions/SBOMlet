@@ -246,7 +246,7 @@
   "dockerImages": [
     {
       "digest": "",
-      "image": "sbomlet-scan/examples-docker-scan-dockerfile"
+      "image": "sbomlet-scan/examples-docker-scan-dockerfile-82bd3b3b"
     }
   ],
   "specVersion": "1.6"
