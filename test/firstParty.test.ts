@@ -672,6 +672,49 @@ describe("yarnWorkspaceMembers — @workspace: resolution body lines", () => {
       { name: "evil-abs", relPath: "/etc/passwd", hasDependencies: false },
     ]);
   });
+
+  test.each([
+    ["scoped name", "@acme/web-app", "packages/web-app"],
+    [
+      "dots, dashes, underscores, digits",
+      "my.pkg-name_2",
+      "libs/my.pkg-name_2",
+    ],
+    ["name differs from its directory path", "api", "services/backend-api"],
+    ["deep multi-segment path", "web", "packages/apps/web"],
+    ["unicode name/path", "café-app", "packages/café-app"],
+    [
+      "node_modules-adjacent name",
+      "node-modules-helper",
+      "packages/node-modules-helper",
+    ],
+    ["prefix-colliding pair, shorter member", "app", "app"],
+    ["prefix-colliding pair, longer member", "app-server", "app-server"],
+    ["a directory literally named dot", "dot-named", "dot"],
+    [
+      "uppercase name differing in case from a lowercase path",
+      "Frontend",
+      "Frontend",
+    ],
+  ])(
+    "%s: %s@workspace:%s parses identically to a plain canonical member",
+    (_label, name, relPath) => {
+      const lockfile = [
+        `"${name}@workspace:${relPath}":`,
+        "  version: 0.0.0-use.local",
+        `  resolution: "${name}@workspace:${relPath}"`,
+        "  dependencies:",
+        '    ms: "npm:2.1.3"',
+        "  languageName: unknown",
+        "  linkType: soft",
+        "",
+      ].join("\n");
+
+      expect(yarnWorkspaceMembers(lockfile)).toEqual([
+        { name, relPath, hasDependencies: true },
+      ]);
+    },
+  );
 });
 
 describe("yarnWorkspaceMembers — a workspaces-monorepo fixture (workspace-berry.lock)", () => {

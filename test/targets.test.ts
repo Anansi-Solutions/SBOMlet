@@ -135,6 +135,180 @@ describe("collectTargets — yarn workspace expansion (mechanism test)", () => {
     mock.module("../src/collectors/yarnPlugin", () => REAL_YARN_PLUGIN);
   });
 
+  test("workspace member NAMES never affect behavior — a scoped package name at a deep path, and a member name that differs entirely from its own directory, expand and attribute identically to a plain single-segment name", async () => {
+    // The workspace package NAME ("@acme/web-app", "api") is never used for
+    // path resolution, containment, identity, or cache-keying -- only
+    // relPath is. This proves that end-to-end: identity is derived purely
+    // from the LOCK-DECLARED PATH, and a production dependency in either
+    // workspace classifies correctly regardless of how exotic or
+    // mismatched its package name is.
+    const root = mkdtempSync(join(tmpdir(), "licenses-yarnws-nameshape-"));
+    writeFileSync(
+      join(root, "package.json"),
+      JSON.stringify({
+        name: "demo-root",
+        workspaces: ["packages/web-app", "services/backend-api"],
+        devDependencies: { "left-pad": "1.3.0" },
+      }) + "\n",
+    );
+    const webAppDir = join(root, "packages", "web-app");
+    const apiDir = join(root, "services", "backend-api");
+    mkdirSync(webAppDir, { recursive: true });
+    mkdirSync(apiDir, { recursive: true });
+    writeFileSync(
+      join(webAppDir, "package.json"),
+      JSON.stringify({ name: "@acme/web-app", dependencies: { ms: "2.1.3" } }) +
+        "\n",
+    );
+    writeFileSync(
+      join(apiDir, "package.json"),
+      JSON.stringify({ name: "api", dependencies: { sax: "1.4.1" } }) + "\n",
+    );
+    writeFileSync(
+      join(root, "yarn.lock"),
+      [
+        "__metadata:",
+        "  version: 8",
+        "  cacheKey: 10c0",
+        "",
+        '"demo-root@workspace:.":',
+        "  version: 0.0.0-use.local",
+        '  resolution: "demo-root@workspace:."',
+        "  dependencies:",
+        '    left-pad: "npm:1.3.0"',
+        "  languageName: unknown",
+        "  linkType: soft",
+        "",
+        '"@acme/web-app@workspace:packages/web-app":',
+        "  version: 0.0.0-use.local",
+        '  resolution: "@acme/web-app@workspace:packages/web-app"',
+        "  dependencies:",
+        '    ms: "npm:2.1.3"',
+        "  languageName: unknown",
+        "  linkType: soft",
+        "",
+        '"api@workspace:services/backend-api":',
+        "  version: 0.0.0-use.local",
+        '  resolution: "api@workspace:services/backend-api"',
+        "  dependencies:",
+        '    sax: "npm:1.4.1"',
+        "  languageName: unknown",
+        "  linkType: soft",
+        "",
+        '"ms@npm:2.1.3":',
+        "  version: 2.1.3",
+        '  resolution: "ms@npm:2.1.3"',
+        "  languageName: node",
+        "  linkType: hard",
+        "",
+        '"sax@npm:1.4.1":',
+        "  version: 1.4.1",
+        '  resolution: "sax@npm:1.4.1"',
+        "  languageName: node",
+        "  linkType: hard",
+        "",
+        '"left-pad@npm:1.3.0":',
+        "  version: 1.3.0",
+        '  resolution: "left-pad@npm:1.3.0"',
+        "  languageName: node",
+        "  linkType: hard",
+        "",
+      ].join("\n"),
+    );
+
+    // A dedicated stub keyed on the REAL directory basenames this test
+    // uses ("web-app", "backend-api") -- the shared
+    // fakeCollectWithYarnPlugin only recognizes "backend"/"frontend" and
+    // would silently fall back to the root fixture for any other
+    // directory name, which would prove nothing about THIS test's exotic-
+    // name shapes.
+    const sbomFor = (
+      components: { name: string; version: string; purl: string }[],
+    ): string =>
+      JSON.stringify({
+        bomFormat: "CycloneDX",
+        specVersion: "1.6",
+        components: components.map((c) => ({
+          ...c,
+          licenses: [{ license: { id: "MIT" } }],
+        })),
+      });
+
+    mock.module("../src/collectors/yarnPlugin", () => ({
+      ...REAL_YARN_PLUGIN,
+      collectWithYarnPlugin: async (
+        target: Target,
+      ): Promise<yarnPluginModule.YarnPluginScanResult> => {
+        const tempDir = mkdtempSync(
+          join(tmpdir(), "licenses-yarnws-nameshape-scan-"),
+        );
+        const sbomPath = join(tempDir, "full.json");
+        const prodSbomPath = join(tempDir, "prod.json");
+        const dirName = basename(target.dir);
+        const full =
+          dirName === "web-app"
+            ? sbomFor([
+                { name: "ms", version: "2.1.3", purl: "pkg:npm/ms@2.1.3" },
+              ])
+            : dirName === "backend-api"
+              ? sbomFor([
+                  {
+                    name: "sax",
+                    version: "1.4.1",
+                    purl: "pkg:npm/sax@1.4.1",
+                  },
+                ])
+              : sbomFor([
+                  {
+                    name: "left-pad",
+                    version: "1.3.0",
+                    purl: "pkg:npm/left-pad@1.3.0",
+                  },
+                ]);
+        const prod =
+          dirName === "web-app" || dirName === "backend-api"
+            ? full
+            : sbomFor([]);
+        writeFileSync(sbomPath, full);
+        writeFileSync(prodSbomPath, prod);
+        return {
+          sbomPath,
+          prodSbomPath,
+          cacheKey: "fake",
+          tool: REAL_YARN_PLUGIN.YARN_PLUGIN_TOOL,
+        };
+      },
+    }));
+
+    try {
+      const result = await collectTargets(baseOpts(root), () => {});
+
+      // Identity is the lock-declared PATH, never the package name.
+      expect(result.inputs.map((input) => input.targetIdentity)).toEqual([
+        ".",
+        "packages/web-app",
+        "services/backend-api",
+      ]);
+
+      const model = mergeSboms(result.inputs);
+      const ms = model.packages.find((pkg) => pkg.purl === "pkg:npm/ms@2.1.3");
+      const sax = model.packages.find(
+        (pkg) => pkg.purl === "pkg:npm/sax@1.4.1",
+      );
+      expect(ms?.occurrences).toEqual([
+        { target: "packages/web-app", isDevDependency: false },
+      ]);
+      expect(sax?.occurrences).toEqual([
+        { target: "services/backend-api", isDevDependency: false },
+      ]);
+    } finally {
+      mock.module("../src/collectors/yarnPlugin", () => ({
+        ...REAL_YARN_PLUGIN,
+        collectWithYarnPlugin: fakeCollectWithYarnPlugin,
+      }));
+    }
+  });
+
   test("HEADLINE: a workspaces-monorepo tree yields three per-workspace inputs with per-workspace prodPurlSet, ms production in backend, left-pad dev in root", async () => {
     const { root } = makeWorkspaceTree();
     const log: string[] = [];
