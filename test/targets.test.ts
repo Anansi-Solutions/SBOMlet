@@ -24,6 +24,7 @@ import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import { afterAll, beforeAll, describe, expect, mock, test } from "bun:test";
 
+import * as cdxgenModule from "../src/collectors/cdxgen";
 import * as yarnPluginModule from "../src/collectors/yarnPlugin";
 import { mergeSboms } from "../src/merge/merge";
 import { collectTargets } from "../src/pipeline/targets";
@@ -32,6 +33,9 @@ import type { Target } from "../src/targets/target";
 
 /** Original exports captured BEFORE any mock.module call (restore target). */
 const REAL_YARN_PLUGIN = { ...yarnPluginModule };
+
+/** Original cdxgen exports captured before any mock.module call. */
+const REAL_CDXGEN = { ...cdxgenModule };
 
 const WORKSPACE_LOCK = join(
   import.meta.dir,
@@ -1289,6 +1293,118 @@ describe("collectTargets — yarn workspace expansion edge behavior", () => {
       }
     },
   );
+  test("a classic (pre-Berry) yarn.lock containing @workspace:-shaped text scans as ONE whole-root cdxgen target — expansion never fires without a __metadata version >= 8 block", async () => {
+    // A pre-Berry lock has no __metadata block, so selectJsGenerator routes
+    // it to cdxgen and expandYarnWorkspaceUnits must bail before the member
+    // scan ever runs. The lock below is the worst admissible shape: a
+    // decorative @workspace: comment PLUS Berry-shaped
+    // resolution: "...@workspace:..." body lines (root + one member, both
+    // with dependencies:) that WOULD enumerate as a valid expansion set if
+    // the version gate were bypassed — and the member directory exists on
+    // disk with its own package.json, so no downstream check would trip
+    // incidentally. The dispatch gate alone stands between this lock and a
+    // spurious workspace expansion.
+    const root = mkdtempSync(join(tmpdir(), "licenses-yarnws-classic-"));
+    writeFileSync(
+      join(root, "package.json"),
+      JSON.stringify({ name: "demo-root", dependencies: { ms: "2.1.3" } }) +
+        "\n",
+    );
+    const evilDir = join(root, "packages", "evil");
+    mkdirSync(evilDir, { recursive: true });
+    writeFileSync(
+      join(evilDir, "package.json"),
+      JSON.stringify({ name: "evil", dependencies: { ms: "2.1.3" } }) + "\n",
+    );
+    writeFileSync(
+      join(root, "yarn.lock"),
+      [
+        "# yarn lockfile v1",
+        "# see evil@workspace:packages/evil for layout",
+        "",
+        "ms@^2.1.3:",
+        '  version "2.1.3"',
+        '  resolved "https://registry.example.com/ms/-/ms-2.1.3.tgz#cafe"',
+        "",
+        '"demo-root@workspace:.":',
+        '  version "0.0.0-use.local"',
+        '  resolution: "demo-root@workspace:."',
+        "  dependencies:",
+        '    ms "^2.1.3"',
+        "",
+        '"evil@workspace:packages/evil":',
+        '  version "0.0.0-use.local"',
+        '  resolution: "evil@workspace:packages/evil"',
+        "  dependencies:",
+        '    ms "^2.1.3"',
+        "",
+      ].join("\n"),
+    );
+
+    let cdxgenCalls = 0;
+    let pluginCalls = 0;
+    mock.module("../src/collectors/cdxgen", () => ({
+      ...REAL_CDXGEN,
+      collectWithCdxgen: async (): Promise<cdxgenModule.CollectorSbomFile> => {
+        cdxgenCalls += 1;
+        const tempDir = mkdtempSync(
+          join(tmpdir(), "licenses-yarnws-classic-scan-"),
+        );
+        const sbomPath = join(tempDir, "bom.json");
+        writeFileSync(
+          sbomPath,
+          JSON.stringify({
+            bomFormat: "CycloneDX",
+            specVersion: "1.6",
+            components: [
+              {
+                name: "ms",
+                version: "2.1.3",
+                purl: "pkg:npm/ms@2.1.3",
+                licenses: [{ license: { id: "MIT" } }],
+              },
+            ],
+          }),
+        );
+        return { sbomPath, cacheKey: "fake", tool: REAL_CDXGEN.CDXGEN_TOOL };
+      },
+    }));
+    mock.module("../src/collectors/yarnPlugin", () => ({
+      ...REAL_YARN_PLUGIN,
+      collectWithYarnPlugin: async (
+        target: Target,
+      ): Promise<yarnPluginModule.YarnPluginScanResult> => {
+        pluginCalls += 1;
+        return fakeCollectWithYarnPlugin(target);
+      },
+    }));
+
+    try {
+      const log: string[] = [];
+      const result = await collectTargets(baseOpts(root), (line) => {
+        log.push(line);
+      });
+
+      // Exactly ONE input with the root identity — never a unit for the
+      // on-disk packages/evil directory the lock's text points at.
+      expect(result.inputs.map((input) => input.targetIdentity)).toEqual(["."]);
+
+      // One cdxgen scan, zero yarn-plugin scans, one collecting line: the
+      // whole-root single-scan path, identical to any other cdxgen target.
+      expect(cdxgenCalls).toBe(1);
+      expect(pluginCalls).toBe(0);
+      const tool = REAL_CDXGEN.CDXGEN_TOOL;
+      expect(log.filter((line) => line.startsWith("collecting "))).toEqual([
+        `collecting . via ${tool.name}@${tool.version}`,
+      ]);
+    } finally {
+      mock.module("../src/collectors/cdxgen", () => REAL_CDXGEN);
+      mock.module("../src/collectors/yarnPlugin", () => ({
+        ...REAL_YARN_PLUGIN,
+        collectWithYarnPlugin: fakeCollectWithYarnPlugin,
+      }));
+    }
+  });
 });
 
 /**
