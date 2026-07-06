@@ -32,6 +32,7 @@ import {
 import * as cdxgenModule from "../src/collectors/cdxgen";
 import * as execModule from "../src/collectors/exec";
 import {
+  electCopyrights,
   electExpression,
   scancodeArgs,
   scanPackageSources,
@@ -389,6 +390,22 @@ describe("electExpression / electCopyrights (pure narrow, no exec)", () => {
     // The scanned package's OWN root license must win — a nested vendored
     // file two-or-more segments deep is never "the" root legal file.
     expect(elected?.raw).toBe("MIT");
+  });
+
+  test("a null element inside a copyrights[] array is skipped, never a TypeError", () => {
+    const files = [
+      {
+        path: "pkg/LICENSE",
+        detected_license_expression_spdx: "MIT",
+        // A corrupted/substituted output can carry a null element; the parse
+        // path's posture everywhere else is tolerant narrowing (skip).
+        copyrights: [null, { copyright: "Copyright (c) 2020 Example Author" }],
+      },
+    ];
+    expect(() => electCopyrights(files)).not.toThrow();
+    expect(electCopyrights(files)).toEqual([
+      "Copyright (c) 2020 Example Author",
+    ]);
   });
 });
 

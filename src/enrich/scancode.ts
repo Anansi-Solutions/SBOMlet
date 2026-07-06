@@ -509,8 +509,11 @@ export function electCopyrights(files: unknown): string[] {
     if (!isRawScancodeFile(raw)) continue;
     const copyrights = (raw as { copyrights?: unknown }).copyrights;
     if (!Array.isArray(copyrights)) continue;
-    for (const entry of copyrights as RawCopyrightEntry[]) {
-      const text = entry.copyright;
+    for (const entry of copyrights) {
+      // Tolerant narrowing, matching the rest of this parse path: a null or
+      // mistyped element is skipped, never a TypeError mid-scan.
+      if (typeof entry !== "object" || entry === null) continue;
+      const text = (entry as RawCopyrightEntry).copyright;
       if (typeof text !== "string" || text.length === 0) continue;
       seen.add(sanitizeEvidenceText(text));
     }
