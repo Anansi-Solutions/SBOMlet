@@ -30,6 +30,7 @@ import { COULD_BE_COPYLEFT_FAMILIES } from "../policy/copyleftFamily";
 import {
   elect,
   isCopyleft,
+  leafIds,
   renderNode,
   type ExpressionNode,
 } from "./expression";
@@ -699,6 +700,106 @@ function resolveOverride(
 }
 
 /**
+ * True when every leaf id of a parsed precise SPDX expression is consistent
+ * with an imprecise family (leaf === family, OR leaf starts with
+ * `family + "-"` — e.g. family "BSD" matches leaf "BSD-3-Clause" but NEVER
+ * "0BSD", and family "GPL" matches "GPL-3.0-only" but NEVER "LGPL-2.1-only":
+ * a bare character-prefix match without the "-" boundary would wrongly
+ * accept an unrelated or a narrower/wider copyleft family). Any leaf that
+ * fails the check makes the whole expression inconsistent — a single
+ * out-of-family leaf in a compound expression is enough to reject (fail
+ * closed, mirroring signalContradicts/baseSatisfiesAssertion's posture:
+ * every member must agree, not just some).
+ */
+function everyLeafInFamily(node: ExpressionNode, family: string): boolean {
+  const { ids } = leafIds(node);
+  return ids.every((id) => id === family || id.startsWith(`${family}-`));
+}
+
+/**
+ * True when a claim's raw value normalizes (via normalizeRaw) to a PRECISE
+ * expression whose every leaf id is consistent with the given imprecise
+ * family. Parsing the already-normalized precise expression should never
+ * throw (normalizeRaw validated it), but the walk is wrapped defensively
+ * anyway — the POL-07 fail-closed idiom (baseSatisfiesAssertion,
+ * signalContradicts): ANY throw here is treated as inconsistent, never as a
+ * crash, and never as a silent pass.
+ */
+function preciseIsInFamily(raw: string, family: string): boolean {
+  const result = normalizeRaw(raw);
+  if (result.expression === null) return false; // imprecise/unknown: no precise signal
+  try {
+    return everyLeafInFamily(
+      parse(result.expression) as ExpressionNode,
+      family,
+    );
+  } catch {
+    return false; // unparseable against the family check → not consistent, fail closed
+  }
+}
+
+/**
+ * Refine an IMPRECISE base finding to precise when a "scancode"-sourced claim
+ * normalizes to a PRECISE expression that is family-consistent with the base
+ * finding's impreciseFamily (the fill matrix, 10-04 / Pitfall 1). This closes
+ * the gap left by findingFromClaims' all-or-nothing unknown collapse and
+ * combineKnown's W2 imprecise stickiness (normalize.ts:311-327, :353-372):
+ * neither rule is touched here — refinement is a SEPARATE step applied AFTER
+ * both, composing around them rather than modifying their logic.
+ *
+ * Gate (every condition must hold, fail-closed on any miss):
+ *   1. `base.confidence === "imprecise"` — refinement NEVER touches a
+ *      genuinely-unknown finding (a garbage/contradicted declaration is
+ *      `[[clarify]]` territory, never silently filled — D-05's spirit) and
+ *      NEVER touches an already-precise finding (D-05's never-override rule
+ *      is enforced simply by the gate: a precise base finding never reaches
+ *      this function's replacement branch).
+ *   2. At least one claim has `source === "scancode"` AND normalizes to a
+ *      precise expression.
+ *   3. EVERY leaf of that precise expression is consistent with
+ *      `base.impreciseFamily` ({@link preciseIsInFamily}) — a single
+ *      out-of-family leaf (row 4) or a same-string-prefix-but-different-id
+ *      leaf (the LGPL-vs-GPL prefix-discipline edge) fails the whole claim.
+ *
+ * The FIRST family-consistent scancode claim (claim order, deterministic)
+ * wins; its raw normalized precise expression becomes the finding's
+ * expression/elected, `confidence` becomes "exact" (the same confidence a
+ * precise declared claim yields), and `source` becomes "scancode" (a widened
+ * finding-source value auditable in the dump — the finding-source union
+ * already carries "scancode" via {@link LicenseClaimSource}). Any parse
+ * failure anywhere in the check is treated as NOT consistent (fail closed) —
+ * refinement never throws.
+ *
+ * Pure function of (claims, base finding) ONLY — no mode flag, no cache
+ * handle, no clock (Pitfall 2): an offline `check` run replays the identical
+ * claims from the committed cache and reproduces the identical refined
+ * finding byte-for-byte, so intensive generate and check never diverge.
+ */
+export function refineImpreciseFromScancode(
+  claims: ReadonlyArray<LicenseClaim>,
+  base: LicenseFinding,
+): LicenseFinding {
+  if (base.confidence !== "imprecise" || base.impreciseFamily === undefined) {
+    return base;
+  }
+  const family = base.impreciseFamily;
+  for (const c of claims) {
+    if (c.source !== "scancode") continue;
+    if (!preciseIsInFamily(c.raw, family)) continue;
+    const result = normalizeRaw(c.raw);
+    const expression = result.expression as string; // preciseIsInFamily verified non-null
+    const node = parse(expression) as ExpressionNode;
+    return {
+      expression,
+      elected: renderNode(elect(node)),
+      source: "scancode",
+      confidence: "exact",
+    };
+  }
+  return base; // no family-consistent scancode claim found — stays imprecise
+}
+
+/**
  * Attach a LicenseFinding to every package (including the zero-claim
  * population — expression null). The two-level, staleness-guarded override
  * chain runs in precedence order: project clarify FIRST (project-wins), then
@@ -719,7 +820,14 @@ export function annotateFindings(
 ): AnnotatedFindings {
   const usedClarifyIndices = new Set<number>();
   const packages = model.packages.map((entry: PackageEntry): PackageEntry => {
-    const base = findingFromClaims(entry.licenseClaims, entry.scope);
+    const unrefinedBase = findingFromClaims(entry.licenseClaims, entry.scope);
+    // 10-04: refine an imprecise base finding from a family-consistent
+    // "scancode" claim BEFORE overrides see it (clarify/builtin still
+    // decide last — the refinement composes below them, never above).
+    const base = refineImpreciseFromScancode(
+      entry.licenseClaims,
+      unrefinedBase,
+    );
     const signal = observedSignal(entry.licenseClaims, base);
     const overridden = resolveOverride(
       entry,

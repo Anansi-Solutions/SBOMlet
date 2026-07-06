@@ -1420,3 +1420,168 @@ describe("findingFromClaims — os-scope partial finding (07-06)", () => {
     expect(finding.unrecognizedTokens).toEqual(["some-custom-token"]);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Family-consistency-gated imprecise refinement (10-04, the fill matrix).
+// annotateFindings refines an IMPRECISE base finding to precise ONLY when a
+// "scancode"-sourced claim normalizes to a PRECISE expression whose every leaf
+// id matches the imprecise family (leaf === family or leaf starts with
+// `family + "-"`, so LGPL-2.1 never matches GPL). Any parse failure or
+// inconsistency leaves the finding imprecise (fail-closed, POL-07 posture).
+// The refinement sits BELOW clarify/builtin overrides and NEVER touches a
+// genuinely-unknown or already-precise finding (D-05 never-override).
+// ---------------------------------------------------------------------------
+
+/** A claim with an explicit source — the scancode-refinement fixture idiom. */
+const sourcedClaim = (
+  raw: string,
+  source: LicenseClaim["source"],
+  kind: LicenseClaimKind = "name",
+): LicenseClaim => ({ raw, kind, source });
+
+/** A scancode-sourced claim (the refinement trigger). */
+const scancodeClaim = (raw: string): LicenseClaim =>
+  sourcedClaim(raw, "scancode", "expression");
+
+describe("annotateFindings — family-consistency-gated imprecise refinement (10-04 fill matrix)", () => {
+  test("row 1 (registry parity): zero-claim package + a precise scancode claim resolves via the plain claim path, no refinement involved", () => {
+    const entry = pkg("zero-claim-pkg", "1.0.0", [scancodeClaim("MIT")]);
+    const { model } = annotateFindings(modelOf(entry), []);
+    const finding = model.packages[0]!.finding!;
+    expect(finding.expression).toBe("MIT");
+    expect(finding.confidence).toBe("exact");
+  });
+
+  test("row 2: garbage-claim package (a contradicted declaration) + precise scancode claim stays UNKNOWN — refinement keys on imprecise only", () => {
+    const entry = pkg("garbage-claim-pkg", "1.0.0", [
+      claim("total garbage xyz", "name"),
+      scancodeClaim("MIT"),
+    ]);
+    const { model } = annotateFindings(modelOf(entry), []);
+    const finding = model.packages[0]!.finding!;
+    expect(finding.confidence).toBe("none");
+    expect(finding.expression).toBeNull();
+  });
+
+  test("row 3 (the win): imprecise BSD family + scancode BSD-3-Clause (in-family) becomes precise with source scancode", () => {
+    const entry = pkg("imprecise-bsd-pkg", "1.0.0", [
+      claim("BSD", "name"),
+      scancodeClaim("BSD-3-Clause"),
+    ]);
+    const { model } = annotateFindings(modelOf(entry), []);
+    const finding = model.packages[0]!.finding!;
+    expect(finding.expression).toBe("BSD-3-Clause");
+    expect(finding.confidence).not.toBe("imprecise");
+    expect(finding.impreciseFamily).toBeUndefined();
+    expect(finding.source).toBe("scancode");
+  });
+
+  test("row 4 (fail-safe): imprecise GPL family + scancode MIT (inconsistent family) stays imprecise — the copyleft signal is not masked", () => {
+    const entry = pkg("imprecise-gpl-pkg", "1.0.0", [
+      claim("GPL", "name"),
+      scancodeClaim("MIT"),
+    ]);
+    const { model } = annotateFindings(modelOf(entry), []);
+    const finding = model.packages[0]!.finding!;
+    expect(finding.confidence).toBe("imprecise");
+    expect(finding.impreciseFamily).toBe("GPL");
+    expect(finding.expression).toBeNull();
+  });
+
+  test("row 5 (INV-04): a scancode claim that itself normalizes imprecise (bare family raw) leaves the base finding imprecise", () => {
+    const entry = pkg("imprecise-apache-pkg", "1.0.0", [
+      claim("Apache", "name"),
+      scancodeClaim("Apache"),
+    ]);
+    const { model } = annotateFindings(modelOf(entry), []);
+    const finding = model.packages[0]!.finding!;
+    expect(finding.confidence).toBe("imprecise");
+    expect(finding.impreciseFamily).toBe("Apache");
+    expect(finding.expression).toBeNull();
+  });
+
+  test('family edge: imprecise BSD family + scancode 0BSD stays imprecise — prefix discipline (0BSD does not start with "BSD-")', () => {
+    const entry = pkg("imprecise-bsd-0bsd-pkg", "1.0.0", [
+      claim("BSD", "name"),
+      scancodeClaim("0BSD"),
+    ]);
+    const { model } = annotateFindings(modelOf(entry), []);
+    const finding = model.packages[0]!.finding!;
+    expect(finding.confidence).toBe("imprecise");
+    expect(finding.impreciseFamily).toBe("BSD");
+    expect(finding.expression).toBeNull();
+  });
+
+  test("family edge (copyleft prefix collision guard): imprecise GPL family + scancode LGPL-2.1-only — the pre-existing C2 copyleft-dominance combine (untouched) elects the precise LGPL claim; refinement is not the deciding mechanism here and the elected id is never a bare GPL guess", () => {
+    const entry = pkg("imprecise-gpl-lgpl-pkg", "1.0.0", [
+      claim("GPL", "name"),
+      scancodeClaim("LGPL-2.1-only"),
+    ]);
+    const { model } = annotateFindings(modelOf(entry), []);
+    const finding = model.packages[0]!.finding!;
+    // C2 (combineKnown, untouched by this plan): a PRECISE copyleft claim
+    // dominates an imprecise sibling family regardless of source — this is
+    // the pre-existing precedence, not a refinement outcome. Assert it stays
+    // exactly what it already was before this plan (no regression), and that
+    // the elected id is the genuinely-observed LGPL-2.1-only, never a
+    // fabricated bare-GPL guess.
+    expect(finding.expression).toBe("LGPL-2.1-only");
+    expect(finding.confidence).toBe("exact");
+  });
+
+  test("fail-closed: a scancode claim that is a compound expression mixing an in-family leaf with an out-of-family leaf leaves the finding imprecise, no throw (not every leaf matches the family)", () => {
+    const entry = pkg("imprecise-mixed-compound-pkg", "1.0.0", [
+      claim("BSD", "name"),
+      scancodeClaim("BSD-3-Clause AND MIT"),
+    ]);
+    expect(() => annotateFindings(modelOf(entry), [])).not.toThrow();
+    const { model } = annotateFindings(modelOf(entry), []);
+    const finding = model.packages[0]!.finding!;
+    expect(finding.confidence).toBe("imprecise");
+    expect(finding.impreciseFamily).toBe("BSD");
+    expect(finding.expression).toBeNull();
+  });
+
+  test("precedence: a clarify override on the same package still decides the final finding over a would-be refinement", () => {
+    const entry = pkg("imprecise-clarified-pkg", "1.0.0", [
+      claim("BSD", "name"),
+      scancodeClaim("BSD-3-Clause"),
+    ]);
+    const clarify: ClarifyInput[] = [
+      { name: "imprecise-clarified-pkg", expression: "MIT" },
+    ];
+    const { model } = annotateFindings(modelOf(entry), clarify);
+    const finding = model.packages[0]!.finding!;
+    expect(finding.source).toBe("override");
+    expect(finding.expression).toBe("MIT");
+  });
+
+  test("never-override (D-05): a package with a PRECISE declared finding + a scancode claim is unchanged", () => {
+    const entry = pkg("already-precise-pkg", "1.0.0", [
+      claim("Apache-2.0"),
+      scancodeClaim("MIT"),
+    ]);
+    const { model } = annotateFindings(modelOf(entry), []);
+    const finding = model.packages[0]!.finding!;
+    // The precise declared claim AND-combines with the scancode claim's own
+    // precise expression under the existing all-precise combine path — this is
+    // NOT the refinement (refinement only fires on an imprecise base finding).
+    // Assert the base finding was never treated as "imprecise-then-refined":
+    // combinePrecise's AND-combine still owns this case untouched.
+    expect(finding.confidence).not.toBe("imprecise");
+    expect(finding.impreciseFamily).toBeUndefined();
+  });
+
+  test("purity: the refinement helper is exported and takes claims + base finding only (no EnrichOptions, no mode, no Date)", () => {
+    // The refinement is invoked internally by annotateFindings; a direct
+    // second call with the identical claims/base must reproduce the identical
+    // finding (referential purity — no hidden clock/mode/cache dependency).
+    const entry = pkg("purity-check-pkg", "1.0.0", [
+      claim("BSD", "name"),
+      scancodeClaim("BSD-3-Clause"),
+    ]);
+    const { model: modelA } = annotateFindings(modelOf(entry), []);
+    const { model: modelB } = annotateFindings(modelOf(entry), []);
+    expect(modelA.packages[0]!.finding).toEqual(modelB.packages[0]!.finding);
+  });
+});
