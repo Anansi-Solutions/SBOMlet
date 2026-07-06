@@ -830,13 +830,13 @@ describe("collectTargets — yarn workspace expansion edge behavior", () => {
       log.push(line);
     });
 
-    // Both units skip loudly; the run completes (no throw) with a
-    // genuinely empty (not merely small) input list.
+    // A lock whose every entry is workspace:-protocol skip-classifies at
+    // the TARGET level (zero third-party entries), before any per-unit
+    // processing: one loud warning naming the target and the reason, and
+    // the run completes (no throw) with a genuinely empty (not merely
+    // small) input list.
     expect(log).toContain(
-      "warning: skipping . — workspace declares no dependencies in yarn.lock",
-    );
-    expect(log).toContain(
-      "warning: skipping backend — workspace declares no dependencies in yarn.lock",
+      "warning: skipping . — yarn.lock has no third-party entries (only workspace/portal members)",
     );
     expect(result.inputs).toEqual([]);
 
@@ -845,6 +845,83 @@ describe("collectTargets — yarn workspace expansion edge behavior", () => {
     // a stale/misleading non-empty one.
     const model = mergeSboms(result.inputs);
     expect(model.packages).toEqual([]);
+  });
+
+  test("an all-workspace-protocol lock (workspaces depending only on each other) skips the whole target LOUDLY before any unit spawn — never a silent post-scan drop", async () => {
+    // Every entry in this lock resolves via workspace: (the monorepo's
+    // workspaces depend only on each other), so thirdPartyEntryCount is 0
+    // and there is nothing to inventory. The non-expanded path pre-checks
+    // coverageSkipReason and warns BEFORE dispatch; the expanded path must
+    // hold the same two guarantees: the skip is loud (a warning line names
+    // the target and the reason), and no generator spawn is burned on units
+    // whose coverage verdict is already decided by the root lock.
+    const root = mkdtempSync(join(tmpdir(), "licenses-yarnws-allws-"));
+    writeFileSync(
+      join(root, "package.json"),
+      JSON.stringify({
+        name: "demo-root",
+        workspaces: ["backend"],
+        dependencies: { backend: "workspace:^" },
+      }) + "\n",
+    );
+    const backendDir = join(root, "backend");
+    mkdirSync(backendDir);
+    writeFileSync(
+      join(backendDir, "package.json"),
+      JSON.stringify({ name: "backend" }) + "\n",
+    );
+    writeFileSync(
+      join(root, "yarn.lock"),
+      [
+        "__metadata:",
+        "  version: 8",
+        "  cacheKey: 10c0",
+        "",
+        '"backend@workspace:^, backend@workspace:backend":',
+        "  version: 0.0.0-use.local",
+        '  resolution: "backend@workspace:backend"',
+        "  languageName: unknown",
+        "  linkType: soft",
+        "",
+        '"demo-root@workspace:.":',
+        "  version: 0.0.0-use.local",
+        '  resolution: "demo-root@workspace:."',
+        "  dependencies:",
+        '    backend: "workspace:^"',
+        "  languageName: unknown",
+        "  linkType: soft",
+        "",
+      ].join("\n"),
+    );
+
+    let spawnCount = 0;
+    mock.module("../src/collectors/yarnPlugin", () => ({
+      ...REAL_YARN_PLUGIN,
+      collectWithYarnPlugin: async (
+        target: Target,
+      ): Promise<yarnPluginModule.YarnPluginScanResult> => {
+        spawnCount += 1;
+        return fakeCollectWithYarnPlugin(target);
+      },
+    }));
+
+    try {
+      const log: string[] = [];
+      const result = await collectTargets(baseOpts(root), (line) => {
+        log.push(line);
+      });
+
+      expect(log).toContain(
+        "warning: skipping . — yarn.lock has no third-party entries (only workspace/portal members)",
+      );
+      expect(spawnCount).toBe(0);
+      expect(result.inputs).toEqual([]);
+    } finally {
+      mock.module("../src/collectors/yarnPlugin", () => ({
+        ...REAL_YARN_PLUGIN,
+        collectWithYarnPlugin: fakeCollectWithYarnPlugin,
+      }));
+    }
   });
 
   test("zero-dep workspace (including the dep-less root): skip is loud, the run completes, other workspaces still scan", async () => {

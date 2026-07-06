@@ -303,20 +303,40 @@ function assertManifestsExist(
 }
 
 /**
- * Scan every expanded workspace unit in sorted order: per-unit zero-dep
- * skip (keyed on each unit's OWN captured hasDependencies flag from
- * expansion time, covering the dep-less root unit too), the
- * re-routed manifest pre-check (only the unit's own package.json; the root
- * yarn.lock was already proven to exist by the caller's read), then the
- * shared dispatch+coverage path with the ROOT lock text.
+ * Scan every expanded workspace unit in sorted order: the whole-target
+ * coverage pre-check on the ROOT lock first (the expanded-path twin of the
+ * non-expanded pre-scan warn+skip branch), then per-unit zero-dep skip
+ * (keyed on each unit's OWN captured hasDependencies flag from expansion
+ * time, covering the dep-less root unit too), the re-routed manifest
+ * pre-check (only the unit's own package.json; the root yarn.lock was
+ * already proven to exist by the caller's read), then the shared
+ * dispatch+coverage path with the ROOT lock text.
  */
 async function scanWorkspaceUnits(
+  target: DiscoveredTarget,
   expandedUnits: readonly ExpandedUnit[],
   rootLockfileText: string,
   lockfileName: string,
   opts: GenerateOptions,
   log: (line: string) => void,
 ): Promise<CollectedSbom[]> {
+  // Every unit's coverage verdict is decided by the SAME root lock text
+  // dispatchAndCollect classifies after the scan, so a skip-classified
+  // lock (e.g. all entries workspace:-protocol — a monorepo whose
+  // workspaces depend only on each other) is known before any unit runs:
+  // warn ONCE, loudly, and never burn a generator spawn on a verdict that
+  // is already decided. Without this, the post-scan "skip" branch would be
+  // the only SILENT skip in the collect loop, reached after both plugin
+  // runs were spawned per unit.
+  const skipReason = coverageSkipReason(
+    lockfileName,
+    rootLockfileText,
+    target.dir,
+  );
+  if (skipReason !== undefined) {
+    log(`warning: skipping ${target.identity} — ${skipReason}`);
+    return [];
+  }
   const results: CollectedSbom[] = [];
   for (const { unit, hasDependencies } of expandedUnits) {
     if (!hasDependencies) {
@@ -399,6 +419,7 @@ export async function collectTargets(
     const expandedUnits = expandYarnWorkspaceUnits(target, lockfileText);
     if (expandedUnits !== undefined) {
       const unitInputs = await scanWorkspaceUnits(
+        target,
         expandedUnits,
         lockfileText,
         lockfileName,
