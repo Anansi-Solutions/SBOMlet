@@ -1,7 +1,7 @@
 /**
  * Subprocess-free tests for src/enrich/scancode.ts.
  *
- * This file starts with the PURE fs-based mapper tests (sourceDirFor and its
+ * This file starts with the PURE fs-based mapper tests (sourceDirsFor and its
  * npm/pypi helpers) — no exec mock needed. The invocation-lane recorder
  * harness (mock.module over ../src/collectors/exec, the dockerOsBuilt.test.ts
  * shape) is added ABOVE these in this same file so the mock.module suite
@@ -37,7 +37,7 @@ import {
   electExpression,
   scancodeArgs,
   scanPackageSources,
-  sourceDirFor,
+  sourceDirsFor,
   SCANCODE_TOOL,
 } from "../src/enrich/scancode";
 import { enrichUnknowns } from "../src/enrich/enrich";
@@ -457,7 +457,7 @@ describe("electExpression / electCopyrights (pure narrow, no exec)", () => {
 
 // --- Task 1: purl -> source-dir mapper (pure fs, no exec mock) -------------
 
-describe("sourceDirFor — npm mapping", () => {
+describe("sourceDirsFor — npm mapping", () => {
   let targetDir: string;
 
   afterEach(() => {
@@ -480,32 +480,32 @@ describe("sourceDirFor — npm mapping", () => {
     targetDir = mkdtempSync(join(tmpdir(), "scancode-npm-"));
     const pkgDir = writeNpmPackage(targetDir, "left-pad", "1.3.0");
 
-    const result = sourceDirFor("pkg:npm/left-pad@1.3.0", [targetDir]);
-    expect(result).toBe(pkgDir);
+    const result = sourceDirsFor("pkg:npm/left-pad@1.3.0", [targetDir]);
+    expect(result).toEqual([pkgDir]);
   });
 
   test("a scoped purl pkg:npm/%40scope/pkg@1.0.0 resolves to node_modules/@scope/pkg (A6 locked)", () => {
     targetDir = mkdtempSync(join(tmpdir(), "scancode-npm-scoped-"));
     const pkgDir = writeNpmPackage(targetDir, "@scope/pkg", "1.0.0");
 
-    const result = sourceDirFor("pkg:npm/%40scope/pkg@1.0.0", [targetDir]);
-    expect(result).toBe(pkgDir);
+    const result = sourceDirsFor("pkg:npm/%40scope/pkg@1.0.0", [targetDir]);
+    expect(result).toEqual([pkgDir]);
   });
 
   test("package.json version MISMATCH returns undefined (Pitfall 8)", () => {
     targetDir = mkdtempSync(join(tmpdir(), "scancode-npm-mismatch-"));
     writeNpmPackage(targetDir, "left-pad", "1.2.0");
 
-    const result = sourceDirFor("pkg:npm/left-pad@1.3.0", [targetDir]);
-    expect(result).toBeUndefined();
+    const result = sourceDirsFor("pkg:npm/left-pad@1.3.0", [targetDir]);
+    expect(result).toEqual([]);
   });
 
   test("dir absent returns undefined", () => {
     targetDir = mkdtempSync(join(tmpdir(), "scancode-npm-absent-"));
     mkdirSync(join(targetDir, "node_modules"), { recursive: true });
 
-    const result = sourceDirFor("pkg:npm/does-not-exist@1.0.0", [targetDir]);
-    expect(result).toBeUndefined();
+    const result = sourceDirsFor("pkg:npm/does-not-exist@1.0.0", [targetDir]);
+    expect(result).toEqual([]);
   });
 
   test("package.json absent returns undefined", () => {
@@ -514,8 +514,8 @@ describe("sourceDirFor — npm mapping", () => {
       recursive: true,
     });
 
-    const result = sourceDirFor("pkg:npm/left-pad@1.3.0", [targetDir]);
-    expect(result).toBeUndefined();
+    const result = sourceDirsFor("pkg:npm/left-pad@1.3.0", [targetDir]);
+    expect(result).toEqual([]);
   });
 
   test("package.json unparseable returns undefined (never throws)", () => {
@@ -525,10 +525,10 @@ describe("sourceDirFor — npm mapping", () => {
     writeFileSync(join(pkgDir, "package.json"), "{ not valid json");
 
     expect(() =>
-      sourceDirFor("pkg:npm/left-pad@1.3.0", [targetDir]),
+      sourceDirsFor("pkg:npm/left-pad@1.3.0", [targetDir]),
     ).not.toThrow();
-    const result = sourceDirFor("pkg:npm/left-pad@1.3.0", [targetDir]);
-    expect(result).toBeUndefined();
+    const result = sourceDirsFor("pkg:npm/left-pad@1.3.0", [targetDir]);
+    expect(result).toEqual([]);
   });
 
   test("a crafted purl whose decoded name contains '..' never escapes node_modules", () => {
@@ -543,19 +543,19 @@ describe("sourceDirFor — npm mapping", () => {
     );
 
     // "..%2Fsecret" decodes to "../secret" — an escape attempt.
-    const result = sourceDirFor("pkg:npm/..%2Fsecret@1.0.0", [targetDir]);
-    expect(result).toBeUndefined();
+    const result = sourceDirsFor("pkg:npm/..%2Fsecret@1.0.0", [targetDir]);
+    expect(result).toEqual([]);
   });
 
-  test("every non-undefined result path-prefix-matches <targetDir>/node_modules after resolution", () => {
+  test("every non-empty result path-prefix-matches <targetDir>/node_modules after resolution", () => {
     targetDir = mkdtempSync(join(tmpdir(), "scancode-npm-invariant-"));
     const pkgDir = writeNpmPackage(targetDir, "left-pad", "1.3.0");
 
-    const result = sourceDirFor("pkg:npm/left-pad@1.3.0", [targetDir]);
-    expect(result).toBeDefined();
+    const result = sourceDirsFor("pkg:npm/left-pad@1.3.0", [targetDir]);
+    expect(result).toHaveLength(1);
     const nodeModulesRoot = join(targetDir, "node_modules");
-    expect(result!.startsWith(nodeModulesRoot)).toBe(true);
-    expect(result).toBe(pkgDir);
+    expect(result[0]!.startsWith(nodeModulesRoot)).toBe(true);
+    expect(result).toEqual([pkgDir]);
   });
 
   test("two targetDirs both matching — the compareCodeUnits-first dir wins deterministically", () => {
@@ -573,8 +573,8 @@ describe("sourceDirFor — npm mapping", () => {
 
       // Call with REVERSED argument order to prove determinism is a function
       // of the sorted set, not caller order.
-      const result = sourceDirFor("pkg:npm/left-pad@1.3.0", [dirB, dirA]);
-      expect(result).toBe(expected);
+      const result = sourceDirsFor("pkg:npm/left-pad@1.3.0", [dirB, dirA]);
+      expect(result).toEqual([expected]);
     } finally {
       rmSync(dirA, { recursive: true, force: true });
       rmSync(dirB, { recursive: true, force: true });
@@ -582,7 +582,7 @@ describe("sourceDirFor — npm mapping", () => {
   });
 });
 
-describe("sourceDirFor — pypi mapping", () => {
+describe("sourceDirsFor — pypi mapping", () => {
   let targetDir: string;
 
   afterEach(() => {
@@ -597,7 +597,7 @@ describe("sourceDirFor — pypi mapping", () => {
       : join(dir, ".venv", "lib", "python3.12", "site-packages");
   }
 
-  test("a pypi purl with a temp .venv dist-info + top_level.txt naming an existing sibling dir resolves to that dir", () => {
+  test("a pypi purl with a temp .venv dist-info + top_level.txt naming an existing sibling dir yields the dist-info dir first, then that dir", () => {
     targetDir = mkdtempSync(join(tmpdir(), "scancode-pypi-"));
     const sitePackages = venvSitePackagesDir(targetDir);
     mkdirSync(sitePackages, { recursive: true });
@@ -609,21 +609,23 @@ describe("sourceDirFor — pypi mapping", () => {
     const packageDir = join(sitePackages, "typing_extensions");
     mkdirSync(packageDir, { recursive: true });
 
-    const result = sourceDirFor("pkg:pypi/typing-extensions@4.9.0", [
+    const result = sourceDirsFor("pkg:pypi/typing-extensions@4.9.0", [
       targetDir,
     ]);
-    expect(result).toBe(packageDir);
+    // The dist-info dir holds the wheel's METADATA and legal files — it is
+    // the first scan candidate; the import package dir follows.
+    expect(result).toEqual([distInfoDir, packageDir]);
   });
 
   test("absent venv returns undefined", () => {
     targetDir = mkdtempSync(join(tmpdir(), "scancode-pypi-novenv-"));
-    const result = sourceDirFor("pkg:pypi/typing-extensions@4.9.0", [
+    const result = sourceDirsFor("pkg:pypi/typing-extensions@4.9.0", [
       targetDir,
     ]);
-    expect(result).toBeUndefined();
+    expect(result).toEqual([]);
   });
 
-  test("absent top-level dir returns undefined", () => {
+  test("absent top-level dir still yields the dist-info dir (the wheel's own evidence)", () => {
     targetDir = mkdtempSync(join(tmpdir(), "scancode-pypi-notopdir-"));
     const sitePackages = venvSitePackagesDir(targetDir);
     mkdirSync(sitePackages, { recursive: true });
@@ -632,10 +634,10 @@ describe("sourceDirFor — pypi mapping", () => {
     writeFileSync(join(distInfoDir, "top_level.txt"), "typing_extensions\n");
     // Deliberately do NOT create the sibling package dir.
 
-    const result = sourceDirFor("pkg:pypi/typing-extensions@4.9.0", [
+    const result = sourceDirsFor("pkg:pypi/typing-extensions@4.9.0", [
       targetDir,
     ]);
-    expect(result).toBeUndefined();
+    expect(result).toEqual([distInfoDir]);
   });
 
   test("a hostile top_level.txt line containing '..' never escapes site-packages (mirrors the npm traversal guard)", () => {
@@ -651,8 +653,10 @@ describe("sourceDirFor — pypi mapping", () => {
     // not a failing existsSync — can produce the undefined below.
     mkdirSync(join(sitePackages, "..", "escape"), { recursive: true });
 
-    const result = sourceDirFor("pkg:pypi/evil@1.0.0", [targetDir]);
-    expect(result).toBeUndefined();
+    // The dist-info dir stays a legitimate candidate; the escaped path must
+    // never appear among the candidates.
+    const result = sourceDirsFor("pkg:pypi/evil@1.0.0", [targetDir]);
+    expect(result).toEqual([distInfoDir]);
   });
 
   test("an absolute-path-shaped top_level.txt line never resolves outside site-packages", () => {
@@ -665,30 +669,30 @@ describe("sourceDirFor — pypi mapping", () => {
     // so only the containment guard can reject it.
     writeFileSync(join(distInfoDir, "top_level.txt"), `${targetDir}\n`);
 
-    const result = sourceDirFor("pkg:pypi/evil@1.0.0", [targetDir]);
-    expect(result).toBeUndefined();
+    const result = sourceDirsFor("pkg:pypi/evil@1.0.0", [targetDir]);
+    expect(result).toEqual([distInfoDir]);
   });
 });
 
-describe("sourceDirFor — unsupported ecosystems and malformed purls", () => {
+describe("sourceDirsFor — unsupported ecosystems and malformed purls", () => {
   test("terraform purls return undefined with zero fs probes", () => {
-    const result = sourceDirFor(
+    const result = sourceDirsFor(
       "pkg:terraform/registry.opentofu.org/hashicorp/aws@5.0.0",
       ["/nonexistent/dir/that/would/throw/if/probed"],
     );
-    expect(result).toBeUndefined();
+    expect(result).toEqual([]);
   });
 
   test("apk purls return undefined", () => {
-    const result = sourceDirFor("pkg:apk/alpine/musl@1.2.0", [
+    const result = sourceDirsFor("pkg:apk/alpine/musl@1.2.0", [
       "/nonexistent/dir",
     ]);
-    expect(result).toBeUndefined();
+    expect(result).toEqual([]);
   });
 
   test("unparseable purls return undefined", () => {
-    const result = sourceDirFor("not-a-purl-at-all", ["/nonexistent/dir"]);
-    expect(result).toBeUndefined();
+    const result = sourceDirsFor("not-a-purl-at-all", ["/nonexistent/dir"]);
+    expect(result).toEqual([]);
   });
 
   test("a malformed percent-encoding in an npm purl name is an honest skip, never a URIError", () => {
@@ -699,9 +703,9 @@ describe("sourceDirFor — unsupported ecosystems and malformed purls", () => {
       // undefined on ANY structural mismatch — a crafted SBOM purl must
       // never crash the run.
       expect(() =>
-        sourceDirFor("pkg:npm/%ZZ@1.0.0", [targetDir]),
+        sourceDirsFor("pkg:npm/%ZZ@1.0.0", [targetDir]),
       ).not.toThrow();
-      expect(sourceDirFor("pkg:npm/%ZZ@1.0.0", [targetDir])).toBeUndefined();
+      expect(sourceDirsFor("pkg:npm/%ZZ@1.0.0", [targetDir])).toEqual([]);
     } finally {
       rmSync(targetDir, { recursive: true, force: true });
     }
@@ -717,9 +721,9 @@ describe("sourceDirFor — unsupported ecosystems and malformed purls", () => {
           : join(targetDir, ".venv", "lib", "python3.12", "site-packages");
       mkdirSync(sitePackages, { recursive: true });
       expect(() =>
-        sourceDirFor("pkg:pypi/%ZZ@1.0.0", [targetDir]),
+        sourceDirsFor("pkg:pypi/%ZZ@1.0.0", [targetDir]),
       ).not.toThrow();
-      expect(sourceDirFor("pkg:pypi/%ZZ@1.0.0", [targetDir])).toBeUndefined();
+      expect(sourceDirsFor("pkg:pypi/%ZZ@1.0.0", [targetDir])).toEqual([]);
     } finally {
       rmSync(targetDir, { recursive: true, force: true });
     }
@@ -1094,6 +1098,102 @@ describe("enrichUnknowns intensive lane (10-04: residual scan, provenance write,
     });
   });
 
+  test("pypi evidence lane: METADATA in the matched dist-info dir resolves a package whose import dir carries no legal file", async () => {
+    repoDir = mkdtempSync(join(tmpdir(), "scancode-intensive-pypi-"));
+    const sitePackages =
+      process.platform === "win32"
+        ? join(repoDir, ".venv", "Lib", "site-packages")
+        : join(repoDir, ".venv", "lib", "python3.12", "site-packages");
+    const distInfoDir = join(sitePackages, "typing_extensions-4.9.0.dist-info");
+    mkdirSync(distInfoDir, { recursive: true });
+    writeFileSync(
+      join(distInfoDir, "METADATA"),
+      "Metadata-Version: 2.1\nName: typing_extensions\nLicense-Expression: Apache-2.0\n",
+    );
+    writeFileSync(join(distInfoDir, "top_level.txt"), "typing_extensions\n");
+    // A wheel-typical import package: source only, NO legal file, NO manifest.
+    const packageDir = join(sitePackages, "typing_extensions");
+    mkdirSync(packageDir, { recursive: true });
+    writeFileSync(join(packageDir, "__init__.py"), "");
+
+    const fixture = JSON.parse(readFileSync(FIXTURE_PATH, "utf8")) as {
+      headers: unknown[];
+    };
+    // Routed by the scanned dir operand: the import package dir yields NO
+    // detections; the dist-info dir yields its METADATA manifest detection.
+    const routedExecTool = (
+      cmd: string,
+      args: string[],
+    ): Promise<{ stdout: string; stderr: string }> => {
+      invocations.push([cmd, ...args]);
+      const outFile = args[args.indexOf("--json-pp") + 1] as string;
+      const scanned = args[args.length - 1] as string;
+      const doc = scanned.endsWith(".dist-info")
+        ? {
+            headers: fixture.headers,
+            files: [
+              {
+                path: "typing_extensions-4.9.0.dist-info/METADATA",
+                detected_license_expression_spdx: "Apache-2.0",
+                copyrights: [],
+              },
+            ],
+          }
+        : { headers: fixture.headers, files: [] };
+      writeFileSync(outFile, JSON.stringify(doc));
+      return Promise.resolve({ stdout: "", stderr: "" });
+    };
+    mock.module("../src/collectors/exec", () => ({
+      ...REAL_EXEC,
+      execTool: routedExecTool,
+    }));
+
+    const { dir, path } = tempCachePath();
+    cacheDir = dir;
+    const model: CanonicalDependenciesLike = {
+      packages: [
+        {
+          purl: "pkg:pypi/typing-extensions@4.9.0",
+          name: "typing-extensions",
+          version: "4.9.0",
+          occurrences: [{ target: "proj", isDevDependency: false }],
+          licenseClaims: [],
+          scope: "app",
+        },
+      ],
+    };
+    try {
+      const { fetch } = fetchStubReturningEmpty();
+      const result = await withFetchGlobal(fetch, () =>
+        enrichUnknowns(model as never, {
+          mode: "generate",
+          cachePath: path,
+          verbose: false,
+          intensive: { targetDirs: [repoDir] },
+        }),
+      );
+      const claim = result.model.packages[0]?.licenseClaims.find(
+        (c) => c.source === "scancode",
+      );
+      expect(claim).toEqual({
+        raw: "Apache-2.0",
+        kind: "expression",
+        source: "scancode",
+      });
+      const entry = getEntry(
+        readCache(path),
+        "pkg:pypi/typing-extensions@4.9.0",
+      );
+      expect(entry?.license).toBe("Apache-2.0");
+      expect(entry?.via).toContain("/manifest");
+    } finally {
+      mock.module("../src/collectors/exec", () => ({
+        ...REAL_EXEC,
+        execTool: fakeExecTool,
+      }));
+    }
+  });
+
   test("idempotent warm run, imprecise-family shape: a replayed scancode answer takes the package out of the burn-down set — zero invocations, byte-identical cache, one claim", async () => {
     repoDir = mkdtempSync(join(tmpdir(), "scancode-intensive-repo-"));
     writeNpmSource(repoDir, "left-pad", "1.3.0");
@@ -1241,7 +1341,7 @@ async function withFetchGlobal<T>(
 // (execTool) are recorder-stubbed so this stays subprocess-free; the
 // assertion that matters is that ZERO of the recorded invocations are a
 // scancode invocation, even though the bait package is present on disk and
-// would resolve via sourceDirFor if the lane were active. This is the
+// would resolve via sourceDirsFor if the lane were active. This is the
 // structural proof that the default path never even LOOKS at ScanCode — not
 // just that enrichUnknowns wasn't passed an intensive option (that unit-level
 // guard already exists; this is the end-to-end version of it).
@@ -1338,7 +1438,7 @@ describe("default generate path isolation lock (10-05, D-07 structural proof)", 
         verbose: false,
       });
 
-      // The bait resolved via sourceDirFor WOULD be scanned if the lane were
+      // The bait resolved via sourceDirsFor WOULD be scanned if the lane were
       // reachable (a real, version-matched node_modules/left-pad with a
       // LICENSE file) — yet the default (--intensive absent) path recorded
       // zero invocations whose argv names the scancode binary.

@@ -3,18 +3,22 @@
  * deep source-level license + copyright detection, orchestrated behind the
  * `--intensive` lane (SCAN-01). Two responsibilities live in this module:
  *
- *  1. `sourceDirFor` — a purl → locally-present source-dir mapper (no
- *     registry/collector analog exists for this; see PATTERNS "No Analog
- *     Found"). npm: the decoded package name under `<targetDir>/node_modules`,
- *     with the installed `package.json` version MANDATORILY equal to the
- *     purl's version (Pitfall 8 — a stale node_modules must never poison the
- *     cache with the wrong version's license). pypi: an in-project `.venv`'s
- *     site-packages, keyed by the PEP-503 structural fold of the dist-info
- *     dir name (ADR-0015: the dir name IS the signal, no PEP-440/508 parsing).
- *     Everything else, or any structural mismatch, returns undefined — an
+ *  1. `sourceDirsFor` — a purl → ordered locally-present scan-candidate
+ *     mapper (no registry/collector analog exists for this; see PATTERNS "No
+ *     Analog Found"). npm: the decoded package name under
+ *     `<targetDir>/node_modules`, with the installed `package.json` version
+ *     MANDATORILY equal to the purl's version (Pitfall 8 — a stale
+ *     node_modules must never poison the cache with the wrong version's
+ *     license). pypi: an in-project `.venv`'s site-packages, keyed by the
+ *     PEP-503 structural fold of the dist-info dir name (ADR-0015: the dir
+ *     name IS the signal, no PEP-440/508 parsing) — the dist-info dir itself
+ *     is the first candidate (a wheel's METADATA and legal files live there,
+ *     not in the import package), the top_level.txt import package dir the
+ *     second. Everything else, or any structural mismatch, returns [] — an
  *     honest skip, never a fabricated guess. A `..`-shaped or
- *     absolute-path-shaped decoded name can never escape the target's
- *     `node_modules` root (resolve + strict prefix-check, T-10-06).
+ *     absolute-path-shaped decoded name (or top_level.txt line) can never
+ *     escape the target's containment root (resolve + strict prefix-check,
+ *     T-10-06).
  *
  *  2. `scanPackageSources` — orchestrates the pinned `scancode-toolkit` CLI
  *     through `execTool` (the tool's only child_process seam; dockerOs.ts
@@ -215,40 +219,53 @@ function sitePackagesDir(venvDir: string): string {
 }
 
 /**
- * Resolve a pypi purl to its locally-present source dir via an in-project
- * `.venv`'s site-packages: the dist-info dir name is the PEP-503 structural
- * fold of `<name>-<version>` (literal lower-case + `-`/`_`/`.` folded), and
- * its `top_level.txt` (sorted, first entry that exists as a sibling dir)
- * names the actual package dir to scan. Absent venv, absent dist-info,
- * absent/empty top_level.txt, or no existing named sibling -> undefined
- * (honest skip, never a fabricated guess). top_level.txt content is fully
+ * Resolve a pypi purl to its ordered locally-present scan candidates via an
+ * in-project `.venv`'s site-packages. The dist-info dir name is the PEP-503
+ * structural fold of `<name>-<version>` (literal lower-case + `-`/`_`/`.`
+ * folded); the matched dist-info dir itself is ALWAYS the first candidate —
+ * a wheel install puts `METADATA` and the `LICENSE`/`licenses/` legal files
+ * there, not inside the import package, so it is where the election lanes'
+ * evidence actually lives. The `top_level.txt`-named import package dir
+ * (sorted, first entry that exists as a sibling dir) follows as the second
+ * candidate when present. Absent venv or absent dist-info -> [] (honest
+ * skip, never a fabricated guess). top_level.txt content is fully
  * controlled by the installed package, so a `..`-shaped or
  * absolute-path-shaped line can never name a directory outside
  * site-packages (resolve + strict prefix-check, the npmSourceDir guard).
  */
-function pypiSourceDir(
-  purl: EcosystemPurl,
-  targetDir: string,
-): string | undefined {
+function pypiSourceDirs(purl: EcosystemPurl, targetDir: string): string[] {
   const venvDir = join(targetDir, ".venv");
   // Resolved once up front so both sides of the containment check below
   // compare canonical absolute paths.
   const sitePackages = resolve(sitePackagesDir(venvDir));
-  if (!existsSync(sitePackages)) return undefined;
+  if (!existsSync(sitePackages)) return [];
 
   const name = safeDecode(purl.encodedName);
-  if (name === undefined) return undefined;
+  if (name === undefined) return [];
   const folded = pep503Fold(`${name}-${purl.version}`);
 
   const entries = safeReaddir(sitePackages);
-  const distInfoDir = entries.find(
+  const distInfoName = entries.find(
     (e) =>
       e.endsWith(".dist-info") &&
       pep503Fold(e.slice(0, -".dist-info".length)) === folded,
   );
-  if (distInfoDir === undefined) return undefined;
+  if (distInfoName === undefined) return [];
 
-  const topLevelPath = join(sitePackages, distInfoDir, "top_level.txt");
+  const distInfoDir = join(sitePackages, distInfoName);
+  const packageDir = topLevelPackageDir(sitePackages, distInfoDir);
+  return packageDir === undefined ? [distInfoDir] : [distInfoDir, packageDir];
+}
+
+/**
+ * The `top_level.txt`-named import package dir inside site-packages, or
+ * undefined when absent/unreadable/empty or when no named sibling exists.
+ */
+function topLevelPackageDir(
+  sitePackages: string,
+  distInfoDir: string,
+): string | undefined {
+  const topLevelPath = join(distInfoDir, "top_level.txt");
   if (!existsSync(topLevelPath)) return undefined;
 
   let topLevelRaw: string;
@@ -279,30 +296,32 @@ function pypiSourceDir(
 }
 
 /**
- * Map a purl to its locally-present source dir across a set of candidate
- * target dirs (probed in {@link compareCodeUnits}-sorted order, first
- * structural match wins — determinism regardless of caller-supplied order).
- * npm and pypi are the only supported ecosystems (Pattern 4); every other
- * type — including an unparseable purl — returns undefined with zero fs
- * probes beyond the initial parse.
+ * Map a purl to its ordered locally-present scan candidates across a set of
+ * candidate target dirs (probed in {@link compareCodeUnits}-sorted order,
+ * first target dir with a structural match wins — determinism regardless of
+ * caller-supplied order). npm yields at most one dir; pypi yields the
+ * matched dist-info dir first and the top_level.txt import package dir
+ * second (the caller scans in order until the first positive answer). npm
+ * and pypi are the only supported ecosystems (Pattern 4); every other type —
+ * including an unparseable purl — returns [] with zero fs probes beyond the
+ * initial parse.
  */
-export function sourceDirFor(
-  purl: string,
-  targetDirs: string[],
-): string | undefined {
+export function sourceDirsFor(purl: string, targetDirs: string[]): string[] {
   const parsed = parsePurl(purl);
-  if (parsed === undefined) return undefined;
-  if (parsed.type !== "npm" && parsed.type !== "pypi") return undefined;
+  if (parsed === undefined) return [];
+  if (parsed.type !== "npm" && parsed.type !== "pypi") return [];
 
   const sortedDirs = [...targetDirs].sort(compareCodeUnits);
   for (const targetDir of sortedDirs) {
-    const found =
-      parsed.type === "npm"
-        ? npmSourceDir(parsed, targetDir)
-        : pypiSourceDir(parsed, targetDir);
-    if (found !== undefined) return found;
+    if (parsed.type === "npm") {
+      const found = npmSourceDir(parsed, targetDir);
+      if (found !== undefined) return [found];
+    } else {
+      const found = pypiSourceDirs(parsed, targetDir);
+      if (found.length > 0) return found;
+    }
   }
-  return undefined;
+  return [];
 }
 
 // --- Invocation lane -------------------------------------------------------
@@ -316,7 +335,7 @@ export function sourceDirFor(
  * (EnrichOptions.now?, ScancodeScanOptions.scancodeBin?).
  */
 export interface IntensiveOptions {
-  /** Candidate roots probed by {@link sourceDirFor} (compareCodeUnits-sorted, first match wins). */
+  /** Candidate roots probed by {@link sourceDirsFor} (compareCodeUnits-sorted, first match wins). */
   targetDirs: string[];
   /** Executable that runs the pinned scancode binary. Defaults to "scancode". */
   scancodeBin?: string;

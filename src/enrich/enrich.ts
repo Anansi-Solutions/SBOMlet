@@ -65,7 +65,7 @@ import { resolveNpmLicense } from "./npm";
 import { resolvePypiLicense } from "./pypi";
 import {
   scanPackageSources,
-  sourceDirFor,
+  sourceDirsFor,
   type IntensiveOptions,
 } from "./scancode";
 
@@ -538,9 +538,9 @@ function applyScanResult(
  * (D-03 — a per-package wall-clock timeout and honest per-package attribution
  * beat batch amortization; the residual set is tiny by design, so sequential
  * scanning is the simple, honest choice — revisit only if measured cost
- * demands otherwise) map its purl to a locally-present source dir
- * ({@link sourceDirFor}) and, when present, scan it
- * ({@link scanPackageSources}):
+ * demands otherwise) map its purl to its ordered locally-present scan
+ * candidates ({@link sourceDirsFor}) and scan them in order until the first
+ * positive answer ({@link scanPackageSources}):
  *
  *  - A warm-cache scancode answer already replayed onto the package
  *    ({@link scancodeReplayDone}) → skip before any dir mapping: nothing new
@@ -574,11 +574,16 @@ async function scanResidual(
     if (scancodeReplayDone(entry.entry, getEntry(cache, entry.entry.purl))) {
       continue; // the warm cache already answered: no re-scan, no restamp
     }
-    const sourceDir = sourceDirFor(entry.entry.purl, intensive.targetDirs);
-    if (sourceDir === undefined) continue; // D-02: no locally-present source, honest skip
-    const resolved = await scanPackageSources(sourceDir, scanOpts);
-    if (resolved === null) continue; // clean no-answer: write nothing, existing negative stays
-    applyScanResult(entry, resolved, packages, cache, opts);
+    // D-02: an empty candidate list is the no-locally-present-source skip.
+    for (const sourceDir of sourceDirsFor(
+      entry.entry.purl,
+      intensive.targetDirs,
+    )) {
+      const resolved = await scanPackageSources(sourceDir, scanOpts);
+      if (resolved === null) continue; // clean no-answer: try the next candidate
+      applyScanResult(entry, resolved, packages, cache, opts);
+      break; // first positive answer wins; nothing rewrites it
+    }
   }
 }
 
