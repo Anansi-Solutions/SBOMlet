@@ -31,9 +31,12 @@
  * `source:"scancode"` cache entry. A clean no-answer writes nothing — an
  * existing registry negative is left untouched, and scancode negatives are
  * never cached (re-scanning a tiny residual set each intensive run is
- * cheaper than the added envelope semantics). `check` never receives the
- * `intensive` option and never scans; it replays a scancode-sourced claim
- * from the committed cache exactly like a registry-sourced one.
+ * cheaper than the added envelope semantics). A residual whose warm-cache
+ * scancode answer is already replayed onto it is skipped outright, so a warm
+ * intensive run re-scans nothing and rewrites nothing (byte-identical
+ * committed cache). `check` never receives the `intensive` option and never
+ * scans; it replays a scancode-sourced claim from the committed cache
+ * exactly like a registry-sourced one.
  */
 import { sanitizeEvidenceText } from "../merge/merge";
 import {
@@ -473,6 +476,32 @@ function residualUnknowns(packages: PackageEntry[]): Unknown[] {
 }
 
 /**
+ * True when a residual package's warm-cache scancode answer has ALREADY been
+ * replayed onto it: the cache entry carries scancode provenance with a
+ * positive license, and that exact claim is present on the package (the
+ * cache-hit loop in enrichUnknowns appended it). Re-scanning such a package
+ * would only re-derive the answer the cache already holds and restamp its
+ * `fetchedAt` — churning the committed bytes on every warm run (and turning
+ * the scheduled workflow's "artifacts unchanged" early-exit into a
+ * timestamp-only commit every month). The shape that makes this matter is an
+ * imprecise family claim co-existing with the scancode answer: the imprecise
+ * claim never normalizes, so needsEnrichment keeps the package residual
+ * forever — this skip is what takes it out of the warm burn-down set.
+ */
+function scancodeReplayDone(
+  entry: PackageEntry,
+  hit: CacheEntry | undefined,
+): boolean {
+  if (hit === undefined || hit.source !== "scancode" || hit.license === null) {
+    return false;
+  }
+  const license = hit.license;
+  return entry.licenseClaims.some(
+    (c) => c.source === "scancode" && c.raw === license,
+  );
+}
+
+/**
  * Apply one positive scancode result to a residual package: append the
  * "scancode"-sourced claim, attach attribution when the package carries none
  * (reusing {@link withReplayAttribution}'s sanitize/dedupe/sort/cap contract —
@@ -513,6 +542,10 @@ function applyScanResult(
  * ({@link sourceDirFor}) and, when present, scan it
  * ({@link scanPackageSources}):
  *
+ *  - A warm-cache scancode answer already replayed onto the package
+ *    ({@link scancodeReplayDone}) → skip before any dir mapping: nothing new
+ *    to learn, and a re-scan would restamp `fetchedAt` and churn the
+ *    committed cache bytes on every warm run.
  *  - No locally-present source dir → honest skip, zero scan attempted, the
  *    package keeps its existing (possibly still-negative) residual (D-02).
  *  - A clean no-answer scan → writes NOTHING: the existing registry negative
@@ -538,6 +571,9 @@ async function scanResidual(
     ...(intensive.tempDir !== undefined ? { tempDir: intensive.tempDir } : {}),
   };
   for (const entry of residual) {
+    if (scancodeReplayDone(entry.entry, getEntry(cache, entry.entry.purl))) {
+      continue; // the warm cache already answered: no re-scan, no restamp
+    }
     const sourceDir = sourceDirFor(entry.entry.purl, intensive.targetDirs);
     if (sourceDir === undefined) continue; // D-02: no locally-present source, honest skip
     const resolved = await scanPackageSources(sourceDir, scanOpts);

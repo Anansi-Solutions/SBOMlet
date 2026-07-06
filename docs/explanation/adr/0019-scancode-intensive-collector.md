@@ -67,9 +67,13 @@ would have split the single offline source of truth `check` depends on into
 two files that have to agree; one envelope with a provenance tag needed no
 new machinery at all.
 
-A ScanCode claim can only ever *fill* a gap, never override a precise one. If
-registry enrichment already produced a precise license, ScanCode does not run
-for that package. Where a package is imprecise — a family is known but the
+A ScanCode claim can only ever *fill* a gap, never override a precise one. A
+package leaves the scan set once every claim it carries normalizes precisely,
+or once a previous scan's answer is already replayed from the committed
+cache — a package kept residual by an imprecise or garbled claim is scanned
+once, and warm runs after that re-scan nothing and rewrite nothing, so the
+scheduled workflow no-ops on unchanged inputs. Where a package is imprecise
+— a family is known but the
 exact identifier is not — a ScanCode claim only replaces the entry when it
 agrees with the already-known family; a ScanCode MIT detection against a
 declared-imprecise GPL family does not "helpfully" resolve to MIT, because

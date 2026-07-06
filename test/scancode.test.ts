@@ -1048,6 +1048,89 @@ describe("enrichUnknowns intensive lane (10-04: residual scan, provenance write,
     });
   });
 
+  test("idempotent warm run, imprecise-family shape: a replayed scancode answer takes the package out of the burn-down set — zero invocations, byte-identical cache, one claim", async () => {
+    repoDir = mkdtempSync(join(tmpdir(), "scancode-intensive-repo-"));
+    writeNpmSource(repoDir, "left-pad", "1.3.0");
+    const { dir, path } = tempCachePath();
+    cacheDir = dir;
+
+    // The refinement matrix's flagship shape: an imprecise family claim
+    // ("BSD" normalizes to expression null FOREVER) plus a scancode answer
+    // inside that family. needsEnrichment stays true even after the replay,
+    // so without the replay-done skip the package would be re-scanned and
+    // its fetchedAt restamped on every warm run.
+    const fixture = JSON.parse(readFileSync(FIXTURE_PATH, "utf8")) as {
+      headers: unknown[];
+    };
+    const bsdDoc = {
+      headers: fixture.headers,
+      files: [
+        {
+          path: "left-pad/LICENSE",
+          detected_license_expression_spdx: "BSD-3-Clause",
+          copyrights: [{ copyright: "Copyright (c) 2020 Example Author" }],
+        },
+      ],
+    };
+    mock.module("../src/collectors/exec", () => ({
+      ...REAL_EXEC,
+      execTool: makeFakeExecToolWithDoc(bsdDoc),
+    }));
+
+    const impreciseModel = (): CanonicalDependenciesLike => ({
+      packages: [
+        {
+          ...zeroClaimNpmPackage("left-pad", "1.3.0"),
+          licenseClaims: [
+            { raw: "BSD", kind: "expression", source: "generator" },
+          ],
+        },
+      ],
+    });
+
+    try {
+      const { fetch } = fetchStubReturningEmpty();
+      await withFetchGlobal(fetch, () =>
+        enrichUnknowns(impreciseModel() as never, {
+          mode: "generate",
+          cachePath: path,
+          verbose: false,
+          now: () => new Date("2026-01-01T00:00:00.000Z"),
+          intensive: { targetDirs: [repoDir] },
+        }),
+      );
+      expect(invocations.length).toBe(1);
+      const firstBytes = readFileSync(path, "utf8");
+      invocations = [];
+
+      // Second warm run with a DIFFERENT clock: a restamp would change the
+      // committed bytes; the replay-done skip must keep them identical.
+      const second = await withFetchGlobal(fetch, () =>
+        enrichUnknowns(impreciseModel() as never, {
+          mode: "generate",
+          cachePath: path,
+          verbose: false,
+          now: () => new Date("2026-02-01T00:00:00.000Z"),
+          intensive: { targetDirs: [repoDir] },
+        }),
+      );
+      expect(invocations.length).toBe(0);
+      expect(readFileSync(path, "utf8")).toBe(firstBytes);
+      // Exactly ONE scancode claim — the replay, never a duplicate on top.
+      const scancodeClaims = second.model.packages[0]?.licenseClaims.filter(
+        (c) => c.source === "scancode",
+      );
+      expect(scancodeClaims).toEqual([
+        { raw: "BSD-3-Clause", kind: "expression", source: "scancode" },
+      ]);
+    } finally {
+      mock.module("../src/collectors/exec", () => ({
+        ...REAL_EXEC,
+        execTool: fakeExecTool,
+      }));
+    }
+  });
+
   test("isolation guard: enrichUnknowns mode generate WITHOUT intensive over the same fixture repo invokes zero scancode scans", async () => {
     repoDir = mkdtempSync(join(tmpdir(), "scancode-intensive-repo-"));
     writeNpmSource(repoDir, "left-pad", "1.3.0");
