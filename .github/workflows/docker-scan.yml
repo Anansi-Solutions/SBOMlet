@@ -134,6 +134,28 @@ jobs:
             exit 0
           fi
           head_oid="$(git rev-parse HEAD)"
+          # The createCommitOnBranch payload below is additions-only: it can
+          # represent added/modified files, nothing else. A deletion would
+          # break the base64 read (and could never be committed back), and a
+          # rename or a path git quotes in porcelain output (non-ASCII under
+          # default core.quotepath) would corrupt the path list -- fail loudly
+          # naming the entry instead of producing a broken or silently
+          # incomplete commit.
+          while IFS= read -r line; do
+            xy="${line:0:2}"
+            case "$xy" in
+              *D*|R*|C*)
+                echo "::error::commit-back supports additions/modifications only; unsupported porcelain entry: $line"
+                exit 1
+                ;;
+            esac
+            case "$line" in
+              *'"'*)
+                echo "::error::commit-back cannot represent a git-quoted path; unsupported porcelain entry: $line"
+                exit 1
+                ;;
+            esac
+          done < <(git status --porcelain)
           # Every changed/untracked artifact's base64 content is written to its
           # OWN small file (never passed as a jq/gh CLI argument -- a full-image
           # SBOM's base64 payload is large enough to exceed the OS argv limit).
