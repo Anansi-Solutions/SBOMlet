@@ -23,16 +23,27 @@ on:
         description: "Optional space-separated Dockerfile paths (default: discover all)"
         required: false
         default: ""
+  # GitHub path filters are case-sensitive while the tool's Dockerfile
+  # discovery (isDockerfileName) is case-insensitive, so the filters below
+  # spell out the documented case variants (nginx.Dockerfile, a bare lowercase
+  # dockerfile, DOCKERFILE.prod) -- otherwise editing a discovered Dockerfile
+  # could leave the committed SBOM stale without ever firing this workflow.
   push:
     paths:
       - "**/Dockerfile*"
+      - "**/dockerfile*"
+      - "**/DOCKERFILE*"
       - "**/*.dockerfile"
+      - "**/*.Dockerfile"
       - "examples/docker-scan/**"
       - ".github/workflows/docker-scan.yml"
   pull_request:
     paths:
       - "**/Dockerfile*"
+      - "**/dockerfile*"
+      - "**/DOCKERFILE*"
       - "**/*.dockerfile"
+      - "**/*.Dockerfile"
       - "examples/docker-scan/**"
       - ".github/workflows/docker-scan.yml"
 
