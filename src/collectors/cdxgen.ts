@@ -110,6 +110,18 @@ export function cdxgenCacheArgs(ecosystem: Ecosystem): string[] {
 }
 
 /**
+ * One manifest entry hashed into the cache key: a plain string resolves from
+ * the target's own dir (today's exact behavior, byte-unchanged); an object
+ * form resolves from an explicit `dir` — the yarn workspace-unit path,
+ * where the root yarn.lock and root package.json live in a different
+ * directory than the workspace's own package.json. The hashed label is
+ * ALWAYS the bare file name in both forms — content-relative, never
+ * path-relative — so the two-dirs-same-bytes-same-key lock
+ * (test/yarnPlugin.test.ts) keeps holding for object entries too.
+ */
+export type ManifestEntry = string | { file: string; dir: string };
+
+/**
  * Content-hash cache key. Hashes the raw bytes of the target's manifest files
  * (no text decoding — immune to EOL differences) plus the tool identity and
  * the full argv (callers pass the sentinel-normalized cache argv — never an
@@ -122,17 +134,29 @@ export function cdxgenCacheArgs(ecosystem: Ecosystem): string[] {
  * cache contract and must not change silently. The manifest list is
  * caller-supplied: yarn targets hash ["yarn.lock", "package.json"], poetry
  * targets ["poetry.lock", "pyproject.toml"], uv targets
- * ["uv.lock", "pyproject.toml"].
+ * ["uv.lock", "pyproject.toml"]. A yarn WORKSPACE UNIT instead passes
+ * explicit {file, dir} entries (root yarn.lock, workspace package.json, root
+ * package.json) since its manifests are NOT all in target.dir.
+ *
+ * When `target.workspacePath` is set, one additional
+ * domain-tagged segment enters the hash AFTER the file loop and BEFORE the
+ * tool segment — a stale-cache poisoning guard so two workspaces that happen
+ * to share byte-identical manifests (rare but possible with generated
+ * package.json content) can never collide on the same key. Targets without
+ * workspacePath (every existing target, every existing test) carry no such
+ * segment and hash byte-identically to before this addition.
  */
 export function computeCacheKey(
   target: Target,
   tool: { name: string; version: string },
   args: string[],
-  manifestFiles: readonly string[],
+  manifestFiles: readonly ManifestEntry[],
 ): string {
   const hash = createHash("sha256");
-  for (const file of manifestFiles) {
-    const path = join(target.dir, file);
+  for (const entry of manifestFiles) {
+    const file = typeof entry === "string" ? entry : entry.file;
+    const dir = typeof entry === "string" ? target.dir : entry.dir;
+    const path = join(dir, file);
     // Python targets bypass resolveTarget's yarn-manifest validation, so a
     // missing pyproject.toml first surfaces here — name the target identity
     // and the expected absolute path.
@@ -143,6 +167,9 @@ export function computeCacheKey(
     }
     const bytes = readFileSync(path);
     hash.update(`file:${file}:${bytes.length}\0`).update(bytes);
+  }
+  if (target.workspacePath !== undefined) {
+    hash.update(`workspace:${target.workspacePath}\0`);
   }
   hash.update(`tool:${tool.name}\0${tool.version}\0`);
   for (const arg of args) {

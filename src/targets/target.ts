@@ -18,6 +18,22 @@ export interface Target {
    * `.git` ancestor exists. NEVER contains backslashes, even on Windows.
    */
   identity: string;
+  /**
+   * Present ONLY on a yarn workspace scan unit (a collect-loop expansion):
+   * the absolute directory holding the governing root yarn.lock
+   * and root package.json. Absent means the target itself governs both — every
+   * non-yarn-workspace target and every existing constructor leaves this
+   * unset, so the cache-key and collector paths they exercise stay
+   * byte-unchanged.
+   */
+  lockfileDir?: string;
+  /**
+   * Present ONLY on a yarn workspace scan unit: the lock-relative,
+   * forward-slash workspace path exactly as `@workspace:` resolved it (e.g.
+   * "backend", "libs/a"). Feeds the cache-key discriminator so two
+   * workspaces sharing byte-identical manifests never collide.
+   */
+  workspacePath?: string;
 }
 
 /**

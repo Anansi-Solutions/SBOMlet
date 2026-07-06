@@ -1,0 +1,29 @@
+{
+  "$schema": "http://cyclonedx.org/schema/bom-1.6.schema.json",
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.6",
+  "version": 1,
+  "metadata": {
+    "component": {
+      "type": "application",
+      "name": "demo-root",
+      "purl": "pkg:npm/demo-root"
+    },
+    "tools": {
+      "components": [
+        {
+          "type": "application",
+          "name": "yarn",
+          "version": "4.9.1"
+        },
+        {
+          "type": "library",
+          "group": "@cyclonedx",
+          "name": "yarn-plugin-cyclonedx",
+          "version": "3.3.1"
+        }
+      ]
+    }
+  },
+  "components": []
+}

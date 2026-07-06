@@ -27,7 +27,11 @@ import { existsSync, mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { computeCacheKey, type CollectOptions } from "./cdxgen";
+import {
+  computeCacheKey,
+  type CollectOptions,
+  type ManifestEntry,
+} from "./cdxgen";
 import { execTool } from "./exec";
 import type { Target } from "../targets/target";
 
@@ -152,6 +156,24 @@ function validatePluginOutput(outFile: string, invocation: string): void {
 }
 
 /**
+ * The cache-key manifest list for a target: the exact string pair when the
+ * target has no lockfileDir (every existing target); a unit-shaped list of
+ * explicit {file, dir} entries when it does (workspace-unit expansion) —
+ * root yarn.lock, the unit's own package.json, and root package.json, in
+ * that order.
+ */
+function manifestEntriesFor(target: Target): readonly ManifestEntry[] {
+  if (target.lockfileDir === undefined) {
+    return ["yarn.lock", "package.json"];
+  }
+  return [
+    { file: "yarn.lock", dir: target.lockfileDir },
+    { file: "package.json", dir: target.dir },
+    { file: "package.json", dir: target.lockfileDir },
+  ];
+}
+
+/**
  * Dual-run scan: one call performs the full (dev+prod) run AND the
  * --production run and returns both SBOM paths. The runner defaults to
  * "mise" (`mise x -- yarn ...`): mise.exe is a real executable, verified
@@ -190,11 +212,18 @@ export async function collectWithYarnPlugin(
     prodSbomPath: prodPath,
     // Reuses the shared cache-key framing contract; hashes both argv arrays
     // (sentinel-normalized) so a flag change in either run invalidates the
-    // cached pair while per-run temp paths never enter the key.
-    cacheKey: computeCacheKey(target, YARN_PLUGIN_TOOL, yarnPluginCacheArgs(), [
-      "yarn.lock",
-      "package.json",
-    ]),
+    // cached pair while per-run temp paths never enter the key. A unit-shaped
+    // target (workspace expansion, target.lockfileDir set) hashes the
+    // ROOT yarn.lock + the WORKSPACE package.json + the ROOT package.json (root
+    // resolutions/overrides can change the resolved tree even when the
+    // workspace's own manifest is untouched); every other target keeps the
+    // exact pair, resolved from target.dir.
+    cacheKey: computeCacheKey(
+      target,
+      YARN_PLUGIN_TOOL,
+      yarnPluginCacheArgs(),
+      manifestEntriesFor(target),
+    ),
     tool: YARN_PLUGIN_TOOL,
   };
 }

@@ -5,10 +5,10 @@
  */
 
 import { existsSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import { join, relative, resolve, sep } from "node:path";
 
 import { assertBunLockSize } from "../collectors/bunLock";
-import { manifestFilesFor } from "../collectors/dispatch";
+import { manifestFilesFor, selectJsGenerator } from "../collectors/dispatch";
 import { collectors } from "../collectors/registry";
 import { compareCodeUnits } from "../model/dependencies";
 import { type CollectedSbom } from "../merge/merge";
@@ -18,6 +18,7 @@ import {
   lockfileNameFor,
   type DiscoveredTarget,
 } from "../targets/discover";
+import { yarnWorkspaceMembers } from "../targets/firstParty";
 import { resolveTarget } from "../targets/target";
 import {
   classifyCoverage,
@@ -93,10 +94,230 @@ export interface CollectResult {
 }
 
 /**
+ * A yarn workspace scan unit: a DiscoveredTarget carrying the two
+ * lockfileDir/workspacePath fields, always set together. The root member
+ * (".") in the lock reuses the ORIGINAL target unchanged — it keeps identity
+ * "." and carries neither field — only non-"." members
+ * become a distinct unit.
+ */
+type WorkspaceScanUnit = DiscoveredTarget;
+
+/**
+ * Enumerate a yarn-plugin-routed target's workspace members into scan units,
+ * or return undefined when expansion does not apply — never invents a unit
+ * the lock does not declare (comment at the call site names the exact
+ * gate). Containment is enforced HERE, before any unit is returned: a
+ * `@workspace:` relPath that resolves outside target.dir (traversal or an
+ * absolute path) throws immediately, naming the offending identity and path
+ * — a tampered lockfile can never move a subprocess cwd outside the scanned
+ * repo and can never silently hide a workspace.
+ */
+function expandYarnWorkspaceUnits(
+  target: DiscoveredTarget,
+  lockfileText: string,
+): WorkspaceScanUnit[] | undefined {
+  if (
+    target.lockfile !== "yarn" ||
+    selectJsGenerator(lockfileText) !== "yarn-plugin"
+  ) {
+    return undefined;
+  }
+  const members = yarnWorkspaceMembers(lockfileText);
+  const hasRoot = members.some((member) => member.relPath === ".");
+  const hasNonRoot = members.some((member) => member.relPath !== ".");
+  // Belt-and-braces fallback: a Berry lock always carries the root workspace
+  // entry, so a lock without one is not trustworthy expansion input — take
+  // today's single-scan path rather than invent units from a shape the lock
+  // never declared.
+  if (!hasRoot || !hasNonRoot) {
+    return undefined;
+  }
+
+  const targetRoot = resolve(target.dir);
+  const units: WorkspaceScanUnit[] = [];
+  for (const member of members) {
+    if (member.relPath === ".") {
+      units.push(target);
+      continue;
+    }
+    const memberDir = resolve(target.dir, member.relPath);
+    const relFromRoot = relative(targetRoot, memberDir);
+    // Containment: neither absolute nor a traversal outside target.dir.
+    if (
+      resolve(member.relPath) === member.relPath ||
+      relFromRoot === ".." ||
+      relFromRoot.startsWith(".." + sep)
+    ) {
+      throw new Error(
+        `target "${target.identity}/${member.relPath}" escapes the workspace root — refusing to scan ${memberDir}`,
+      );
+    }
+    units.push({
+      ...target,
+      dir: memberDir,
+      identity:
+        target.identity === "."
+          ? member.relPath
+          : `${target.identity}/${member.relPath}`,
+      lockfileDir: target.dir,
+      workspacePath: member.relPath,
+    });
+  }
+  return units.sort((a, b) => compareCodeUnits(a.identity, b.identity));
+}
+
+/**
+ * Dispatch one target/unit through the collector registry and apply the
+ * coverage policy — shared by the non-expanded per-target path and every
+ * expanded workspace unit, so the two can never drift apart. `rootLockfileText`
+ * is the text the collector receives via ctx.lockfileText: for a workspace
+ * unit this is the governing ROOT lock (yarn's cross-workspace-dep filter,
+ * firstPartyNames, reads the root lock, never the unit's own directory,
+ * which has no yarn.lock of its own). Returns undefined for a
+ * coverage-skip verdict (never pushed into the merge); throws on a
+ * scannable-but-zero-component result (the coverage hard-fail).
+ */
+async function dispatchAndCollect(
+  target: DiscoveredTarget,
+  rootLockfileText: string,
+  lockfileName: string,
+  opts: GenerateOptions,
+  log: (line: string) => void,
+): Promise<CollectedSbom | undefined> {
+  // Registry dispatch: the map is exhaustive over LockfileKind; the guard is
+  // belt-and-braces, routing an unregistered kind to the tool-error exit
+  // path.
+  const collector = collectors.get(target.lockfile);
+  if (collector === undefined) {
+    throw new Error(
+      `no collector is registered for lockfile kind "${target.lockfile}"`,
+    );
+  }
+  // The CLI owns stderr: the collecting line is emitted HERE, never inside
+  // a collector, with the identity the registration reports for this
+  // lockfile text (yarn's generator choice is content-dependent).
+  const tool = collector.tool(rootLockfileText);
+  log(`collecting ${target.identity} via ${tool.name}@${tool.version}`);
+  const input = await collector.collect(target, {
+    lockfileText: rootLockfileText,
+    timeoutMs: DEFAULT_TIMEOUT_MS,
+    verbose: opts.verbose,
+    log,
+  });
+
+  // Coverage enforcement point: the verdict is authoritative — a
+  // "skip"-classified target is never pushed into the merge, so this gate
+  // and the pre-scan warn+skip can never drift apart (both delegate to
+  // coverageSkipReason). The hard branch — a scannable lockfile whose scan
+  // produced zero components — throws and aborts the run (exit 3 via the
+  // CLI's fail path).
+  const verdict = classifyCoverage(
+    target.identity,
+    lockfileName,
+    rootLockfileText,
+    componentCountOf(input.sbom),
+    target.dir,
+  );
+  if (verdict === "skip") return undefined;
+  return input;
+}
+/**
+ * Fail fast on a missing manifest: discovery requires only the lockfile to
+ * exist, so a vendored/fixture lockfile without its manifest (poetry.lock
+ * sans pyproject.toml, yarn.lock sans package.json) would otherwise burn
+ * the full scan budget before the adapters' own computeCacheKey check
+ * throws. Same error shape as computeCacheKey; this cheap pre-check just
+ * runs first, before any subprocess. `files` is the set to check relative
+ * to `dir` — the non-expanded path checks both lockfile+manifest at
+ * target.dir; a workspace unit checks only package.json at its own dir (the
+ * root yarn.lock's existence was already proven by the read at the root).
+ */
+function assertManifestsExist(
+  identity: string,
+  dir: string,
+  files: readonly string[],
+): void {
+  for (const file of files) {
+    const manifestPath = join(dir, file);
+    if (!existsSync(manifestPath)) {
+      throw new Error(
+        `target "${identity}" is missing ${file}: expected ${manifestPath}`,
+      );
+    }
+  }
+}
+
+/**
+ * Scan every expanded workspace unit in sorted order: per-unit zero-dep
+ * skip (covers the dep-less root unit too), the
+ * re-routed manifest pre-check (only the unit's own package.json; the root
+ * yarn.lock was already proven to exist by the caller's read), then the
+ * shared dispatch+coverage path with the ROOT lock text.
+ */
+async function scanWorkspaceUnits(
+  units: readonly WorkspaceScanUnit[],
+  members: ReturnType<typeof yarnWorkspaceMembers>,
+  rootLockfileText: string,
+  lockfileName: string,
+  opts: GenerateOptions,
+  log: (line: string) => void,
+): Promise<CollectedSbom[]> {
+  const membersByPath = new Map(
+    members.map((member) => [member.relPath, member]),
+  );
+  const results: CollectedSbom[] = [];
+  for (const unit of units) {
+    const member = membersByPath.get(unit.workspacePath ?? ".");
+    if (member !== undefined && !member.hasDependencies) {
+      // Loud, never silent — covers the dep-less root unit as well as any
+      // dep-less workspace.
+      log(
+        `warning: skipping ${unit.identity} — workspace declares no dependencies in yarn.lock`,
+      );
+      continue;
+    }
+    assertManifestsExist(unit.identity, unit.dir, ["package.json"]);
+    const input = await dispatchAndCollect(
+      unit,
+      rootLockfileText,
+      lockfileName,
+      opts,
+      log,
+    );
+    if (input !== undefined) results.push(input);
+  }
+  return results;
+}
+
+/**
+ * Fold a batch of expanded workspace inputs into the running collect-loop
+ * accumulators: pushes each input and adds its unit's OWN dir (never the
+ * root dir) — extracted so the caller's for-loop stays within max-depth 3.
+ */
+function absorbUnitInputs(
+  unitInputs: readonly CollectedSbom[],
+  units: readonly WorkspaceScanUnit[],
+  inputs: CollectedSbom[],
+  dirs: Set<string>,
+): void {
+  const dirByIdentity = new Map(units.map((unit) => [unit.identity, unit.dir]));
+  for (const input of unitInputs) {
+    inputs.push(input);
+    const unitDir = dirByIdentity.get(input.targetIdentity);
+    if (unitDir !== undefined) dirs.add(unitDir);
+  }
+}
+/**
  * The per-target collect loop: resolve targets, dispatch each through the
  * collector registry, and apply the coverage policy. The loop owns the
  * "collecting"/"skipping" stderr lines, routed through the caller-provided log
  * sink, so the locked line shapes are emitted from one place.
+ *
+ * A yarn-plugin-routed target whose lock declares workspace members expands
+ * into one scan unit per member: the non-expanded path below is the exact
+ * body shared verbatim by every other lockfile kind and by a
+ * single-workspace (`@workspace:.`-only) yarn-plugin lock, which never
+ * triggers expansion (structural no-op).
  */
 export async function collectTargets(
   opts: GenerateOptions,
@@ -118,9 +339,23 @@ export async function collectTargets(
     if (target.lockfile === "bun") {
       assertBunLockSize(lockfilePath);
     }
-    // Read once; reused for the empty-check, generator dispatch, and the
-    // first-party member set.
+    // Read once; reused for the empty-check, generator dispatch, expansion,
+    // and the first-party member set.
     const lockfileText = readFileSync(lockfilePath, "utf8");
+
+    const units = expandYarnWorkspaceUnits(target, lockfileText);
+    if (units !== undefined) {
+      const unitInputs = await scanWorkspaceUnits(
+        units,
+        yarnWorkspaceMembers(lockfileText),
+        lockfileText,
+        lockfileName,
+        opts,
+        log,
+      );
+      absorbUnitInputs(unitInputs, units, inputs, dirs);
+      continue;
+    }
 
     const skipReason = coverageSkipReason(
       lockfileName,
@@ -135,56 +370,20 @@ export async function collectTargets(
       continue;
     }
 
-    // Fail fast on a missing manifest: discovery requires only the lockfile to
-    // exist, so a vendored/fixture lockfile without its manifest (poetry.lock
-    // sans pyproject.toml, yarn.lock sans package.json) would otherwise burn
-    // the full scan budget before the adapters' own computeCacheKey check
-    // throws. Same error shape as computeCacheKey; this cheap pre-check just
-    // runs first, before any subprocess.
-    for (const file of manifestFilesFor(target.lockfile)) {
-      const manifestPath = join(target.dir, file);
-      if (!existsSync(manifestPath)) {
-        throw new Error(
-          `target "${target.identity}" is missing ${file}: expected ${manifestPath}`,
-        );
-      }
-    }
-
-    // Registry dispatch: the map is exhaustive over LockfileKind; the guard is
-    // belt-and-braces, routing an unregistered kind to the tool-error exit
-    // path.
-    const collector = collectors.get(target.lockfile);
-    if (collector === undefined) {
-      throw new Error(
-        `no collector is registered for lockfile kind "${target.lockfile}"`,
-      );
-    }
-    // The CLI owns stderr: the collecting line is emitted HERE, never inside
-    // a collector, with the identity the registration reports for this
-    // lockfile text (yarn's generator choice is content-dependent).
-    const tool = collector.tool(lockfileText);
-    log(`collecting ${target.identity} via ${tool.name}@${tool.version}`);
-    const input = await collector.collect(target, {
-      lockfileText,
-      timeoutMs: DEFAULT_TIMEOUT_MS,
-      verbose: opts.verbose,
-      log,
-    });
-
-    // Coverage enforcement point: the verdict is authoritative — a
-    // "skip"-classified target is never pushed into the merge, so this gate
-    // and the pre-scan warn+skip can never drift apart (both delegate to
-    // coverageSkipReason). The hard branch — a scannable lockfile whose scan
-    // produced zero components — throws and aborts the run (exit 3 via the
-    // CLI's fail path).
-    const verdict = classifyCoverage(
+    assertManifestsExist(
       target.identity,
-      lockfileName,
-      lockfileText,
-      componentCountOf(input.sbom),
       target.dir,
+      manifestFilesFor(target.lockfile),
     );
-    if (verdict === "skip") continue;
+
+    const input = await dispatchAndCollect(
+      target,
+      lockfileText,
+      lockfileName,
+      opts,
+      log,
+    );
+    if (input === undefined) continue;
     inputs.push(input);
     dirs.add(target.dir);
   }

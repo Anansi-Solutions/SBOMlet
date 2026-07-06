@@ -13,16 +13,21 @@
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 
 import { CDXGEN_TOOL, computeCacheKey } from "../src/collectors/cdxgen";
+import * as execModule from "../src/collectors/exec";
 import {
   YARN_PLUGIN_TOOL,
+  collectWithYarnPlugin,
   pluginEnv,
   yarnPluginArgs,
   yarnPluginCacheArgs,
 } from "../src/collectors/yarnPlugin";
 import type { Target } from "../src/targets/target";
+
+/** Original exports captured BEFORE any mock.module call (restore target). */
+const REAL_EXEC = { ...execModule };
 
 function makeTarget(yarnLock: string, packageJson: string): Target {
   const dir = mkdtempSync(join(tmpdir(), "licenses-test-"));
@@ -172,5 +177,209 @@ describe("dual-run cache key", () => {
     ).toBe(
       computeCacheKey(b, YARN_PLUGIN_TOOL, yarnPluginCacheArgs(), MANIFESTS),
     );
+  });
+
+  test("a plain-string manifest entry produces a key byte-identical to an equivalent {file, dir: target.dir} object spelling", () => {
+    // The hashed label is content-relative, not path-relative: an object
+    // entry pointing at the SAME dir as the target must hash identically to
+    // the plain-string spelling of the same file.
+    const target = makeTarget(YARN_LOCK, PACKAGE_JSON);
+    const stringKey = computeCacheKey(
+      target,
+      YARN_PLUGIN_TOOL,
+      yarnPluginCacheArgs(),
+      MANIFESTS,
+    );
+    const objectKey = computeCacheKey(
+      target,
+      YARN_PLUGIN_TOOL,
+      yarnPluginCacheArgs(),
+      [
+        { file: "yarn.lock", dir: target.dir },
+        { file: "package.json", dir: target.dir },
+      ],
+    );
+    expect(objectKey).toBe(stringKey);
+  });
+
+  test("a workspace-unit key covers root yarn.lock + workspace package.json + root package.json — mutating any ONE changes the key", () => {
+    const rootDir = mkdtempSync(join(tmpdir(), "licenses-test-root-"));
+    writeFileSync(join(rootDir, "yarn.lock"), YARN_LOCK);
+    writeFileSync(join(rootDir, "package.json"), '{"name":"root"}\n');
+    const unitDir = mkdtempSync(join(tmpdir(), "licenses-test-unit-"));
+    writeFileSync(join(unitDir, "package.json"), PACKAGE_JSON);
+
+    const unit: Target = {
+      dir: unitDir,
+      identity: "backend",
+      lockfileDir: rootDir,
+      workspacePath: "backend",
+    };
+    const manifests = [
+      { file: "yarn.lock", dir: rootDir },
+      { file: "package.json", dir: unitDir },
+      { file: "package.json", dir: rootDir },
+    ];
+    const baseline = computeCacheKey(
+      unit,
+      YARN_PLUGIN_TOOL,
+      yarnPluginCacheArgs(),
+      manifests,
+    );
+
+    // Mutate root yarn.lock only.
+    writeFileSync(join(rootDir, "yarn.lock"), YARN_LOCK + "\n# mutated\n");
+    expect(
+      computeCacheKey(unit, YARN_PLUGIN_TOOL, yarnPluginCacheArgs(), manifests),
+    ).not.toBe(baseline);
+    writeFileSync(join(rootDir, "yarn.lock"), YARN_LOCK);
+
+    // Mutate workspace package.json only.
+    writeFileSync(join(unitDir, "package.json"), PACKAGE_JSON + "\n");
+    expect(
+      computeCacheKey(unit, YARN_PLUGIN_TOOL, yarnPluginCacheArgs(), manifests),
+    ).not.toBe(baseline);
+    writeFileSync(join(unitDir, "package.json"), PACKAGE_JSON);
+
+    // Mutate root package.json only.
+    writeFileSync(join(rootDir, "package.json"), '{"name":"root-changed"}\n');
+    expect(
+      computeCacheKey(unit, YARN_PLUGIN_TOOL, yarnPluginCacheArgs(), manifests),
+    ).not.toBe(baseline);
+  });
+
+  test("two units with byte-identical workspace package.json under the same root differ ONLY by workspacePath and get DIFFERENT keys", () => {
+    const rootDir = mkdtempSync(join(tmpdir(), "licenses-test-root2-"));
+    writeFileSync(join(rootDir, "yarn.lock"), YARN_LOCK);
+    writeFileSync(join(rootDir, "package.json"), '{"name":"root"}\n');
+    const unitADir = mkdtempSync(join(tmpdir(), "licenses-test-unitA-"));
+    const unitBDir = mkdtempSync(join(tmpdir(), "licenses-test-unitB-"));
+    writeFileSync(join(unitADir, "package.json"), PACKAGE_JSON);
+    writeFileSync(join(unitBDir, "package.json"), PACKAGE_JSON);
+
+    const unitA: Target = {
+      dir: unitADir,
+      identity: "backend",
+      lockfileDir: rootDir,
+      workspacePath: "backend",
+    };
+    const unitB: Target = {
+      dir: unitBDir,
+      identity: "frontend",
+      lockfileDir: rootDir,
+      workspacePath: "frontend",
+    };
+    const manifestsFor = (unit: Target): { file: string; dir: string }[] => [
+      { file: "yarn.lock", dir: rootDir },
+      { file: "package.json", dir: unit.dir },
+      { file: "package.json", dir: rootDir },
+    ];
+    const keyA = computeCacheKey(
+      unitA,
+      YARN_PLUGIN_TOOL,
+      yarnPluginCacheArgs(),
+      manifestsFor(unitA),
+    );
+    const keyB = computeCacheKey(
+      unitB,
+      YARN_PLUGIN_TOOL,
+      yarnPluginCacheArgs(),
+      manifestsFor(unitB),
+    );
+    expect(keyA).not.toBe(keyB);
+  });
+
+  test("a target with neither lockfileDir nor workspacePath produces a key through the exact pre-change path", () => {
+    // No behavioral assertion needed beyond re-running the existing
+    // MANIFESTS-based expectations above: this test just asserts the two
+    // fields being undefined does not alter today's key for a plain target.
+    const target = makeTarget(YARN_LOCK, PACKAGE_JSON);
+    expect(target.lockfileDir).toBeUndefined();
+    expect(target.workspacePath).toBeUndefined();
+    const key = computeCacheKey(
+      target,
+      YARN_PLUGIN_TOOL,
+      yarnPluginCacheArgs(),
+      MANIFESTS,
+    );
+    expect(key).toMatch(/^[0-9a-f]{64}$/);
+  });
+});
+
+describe("collectWithYarnPlugin — unit-aware cwd and cache key", () => {
+  let capturedCwds: (string | undefined)[] = [];
+
+  beforeEach(() => {
+    capturedCwds = [];
+    mock.module("../src/collectors/exec", () => ({
+      ...REAL_EXEC,
+      execTool: async (
+        _cmd: string,
+        args: string[],
+        opts: { cwd?: string },
+      ): Promise<{ stdout: string; stderr: string }> => {
+        capturedCwds.push(opts.cwd);
+        // Write a minimal valid plugin output at the -o operand so
+        // validatePluginOutput passes without a real yarn spawn.
+        const outFile = args[args.length - 1] as string;
+        writeFileSync(
+          outFile,
+          JSON.stringify({ specVersion: "1.6", components: [] }),
+        );
+        return { stdout: "", stderr: "" };
+      },
+    }));
+  });
+
+  afterEach(() => {
+    mock.module("../src/collectors/exec", () => REAL_EXEC);
+  });
+
+  test("resolves yarn.lock from lockfileDir for the cache key while spawning with cwd = target.dir — no real spawn happens", async () => {
+    const rootDir = mkdtempSync(join(tmpdir(), "licenses-test-root-collect-"));
+    writeFileSync(
+      join(rootDir, "yarn.lock"),
+      '# synthetic lockfile\n"left-pad@npm:1.3.0":\n  version: 1.3.0\n',
+    );
+    writeFileSync(join(rootDir, "package.json"), '{"name":"root"}\n');
+    const unitDir = mkdtempSync(join(tmpdir(), "licenses-test-unit-collect-"));
+    // The unit dir intentionally has NO yarn.lock of its own — proving the
+    // key and spawn both resolve yarn.lock from lockfileDir, not target.dir.
+    writeFileSync(
+      join(unitDir, "package.json"),
+      '{"name":"backend","dependencies":{"ms":"2.1.3"}}\n',
+    );
+
+    const unit: Target = {
+      dir: unitDir,
+      identity: "backend",
+      lockfileDir: rootDir,
+      workspacePath: "backend",
+    };
+
+    const result = await collectWithYarnPlugin(unit, {
+      timeoutMs: 5000,
+      verbose: false,
+    });
+
+    // The ONLY behavioral spawn change: cwd is the unit dir, for BOTH runs
+    // (full + production) — never the root.
+    expect(capturedCwds).toEqual([unitDir, unitDir]);
+    expect(result.cacheKey).toMatch(/^[0-9a-f]{64}$/);
+
+    // The unit-aware key must differ from an otherwise-identical key computed
+    // with workspacePath undefined — proving the discriminator segment
+    // entered the hash.
+    const noDiscriminatorKey = computeCacheKey(
+      { dir: unitDir, identity: "backend", lockfileDir: rootDir },
+      YARN_PLUGIN_TOOL,
+      yarnPluginCacheArgs(),
+      [
+        { file: "yarn.lock", dir: rootDir },
+        { file: "package.json", dir: unitDir },
+        { file: "package.json", dir: rootDir },
+      ],
+    );
+    expect(result.cacheKey).not.toBe(noDiscriminatorKey);
   });
 });
