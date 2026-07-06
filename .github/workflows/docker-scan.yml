@@ -144,7 +144,7 @@ jobs:
           while IFS= read -r line; do
             xy="${line:0:2}"
             case "$xy" in
-              *D*|R*|C*)
+              *[DRC]*)
                 echo "::error::commit-back supports additions/modifications only; unsupported porcelain entry: $line"
                 exit 1
                 ;;
@@ -187,6 +187,36 @@ jobs:
           if [ -n "$(git status --porcelain)" ]; then
             echo "::error::regenerated scan artifacts are not committed -- run generate and commit the result"
             git --no-pager diff --stat
+            # The upload path: below consumes this list as newline-separated
+            # glob patterns, so it inherits the commit-back's porcelain
+            # hazards: a git-quoted path (non-ASCII under default
+            # core.quotepath) matches nothing and silently drops from the
+            # payload, a rename contributes a garbled "old -> new" line, and
+            # a path starting with "!" becomes an EXCLUSION glob that can
+            # drop other files from the payload. Mirror the commit-back
+            # guard so the offered payload is either complete or loudly
+            # absent.
+            while IFS= read -r line; do
+              xy="${line:0:2}"
+              case "$xy" in
+                *[DRC]*)
+                  echo "::error::upload set supports additions/modifications only; unsupported porcelain entry: $line"
+                  exit 1
+                  ;;
+              esac
+              case "$line" in
+                *'"'*)
+                  echo "::error::upload set cannot represent a git-quoted path; unsupported porcelain entry: $line"
+                  exit 1
+                  ;;
+              esac
+              case "${line:3}" in
+                '!'*)
+                  echo "::error::a leading '!' would become an upload exclusion glob; unsupported porcelain entry: $line"
+                  exit 1
+                  ;;
+              esac
+            done < <(git status --porcelain)
             echo "diverged=true" >> "$GITHUB_OUTPUT"
             # Derive the upload set from the SAME porcelain output this
             # divergence predicate uses, so the downloaded artifact payload is
