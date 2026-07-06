@@ -373,6 +373,23 @@ describe("electExpression / electCopyrights (pure narrow, no exec)", () => {
     const elected = electExpression(files);
     expect(elected?.raw).toBe("MIT");
   });
+
+  test("BUG (10-07 adversarial review, Lens 5): a nested vendored/bundled LICENSE must never outrank the scanned tree's own ROOT legal file — election is basename-only today with no depth check, so array order alone can elect a deeply-nested vendor LICENSE over the real root LICENSE", () => {
+    const files = [
+      // scancode's files[] walk order is not guaranteed root-first; a nested
+      // vendored/bundled dependency's LICENSE (a DIFFERENT, even copyleft
+      // license) appears BEFORE the scanned package's own root LICENSE.
+      {
+        path: "pkg/dist/vendor/some-lib/LICENSE",
+        detected_license_expression_spdx: "GPL-3.0-only",
+      },
+      { path: "pkg/LICENSE", detected_license_expression_spdx: "MIT" },
+    ];
+    const elected = electExpression(files);
+    // The scanned package's OWN root license must win — a nested vendored
+    // file two-or-more segments deep is never "the" root legal file.
+    expect(elected?.raw).toBe("MIT");
+  });
 });
 
 // --- Task 1: purl -> source-dir mapper (pure fs, no exec mock) -------------

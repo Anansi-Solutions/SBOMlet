@@ -393,7 +393,30 @@ function isRawScancodeFile(raw: unknown): raw is RawScancodeFile {
   return typeof raw === "object" && raw !== null;
 }
 
-/** Elect the first file entry matching a basename pattern with a non-null, non-noise expression. */
+/**
+ * True iff a scancode `files[].path` sits directly inside the scanned
+ * tree's own root — never a nested/vendored/bundled subdirectory. ScanCode's
+ * `--json-pp` paths are forward-slash-separated and always prefixed with
+ * the scanned directory's OWN basename (verified live, Plan 02's capture:
+ * `ajv/LICENSE`, `ajv/dist/ajv.bundle.js`), so a root-level file has
+ * EXACTLY two `/`-segments: `<scanRootBasename>/<filename>`.
+ * Backslash-separated paths are defensively rejected too (scancode never
+ * emits them; fail closed rather than trust an unexpected separator as
+ * root-level).
+ *
+ * 10-07 adversarial-review finding (Lens 5): election previously matched on
+ * `basename(path)` alone with no depth check, so a deeply-nested
+ * vendored/bundled dependency's LICENSE — carrying a DIFFERENT, potentially
+ * copyleft license — could silently outrank the scanned package's own root
+ * license purely by `files[]` array order (scancode's own walk order is
+ * not guaranteed root-first). This closes that gap.
+ */
+function isRootLevelPath(path: string): boolean {
+  if (path.includes("\\")) return false;
+  return path.split("/").length === 2;
+}
+
+/** Elect the first ROOT-LEVEL file entry matching a basename pattern with a non-null, non-noise expression. */
 function electFromPattern(
   entries: RawScancodeFile[],
   pattern: RegExp,
@@ -402,6 +425,7 @@ function electFromPattern(
   for (const entry of entries) {
     const path = entry.path;
     if (typeof path !== "string") continue;
+    if (!isRootLevelPath(path)) continue;
     if (!pattern.test(basename(path))) continue;
     const expression = entry.detected_license_expression_spdx;
     if (typeof expression !== "string" || expression.length === 0) continue;
