@@ -29,6 +29,11 @@ on:
   # dockerfile, DOCKERFILE.prod) -- otherwise editing a discovered Dockerfile
   # could leave the committed SBOM stale without ever firing this workflow.
   push:
+    # Path filters are NOT evaluated on tag pushes, so without a branches
+    # filter every tag push would run the full build-and-scan and the
+    # commit-back would target the tag name as a branch. "**" matches all
+    # branches (the paths filter stays effective) and excludes tags.
+    branches: ["**"]
     paths:
       - "**/Dockerfile*"
       - "**/dockerfile*"
