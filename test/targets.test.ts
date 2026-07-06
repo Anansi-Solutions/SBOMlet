@@ -189,6 +189,94 @@ describe("collectTargets — yarn workspace expansion (mechanism test)", () => {
       expect(input.targetIdentity).not.toContain("\\");
     }
   });
+
+  test("unit order is stable and alphabetic regardless of the lock entry order — a REVERSED lock (frontend, backend, root) still yields [., backend, frontend]", async () => {
+    const root = mkdtempSync(join(tmpdir(), "licenses-yarnws-reversed-"));
+    writeFileSync(
+      join(root, "package.json"),
+      JSON.stringify({
+        name: "demo-root",
+        workspaces: ["frontend", "backend"],
+        devDependencies: { "left-pad": "1.3.0" },
+      }) + "\n",
+    );
+    const backendDir = join(root, "backend");
+    const frontendDir = join(root, "frontend");
+    mkdirSync(backendDir);
+    mkdirSync(frontendDir);
+    writeFileSync(
+      join(backendDir, "package.json"),
+      JSON.stringify({ name: "backend", dependencies: { ms: "2.1.3" } }) + "\n",
+    );
+    writeFileSync(
+      join(frontendDir, "package.json"),
+      JSON.stringify({ name: "frontend", dependencies: { sax: "1.4.1" } }) +
+        "\n",
+    );
+    // The lock entries themselves are in REVERSE alphabetic order
+    // (frontend, then backend, then root) — expandYarnWorkspaceUnits'
+    // own explicit .sort(compareCodeUnits) must still produce the
+    // canonical alphabetic order in the output, never the encounter
+    // order the lock happened to declare.
+    writeFileSync(
+      join(root, "yarn.lock"),
+      [
+        "__metadata:",
+        "  version: 8",
+        "  cacheKey: 10c0",
+        "",
+        '"frontend@workspace:frontend":',
+        "  version: 0.0.0-use.local",
+        '  resolution: "frontend@workspace:frontend"',
+        "  dependencies:",
+        '    sax: "npm:1.4.1"',
+        "  languageName: unknown",
+        "  linkType: soft",
+        "",
+        '"backend@workspace:backend":',
+        "  version: 0.0.0-use.local",
+        '  resolution: "backend@workspace:backend"',
+        "  dependencies:",
+        '    ms: "npm:2.1.3"',
+        "  languageName: unknown",
+        "  linkType: soft",
+        "",
+        '"demo-root@workspace:.":',
+        "  version: 0.0.0-use.local",
+        '  resolution: "demo-root@workspace:."',
+        "  dependencies:",
+        '    left-pad: "npm:1.3.0"',
+        "  languageName: unknown",
+        "  linkType: soft",
+        "",
+        '"sax@npm:1.4.1":',
+        "  version: 1.4.1",
+        '  resolution: "sax@npm:1.4.1"',
+        "  languageName: node",
+        "  linkType: hard",
+        "",
+        '"ms@npm:2.1.3":',
+        "  version: 2.1.3",
+        '  resolution: "ms@npm:2.1.3"',
+        "  languageName: node",
+        "  linkType: hard",
+        "",
+        '"left-pad@npm:1.3.0":',
+        "  version: 1.3.0",
+        '  resolution: "left-pad@npm:1.3.0"',
+        "  languageName: node",
+        "  linkType: hard",
+        "",
+      ].join("\n"),
+    );
+
+    const result = await collectTargets(baseOpts(root), () => {});
+    expect(result.inputs.map((input) => input.targetIdentity)).toEqual([
+      ".",
+      "backend",
+      "frontend",
+    ]);
+  });
 });
 const ZERO_DEP_LOCK_LINES = [
   "__metadata:",
@@ -485,6 +573,62 @@ describe("collectTargets — yarn workspace expansion edge behavior", () => {
     expect(ms?.occurrences.some((o) => !o.isDevDependency)).toBe(true);
   });
 
+  test("EVERY unit dep-less (root and its only workspace) yields a loud, empty inventory through the full pipeline — never a crash, never a misleadingly non-empty result", async () => {
+    const root = mkdtempSync(join(tmpdir(), "licenses-yarnws-allskipped-"));
+    writeFileSync(
+      join(root, "package.json"),
+      JSON.stringify({ name: "demo-root", workspaces: ["backend"] }) + "\n",
+    );
+    const backendDir = join(root, "backend");
+    mkdirSync(backendDir);
+    writeFileSync(
+      join(backendDir, "package.json"),
+      JSON.stringify({ name: "backend" }) + "\n",
+    );
+    writeFileSync(
+      join(root, "yarn.lock"),
+      [
+        "__metadata:",
+        "  version: 8",
+        "  cacheKey: 10c0",
+        "",
+        '"demo-root@workspace:.":',
+        "  version: 0.0.0-use.local",
+        '  resolution: "demo-root@workspace:."',
+        "  languageName: unknown",
+        "  linkType: soft",
+        "",
+        '"backend@workspace:backend":',
+        "  version: 0.0.0-use.local",
+        '  resolution: "backend@workspace:backend"',
+        "  languageName: unknown",
+        "  linkType: soft",
+        "",
+      ].join("\n"),
+    );
+
+    const log: string[] = [];
+    const result = await collectTargets(baseOpts(root), (line) => {
+      log.push(line);
+    });
+
+    // Both units skip loudly; the run completes (no throw) with a
+    // genuinely empty (not merely small) input list.
+    expect(log).toContain(
+      "warning: skipping . — workspace declares no dependencies in yarn.lock",
+    );
+    expect(log).toContain(
+      "warning: skipping backend — workspace declares no dependencies in yarn.lock",
+    );
+    expect(result.inputs).toEqual([]);
+
+    // The full pipeline (merge + render) on a genuinely empty input list
+    // must not crash and must render an honest zero-count document, never
+    // a stale/misleading non-empty one.
+    const model = mergeSboms(result.inputs);
+    expect(model.packages).toEqual([]);
+  });
+
   test("zero-dep workspace (including the dep-less root): skip is loud, the run completes, other workspaces still scan", async () => {
     const root = mkdtempSync(join(tmpdir(), "licenses-yarnws-zerodep-"));
     writeFileSync(
@@ -632,6 +776,94 @@ describe("collectTargets — yarn workspace expansion edge behavior", () => {
         /symlink/,
       );
       expect(spawnCount).toBe(0);
+    } finally {
+      mock.module("../src/collectors/yarnPlugin", () => ({
+        ...REAL_YARN_PLUGIN,
+        collectWithYarnPlugin: fakeCollectWithYarnPlugin,
+      }));
+    }
+  });
+
+  test("a workspace unit that declares real dependencies but whose scan yields zero components hard-fails, never silently skips via the ROOT lock text passed to classifyCoverage", async () => {
+    // classifyCoverage receives the ROOT lockfile text (not the unit's own
+    // slice) for its coverageSkipReason pre-check. This proves that check
+    // never masks a genuine zero-component scan as a skip for a unit that
+    // itself declares dependencies: the componentCount===0 branch must
+    // still throw.
+    const root = mkdtempSync(join(tmpdir(), "licenses-yarnws-hardfail-"));
+    writeFileSync(
+      join(root, "package.json"),
+      JSON.stringify({ name: "demo-root", workspaces: ["backend"] }) + "\n",
+    );
+    const backendDir = join(root, "backend");
+    mkdirSync(backendDir);
+    writeFileSync(
+      join(backendDir, "package.json"),
+      JSON.stringify({ name: "backend", dependencies: { ms: "2.1.3" } }) + "\n",
+    );
+    writeFileSync(
+      join(root, "yarn.lock"),
+      [
+        "__metadata:",
+        "  version: 8",
+        "  cacheKey: 10c0",
+        "",
+        '"demo-root@workspace:.":',
+        "  version: 0.0.0-use.local",
+        '  resolution: "demo-root@workspace:."',
+        "  languageName: unknown",
+        "  linkType: soft",
+        "",
+        '"backend@workspace:backend":',
+        "  version: 0.0.0-use.local",
+        '  resolution: "backend@workspace:backend"',
+        "  dependencies:",
+        '    ms: "npm:2.1.3"',
+        "  languageName: unknown",
+        "  linkType: soft",
+        "",
+        '"ms@npm:2.1.3":',
+        "  version: 2.1.3",
+        '  resolution: "ms@npm:2.1.3"',
+        "  languageName: node",
+        "  linkType: hard",
+        "",
+      ].join("\n"),
+    );
+
+    // Stub the plugin to return an EMPTY SBOM for the backend unit only
+    // (a scan that legitimately produced nothing, despite a real
+    // dependencies: entry in the lock).
+    mock.module("../src/collectors/yarnPlugin", () => ({
+      ...REAL_YARN_PLUGIN,
+      collectWithYarnPlugin: async (
+        _target: Target,
+      ): Promise<yarnPluginModule.YarnPluginScanResult> => {
+        const tempDir = mkdtempSync(
+          join(tmpdir(), "licenses-yarnws-hardfail-scan-"),
+        );
+        const sbomPath = join(tempDir, "full.json");
+        const prodSbomPath = join(tempDir, "prod.json");
+        const empty = JSON.stringify({
+          bomFormat: "CycloneDX",
+          specVersion: "1.6",
+          components: [],
+        });
+        writeFileSync(sbomPath, empty);
+        writeFileSync(prodSbomPath, empty);
+        return {
+          sbomPath,
+          prodSbomPath,
+          cacheKey: "fake",
+          tool: REAL_YARN_PLUGIN.YARN_PLUGIN_TOOL,
+        };
+      },
+    }));
+
+    try {
+      await expect(collectTargets(baseOpts(root), () => {})).rejects.toThrow(
+        /coverage assertion failed/,
+      );
     } finally {
       mock.module("../src/collectors/yarnPlugin", () => ({
         ...REAL_YARN_PLUGIN,
