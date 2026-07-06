@@ -40,6 +40,7 @@ import {
   mkdtempSync,
   readdirSync,
   readFileSync,
+  rmSync,
   statSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -581,6 +582,13 @@ async function runScancode(
  * read -> read -> parse + version-assert -> election. A spawn ENOENT
  * (missing tool) is mapped to the D-01 loud install-command error; any other
  * rejection (non-zero exit, timeout) propagates as-is.
+ *
+ * Output-file hygiene: any stale out file is removed BEFORE the spawn, so
+ * with a caller-shared tempDir a PREVIOUS scan's output can never masquerade
+ * as this scan's result (the exists-check really proves scancode wrote
+ * output). Afterwards the out file is removed again — and when this function
+ * created the temp dir itself, the whole dir is removed, never leaked one
+ * per scanned package per run.
  */
 export async function scanPackageSources(
   sourceDir: string,
@@ -589,21 +597,28 @@ export async function scanPackageSources(
   const timeoutMs = opts.timeoutMs ?? DEFAULT_SCAN_TIMEOUT_MS;
   const verbose = opts.verbose ?? false;
   const scancodeBin = opts.scancodeBin ?? "scancode";
+  const ownsTempDir = opts.tempDir === undefined;
   const tempDir =
     opts.tempDir ?? mkdtempSync(join(tmpdir(), "licenses-scancode-"));
   const outFile = join(tempDir, "scancode-output.json");
+  rmSync(outFile, { force: true });
 
-  const parsed = await runScancode(sourceDir, outFile, scancodeBin, {
-    timeoutMs,
-    verbose,
-  });
+  try {
+    const parsed = await runScancode(sourceDir, outFile, scancodeBin, {
+      timeoutMs,
+      verbose,
+    });
 
-  const elected = electExpression(parsed.files);
-  if (elected === undefined) return null;
+    const elected = electExpression(parsed.files);
+    if (elected === undefined) return null;
 
-  return {
-    raw: elected.raw,
-    via: elected.via,
-    copyrights: electCopyrights(parsed.files),
-  };
+    return {
+      raw: elected.raw,
+      via: elected.via,
+      copyrights: electCopyrights(parsed.files),
+    };
+  } finally {
+    if (ownsTempDir) rmSync(tempDir, { recursive: true, force: true });
+    else rmSync(outFile, { force: true });
+  }
 }

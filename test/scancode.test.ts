@@ -11,6 +11,7 @@
 
 import {
   copyFileSync,
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -18,7 +19,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import {
   afterAll,
   afterEach,
@@ -330,6 +331,51 @@ describe("scanPackageSources (subprocess-free, exec recorder harness)", () => {
       ...REAL_EXEC,
       execTool: fakeExecTool,
     }));
+  });
+
+  test("a shared tempDir never lets a previous scan's output masquerade as a later scan's result", async () => {
+    // One caller-supplied tempDir threaded into two scans (exactly what
+    // scanResidual does when IntensiveOptions.tempDir is set): the second
+    // scan's exec writes NO output, so the 'produced no output' guard must
+    // fire — never a parse of the FIRST package's leftover file.
+    let call = 0;
+    const writeOnceExecTool = (
+      cmd: string,
+      args: string[],
+    ): Promise<{ stdout: string; stderr: string }> => {
+      invocations.push([cmd, ...args]);
+      if (call++ === 0) {
+        const jsonPpIndex = args.indexOf("--json-pp");
+        copyFileSync(FIXTURE_PATH, args[jsonPpIndex + 1] as string);
+      }
+      return Promise.resolve({ stdout: "", stderr: "" });
+    };
+    mock.module("../src/collectors/exec", () => ({
+      ...REAL_EXEC,
+      execTool: writeOnceExecTool,
+    }));
+
+    tempDir = mkdtempSync(join(tmpdir(), "scancode-shared-"));
+    try {
+      const first = await scanPackageSources("/pkg/first", { tempDir });
+      expect(first?.raw).toBe("MIT");
+      await expect(
+        scanPackageSources("/pkg/second", { tempDir }),
+      ).rejects.toThrow(/produced no output/);
+    } finally {
+      mock.module("../src/collectors/exec", () => ({
+        ...REAL_EXEC,
+        execTool: fakeExecTool,
+      }));
+    }
+  });
+
+  test("an owned (default) temp dir is cleaned up after the scan", async () => {
+    const result = await scanPackageSources("/some/source/dir", {});
+    expect(result?.raw).toBe("MIT");
+    // argv shape: [cmd, --license, --copyright, --json-pp, outFile, --, dir]
+    const outFile = (invocations[0] as string[])[4] as string;
+    expect(existsSync(dirname(outFile))).toBe(false);
   });
 
   test("isolation proof: no scancode invocation is recorded unless scanPackageSources is called", () => {
