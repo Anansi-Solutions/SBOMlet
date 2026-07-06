@@ -646,8 +646,14 @@ export async function runGenerateDockerSbom(
   // resolution or artifact write — this mode scans nothing and writes
   // nothing, it only prints the tool's own policy-aware Dockerfile walk to
   // stdout (the machine channel) for the CI workflow's build loop to consume.
-  // The CLI conflict guard guarantees repoRoot is set when listDockerfiles is.
-  if (opts.listDockerfiles === true && opts.repoRoot !== undefined) {
+  if (opts.listDockerfiles === true) {
+    // The CLI conflict table pairs --list-dockerfiles with --repo-root at the
+    // flag surface; hold the same invariant at this public API boundary so a
+    // programmatic caller can never fall through the mode ladder into the
+    // default live scan (which would overwrite the committed SBOM).
+    if (opts.repoRoot === undefined) {
+      throw new Error("--list-dockerfiles requires a repo root");
+    }
     const repoRoot = resolveFrom(opts.baseDir, opts.repoRoot);
     const dockerIgnore =
       opts.policyPath !== undefined

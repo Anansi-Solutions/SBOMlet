@@ -6,6 +6,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import {
   dockerfileListing,
   resolveDiscoveredImages,
+  runGenerateDockerSbom,
   safeLiveScanImages,
 } from "../src/pipeline/dockerSbom";
 
@@ -174,5 +175,25 @@ describe("dockerfileListing (--list-dockerfiles, NO docker, NO writes)", () => {
     writeFile(root, "README.md", "nothing here\n");
 
     expect(dockerfileListing(root)).toEqual([]);
+  });
+});
+
+describe("runGenerateDockerSbom (--list-dockerfiles API invariant)", () => {
+  test("listDockerfiles without repoRoot throws instead of falling through", async () => {
+    // The CLI conflict table pairs --list-dockerfiles with --repo-root at the
+    // flag surface, but runGenerateDockerSbom is a public export: a
+    // programmatic caller passing { listDockerfiles: true } alone must hit the
+    // same invariant at the API boundary -- never fall through the mode
+    // ladder into the default live scan (which would spawn docker/syft and
+    // overwrite the committed SBOM). The temp baseDir/output confine any
+    // regression to this test's sandbox.
+    const root = makeTempRoot();
+    await expect(
+      runGenerateDockerSbom({
+        listDockerfiles: true,
+        baseDir: root,
+        dockerOsSbomPath: join(root, "docker-os.sbom.json"),
+      }),
+    ).rejects.toThrow("--list-dockerfiles requires a repo root");
   });
 });
