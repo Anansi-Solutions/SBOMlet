@@ -1,0 +1,222 @@
+{
+  "headers": [
+    {
+      "tool_name": "scancode-toolkit",
+      "tool_version": "32.5.0",
+      "options": {
+        "input": [
+          "ajv"
+        ],
+        "--copyright": true,
+        "--json-pp": "output.json",
+        "--license": true
+      },
+      "notice": "Generated with ScanCode and provided on an \"AS IS\" BASIS, WITHOUT WARRANTIES\nOR CONDITIONS OF ANY KIND, either express or implied. No content created from\nScanCode should be considered or used as legal advice. Consult an Attorney\nfor any legal advice.\nScanCode is a free software code scanning tool from nexB Inc. and others.\nVisit https://github.com/nexB/scancode-toolkit/ for support and download.",
+      "output_format_version": "4.1.0",
+      "message": null,
+      "errors": [],
+      "warnings": [],
+      "extra_data": {
+        "spdx_license_list_version": "3.27",
+        "files_count": 92
+      }
+    }
+  ],
+  "files": [
+    {
+      "path": "ajv/LICENSE",
+      "type": "file",
+      "detected_license_expression": "mit",
+      "detected_license_expression_spdx": "MIT",
+      "license_detections": [
+        {
+          "license_expression": "mit",
+          "license_expression_spdx": "MIT",
+          "matches": [
+            {
+              "license_expression": "mit",
+              "license_expression_spdx": "MIT",
+              "from_file": "ajv/LICENSE",
+              "start_line": 1,
+              "end_line": 1,
+              "matcher": "2-aho",
+              "score": 100.0,
+              "matched_length": 4,
+              "match_coverage": 100.0,
+              "rule_relevance": 100,
+              "rule_identifier": "mit_26.RULE"
+            },
+            {
+              "license_expression": "mit",
+              "license_expression_spdx": "MIT",
+              "from_file": "ajv/LICENSE",
+              "start_line": 5,
+              "end_line": 21,
+              "matcher": "2-aho",
+              "score": 100.0,
+              "matched_length": 161,
+              "match_coverage": 100.0,
+              "rule_relevance": 100,
+              "rule_identifier": "mit.LICENSE"
+            }
+          ],
+          "identifier": "mit-86fcf017-3572-9813-b7e8-0a10ec4a120f"
+        }
+      ],
+      "license_clues": [],
+      "percentage_of_license_text": 96.49,
+      "copyrights": [
+        {
+          "copyright": "Copyright (c) 2015-2017 Evgeny Poberezkin",
+          "start_line": 3,
+          "end_line": 3
+        }
+      ],
+      "holders": [
+        {
+          "holder": "Evgeny Poberezkin",
+          "start_line": 3,
+          "end_line": 3
+        }
+      ],
+      "authors": [],
+      "scan_errors": []
+    },
+    {
+      "path": "ajv/package.json",
+      "type": "file",
+      "detected_license_expression": "mit",
+      "detected_license_expression_spdx": "MIT",
+      "license_detections": [
+        {
+          "license_expression": "mit",
+          "license_expression_spdx": "MIT",
+          "matches": [
+            {
+              "license_expression": "mit",
+              "license_expression_spdx": "MIT",
+              "from_file": "ajv/package.json",
+              "start_line": 58,
+              "end_line": 58,
+              "matcher": "2-aho",
+              "score": 100.0,
+              "matched_length": 2,
+              "match_coverage": 100.0,
+              "rule_relevance": 100,
+              "rule_identifier": "mit_30.RULE"
+            }
+          ],
+          "identifier": "mit-3fce6ea2-8abd-6c6b-3ede-a37af7c6efee"
+        }
+      ],
+      "license_clues": [],
+      "percentage_of_license_text": 0.48,
+      "copyrights": [],
+      "holders": [],
+      "authors": [
+        {
+          "author": "Evgeny Poberezkin",
+          "start_line": 57,
+          "end_line": 57
+        }
+      ],
+      "scan_errors": []
+    },
+    {
+      "path": "ajv/dist/ajv.bundle.js",
+      "type": "file",
+      "detected_license_expression": "bsd-2-clause-views",
+      "detected_license_expression_spdx": "BSD-2-Clause-Views",
+      "license_detections": [
+        {
+          "license_expression": "bsd-2-clause-views",
+          "license_expression_spdx": "BSD-2-Clause-Views",
+          "matches": [
+            {
+              "license_expression": "bsd-2-clause-views",
+              "license_expression_spdx": "BSD-2-Clause-Views",
+              "from_file": "ajv/dist/ajv.bundle.js",
+              "start_line": 5959,
+              "end_line": 5990,
+              "matcher": "2-aho",
+              "score": 92.0,
+              "matched_length": 118,
+              "match_coverage": 92.0,
+              "rule_relevance": 100,
+              "rule_identifier": "bsd-2-clause-views_9.RULE"
+            }
+          ],
+          "identifier": "bsd_2_clause_views-9e21e4c1-6b2a-4b8c-8f3f-2a1d6e0c6f11"
+        }
+      ],
+      "license_clues": [],
+      "percentage_of_license_text": 0.78,
+      "copyrights": [
+        {
+          "copyright": "(c) 2011 Gary Court",
+          "start_line": 5248,
+          "end_line": 5248
+        },
+        {
+          "copyright": "Copyright 2011 Gary Court",
+          "start_line": 5963,
+          "end_line": 5963
+        }
+      ],
+      "holders": [
+        {
+          "holder": "Gary Court",
+          "start_line": 5248,
+          "end_line": 5248
+        },
+        {
+          "holder": "Gary Court",
+          "start_line": 5963,
+          "end_line": 5963
+        }
+      ],
+      "authors": [
+        {
+          "author": "gary.court@gmail.com Gary Court http://github.com/garycourt/uri-js",
+          "start_line": 5959,
+          "end_line": 5960
+        }
+      ],
+      "scan_errors": []
+    },
+    {
+      "path": "ajv/NOTICE.txt",
+      "type": "file",
+      "detected_license_expression": "unknown-license-reference",
+      "detected_license_expression_spdx": "LicenseRef-scancode-unknown-license-reference",
+      "license_detections": [
+        {
+          "license_expression": "unknown-license-reference",
+          "license_expression_spdx": "LicenseRef-scancode-unknown-license-reference",
+          "matches": [
+            {
+              "license_expression": "unknown-license-reference",
+              "license_expression_spdx": "LicenseRef-scancode-unknown-license-reference",
+              "from_file": "ajv/NOTICE.txt",
+              "start_line": 1,
+              "end_line": 1,
+              "matcher": "2-aho",
+              "score": 100.0,
+              "matched_length": 4,
+              "match_coverage": 100.0,
+              "rule_relevance": 100,
+              "rule_identifier": "license-intro_15.RULE"
+            }
+          ],
+          "identifier": "unknown_license_reference-fad048da-d0a1-eb6b-e543-269c6933d476"
+        }
+      ],
+      "license_clues": [],
+      "percentage_of_license_text": 12.9,
+      "copyrights": [],
+      "holders": [],
+      "authors": [],
+      "scan_errors": []
+    }
+  ]
+}
