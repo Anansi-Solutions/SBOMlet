@@ -61,6 +61,12 @@ jobs:
     steps:
       - name: Check out repository code
         uses: actions/checkout@v6
+        with:
+          # No step uses authenticated git (the commit-back goes through
+          # gh api with GH_TOKEN from env), so never leave the contents:write
+          # token in .git/config -- a root-level Dockerfile would otherwise
+          # expose it to COPY inside the image under scan.
+          persist-credentials: false
 
       - name: Set up the SBOMlet toolchain
         uses: jdx/mise-action@v4
