@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+
 import { describe, expect, test } from "bun:test";
 
 import {
@@ -8,6 +11,7 @@ import {
   pnpmThirdPartyEntryCount,
   pythonThirdPartyEntryCount,
   thirdPartyEntryCount,
+  yarnWorkspaceMembers,
 } from "../src/targets/firstParty";
 
 describe("firstPartyNames — workspace/portal member set from lockfile text", () => {
@@ -419,5 +423,208 @@ describe("pnpmImporterNames — importer keys !== '.' (belt-and-braces)", () => 
   test("garbage yields an empty set, never throws", () => {
     expect(pnpmImporterNames("")).toEqual(new Set());
     expect(pnpmImporterNames("nonsense }{ :::")).toEqual(new Set());
+  });
+});
+
+describe("yarnWorkspaceMembers — @workspace: resolution body lines", () => {
+  test("direct entries: resolution body lines yield members with their literal relPaths", () => {
+    const lockfile = [
+      '"backend@workspace:backend":',
+      "  version: 0.0.0-use.local",
+      '  resolution: "backend@workspace:backend"',
+      "  dependencies:",
+      '    ms: "npm:2.1.3"',
+      "  languageName: unknown",
+      "  linkType: soft",
+      "",
+      '"frontend@workspace:frontend":',
+      "  version: 0.0.0-use.local",
+      '  resolution: "frontend@workspace:frontend"',
+      "  dependencies:",
+      '    sax: "npm:1.4.1"',
+      "  languageName: unknown",
+      "  linkType: soft",
+      "",
+    ].join("\n");
+
+    expect(yarnWorkspaceMembers(lockfile)).toEqual([
+      { name: "backend", relPath: "backend", hasDependencies: true },
+      { name: "frontend", relPath: "frontend", hasDependencies: true },
+    ]);
+  });
+
+  test("glob-resolved literal: a scoped name's lazy match extends past the leading @", () => {
+    // The shape a `libs/*` workspaces glob produces once yarn resolves it.
+    const lockfile = [
+      '"@scope/util@workspace:libs/util":',
+      "  version: 0.0.0-use.local",
+      '  resolution: "@scope/util@workspace:libs/util"',
+      "  languageName: unknown",
+      "  linkType: soft",
+      "",
+    ].join("\n");
+
+    expect(yarnWorkspaceMembers(lockfile)).toEqual([
+      { name: "@scope/util", relPath: "libs/util", hasDependencies: false },
+    ]);
+  });
+
+  test("root entry: relPath '.' — a root-only lock yields exactly one member", () => {
+    const lockfile = [
+      '"demo-root@workspace:.":',
+      "  version: 0.0.0-use.local",
+      '  resolution: "demo-root@workspace:."',
+      "  languageName: unknown",
+      "  linkType: soft",
+      "",
+    ].join("\n");
+
+    expect(yarnWorkspaceMembers(lockfile)).toEqual([
+      { name: "demo-root", relPath: ".", hasDependencies: false },
+    ]);
+  });
+
+  test("header range descriptors (workspace:^) never contribute a member", () => {
+    // Cross-workspace deps make the header carry a RANGE descriptor
+    // (workspace:^), not a path — only the resolution body line is real.
+    const lockfile = [
+      '"backend@workspace:^, backend@workspace:backend":',
+      "  version: 0.0.0-use.local",
+      '  resolution: "backend@workspace:backend"',
+      "  languageName: unknown",
+      "  linkType: soft",
+      "",
+    ].join("\n");
+
+    const members = yarnWorkspaceMembers(lockfile);
+    expect(members).toEqual([
+      { name: "backend", relPath: "backend", hasDependencies: false },
+    ]);
+    expect(members.some((m) => m.relPath === "^")).toBe(false);
+  });
+
+  test("hasDependencies: true when the entry's own block has a dependencies: line, false otherwise", () => {
+    const lockfile = [
+      '"backend@workspace:backend":',
+      "  version: 0.0.0-use.local",
+      '  resolution: "backend@workspace:backend"',
+      "  dependencies:",
+      '    ms: "npm:2.1.3"',
+      "  languageName: unknown",
+      "  linkType: soft",
+      "",
+      '"frontend@workspace:frontend":',
+      "  version: 0.0.0-use.local",
+      '  resolution: "frontend@workspace:frontend"',
+      "  languageName: unknown",
+      "  linkType: soft",
+      "",
+    ].join("\n");
+
+    expect(yarnWorkspaceMembers(lockfile)).toEqual([
+      { name: "backend", relPath: "backend", hasDependencies: true },
+      { name: "frontend", relPath: "frontend", hasDependencies: false },
+    ]);
+  });
+
+  test("a dependencies: block never bleeds across entries into a following member", () => {
+    // backend's dependencies: block is followed by a NEW column-0 header
+    // (frontend) before frontend's own (dependencies-less) body — frontend
+    // must report false, not inherit backend's true.
+    const lockfile = [
+      '"backend@workspace:backend":',
+      "  version: 0.0.0-use.local",
+      '  resolution: "backend@workspace:backend"',
+      "  dependencies:",
+      '    ms: "npm:2.1.3"',
+      "  languageName: unknown",
+      "  linkType: soft",
+      "",
+      '"frontend@workspace:frontend":',
+      "  version: 0.0.0-use.local",
+      '  resolution: "frontend@workspace:frontend"',
+      "  languageName: unknown",
+      "  linkType: soft",
+      "",
+    ].join("\n");
+
+    const members = yarnWorkspaceMembers(lockfile);
+    expect(members.find((m) => m.name === "frontend")?.hasDependencies).toBe(
+      false,
+    );
+  });
+
+  test("CRLF lockfile text parses identically (trimEnd tolerance)", () => {
+    const lockfile = [
+      '"backend@workspace:backend":',
+      "  version: 0.0.0-use.local",
+      '  resolution: "backend@workspace:backend"',
+      "  dependencies:",
+      '    ms: "npm:2.1.3"',
+      "  languageName: unknown",
+      "  linkType: soft",
+      "",
+    ].join("\r\n");
+
+    expect(yarnWorkspaceMembers(lockfile)).toEqual([
+      { name: "backend", relPath: "backend", hasDependencies: true },
+    ]);
+  });
+
+  test("garbage/binary-ish text returns [] and never throws", () => {
+    expect(yarnWorkspaceMembers("")).toEqual([]);
+    expect(yarnWorkspaceMembers("not a lockfile at all }{ \0\x01\x02")).toEqual(
+      [],
+    );
+  });
+
+  test("a non-workspace protocol resolution (npm:) contributes nothing", () => {
+    const lockfile = [
+      '"ms@npm:2.1.3":',
+      "  version: 2.1.3",
+      '  resolution: "ms@npm:2.1.3"',
+      "  languageName: node",
+      "  linkType: hard",
+      "",
+    ].join("\n");
+
+    expect(yarnWorkspaceMembers(lockfile)).toEqual([]);
+  });
+
+  test("hostile paths (traversal, absolute) are returned VERBATIM — containment is enforced at unit creation in the collect loop, not here", () => {
+    const lockfile = [
+      '"evil@workspace:../outside":',
+      "  version: 0.0.0-use.local",
+      '  resolution: "evil@workspace:../outside"',
+      "  languageName: unknown",
+      "  linkType: soft",
+      "",
+      '"evil-abs@workspace:/etc/passwd":',
+      "  version: 0.0.0-use.local",
+      '  resolution: "evil-abs@workspace:/etc/passwd"',
+      "  languageName: unknown",
+      "  linkType: soft",
+      "",
+    ].join("\n");
+
+    expect(yarnWorkspaceMembers(lockfile)).toEqual([
+      { name: "evil", relPath: "../outside", hasDependencies: false },
+      { name: "evil-abs", relPath: "/etc/passwd", hasDependencies: false },
+    ]);
+  });
+});
+
+describe("yarnWorkspaceMembers — a workspaces-monorepo fixture (workspace-berry.lock)", () => {
+  test("the full fixture lock parses to exactly the three workspace members, in lockfile order, all with dependencies", () => {
+    const lockfile = readFileSync(
+      join(import.meta.dir, "fixtures", "workspace-berry.lock"),
+      "utf8",
+    );
+
+    expect(yarnWorkspaceMembers(lockfile)).toEqual([
+      { name: "demo-root", relPath: ".", hasDependencies: true },
+      { name: "backend", relPath: "backend", hasDependencies: true },
+      { name: "frontend", relPath: "frontend", hasDependencies: true },
+    ]);
   });
 });

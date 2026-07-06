@@ -16,8 +16,10 @@
  * consumes: thirdPartyEntryCount (yarn), pythonThirdPartyEntryCount
  * (poetry/uv), npmThirdPartyEntryCount / npmFirstPartyNames
  * (package-lock.json v2/v3, plain JSON), and pnpmThirdPartyEntryCount /
- * pnpmImporterNames (pnpm-lock.yaml v6/v9, stateful line scan). All keep the
- * same contract: pure text in, data out, never throw on garbage.
+ * pnpmImporterNames (pnpm-lock.yaml v6/v9, stateful line scan). It also hosts
+ * yarnWorkspaceMembers, the root-lockfile workspace enumeration primitive
+ * (resolution-body-line scan, lockfile-authoritative). All keep the same
+ * contract: pure text in, data out, never throw on garbage.
  */
 
 import { type } from "arktype";
@@ -56,6 +58,82 @@ export function firstPartyNames(lockfileText: string): Set<string> {
     }
   }
   return names;
+}
+
+/**
+ * Matches one indented `resolution:` body line for a `@workspace:` entry,
+ * capturing the member name (lazy quantifier, same scoped-name posture as
+ * FIRST_PARTY_RE — extends past a leading "@") and the literal relative
+ * path Yarn already resolved (verified Yarn-Berry shape: `resolution:
+ * "backend@workspace:backend"`, root as `"proj@workspace:."`). Line-bounded,
+ * no nested quantifiers (ReDoS-resistant, same posture as FIRST_PARTY_RE).
+ */
+const WORKSPACE_RESOLUTION_RE = /^[ \t]+resolution: "(.+?)@workspace:([^"]+)"$/;
+
+/** Matches the entry's own `dependencies:` block header (indented, exact). */
+const DEPENDENCIES_BLOCK_RE = /^[ \t]+dependencies:$/;
+
+/**
+ * Enumerate a root Yarn-Berry lockfile's workspace members from `resolution:`
+ * body lines — NOT entry headers. Headers can carry `workspace:^` /
+ * `workspace:*` range descriptors when workspaces depend on each other
+ * (those are ranges, not paths); only the resolution line inside an entry's
+ * body is the literal path Yarn itself resolved, including glob-form
+ * `workspaces` fields (`"libs/*"` resolves to a literal relative path in the
+ * lock — zero glob code needed here, ADR-0015 posture).
+ *
+ * `hasDependencies` is derived from the SAME entry block containing an
+ * indented `dependencies:` line — the lockfile-authoritative signal for the
+ * per-workspace zero-dependency skip (a member without one is the loud
+ * warn+skip case upstream, never a silent drop or hard fail).
+ *
+ * Path containment is deliberately NOT this parser's job: relPath is
+ * returned VERBATIM (including traversal or absolute forms a hostile lock
+ * could contain) — the collect loop enforces containment before any
+ * subprocess spawn uses it as a cwd.
+ *
+ * Stateful single-pass line scan (the pnpmThirdPartyEntryCount idiom):
+ * column-0 lines flush the current candidate and start a new one; never
+ * throws on garbage, CRLF-tolerant via trimEnd.
+ */
+export function yarnWorkspaceMembers(
+  lockfileText: string,
+): { name: string; relPath: string; hasDependencies: boolean }[] {
+  const members: { name: string; relPath: string; hasDependencies: boolean }[] =
+    [];
+  let candidate: { name: string; relPath: string } | undefined;
+  let hasDependencies = false;
+
+  const flush = (): void => {
+    if (candidate !== undefined) {
+      members.push({ ...candidate, hasDependencies });
+    }
+    candidate = undefined;
+    hasDependencies = false;
+  };
+
+  for (const rawLine of lockfileText.split("\n")) {
+    const line = rawLine.trimEnd(); // tolerate CRLF lockfiles
+    if (line.length === 0) continue;
+    if (line[0] !== " " && line[0] !== "\t") {
+      // Column-0 line: a new entry header — flush the previous candidate.
+      flush();
+      continue;
+    }
+    const match = WORKSPACE_RESOLUTION_RE.exec(line);
+    if (match !== null) {
+      candidate = {
+        name: match[1] as string,
+        relPath: match[2] as string,
+      };
+      continue;
+    }
+    if (candidate !== undefined && DEPENDENCIES_BLOCK_RE.test(line)) {
+      hasDependencies = true;
+    }
+  }
+  flush();
+  return members;
 }
 
 /**
