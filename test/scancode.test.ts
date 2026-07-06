@@ -29,6 +29,7 @@ import {
   test,
 } from "bun:test";
 
+import * as cdxgenModule from "../src/collectors/cdxgen";
 import * as execModule from "../src/collectors/exec";
 import {
   electExpression,
@@ -40,9 +41,13 @@ import {
 import { enrichUnknowns } from "../src/enrich/enrich";
 import { getEntry, readCache, serializeCache } from "../src/enrich/cache";
 import { annotateFindings } from "../src/normalize/normalize";
+import { runGenerate } from "../src/pipeline/pipeline";
 
 /** Original exec export captured BEFORE any mock.module call (restore target). */
 const REAL_EXEC = { ...execModule };
+
+/** Original cdxgen export captured BEFORE any mock.module call (restore target). */
+const REAL_CDXGEN = { ...cdxgenModule };
 
 /** Every recorded execTool invocation: [cmd, ...args]. */
 let invocations: string[][] = [];
@@ -998,3 +1003,124 @@ async function withFetchGlobal<T>(
     globalThis.fetch = original;
   }
 }
+
+// ---------------------------------------------------------------------------
+// Structural default-path isolation lock (10-05, D-07, T-10-15): the SAME
+// bait shape as the 10-04 mechanism proof above (an unknown-license package
+// WITH version-matched local sources — scannable if the lane were reachable)
+// driven through the FULL generate pipeline (runGenerate, CLI/pipeline
+// level) WITHOUT --intensive. Both cdxgen (the SBOM generator) and scancode
+// (execTool) are recorder-stubbed so this stays subprocess-free; the
+// assertion that matters is that ZERO of the recorded invocations are a
+// scancode invocation, even though the bait package is present on disk and
+// would resolve via sourceDirFor if the lane were active. This is the
+// structural proof that the default path never even LOOKS at ScanCode — not
+// just that enrichUnknowns wasn't passed an intensive option (that unit-level
+// guard already exists; this is the end-to-end version of it).
+// ---------------------------------------------------------------------------
+
+describe("default generate path isolation lock (10-05, D-07 structural proof)", () => {
+  let repoDir: string;
+
+  beforeAll(() => {
+    mock.module("../src/collectors/exec", () => ({
+      ...REAL_EXEC,
+      execTool: fakeExecTool,
+    }));
+  });
+
+  afterAll(() => {
+    mock.module("../src/collectors/exec", () => REAL_EXEC);
+    mock.module("../src/collectors/cdxgen", () => REAL_CDXGEN);
+  });
+
+  afterEach(() => {
+    invocations = [];
+    if (repoDir !== undefined) {
+      rmSync(repoDir, { recursive: true, force: true });
+    }
+  });
+
+  /** The bait SBOM: one zero-claim (unknown-license) npm package cdxgen "found". */
+  const BAIT_SBOM = {
+    bomFormat: "CycloneDX",
+    specVersion: "1.6",
+    components: [
+      {
+        purl: "pkg:npm/left-pad@1.3.0",
+        name: "left-pad",
+        version: "1.3.0",
+      },
+    ],
+  };
+
+  async function fakeCollectWithCdxgen(): Promise<cdxgenModule.CollectorSbomFile> {
+    const tempDir = mkdtempSync(join(tmpdir(), "licenses-isolation-scan-"));
+    const sbomPath = join(tempDir, "bom.json");
+    writeFileSync(sbomPath, JSON.stringify(BAIT_SBOM));
+    return { sbomPath, cacheKey: "fake-bait", tool: REAL_CDXGEN.CDXGEN_TOOL };
+  }
+
+  /** Yarn-1-style lockfile: cdxgen dispatch, one third-party entry (left-pad). */
+  const BAIT_LOCKFILE = [
+    "# yarn lockfile v1",
+    "",
+    "left-pad@^1.3.0:",
+    '  version "1.3.0"',
+    "",
+  ].join("\n");
+
+  /** repoRoot/proj with a real, version-matched node_modules/left-pad SCANNABLE BAIT. */
+  function makeBaitTree(): { root: string } {
+    const root = mkdtempSync(join(tmpdir(), "licenses-isolation-repo-"));
+    const projDir = join(root, "proj");
+    mkdirSync(projDir, { recursive: true });
+    writeFileSync(join(projDir, "package.json"), '{ "name": "proj" }\n');
+    writeFileSync(join(projDir, "yarn.lock"), BAIT_LOCKFILE);
+    const pkgDir = join(projDir, "node_modules", "left-pad");
+    mkdirSync(pkgDir, { recursive: true });
+    writeFileSync(
+      join(pkgDir, "package.json"),
+      JSON.stringify({ name: "left-pad", version: "1.3.0" }),
+    );
+    writeFileSync(
+      join(pkgDir, "LICENSE"),
+      "MIT License\n\nCopyright (c) 2020 Example Author\n",
+    );
+    return { root };
+  }
+
+  test("default generate over a repo with a scannable unknown-license bait spawns ZERO scancode invocations", async () => {
+    mock.module("../src/collectors/cdxgen", () => ({
+      ...REAL_CDXGEN,
+      collectWithCdxgen: fakeCollectWithCdxgen,
+    }));
+
+    const { root } = makeBaitTree();
+    repoDir = root;
+    const outputPath = join(root, "out.md");
+    const cacheDir = mkdtempSync(join(tmpdir(), "licenses-isolation-cache-"));
+
+    try {
+      await runGenerate({
+        repoRoot: root,
+        outputPath,
+        noticesPath: join(root, "notices.md"),
+        enrichmentCachePath: join(cacheDir, "licenses.cache.json"),
+        verbose: false,
+      });
+
+      // The bait resolved via sourceDirFor WOULD be scanned if the lane were
+      // reachable (a real, version-matched node_modules/left-pad with a
+      // LICENSE file) — yet the default (--intensive absent) path recorded
+      // zero invocations whose argv names the scancode binary.
+      const scancodeInvocations = invocations.filter((argv) =>
+        argv.some((arg) => arg.includes("scancode")),
+      );
+      expect(scancodeInvocations).toEqual([]);
+    } finally {
+      rmSync(cacheDir, { recursive: true, force: true });
+      mock.module("../src/collectors/cdxgen", () => REAL_CDXGEN);
+    }
+  });
+});
