@@ -277,6 +277,25 @@ export function sourceDirFor(
 
 // --- Invocation lane -------------------------------------------------------
 
+/**
+ * Options threading the `--intensive` lane through enrichUnknowns (10-04).
+ * Present ONLY on `generate --intensive`: check never receives it, and a
+ * default generate call never constructs it (the intensive lane is
+ * additionally gated on this field's mere presence — enrich.ts). Mirrors the
+ * default-to-production/override-in-tests idiom used throughout this tool
+ * (EnrichOptions.now?, ScancodeScanOptions.scancodeBin?).
+ */
+export interface IntensiveOptions {
+  /** Candidate roots probed by {@link sourceDirFor} (compareCodeUnits-sorted, first match wins). */
+  targetDirs: string[];
+  /** Executable that runs the pinned scancode binary. Defaults to "scancode". */
+  scancodeBin?: string;
+  /** Hard wall-clock limit per spawn; defaults to {@link DEFAULT_SCAN_TIMEOUT_MS}. */
+  timeoutMs?: number;
+  /** Per-run temp directory; defaults to a fresh mkdtemp under os tmpdir. */
+  tempDir?: string;
+}
+
 export interface ScancodeScanOptions {
   /** Hard wall-clock limit per spawn; defaults to {@link DEFAULT_SCAN_TIMEOUT_MS}. */
   timeoutMs?: number;

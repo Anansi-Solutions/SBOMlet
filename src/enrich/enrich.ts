@@ -20,6 +20,20 @@
  * (it is just another claim), so `clarify > registry > generator` precedence
  * holds for free via annotateFindings downstream. The input model is never
  * mutated: new entries are produced via object spread, like annotateFindings.
+ *
+ * On `generate --intensive` (10-04, SCAN-01/SCAN-02) a SECOND lane runs after
+ * the registry fetch pass and strictly before the single write site: every
+ * still-unknown (residual) package is mapped to a locally-present source dir
+ * and, when present, scanned with the ScanCode toolkit collector
+ * (src/enrich/scancode.ts). A positive result appends a `source:"scancode"`
+ * claim, attaches attribution when the package has none, and overwrites any
+ * existing registry entry (including a negative one) with a
+ * `source:"scancode"` cache entry. A clean no-answer writes nothing — an
+ * existing registry negative is left untouched, and scancode negatives are
+ * never cached (re-scanning a tiny residual set each intensive run is
+ * cheaper than the added envelope semantics). `check` never receives the
+ * `intensive` option and never scans; it replays a scancode-sourced claim
+ * from the committed cache exactly like a registry-sourced one.
  */
 import { sanitizeEvidenceText } from "../merge/merge";
 import {
@@ -46,6 +60,11 @@ import {
 } from "./github";
 import { resolveNpmLicense } from "./npm";
 import { resolvePypiLicense } from "./pypi";
+import {
+  scanPackageSources,
+  sourceDirFor,
+  type IntensiveOptions,
+} from "./scancode";
 
 /** Cap on copyright lines attached from a scancode replay (matches the extractor/merge cap). */
 const MAX_REPLAY_COPYRIGHT_LINES = 20;
@@ -68,6 +87,14 @@ export interface EnrichOptions {
    * (default-to-production, override-in-tests) — NEVER a bare inline `new Date()`.
    */
   now?: () => Date;
+  /**
+   * Present ONLY on `generate --intensive` (10-04, SCAN-01/SCAN-02): the
+   * ScanCode residual-scan lane. `check` never receives it (the CLI/pipeline
+   * layer rejects `--intensive` on check, Pitfall 4) and a default generate
+   * call never constructs it — the lane is gated on this field's mere
+   * presence, additionally inside `mode === "generate"`.
+   */
+  intensive?: IntensiveOptions;
 }
 
 export interface EnrichResult {
@@ -271,6 +298,14 @@ export async function enrichUnknowns(
 
   if (opts.mode === "generate") {
     if (misses.length > 0) await fetchMisses(misses, packages, cache, opts);
+    // The intensive ScanCode lane (10-04): runs strictly BEFORE the single
+    // write site, gated on opts.intensive being present. Recomputes the
+    // residual set from the POST-registry packages (Pitfall 5 — a
+    // registry-negative-entry package is a cache HIT, filtered out of
+    // `misses` above, yet still an intensive scan target).
+    if (opts.intensive !== undefined) {
+      await scanResidual(packages, cache, opts.intensive, opts);
+    }
     // The ONLY enrichment write site, gated on generate mode: generate always
     // materializes the committed artifact; an empty envelope is a valid answer.
     writeArtifact(opts.cachePath, serializeCache(cache));
@@ -415,6 +450,100 @@ async function fetchTerraformMisses(
 /** The production now-source for the injectable fetchedAt clock (revision D). */
 function defaultNow(): Date {
   return new Date();
+}
+
+/**
+ * The intensive residual set (10-04, Pitfall 5): re-run {@link needsEnrichment}
+ * over the FULL post-registry `packages` array (index-tracked, mirroring the
+ * `unknowns` construction above) — NOT the `misses` array. A package with a
+ * registry NEGATIVE cache entry is a cache HIT (filtered out of `misses`
+ * entirely) yet is STILL genuinely unknown and therefore still an intensive
+ * scan target; using `misses` here would silently skip every
+ * previously-registry-negative package forever.
+ */
+function residualUnknowns(packages: PackageEntry[]): Unknown[] {
+  const residual: Unknown[] = [];
+  packages.forEach((entry, index) => {
+    if (!needsEnrichment(entry)) return;
+    const parsed = parsePurl(entry.purl);
+    if (parsed === undefined) return;
+    residual.push({ index, entry, parsed });
+  });
+  return residual;
+}
+
+/**
+ * Apply one positive scancode result to a residual package: append the
+ * "scancode"-sourced claim, attach attribution when the package carries none
+ * (reusing {@link withReplayAttribution}'s sanitize/dedupe/sort/cap contract —
+ * a fresh scan result is wrapped into the identical CacheEntry shape so the
+ * replay and live-scan paths share one attribution rule, never two), and
+ * record the cache entry. A positive scancode result OVERWRITES any existing
+ * registry entry for this purl — including a negative one (Pitfall 5: a
+ * better answer supersedes no-answer).
+ */
+function applyScanResult(
+  residual: Unknown,
+  resolved: { raw: string; via: string; copyrights: string[] },
+  packages: PackageEntry[],
+  cache: Map<string, CacheEntry>,
+  opts: EnrichOptions,
+): void {
+  const cacheEntry: CacheEntry = {
+    license: resolved.raw,
+    source: "scancode",
+    fetchedFrom: "scancode",
+    via: resolved.via,
+    resolvable: true,
+    copyrights: resolved.copyrights,
+    fetchedAt: (opts.now ?? defaultNow)().toISOString(),
+  };
+  const withClaim = withCacheClaim(residual.entry, resolved.raw, "scancode");
+  packages[residual.index] = withReplayAttribution(withClaim, cacheEntry);
+  putEntry(cache, residual.entry.purl, cacheEntry);
+}
+
+/**
+ * The intensive ScanCode lane (10-04, SCAN-01/SCAN-02): for every residual
+ * package (still-unknown after the registry hit/miss pass above), sequentially
+ * (D-03 — a per-package wall-clock timeout and honest per-package attribution
+ * beat batch amortization; the residual set is tiny by design, so sequential
+ * scanning is the simple, honest choice — revisit only if measured cost
+ * demands otherwise) map its purl to a locally-present source dir
+ * ({@link sourceDirFor}) and, when present, scan it
+ * ({@link scanPackageSources}):
+ *
+ *  - No locally-present source dir → honest skip, zero scan attempted, the
+ *    package keeps its existing (possibly still-negative) residual (D-02).
+ *  - A clean no-answer scan → writes NOTHING: the existing registry negative
+ *    (if any) stays untouched, and no new entry is created (scancode
+ *    negatives are not cached — Open Question 2 / the ADR-recorded tradeoff).
+ *  - A positive scan → {@link applyScanResult} appends the claim, attaches
+ *    attribution, and writes the cache entry (overwriting a negative).
+ */
+async function scanResidual(
+  packages: PackageEntry[],
+  cache: Map<string, CacheEntry>,
+  intensive: IntensiveOptions,
+  opts: EnrichOptions,
+): Promise<void> {
+  const residual = residualUnknowns(packages);
+  const scanOpts = {
+    ...(intensive.scancodeBin !== undefined
+      ? { scancodeBin: intensive.scancodeBin }
+      : {}),
+    ...(intensive.timeoutMs !== undefined
+      ? { timeoutMs: intensive.timeoutMs }
+      : {}),
+    ...(intensive.tempDir !== undefined ? { tempDir: intensive.tempDir } : {}),
+  };
+  for (const entry of residual) {
+    const sourceDir = sourceDirFor(entry.entry.purl, intensive.targetDirs);
+    if (sourceDir === undefined) continue; // D-02: no locally-present source, honest skip
+    const resolved = await scanPackageSources(sourceDir, scanOpts);
+    if (resolved === null) continue; // clean no-answer: write nothing, existing negative stays
+    applyScanResult(entry, resolved, packages, cache, opts);
+  }
 }
 
 /** Record a definitive-no-license negative entry for a miss. */

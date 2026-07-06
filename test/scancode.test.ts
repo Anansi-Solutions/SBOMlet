@@ -37,6 +37,9 @@ import {
   sourceDirFor,
   SCANCODE_TOOL,
 } from "../src/enrich/scancode";
+import { enrichUnknowns } from "../src/enrich/enrich";
+import { getEntry, readCache, serializeCache } from "../src/enrich/cache";
+import { annotateFindings } from "../src/normalize/normalize";
 
 /** Original exec export captured BEFORE any mock.module call (restore target). */
 const REAL_EXEC = { ...execModule };
@@ -572,3 +575,426 @@ describe("sourceDirFor — unsupported ecosystems and malformed purls", () => {
     expect(result).toBeUndefined();
   });
 });
+
+// ---------------------------------------------------------------------------
+// The intensive lane in enrichUnknowns (10-04): residual scan, provenance
+// write, hermetic check. Uses the SAME exec recorder harness as above
+// (mock.module over ../src/collectors/exec) plus enrichUnknowns from
+// ../src/enrich/enrich — the end-to-end mechanism proof (D-10) that appending
+// a scancode claim actually changes the RENDERED finding, not just the cache
+// entry (Pitfall 1's warning sign).
+// ---------------------------------------------------------------------------
+
+describe("enrichUnknowns intensive lane (10-04: residual scan, provenance write, hermetic check)", () => {
+  let repoDir: string;
+  let cacheDir: string;
+
+  beforeAll(() => {
+    mock.module("../src/collectors/exec", () => ({
+      ...REAL_EXEC,
+      execTool: fakeExecTool,
+    }));
+  });
+
+  afterAll(() => {
+    mock.module("../src/collectors/exec", () => REAL_EXEC);
+  });
+
+  afterEach(() => {
+    invocations = [];
+    if (repoDir !== undefined)
+      rmSync(repoDir, { recursive: true, force: true });
+    if (cacheDir !== undefined)
+      rmSync(cacheDir, { recursive: true, force: true });
+  });
+
+  /** A minimal on-disk node_modules/<name> tree with a version-matched package.json + LICENSE. */
+  function writeNpmSource(
+    targetDir: string,
+    name: string,
+    version: string,
+    licenseText = "MIT License\n\nCopyright (c) 2020 Example Author\n",
+  ): string {
+    const pkgDir = join(targetDir, "node_modules", ...name.split("/"));
+    mkdirSync(pkgDir, { recursive: true });
+    writeFileSync(
+      join(pkgDir, "package.json"),
+      JSON.stringify({ name, version }),
+    );
+    writeFileSync(join(pkgDir, "LICENSE"), licenseText);
+    return pkgDir;
+  }
+
+  function tempCachePath(): { dir: string; path: string } {
+    const dir = mkdtempSync(join(tmpdir(), "scancode-intensive-cache-"));
+    return { dir, path: join(dir, "enrichment-cache.json") };
+  }
+
+  function zeroClaimNpmPackage(
+    name: string,
+    version: string,
+  ): import("../src/model/dependencies").PackageEntry {
+    return {
+      purl: `pkg:npm/${name}@${version}`,
+      name,
+      version,
+      occurrences: [{ target: "proj", isDevDependency: false }],
+      licenseClaims: [],
+      scope: "app",
+    };
+  }
+
+  /** The scancode-sourced claim on a package, or undefined when none was appended. */
+  function scancodeClaim(
+    entry: import("../src/model/dependencies").PackageEntry | undefined,
+  ): import("../src/model/dependencies").LicenseClaim | undefined {
+    return entry?.licenseClaims.find((c) => c.source === "scancode");
+  }
+
+  test("mechanism proof (D-10): a zero-claim package with a locally-present node_modules source gains the scancode claim, attribution, a cache entry, and a PRECISE rendered finding end-to-end", async () => {
+    repoDir = mkdtempSync(join(tmpdir(), "scancode-intensive-repo-"));
+    writeNpmSource(repoDir, "left-pad", "1.3.0");
+    const { dir, path } = tempCachePath();
+    cacheDir = dir;
+
+    const model: CanonicalDependenciesLike = {
+      packages: [zeroClaimNpmPackage("left-pad", "1.3.0")],
+    };
+
+    const fixedNow = (): Date => new Date("2026-01-01T00:00:00.000Z");
+    const { fetch } = fetchStubReturningEmpty();
+    const result = await withFetchGlobal(fetch, () =>
+      enrichUnknowns(model as never, {
+        mode: "generate",
+        cachePath: path,
+        verbose: false,
+        now: fixedNow,
+        intensive: {
+          targetDirs: [repoDir],
+          tempDir: mkdtempSync(join(tmpdir(), "scancode-intensive-out-")),
+        },
+      }),
+    );
+
+    expect(invocations.length).toBe(1);
+    const pkg = result.model.packages[0];
+    const claim = scancodeClaim(pkg);
+    expect(claim).toEqual({
+      raw: "MIT",
+      kind: "expression",
+      source: "scancode",
+    });
+    expect(pkg?.attribution?.copyrightLines.length).toBeGreaterThan(0);
+
+    const cache = readCache(path);
+    const entry = getEntry(cache, "pkg:npm/left-pad@1.3.0");
+    expect(entry?.source).toBe("scancode");
+    expect(entry?.fetchedFrom).toBe("scancode");
+    expect(entry?.via).toBe(
+      `${SCANCODE_TOOL.name}@${SCANCODE_TOOL.version}/license-file`,
+    );
+    expect(entry?.resolvable).toBe(true);
+    expect(entry?.copyrights?.length).toBeGreaterThan(0);
+    expect(entry?.fetchedAt).toBe("2026-01-01T00:00:00.000Z");
+
+    // The mechanism proof: the RENDERED finding is precise, not just the
+    // cache entry (Pitfall 1's warning sign — assert the finding, not the
+    // claim alone).
+    const { model: annotated } = annotateFindings(
+      { packages: result.model.packages } as never,
+      [],
+    );
+    const finding = (
+      annotated.packages[0] as {
+        finding?: { expression: string | null; confidence: string };
+      }
+    ).finding;
+    expect(finding?.expression).toBe("MIT");
+    expect(finding?.confidence).toBe("exact");
+  });
+
+  test("Pitfall 5a: a package pre-seeded with a registry NEGATIVE entry is still scanned under intensive; a positive result overwrites the negative", async () => {
+    repoDir = mkdtempSync(join(tmpdir(), "scancode-intensive-repo-"));
+    writeNpmSource(repoDir, "left-pad", "1.3.0");
+    const { dir, path } = tempCachePath();
+    cacheDir = dir;
+
+    const seedCache = new Map();
+    seedCache.set("pkg:npm/left-pad@1.3.0", {
+      license: null,
+      source: "registry",
+      fetchedFrom: "npm",
+      via: "unresolved",
+      resolvable: false,
+    });
+    writeFileSync(path, serializeCache(seedCache));
+
+    const model: CanonicalDependenciesLike = {
+      packages: [zeroClaimNpmPackage("left-pad", "1.3.0")],
+    };
+    const { fetch, calls } = fetchStubReturningEmpty();
+    const result = await withFetchGlobal(fetch, () =>
+      enrichUnknowns(model as never, {
+        mode: "generate",
+        cachePath: path,
+        verbose: false,
+        intensive: { targetDirs: [repoDir] },
+      }),
+    );
+    // The package IS a cache hit (negative) — zero registry fetches — yet
+    // still an intensive scan target.
+    expect(calls).toEqual([]);
+    expect(invocations.length).toBe(1);
+
+    const pkg = result.model.packages[0];
+    expect(scancodeClaim(pkg)).toEqual({
+      raw: "MIT",
+      kind: "expression",
+      source: "scancode",
+    });
+
+    const cache = readCache(path);
+    const entry = getEntry(cache, "pkg:npm/left-pad@1.3.0");
+    expect(entry?.resolvable).toBe(true);
+    expect(entry?.source).toBe("scancode");
+  });
+
+  test("Pitfall 5b: a scancode no-answer leaves the registry negative byte-untouched and writes no new entry", async () => {
+    repoDir = mkdtempSync(join(tmpdir(), "scancode-intensive-repo-"));
+    // Source dir present but with NO legal file / manifest license, so
+    // scanPackageSources elects nothing (a clean no-answer, fixture: only the
+    // LicenseRef-scancode- noise entry survives via the manifest-lane mock).
+    const pkgDir = join(repoDir, "node_modules", "no-answer-pkg");
+    mkdirSync(pkgDir, { recursive: true });
+    writeFileSync(
+      join(pkgDir, "package.json"),
+      JSON.stringify({ name: "no-answer-pkg", version: "1.0.0" }),
+    );
+
+    const fixture = JSON.parse(readFileSync(FIXTURE_PATH, "utf8")) as {
+      headers: unknown[];
+      files: unknown[];
+    };
+    const noiseOnly = {
+      ...fixture,
+      files: [
+        {
+          path: "no-answer-pkg/LICENSE",
+          detected_license_expression_spdx: "LicenseRef-scancode-unknown",
+          copyrights: [],
+        },
+      ],
+    };
+    mock.module("../src/collectors/exec", () => ({
+      ...REAL_EXEC,
+      execTool: makeFakeExecToolWithDoc(noiseOnly),
+    }));
+
+    const { dir, path } = tempCachePath();
+    cacheDir = dir;
+    const negativeEntry = {
+      license: null,
+      source: "registry" as const,
+      fetchedFrom: "npm" as const,
+      via: "unresolved",
+      resolvable: false,
+    };
+    const seedCache = new Map();
+    seedCache.set("pkg:npm/no-answer-pkg@1.0.0", negativeEntry);
+    const seededBytes = serializeCache(seedCache);
+    writeFileSync(path, seededBytes);
+
+    const model: CanonicalDependenciesLike = {
+      packages: [zeroClaimNpmPackage("no-answer-pkg", "1.0.0")],
+    };
+    try {
+      const result = await enrichUnknowns(model as never, {
+        mode: "generate",
+        cachePath: path,
+        verbose: false,
+        intensive: { targetDirs: [repoDir] },
+      });
+      expect(scancodeClaim(result.model.packages[0])).toBeUndefined();
+
+      const cache = readCache(path);
+      expect(getEntry(cache, "pkg:npm/no-answer-pkg@1.0.0")).toEqual(
+        negativeEntry,
+      );
+    } finally {
+      mock.module("../src/collectors/exec", () => ({
+        ...REAL_EXEC,
+        execTool: fakeExecTool,
+      }));
+    }
+  });
+
+  test("D-02: a residual package whose sources are absent is skipped — zero scancode invocations, no entry, finding stays unknown", async () => {
+    repoDir = mkdtempSync(join(tmpdir(), "scancode-intensive-repo-empty-"));
+    mkdirSync(join(repoDir, "node_modules"), { recursive: true });
+    const { dir, path } = tempCachePath();
+    cacheDir = dir;
+
+    const model: CanonicalDependenciesLike = {
+      packages: [zeroClaimNpmPackage("absent-pkg", "1.0.0")],
+    };
+    // The registry side is a genuine miss too (absent-pkg has no registry
+    // doc); stub fetch to a clean 200-empty so fetchMisses records its OWN
+    // (registry) negative rather than throwing — this test isolates the
+    // scancode D-02 skip, not the registry-miss path.
+    const { fetch } = fetchStubReturningEmpty();
+    const result = await withFetchGlobal(fetch, () =>
+      enrichUnknowns(model as never, {
+        mode: "generate",
+        cachePath: path,
+        verbose: false,
+        intensive: { targetDirs: [repoDir] },
+      }),
+    );
+
+    expect(invocations.length).toBe(0);
+    expect(scancodeClaim(result.model.packages[0])).toBeUndefined();
+    const cache = readCache(path);
+    // The registry-negative entry IS written (existing fetchMisses contract,
+    // unchanged) — but it carries NO scancode provenance: the D-02 skip means
+    // zero scancode invocations, never a scancode-sourced entry.
+    const entry = getEntry(cache, "pkg:npm/absent-pkg@1.0.0");
+    expect(entry?.source).toBe("registry");
+  });
+
+  test("hermetic check (Pitfall 2): after an intensive generate, check mode with the scanner stubbed to throw never invokes it and reproduces byte-identical claims", async () => {
+    repoDir = mkdtempSync(join(tmpdir(), "scancode-intensive-repo-"));
+    writeNpmSource(repoDir, "left-pad", "1.3.0");
+    const { dir, path } = tempCachePath();
+    cacheDir = dir;
+
+    const model: CanonicalDependenciesLike = {
+      packages: [zeroClaimNpmPackage("left-pad", "1.3.0")],
+    };
+    const { fetch } = fetchStubReturningEmpty();
+    const generated = await withFetchGlobal(fetch, () =>
+      enrichUnknowns(model as never, {
+        mode: "generate",
+        cachePath: path,
+        verbose: false,
+        intensive: { targetDirs: [repoDir] },
+      }),
+    );
+    const generatedClaim = scancodeClaim(generated.model.packages[0]);
+    invocations = [];
+
+    // check mode NEVER receives `intensive` at all (the CLI/pipeline layer's
+    // job — Pitfall 4) — this proves the plain check-mode replay path alone
+    // (no exec mock even engaged) reproduces the identical claim from the
+    // committed cache.
+    mock.module("../src/collectors/exec", () => ({
+      ...REAL_EXEC,
+      execTool: (): Promise<{ stdout: string; stderr: string }> => {
+        throw new Error("check must never invoke scancode");
+      },
+    }));
+    try {
+      const checked = await enrichUnknowns(model as never, {
+        mode: "check",
+        cachePath: path,
+        verbose: false,
+      });
+      expect(checked.staleUnknowns).toEqual([]);
+      expect(scancodeClaim(checked.model.packages[0])).toEqual(generatedClaim);
+    } finally {
+      mock.module("../src/collectors/exec", () => ({
+        ...REAL_EXEC,
+        execTool: fakeExecTool,
+      }));
+    }
+  });
+
+  test("idempotent warm run: a second intensive generate over the warm cache records ZERO scancode invocations", async () => {
+    repoDir = mkdtempSync(join(tmpdir(), "scancode-intensive-repo-"));
+    writeNpmSource(repoDir, "left-pad", "1.3.0");
+    const { dir, path } = tempCachePath();
+    cacheDir = dir;
+
+    const model: CanonicalDependenciesLike = {
+      packages: [zeroClaimNpmPackage("left-pad", "1.3.0")],
+    };
+    const { fetch } = fetchStubReturningEmpty();
+    await withFetchGlobal(fetch, () =>
+      enrichUnknowns(model as never, {
+        mode: "generate",
+        cachePath: path,
+        verbose: false,
+        intensive: { targetDirs: [repoDir] },
+      }),
+    );
+    invocations = [];
+
+    const second = await withFetchGlobal(fetch, () =>
+      enrichUnknowns(model as never, {
+        mode: "generate",
+        cachePath: path,
+        verbose: false,
+        intensive: { targetDirs: [repoDir] },
+      }),
+    );
+    expect(invocations.length).toBe(0);
+    expect(scancodeClaim(second.model.packages[0])).toEqual({
+      raw: "MIT",
+      kind: "expression",
+      source: "scancode",
+    });
+  });
+
+  test("isolation guard: enrichUnknowns mode generate WITHOUT intensive over the same fixture repo invokes zero scancode scans", async () => {
+    repoDir = mkdtempSync(join(tmpdir(), "scancode-intensive-repo-"));
+    writeNpmSource(repoDir, "left-pad", "1.3.0");
+    const { dir, path } = tempCachePath();
+    cacheDir = dir;
+
+    const model: CanonicalDependenciesLike = {
+      packages: [zeroClaimNpmPackage("left-pad", "1.3.0")],
+    };
+    const { fetch } = fetchStubReturningEmpty();
+    const result = await withFetchGlobal(fetch, () =>
+      enrichUnknowns(model as never, {
+        mode: "generate",
+        cachePath: path,
+        verbose: false,
+      }),
+    );
+    expect(invocations.length).toBe(0);
+    expect(scancodeClaim(result.model.packages[0])).toBeUndefined();
+  });
+});
+
+/** Structural alias so the test fixtures don't need the real model import at the top. */
+type CanonicalDependenciesLike = {
+  packages: import("../src/model/dependencies").PackageEntry[];
+};
+
+/** A fetch stub returning an empty-object 200 body for any URL (registry-miss-safe default). */
+function fetchStubReturningEmpty(): { fetch: typeof fetch; calls: string[] } {
+  const calls: string[] = [];
+  const impl = (async (input: string | URL | Request): Promise<Response> => {
+    const url = typeof input === "string" ? input : input.toString();
+    calls.push(url);
+    return new Response(JSON.stringify({}), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    });
+  }) as typeof fetch;
+  return { fetch: impl, calls };
+}
+
+/** Run `fn` with globalThis.fetch swapped, always restored in finally. */
+async function withFetchGlobal<T>(
+  impl: typeof fetch,
+  fn: () => Promise<T>,
+): Promise<T> {
+  const original = globalThis.fetch;
+  globalThis.fetch = impl;
+  try {
+    return await fn();
+  } finally {
+    globalThis.fetch = original;
+  }
+}
