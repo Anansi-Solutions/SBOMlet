@@ -1730,6 +1730,69 @@ describe("evaluate — POL-08 dev-scope downgrade (default warn)", () => {
   });
 });
 
+describe("evaluate — POL-08 workspace-shape production occurrences", () => {
+  // Pins the applyDevScope production terminal (evaluate.ts ~411:
+  // "if (!occurrence.isDevDependency) return failVerdict;") on the EXACT
+  // per-workspace repo shape the collect-loop expansion now produces —
+  // {target: "frontend" | "backend", isDevDependency: false} — so the fix
+  // can never silently regress under the real workspace target identities
+  // instead of the older synthetic apps/a / apps/b names.
+
+  test("HEADLINE: a production copyleft occurrence on {target:'frontend', isDevDependency:false} FAILS under dev_dependencies=warn — never downgraded", () => {
+    const { verdicts } = runEngine(
+      [
+        pkgSpec("imaging-native", "LGPL-3.0-or-later", [
+          { target: "frontend", dev: false },
+        ]),
+      ],
+      "",
+    );
+    expect(verdicts).toHaveLength(1);
+    expect(verdicts[0].status).toBe("fail");
+    expect(verdicts[0].rule).toBe("default:copyleft");
+    expect(verdicts[0].occurrenceTarget).toBe("frontend");
+  });
+
+  test("contrast arm: the SAME package as a dev occurrence on the workspace shape WARNS — proving the terminal, not the shape, does the work", () => {
+    const { verdicts } = runEngine(
+      [
+        pkgSpec("imaging-native", "LGPL-3.0-or-later", [
+          { target: "frontend", dev: true },
+        ]),
+      ],
+      "",
+    );
+    expect(verdicts).toHaveLength(1);
+    expect(verdicts[0].status).toBe("warn");
+    expect(verdicts[0].rule).toBe("default:copyleft");
+    expect(verdicts[0].occurrenceTarget).toBe("frontend");
+    expect(verdicts[0].reason).toContain("dev-only occurrence");
+  });
+
+  test("deny, production: a [[deny]]-listed license on {target:'backend', isDevDependency:false} FAILS (terminal)", () => {
+    const { verdicts } = runEngine(
+      [pkgSpec("busl-pkg", "BUSL-1.1", [{ target: "backend", dev: false }])],
+      denyLicenseFixture("BUSL-1.1"),
+    );
+    expect(verdicts).toHaveLength(1);
+    expect(verdicts[0].status).toBe("fail");
+    expect(verdicts[0].rule).toBe("denied[0]");
+    expect(verdicts[0].occurrenceTarget).toBe("backend");
+  });
+
+  test("deny, dev: the SAME deny shape with isDevDependency:true STILL FAILS — deny sits above the dev downgrade on this scan shape too", () => {
+    const { verdicts } = runEngine(
+      [pkgSpec("busl-pkg", "BUSL-1.1", [{ target: "backend", dev: true }])],
+      denyLicenseFixture("BUSL-1.1"),
+    );
+    expect(verdicts).toHaveLength(1);
+    expect(verdicts[0].status).toBe("fail");
+    expect(verdicts[0].rule).toBe("denied[0]");
+    expect(verdicts[0].occurrenceTarget).toBe("backend");
+    expect(verdicts[0].reason).not.toContain("dev-only occurrence");
+  });
+});
+
 describe('evaluate — POL-08 dev_dependencies = "fail" (pre-POL-08 behavior)', () => {
   test("BOTH copyleft occurrences fail (no downgrade)", () => {
     const { verdicts } = runEngine(

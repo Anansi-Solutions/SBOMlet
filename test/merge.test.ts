@@ -941,6 +941,173 @@ describe("mergeSboms — plugin dual-run prod diff", () => {
   });
 });
 
+describe("mergeSboms — per-workspace inputs (yarn workspace units)", () => {
+  // Per-workspace classification is a MODEL-level lock, not just a
+  // fixture-level observation — this describe mirrors the plugin dual-run
+  // suite's per-input construction idiom (lines 896-906) but drives TWO
+  // distinct targetIdentity inputs at once, the shape collectTargets'
+  // workspace expansion produces for a workspaces monorepo.
+
+  test("two distinct-purl workspace inputs attribute occurrences to their OWN target, independently prod/dev split", () => {
+    const backendDoc = {
+      components: [
+        {
+          name: "ms",
+          version: "2.1.3",
+          purl: "pkg:npm/ms@2.1.3",
+        },
+        {
+          name: "isarray",
+          version: "2.0.5",
+          purl: "pkg:npm/isarray@2.0.5",
+        },
+      ],
+    };
+    const frontendDoc = {
+      components: [
+        {
+          name: "sax",
+          version: "1.4.1",
+          purl: "pkg:npm/sax@1.4.1",
+        },
+      ],
+    };
+    const model = mergeSboms([
+      {
+        sbom: backendDoc,
+        targetIdentity: "backend",
+        prodPurlSet: new Set(["pkg:npm/ms@2.1.3"]),
+      },
+      {
+        sbom: frontendDoc,
+        targetIdentity: "frontend",
+        prodPurlSet: new Set(["pkg:npm/sax@1.4.1"]),
+      },
+    ]);
+    const byPurl = new Map(model.packages.map((p) => [p.purl, p]));
+
+    expect(byPurl.get("pkg:npm/ms@2.1.3")?.occurrences).toEqual([
+      { target: "backend", isDevDependency: false },
+    ]);
+    expect(byPurl.get("pkg:npm/isarray@2.0.5")?.occurrences).toEqual([
+      { target: "backend", isDevDependency: true },
+    ]);
+    expect(byPurl.get("pkg:npm/sax@1.4.1")?.occurrences).toEqual([
+      { target: "frontend", isDevDependency: false },
+    ]);
+  });
+
+  test("a purl shared by two workspaces (prod in one, dev in the other) folds to ONE entry, TWO occurrences, single attribution", () => {
+    const sharedPurl = "pkg:npm/shared-lib@1.0.0";
+    const backendDoc = {
+      components: [
+        {
+          name: "shared-lib",
+          version: "1.0.0",
+          purl: sharedPurl,
+          licenses: [{ license: { id: "MIT" } }],
+        },
+      ],
+    };
+    const frontendDoc = {
+      components: [
+        {
+          name: "shared-lib",
+          version: "1.0.0",
+          purl: sharedPurl,
+          licenses: [{ license: { id: "MIT" } }],
+        },
+      ],
+    };
+    const model = mergeSboms([
+      {
+        sbom: backendDoc,
+        targetIdentity: "backend",
+        prodPurlSet: new Set([sharedPurl]),
+      },
+      {
+        sbom: frontendDoc,
+        targetIdentity: "frontend",
+        prodPurlSet: new Set(),
+      },
+    ]);
+    const shared = model.packages.filter((p) => p.purl === sharedPurl);
+
+    // One package entry — the purl-keyed fold never duplicates across inputs.
+    expect(shared.length).toBe(1);
+    // Two occurrences, sorted by target: backend (prod) before frontend (dev).
+    expect(shared[0]?.occurrences).toEqual([
+      { target: "backend", isDevDependency: false },
+      { target: "frontend", isDevDependency: true },
+    ]);
+    // First-seen license claim, never duplicated by the second input's
+    // identical MIT claim.
+    expect(shared[0]?.licenseClaims).toEqual([
+      { raw: "MIT", kind: "spdx-id", source: "generator" },
+    ]);
+  });
+
+  test("a cross-workspace dependency (member depending on a sibling workspace) is filtered by the existing two-signal first-party rule fed with root-lock firstPartyNames", () => {
+    // "backend" is a first-party workspace member (root-lock firstPartyNames)
+    // and, when it appears INSIDE frontend's own SBOM as a workspace-linked
+    // dependency, it carries the yarn local-version marker — the existing
+    // belt-and-braces rule (name in set AND local-version marker) skips it.
+    const frontendDoc = {
+      components: [
+        {
+          name: "backend",
+          version: "0.0.0-use.local",
+          purl: "pkg:npm/backend@0.0.0-use.local",
+        },
+        {
+          name: "sax",
+          version: "1.4.1",
+          purl: "pkg:npm/sax@1.4.1",
+        },
+      ],
+    };
+    const model = mergeSboms([
+      {
+        sbom: frontendDoc,
+        targetIdentity: "frontend",
+        prodPurlSet: new Set(["pkg:npm/sax@1.4.1"]),
+        firstPartyNames: new Set(["backend", "frontend"]),
+      },
+    ]);
+
+    expect(model.packages.some((p) => p.name === "backend")).toBe(false);
+    // A real third-party package is untouched by the skip.
+    expect(model.packages.some((p) => p.purl === "pkg:npm/sax@1.4.1")).toBe(
+      true,
+    );
+  });
+
+  test("the SAME name at a REAL version (not the local-version marker) is kept even when the name is in firstPartyNames", () => {
+    const frontendDoc = {
+      components: [
+        {
+          // Same name as a workspace member, but a REAL published version —
+          // the second signal is absent, so the two-signal rule keeps it.
+          name: "backend",
+          version: "3.2.1",
+          purl: "pkg:npm/backend@3.2.1",
+        },
+      ],
+    };
+    const model = mergeSboms([
+      {
+        sbom: frontendDoc,
+        targetIdentity: "frontend",
+        firstPartyNames: new Set(["backend"]),
+      },
+    ]);
+
+    expect(model.packages.some((p) => p.purl === "pkg:npm/backend@3.2.1")).toBe(
+      true,
+    );
+  });
+});
+
 describe("mergeSboms — python dev-group marker", () => {
   const PY_TARGET = "apps/jupyter";
 

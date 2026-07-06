@@ -26,7 +26,7 @@ import { afterAll, beforeAll, describe, expect, mock, test } from "bun:test";
 import * as yarnPluginModule from "../src/collectors/yarnPlugin";
 import { mergeSboms } from "../src/merge/merge";
 import { collectTargets } from "../src/pipeline/targets";
-import type { GenerateOptions } from "../src/pipeline/pipeline";
+import { runGenerate, type GenerateOptions } from "../src/pipeline/pipeline";
 import type { Target } from "../src/targets/target";
 
 /** Original exports captured BEFORE any mock.module call (restore target). */
@@ -502,5 +502,116 @@ describe("collectTargets — yarn workspace expansion edge behavior", () => {
       ...REAL_YARN_PLUGIN,
       collectWithYarnPlugin: fakeCollectWithYarnPlugin,
     }));
+  });
+});
+
+/**
+ * Capture process.stderr.write for the duration of a callback; always
+ * restores in finally (test/cli.test.ts idiom).
+ */
+async function withCapturedStderr(fn: () => Promise<void>): Promise<string> {
+  const original = process.stderr.write.bind(process.stderr);
+  let captured = "";
+  process.stderr.write = ((chunk: unknown): boolean => {
+    captured += String(chunk);
+    return true;
+  }) as typeof process.stderr.write;
+  try {
+    await fn();
+  } finally {
+    process.stderr.write = original;
+  }
+  return captured;
+}
+
+/** Collapse multi-space runs (markdown table padding) before matching. */
+const squish = (s: string): string => s.replace(/ {2,}/g, " ");
+
+describe("collectTargets — yarn workspace expansion (fixture-mirror document)", () => {
+  // Document-level acceptance evidence: the corrected reporting shape on the
+  // SAME workspaces-monorepo tree as the mechanism test above — Production
+  // > 0, per-workspace Used-in cells, the copyleft package in the Production
+  // section, and (with an inline policy) a policy FAIL naming it "in
+  // frontend". This is the inversion of the pre-fix collapse (one target,
+  // zero production packages). No live yarn spawn: reuses the
+  // fakeCollectWithYarnPlugin stub and mkdtemp tree builder (module-scope
+  // above), keyed on directory
+  // basename against the workspace-{backend,frontend}-{full,prod} fixture
+  // pairs, which already carry ms/isarray (backend) and sax/imaging-native
+  // (frontend, imaging-native under LGPL-3.0-or-later) plus the root's
+  // left-pad dev dependency — every fixture component carries a license, so
+  // the enrichment lane stays fetch-free without needing a fetch stub.
+  beforeAll(() => {
+    mock.module("../src/collectors/yarnPlugin", () => ({
+      ...REAL_YARN_PLUGIN,
+      collectWithYarnPlugin: fakeCollectWithYarnPlugin,
+    }));
+  });
+
+  afterAll(() => {
+    mock.module("../src/collectors/yarnPlugin", () => REAL_YARN_PLUGIN);
+  });
+
+  function generateOpts(root: string, policyPath?: string): GenerateOptions {
+    const opts: GenerateOptions = {
+      repoRoot: root,
+      baseDir: root,
+      outputPath: join(root, "THIRD_PARTY_LICENSES.md"),
+      noticesPath: join(root, "THIRD_PARTY_NOTICES.md"),
+      enrichmentCachePath: join(root, "enrichment-cache.json"),
+      verbose: false,
+    };
+    if (policyPath !== undefined) opts.policyPath = policyPath;
+    return opts;
+  }
+
+  test("HEADLINE: the rendered document shows the corrected shape — Total 5, Production 3, Development-only 2, per-workspace Used-in, imaging-native in Production", async () => {
+    const { root } = makeWorkspaceTree();
+
+    const md = await runGenerate(generateOpts(root));
+
+    // (a) counts block: Total 5, Production 3 (ms, sax, imaging-native),
+    // Development-only 2 (isarray, left-pad).
+    expect(md).toContain("- Total packages: 5");
+    expect(md).toContain("- Production packages: 3");
+    expect(md).toContain("- Development-only packages: 2");
+
+    // (b) per-workspace Used-in attribution at the rendered surface:
+    // ms->backend, sax/imaging-native->frontend, left-pad->'.'. The
+    // renderer pads table columns to their widest cell, so multi-space runs
+    // are squished before matching (test/cli.test.ts idiom).
+    const squished = squish(md);
+    expect(squished).toContain("| ms | npm | 2.1.3 | MIT | backend |");
+    expect(squished).toContain("| sax | npm | 1.4.1 | ISC | frontend |");
+    expect(squished).toContain("| left-pad | npm | 1.3.0 | WTFPL | . |");
+
+    // (c) imaging-native (LGPL-3.0-or-later) renders in the Production
+    // dependencies section, not Development-only.
+    const productionIdx = md.indexOf("## Production dependencies");
+    const developmentIdx = md.indexOf("## Development-only dependencies");
+    const imagingIdx = md.indexOf("imaging-native");
+    expect(productionIdx).toBeGreaterThan(-1);
+    expect(developmentIdx).toBeGreaterThan(-1);
+    expect(imagingIdx).toBeGreaterThan(productionIdx);
+    expect(imagingIdx).toBeLessThan(developmentIdx);
+  });
+
+  test("policy run: the FAIL line names imaging-native 'in frontend' under a default posture (dev_dependencies=warn)", async () => {
+    const { root } = makeWorkspaceTree();
+    const policyPath = join(root, "policy.toml");
+    writeFileSync(
+      policyPath,
+      ["[unknown]", 'handling = "warn"', ""].join("\n"),
+    );
+
+    const stderr = await withCapturedStderr(async () => {
+      await runGenerate(generateOpts(root, policyPath));
+    });
+
+    // Locked shape: 'policy <status>: <purl> in <target> — <rule>: <reason>'.
+    expect(stderr).toContain(
+      "policy fail: pkg:npm/imaging-native@2.0.0 in frontend — default:copyleft:",
+    );
+    expect(stderr).toContain('copyleft license "LGPL-3.0-or-later"');
   });
 });
