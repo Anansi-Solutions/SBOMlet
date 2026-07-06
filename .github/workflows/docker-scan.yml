@@ -78,7 +78,14 @@ jobs:
         run: |
           tags=""
           for df in $DOCKERFILE_SET; do
-            tag="sbomlet-scan/$(echo "$df" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9._-]/-/g')"
+            # The sanitized name alone is not injective (a/b/Dockerfile and
+            # a-b/Dockerfile collide, as do case-folded paths); a collision
+            # would let the second build silently overwrite the first image
+            # and drop it from the committed inventory. Suffix a short hash
+            # of the path so distinct Dockerfiles always get distinct tags --
+            # deterministic per path, so the committed sidecar identity is
+            # stable across runs.
+            tag="sbomlet-scan/$(echo "$df" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9._-]/-/g')-$(printf '%s' "$df" | sha256sum | cut -c1-8)"
             docker buildx build --load --provenance=false -f "$df" -t "$tag" "$(dirname "$df")"
             tags="$tags $tag"
           done
