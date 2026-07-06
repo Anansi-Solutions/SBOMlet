@@ -424,6 +424,38 @@ describe("runCheck + exitCodeFor — the CI gate (GATE-01, GATE-02)", () => {
     expect(snapshotTree(root)).toEqual(before);
   });
 
+  test("Test 8b: --intensive is a config error on check (Pitfall 4, T-10-14) — the shared option table cannot leak the flag into the offline gate", async () => {
+    const { root } = makeScannableTree();
+    const paths = pathsFor(root, true);
+    const policyPath = writePolicy(root, '[unknown]\nhandling = "warn"\n');
+    await withCapturedStderr(async () => {
+      await runGenerate({
+        repoRoot: root,
+        ...paths,
+        policyPath,
+        verbose: false,
+      });
+    });
+
+    const before = snapshotTree(root);
+    // Passing --intensive to check is a config error: it throws (-> main's
+    // catch -> fail() -> exit 3 path) and never reaches exitCodeFor. This is
+    // the FIRST guard, checked before the dump-model one, in runCheck.
+    await withCapturedStderr(async () => {
+      await expect(
+        runCheck({
+          repoRoot: root,
+          ...paths,
+          policyPath,
+          intensive: true,
+          verbose: false,
+        }),
+      ).rejects.toThrow("check never scans");
+    });
+    // check never wrote anything on its way to the throw.
+    expect(snapshotTree(root)).toEqual(before);
+  });
+
   test("Test 9: exit-taxonomy boundaries — and errors never reach the mapping", async () => {
     // Pure mapping boundaries.
     expect(exitCodeFor({ violations: 0, staleFiles: [] })).toBe(0);

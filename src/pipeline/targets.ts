@@ -10,6 +10,7 @@ import { join } from "node:path";
 import { assertBunLockSize } from "../collectors/bunLock";
 import { manifestFilesFor } from "../collectors/dispatch";
 import { collectors } from "../collectors/registry";
+import { compareCodeUnits } from "../model/dependencies";
 import { type CollectedSbom } from "../merge/merge";
 import {
   discoverTargets,
@@ -78,6 +79,20 @@ function resolveTargets(opts: GenerateOptions): DiscoveredTarget[] {
 }
 
 /**
+ * The per-target collect result: the merge inputs plus every target directory
+ * that actually contributed one (compareCodeUnits-sorted, deduped) — the same
+ * dirs the collectors ran in. {@link IntensiveOptions.targetDirs} (10-05,
+ * generate --intensive) is built from this so the residual ScanCode lane
+ * probes exactly the source trees this run already walked, never a
+ * freshly-discovered set that could drift from what was actually collected.
+ */
+export interface CollectResult {
+  inputs: CollectedSbom[];
+  /** compareCodeUnits-sorted, deduped absolute target directories. */
+  targetDirs: string[];
+}
+
+/**
  * The per-target collect loop: resolve targets, dispatch each through the
  * collector registry, and apply the coverage policy. The loop owns the
  * "collecting"/"skipping" stderr lines, routed through the caller-provided log
@@ -86,9 +101,10 @@ function resolveTargets(opts: GenerateOptions): DiscoveredTarget[] {
 export async function collectTargets(
   opts: GenerateOptions,
   log: (line: string) => void,
-): Promise<CollectedSbom[]> {
+): Promise<CollectResult> {
   const targets = resolveTargets(opts);
   const inputs: CollectedSbom[] = [];
+  const dirs = new Set<string>();
 
   // Sequential scan in sorted (identity, kind) order — discoverTargets
   // already sorts; single-target mode is a one-element list.
@@ -170,7 +186,11 @@ export async function collectTargets(
     );
     if (verdict === "skip") continue;
     inputs.push(input);
+    dirs.add(target.dir);
   }
 
-  return inputs;
+  return {
+    inputs,
+    targetDirs: [...dirs].sort(compareCodeUnits),
+  };
 }

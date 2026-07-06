@@ -25,6 +25,9 @@
 #   BUILT_IMAGES    space-separated locally built image tags to scan (generate-docker-sbom)
 #   PULL            docker pull each resolved image before scanning (generate-docker-sbom)
 #   DOCKER_OS_SBOM  override the committed SBOM path (default: in the cache dir)
+#   INTENSIVE       set (e.g. INTENSIVE=1) to add --intensive to generate: scan
+#                   still-unresolved packages' local sources with ScanCode
+#                   after registry enrichment (occasional-run cost posture)
 #   TITLE           decision title for adr:new
 #
 # Task runs every command through its own embedded POSIX shell (mvdan/sh), so they
@@ -44,7 +47,7 @@ tasks:
   generate:
     desc: Generate THIRD_PARTY_LICENSES.md and THIRD_PARTY_NOTICES.md (plus an optional CycloneDX export); commit the outputs
     cmds:
-      - mise x -- bun src/cli.ts generate --base-dir {{.USER_WORKING_DIR | q}} --repo-root {{.REPO_ROOT | q}} --output {{.OUTPUT | q}} --notices {{.NOTICES | q}}{{if .POLICY}} --policy {{.POLICY | q}}{{end}}{{if .CYCLONEDX}} --cyclonedx {{.CYCLONEDX | q}}{{end}}
+      - mise x -- bun src/cli.ts generate --base-dir {{.USER_WORKING_DIR | q}} --repo-root {{.REPO_ROOT | q}} --output {{.OUTPUT | q}} --notices {{.NOTICES | q}}{{if .POLICY}} --policy {{.POLICY | q}}{{end}}{{if .CYCLONEDX}} --cyclonedx {{.CYCLONEDX | q}}{{end}}{{if .INTENSIVE}} --intensive{{end}}
 
   check:
     desc: 'CI gate — exit 0 clean, 1 policy violation (beats stale), 2 stale/missing output, 3+ tool error'

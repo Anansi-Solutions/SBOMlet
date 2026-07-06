@@ -34,9 +34,17 @@ export interface CheckResult {
  * output is exactly what exit 2 reports.
  *
  * runCheck never writes files: --dump-model is rejected as a config error, so
- * the gate cannot overwrite the files it verifies.
+ * the gate cannot overwrite the files it verifies. --intensive is rejected
+ * alongside it (10-05, Pitfall 4): the parseArgs option table is SHARED
+ * across subcommands, so without this explicit guard check would silently
+ * ACCEPT --intensive and gain a scan path the offline gate must never have.
  */
 export async function runCheck(opts: GenerateOptions): Promise<CheckResult> {
+  if (opts.intensive === true) {
+    throw new Error(
+      "check never scans — --intensive is only valid on generate",
+    );
+  }
   if (opts.dumpModelPath !== undefined) {
     throw new Error(
       "check performs no writes — --dump-model is only valid on generate",

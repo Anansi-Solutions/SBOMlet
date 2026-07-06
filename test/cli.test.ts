@@ -28,7 +28,11 @@ import { tmpdir } from "node:os";
 import { join, relative, resolve } from "node:path";
 import { afterAll, beforeAll, describe, expect, mock, test } from "bun:test";
 
-import { dockerSbomOptionsFrom, dockerSbomModeConflict } from "../src/cli";
+import {
+  dockerSbomOptionsFrom,
+  dockerSbomModeConflict,
+  optionsFrom,
+} from "../src/cli";
 import { exitCodeFor, runCheck } from "../src/gate/check";
 import { classifyCoverage, coverageSkipReason } from "../src/pipeline/coverage";
 import { defaultNoticesPath, resolveFrom } from "../src/pipeline/paths";
@@ -2268,5 +2272,51 @@ describe("generate-docker-sbom mode contract", () => {
         "repo-root": ".",
       }),
     ).toBeUndefined();
+  });
+});
+
+describe("optionsFrom --intensive threading (10-05, D-07 absent-not-false)", () => {
+  test("intensive absent from CliValues leaves options.intensive ABSENT (own-property, not false)", () => {
+    const options = optionsFrom({});
+    expect(Object.prototype.hasOwnProperty.call(options, "intensive")).toBe(
+      false,
+    );
+    expect(options.intensive).toBeUndefined();
+  });
+
+  test("--intensive true yields options.intensive === true", () => {
+    const options = optionsFrom({ intensive: true });
+    expect(options.intensive).toBe(true);
+    expect(Object.prototype.hasOwnProperty.call(options, "intensive")).toBe(
+      true,
+    );
+  });
+
+  test("intensive: false (should never happen — no default in parseArgs) still yields ABSENT, never a stored false", () => {
+    // parseArgs never produces this shape (no `default` on the intensive
+    // option), but optionsFrom's own guard is `=== true`, so even a stray
+    // false input cannot leak a stored false into GenerateOptions.
+    const options = optionsFrom({ intensive: false });
+    expect(Object.prototype.hasOwnProperty.call(options, "intensive")).toBe(
+      false,
+    );
+  });
+});
+
+describe("Taskfile.yml --intensive plumbing (10-05, static/string-locked, no YAML parser)", () => {
+  test("generate task composes --intensive from the INTENSIVE var (bare boolean, PULL idiom)", () => {
+    const taskfile = readFileSync(
+      join(import.meta.dir, "..", "Taskfile.yml"),
+      "utf8",
+    );
+    expect(taskfile).toContain("{{if .INTENSIVE}} --intensive{{end}}");
+  });
+
+  test("INTENSIVE is documented in the header overridable-variables list", () => {
+    const taskfile = readFileSync(
+      join(import.meta.dir, "..", "Taskfile.yml"),
+      "utf8",
+    );
+    expect(taskfile).toContain("INTENSIVE");
   });
 });

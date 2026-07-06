@@ -9,6 +9,7 @@ import { basename, relative } from "node:path";
 
 import { assertSyftSbomSize } from "../collectors/dockerOs";
 import { enrichUnknowns } from "../enrich/enrich";
+import { type IntensiveOptions } from "../enrich/scancode";
 import { mergeSboms, type CollectedSbom } from "../merge/merge";
 import {
   toSortedDependenciesJson,
@@ -72,6 +73,16 @@ export interface GenerateOptions {
    */
   cyclonedxPath?: string;
   dumpModelPath?: string;
+  /**
+   * generate --intensive (10-05, SCAN-01/SCAN-02/SCAN-03): opt-in ScanCode
+   * residual-scan lane over still-unresolved packages with locally-present
+   * sources. Absent-not-false (own-property gated at the enrichUnknowns call
+   * site below) so a default generate never constructs {@link IntensiveOptions}
+   * and stays structurally scan-free. check REJECTS this flag outright
+   * (gate/check.ts, the dump-model precedent) — the shared optionsFrom parses
+   * it, but only runGenerate ever threads it through as true.
+   */
+  intensive?: boolean;
   /**
    * Optional TOML policy file: loaded + validated before any scan; verdicts
    * evaluated after the merge and rendered into the PolicyView document.
@@ -282,6 +293,25 @@ function enrichmentCachePath(opts: GenerateOptions, dir: string): string {
 }
 
 /**
+ * Construct {@link IntensiveOptions} for the enrichUnknowns call — ONLY when
+ * mode is "generate" AND opts.intensive is true (D-07's opt-in boundary,
+ * SCAN-03): check never reaches this function with mode "generate" (runCheck
+ * forces "check"), and a default generate call has opts.intensive absent, so
+ * the common case returns undefined and the intensive lane is never even
+ * constructed, let alone invoked. targetDirs comes from the SAME collect loop
+ * this run already walked (10-05) — never a fresh discovery — so the residual
+ * scan's candidate roots can never drift from what generate actually scanned.
+ */
+function intensiveOptionsFor(
+  mode: "generate" | "check",
+  opts: GenerateOptions,
+  targetDirs: string[],
+): IntensiveOptions | undefined {
+  if (mode !== "generate" || opts.intensive !== true) return undefined;
+  return { targetDirs };
+}
+
+/**
  * Project the PolicyView the document renderer consumes. The policy pointer path
  * is repo-root-relative (policyPointerPath) so the committed bytes stay stable
  * across platforms. 07-09: the author-supplied [document] title + preamble flow
@@ -334,7 +364,7 @@ export async function buildOutputs(
 
   // The collect loop owns the per-target stderr lines; the sink is provided
   // here so the pipeline stays the single place wiring stderr.
-  const inputs: CollectedSbom[] = await collectTargets(opts, (line): void => {
+  const { inputs, targetDirs } = await collectTargets(opts, (line): void => {
     process.stderr.write(`${line}\n`);
   });
 
@@ -354,10 +384,12 @@ export async function buildOutputs(
   // fetch on a cache miss and write the committed cache; check NEVER fetches or
   // writes — a miss-needing-enrichment surfaces as a stale unknown (exit 2).
   const mode = opts.mode ?? "check";
+  const intensive = intensiveOptionsFor(mode, opts, targetDirs);
   const { model: enriched, staleUnknowns } = await enrichUnknowns(model, {
     mode,
     cachePath: enrichmentCachePath(opts, dir),
     verbose: opts.verbose,
+    ...(intensive !== undefined ? { intensive } : {}),
   });
 
   // Normalization runs unconditionally: annotateFindings with an empty clarify

@@ -55,8 +55,11 @@ const USAGE =
   "  generate [--repo-root <path> | --target <path>] [--exclude <glob>]... " +
   "[--policy <path>] [--output <path>] [--notices <path>] " +
   "[--cyclonedx <path>] [--dump-model <path>] [--base-dir <path>] " +
-  "[--enrichment-cache <path>] [--verbose]\n" +
-  "  check    same flags as generate (minus --dump-model) — regenerates in " +
+  "[--enrichment-cache <path>] [--intensive] [--verbose]\n" +
+  "           --intensive: scan the locally-present sources of still-" +
+  "unresolved packages with ScanCode after registry enrichment (generate-" +
+  "only; meant for occasional runs, not the default fast path).\n" +
+  "  check    same flags as generate (minus --dump-model, minus --intensive) — regenerates in " +
   "memory and byte-compares every configured output; writes nothing\n" +
   "           exit codes: 0 clean, 1 policy violation (beats stale), " +
   "2 stale/missing output, 3+ tool/config error (warns print, never gate)\n" +
@@ -181,6 +184,15 @@ interface CliValues {
    * scans nothing, writes nothing. Requires --repo-root.
    */
   "list-dockerfiles"?: boolean;
+  /**
+   * generate --intensive (10-05, SCAN-01/SCAN-02/SCAN-03): opt-in ScanCode
+   * residual-scan lane over still-unresolved packages with locally-present
+   * sources. GENERATE-ONLY — check rejects it outright (gate/check.ts). No
+   * `default` here: absent must stay absent, never coerced to false, so
+   * optionsFrom's own-property spread can gate the intensive lane on mere
+   * presence.
+   */
+  intensive?: boolean;
 }
 
 /**
@@ -204,7 +216,7 @@ function discoverDefaultPolicy(values: CliValues): string | undefined {
  * generate and check parse the same flags, so the comparison set is exactly
  * the configured output set.
  */
-function optionsFrom(values: CliValues): GenerateOptions {
+export function optionsFrom(values: CliValues): GenerateOptions {
   if (values.target !== undefined && values["repo-root"] !== undefined) {
     fail(
       `--target and --repo-root are mutually exclusive — pass at most one\n${USAGE}`,
@@ -223,6 +235,10 @@ function optionsFrom(values: CliValues): GenerateOptions {
     baseDir: values["base-dir"],
     enrichmentCachePath: values["enrichment-cache"],
     verbose: values.verbose ?? false,
+    // Absent-not-false (D-07): own-property spread so a default generate
+    // never sets this key at all, and check's runCheck rejection reads
+    // opts.intensive === true, never a coerced false.
+    ...(values.intensive === true ? { intensive: true } : {}),
   };
 }
 
@@ -453,6 +469,7 @@ async function main(argv: string[]): Promise<void> {
         "docker-os-sbom": { type: "string" },
         "built-image": { type: "string", multiple: true },
         "list-dockerfiles": { type: "boolean", default: false },
+        intensive: { type: "boolean" },
       },
       allowPositionals: true,
     }));
