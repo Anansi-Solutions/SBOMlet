@@ -166,6 +166,16 @@ jobs:
             echo "::error::regenerated scan artifacts are not committed -- run generate and commit the result"
             git --no-pager diff --stat
             echo "diverged=true" >> "$GITHUB_OUTPUT"
+            # Derive the upload set from the SAME porcelain output this
+            # divergence predicate uses, so the downloaded artifact payload is
+            # always the complete changed set (e.g. a refreshed licenses
+            # cache), never a hardcoded subset that leaves the check red after
+            # a contributor commits what was offered.
+            {
+              echo "changed<<CHANGED_SET_EOF"
+              git status --porcelain | cut -c4-
+              echo "CHANGED_SET_EOF"
+            } >> "$GITHUB_OUTPUT"
           fi
         id: divergence
 
@@ -174,10 +184,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: docker-scan-artifacts
-          path: |
-            .sbomlet.cache/docker-os.sbom.json
-            THIRD_PARTY_LICENSES.md
-            THIRD_PARTY_NOTICES.md
+          # The newline-separated changed-path list computed by the divergence
+          # step -- never a hardcoded subset.
+          path: ${{ steps.divergence.outputs.changed }}
 
       - name: Fail on divergence
         if: github.event_name == 'pull_request' && steps.divergence.outputs.diverged == 'true'
