@@ -627,6 +627,40 @@ describe("sourceDirFor — unsupported ecosystems and malformed purls", () => {
     const result = sourceDirFor("not-a-purl-at-all", ["/nonexistent/dir"]);
     expect(result).toBeUndefined();
   });
+
+  test("a malformed percent-encoding in an npm purl name is an honest skip, never a URIError", () => {
+    const targetDir = mkdtempSync(join(tmpdir(), "scancode-npm-badenc-"));
+    try {
+      mkdirSync(join(targetDir, "node_modules"), { recursive: true });
+      // decodeURIComponent("%ZZ") throws URIError; the mapper's contract is
+      // undefined on ANY structural mismatch — a crafted SBOM purl must
+      // never crash the run.
+      expect(() =>
+        sourceDirFor("pkg:npm/%ZZ@1.0.0", [targetDir]),
+      ).not.toThrow();
+      expect(sourceDirFor("pkg:npm/%ZZ@1.0.0", [targetDir])).toBeUndefined();
+    } finally {
+      rmSync(targetDir, { recursive: true, force: true });
+    }
+  });
+
+  test("a malformed percent-encoding in a pypi purl name is an honest skip, never a URIError", () => {
+    const targetDir = mkdtempSync(join(tmpdir(), "scancode-pypi-badenc-"));
+    try {
+      // A present site-packages so the mapper reaches its decode step.
+      const sitePackages =
+        process.platform === "win32"
+          ? join(targetDir, ".venv", "Lib", "site-packages")
+          : join(targetDir, ".venv", "lib", "python3.12", "site-packages");
+      mkdirSync(sitePackages, { recursive: true });
+      expect(() =>
+        sourceDirFor("pkg:pypi/%ZZ@1.0.0", [targetDir]),
+      ).not.toThrow();
+      expect(sourceDirFor("pkg:pypi/%ZZ@1.0.0", [targetDir])).toBeUndefined();
+    } finally {
+      rmSync(targetDir, { recursive: true, force: true });
+    }
+  });
 });
 
 // ---------------------------------------------------------------------------

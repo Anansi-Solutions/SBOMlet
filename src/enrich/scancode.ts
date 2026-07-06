@@ -103,6 +103,20 @@ interface EcosystemPurl {
 }
 
 /**
+ * decodeURIComponent wrapped so a malformed percent-encoding (e.g. "%ZZ" in
+ * a crafted SBOM purl — SBOM documents are an untrusted shape) is an honest
+ * undefined, never a URIError that would kill the whole intensive run
+ * (the mapper contract: undefined on ANY structural mismatch).
+ */
+function safeDecode(encoded: string): string | undefined {
+  try {
+    return decodeURIComponent(encoded);
+  } catch {
+    return undefined;
+  }
+}
+
+/**
  * Decode + validate an npm purl's encoded name against a candidate
  * `node_modules` root, requiring the installed package.json `version` field
  * to equal the purl version (Pitfall 8, mandatory — never optional). Returns
@@ -116,9 +130,10 @@ function npmSourceDir(
   purl: EcosystemPurl,
   targetDir: string,
 ): string | undefined {
-  // decodeURIComponent exactly mirrors npmPackumentUrl's scoped-name decode
+  // The decode exactly mirrors npmPackumentUrl's scoped-name decode
   // (enrich.ts npmPackumentUrl): "%40scope/pkg" -> "@scope/pkg" (A6 locked).
-  const name = decodeURIComponent(purl.encodedName);
+  const name = safeDecode(purl.encodedName);
+  if (name === undefined) return undefined;
 
   const nodeModulesRoot = resolve(targetDir, "node_modules");
   const candidate = resolve(nodeModulesRoot, name);
@@ -220,7 +235,8 @@ function pypiSourceDir(
   const sitePackages = resolve(sitePackagesDir(venvDir));
   if (!existsSync(sitePackages)) return undefined;
 
-  const name = decodeURIComponent(purl.encodedName);
+  const name = safeDecode(purl.encodedName);
+  if (name === undefined) return undefined;
   const folded = pep503Fold(`${name}-${purl.version}`);
 
   const entries = safeReaddir(sitePackages);
