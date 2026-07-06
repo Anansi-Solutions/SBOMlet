@@ -145,6 +145,7 @@ describe("verifyCache", () => {
       verifyCache({ cachePath: path, verbose: false }),
     );
     expect(result.audited).toBe(3);
+    expect(result.skipped).toBe(0);
     expect(result.mismatches).toEqual([]);
   });
 
@@ -334,7 +335,7 @@ describe("verifyCache", () => {
     ).rejects.toThrow(/malformed enrichment cache/);
   });
 
-  test("a scancode entry is skipped (never re-resolved); a registry entry in the SAME cache is still audited", async () => {
+  test("a scancode entry is counted SKIPPED, never audited; a registry entry in the SAME cache is still audited", async () => {
     const path = tempCachePath();
     writeCache(path, {
       "pkg:npm/scancode-only@1.0.0": {
@@ -357,7 +358,10 @@ describe("verifyCache", () => {
     const result = await withFetch(fetch, () =>
       verifyCache({ cachePath: path, verbose: false }),
     );
-    expect(result.audited).toBe(2);
+    // The skipped scancode entry must never inflate the audited count — the
+    // report would otherwise assert a match for an entry never checked.
+    expect(result.audited).toBe(1);
+    expect(result.skipped).toBe(1);
     expect(result.mismatches).toEqual([]);
     expect(calls.some((u) => u.includes("scancode"))).toBe(false);
     expect(calls.some((u) => u.includes("registry.npmjs.org/lodash"))).toBe(
@@ -373,6 +377,7 @@ describe("verifyCache", () => {
       verifyCache({ cachePath: path, verbose: false }),
     );
     expect(result.audited).toBe(0);
+    expect(result.skipped).toBe(0);
     expect(result.mismatches).toEqual([]);
     expect(calls).toEqual([]);
   });
