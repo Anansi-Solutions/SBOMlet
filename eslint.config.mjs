@@ -44,5 +44,16 @@ export default tseslint.config(
       complexity: ["error", 15],
     },
   },
+  {
+    // github-script step bodies: plain CommonJS Node, not part of the bundled
+    // TypeScript tool, so they use require/module.exports directly.
+    files: [".github/scripts/**/*.js"],
+    languageOptions: {
+      globals: { require: "readonly", module: "writable", process: "readonly" },
+    },
+    rules: {
+      "@typescript-eslint/no-require-imports": "off",
+    },
+  },
   eslintConfigPrettier, // last — disables formatting rules
 );
