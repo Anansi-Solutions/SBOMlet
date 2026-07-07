@@ -68,7 +68,7 @@ jobs:
         uses: actions/github-script@v8
         with:
           script: |
-            await require('./.github/scripts/commit-artifacts.js')(
+            await require('./.github/scripts/commit-artifacts.cjs')(
               { github, context, core },
               { message: "chore: refresh docker scan artifacts" },
             );
@@ -79,7 +79,7 @@ jobs:
         id: divergence
         with:
           script: |
-            await require('./.github/scripts/check-divergence.js')({ github, context, core });
+            await require('./.github/scripts/check-divergence.cjs')({ github, context, core });
 
       - name: Upload the regenerated scan artifacts
         if: github.event_name == 'pull_request' && steps.divergence.outputs.diverged == 'true'

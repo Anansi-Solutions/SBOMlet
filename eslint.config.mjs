@@ -46,8 +46,10 @@ export default tseslint.config(
   },
   {
     // github-script step bodies: plain CommonJS Node, not part of the bundled
-    // TypeScript tool, so they use require/module.exports directly.
-    files: [".github/scripts/**/*.js"],
+    // TypeScript tool, so they use require/module.exports directly. The
+    // .cjs extension forces CommonJS regardless of this repo's own
+    // package.json "type": "module".
+    files: [".github/scripts/**/*.cjs"],
     languageOptions: {
       globals: { require: "readonly", module: "writable", process: "readonly" },
     },

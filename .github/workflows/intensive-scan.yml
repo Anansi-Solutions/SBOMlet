@@ -48,7 +48,7 @@ jobs:
         uses: actions/github-script@v8
         with:
           script: |
-            await require('./.github/scripts/commit-artifacts.js')(
+            await require('./.github/scripts/commit-artifacts.cjs')(
               { github, context, core },
               {
                 // The scan may only ever touch these paths -- anything else
