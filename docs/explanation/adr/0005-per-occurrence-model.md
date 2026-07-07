@@ -12,11 +12,10 @@ about that package are not global — they change with the place it is used.
 
 The first is the "used in" column: the report has to name every workspace that
 pulls a package in, so a reader can see where an obligation lands. The second is
-dev/prod scope. A package can legally be a dev dependency in one workspace and a
+dev/prod scope: a package can legally be a dev dependency in one workspace and a
 production dependency in another, and only what ships carries a distribution
 obligation. Provenance — direct or transitive, and which parent introduced it —
-is per-place too: a package can be declared directly in one workspace and reached
-transitively in another.
+is per-place too.
 
 So the model had to answer "where is this used, and how, in each place?" without
 listing the same package once per place and losing the single-row view the report
@@ -29,8 +28,6 @@ needs.
 - Per-workspace policy: copyleft suppression matches a single workspace, so the
   place a package is used has to be a value the policy can join on.
 - Room to add provenance later without reshaping the model.
-- One stable shape every downstream stage (merge, policy, render, gate) reads the
-  same way.
 
 ## Considered options
 
@@ -54,14 +51,11 @@ target, its dev/prod flag, its provenance).
 This is the only shape that gives a single row per package *and* keeps dev/prod
 correct per workspace. Option 1 keeps scope correct but multiplies the rows and
 pushes the grouping onto every consumer. Option 2 keeps one row but forces one
-dev/prod answer per package, which is wrong the moment a package is dev in one
-workspace and prod in another — the case that pushed us off it.
-
-The model first shipped with package-level scope (option 2) and was migrated to
-per-occurrence scope a day later, once the multi-target merge made the
-single-answer limit concrete. Provenance was added the same way much later — a
-field on the occurrence, no reshaping — which is the additivity this design was
-chosen to allow.
+dev/prod answer per package, wrong the moment a package is dev in one workspace
+and prod in another — the case that pushed the model from package-level scope
+(shipped first) to per-occurrence a day later. Provenance was added the same
+way much later, as a field on the occurrence with no reshaping — the additivity
+this design was chosen to allow.
 
 ## Consequences
 
@@ -81,7 +75,6 @@ chosen to allow.
 
 ## See also
 
-- Research: `.planning/research/ARCHITECTURE.md`
 - Related: [ADR-0003](0003-cyclonedx-purl-merge.md) (purl as the merge key),
   [ADR-0009](0009-dev-prod-os-scopes.md) (dev/prod and OS scopes gate on this
   model), [ADR-0014](0014-dependency-provenance.md) (provenance, the additive

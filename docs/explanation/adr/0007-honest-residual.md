@@ -8,8 +8,7 @@
 The tool produces an inventory a compliance reviewer relies on. The failure mode it
 must avoid is a silent guess: a precise licence, version, or base image inferred
 from incomplete data. A wrong value is worse than a gap, because nobody knows to
-check it. We want the reviewer aware of every ambiguity and able to resolve it,
-even though the underlying tools guess by default.
+check it — even though the underlying tools guess by default.
 
 That default is concrete. PyPI's trove classifier for the Jupyter/IPython stack
 reports the bare label "BSD"; `spdx-correct` turns it into `BSD-2-Clause`, wrong for
@@ -37,27 +36,19 @@ gate.
 
 ## Decision
 
-We surface the residual: record what can be determined, flag the rest for a human.
-The principle has three faces.
-
-For **licences**, a bare family label is a first-class *imprecise* finding. The
-normalizer intercepts the ambiguous labels — `BSD`, `Apache`, `GPL`, `AGPL`,
-`LGPL`, `EUPL` — before `spdx-correct` can add a clause count, and carries the
-family forward as `impreciseFamily` with the SPDX expression null. The policy engine
-gives this its own lane: a permissive family warns and passes; a could-be-copyleft
-family (`GPL`/`AGPL`/`LGPL`) is flagged for review. The document renders
-`BSD (imprecise)`, keeps it out of the unknown count, and lists it in a
-"review / disambiguate" section. A maintainer pins the real answer with a
-`[[clarify]]` override.
-
-For **Docker**, the residual is an unresolvable base image; the Dockerfile collector
-returns `{kind: "unresolved", reason}` and the caller warns and skips. Mechanics in
-[ADR-0015](0015-abstain-over-fragile-parsing.md).
-
-For **provenance**, the residual is a "why is this here?" the graph cannot prove;
-the lane emits no edges and the column renders "—" rather than a
-`direct`/`transitive` label from component order. See
-[ADR-0014](0014-dependency-provenance.md).
+We surface the residual: record what can be determined, flag the rest for a
+human. The principle has three faces. For **licences**, a bare family label
+(`BSD`, `Apache`, `GPL`, `AGPL`, `LGPL`, `EUPL`) is a first-class *imprecise*
+finding: the normalizer intercepts it before `spdx-correct` can add a clause
+count, carries the family forward as `impreciseFamily` with the SPDX expression
+null, and the policy engine warns-and-passes a permissive family while flagging a
+could-be-copyleft one for review. A maintainer pins the real answer with a
+`[[clarify]]` override. For **Docker**, the residual is an unresolvable base
+image — the collector returns `{kind: "unresolved", reason}` and the caller warns
+and skips (mechanics in [ADR-0015](0015-abstain-over-fragile-parsing.md)). For
+**provenance**, the residual is a "why is this here?" the graph cannot prove; the
+lane emits no edges and the column renders "—" rather than a guessed
+`direct`/`transitive` label (see [ADR-0014](0014-dependency-provenance.md)).
 
 Guessing fails the first driver: the `BSD → BSD-2-Clause` and `EUPL → UPL-1.0`
 values are what `spdx-correct` produced against the real corpus, one flipping

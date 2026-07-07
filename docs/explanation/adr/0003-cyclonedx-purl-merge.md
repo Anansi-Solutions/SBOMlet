@@ -44,22 +44,19 @@ Every collector emits CycloneDX, and the merge joins components on their purl in
 one canonical model, keyed by the purl string verbatim. We write the merge
 ourselves.
 
-Purl gives correct identity. A package URL encodes the ecosystem (`pkg:npm/…` vs
-`pkg:pypi/…`), namespace, name, and version, so it separates what name+version
-conflates and never merges two different packages. Name+version collides same-named
-npm and PyPI packages and cannot separate a scoped package from its bare twin.
+Purl gives correct identity: it encodes the ecosystem (`pkg:npm/…` vs
+`pkg:pypi/…`), namespace, name, and version, so it never merges two different
+packages or collides same-named npm and PyPI ones the way name+version does.
+CycloneDX is the format because cdxgen and syft emit it natively, carrying purls,
+the licence-claim shapes we need, and the `cdx:*` properties for dev/prod and
+workspace markers; SPDX is equally standard but would add a second parse path for
+no coverage gain.
 
-CycloneDX is the format because the generators for our ecosystems (cdxgen, syft)
-emit it natively, carrying purls, licence claims in the three shapes we need, and
-the `cdx:*` properties we read for dev/prod and workspace markers. SPDX is equally
-standard but would add a second parse path for no coverage gain, since both
-generators already emit CycloneDX. We narrow only the subset we use.
-
-We do the merge ourselves, in roughly a couple hundred lines, rather than shelling
-out to a generic tool. A generic merge discards which input document a component
-came from — the "used in" attribution we need — and `cyclonedx-cli merge` has open
-dedup defects (components with differing bom-refs are not deduped). Owning it lets
-us key on purl, accumulate a per-target occurrence list, and control the model.
+We do the merge ourselves, in roughly a couple hundred lines, rather than
+shelling out to a generic tool: a generic merge discards which input document a
+component came from — the "used in" attribution we need — and `cyclonedx-cli
+merge` has open dedup defects. Owning it lets us key on purl and accumulate a
+per-target occurrence list.
 
 ## Consequences
 
@@ -73,13 +70,10 @@ us key on purl, accumulate a per-target occurrence list, and control the model.
   subset sits behind our own validation boundary.
 - **Neutral:** the key is the purl string verbatim, URL-encoding intact (`%40`
   stays `%40`), never the document-local bom-ref. A source that emits no purl
-  contributes nothing — the honest residual, not a silent drop. Disagreements
-  between two documents about one purl are reconciled by explicit, order-independent
-  rules.
+  contributes nothing — the honest residual, not a silent drop.
 
 ## See also
 
-- Research: `.planning/research/ARCHITECTURE.md`
 - Related: [ADR-0002](0002-orchestrate-standard-generators.md) (the generators
   whose CycloneDX we merge), [ADR-0005](0005-per-occurrence-model.md) (the model
   the merge builds)

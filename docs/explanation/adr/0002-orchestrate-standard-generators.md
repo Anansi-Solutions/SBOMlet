@@ -41,27 +41,21 @@ We orchestrate. Each target goes to the generator that handles it best, and ever
 generator returns CycloneDX, the only contract the rest of the tool sees. The
 generators resolve licences from inside each ecosystem's own resolution: the Yarn
 plugin fills licences for 99.6–99.8% of packages on a real Yarn 4 target, where
-cdxgen alone fills none, because it reads what Yarn resolved. cdxgen covers JS and
-Python lockfiles; syft covers OS packages in container images. None is installed
+cdxgen alone fills none, because it reads what Yarn resolved. None is installed
 into the scanned project — each runs from a pinned version through a throwaway
 invocation (`bun x`, `yarn dlx`) with install disabled.
 
 An in-house engine would have to match that detection accuracy from scratch and
-carry a lockfile parser per ecosystem on top. The residual error from
-declared-metadata detection is cheaper to absorb; where a generator's metadata is
-wrong, a `clarify`-style policy override corrects that one package by hand.
+carry a lockfile parser per ecosystem on top; the residual error from
+declared-metadata detection is cheaper to absorb, correcting a wrong package by
+hand with a `clarify`-style policy override. This also fixes the scope: the tool
+aggregates *declared* licences and gates on a policy, and does not scan dependency
+source text or reason about licence *compatibility* — each of those is a separate
+product trading a bounded "unknown" for a surface of subtle wrong answers.
 
-This fixes the scope. The tool aggregates *declared* licences and gates on a
-policy. It does not scan dependency source text, and it does not reason about
-licence *compatibility* — that judgment stays with the human reading the document.
-Whole-corpus source scanning and a compatibility matrix are anti-features: each is
-a separate product that trades a bounded "unknown" for a surface of subtle wrong
-answers.
-
-The one place we parse rather than orchestrate is Terraform: no upstream tool
-resolves Terraform provider and module licences at their resolved versions, so
-there is nothing to drive. That exception is
-[ADR-0015](0015-abstain-over-fragile-parsing.md).
+The one place we parse rather than orchestrate is Terraform, where no upstream
+tool resolves provider and module licences at their resolved versions — the
+exception in [ADR-0015](0015-abstain-over-fragile-parsing.md).
 
 ## Consequences
 
@@ -77,7 +71,6 @@ there is nothing to drive. That exception is
 
 ## See also
 
-- Research: `.planning/research/ARCHITECTURE.md`, `.planning/research/FEATURES.md`
 - Related: [ADR-0001](0001-typescript-on-bun.md) (the stack that drives these
   generators), [ADR-0015](0015-abstain-over-fragile-parsing.md) (the Terraform
   exception, where we parse a filesystem signal instead)

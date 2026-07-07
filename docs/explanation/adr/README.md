@@ -2,8 +2,7 @@
 
 An ADR captures one architectural decision: the problem that forced it, the options
 weighed, what we chose, and what it costs. Together they answer "why is the tool
-built this way?". The `Key Decisions` table in `.planning/PROJECT.md` indexes into
-them, and the phase summaries under `.planning/phases/` hold the execution history.
+built this way?"
 
 We use the [MADR](https://adr.github.io/madr/) format. Records are immutable once
 accepted: to change a decision, write a new ADR and mark the old one `Superseded by

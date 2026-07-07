@@ -12,10 +12,9 @@ machine. If two runs disagree on a single byte, the gate fails on noise.
 
 Most SBOM tooling makes this hard. The CycloneDX spec recommends a unique
 `serialNumber` and a `metadata.timestamp` per document, and the common habit is a
-"Generated on …" header. Each changes on every run, so a regenerate-and-diff gate
-against them is stale as soon as it passes. The CycloneDX Maven and Cargo plugins
-both added reproducible-output modes for this reason. On a Windows host with
-`core.autocrlf` on, line endings are a second source of false staleness.
+"Generated on …" header; each changes on every run, so a regenerate-and-diff gate
+against them is stale as soon as it passes. On a Windows host with `core.autocrlf`
+on, line endings are a second source of false staleness.
 
 ## Decision drivers
 
@@ -38,28 +37,21 @@ both added reproducible-output modes for this reason. On a Windows host with
 ## Decision
 
 We emit nothing that varies between runs, so the committed file is the comparison
-and `check` is a byte-compare with no special cases.
+and `check` is a byte-compare with no special cases. Every document is a pure
+function from the canonical model to exact bytes: a stable total order the tool
+computes (packages by name/version/purl, object keys sorted by code unit), `"\n"`
+literals only, and generated files pinned to LF in `.gitattributes`. `check`
+normalizes CRLF to LF on the committed text it reads, absorbing an unpinned
+checkout without weakening the comparison. Nothing carries a timestamp: the
+Markdown header records how to regenerate (`task generate`) instead of a date,
+the CycloneDX export omits the optional serial number and metadata timestamp, and
+the Docker SBOM pins each image by content digest, not scan time.
 
-Every document is a pure function from the canonical model to exact bytes. Ordering
-is a stable total order the tool computes — packages by (name, version, purl),
-occurrences by target, object keys sorted by code unit through one shared
-serializer — not the order a generator emitted. Output uses `"\n"` literals only,
-and the generated files are pinned to LF in `.gitattributes`, so the same model
-produces the same bytes on Windows and Linux. `check` normalizes CRLF to LF on the
-committed text it reads, which absorbs an unpinned checkout without weakening the
-byte comparison.
-
-Nothing carries a timestamp. The Markdown header records how to regenerate
-(`task generate`) instead of a date. The CycloneDX export omits the document serial
-number and metadata timestamp, both optional. The Docker SBOM pins each image by
-content digest, not scan time. Tool versions appear only because mise pins them, so
-a version bump is a real diff.
-
-Masking the unstable fields at compare time keeps them and moves the complexity
-into the gate — a diff filter to maintain, which also hides any real change that
-lands on a masked line. Fingerprinting is faster but passes whenever the inputs are
+Masking unstable fields at compare time keeps them and moves the complexity into
+the gate — a diff filter to maintain, which also hides any real change that lands
+on a masked line. Fingerprinting is faster but passes whenever the inputs are
 unchanged, including when the rendering code changed and the file was never
-regenerated; it misses stale output, which is what the gate is for. At ~4,300
+regenerated — it misses stale output, which is what the gate is for. At ~4,300
 packages and milliseconds to render, a full regenerate is cheap.
 
 ## Consequences
@@ -78,7 +70,6 @@ packages and milliseconds to render, a full regenerate is cheap.
 
 ## See also
 
-- Research: `.planning/research/ARCHITECTURE.md`
 - Related: [ADR-0006](0006-policy-emits-verdicts.md) (renderer and gate consume one
   model), [ADR-0008](0008-offline-check-committed-cache.md) (the offline `check`
   this byte-compare underpins)

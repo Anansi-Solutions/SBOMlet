@@ -13,8 +13,8 @@ genuinely licence-less packages.
 
 That answer comes over the network, and `check` — the CI gate — cannot depend on
 the network. It runs on every pull request, often in a sandbox with no egress, and
-its verdict must not depend on whether pypi.org is reachable today. So the licences
-have to be fetched somewhere, but not in `check`.
+its verdict must not depend on whether the registry is reachable today. So the
+licences have to be fetched somewhere, but not in `check`.
 
 ## Decision drivers
 
@@ -39,41 +39,23 @@ have to be fetched somewhere, but not in `check`.
 ## Decision
 
 We fetch only in `generate` and persist the results to a cache file committed to
-the repository. `check` reads that cache and never opens a socket. The cache is the
-contract between the online step and the offline gate: the only licence `check`
-knows about an enriched package is the one a human committed.
+the repository; `check` reads that cache and never opens a socket. The cache is
+the contract between the online step and the offline gate — the only licence
+`check` knows about an enriched package is the one a human committed. A single
+mode flag threads through the pipeline: on a cache miss, `generate` fetches the
+registry and appends a `registry`-sourced claim, while `check` treats the same
+miss as stale, names the package, prints the `task generate` remedy, and exits 2.
+`generate` writes the cache on every run, even when nothing new resolves, so a
+first-time adopter with an all-resolved tree still has a file to commit.
 
-A single mode flag threads through the pipeline. `generate` runs enrichment in
-generate mode — on a cache miss it fetches the registry, resolves the licence,
-appends it as a `registry`-sourced claim, and records the result. `check` runs the
-same stage in check mode, where a miss never fetches: an unknown package with no
-cache entry is treated as stale, the gate names the package and prints the
-`task generate` remedy, and exits 2. There is one write site for the cache, gated on
-generate mode, so `check` cannot fetch or write.
-
-`generate` writes the cache on every run, not only when a fetch resolves something
-new: a project whose dependencies already all resolve still gets a committed
-cache — an empty envelope, recording that enrichment ran and found nothing to add.
-A first-time adopter with an all-resolved tree always has a file to commit, so a
-later offline `check` has something to read instead of finding no cache at all.
-
-The cache is keyed by the verbatim purl, which pins name and version. A given
-`name@version` has one licence upstream, so a hit stays valid until the lockfile
-changes the purl — no expiry, no staleness heuristic. It is committed, not
-gitignored, because an offline `check` needs it on a fresh checkout, and it uses the
-tool-wide deterministic format so the byte-comparison gate can tell a real licence
-change from noise.
-
-Fetching in `check` breaks the hermetic requirement. A gitignored cache keeps
-`check` offline only on a machine that already ran `generate`, and hides the
-enriched licences from review. The committed cache lets `check` regenerate the whole
-inventory offline and byte-compare it against the committed documents; a tampered
-cache that would change the output is caught as stale by the same comparison.
-
-One detail keeps the cache honest: a clean registry answer that genuinely carries no
-licence is recorded as a negative entry, so an unresolvable package is not
-re-fetched every run. A fetch *failure* is never cached — `generate` throws and
-writes nothing, so a transient outage cannot freeze into a false "no licence here".
+The cache is keyed by the verbatim purl: a given `name@version` has one licence
+upstream, so a hit stays valid with no expiry. It is committed, not gitignored,
+because an offline `check` needs it on a fresh checkout — fetching in `check`
+would break the hermetic requirement, and a gitignored cache would keep `check`
+offline only on a machine that already ran `generate`, hiding the enriched
+licences from review. A clean registry answer that carries no licence is recorded
+as a negative entry so it isn't re-fetched every run; a fetch *failure* is never
+cached, so a transient outage cannot freeze into a false "no licence here".
 
 ## Consequences
 
@@ -86,10 +68,9 @@ writes nothing, so a transient outage cannot freeze into a false "no licence her
   bumps a dependency that needs enrichment, `check` goes stale (exit 2) until
   someone runs `generate` and commits the cache. That is deliberate, but it is a
   step in the dependency-update loop.
-- **Neutral:** the cache stores the raw registry string, not a resolved SPDX id. The
-  raw string flows through the same normalization path as a generator claim, so
-  there is one place that turns text into an expression and the cache is not a
-  second resolution authority.
+- **Neutral:** the cache stores the raw registry string, not a resolved SPDX id, so
+  it flows through the same normalization path as a generator claim rather than
+  acting as a second resolution authority.
 
 ## See also
 

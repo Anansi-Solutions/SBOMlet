@@ -7,27 +7,24 @@
 
 A distribution obligation attaches to what you ship. A copyleft library compiled
 into the client bundle carries one; the same library used only to run the test
-suite does not. The base OS of a container is a third case: glibc, bash, coreutils
-and the rest of a Debian or Alpine image are copyleft, but they are the OS the
-container sits on, not code the project redistributes as a library, and the distro
+suite does not. The base OS of a container is a third case: glibc, bash,
+coreutils and the rest of a Debian or Alpine image are copyleft, but they are the
+OS the container sits on, not code the project redistributes, and the distro
 handles its own compliance.
 
-The first gate drew none of these lines. A default-FAIL fired on any copyleft (or,
+The first gate drew none of these lines: a default-FAIL fired on any copyleft (or,
 under a strict unknown policy, any unrecognised licence) regardless of where the
-package was used. On a large monorepo that failed on build-time-only copyleft and
-on every standard base image — false positives an operator learns to ignore.
-
-So the gate had to tell a package that ships from one that does not. The direction
-of the mistake is what matters: relaxing the gate for a dev or OS package is fine;
+package was used, failing on build-time-only copyleft and on every standard base
+image — false positives an operator learns to ignore. The direction of the
+mistake is what matters: relaxing the gate for a dev or OS package is fine;
 relaxing it for something that ships is not.
 
 ## Decision drivers
 
 - **The one unsafe direction:** a production occurrence of a copyleft or unknown
   licence must never be downgraded.
-- **Per-place truth:** a package can be dev in one workspace and prod in another.
-  The model records dev/prod per occurrence (ADR-0005), so the gate reads scope per
-  place.
+- **Per-place truth:** a package can be dev in one workspace and prod in another,
+  so the gate must read scope per occurrence (ADR-0005), not per package.
 - **Tunable:** a library vendor and an internal service ship differently, so the
   relaxation is a policy knob, not a fixed rule.
 - **Deny stays absolute:** the source-available deny-list (ADR-0013) is terminal;
@@ -47,46 +44,31 @@ relaxing it for something that ships is not.
 ## Decision
 
 We chose option 4. Two downgraders sit where the engine is about to emit a default
-FAIL — a `default:copyleft`, or a `default:unknown` under a strict unknown policy.
-Neither invents a verdict; each only softens a failure the engine already reached,
-and only for a package the policy marks as not shipping.
+FAIL, each softening — never inventing — a verdict, and only for a package the
+policy marks as not shipping. The dev downgrader keys on the occurrence's dev/prod
+flag; a production occurrence is returned unchanged, the load-bearing safety
+property. The OS downgrader is the same shape one level up, keying on the
+package's `os` scope. Both read a policy knob (`dev_dependencies` /
+`os_dependencies`, each defaulting to `warn`); the OS lane runs first, and the
+deny terminal sits above both so a denied licence still fails regardless of scope.
 
-The dev downgrader keys on the occurrence's dev/prod flag. A production occurrence
-is returned unchanged — the load-bearing safety property, asserted at the engine and
-end to end through the exit code. A dev occurrence consults the `dev_dependencies`
-knob: `warn` (default) turns the failure into a non-gating warning, `ignore` into a
-clean pass, `fail` keeps the strict behaviour. The OS downgrader is the same shape
-one level up: it keys on the package's `os` scope and reads `os_dependencies`, also
-defaulting to `warn`. Both knobs mirror the existing `unknown.handling` idiom.
-
-Gating everything is safe but unusable. Stripping dev/OS packages throws away the
-inventory. A package-level dev flag cannot answer dev-here/prod-there, and its wrong
-guess is toward "dev", the unsafe direction. Per-occurrence downgrade with
-production unchanged keeps the inventory, reads scope per place, stays tunable, and
-makes the unsafe direction structurally impossible: the downgraders have no branch
-that touches a production occurrence. One copyleft package used dev in workspace A
-and prod in workspace B produces two verdicts — A warns, B fails — and the gate
-fails.
-
-The two downgraders compose deterministically. The OS lane runs first, then the dev
-lane runs on its result, so an OS-scope copyleft stays a warning even under
-`dev_dependencies=fail`. They do not otherwise interact: an OS package is not an app
-dev occurrence, and an app package never enters the OS lane. Above both sits the
-deny terminal, which returns before either downgrader runs, so a denied licence in a
-dev or OS package still fails.
+Gating everything is safe but unusable; stripping dev/OS packages throws away the
+inventory; a package-level dev flag cannot answer dev-here/prod-there, and its
+wrong guess is toward the unsafe direction. Per-occurrence downgrade with
+production unchanged keeps the inventory, stays tunable, and makes the unsafe
+direction structurally impossible — the downgraders have no branch that touches a
+production occurrence. One copyleft package used dev in workspace A and prod in
+workspace B produces two verdicts, and the gate fails on B.
 
 ## Consequences
 
 - **Good:** the gate stops firing on build-time-only copyleft and on standard base
   images, while still failing on anything that ships a copyleft or unknown licence.
-  The relaxation is two knobs a project tunes to how it distributes. A downgraded
-  verdict keeps its originating rule id and appends an auditable note, so a
-  downgraded warning is not confused with a genuine one.
+  A downgraded verdict keeps its originating rule id and appends an auditable note,
+  so it is not confused with a genuine one.
 - **Bad / cost:** "production" is now a fold across occurrences — a package is
-  production if it ships anywhere — which every consumer of the model respects. The
-  report grew a Production / Development-only split and a separate Docker base-image
-  OS section to make the classification visible, which is more document shape to
-  keep deterministic.
+  production if it ships anywhere. The report grew a Production / Development-only
+  split and a Docker base-image OS section to keep the classification visible.
 - **Neutral:** both knobs default to `warn`, so a fresh adoption sees its dev and OS
   copyleft listed for review rather than blocking CI on day one. The OS scope is fed
   by the committed Docker SBOM (ADR-0012); without that input the OS lane never
@@ -94,9 +76,6 @@ dev or OS package still fails.
 
 ## See also
 
-- Plan summaries:
-  `.planning/phases/05-enrichment-committed-cache/05-08-SUMMARY.md` (dev scope),
-  `.planning/phases/07-docker-os-packages/07-02-SUMMARY.md` (OS scope)
 - Related: [ADR-0005](0005-per-occurrence-model.md) (the per-occurrence model this
   gates on), [ADR-0013](0013-source-available-deny.md) (the deny terminal above both
   downgraders), [ADR-0012](0012-docker-os-via-syft.md) (the committed SBOM feeding

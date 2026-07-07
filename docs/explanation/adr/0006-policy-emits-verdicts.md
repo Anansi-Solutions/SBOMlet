@@ -42,31 +42,25 @@ package the gate fails on need not appear in the rendered notices, or the revers
 The policy engine evaluates once and emits a structured verdict for every
 package-and-occurrence pair; the renderer and the gate both consume that list, and
 neither re-derives anything. `evaluate(model, policy)` is a pure fold — no
-filesystem, no subprocess, no logging, no knowledge of CycloneDX — and the same
-model and policy produce the same sorted `Verdict[]`. Each verdict carries a status
-(`ok`, `warn`, `fail`, or `suppressed`), a machine-readable rule id, and a human
-reason naming the deciding input.
+filesystem, no subprocess, no logging — and the same model and policy produce the
+same sorted `Verdict[]`. Each verdict carries a status (`ok`, `warn`, `fail`, or
+`suppressed`), a machine-readable rule id, and a human reason naming the deciding
+input. One `buildOutputs` call evaluates the policy once and hands the same list
+to both sides, so they cannot disagree about a package.
 
-One `buildOutputs` call evaluates the policy once and hands the same list to both
-sides. The renderer reads it to decide copyleft-section membership through its
-`PolicyView` projection; it does not evaluate policy itself. The gate reads it to
-count `fail` verdicts, which drives the exit code. Because both read one list from
-one evaluation, they cannot disagree about a package.
-
-Option 1 leaves the decision unreachable except by rendering, and gives the gate a
-second copy to drift — the anti-pattern the architecture research names. Option 2
-removes the duplicated code but not the duplicated invocation: two call sites can
-pass different inputs or diverge as signatures grow, so agreement is by discipline,
-not construction. A verdict list emitted ahead of both makes the decision a value
-that exists before either consumer runs, and the purity makes the engine
-table-testable.
+Option 1 leaves the decision unreachable except by rendering, giving the gate a
+second copy to drift. Option 2 removes the duplicated code but not the duplicated
+invocation — two call sites can still pass different inputs or diverge as
+signatures grow, so agreement is by discipline, not construction. A verdict list
+emitted ahead of both makes the decision a value that exists before either
+consumer runs, and its purity makes the engine table-testable.
 
 ## Consequences
 
 - **Good:** the rendered document and the CI exit code come from one evaluation, so
-  they cannot disagree. The engine is a pure function, tested on a table of
-  model-plus-policy inputs. Every verdict names the rule and input that decided it,
-  so a reviewer can trace a flagged package to a policy line.
+  they cannot disagree. The engine is tested on a table of model-plus-policy
+  inputs. Every verdict names the rule and input that decided it, so a reviewer can
+  trace a flagged package to a policy line.
 - **Bad / cost:** the verdict is a defined contract — a status set, a rule-id
   format, a reason string — that the engine, renderer, and gate all bind to. A new
   policy behaviour extends that contract in one place and teaches both consumers the
@@ -77,8 +71,6 @@ table-testable.
 
 ## See also
 
-- Research: `.planning/research/ARCHITECTURE.md` (Anti-Pattern 6: policy logic in
-  the renderer)
 - Related: [ADR-0004](0004-deterministic-output.md) (the deterministic output the
   gate byte-compares), [ADR-0013](0013-source-available-deny.md) (the precedence
   chain the engine walks)
