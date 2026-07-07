@@ -34,15 +34,12 @@ jobs:
       - name: Install dependencies
         run: mise x -- task install
 
-      - name: Install the license scanner
-        # Exact pin, approved and verified against the same version this
-        # repository's fixtures were captured with. Ubuntu runner images are
-        # expected to preship pipx; if a first live run disproves that, add
-        # `pip install pipx` ahead of this step.
-        run: pipx install "scancode-toolkit[full]==32.5.0"
-
       - name: Run the intensive scan
-        run: mise x -- task generate INTENSIVE=1
+        # ScanCode arrives through mise's ad-hoc pipx backend, exact-pinned,
+        # and deliberately absent from mise.toml (heavy, occasional-use tool
+        # -- D-01/ADR-0019: every consumer's `mise install` must not pay for
+        # it). This is the same command a developer runs locally.
+        run: mise x "pipx:scancode-toolkit[full]@32.5.0" -- task generate INTENSIVE=1
 
       - name: Commit refreshed cache entries
         uses: actions/github-script@v8

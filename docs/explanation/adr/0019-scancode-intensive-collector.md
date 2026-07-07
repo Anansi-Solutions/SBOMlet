@@ -120,6 +120,25 @@ established for provenance generally.
   the lane is unused — it exists for the dependency that introduces a
   license the registries can't answer, whenever that happens.
 
+## Amendment, 2026-07-07
+
+The install mechanism changed; the decision to keep ScanCode out of
+`mise.toml` did not. ScanCode now arrives through mise's ad-hoc pipx
+backend — `mise x "pipx:scancode-toolkit[full]@32.5.0" -- task generate
+INTENSIVE=1` — instead of a bare `pipx install` step: every tool a workflow
+acquires must be mise-managed and exact-pinned, never a raw pipx/npm/pip
+install, so a developer runs the identical command locally.
+`scancode-toolkit`'s own `[full]` extra turned out to be redundant in
+practice — its two extras-gated dependencies (`typecode[full]`,
+`extractcode[full]`) are ALSO listed as
+unconditional (non-extras) requirements in the package's own metadata, so a
+bare `scancode-toolkit==32.5.0` install already pulls them in — but the
+pinned spec keeps requesting `[full]` explicitly, matching the tool's
+documented invocation and staying inert if a future scancode-toolkit release
+ever makes the extra load-bearing. `mise.toml` stays untouched: this is
+still an occasional, opt-in-only tool (`--intensive`, generate-only), so the
+D-01/ADR-0019 footprint decision is unchanged, only its acquisition syntax.
+
 ## See also
 
 - [ADR-0002](0002-orchestrate-standard-generators.md) (orchestrate standard

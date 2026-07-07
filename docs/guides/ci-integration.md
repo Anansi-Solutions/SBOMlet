@@ -291,9 +291,10 @@ This is occasional/scheduled CI, not every build. ScanCode needs its own
 install and takes real time to run, so the right place for it is a scheduled
 job, not a step on every push:
 
-- Installing the scanner (`pipx install "scancode-toolkit[full]==32.5.0"`) took
-  about 90 seconds in a one-time measurement — a cost the default `generate`
-  and `check` runs never pay, since the scanner isn't part of the tool's own
+- Installing the scanner (`mise x "pipx:scancode-toolkit[full]@32.5.0" --
+  scancode --version`) took about 90 seconds in a one-time measurement — a
+  cost the default `generate` and `check` runs never pay, since the scanner
+  is deliberately absent from `mise.toml` and isn't part of the tool's own
   toolchain.
 - The scanner's own first-run self-check took about 2 seconds.
 - Scanning a single unresolved package's source tree took about 37 seconds

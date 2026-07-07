@@ -316,7 +316,7 @@ describe("scanPackageSources (subprocess-free, exec recorder harness)", () => {
     }));
   });
 
-  test("missing tool: an ENOENT-shaped spawn error rejects with the pipx install command", async () => {
+  test("missing tool: an ENOENT-shaped spawn error rejects with the mise pipx command", async () => {
     mock.module("../src/collectors/exec", () => ({
       ...REAL_EXEC,
       execTool: fakeExecToolEnoent,
@@ -325,7 +325,9 @@ describe("scanPackageSources (subprocess-free, exec recorder harness)", () => {
     tempDir = mkdtempSync(join(tmpdir(), "scancode-enoent-"));
     await expect(
       scanPackageSources("/some/source/dir", { tempDir }),
-    ).rejects.toThrow(/pipx install "scancode-toolkit\[full\]==32\.5\.0"/);
+    ).rejects.toThrow(
+      /mise x "pipx:scancode-toolkit\[full\]@32\.5\.0" -- scancode/,
+    );
 
     mock.module("../src/collectors/exec", () => ({
       ...REAL_EXEC,
