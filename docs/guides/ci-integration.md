@@ -291,11 +291,13 @@ This is occasional/scheduled CI, not every build. ScanCode needs its own
 install and takes real time to run, so the right place for it is a scheduled
 job, not a step on every push:
 
-- Installing the scanner (`mise x "pipx:scancode-toolkit[full]@32.5.0" --
-  scancode --version`) took about 90 seconds in a one-time measurement — a
-  cost the default `generate` and `check` runs never pay, since the scanner
-  is deliberately absent from `mise.toml` and isn't part of the tool's own
-  toolchain.
+- ScanCode is a real DEPENDENCY, so it is pinned in `mise.toml` like every
+  other tool and arrives through the same `mise install` step every workflow
+  already runs — no separate acquisition command.
+- Installing it (`mise install`, cold) took about 90 seconds in a one-time
+  measurement. Every `mise install` now pays this cost once per cache, not
+  just the scheduled scan job — it is part of the pinned toolchain, the
+  same trade-off every other pinned tool already makes.
 - The scanner's own first-run self-check took about 2 seconds.
 - Scanning a single unresolved package's source tree took about 37 seconds
   wall-clock for a 92-file dependency in this project's own measurements —

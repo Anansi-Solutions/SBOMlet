@@ -56,14 +56,12 @@ import { compareCodeUnits } from "../model/dependencies";
 import { parsePurl } from "./enrich";
 
 /**
- * Collector tool identity. The literal version is the pin — it lives in the
- * intensive workflow's mise ad-hoc pipx line
- * (`mise x "pipx:scancode-toolkit[full]@32.5.0"`), NOT mise.toml — D-01/
- * research verdict: an opt-in-occasional tool must not be pulled by every
- * `mise install` — and is asserted at runtime from the scan output's own
- * `headers[0].tool_version` (the SYFT_TOOL comment voice, dockerOs.ts:41-48)
- * so a version bump — or a substituted binary — must be conscious, never
- * silent (T-10-08).
+ * Collector tool identity. The literal version is the pin — it lives in
+ * mise.toml (`"pipx:scancode-toolkit[full]" = "32.5.0"`) like every other
+ * tool this project depends on, and is asserted at runtime from the scan
+ * output's own `headers[0].tool_version` (the SYFT_TOOL comment voice,
+ * dockerOs.ts:41-48) so a version bump — or a substituted binary — must be
+ * conscious, never silent (T-10-08).
  */
 export const SCANCODE_TOOL = {
   name: "scancode-toolkit",
@@ -572,8 +570,7 @@ async function runScancode(
   } catch (error) {
     if (isEnoentError(error)) {
       throw new Error(
-        `scancode binary not found on PATH — install it with ` +
-          `mise x "pipx:scancode-toolkit[full]@32.5.0" -- scancode\ninvocation: ${invocation}`,
+        `scancode binary not found on PATH — run mise install\ninvocation: ${invocation}`,
         { cause: error },
       );
     }

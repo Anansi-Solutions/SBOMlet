@@ -120,24 +120,49 @@ established for provenance generally.
   the lane is unused — it exists for the dependency that introduces a
   license the registries can't answer, whenever that happens.
 
-## Amendment, 2026-07-07
+## Amendment, 2026-07-08
 
-The install mechanism changed; the decision to keep ScanCode out of
-`mise.toml` did not. ScanCode now arrives through mise's ad-hoc pipx
-backend — `mise x "pipx:scancode-toolkit[full]@32.5.0" -- task generate
-INTENSIVE=1` — instead of a bare `pipx install` step: every tool a workflow
-acquires must be mise-managed and exact-pinned, never a raw pipx/npm/pip
-install, so a developer runs the identical command locally.
-`scancode-toolkit`'s own `[full]` extra turned out to be redundant in
-practice — its two extras-gated dependencies (`typecode[full]`,
-`extractcode[full]`) are ALSO listed as
-unconditional (non-extras) requirements in the package's own metadata, so a
-bare `scancode-toolkit==32.5.0` install already pulls them in — but the
-pinned spec keeps requesting `[full]` explicitly, matching the tool's
-documented invocation and staying inert if a future scancode-toolkit release
-ever makes the extra load-bearing. `mise.toml` stays untouched: this is
-still an occasional, opt-in-only tool (`--intensive`, generate-only), so the
-D-01/ADR-0019 footprint decision is unchanged, only its acquisition syntax.
+The 2026-07-07 amendment above described ScanCode arriving through mise's
+ad-hoc pipx backend (`mise x "pipx:scancode-toolkit[full]@32.5.0" -- task
+generate INTENSIVE=1`), kept deliberately out of `mise.toml` on the D-01
+footprint reasoning. That reasoning does not survive scrutiny: ScanCode IS
+a dependency of this tool — the `--intensive` lane cannot run without
+it, exactly like `task` or `syft` cannot run without their own pinned
+tools — and every other dependency here is declared in `mise.toml` and
+installed by `mise install`, never acquired ad-hoc inside a single
+workflow step. Treating ScanCode differently just because it is large and
+occasional-use was inconsistent with that rule, not a genuine exception to
+it.
+
+ScanCode is now pinned in `mise.toml` — `"pipx:scancode-toolkit[full]" =
+"32.5.0"` — like every other tool, and every consumer's `mise install`
+provisions it. The trade-off this supersedes: every `mise install` now
+pays ScanCode's install cost (about 90 seconds cold, cached thereafter)
+whether or not that run ever hits the `--intensive` path. That cost is
+accepted as part of the toolchain by explicit decision, the same way this
+project already accepts `task` and `syft`'s install cost on every run.
+`generate` and `check` still never SPAWN ScanCode outside `--intensive`
+(D-07's structural isolation is unchanged) — only the install-time
+footprint grew, not the runtime surface.
+
+The still-valid finding from the 2026-07-07 amendment carries forward
+unchanged: mise's pipx backend strips the `[full]` extra before invoking
+pipx (it passes bare `scancode-toolkit==32.5.0`), which is harmless at
+this version because `scancode-toolkit`'s own metadata already lists both
+extras-gated dependencies (`typecode[full]`, `extractcode[full]`) as
+unconditional requirements. The `mise.toml` key keeps `[full]` in the
+spec anyway, for intent-documentation and to stay correct if a future
+scancode-toolkit release ever makes the extra load-bearing again.
+
+One acquisition-mechanics finding surfaced during verification: mise's
+pipx backend requires `pipx` itself to already be present — it does not
+bootstrap pipx the way it bootstraps most of its own backends. `ubuntu-
+latest` GitHub runners ship Python with `pipx` preinstalled, so the
+existing `jdx/mise-action` step provisions ScanCode with no additional
+step. A runner image without a preinstalled `pipx` would need `pipx`
+added as its own mise-managed dependency first (mise's `aqua:pypa/pipx`
+backend covers linux and darwin); that is not needed today because the
+workflow already targets `ubuntu-latest`.
 
 ## See also
 

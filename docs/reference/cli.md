@@ -64,7 +64,7 @@ requested but the scanner isn't on `PATH`, the run fails loudly rather than
 skipping the scan silently:
 
 ```
-scancode binary not found on PATH — install it with mise x "pipx:scancode-toolkit[full]@32.5.0" -- scancode
+scancode binary not found on PATH — run mise install
 ```
 
 ## check
