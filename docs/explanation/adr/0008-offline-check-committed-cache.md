@@ -51,6 +51,12 @@ cache entry is treated as stale, the gate names the package and prints the
 `task generate` remedy, and exits 2. There is one write site for the cache, gated on
 generate mode, so `check` cannot fetch or write.
 
+`generate` writes the cache on every run, not only when a fetch resolves something
+new: a project whose dependencies already all resolve still gets a committed
+cache — an empty envelope, recording that enrichment ran and found nothing to add.
+A first-time adopter with an all-resolved tree always has a file to commit, so a
+later offline `check` has something to read instead of finding no cache at all.
+
 The cache is keyed by the verbatim purl, which pins name and version. A given
 `name@version` has one licence upstream, so a hit stays valid until the lockfile
 changes the purl — no expiry, no staleness heuristic. It is committed, not
@@ -85,23 +91,8 @@ writes nothing, so a transient outage cannot freeze into a false "no licence her
   there is one place that turns text into an expression and the cache is not a
   second resolution authority.
 
-## Amendment, 2026-07-02
-
-The write condition changed. `generate` used to write the cache only after
-fetching at least one new licence, so a repository with nothing left to enrich
-never got the file at all — a first-time adopter with an all-resolved dependency
-tree ran `generate`, found no committed cache on disk, and had nothing to commit
-for `check` to read offline. `generate` now writes the cache on every run,
-recording an empty envelope when there was nothing to fetch. An empty cache is a
-valid answer: it means enrichment ran and needed nothing, not that enrichment
-never happened. The rest of this record still holds — there is one write site,
-gated on generate mode, and `check` never fetches or writes.
-
 ## See also
 
-- Plan summaries:
-  `.planning/phases/05-enrichment-committed-cache/05-03-SUMMARY.md`,
-  `.planning/phases/05-enrichment-committed-cache/05-04-SUMMARY.md`
 - Related: [ADR-0004](0004-deterministic-output.md) (the deterministic format the
   cache uses), [ADR-0017](0017-cache-directory-layout.md) (where the committed cache
   lives)
