@@ -1,21 +1,13 @@
 name: Docker scan
 
-# Builds the repository's Dockerfile-derived images locally, scans the BUILT
-# images so the committed SBOM covers application-layer packages in addition
-# to OS packages, and commits the regenerated artifacts back. Paths-filtered
-# because an image build-and-scan is expensive, and only a change to an image
-# source (a Dockerfile, the example image, or this workflow) can alter the
-# result.
-#
-# On a same-repo pull request, a branch push behind the PR fires BOTH runs: the
-# push run commits refreshed artifacts back, the PR run red-diffs against the
-# pre-refresh tree. The bot commit does not retrigger either run (GITHUB_TOKEN
-# events are not treated as new pushes), so a PR check that went red against
-# stale artifacts clears on the PR branch's next push or a manual rerun. The
-# committed artifact paths (.sbomlet.cache/**, THIRD_PARTY_*.md) are
-# deliberately absent from the trigger paths below, so the bot's own commit-back
-# can never re-trigger this workflow -- a structural loop impossibility on top
-# of the GITHUB_TOKEN non-retrigger behavior.
+# Builds the repository's Dockerfile-derived images and scans the built
+# images, so the committed SBOM covers application-layer packages too, then
+# commits the regenerated artifacts back. Path-filtered because a build-and-
+# scan is expensive and only a change to an image source can alter the
+# result; the committed artifact paths are deliberately absent from the
+# triggers below, so the bot's own commit-back can never re-trigger this
+# workflow. See docs/guides/ci-integration.md for the full loop-prevention
+# story.
 on:
   workflow_dispatch:
     inputs:
@@ -23,18 +15,12 @@ on:
         description: "Optional space-separated Dockerfile paths (default: discover all)"
         required: false
         default: ""
-  # GitHub path filters are case-sensitive while the tool's Dockerfile
-  # discovery (isDockerfileName) is case-insensitive, so the filters below
-  # spell out the documented case variants (nginx.Dockerfile, a bare lowercase
-  # dockerfile, DOCKERFILE.prod) -- otherwise editing a discovered Dockerfile
-  # could leave the committed SBOM stale without ever firing this workflow.
   push:
-    # Path filters are NOT evaluated on tag pushes, so without a branches
-    # filter every tag push would run the full build-and-scan and the
-    # commit-back would target the tag name as a branch. "**" matches all
-    # branches (the paths filter stays effective) and excludes tags.
+    # "**" matches every branch and excludes tags -- path filters don't apply
+    # to tag pushes, so without this the commit-back would target the tag
+    # name as a branch.
     branches: ["**"]
-    paths:
+    paths: &image-paths
       - "**/Dockerfile*"
       - "**/dockerfile*"
       - "**/DOCKERFILE*"
@@ -43,14 +29,7 @@ on:
       - "examples/docker-scan/**"
       - ".github/workflows/docker-scan.yml"
   pull_request:
-    paths:
-      - "**/Dockerfile*"
-      - "**/dockerfile*"
-      - "**/DOCKERFILE*"
-      - "**/*.dockerfile"
-      - "**/*.Dockerfile"
-      - "examples/docker-scan/**"
-      - ".github/workflows/docker-scan.yml"
+    paths: *image-paths
 
 jobs:
   scan:
@@ -62,10 +41,10 @@ jobs:
       - name: Check out repository code
         uses: actions/checkout@v6
         with:
-          # No step uses authenticated git (the commit-back goes through
-          # gh api with GH_TOKEN from env), so never leave the contents:write
-          # token in .git/config -- a root-level Dockerfile would otherwise
-          # expose it to COPY inside the image under scan.
+          # No step uses authenticated git; the commit-back goes through
+          # github-script's own token instead, so never leave the
+          # contents:write token in .git/config -- a root-level Dockerfile
+          # would otherwise expose it to COPY inside the image under scan.
           persist-credentials: false
 
       - name: Set up the SBOMlet toolchain
@@ -74,173 +53,41 @@ jobs:
       - name: Install dependencies
         run: mise x -- task install
 
-      - name: Resolve the Dockerfile set
-        id: resolve
+      - name: Build and scan the Dockerfiles
         env:
-          SCAN_DOCKERFILES: ${{ inputs.dockerfiles }}
-        shell: bash
+          DOCKERFILES: ${{ inputs.dockerfiles }}
         run: |
-          if [ -n "$SCAN_DOCKERFILES" ]; then
-            set="$SCAN_DOCKERFILES"
-          else
-            set="$(mise x -- task --silent list-dockerfiles | tr '\n' ' ')"
-          fi
-          set="$(echo "$set" | xargs)"
-          if [ -z "$set" ]; then
-            echo "::error::no Dockerfiles to scan"
-            exit 1
-          fi
-          echo "set=$set" >> "$GITHUB_OUTPUT"
-
-      - name: Build the images
-        id: build
-        env:
-          DOCKERFILE_SET: ${{ steps.resolve.outputs.set }}
-        shell: bash
-        run: |
-          tags=""
-          for df in $DOCKERFILE_SET; do
-            # The sanitized name alone is not injective (a/b/Dockerfile and
-            # a-b/Dockerfile collide, as do case-folded paths); a collision
-            # would let the second build silently overwrite the first image
-            # and drop it from the committed inventory. Suffix a short hash
-            # of the path so distinct Dockerfiles always get distinct tags --
-            # deterministic per path, so the committed sidecar identity is
-            # stable across runs.
-            tag="sbomlet-scan/$(echo "$df" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9._-]/-/g')-$(printf '%s' "$df" | sha256sum | cut -c1-8)"
-            docker buildx build --load --provenance=false -f "$df" -t "$tag" "$(dirname "$df")"
-            tags="$tags $tag"
-          done
-          tags="$(echo "$tags" | xargs)"
-          echo "tags=$tags" >> "$GITHUB_OUTPUT"
-
-      - name: Scan the built images
-        env:
-          TAGS: ${{ steps.build.outputs.tags }}
-        run: mise x -- task generate-docker-sbom BUILT_IMAGES="$TAGS"
+          tags=$(mise x -- bun scripts/build-scan-images.ts $DOCKERFILES)
+          mise x -- task generate-docker-sbom BUILT_IMAGES="$tags"
 
       - name: Regenerate the inventory
         run: mise x -- task generate
 
       - name: Commit regenerated scan artifacts
         if: github.event_name != 'pull_request'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          BRANCH: ${{ github.ref_name }}
-        shell: bash
-        run: |
-          if [ -z "$(git status --porcelain)" ]; then
-            echo "artifacts unchanged"
-            exit 0
-          fi
-          head_oid="$(git rev-parse HEAD)"
-          # The createCommitOnBranch payload below is additions-only: it can
-          # represent added/modified files, nothing else. A deletion would
-          # break the base64 read (and could never be committed back), and a
-          # rename or a path git quotes in porcelain output (non-ASCII under
-          # default core.quotepath) would corrupt the path list -- fail loudly
-          # naming the entry instead of producing a broken or silently
-          # incomplete commit.
-          while IFS= read -r line; do
-            xy="${line:0:2}"
-            case "$xy" in
-              *[DRC]*)
-                echo "::error::commit-back supports additions/modifications only; unsupported porcelain entry: $line"
-                exit 1
-                ;;
-            esac
-            case "$line" in
-              *'"'*)
-                echo "::error::commit-back cannot represent a git-quoted path; unsupported porcelain entry: $line"
-                exit 1
-                ;;
-            esac
-          done < <(git status --porcelain)
-          # Every changed/untracked artifact's base64 content is written to its
-          # OWN small file (never passed as a jq/gh CLI argument -- a full-image
-          # SBOM's base64 payload is large enough to exceed the OS argv limit).
-          rm -rf /tmp/gsd-commit-additions && mkdir -p /tmp/gsd-commit-additions
-          i=0
-          while IFS= read -r f; do
-            base64 -w0 "$f" > /tmp/gsd-commit-additions/content-$i.b64
-            jq -n --arg p "$f" --rawfile c /tmp/gsd-commit-additions/content-$i.b64 \
-              '{path:$p, contents:$c}' > /tmp/gsd-commit-additions/entry-$i.json
-            i=$((i + 1))
-          done < <(git status --porcelain | cut -c4-)
-          jq -s '.' /tmp/gsd-commit-additions/entry-*.json > /tmp/gsd-commit-additions.json
-          # gh api's -F/--field @file reads the file as a raw STRING value; it
-          # does not parse it as JSON. The full GraphQL request body (query +
-          # variables) is built here and sent whole via --input, the flag that
-          # treats the file as the literal HTTP request body.
-          jq -n --arg repo "$GITHUB_REPOSITORY" --arg branch "$BRANCH" --arg oid "$head_oid" \
-            --slurpfile adds /tmp/gsd-commit-additions.json \
-            '{query:"mutation($input: CreateCommitOnBranchInput!) { createCommitOnBranch(input: $input) { commit { oid } } }",
-              variables:{input:{branch:{repositoryNameWithOwner:$repo, branchName:$branch}, expectedHeadOid:$oid, message:{headline:"chore: refresh docker scan artifacts"}, fileChanges:{additions:$adds[0]}}}}' \
-            > /tmp/gsd-commit-input.json
-          gh api graphql --input /tmp/gsd-commit-input.json
-          rm -rf /tmp/gsd-commit-additions /tmp/gsd-commit-additions.json /tmp/gsd-commit-input.json
+        uses: actions/github-script@v8
+        with:
+          script: |
+            await require('./.github/scripts/commit-artifacts.js')(
+              { github, context, core },
+              { message: "chore: refresh docker scan artifacts" },
+            );
 
-      - name: Scan artifacts must be committed
+      - name: Check for uncommitted scan artifacts
         if: github.event_name == 'pull_request'
-        shell: bash
-        run: |
-          if [ -n "$(git status --porcelain)" ]; then
-            echo "::error::regenerated scan artifacts are not committed -- run generate and commit the result"
-            git --no-pager diff --stat
-            # The upload path: below consumes this list as newline-separated
-            # glob patterns, so it inherits the commit-back's porcelain
-            # hazards: a git-quoted path (non-ASCII under default
-            # core.quotepath) matches nothing and silently drops from the
-            # payload, a rename contributes a garbled "old -> new" line, and
-            # a path starting with "!" becomes an EXCLUSION glob that can
-            # drop other files from the payload. Mirror the commit-back
-            # guard so the offered payload is either complete or loudly
-            # absent.
-            while IFS= read -r line; do
-              xy="${line:0:2}"
-              case "$xy" in
-                *[DRC]*)
-                  echo "::error::upload set supports additions/modifications only; unsupported porcelain entry: $line"
-                  exit 1
-                  ;;
-              esac
-              case "$line" in
-                *'"'*)
-                  echo "::error::upload set cannot represent a git-quoted path; unsupported porcelain entry: $line"
-                  exit 1
-                  ;;
-              esac
-              case "${line:3}" in
-                '!'*)
-                  echo "::error::a leading '!' would become an upload exclusion glob; unsupported porcelain entry: $line"
-                  exit 1
-                  ;;
-              esac
-            done < <(git status --porcelain)
-            echo "diverged=true" >> "$GITHUB_OUTPUT"
-            # Derive the upload set from the SAME porcelain output this
-            # divergence predicate uses, so the downloaded artifact payload is
-            # always the complete changed set (e.g. a refreshed licenses
-            # cache), never a hardcoded subset that leaves the check red after
-            # a contributor commits what was offered.
-            {
-              echo "changed<<CHANGED_SET_EOF"
-              git status --porcelain | cut -c4-
-              echo "CHANGED_SET_EOF"
-            } >> "$GITHUB_OUTPUT"
-          fi
+        uses: actions/github-script@v8
         id: divergence
+        with:
+          script: |
+            await require('./.github/scripts/check-divergence.js')({ github, context, core });
 
       - name: Upload the regenerated scan artifacts
         if: github.event_name == 'pull_request' && steps.divergence.outputs.diverged == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: docker-scan-artifacts
-          # The newline-separated changed-path list computed by the divergence
-          # step -- never a hardcoded subset.
           path: ${{ steps.divergence.outputs.changed }}
 
       - name: Fail on divergence
         if: github.event_name == 'pull_request' && steps.divergence.outputs.diverged == 'true'
         run: exit 1
-

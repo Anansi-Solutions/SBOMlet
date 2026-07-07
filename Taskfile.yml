@@ -70,6 +70,16 @@ tasks:
     cmds:
       - mise x -- bun src/cli.ts generate-docker-sbom --list-dockerfiles --base-dir {{.USER_WORKING_DIR | q}} --repo-root {{.DISCOVER_ROOT | default .ROOT_DIR | q}}{{if .POLICY}} --policy {{.POLICY | q}}{{end}}
 
+  docker-scan:
+    desc: 'Discover, build, and scan the repository''s Dockerfiles, then regenerate the inventory — the local equivalent of the docker-scan workflow. DOCKERFILES="a/Dockerfile b/Dockerfile" targets an explicit list instead of discovering. Needs a Docker daemon.'
+    vars:
+      TAGS:
+        sh: mise x -- bun scripts/build-scan-images.ts {{.DOCKERFILES | default ""}}
+    cmds:
+      - task: generate-docker-sbom
+        vars: { BUILT_IMAGES: '{{.TAGS}}' }
+      - task: generate
+
   quality:
     desc: Quality gate — lint + format-check + typecheck
     cmds:
