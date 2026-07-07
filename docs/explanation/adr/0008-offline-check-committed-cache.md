@@ -69,6 +69,10 @@ licence is recorded as a negative entry, so an unresolvable package is not
 re-fetched every run. A fetch *failure* is never cached — `generate` throws and
 writes nothing, so a transient outage cannot freeze into a false "no licence here".
 
+For this to work, we assume `generate` writes the cache on every run, recording an
+empty envelope when there was nothing to fetch. An empty cache is a valid answer:
+it means enrichment ran and needed nothing, not that enrichment never happened.
+
 ## Consequences
 
 - **Good:** `check` is fully offline and deterministic. The enriched licences are a
@@ -84,18 +88,6 @@ writes nothing, so a transient outage cannot freeze into a false "no licence her
   raw string flows through the same normalization path as a generator claim, so
   there is one place that turns text into an expression and the cache is not a
   second resolution authority.
-
-## Amendment, 2026-07-02
-
-The write condition changed. `generate` used to write the cache only after
-fetching at least one new licence, so a repository with nothing left to enrich
-never got the file at all — a first-time adopter with an all-resolved dependency
-tree ran `generate`, found no committed cache on disk, and had nothing to commit
-for `check` to read offline. `generate` now writes the cache on every run,
-recording an empty envelope when there was nothing to fetch. An empty cache is a
-valid answer: it means enrichment ran and needed nothing, not that enrichment
-never happened. The rest of this record still holds — there is one write site,
-gated on generate mode, and `check` never fetches or writes.
 
 ## See also
 
