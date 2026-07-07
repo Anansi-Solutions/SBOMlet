@@ -1,29 +1,14 @@
 name: Intensive license scan
 
-# Runs ScanCode against the local source trees of packages that registry
-# resolution left unknown or imprecise, and commits any refreshed cache
-# entries back. This is the occasional, deep-scan lane: it exists to fill
-# gaps the registry lookups cannot -- source-level license and copyright
-# detection is slow (seconds to tens of seconds per package) and pointless to
-# repeat on every push, so it runs on a schedule plus manual dispatch only.
-#
-# Loop story: schedule and workflow_dispatch events carry no path triggers at
-# all, so the bot commit this workflow makes cannot retrigger this workflow --
-# there is no push/pull_request trigger below for it to match. That is a
-# stronger guarantee than docker-scan.yml's three-layer defense, because there
-# is nothing here for a commit to fire in the first place.
-#
-# Honest note: this run usually no-ops today. The dogfood dependency tree
-# currently has no unresolved packages, so most invocations will report
-# "artifacts unchanged" and exit clean. The lane exists for when a future
-# dependency introduces a license the registries can't answer -- at that
-# point this is what resolves it, on its own schedule, without slowing down
-# every ordinary run.
-#
-# Interplay: a successful commit-back touches .sbomlet.cache/** on the
-# default branch, which is exactly the path verify-cache.yml watches. That is
-# expected and fine -- verify-cache's audit skips scancode-provenance entries
-# by design, since the registries had no answer for them in the first place.
+# Runs ScanCode against local source trees the registries left unresolved,
+# and commits any refreshed cache entries back. This is the occasional,
+# deep-scan lane -- source-level detection is slow, so it runs on a schedule
+# plus manual dispatch only, never on every push. Usually a no-op: it exists
+# for when a future dependency introduces a license the registries can't
+# answer. See docs/guides/ci-integration.md for the full story, including why
+# a successful commit-back touching .sbomlet.cache/** here is expected and
+# does not loop back into this workflow (no push/pull_request trigger below
+# for that commit to match).
 on:
   schedule:
     - cron: "17 4 1 * *" # monthly: the burn-down set is small and changes slowly
@@ -39,9 +24,8 @@ jobs:
       - name: Check out repository code
         uses: actions/checkout@v6
         with:
-          # No step uses authenticated git (the commit-back goes through gh
-          # api with GH_TOKEN from env), so never leave the contents:write
-          # token in .git/config.
+          # No step uses authenticated git; the commit-back goes through
+          # github-script's own token instead.
           persist-credentials: false
 
       - name: Set up the SBOMlet toolchain
@@ -61,73 +45,16 @@ jobs:
         run: mise x -- task generate INTENSIVE=1
 
       - name: Commit refreshed cache entries
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          BRANCH: ${{ github.ref_name }}
-        shell: bash
-        run: |
-          # The scan may only ever touch the committed artifacts below --
-          # the enrichment cache dir and the two rendered documents. Anything
-          # else dirty in the tree is an earlier step's bug, and committing
-          # it under this message would hide it: fail loudly instead of
-          # sweeping arbitrary workspace drift into the commit.
-          artifact_status() {
-            git status --porcelain -- .sbomlet.cache THIRD_PARTY_LICENSES.md THIRD_PARTY_NOTICES.md
-          }
-          if [ "$(git status --porcelain)" != "$(artifact_status)" ]; then
-            echo "::error::workspace drift outside the intensive-scan artifacts; refusing to commit:"
-            git status --porcelain
-            exit 1
-          fi
-          if [ -z "$(artifact_status)" ]; then
-            echo "artifacts unchanged"
-            exit 0
-          fi
-          head_oid="$(git rev-parse HEAD)"
-          # The createCommitOnBranch payload below is additions-only: it can
-          # represent added/modified files, nothing else. A deletion would
-          # break the base64 read (and could never be committed back), and a
-          # rename or a path git quotes in porcelain output (non-ASCII under
-          # default core.quotepath) would corrupt the path list -- fail loudly
-          # naming the entry instead of producing a broken or silently
-          # incomplete commit.
-          while IFS= read -r line; do
-            xy="${line:0:2}"
-            case "$xy" in
-              *[DRC]*)
-                echo "::error::commit-back supports additions/modifications only; unsupported porcelain entry: $line"
-                exit 1
-                ;;
-            esac
-            case "$line" in
-              *'"'*)
-                echo "::error::commit-back cannot represent a git-quoted path; unsupported porcelain entry: $line"
-                exit 1
-                ;;
-            esac
-          done < <(artifact_status)
-          # Every changed/untracked artifact's base64 content is written to its
-          # OWN small file (never passed as a jq/gh CLI argument -- a full-image
-          # SBOM's base64 payload is large enough to exceed the OS argv limit).
-          rm -rf /tmp/gsd-commit-additions && mkdir -p /tmp/gsd-commit-additions
-          i=0
-          while IFS= read -r f; do
-            # -- ends option parsing: a dash-prefixed path must never be
-            # read as a base64 option (or as stdin).
-            base64 -w0 -- "$f" > /tmp/gsd-commit-additions/content-$i.b64
-            jq -n --arg p "$f" --rawfile c /tmp/gsd-commit-additions/content-$i.b64 \
-              '{path:$p, contents:$c}' > /tmp/gsd-commit-additions/entry-$i.json
-            i=$((i + 1))
-          done < <(artifact_status | cut -c4-)
-          jq -s '.' /tmp/gsd-commit-additions/entry-*.json > /tmp/gsd-commit-additions.json
-          # gh api's -F/--field @file reads the file as a raw STRING value; it
-          # does not parse it as JSON. The full GraphQL request body (query +
-          # variables) is built here and sent whole via --input, the flag that
-          # treats the file as the literal HTTP request body.
-          jq -n --arg repo "$GITHUB_REPOSITORY" --arg branch "$BRANCH" --arg oid "$head_oid" \
-            --slurpfile adds /tmp/gsd-commit-additions.json \
-            '{query:"mutation($input: CreateCommitOnBranchInput!) { createCommitOnBranch(input: $input) { commit { oid } } }",
-              variables:{input:{branch:{repositoryNameWithOwner:$repo, branchName:$branch}, expectedHeadOid:$oid, message:{headline:"chore: refresh intensive scan artifacts"}, fileChanges:{additions:$adds[0]}}}}' \
-            > /tmp/gsd-commit-input.json
-          gh api graphql --input /tmp/gsd-commit-input.json
-          rm -rf /tmp/gsd-commit-additions /tmp/gsd-commit-additions.json /tmp/gsd-commit-input.json
+        uses: actions/github-script@v8
+        with:
+          script: |
+            await require('./.github/scripts/commit-artifacts.js')(
+              { github, context, core },
+              {
+                // The scan may only ever touch these paths -- anything else
+                // dirty is an earlier step's bug, not something to sweep
+                // into this commit.
+                scope: [".sbomlet.cache", "THIRD_PARTY_LICENSES.md", "THIRD_PARTY_NOTICES.md"],
+                message: "chore: refresh intensive scan artifacts",
+              },
+            );
