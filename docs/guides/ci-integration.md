@@ -395,6 +395,15 @@ request: it lists the repository's Dockerfiles with `--list-dockerfiles`,
 builds each one to a local, never-pushed tag, scans those tags with
 `--built-image`, and regenerates the inventory.
 
+`task docker-scan` runs that same discover-build-scan-generate sequence locally
+(needs a Docker daemon):
+
+```sh
+task docker-scan
+```
+
+Or drive the steps individually — this is what the Taskfile task above wraps:
+
 ```sh
 # List the Dockerfiles a CI job should build (no Docker, no writes)
 task list-dockerfiles

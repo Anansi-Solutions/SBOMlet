@@ -241,6 +241,7 @@ directory's pinned runtime. With `flatten: true` SBOMlet's tasks are exposed unp
 | `task verify-cache` | `verify-cache`; the online cache-integrity audit. | Before a release/audit, or when the cache changes; needs the network. |
 | `task generate-docker-sbom` | `generate-docker-sbom`; scans the image set and writes `.sbomlet.cache/docker-os.sbom.json`. | Maintainer-only, needs Docker; not part of `check`. |
 | `task list-dockerfiles` | `generate-docker-sbom --list-dockerfiles`; prints the discovered Dockerfile paths. | To find the build set a CI workflow should use. No Docker, no writes. |
+| `task docker-scan` | Discovers (or takes `DOCKERFILES=...`) the repository's Dockerfiles, builds each to a local tag, scans the built images, and regenerates the inventory. | The local equivalent of the `docker-scan.yml` workflow. Needs Docker. |
 | `task quality` | Lint, format check, and typecheck for the tool itself. | When changing the tool. |
 
 Each task reads variables you can override on the command line. Set a variable by
