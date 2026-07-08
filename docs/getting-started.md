@@ -12,44 +12,67 @@ tool itself, start from [`contributing.md`](./contributing.md) instead.
 
 ## Before you start
 
-You need two things on your machine. The tool runs on a pinned runtime, but you don't install
-it yourself; [mise](https://mise.jdx.dev) reads the pinned version and fetches
-it for you.
-
-| Tool | Why you need it | Install |
-| ---- | --------------- | ------- |
-| [mise](https://mise.jdx.dev) | Resolves and runs the pinned runtime the tool ships with | `curl https://mise.run \| sh` (or your package manager) |
-| [Task](https://taskfile.dev) | Runs `task generate` and `task check` | `mise use -g task` (or your package manager) |
+You need one tool on your machine: [mise](https://mise.jdx.dev). Install it
+with `curl https://mise.run | sh`, or your package manager. Everything else the
+tool needs — its pinned runtime and [Task](https://taskfile.dev), which drives
+it — is declared in the tool's own `mise.toml`, and a single `mise install` in
+step 1 fetches all of it.
 
 That's the whole list. The tool keeps a small dependency footprint, since it
 audits dependencies. There's no Node install, no build step, and nothing to
 compile.
 
-To confirm both are present:
+To confirm mise is present:
 
 ```sh
 mise --version
-task --version
 ```
 
 ## Step 1 — Put the tool in your repository
 
-The tool lives in one self-contained directory. Copy it into your repository as
-`tools/sbomlet`:
+The tool lives in one self-contained directory. Add it to your repository as a
+git submodule at `tools/sbomlet`:
 
 ```sh
 # from your repository root
-cp -r /path/to/tools/sbomlet tools/sbomlet
+git submodule add https://github.com/Anansi-Solutions/SBOMlet tools/sbomlet
 ```
 
-It carries its own `mise.toml` with the runtime pin, so it works the same on every
-machine. You don't need to install anything inside it yet. The first
-`task generate` will do that.
+The submodule pins an exact version, so every machine and every CI run uses
+the same tool, and you move to a newer one deliberately with
+`git submodule update --remote tools/sbomlet`. A fresh clone of your
+repository leaves `tools/sbomlet` empty until someone runs
+`git submodule update --init` (or clones with `git clone --recurse-submodules`).
 
-## Step 2 — Add the Taskfile include
+If your repository avoids submodules, vendor a plain copy instead:
 
-Open your repository's root `Taskfile.yml` (create one if you don't have it) and
-add the include:
+```sh
+# from your repository root
+git clone --depth 1 https://github.com/Anansi-Solutions/SBOMlet tools/sbomlet
+rm -rf tools/sbomlet/.git
+```
+
+Either way, the directory carries its own `mise.toml` with the toolchain pins,
+so it works the same on every machine. Fetch the toolchain once:
+
+```sh
+(cd tools/sbomlet && mise install)
+```
+
+That fetches the pinned toolchain — the runtime, Task, and the scanners the
+tool drives — into mise's store; nothing lands globally. The tool's own
+dependencies arrive on the first `task generate`.
+
+## Step 2 — Wire it into your build
+
+The tool's `Taskfile.yml` is its interface: everything runs through
+`task generate` and `task check`. How you reach that Taskfile depends on what
+your repository already builds with; pick one of the two routes.
+
+### If your repository uses Task
+
+Open your root `Taskfile.yml` (create one if you don't have it) and add the
+include:
 
 ```yaml
 version: "3"
@@ -62,9 +85,14 @@ includes:
 ```
 
 The `dir:` line is required. The tasks have to run inside `tools/sbomlet` so
-that mise resolves that directory's runtime pin. Without it, Task would run at your
-repository root, where there's no pin. `flatten: true` exposes SBOMlet's tasks unprefixed, so you run
-`task generate` and `task check`; nothing else is wired in.
+that mise resolves that directory's toolchain pins. Without it, Task would run
+at your repository root, where there's no pin. `flatten: true` exposes
+SBOMlet's tasks unprefixed, so you run `task generate` and `task check`;
+nothing else is wired in.
+
+This route needs a `task` binary of your own to run the include. If you don't
+have one yet, mise provides that too: `mise use task` at your repository root
+pins it in your own config.
 
 To check the include took:
 
@@ -74,15 +102,42 @@ task --list
 
 You should see `generate` and `check` among the tasks.
 
+### If your repository uses Make
+
+You don't need Task on your machine for this route: the pinned copy from
+`tools/sbomlet/mise.toml` runs the Taskfile. Add two targets to your root
+`Makefile`:
+
+```make
+SBOMLET_POLICY ?= .sbomlet.policy.toml
+
+.PHONY: sbomlet-generate sbomlet-check
+sbomlet-generate:
+	cd tools/sbomlet && mise x -- task generate REPO_ROOT="$(CURDIR)" POLICY="$(CURDIR)/$(SBOMLET_POLICY)"
+
+sbomlet-check:
+	cd tools/sbomlet && mise x -- task check REPO_ROOT="$(CURDIR)" POLICY="$(CURDIR)/$(SBOMLET_POLICY)"
+```
+
+The recipes change into `tools/sbomlet` so that mise resolves that directory's
+toolchain pins, for the same reason the Task route needs `dir:`.
+`REPO_ROOT="$(CURDIR)"` points the scan back at your repository root, which is
+also where the outputs land, and the policy path is passed absolute so it
+names the same file no matter where the task executes.
+
+The rest of this guide shows the Task commands. On this route, run
+`make sbomlet-generate` wherever you see `task generate POLICY=…`, and
+`make sbomlet-check` for `task check POLICY=…`.
+
 ## Step 3 — Copy the example policy
 
 Without a policy file the tool only inventories licenses. A policy file turns
 that inventory into a gate by attaching a [verdict](./glossary.md#verdict) of
 `ok`, `warn`, `fail`, or `suppressed` to every dependency. Start from the
-commented example and rename it:
+commented example that ships with the tool and rename it:
 
 ```sh
-cp policy.example.toml .sbomlet.policy.toml
+cp tools/sbomlet/policy.example.toml .sbomlet.policy.toml
 ```
 
 `policy.example.toml` is heavily annotated and a reasonable default to begin
@@ -201,14 +256,18 @@ hit the stale gate without it.
 
 ## Step 8 — Commit everything
 
-Commit the generated outputs, the policy, and the pins together:
+Commit the generated outputs, the policy, the pins, and the wiring together:
 
 ```sh
 git add THIRD_PARTY_LICENSES.md THIRD_PARTY_NOTICES.md .sbomlet.cache/licenses.cache.json
 git add .sbomlet.policy.toml .gitattributes
-git add tools/sbomlet
+git add tools/sbomlet Taskfile.yml
 git commit -m "docs: add third-party license inventory and CI gate"
 ```
+
+Swap `Taskfile.yml` for your `Makefile` if you took the Make route. On the
+submodule route, step 1 already staged `.gitmodules`; it rides along in this
+commit.
 
 The `.sbomlet.cache/licenses.cache.json` is committed on purpose, because it's what lets
 `check` run offline in CI.
