@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { describe, expect, test } from "bun:test";
 
 import parse from "spdx-expression-parse";
+import satisfies from "spdx-satisfies";
 
 import { COPYLEFT_IDS } from "../src/policy/copyleft";
 import {
@@ -176,6 +177,45 @@ describe("orLeaves — satisfies-allowlist decomposition primitive", () => {
   test("any AND anywhere yields null", () => {
     expect(orLeaves(p("MIT AND Apache-2.0"))).toBeNull();
     expect(orLeaves(p("(MIT OR Apache-2.0) AND BSD-2-Clause"))).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// spdx-satisfies allowlist-entry behavior lock. The scancode agreement test
+// (applyScancodeAssessment) calls satisfies(P, [S]) with the in-depth
+// expression S as a one-entry allowlist, inside try/catch where ANY throw =
+// disagree (fail closed). That posture must be grounded in the library's REAL
+// behavior, not the schema.ts comment: this suite records it. Observed at
+// spdx-satisfies 6.0.0: a compound allowlist entry — AND *or* OR — throws
+// ("Approved licenses cannot be AND or OR expressions"), so a compound
+// scancode expression can only agree via the exact-equality pre-check; a WITH
+// entry is a valid single unit; the first argument may be compound freely.
+// ---------------------------------------------------------------------------
+
+describe("spdx-satisfies allowlist-entry edge (agreement-test substrate)", () => {
+  test("an AND-bearing allowlist entry throws — never returns a verdict", () => {
+    expect(() => satisfies("MIT", ["MIT AND Apache-2.0"])).toThrow();
+    // Even the byte-identical expression cannot satisfy itself through the
+    // allowlist — the exact-equality pre-check is the ONLY agreement path
+    // for compound in-depth expressions.
+    expect(() =>
+      satisfies("MIT AND Apache-2.0", ["MIT AND Apache-2.0"]),
+    ).toThrow();
+  });
+
+  test("an OR-bearing allowlist entry throws too (stricter than the AND-only schema.ts comment)", () => {
+    expect(() => satisfies("MIT", ["MIT OR Apache-2.0"])).toThrow();
+  });
+
+  test("a simple allowlist entry returns a boolean; WITH is a valid unit; a compound FIRST argument is fine", () => {
+    expect(satisfies("MIT", ["MIT"])).toBe(true);
+    expect(satisfies("Apache-2.0", ["MIT"])).toBe(false);
+    expect(satisfies("MIT AND Apache-2.0", ["MIT"])).toBe(false);
+    expect(
+      satisfies("GPL-2.0-only WITH Classpath-exception-2.0", [
+        "GPL-2.0-only WITH Classpath-exception-2.0",
+      ]),
+    ).toBe(true);
   });
 });
 
