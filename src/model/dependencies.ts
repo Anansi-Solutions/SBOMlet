@@ -94,6 +94,18 @@ export interface LicenseFinding {
    */
   staleOverride?: StaleOverride;
   /**
+   * A senior-assessment disagreement (SCAN-05): the in-depth ScanCode answer
+   * conflicts with at least one quick-check claim (declared metadata or a
+   * registry answer). Set by applyScancodeAssessment on the UN-OVERRIDDEN
+   * base finding — the base stands in full and the disagreement is surfaced,
+   * never absorbed in either direction — and cleared when an override
+   * (project clarify or tool-level builtin) DECIDES the finding: an applied
+   * override is the human resolution, so it never carries the marker. Absent
+   * when no scancode claim exists or the assessment agrees (absent-not-empty
+   * for golden stability).
+   */
+  conflict?: AssessmentConflict;
+  /**
    * The PRE-OVERRIDE observed SPDX expression (C#1: deny terminal over
    * overrides). Set by annotateFindings from the un-overridden base finding
    * BEFORE an override may rewrite `expression`. The deny terminal consults
@@ -152,6 +164,21 @@ export interface StaleOverride {
   expected: string;
   /** The package's now-observed signal members (the relicensed values). */
   observed: ReadonlyArray<string>;
+}
+
+/** A senior-assessment disagreement surfaced to the policy engine (SCAN-05). */
+export interface AssessmentConflict {
+  /**
+   * The in-depth assessed value: the ScanCode-elected normalized SPDX
+   * expression, or the bare family token when the assessment itself is
+   * imprecise.
+   */
+  assessed: string;
+  /**
+   * The disagreeing quick-check signal members — normalized where precise,
+   * the family token / trimmed raw otherwise — deduped and sorted.
+   */
+  disagreeing: ReadonlyArray<string>;
 }
 
 export type VerdictStatus = "ok" | "warn" | "fail" | "suppressed";

@@ -717,86 +717,174 @@ function everyLeafInFamily(node: ExpressionNode, family: string): boolean {
 }
 
 /**
- * True when a claim's raw value normalizes (via normalizeRaw) to a PRECISE
- * expression whose every leaf id is consistent with the given imprecise
- * family. Parsing the already-normalized precise expression should never
- * throw (normalizeRaw validated it), but the walk is wrapped defensively
- * anyway — the POL-07 fail-closed idiom (baseSatisfiesAssertion,
- * signalContradicts): ANY throw here is treated as inconsistent, never as a
- * crash, and never as a silent pass.
+ * True when a PRECISE SPDX expression's every leaf id is consistent with an
+ * imprecise family ({@link everyLeafInFamily}). Parsing an already-normalized
+ * expression should never throw, but the walk is wrapped defensively anyway —
+ * the POL-07 fail-closed idiom (baseSatisfiesAssertion, signalContradicts):
+ * ANY throw is treated as inconsistent, never as a crash, never a silent
+ * pass.
  */
-function preciseIsInFamily(raw: string, family: string): boolean {
-  const result = normalizeRaw(raw);
-  if (result.expression === null) return false; // imprecise/unknown: no precise signal
+function expressionInFamily(expression: string, family: string): boolean {
   try {
-    return everyLeafInFamily(
-      parse(result.expression) as ExpressionNode,
-      family,
-    );
+    return everyLeafInFamily(parse(expression) as ExpressionNode, family);
   } catch {
-    return false; // unparseable against the family check → not consistent, fail closed
+    return false; // unparseable against the family check → fail closed
   }
 }
 
 /**
- * Refine an IMPRECISE base finding to precise when a "scancode"-sourced claim
- * normalizes to a PRECISE expression that is family-consistent with the base
- * finding's impreciseFamily (the fill matrix, 10-04 / Pitfall 1). This closes
- * the gap left by findingFromClaims' all-or-nothing unknown collapse and
- * combineKnown's W2 imprecise stickiness (normalize.ts:311-327, :353-372):
- * neither rule is touched here — refinement is a SEPARATE step applied AFTER
- * both, composing around them rather than modifying their logic.
- *
- * Gate (every condition must hold, fail-closed on any miss):
- *   1. `base.confidence === "imprecise"` — refinement NEVER touches a
- *      genuinely-unknown finding (a garbage/contradicted declaration is
- *      `[[clarify]]` territory, never silently filled — D-05's spirit) and
- *      NEVER touches an already-precise finding (D-05's never-override rule
- *      is enforced simply by the gate: a precise base finding never reaches
- *      this function's replacement branch).
- *   2. At least one claim has `source === "scancode"` AND normalizes to a
- *      precise expression.
- *   3. EVERY leaf of that precise expression is consistent with
- *      `base.impreciseFamily` ({@link preciseIsInFamily}) — a single
- *      out-of-family leaf (row 4) or a same-string-prefix-but-different-id
- *      leaf (the LGPL-vs-GPL prefix-discipline edge) fails the whole claim.
- *
- * The FIRST family-consistent scancode claim (claim order, deterministic)
- * wins; its raw normalized precise expression becomes the finding's
- * expression/elected, `confidence` becomes "exact" (the same confidence a
- * precise declared claim yields), and `source` becomes "scancode" (a widened
- * finding-source value auditable in the dump — the finding-source union
- * already carries "scancode" via {@link LicenseClaimSource}). Any parse
- * failure anywhere in the check is treated as NOT consistent (fail closed) —
- * refinement never throws.
- *
- * Pure function of (claims, base finding) ONLY — no mode flag, no cache
- * handle, no clock (Pitfall 2): an offline `check` run replays the identical
- * claims from the committed cache and reproduces the identical refined
- * finding byte-for-byte, so intensive generate and check never diverge.
+ * The quick-check comparands for the senior assessment: every DISTINCT
+ * non-scancode claim, deduped by (kind, raw) exactly like findingFromClaims,
+ * with bare connective artifacts and empty raws dropped — they are
+ * tokenization noise, never a license statement to agree or disagree with.
  */
-export function refineImpreciseFromScancode(
+function quickCheckClaims(claims: ReadonlyArray<LicenseClaim>): LicenseClaim[] {
+  const seen = new Set<string>();
+  const distinct: LicenseClaim[] = [];
+  for (const c of claims) {
+    if (c.source === "scancode") continue;
+    if (c.raw.trim() === "" || isBareConnective(c.raw)) continue;
+    const key = `${c.kind}\0${c.raw}`;
+    if (!seen.has(key)) {
+      seen.add(key);
+      distinct.push(c);
+    }
+  }
+  return distinct;
+}
+
+/**
+ * True when one quick-check claim AGREES with the precise in-depth
+ * expression. A precise member P agrees iff P === S (normalized exact
+ * equality, cheap first check) or satisfies(P, [S]) holds — satisfies is
+ * defensive per the locked spdx-satisfies allowlist edge (a compound S
+ * throws for AND and OR alike): ANY throw = disagree, fail closed, so a
+ * compound assessment can only agree via exact equality. An imprecise
+ * family agrees iff every leaf of S is in the family. A genuinely-unknown
+ * claim with a non-empty raw DISAGREES: a garbage/proprietary declaration
+ * contradicted by a precise assessment must become a visible conflict,
+ * never be silently decided in either direction (SCAN-05).
+ */
+function claimAgreesWithAssessment(
+  claim: LicenseClaim,
+  assessed: string,
+): boolean {
+  const result = normalizeRaw(claim.raw);
+  if (result.expression !== null) {
+    if (result.expression === assessed) return true;
+    try {
+      return satisfies(result.expression, [assessed]);
+    } catch {
+      return false; // compound/unparseable allowlist entry → fail closed
+    }
+  }
+  if (result.imprecise === true && result.impreciseFamily !== undefined) {
+    return expressionInFamily(assessed, result.impreciseFamily);
+  }
+  return false; // genuinely-unknown non-empty claim: a human must look
+}
+
+/**
+ * The disagreeing-member label carried on the conflict marker: normalized
+ * where precise, the family token where imprecise, the trimmed raw otherwise
+ * — the most faithful reviewable value each claim can offer.
+ */
+function disagreeingLabel(claim: LicenseClaim): string {
+  const result = normalizeRaw(claim.raw);
+  if (result.expression !== null) return result.expression;
+  if (result.imprecise === true && result.impreciseFamily !== undefined) {
+    return result.impreciseFamily;
+  }
+  return claim.raw.trim();
+}
+
+/**
+ * The in-depth answer is PRECISE: agreement is tested against every
+ * quick-check comparand; zero comparands is vacuous agreement. ALL agree →
+ * the assessed expression becomes the finding (elected, source "scancode",
+ * confidence "exact"). ANY disagree → the base finding STANDS in full with
+ * the conflict marker attached, its members deduped and sorted for
+ * determinism.
+ */
+function assessPrecise(
+  assessed: string,
   claims: ReadonlyArray<LicenseClaim>,
   base: LicenseFinding,
 ): LicenseFinding {
-  if (base.confidence !== "imprecise" || base.impreciseFamily === undefined) {
-    return base;
+  const disagreeing = quickCheckClaims(claims)
+    .filter((c) => !claimAgreesWithAssessment(c, assessed))
+    .map(disagreeingLabel);
+  if (disagreeing.length > 0) {
+    const members = [...new Set(disagreeing)].sort(compareCodeUnits);
+    return { ...base, conflict: { assessed, disagreeing: members } };
   }
-  const family = base.impreciseFamily;
-  for (const c of claims) {
-    if (c.source !== "scancode") continue;
-    if (!preciseIsInFamily(c.raw, family)) continue;
-    const result = normalizeRaw(c.raw);
-    const expression = result.expression as string; // preciseIsInFamily verified non-null
-    const node = parse(expression) as ExpressionNode;
+  const node = parse(assessed) as ExpressionNode;
+  return {
+    expression: assessed,
+    elected: renderNode(elect(node)),
+    source: "scancode",
+    confidence: "exact",
+  };
+}
+
+/**
+ * The in-depth answer is IMPRECISE (a bare family): it never upgrades
+ * anything (INV-04). A precise base whose leaves are out-of-family is a
+ * conflict (fail closed — a disagreement in any direction is surfaced);
+ * everything else stands unchanged, including an out-of-family imprecise
+ * base (nothing precise on either side to weigh).
+ */
+function assessImprecise(family: string, base: LicenseFinding): LicenseFinding {
+  if (
+    base.expression !== null &&
+    !expressionInFamily(base.expression, family)
+  ) {
     return {
-      expression,
-      elected: renderNode(elect(node)),
-      source: "scancode",
-      confidence: "exact",
+      ...base,
+      conflict: { assessed: family, disagreeing: [base.expression] },
     };
   }
-  return base; // no family-consistent scancode claim found — stays imprecise
+  return base;
+}
+
+/**
+ * Apply the ScanCode SENIOR ASSESSMENT to a package's base finding (SCAN-04/
+ * SCAN-05). The model: the in-depth result outranks the quick check
+ * (declared metadata, registry answers) where they agree — the finding
+ * becomes the assessed expression — and a disagreement is surfaced as a
+ * first-class conflict marker on the UNCHANGED base finding, never absorbed
+ * in either direction. Overrides stay on top: this runs BEFORE
+ * resolveOverride, and an APPLIED override (the human's decision) clears the
+ * marker because the marker lives on the base finding only.
+ *
+ * Steps:
+ *   1. No scancode claim → base returned unchanged (same reference): a
+ *      repository with no ScanCode results behaves byte-identically to one
+ *      where this function does not exist.
+ *   2. The scancode raw normalizes PRECISE → {@link assessPrecise}.
+ *   3. The scancode raw normalizes IMPRECISE → {@link assessImprecise}.
+ *   4. The scancode raw is genuinely unknown (the election rejects these
+ *      before a claim exists) → base unchanged, defensively.
+ *
+ * Pure function of (claims, base finding) ONLY — no mode flag, no cache
+ * handle, no clock: an offline check run replays the identical claims from
+ * the committed cache and reproduces the identical finding byte-for-byte,
+ * so an intensive generate and a later check never diverge.
+ */
+export function applyScancodeAssessment(
+  claims: ReadonlyArray<LicenseClaim>,
+  base: LicenseFinding,
+): LicenseFinding {
+  const scancode = claims.find((c) => c.source === "scancode");
+  if (scancode === undefined) return base;
+  const result = normalizeRaw(scancode.raw);
+  if (result.expression !== null) {
+    return assessPrecise(result.expression, claims, base);
+  }
+  if (result.imprecise === true && result.impreciseFamily !== undefined) {
+    return assessImprecise(result.impreciseFamily, base);
+  }
+  return base;
 }
 
 /**
@@ -821,13 +909,11 @@ export function annotateFindings(
   const usedClarifyIndices = new Set<number>();
   const packages = model.packages.map((entry: PackageEntry): PackageEntry => {
     const unrefinedBase = findingFromClaims(entry.licenseClaims, entry.scope);
-    // 10-04: refine an imprecise base finding from a family-consistent
-    // "scancode" claim BEFORE overrides see it (clarify/builtin still
-    // decide last — the refinement composes below them, never above).
-    const base = refineImpreciseFromScancode(
-      entry.licenseClaims,
-      unrefinedBase,
-    );
+    // 12-01: the scancode SENIOR ASSESSMENT runs BEFORE overrides see the
+    // finding (clarify/builtin still decide last). An APPLIED override's
+    // finding never carries the conflict marker: the marker lives on this
+    // base only, and overrideFinding builds a fresh object.
+    const base = applyScancodeAssessment(entry.licenseClaims, unrefinedBase);
     const signal = observedSignal(entry.licenseClaims, base);
     const overridden = resolveOverride(
       entry,

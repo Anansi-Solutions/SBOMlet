@@ -15,6 +15,7 @@ import {
 } from "../src/normalize/expression";
 import {
   annotateFindings,
+  applyScancodeAssessment,
   normalizeRaw,
   type ClarifyInput,
   type BuiltinOverrideInput,
@@ -24,6 +25,7 @@ import type {
   CanonicalDependencies,
   LicenseClaim,
   LicenseClaimKind,
+  LicenseFinding,
   PackageEntry,
 } from "../src/model/dependencies";
 
@@ -1462,37 +1464,42 @@ describe("findingFromClaims — os-scope partial finding (07-06)", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Family-consistency-gated imprecise refinement (10-04, the fill matrix).
-// annotateFindings refines an IMPRECISE base finding to precise ONLY when a
-// "scancode"-sourced claim normalizes to a PRECISE expression whose every leaf
-// id matches the imprecise family (leaf === family or leaf starts with
-// `family + "-"`, so LGPL-2.1 never matches GPL). Any parse failure or
-// inconsistency leaves the finding imprecise (fail-closed, POL-07 posture).
-// The refinement sits BELOW clarify/builtin overrides and NEVER touches a
-// genuinely-unknown or already-precise finding (D-05 never-override).
+// ScanCode senior assessment (12-01, SCAN-04/SCAN-05). applyScancodeAssessment
+// replaces the 10-04 family-consistency refinement gate at the same seam: the
+// in-depth scancode answer OUTRANKS the quick check (declared metadata and
+// registry answers) when they agree — the finding becomes the assessed
+// expression, source "scancode", confidence "exact" — and ANY disagreement
+// becomes a first-class conflict marker on the UNCHANGED base finding, never
+// absorbed in either direction (the marked finding flows to the policy
+// engine; surfacing is its concern). Overrides (clarify/builtin) still decide
+// last; an APPLIED override never carries the marker. An imprecise scancode
+// answer never upgrades anything (INV-04). Every changed expectation below is
+// a conscious relock of a 10-04 fill-matrix row to the new semantics.
 // ---------------------------------------------------------------------------
 
-/** A claim with an explicit source — the scancode-refinement fixture idiom. */
+/** A claim with an explicit source — the scancode-assessment fixture idiom. */
 const sourcedClaim = (
   raw: string,
   source: LicenseClaim["source"],
   kind: LicenseClaimKind = "name",
 ): LicenseClaim => ({ raw, kind, source });
 
-/** A scancode-sourced claim (the refinement trigger). */
+/** A scancode-sourced claim (the assessment trigger). */
 const scancodeClaim = (raw: string): LicenseClaim =>
   sourcedClaim(raw, "scancode", "expression");
 
-describe("annotateFindings — family-consistency-gated imprecise refinement (10-04 fill matrix)", () => {
-  test("row 1 (registry parity): zero-claim package + a precise scancode claim resolves via the plain claim path, no refinement involved", () => {
+describe("annotateFindings — scancode senior assessment (12-01 relock of the 10-04 fill matrix)", () => {
+  test("row 1 (vacuous agreement): zero-claim package + a precise scancode claim — the assessment IS the finding, source scancode", () => {
     const entry = pkg("zero-claim-pkg", "1.0.0", [scancodeClaim("MIT")]);
     const { model } = annotateFindings(modelOf(entry), []);
     const finding = model.packages[0]!.finding!;
     expect(finding.expression).toBe("MIT");
     expect(finding.confidence).toBe("exact");
+    expect(finding.source).toBe("scancode");
+    expect(finding.conflict).toBeUndefined();
   });
 
-  test("row 2: garbage-claim package (a contradicted declaration) + precise scancode claim stays UNKNOWN — refinement keys on imprecise only", () => {
+  test("row 2 (relocked): garbage-claim package + precise scancode claim — the unknown base STANDS and carries a conflict marker, never silently decided either way", () => {
     const entry = pkg("garbage-claim-pkg", "1.0.0", [
       claim("total garbage xyz", "name"),
       scancodeClaim("MIT"),
@@ -1501,9 +1508,13 @@ describe("annotateFindings — family-consistency-gated imprecise refinement (10
     const finding = model.packages[0]!.finding!;
     expect(finding.confidence).toBe("none");
     expect(finding.expression).toBeNull();
+    expect(finding.conflict).toEqual({
+      assessed: "MIT",
+      disagreeing: ["total garbage xyz"],
+    });
   });
 
-  test("row 3 (the win): imprecise BSD family + scancode BSD-3-Clause (in-family) becomes precise with source scancode", () => {
+  test("row 3 (agreement): imprecise BSD family + scancode BSD-3-Clause — the in-family assessment becomes the finding, source scancode, confidence exact", () => {
     const entry = pkg("imprecise-bsd-pkg", "1.0.0", [
       claim("BSD", "name"),
       scancodeClaim("BSD-3-Clause"),
@@ -1511,12 +1522,13 @@ describe("annotateFindings — family-consistency-gated imprecise refinement (10
     const { model } = annotateFindings(modelOf(entry), []);
     const finding = model.packages[0]!.finding!;
     expect(finding.expression).toBe("BSD-3-Clause");
-    expect(finding.confidence).not.toBe("imprecise");
+    expect(finding.confidence).toBe("exact");
     expect(finding.impreciseFamily).toBeUndefined();
     expect(finding.source).toBe("scancode");
+    expect(finding.conflict).toBeUndefined();
   });
 
-  test("row 4 (fail-safe): imprecise GPL family + scancode MIT (inconsistent family) stays imprecise — the copyleft signal is not masked", () => {
+  test("row 4 (relocked, the flagship conflict): imprecise GPL family + scancode MIT — the copyleft signal STANDS and the disagreement is surfaced as a conflict", () => {
     const entry = pkg("imprecise-gpl-pkg", "1.0.0", [
       claim("GPL", "name"),
       scancodeClaim("MIT"),
@@ -1526,9 +1538,13 @@ describe("annotateFindings — family-consistency-gated imprecise refinement (10
     expect(finding.confidence).toBe("imprecise");
     expect(finding.impreciseFamily).toBe("GPL");
     expect(finding.expression).toBeNull();
+    expect(finding.conflict).toEqual({
+      assessed: "MIT",
+      disagreeing: ["GPL"],
+    });
   });
 
-  test("row 5 (INV-04): a scancode claim that itself normalizes imprecise (bare family raw) leaves the base finding imprecise", () => {
+  test("row 5 (INV-04): a scancode claim that itself normalizes imprecise (bare family raw) leaves the same-family imprecise base unchanged, no conflict", () => {
     const entry = pkg("imprecise-apache-pkg", "1.0.0", [
       claim("Apache", "name"),
       scancodeClaim("Apache"),
@@ -1538,9 +1554,22 @@ describe("annotateFindings — family-consistency-gated imprecise refinement (10
     expect(finding.confidence).toBe("imprecise");
     expect(finding.impreciseFamily).toBe("Apache");
     expect(finding.expression).toBeNull();
+    expect(finding.conflict).toBeUndefined();
   });
 
-  test('family edge: imprecise BSD family + scancode 0BSD stays imprecise — prefix discipline (0BSD does not start with "BSD-")', () => {
+  test("an imprecise assessment never conflicts with an imprecise base, even out-of-family — nothing precise on either side to weigh (INV-04)", () => {
+    const entry = pkg("imprecise-both-pkg", "1.0.0", [
+      claim("BSD", "name"),
+      scancodeClaim("Apache"),
+    ]);
+    const { model } = annotateFindings(modelOf(entry), []);
+    const finding = model.packages[0]!.finding!;
+    expect(finding.confidence).toBe("imprecise");
+    expect(finding.impreciseFamily).toBe("BSD");
+    expect(finding.conflict).toBeUndefined();
+  });
+
+  test('family edge (relocked): imprecise BSD family + scancode 0BSD — prefix discipline (0BSD does not start with "BSD-") makes it a conflict, the imprecise base stands', () => {
     const entry = pkg("imprecise-bsd-0bsd-pkg", "1.0.0", [
       claim("BSD", "name"),
       scancodeClaim("0BSD"),
@@ -1550,26 +1579,33 @@ describe("annotateFindings — family-consistency-gated imprecise refinement (10
     expect(finding.confidence).toBe("imprecise");
     expect(finding.impreciseFamily).toBe("BSD");
     expect(finding.expression).toBeNull();
+    expect(finding.conflict).toEqual({
+      assessed: "0BSD",
+      disagreeing: ["BSD"],
+    });
   });
 
-  test("family edge (copyleft prefix collision guard): imprecise GPL family + scancode LGPL-2.1-only — the pre-existing C2 copyleft-dominance combine (untouched) elects the precise LGPL claim; refinement is not the deciding mechanism here and the elected id is never a bare GPL guess", () => {
+  test("family edge (relocked, copyleft prefix guard): imprecise GPL family + scancode LGPL-2.1-only — C2 copyleft dominance still elects the precise LGPL base, AND the out-of-family disagreement is surfaced (LGPL vs GPL is a human question)", () => {
     const entry = pkg("imprecise-gpl-lgpl-pkg", "1.0.0", [
       claim("GPL", "name"),
       scancodeClaim("LGPL-2.1-only"),
     ]);
     const { model } = annotateFindings(modelOf(entry), []);
     const finding = model.packages[0]!.finding!;
-    // C2 (combineKnown, untouched by this plan): a PRECISE copyleft claim
-    // dominates an imprecise sibling family regardless of source — this is
-    // the pre-existing precedence, not a refinement outcome. Assert it stays
-    // exactly what it already was before this plan (no regression), and that
-    // the elected id is the genuinely-observed LGPL-2.1-only, never a
-    // fabricated bare-GPL guess.
+    // C2 (combineKnown, untouched): a PRECISE copyleft claim dominates an
+    // imprecise sibling family regardless of source — the base finding is the
+    // genuinely-observed LGPL-2.1-only, never a fabricated bare-GPL guess.
+    // NEW under the assessment model: the GPL family member is out-of-family
+    // for the LGPL leaf (prefix boundary), so the disagreement is surfaced.
     expect(finding.expression).toBe("LGPL-2.1-only");
     expect(finding.confidence).toBe("exact");
+    expect(finding.conflict).toEqual({
+      assessed: "LGPL-2.1-only",
+      disagreeing: ["GPL"],
+    });
   });
 
-  test("fail-closed: a scancode claim that is a compound expression mixing an in-family leaf with an out-of-family leaf leaves the finding imprecise, no throw (not every leaf matches the family)", () => {
+  test("fail-closed (relocked): a compound scancode expression mixing an in-family leaf with an out-of-family leaf conflicts with the imprecise family, no throw", () => {
     const entry = pkg("imprecise-mixed-compound-pkg", "1.0.0", [
       claim("BSD", "name"),
       scancodeClaim("BSD-3-Clause AND MIT"),
@@ -1580,9 +1616,13 @@ describe("annotateFindings — family-consistency-gated imprecise refinement (10
     expect(finding.confidence).toBe("imprecise");
     expect(finding.impreciseFamily).toBe("BSD");
     expect(finding.expression).toBeNull();
+    expect(finding.conflict).toEqual({
+      assessed: "BSD-3-Clause AND MIT",
+      disagreeing: ["BSD"],
+    });
   });
 
-  test("precedence: a clarify override on the same package still decides the final finding over a would-be refinement", () => {
+  test("precedence: a clarify override on the same package still decides the final finding over the assessment (D-02, clarify on top)", () => {
     const entry = pkg("imprecise-clarified-pkg", "1.0.0", [
       claim("BSD", "name"),
       scancodeClaim("BSD-3-Clause"),
@@ -1596,32 +1636,207 @@ describe("annotateFindings — family-consistency-gated imprecise refinement (10
     expect(finding.expression).toBe("MIT");
   });
 
-  test("never-override (D-05): a package with a PRECISE declared finding + a scancode claim is unchanged", () => {
-    const entry = pkg("already-precise-pkg", "1.0.0", [
+  test("seniority (relocked from never-override): a PRECISE declared claim agreeing with the assessment yields the scancode-sourced finding — the in-depth assessment outranks the quick check", () => {
+    const entry = pkg("agreeing-precise-pkg", "1.0.0", [
+      claim("MIT"),
+      scancodeClaim("MIT"),
+    ]);
+    const { model } = annotateFindings(modelOf(entry), []);
+    const finding = model.packages[0]!.finding!;
+    expect(finding.expression).toBe("MIT");
+    expect(finding.confidence).toBe("exact");
+    expect(finding.source).toBe("scancode");
+    expect(finding.conflict).toBeUndefined();
+  });
+
+  test("seniority (relocked from never-override): a PRECISE declared claim contradicted by the assessment STANDS in full and carries a conflict marker — never silently overridden in either direction", () => {
+    const entry = pkg("disagreeing-precise-pkg", "1.0.0", [
       claim("Apache-2.0"),
       scancodeClaim("MIT"),
     ]);
     const { model } = annotateFindings(modelOf(entry), []);
     const finding = model.packages[0]!.finding!;
-    // The precise declared claim AND-combines with the scancode claim's own
-    // precise expression under the existing all-precise combine path — this is
-    // NOT the refinement (refinement only fires on an imprecise base finding).
-    // Assert the base finding was never treated as "imprecise-then-refined":
-    // combinePrecise's AND-combine still owns this case untouched.
-    expect(finding.confidence).not.toBe("imprecise");
-    expect(finding.impreciseFamily).toBeUndefined();
+    // The base finding — the quick-check AND-combine of every precise claim —
+    // stands untouched; the marker names both sides for a human.
+    expect(finding.expression).toBe("Apache-2.0 AND MIT");
+    expect(finding.source).not.toBe("scancode");
+    expect(finding.conflict).toEqual({
+      assessed: "MIT",
+      disagreeing: ["Apache-2.0"],
+    });
   });
 
-  test("purity: the refinement helper is exported and takes claims + base finding only (no EnrichOptions, no mode, no Date)", () => {
-    // The refinement is invoked internally by annotateFindings; a direct
-    // second call with the identical claims/base must reproduce the identical
-    // finding (referential purity — no hidden clock/mode/cache dependency).
-    const entry = pkg("purity-check-pkg", "1.0.0", [
-      claim("BSD", "name"),
-      scancodeClaim("BSD-3-Clause"),
+  test("agreement via satisfies: a precise OR-bearing declared claim whose elected branch matches the assessment agrees — satisfies(P, [S])", () => {
+    const entry = pkg("or-agreeing-pkg", "1.0.0", [
+      claim("Apache-2.0 OR MIT", "expression"),
+      scancodeClaim("MIT"),
     ]);
-    const { model: modelA } = annotateFindings(modelOf(entry), []);
-    const { model: modelB } = annotateFindings(modelOf(entry), []);
-    expect(modelA.packages[0]!.finding).toEqual(modelB.packages[0]!.finding);
+    const { model } = annotateFindings(modelOf(entry), []);
+    const finding = model.packages[0]!.finding!;
+    expect(finding.expression).toBe("MIT");
+    expect(finding.source).toBe("scancode");
+    expect(finding.conflict).toBeUndefined();
+  });
+
+  test("fail closed on the satisfies throw: a compound assessment agrees only via exact equality — any other precise claim is a conflict", () => {
+    // Compound S: satisfies(P, [S]) throws (locked above), so agreement falls
+    // back to the exact-equality pre-check alone.
+    const equal = pkg("compound-equal-pkg", "1.0.0", [
+      claim("MIT AND Apache-2.0", "expression"),
+      scancodeClaim("MIT AND Apache-2.0"),
+    ]);
+    const equalFinding = annotateFindings(modelOf(equal), []).model.packages[0]!
+      .finding!;
+    expect(equalFinding.expression).toBe("MIT AND Apache-2.0");
+    expect(equalFinding.source).toBe("scancode");
+    expect(equalFinding.conflict).toBeUndefined();
+
+    const differing = pkg("compound-differing-pkg", "1.0.0", [
+      claim("MIT"),
+      scancodeClaim("MIT AND Apache-2.0"),
+    ]);
+    const differingFinding = annotateFindings(modelOf(differing), []).model
+      .packages[0]!.finding!;
+    expect(differingFinding.source).not.toBe("scancode");
+    expect(differingFinding.conflict).toEqual({
+      assessed: "MIT AND Apache-2.0",
+      disagreeing: ["MIT"],
+    });
+  });
+
+  test("imprecise assessment vs an out-of-family PRECISE base (C2 copyleft): the base stands and the disagreement is a conflict — an imprecise answer never upgrades or absorbs", () => {
+    const entry = pkg("imprecise-scan-vs-copyleft-pkg", "1.0.0", [
+      claim("GPL-3.0-only"),
+      scancodeClaim("Apache"),
+    ]);
+    const { model } = annotateFindings(modelOf(entry), []);
+    const finding = model.packages[0]!.finding!;
+    expect(finding.expression).toBe("GPL-3.0-only");
+    expect(finding.confidence).toBe("exact");
+    expect(finding.conflict).toEqual({
+      assessed: "Apache",
+      disagreeing: ["GPL-3.0-only"],
+    });
+  });
+
+  test("imprecise assessment vs an in-family PRECISE base: unchanged, no conflict — the assessment corroborates without upgrading", () => {
+    const entry = pkg("imprecise-scan-in-family-pkg", "1.0.0", [
+      claim("GPL-3.0-only"),
+      scancodeClaim("GPL"),
+    ]);
+    const { model } = annotateFindings(modelOf(entry), []);
+    const finding = model.packages[0]!.finding!;
+    expect(finding.expression).toBe("GPL-3.0-only");
+    expect(finding.confidence).toBe("exact");
+    expect(finding.conflict).toBeUndefined();
+  });
+
+  test("a bare connective artifact is tokenization noise, never a disagreeing member (#3/#10 discipline carries over)", () => {
+    const entry = pkg("connective-noise-pkg", "1.0.0", [
+      claim("AND", "name"),
+      scancodeClaim("MIT"),
+    ]);
+    const { model } = annotateFindings(modelOf(entry), []);
+    const finding = model.packages[0]!.finding!;
+    expect(finding.expression).toBe("MIT");
+    expect(finding.source).toBe("scancode");
+    expect(finding.conflict).toBeUndefined();
+  });
+
+  test("multiple disagreeing members are collected, deduped, and sorted deterministically", () => {
+    const entry = pkg("multi-disagree-pkg", "1.0.0", [
+      claim("Apache-2.0"),
+      claim("BSD", "name"),
+      scancodeClaim("MIT"),
+    ]);
+    const { model } = annotateFindings(modelOf(entry), []);
+    const finding = model.packages[0]!.finding!;
+    // W2 stickiness (untouched): the imprecise BSD member keeps the base
+    // imprecise; the conflict names BOTH disagreeing quick-check members —
+    // the precise one normalized, the imprecise one as its family token.
+    expect(finding.confidence).toBe("imprecise");
+    expect(finding.impreciseFamily).toBe("BSD");
+    expect(finding.conflict).toEqual({
+      assessed: "MIT",
+      disagreeing: ["Apache-2.0", "BSD"],
+    });
+  });
+
+  test("resolution: an APPLIED clarify override decides the conflict and the marker is dropped — the marker lives on the un-overridden base only", () => {
+    const entry = pkg("conflicted-clarified-pkg", "1.0.0", [
+      claim("Apache-2.0"),
+      scancodeClaim("MIT"),
+    ]);
+    const clarify: ClarifyInput[] = [
+      { name: "conflicted-clarified-pkg", expression: "MIT" },
+    ];
+    const { model } = annotateFindings(modelOf(entry), clarify);
+    const finding = model.packages[0]!.finding!;
+    expect(finding.source).toBe("override");
+    expect(finding.expression).toBe("MIT");
+    expect(finding.conflict).toBeUndefined();
+    expect(finding.staleOverride).toBeUndefined();
+  });
+
+  test("a STALE clarify override keeps the base finding, which carries BOTH markers — stale + conflict coexist (chain ordering is the policy engine's concern)", () => {
+    const entry = pkg("stale-conflicted-pkg", "1.0.0", [
+      claim("Apache-2.0"),
+      scancodeClaim("MIT"),
+    ]);
+    const clarify: ClarifyInput[] = [
+      { name: "stale-conflicted-pkg", expects: "BSD", expression: "MIT" },
+    ];
+    const { model } = annotateFindings(modelOf(entry), clarify);
+    const finding = model.packages[0]!.finding!;
+    expect(finding.staleOverride).toBeDefined();
+    expect(finding.conflict).toEqual({
+      assessed: "MIT",
+      disagreeing: ["Apache-2.0"],
+    });
+  });
+
+  test("deny visibility: a scancode win never drops the quick-check members from observedExpressions — a denied license present only in a non-scancode claim stays visible to the deny terminal", () => {
+    const entry = pkg("deny-visible-pkg", "1.0.0", [
+      claim("BUSL-1.1 OR MIT", "expression"),
+      scancodeClaim("MIT"),
+    ]);
+    const { model } = annotateFindings(modelOf(entry), []);
+    const finding = model.packages[0]!.finding!;
+    expect(finding.source).toBe("scancode");
+    expect(finding.expression).toBe("MIT");
+    expect(finding.observedExpressions).toContain("BUSL-1.1 OR MIT");
+  });
+});
+
+describe("applyScancodeAssessment — unit surface", () => {
+  const impreciseBsdBase: LicenseFinding = {
+    expression: null,
+    elected: null,
+    source: "generator",
+    confidence: "imprecise",
+    impreciseFamily: "BSD",
+  };
+
+  test("purity: exported, a function of (claims, base finding) only — identical inputs reproduce identical findings (no options, no mode, no clock)", () => {
+    const claims = [claim("BSD", "name"), scancodeClaim("BSD-3-Clause")];
+    const a = applyScancodeAssessment(claims, impreciseBsdBase);
+    const b = applyScancodeAssessment(claims, impreciseBsdBase);
+    expect(a).toEqual(b);
+    expect(a.expression).toBe("BSD-3-Clause");
+    expect(a.source).toBe("scancode");
+  });
+
+  test("no scancode claim: the base finding is returned unchanged — the identical reference, not a copy (byte-identity for scancode-free inputs)", () => {
+    const claims = [claim("MIT"), claim("Apache-2.0")];
+    expect(applyScancodeAssessment(claims, impreciseBsdBase)).toBe(
+      impreciseBsdBase,
+    );
+  });
+
+  test("a genuinely-unknown scancode raw assesses nothing — base returned unchanged, defensively (the election rejects these upstream)", () => {
+    const claims = [claim("MIT"), scancodeClaim("who knows")];
+    expect(applyScancodeAssessment(claims, impreciseBsdBase)).toBe(
+      impreciseBsdBase,
+    );
   });
 });
