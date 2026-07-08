@@ -5,74 +5,67 @@
 
 ## Context and problem
 
-A Yarn 4 workspaces monorepo keeps one root `yarn.lock`, so discovery finds a
-single target at the repo root and the dual-run plugin (ADR-0010) scans only
-the root package's own dependencies. Workspace members' production
-dependencies never enter the document — not misclassified, absent — and the
-whole tree classifies development-only, letting the dev-downgrade lane wave
-through shipped dependencies that should fail the gate.
+A Yarn 4 monorepo keeps one `yarn.lock` at the root, shared by every
+workspace, so the tool scanned the whole repository as a single unit from the
+root. Scanned that way, the production half of the scan sees only the root
+package's own dependencies, and every workspace dependency comes out marked
+development-only. The policy is lenient with development dependencies, so a
+shipped dependency could pass a license gate it should have failed.
 
-Scope classification and per-target attribution are already correct once the
-right inputs reach them (ADR-0009). The scan needed one unit per workspace
-member instead of one for the whole tree; the question was where the member
-list comes from.
+The fix is to scan each workspace on its own. This record settles one
+question: where the list of workspaces comes from.
 
 ## Decision drivers
 
-- **No silent under-inventory** — an absent row is the failure class the
-  honest residual (ADR-0007) guards against.
-- **Structural signal over parsing** (ADR-0015): workspace membership already
-  has one authoritative, already-resolved source.
-- **Minimal churn** — collector, merge, and render already handle multiple
-  targets correctly.
+- The report must not silently understate what ships (ADR-0007).
+- Don't re-parse what Yarn has already resolved (ADR-0015).
+- The pipeline already handles several scan targets; give it more targets
+  rather than change it.
 
 ## Considered options
 
-1. **Parse the manifest's `workspaces` globs** — re-implements glob matching
-   (`*`, `**`, object form, negations) Yarn already resolved at install time.
-2. **Enumerate at discovery time** — hands the pure filesystem walk
-   lockfile-parsing duties it deliberately doesn't have.
-3. **Expand in the collect loop from the lockfile's own resolutions —
-   chosen** — every member appears as a literal resolved path
-   (`resolution: "<name>@workspace:<path>"`), globs already expanded, in a
-   file the loop already reads once per target.
+1. **Read the `workspaces` globs in `package.json`** — means re-implementing
+   Yarn's glob matching (`*`, `**`, object form, negations).
+2. **List workspaces while discovering scan targets** — discovery is a plain
+   directory walk that reads no file contents; this would change its contract.
+3. **Read the lockfile — chosen.** `yarn.lock` already names every workspace
+   as a plain path (`resolution: "<name>@workspace:<path>"`), globs expanded,
+   in a file the tool already reads.
 
 ## Decision
 
-The collect loop expands a Yarn-4-routed target into one scan unit per
-workspace member, read from the root lockfile's `resolution:` lines. Each
-unit carries its own directory, its own identity
-(`<target>/<workspace-path>`), and the root lockfile's directory as its
-`lockfileDir`; the dual-run plugin runs per unit, so each workspace gets its
-own prod/dev split. The manifest option was rejected because the lockfile has
-already done that work with zero glob code; the discovery option because
-reading file contents there would blur the discovery/collection boundary
-ADR-0010 draws and duplicate the collect loop's read.
+The list of workspaces comes from the `resolution:` lines of the root
+`yarn.lock`. Each workspace is then scanned as its own target: its own
+directory, its own name in the report (`<target>/<workspace-path>`), the
+root lockfile shared. Reading `package.json` was rejected because Yarn has
+already expanded its globs into the lockfile; listing during discovery was
+rejected because discovery deliberately reads no file contents (the boundary
+ADR-0010 draws).
 
-Expansion fires only when the lock declares both the root member (`.`) and at
-least one non-root member; a single-workspace lock takes the exact
-pre-existing single-scan path. Every enumerated directory is resolved and
-containment-checked against the target root, and a `@workspace:` path that
-would escape is rejected outright — ADR-0015's resolve-then-compare posture
-for untrusted structural signals.
+Two guards keep the change contained. A lockfile that names only the root
+workspace is scanned exactly as before, so repositories without workspaces
+are untouched. And since a lockfile is untrusted input, every workspace path
+is resolved and must land inside the repository — one that points outside is
+rejected (ADR-0015's posture).
 
 ## Consequences
 
-- **Good:** a workspaces monorepo gets a complete inventory with
-  per-workspace attribution; no collector, merge, or render code changed.
-- **Bad / cost:** N members cost 2(N+1) plugin invocations instead of 2, each
-  with its own cold start — linear and small at real workspace counts.
-- **Neutral:** single-workspace and non-yarn targets take the exact
-  pre-existing code path; no golden or dogfood output changes.
+- **Good:** every workspace's dependencies are classified correctly and
+  attributed to that workspace. No downstream code changed.
+- **Bad / cost:** a monorepo with N workspaces runs 2(N+1) scans instead
+  of 2 (each directory is scanned twice: with and without development
+  dependencies). Workspace counts are small in practice, so the cost stays
+  minor.
+- **Neutral:** repositories without workspaces produce byte-identical output.
 
 ## See also
 
-- [ADR-0010](0010-js-generator-routing.md) — extends its collect step;
+- [ADR-0010](0010-js-generator-routing.md) — the Yarn scan this extends;
   routing itself is unchanged
-- [ADR-0009](0009-dev-prod-os-scopes.md) — the per-occurrence dev/prod model
-  this now feeds correctly
-- [ADR-0015](0015-abstain-over-fragile-parsing.md) — the structural-signal
-  posture followed here
+- [ADR-0009](0009-dev-prod-os-scopes.md) — the production/development split
+  each workspace now gets on its own
+- [ADR-0015](0015-abstain-over-fragile-parsing.md) — trust the resolved
+  structural signal; contain untrusted paths
 - Code: `src/pipeline/targets.ts` (`expandYarnWorkspaceUnits`,
   `scanWorkspaceUnits`), `src/targets/firstParty.ts`
   (`yarnWorkspaceMembers`)
