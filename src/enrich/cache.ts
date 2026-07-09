@@ -17,7 +17,9 @@
  * on a fetch failure — the clean-200-empty-only policy lives in the orchestrator
  * (Plan 03), so a transient outage can never become a false negative here
  * (Pitfall 1). A malformed envelope throws loudly (a poisoned/garbage cache is a
- * config error, distinct from a benign missing file which is empty).
+ * config error, distinct from a benign missing file which is empty). The
+ * envelope reader is generic ({@link readEnvelope}) so the dedicated ScanCode
+ * memo reuses the identical loud-on-malformed posture — one reader, not two.
  */
 import { existsSync, readFileSync } from "node:fs";
 
@@ -75,6 +77,26 @@ interface CacheFile {
  * envelope (bad JSON, missing/ill-typed `entries`) throws loudly with the path.
  */
 export function readCache(path: string): Map<string, CacheEntry> {
+  return readEnvelope<CacheEntry>(path, "enrichment cache");
+}
+
+/**
+ * Read a committed {version,entries} envelope file into a purl→entry Map,
+ * generic over the entry type. A missing/unreadable file yields an empty Map
+ * (never an error). A malformed envelope (bad JSON, missing/ill-typed
+ * `entries`) throws loudly, naming the path and the given `label` so the
+ * enrichment cache and the ScanCode memo each name themselves in the error. An
+ * optional `expectedVersion`, when given, rejects any OTHER schema version
+ * loudly — the ScanCode memo opts into that strictness (T-12-07); the registry
+ * cache passes none, preserving its historical version-agnostic read. This is
+ * the single envelope reader — the memo reuses it rather than hand-rolling a
+ * second loud-on-malformed parser.
+ */
+export function readEnvelope<T>(
+  path: string,
+  label: string,
+  expectedVersion?: number,
+): Map<string, T> {
   if (!existsSync(path)) return new Map();
 
   const raw = readFileSync(path, "utf8");
@@ -82,20 +104,29 @@ export function readCache(path: string): Map<string, CacheEntry> {
   try {
     parsed = JSON.parse(raw);
   } catch (error) {
-    throw new Error(`malformed enrichment cache (invalid JSON): ${path}`, {
+    throw new Error(`malformed ${label} (invalid JSON): ${path}`, {
       cause: error,
     });
   }
 
-  const entries = envelopeEntries(parsed, path);
+  const entries = envelopeEntries<T>(parsed, path, label);
+  if (
+    expectedVersion !== undefined &&
+    (parsed as { version?: unknown }).version !== expectedVersion
+  ) {
+    throw new Error(
+      `malformed ${label} (unsupported schema version, expected ${expectedVersion}): ${path}`,
+    );
+  }
   return new Map(Object.entries(entries));
 }
 
 /** Validate the {version,entries} envelope, throwing loudly on any deviation. */
-function envelopeEntries(
+function envelopeEntries<T>(
   parsed: unknown,
   path: string,
-): Record<string, CacheEntry> {
+  label: string,
+): Record<string, T> {
   if (
     parsed === null ||
     typeof parsed !== "object" ||
@@ -103,7 +134,7 @@ function envelopeEntries(
     !("entries" in parsed)
   ) {
     throw new Error(
-      `malformed enrichment cache (missing {version,entries} envelope): ${path}`,
+      `malformed ${label} (missing {version,entries} envelope): ${path}`,
     );
   }
   const entries = (parsed as { entries: unknown }).entries;
@@ -112,11 +143,9 @@ function envelopeEntries(
     typeof entries !== "object" ||
     Array.isArray(entries)
   ) {
-    throw new Error(
-      `malformed enrichment cache (entries is not an object): ${path}`,
-    );
+    throw new Error(`malformed ${label} (entries is not an object): ${path}`);
   }
-  return entries as Record<string, CacheEntry>;
+  return entries as Record<string, T>;
 }
 
 /**
