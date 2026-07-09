@@ -31,14 +31,10 @@ const CACHE_VERSION = 1;
 /**
  * One cached resolution, keyed by purl. `license` is the RAW string (resolution
  * to SPDX happens downstream via normalizeRaw), or null for a negative entry.
- * `source` is the provenance discriminator: "registry" for every entry a
- * PyPI/npm/GitHub lookup produced (the original and, so far, only lane);
- * "scancode" for an entry the intensive ScanCode collector produced when the
- * registry had no (or an imprecise) answer — see Phase 10. `fetchedFrom`
- * records which source answered (registries, or "scancode"); `via` records
- * which resolver layer won (audit/debug); `resolvable:false` marks a negative
- * entry that must never be re-fetched (registry entries only — ScanCode never
- * writes a negative entry, per its own contract).
+ * Every entry is produced by a PyPI/npm/GitHub lookup — this is the registry
+ * enrichment lane and the only lane this file serves. `fetchedFrom` records
+ * which registry answered; `via` records which resolver layer won (audit/debug);
+ * `resolvable:false` marks a negative entry that must never be re-fetched.
  *
  * `fetchedAt` is an OPTIONAL ISO timestamp stamped (via an injectable clock)
  * ONLY on a NEW `fetchedFrom:"github"` entry on first resolve — it is the
@@ -46,23 +42,14 @@ const CACHE_VERSION = 1;
  * pypi/npm entries (no backfill, no churn of the existing entries) and NEVER
  * rewritten on a cache hit, so a warm double-generate is byte-identical. It
  * lives ONLY here — never in any output (the determinism control, T-06-14).
- *
- * `copyrights` is an OPTIONAL sorted/deduped list of copyright lines the
- * ScanCode collector extracted alongside the license (absent on every
- * registry entry — the fetchedAt optional-field precedent: absent = zero
- * churn on existing entries). Replay attaches it as attribution only when the
- * package carries none (absent-not-empty invariant, dependencies.ts).
  */
 export interface CacheEntry {
   license: string | null;
-  source: "registry" | "scancode";
-  fetchedFrom: "pypi" | "npm" | "github" | "scancode";
+  fetchedFrom: "pypi" | "npm" | "github";
   via: string;
   resolvable: boolean;
   /** ISO timestamp on NEW github entries only (injectable-clock-stamped). */
   fetchedAt?: string;
-  /** Copyright lines from a scancode entry (absent = zero churn precedent). */
-  copyrights?: string[];
 }
 
 /** The on-disk envelope: a schema version plus the purl→entry table. */

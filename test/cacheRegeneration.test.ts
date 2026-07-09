@@ -235,7 +235,6 @@ describe("enrichment cache creation on generate", () => {
       fetchedFrom: "npm",
       license: "MIT",
       resolvable: true,
-      source: "registry",
       via: "version-license",
     });
 

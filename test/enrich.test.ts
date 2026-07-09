@@ -581,14 +581,12 @@ describe("npm packument resolver", () => {
 describe("committed purl-keyed cache", () => {
   const positive: CacheEntry = {
     license: "MIT",
-    source: "registry",
     fetchedFrom: "pypi",
     via: "license-expression",
     resolvable: true,
   };
   const negative: CacheEntry = {
     license: null,
-    source: "registry",
     fetchedFrom: "npm",
     via: "unresolved",
     resolvable: false,
@@ -832,7 +830,6 @@ describe("enrichUnknowns orchestrator (cache-first, generate-fetch, check-stale)
       const cache = new Map<string, CacheEntry>();
       putEntry(cache, "pkg:npm/no-claims@2.0.0", {
         license: "MIT",
-        source: "registry",
         fetchedFrom: "npm",
         via: "version-license",
         resolvable: true,
@@ -868,7 +865,6 @@ describe("enrichUnknowns orchestrator (cache-first, generate-fetch, check-stale)
       const cache = new Map<string, CacheEntry>();
       putEntry(cache, "pkg:npm/no-claims@2.0.0", {
         license: null,
-        source: "registry",
         fetchedFrom: "npm",
         via: "unresolved",
         resolvable: false,
@@ -1117,7 +1113,6 @@ describe("enrichUnknowns orchestrator (cache-first, generate-fetch, check-stale)
       // License", resolved via the ambiguous classifier.
       putEntry(cache, "pkg:pypi/colorama@0.4.6", {
         license: "BSD License",
-        source: "registry",
         fetchedFrom: "pypi",
         via: "classifier",
         resolvable: true,

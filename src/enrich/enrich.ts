@@ -255,9 +255,9 @@ export async function enrichUnknowns(
         const withClaim = withCacheClaim(
           unknown.entry,
           hit.license,
-          hit.source,
+          "registry",
         );
-        packages[unknown.index] = withReplayAttribution(withClaim, hit);
+        packages[unknown.index] = withClaim;
       }
       // A negative hit (resolvable:false) leaves the package unknown, no fetch.
       continue;
@@ -397,7 +397,6 @@ async function fetchTerraformMisses(
       );
       putEntry(cache, miss.entry.purl, {
         license: resolved.raw,
-        source: "registry",
         fetchedFrom: "github",
         via: `${resolved.via}@${viaRef}`,
         resolvable: true,
@@ -425,7 +424,6 @@ function recordNegative(
 ): void {
   putEntry(cache, miss.entry.purl, {
     license: null,
-    source: "registry",
     fetchedFrom,
     via: "unresolved",
     resolvable: false,
@@ -444,7 +442,6 @@ function applyResolution(
     packages[miss.index] = withCacheClaim(miss.entry, resolved.raw, "registry");
     putEntry(cache, miss.entry.purl, {
       license: resolved.raw,
-      source: "registry",
       fetchedFrom: resolved.fetchedFrom,
       via: resolved.via,
       resolvable: true,

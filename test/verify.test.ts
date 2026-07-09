@@ -42,7 +42,6 @@ function positive(
 ): CacheEntry {
   return {
     license,
-    source: "registry",
     fetchedFrom,
     via: "x",
     resolvable: true,
@@ -52,7 +51,6 @@ function positive(
 function negative(fetchedFrom: CacheEntry["fetchedFrom"]): CacheEntry {
   return {
     license: null,
-    source: "registry",
     fetchedFrom,
     via: "unresolved",
     resolvable: false,
@@ -145,7 +143,6 @@ describe("verifyCache", () => {
       verifyCache({ cachePath: path, verbose: false }),
     );
     expect(result.audited).toBe(3);
-    expect(result.skipped).toBe(0);
     expect(result.mismatches).toEqual([]);
   });
 
@@ -335,40 +332,6 @@ describe("verifyCache", () => {
     ).rejects.toThrow(/malformed enrichment cache/);
   });
 
-  test("a scancode entry is counted SKIPPED, never audited; a registry entry in the SAME cache is still audited", async () => {
-    const path = tempCachePath();
-    writeCache(path, {
-      "pkg:npm/scancode-only@1.0.0": {
-        license: "Apache-2.0",
-        source: "scancode",
-        fetchedFrom: "scancode",
-        via: "scancode-toolkit@32.5.0/license-file",
-        resolvable: true,
-      },
-      "pkg:npm/lodash@4.17.21": positive("MIT", "npm"),
-    });
-    const { fetch, calls } = fetchMock((url) => {
-      if (url.includes("registry.npmjs.org/lodash")) {
-        return { status: 200, body: npmPackument({ "4.17.21": "MIT" }) };
-      }
-      // A scancode entry must never trigger a fetch — if it does, this 500
-      // response would surface as an unrelated mismatch/error.
-      return { status: 500 };
-    });
-    const result = await withFetch(fetch, () =>
-      verifyCache({ cachePath: path, verbose: false }),
-    );
-    // The skipped scancode entry must never inflate the audited count — the
-    // report would otherwise assert a match for an entry never checked.
-    expect(result.audited).toBe(1);
-    expect(result.skipped).toBe(1);
-    expect(result.mismatches).toEqual([]);
-    expect(calls.some((u) => u.includes("scancode"))).toBe(false);
-    expect(calls.some((u) => u.includes("registry.npmjs.org/lodash"))).toBe(
-      true,
-    );
-  });
-
   test("an empty cache audits zero entries with no fetch", async () => {
     const path = tempCachePath();
     writeCache(path, {});
@@ -377,7 +340,6 @@ describe("verifyCache", () => {
       verifyCache({ cachePath: path, verbose: false }),
     );
     expect(result.audited).toBe(0);
-    expect(result.skipped).toBe(0);
     expect(result.mismatches).toEqual([]);
     expect(calls).toEqual([]);
   });

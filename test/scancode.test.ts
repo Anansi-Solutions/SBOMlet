@@ -1399,7 +1399,6 @@ describe("assessPackages — ScanCode peer assessment stage (12-04)", () => {
     const enrichCache = new Map();
     enrichCache.set("pkg:npm/left-pad@1.3.0", {
       license: null,
-      source: "registry",
       fetchedFrom: "npm",
       via: "unresolved",
       resolvable: false,

@@ -11,13 +11,6 @@
  * any divergence. A divergence is either tampering or a genuine upstream
  * license change; both warrant a human look before a release or audit.
  *
- * A "scancode"-provenance entry (Phase 10) is SKIPPED, not re-resolved: it
- * exists precisely because the registry had no (or an imprecise) answer, so
- * re-querying the registry would either repeat the original silence or produce
- * a false MISMATCH against a source this audit was never meant to check.
- * Skipped entries are counted and reported SEPARATELY from audited ones — the
- * audit never claims "all match" over an entry it never checked.
- *
  * The comparison is a single equality on the raw license string: a cached value
  * (string for a positive entry, null for a negative one) versus the freshly
  * resolved value. That one check covers every tamper shape — a changed string, a
@@ -71,13 +64,6 @@ export interface CacheMismatch {
 export interface VerifyResult {
   /** Entries actually re-resolved against a registry. */
   audited: number;
-  /**
-   * `source:"scancode"` entries SKIPPED (not registry-auditable) — counted
-   * and reported separately so the audit never claims a match for an entry
-   * it never checked (and so a re-tagged entry at least moves a number a
-   * reviewer can see).
-   */
-  skipped: number;
   /** Divergences, sorted by purl for deterministic reporting. */
   mismatches: CacheMismatch[];
 }
@@ -190,25 +176,16 @@ export async function verifyCache(opts: VerifyOptions): Promise<VerifyResult> {
     return pending;
   };
 
-  // A scancode entry is not registry-auditable: it exists precisely because
-  // the registry had no (or an imprecise) answer when generate ran, so
-  // re-resolving it would either repeat that silence or report a false
-  // MISMATCH the moment this audit runs (Pitfall 3). Partitioned OUT of the
-  // audit set — never counted as audited, reported as skipped instead.
   const entries = [...cache.entries()];
-  const auditable = entries.filter(([, entry]) => entry.source !== "scancode");
-  const audited = await mapLimit(
-    auditable,
-    VERIFY_CONCURRENCY,
-    ([purl, entry]) => auditEntry(purl, entry, fetchDoc, fetchOpts),
+  const audited = await mapLimit(entries, VERIFY_CONCURRENCY, ([purl, entry]) =>
+    auditEntry(purl, entry, fetchDoc, fetchOpts),
   );
   const mismatches = audited
     .filter((m): m is CacheMismatch => m !== null)
     .sort((a, b) => compareCodeUnits(a.purl, b.purl));
 
   return {
-    audited: auditable.length,
-    skipped: entries.length - auditable.length,
+    audited: entries.length,
     mismatches,
   };
 }

@@ -4,1043 +4,894 @@
       "fetchedFrom": "npm",
       "license": "MIT",
       "resolvable": true,
-      "source": "registry",
       "via": "version-license"
     },
     "pkg:npm/%40ark/util@0.56.0": {
       "fetchedFrom": "npm",
       "license": "MIT",
       "resolvable": true,
-      "source": "registry",
       "via": "version-license"
     },
     "pkg:npm/%40emnapi/core@1.10.0": {
       "fetchedFrom": "npm",
       "license": "MIT",
       "resolvable": true,
-      "source": "registry",
       "via": "version-license"
     },
     "pkg:npm/%40emnapi/runtime@1.10.0": {
       "fetchedFrom": "npm",
       "license": "MIT",
       "resolvable": true,
-      "source": "registry",
       "via": "version-license"
     },
     "pkg:npm/%40emnapi/wasi-threads@1.2.1": {
       "fetchedFrom": "npm",
       "license": "MIT",
       "resolvable": true,
-      "source": "registry",
       "via": "version-license"
     },
     "pkg:npm/%40eslint-community/eslint-utils@4.9.1": {
       "fetchedFrom": "npm",
       "license": "MIT",
       "resolvable": true,
-      "source": "registry",
       "via": "version-license"
     },
     "pkg:npm/%40eslint-community/regexpp@4.12.2": {
       "fetchedFrom": "npm",
       "license": "MIT",
       "resolvable": true,
-      "source": "registry",
       "via": "version-license"
     },
     "pkg:npm/%40eslint/config-array@0.23.5": {
       "fetchedFrom": "npm",
       "license": "Apache-2.0",
       "resolvable": true,
-      "source": "registry",
       "via": "version-license"
     },
     "pkg:npm/%40eslint/config-helpers@0.6.0": {
       "fetchedFrom": "npm",
       "license": "Apache-2.0",
       "resolvable": true,
-      "source": "registry",
       "via": "version-license"
     },
     "pkg:npm/%40eslint/core@1.2.1": {
       "fetchedFrom": "npm",
       "license": "Apache-2.0",
       "resolvable": true,
-      "source": "registry",
       "via": "version-license"
     },
     "pkg:npm/%40eslint/js@10.0.1": {
       "fetchedFrom": "npm",
       "license": "MIT",
       "resolvable": true,
-      "source": "registry",
       "via": "version-license"
     },
     "pkg:npm/%40eslint/object-schema@3.0.5": {
       "fetchedFrom": "npm",
       "license": "Apache-2.0",
       "resolvable": true,
-      "source": "registry",
       "via": "version-license"
     },
     "pkg:npm/%40eslint/plugin-kit@0.7.2": {
       "fetchedFrom": "npm",
       "license": "Apache-2.0",
       "resolvable": true,
-      "source": "registry",
       "via": "version-license"
     },
     "pkg:npm/%40humanfs/core@0.19.2": {
       "fetchedFrom": "npm",
       "license": "Apache-2.0",
       "resolvable": true,
-      "source": "registry",
       "via": "version-license"
     },
     "pkg:npm/%40humanfs/node@0.16.8": {
       "fetchedFrom": "npm",
       "license": "Apache-2.0",
       "resolvable": true,
-      "source": "registry",
       "via": "version-license"
     },
     "pkg:npm/%40humanfs/types@0.15.0": {
       "fetchedFrom": "npm",
       "license": "Apache-2.0",
       "resolvable": true,
-      "source": "registry",
       "via": "version-license"
     },
     "pkg:npm/%40humanwhocodes/module-importer@1.0.1": {
       "fetchedFrom": "npm",
       "license": "Apache-2.0",
       "resolvable": true,
-      "source": "registry",
       "via": "version-license"
     },
     "pkg:npm/%40humanwhocodes/retry@0.4.3": {
       "fetchedFrom": "npm",
       "license": "Apache-2.0",
       "resolvable": true,
-      "source": "registry",
       "via": "version-license"
     },
     "pkg:npm/%40napi-rs/wasm-runtime@1.1.5": {
       "fetchedFrom": "npm",
       "license": "MIT",
       "resolvable": true,
-      "source": "registry",
       "via": "version-license"
     },
     "pkg:npm/%40package-json/types@0.0.12": {
       "fetchedFrom": "npm",
       "license": "MIT",
       "resolvable": true,
-      "source": "registry",
       "via": "version-license"
     },
     "pkg:npm/%40tybys/wasm-util@0.10.2": {
       "fetchedFrom": "npm",
       "license": "MIT",
       "resolvable": true,
-      "source": "registry",
       "via": "version-license"
     },
     "pkg:npm/%40types/bun@1.3.14": {
       "fetchedFrom": "npm",
       "license": "MIT",
       "resolvable": true,
-      "source": "registry",
       "via": "version-license"
     },
     "pkg:npm/%40types/esrecurse@4.3.1": {
       "fetchedFrom": "npm",
       "license": "MIT",
       "resolvable": true,
-      "source": "registry",
       "via": "version-license"
     },
     "pkg:npm/%40types/estree@1.0.9": {
       "fetchedFrom": "npm",
       "license": "MIT",
       "resolvable": true,
-      "source": "registry",
       "via": "version-license"
     },
     "pkg:npm/%40types/json-schema@7.0.15": {
       "fetchedFrom": "npm",
       "license": "MIT",
       "resolvable": true,
-      "source": "registry",
       "via": "version-license"
     },
     "pkg:npm/%40types/node@25.9.2": {
       "fetchedFrom": "npm",
       "license": "MIT",
       "resolvable": true,
-      "source": "registry",
       "via": "version-license"
     },
     "pkg:npm/%40types/spdx-correct@3.1.3": {
       "fetchedFrom": "npm",
       "license": "MIT",
       "resolvable": true,
-      "source": "registry",
       "via": "version-license"
     },
     "pkg:npm/%40types/spdx-expression-parse@4.0.0": {
       "fetchedFrom": "npm",
       "license": "MIT",
       "resolvable": true,
-      "source": "registry",
       "via": "version-license"
     },
     "pkg:npm/%40types/spdx-satisfies@6.0.0": {
       "fetchedFrom": "npm",
       "license": "MIT",
       "resolvable": true,
-      "source": "registry",
       "via": "version-license"
     },
     "pkg:npm/%40typescript-eslint/eslint-plugin@8.61.0": {
       "fetchedFrom": "npm",
       "license": "MIT",
       "resolvable": true,
-      "source": "registry",
       "via": "version-license"
     },
     "pkg:npm/%40typescript-eslint/parser@8.61.0": {
       "fetchedFrom": "npm",
       "license": "MIT",
       "resolvable": true,
-      "source": "registry",
       "via": "version-license"
     },
     "pkg:npm/%40typescript-eslint/project-service@8.61.0": {
       "fetchedFrom": "npm",
       "license": "MIT",
       "resolvable": true,
-      "source": "registry",
       "via": "version-license"
     },
     "pkg:npm/%40typescript-eslint/scope-manager@8.61.0": {
       "fetchedFrom": "npm",
       "license": "MIT",
       "resolvable": true,
-      "source": "registry",
       "via": "version-license"
     },
     "pkg:npm/%40typescript-eslint/tsconfig-utils@8.61.0": {
       "fetchedFrom": "npm",
       "license": "MIT",
       "resolvable": true,
-      "source": "registry",
       "via": "version-license"
     },
     "pkg:npm/%40typescript-eslint/type-utils@8.61.0": {
       "fetchedFrom": "npm",
       "license": "MIT",
       "resolvable": true,
-      "source": "registry",
       "via": "version-license"
     },
     "pkg:npm/%40typescript-eslint/types@8.61.0": {
       "fetchedFrom": "npm",
       "license": "MIT",
       "resolvable": true,
-      "source": "registry",
       "via": "version-license"
     },
     "pkg:npm/%40typescript-eslint/typescript-estree@8.61.0": {
       "fetchedFrom": "npm",
       "license": "MIT",
       "resolvable": true,
-      "source": "registry",
       "via": "version-license"
     },
     "pkg:npm/%40typescript-eslint/utils@8.61.0": {
       "fetchedFrom": "npm",
       "license": "MIT",
       "resolvable": true,
-      "source": "registry",
       "via": "version-license"
     },
     "pkg:npm/%40typescript-eslint/visitor-keys@8.61.0": {
       "fetchedFrom": "npm",
       "license": "MIT",
       "resolvable": true,
-      "source": "registry",
       "via": "version-license"
     },
     "pkg:npm/%40unrs/resolver-binding-android-arm-eabi@1.12.2": {
       "fetchedFrom": "npm",
       "license": "MIT",
       "resolvable": true,
-      "source": "registry",
       "via": "version-license"
     },
     "pkg:npm/%40unrs/resolver-binding-android-arm64@1.12.2": {
       "fetchedFrom": "npm",
       "license": "MIT",
       "resolvable": true,
-      "source": "registry",
       "via": "version-license"
     },
     "pkg:npm/%40unrs/resolver-binding-darwin-arm64@1.12.2": {
       "fetchedFrom": "npm",
       "license": "MIT",
       "resolvable": true,
-      "source": "registry",
       "via": "version-license"
     },
     "pkg:npm/%40unrs/resolver-binding-darwin-x64@1.12.2": {
       "fetchedFrom": "npm",
       "license": "MIT",
       "resolvable": true,
-      "source": "registry",
       "via": "version-license"
     },
     "pkg:npm/%40unrs/resolver-binding-freebsd-x64@1.12.2": {
       "fetchedFrom": "npm",
       "license": "MIT",
       "resolvable": true,
-      "source": "registry",
       "via": "version-license"
     },
     "pkg:npm/%40unrs/resolver-binding-linux-arm-gnueabihf@1.12.2": {
       "fetchedFrom": "npm",
       "license": "MIT",
       "resolvable": true,
-      "source": "registry",
       "via": "version-license"
     },
     "pkg:npm/%40unrs/resolver-binding-linux-arm-musleabihf@1.12.2": {
       "fetchedFrom": "npm",
       "license": "MIT",
       "resolvable": true,
-      "source": "registry",
       "via": "version-license"
     },
     "pkg:npm/%40unrs/resolver-binding-linux-arm64-gnu@1.12.2": {
       "fetchedFrom": "npm",
       "license": "MIT",
       "resolvable": true,
-      "source": "registry",
       "via": "version-license"
     },
     "pkg:npm/%40unrs/resolver-binding-linux-arm64-musl@1.12.2": {
       "fetchedFrom": "npm",
       "license": "MIT",
       "resolvable": true,
-      "source": "registry",
       "via": "version-license"
     },
     "pkg:npm/%40unrs/resolver-binding-linux-loong64-gnu@1.12.2": {
       "fetchedFrom": "npm",
       "license": "MIT",
       "resolvable": true,
-      "source": "registry",
       "via": "version-license"
     },
     "pkg:npm/%40unrs/resolver-binding-linux-loong64-musl@1.12.2": {
       "fetchedFrom": "npm",
       "license": "MIT",
       "resolvable": true,
-      "source": "registry",
       "via": "version-license"
     },
     "pkg:npm/%40unrs/resolver-binding-linux-ppc64-gnu@1.12.2": {
       "fetchedFrom": "npm",
       "license": "MIT",
       "resolvable": true,
-      "source": "registry",
       "via": "version-license"
     },
     "pkg:npm/%40unrs/resolver-binding-linux-riscv64-gnu@1.12.2": {
       "fetchedFrom": "npm",
       "license": "MIT",
       "resolvable": true,
-      "source": "registry",
       "via": "version-license"
     },
     "pkg:npm/%40unrs/resolver-binding-linux-riscv64-musl@1.12.2": {
       "fetchedFrom": "npm",
       "license": "MIT",
       "resolvable": true,
-      "source": "registry",
       "via": "version-license"
     },
     "pkg:npm/%40unrs/resolver-binding-linux-s390x-gnu@1.12.2": {
       "fetchedFrom": "npm",
       "license": "MIT",
       "resolvable": true,
-      "source": "registry",
       "via": "version-license"
     },
     "pkg:npm/%40unrs/resolver-binding-linux-x64-gnu@1.12.2": {
       "fetchedFrom": "npm",
       "license": "MIT",
       "resolvable": true,
-      "source": "registry",
       "via": "version-license"
     },
     "pkg:npm/%40unrs/resolver-binding-linux-x64-musl@1.12.2": {
       "fetchedFrom": "npm",
       "license": "MIT",
       "resolvable": true,
-      "source": "registry",
       "via": "version-license"
     },
     "pkg:npm/%40unrs/resolver-binding-openharmony-arm64@1.12.2": {
       "fetchedFrom": "npm",
       "license": "MIT",
       "resolvable": true,
-      "source": "registry",
       "via": "version-license"
     },
     "pkg:npm/%40unrs/resolver-binding-wasm32-wasi@1.12.2": {
       "fetchedFrom": "npm",
       "license": "MIT",
       "resolvable": true,
-      "source": "registry",
       "via": "version-license"
     },
     "pkg:npm/%40unrs/resolver-binding-win32-arm64-msvc@1.12.2": {
       "fetchedFrom": "npm",
       "license": "MIT",
       "resolvable": true,
-      "source": "registry",
       "via": "version-license"
     },
     "pkg:npm/%40unrs/resolver-binding-win32-ia32-msvc@1.12.2": {
       "fetchedFrom": "npm",
       "license": "MIT",
       "resolvable": true,
-      "source": "registry",
       "via": "version-license"
     },
     "pkg:npm/%40unrs/resolver-binding-win32-x64-msvc@1.12.2": {
       "fetchedFrom": "npm",
       "license": "MIT",
       "resolvable": true,
-      "source": "registry",
       "via": "version-license"
     },
     "pkg:npm/acorn-jsx@5.3.2": {
       "fetchedFrom": "npm",
       "license": "MIT",
       "resolvable": true,
-      "source": "registry",
       "via": "version-license"
     },
     "pkg:npm/acorn@8.17.0": {
       "fetchedFrom": "npm",
       "license": "MIT",
       "resolvable": true,
-      "source": "registry",
       "via": "version-license"
     },
     "pkg:npm/ajv@6.15.0": {
       "fetchedFrom": "npm",
       "license": "MIT",
       "resolvable": true,
-      "source": "registry",
       "via": "version-license"
     },
     "pkg:npm/arkregex@0.0.5": {
       "fetchedFrom": "npm",
       "license": "MIT",
       "resolvable": true,
-      "source": "registry",
       "via": "version-license"
     },
     "pkg:npm/arktype@2.2.0": {
       "fetchedFrom": "npm",
       "license": "MIT",
       "resolvable": true,
-      "source": "registry",
       "via": "version-license"
     },
     "pkg:npm/array-find-index@1.0.2": {
       "fetchedFrom": "npm",
       "license": "MIT",
       "resolvable": true,
-      "source": "registry",
       "via": "version-license"
     },
     "pkg:npm/balanced-match@4.0.4": {
       "fetchedFrom": "npm",
       "license": "MIT",
       "resolvable": true,
-      "source": "registry",
       "via": "version-license"
     },
     "pkg:npm/brace-expansion@5.0.6": {
       "fetchedFrom": "npm",
       "license": "MIT",
       "resolvable": true,
-      "source": "registry",
       "via": "version-license"
     },
     "pkg:npm/bun-types@1.3.14": {
       "fetchedFrom": "npm",
       "license": "MIT",
       "resolvable": true,
-      "source": "registry",
       "via": "version-license"
     },
     "pkg:npm/comment-parser@1.4.7": {
       "fetchedFrom": "npm",
       "license": "MIT",
       "resolvable": true,
-      "source": "registry",
       "via": "version-license"
     },
     "pkg:npm/cross-spawn@7.0.6": {
       "fetchedFrom": "npm",
       "license": "MIT",
       "resolvable": true,
-      "source": "registry",
       "via": "version-license"
     },
     "pkg:npm/debug@4.4.3": {
       "fetchedFrom": "npm",
       "license": "MIT",
       "resolvable": true,
-      "source": "registry",
       "via": "version-license"
     },
     "pkg:npm/deep-is@0.1.4": {
       "fetchedFrom": "npm",
       "license": "MIT",
       "resolvable": true,
-      "source": "registry",
       "via": "version-license"
     },
     "pkg:npm/escape-string-regexp@4.0.0": {
       "fetchedFrom": "npm",
       "license": "MIT",
       "resolvable": true,
-      "source": "registry",
       "via": "version-license"
     },
     "pkg:npm/eslint-config-prettier@10.1.8": {
       "fetchedFrom": "npm",
       "license": "MIT",
       "resolvable": true,
-      "source": "registry",
       "via": "version-license"
     },
     "pkg:npm/eslint-import-context@0.1.9": {
       "fetchedFrom": "npm",
       "license": "MIT",
       "resolvable": true,
-      "source": "registry",
       "via": "version-license"
     },
     "pkg:npm/eslint-plugin-import-x@4.16.2": {
       "fetchedFrom": "npm",
       "license": "MIT",
       "resolvable": true,
-      "source": "registry",
       "via": "version-license"
     },
     "pkg:npm/eslint-scope@9.1.2": {
       "fetchedFrom": "npm",
       "license": "BSD-2-Clause",
       "resolvable": true,
-      "source": "registry",
       "via": "version-license"
     },
     "pkg:npm/eslint-visitor-keys@3.4.3": {
       "fetchedFrom": "npm",
       "license": "Apache-2.0",
       "resolvable": true,
-      "source": "registry",
       "via": "version-license"
     },
     "pkg:npm/eslint-visitor-keys@5.0.1": {
       "fetchedFrom": "npm",
       "license": "Apache-2.0",
       "resolvable": true,
-      "source": "registry",
       "via": "version-license"
     },
     "pkg:npm/eslint@10.4.1": {
       "fetchedFrom": "npm",
       "license": "MIT",
       "resolvable": true,
-      "source": "registry",
       "via": "version-license"
     },
     "pkg:npm/espree@11.2.0": {
       "fetchedFrom": "npm",
       "license": "BSD-2-Clause",
       "resolvable": true,
-      "source": "registry",
       "via": "version-license"
     },
     "pkg:npm/esquery@1.7.0": {
       "fetchedFrom": "npm",
       "license": "BSD-3-Clause",
       "resolvable": true,
-      "source": "registry",
       "via": "version-license"
     },
     "pkg:npm/esrecurse@4.3.0": {
       "fetchedFrom": "npm",
       "license": "BSD-2-Clause",
       "resolvable": true,
-      "source": "registry",
       "via": "version-license"
     },
     "pkg:npm/estraverse@5.3.0": {
       "fetchedFrom": "npm",
       "license": "BSD-2-Clause",
       "resolvable": true,
-      "source": "registry",
       "via": "version-license"
     },
     "pkg:npm/esutils@2.0.3": {
       "fetchedFrom": "npm",
       "license": "BSD-2-Clause",
       "resolvable": true,
-      "source": "registry",
       "via": "version-license"
     },
     "pkg:npm/fast-deep-equal@3.1.3": {
       "fetchedFrom": "npm",
       "license": "MIT",
       "resolvable": true,
-      "source": "registry",
       "via": "version-license"
     },
     "pkg:npm/fast-json-stable-stringify@2.1.0": {
       "fetchedFrom": "npm",
       "license": "MIT",
       "resolvable": true,
-      "source": "registry",
       "via": "version-license"
     },
     "pkg:npm/fast-levenshtein@2.0.6": {
       "fetchedFrom": "npm",
       "license": "MIT",
       "resolvable": true,
-      "source": "registry",
       "via": "version-license"
     },
     "pkg:npm/fdir@6.5.0": {
       "fetchedFrom": "npm",
       "license": "MIT",
       "resolvable": true,
-      "source": "registry",
       "via": "version-license"
     },
     "pkg:npm/file-entry-cache@8.0.0": {
       "fetchedFrom": "npm",
       "license": "MIT",
       "resolvable": true,
-      "source": "registry",
       "via": "version-license"
     },
     "pkg:npm/find-up@5.0.0": {
       "fetchedFrom": "npm",
       "license": "MIT",
       "resolvable": true,
-      "source": "registry",
       "via": "version-license"
     },
     "pkg:npm/flat-cache@4.0.1": {
       "fetchedFrom": "npm",
       "license": "MIT",
       "resolvable": true,
-      "source": "registry",
       "via": "version-license"
     },
     "pkg:npm/flatted@3.4.2": {
       "fetchedFrom": "npm",
       "license": "ISC",
       "resolvable": true,
-      "source": "registry",
       "via": "version-license"
     },
     "pkg:npm/get-tsconfig@4.14.0": {
       "fetchedFrom": "npm",
       "license": "MIT",
       "resolvable": true,
-      "source": "registry",
       "via": "version-license"
     },
     "pkg:npm/glob-parent@6.0.2": {
       "fetchedFrom": "npm",
       "license": "ISC",
       "resolvable": true,
-      "source": "registry",
       "via": "version-license"
     },
     "pkg:npm/ignore@5.3.2": {
       "fetchedFrom": "npm",
       "license": "MIT",
       "resolvable": true,
-      "source": "registry",
       "via": "version-license"
     },
     "pkg:npm/ignore@7.0.5": {
       "fetchedFrom": "npm",
       "license": "MIT",
       "resolvable": true,
-      "source": "registry",
       "via": "version-license"
     },
     "pkg:npm/imurmurhash@0.1.4": {
       "fetchedFrom": "npm",
       "license": "MIT",
       "resolvable": true,
-      "source": "registry",
       "via": "version-license"
     },
     "pkg:npm/is-extglob@2.1.1": {
       "fetchedFrom": "npm",
       "license": "MIT",
       "resolvable": true,
-      "source": "registry",
       "via": "version-license"
     },
     "pkg:npm/is-glob@4.0.3": {
       "fetchedFrom": "npm",
       "license": "MIT",
       "resolvable": true,
-      "source": "registry",
       "via": "version-license"
     },
     "pkg:npm/isexe@2.0.0": {
       "fetchedFrom": "npm",
       "license": "ISC",
       "resolvable": true,
-      "source": "registry",
       "via": "version-license"
     },
     "pkg:npm/json-buffer@3.0.1": {
       "fetchedFrom": "npm",
       "license": "MIT",
       "resolvable": true,
-      "source": "registry",
       "via": "version-license"
     },
     "pkg:npm/json-schema-traverse@0.4.1": {
       "fetchedFrom": "npm",
       "license": "MIT",
       "resolvable": true,
-      "source": "registry",
       "via": "version-license"
     },
     "pkg:npm/json-stable-stringify-without-jsonify@1.0.1": {
       "fetchedFrom": "npm",
       "license": "MIT",
       "resolvable": true,
-      "source": "registry",
       "via": "version-license"
     },
     "pkg:npm/keyv@4.5.4": {
       "fetchedFrom": "npm",
       "license": "MIT",
       "resolvable": true,
-      "source": "registry",
       "via": "version-license"
     },
     "pkg:npm/levn@0.4.1": {
       "fetchedFrom": "npm",
       "license": "MIT",
       "resolvable": true,
-      "source": "registry",
       "via": "version-license"
     },
     "pkg:npm/locate-path@6.0.0": {
       "fetchedFrom": "npm",
       "license": "MIT",
       "resolvable": true,
-      "source": "registry",
       "via": "version-license"
     },
     "pkg:npm/minimatch@10.2.5": {
       "fetchedFrom": "npm",
       "license": "BlueOak-1.0.0",
       "resolvable": true,
-      "source": "registry",
       "via": "version-license"
     },
     "pkg:npm/ms@2.1.3": {
       "fetchedFrom": "npm",
       "license": "MIT",
       "resolvable": true,
-      "source": "registry",
       "via": "version-license"
     },
     "pkg:npm/napi-postinstall@0.3.4": {
       "fetchedFrom": "npm",
       "license": "MIT",
       "resolvable": true,
-      "source": "registry",
       "via": "version-license"
     },
     "pkg:npm/natural-compare@1.4.0": {
       "fetchedFrom": "npm",
       "license": "MIT",
       "resolvable": true,
-      "source": "registry",
       "via": "version-license"
     },
     "pkg:npm/optionator@0.9.4": {
       "fetchedFrom": "npm",
       "license": "MIT",
       "resolvable": true,
-      "source": "registry",
       "via": "version-license"
     },
     "pkg:npm/p-limit@3.1.0": {
       "fetchedFrom": "npm",
       "license": "MIT",
       "resolvable": true,
-      "source": "registry",
       "via": "version-license"
     },
     "pkg:npm/p-locate@5.0.0": {
       "fetchedFrom": "npm",
       "license": "MIT",
       "resolvable": true,
-      "source": "registry",
       "via": "version-license"
     },
     "pkg:npm/path-exists@4.0.0": {
       "fetchedFrom": "npm",
       "license": "MIT",
       "resolvable": true,
-      "source": "registry",
       "via": "version-license"
     },
     "pkg:npm/path-key@3.1.1": {
       "fetchedFrom": "npm",
       "license": "MIT",
       "resolvable": true,
-      "source": "registry",
       "via": "version-license"
     },
     "pkg:npm/picomatch@4.0.4": {
       "fetchedFrom": "npm",
       "license": "MIT",
       "resolvable": true,
-      "source": "registry",
       "via": "version-license"
     },
     "pkg:npm/prelude-ls@1.2.1": {
       "fetchedFrom": "npm",
       "license": "MIT",
       "resolvable": true,
-      "source": "registry",
       "via": "version-license"
     },
     "pkg:npm/prettier@3.8.4": {
       "fetchedFrom": "npm",
       "license": "MIT",
       "resolvable": true,
-      "source": "registry",
       "via": "version-license"
     },
     "pkg:npm/punycode@2.3.1": {
       "fetchedFrom": "npm",
       "license": "MIT",
       "resolvable": true,
-      "source": "registry",
       "via": "version-license"
     },
     "pkg:npm/resolve-pkg-maps@1.0.0": {
       "fetchedFrom": "npm",
       "license": "MIT",
       "resolvable": true,
-      "source": "registry",
       "via": "version-license"
     },
     "pkg:npm/semver@7.8.4": {
       "fetchedFrom": "npm",
       "license": "ISC",
       "resolvable": true,
-      "source": "registry",
       "via": "version-license"
     },
     "pkg:npm/shebang-command@2.0.0": {
       "fetchedFrom": "npm",
       "license": "MIT",
       "resolvable": true,
-      "source": "registry",
       "via": "version-license"
     },
     "pkg:npm/shebang-regex@3.0.0": {
       "fetchedFrom": "npm",
       "license": "MIT",
       "resolvable": true,
-      "source": "registry",
       "via": "version-license"
     },
     "pkg:npm/smol-toml@1.6.1": {
       "fetchedFrom": "npm",
       "license": "BSD-3-Clause",
       "resolvable": true,
-      "source": "registry",
       "via": "version-license"
     },
     "pkg:npm/spdx-compare@1.0.0": {
       "fetchedFrom": "npm",
       "license": "MIT",
       "resolvable": true,
-      "source": "registry",
       "via": "version-license"
     },
     "pkg:npm/spdx-correct@3.2.0": {
       "fetchedFrom": "npm",
       "license": "Apache-2.0",
       "resolvable": true,
-      "source": "registry",
       "via": "version-license"
     },
     "pkg:npm/spdx-exceptions@2.5.0": {
       "fetchedFrom": "npm",
       "license": "CC-BY-3.0",
       "resolvable": true,
-      "source": "registry",
       "via": "version-license"
     },
     "pkg:npm/spdx-expression-parse@3.0.1": {
       "fetchedFrom": "npm",
       "license": "MIT",
       "resolvable": true,
-      "source": "registry",
       "via": "version-license"
     },
     "pkg:npm/spdx-expression-parse@4.0.0": {
       "fetchedFrom": "npm",
       "license": "MIT",
       "resolvable": true,
-      "source": "registry",
       "via": "version-license"
     },
     "pkg:npm/spdx-license-ids@3.0.23": {
       "fetchedFrom": "npm",
       "license": "CC0-1.0",
       "resolvable": true,
-      "source": "registry",
       "via": "version-license"
     },
     "pkg:npm/spdx-license-list@6.11.0": {
       "fetchedFrom": "npm",
       "license": "CC0-1.0",
       "resolvable": true,
-      "source": "registry",
       "via": "version-license"
     },
     "pkg:npm/spdx-ranges@2.1.1": {
       "fetchedFrom": "npm",
       "license": "(MIT AND CC-BY-3.0)",
       "resolvable": true,
-      "source": "registry",
       "via": "version-license"
     },
     "pkg:npm/spdx-satisfies@6.0.0": {
       "fetchedFrom": "npm",
       "license": "MIT",
       "resolvable": true,
-      "source": "registry",
       "via": "version-license"
     },
     "pkg:npm/stable-hash-x@0.2.0": {
       "fetchedFrom": "npm",
       "license": "MIT",
       "resolvable": true,
-      "source": "registry",
       "via": "version-license"
     },
     "pkg:npm/tinyglobby@0.2.17": {
       "fetchedFrom": "npm",
       "license": "MIT",
       "resolvable": true,
-      "source": "registry",
       "via": "version-license"
     },
     "pkg:npm/ts-api-utils@2.5.0": {
       "fetchedFrom": "npm",
       "license": "MIT",
       "resolvable": true,
-      "source": "registry",
       "via": "version-license"
     },
     "pkg:npm/tslib@2.8.1": {
       "fetchedFrom": "npm",
       "license": "0BSD",
       "resolvable": true,
-      "source": "registry",
       "via": "version-license"
     },
     "pkg:npm/type-check@0.4.0": {
       "fetchedFrom": "npm",
       "license": "MIT",
       "resolvable": true,
-      "source": "registry",
       "via": "version-license"
     },
     "pkg:npm/typescript-eslint@8.61.0": {
       "fetchedFrom": "npm",
       "license": "MIT",
       "resolvable": true,
-      "source": "registry",
       "via": "version-license"
     },
     "pkg:npm/typescript@5.9.3": {
       "fetchedFrom": "npm",
       "license": "Apache-2.0",
       "resolvable": true,
-      "source": "registry",
       "via": "version-license"
     },
     "pkg:npm/undici-types@7.24.6": {
       "fetchedFrom": "npm",
       "license": "MIT",
       "resolvable": true,
-      "source": "registry",
       "via": "version-license"
     },
     "pkg:npm/unrs-resolver@1.12.2": {
       "fetchedFrom": "npm",
       "license": "MIT",
       "resolvable": true,
-      "source": "registry",
       "via": "version-license"
     },
     "pkg:npm/uri-js@4.4.1": {
       "fetchedFrom": "npm",
       "license": "BSD-2-Clause",
       "resolvable": true,
-      "source": "registry",
       "via": "version-license"
     },
     "pkg:npm/which@2.0.2": {
       "fetchedFrom": "npm",
       "license": "ISC",
       "resolvable": true,
-      "source": "registry",
       "via": "version-license"
     },
     "pkg:npm/word-wrap@1.2.5": {
       "fetchedFrom": "npm",
       "license": "MIT",
       "resolvable": true,
-      "source": "registry",
       "via": "version-license"
     },
     "pkg:npm/yocto-queue@0.1.0": {
       "fetchedFrom": "npm",
       "license": "MIT",
       "resolvable": true,
-      "source": "registry",
       "via": "version-license"
     }
   },

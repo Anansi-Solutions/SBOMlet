@@ -121,17 +121,9 @@ function reportVerifyCache(result: VerifyResult): void {
     process.stderr.write(`${text}\n`);
   };
   const noun = result.audited === 1 ? "entry" : "entries";
-  // The skip note keeps the summary honest: a skipped scancode entry was
-  // never checked, so "all match" must never be asserted over it.
-  const skipNote =
-    result.skipped === 0
-      ? ""
-      : `, skipped ${result.skipped} scancode ${
-          result.skipped === 1 ? "entry" : "entries"
-        } (not registry-auditable)`;
   if (result.mismatches.length === 0) {
     line(
-      `verify-cache: audited ${result.audited} cache ${noun}${skipNote} — ` +
+      `verify-cache: audited ${result.audited} cache ${noun} — ` +
         `all audited entries match upstream`,
     );
     return;
@@ -146,7 +138,7 @@ function reportVerifyCache(result: VerifyResult): void {
     result.mismatches.length === 1 ? "diverges from" : "diverge from";
   line(
     `verify-cache: ${result.mismatches.length} of ${result.audited} audited cache ${noun} ` +
-      `${verb} upstream${skipNote} — investigate before release`,
+      `${verb} upstream — investigate before release`,
   );
 }
 
