@@ -19,9 +19,8 @@
 #                   (default unset: the tool auto-discovers .sbomlet.policy.toml)
 #   CYCLONEDX       CycloneDX export path; --cyclonedx is added only when set
 #   IMAGES          space-separated image refs to live-scan (generate-docker-sbom)
-#   DISCOVER_ROOT   repo root whose Dockerfile bases to derive (generate-docker-sbom)
-#   DOCKERFILES     space-separated Dockerfile paths to target (generate-docker-sbom)
-#   BUILT_IMAGES    space-separated locally built image tags to scan (generate-docker-sbom)
+#   DISCOVER_ROOT   repo root to discover, build & scan Dockerfiles in (generate-docker-sbom)
+#   DOCKERFILES     space-separated Dockerfile paths to build & scan (generate-docker-sbom)
 #   DOCKER_OS_SBOM  override the committed SBOM path (default: in the cache dir)
 #   INTENSIVE       set (e.g. INTENSIVE=1) to add --intensive to generate: scan
 #                   still-unresolved packages' local sources with ScanCode
@@ -58,9 +57,9 @@ tasks:
       - mise x -- bun src/cli.ts verify-cache --base-dir {{.USER_WORKING_DIR | q}} --repo-root {{.REPO_ROOT | q}}
 
   generate-docker-sbom:
-    desc: 'MAINTAINER + DOCKER ONLY — produce the committed docker-os.sbom.json. IMAGES="a:1 b:2" live-scans those refs; DISCOVER_ROOT=. derives bases from the repo Dockerfiles; DOCKERFILES="a/Dockerfile b/Dockerfile" targets an explicit list; BUILT_IMAGES="myapp:ci worker:ci" scans locally built never-pushed tags (full contents, digest-less). NOT part of check (check reads the committed bytes offline).'
+    desc: 'MAINTAINER + DOCKER ONLY — produce the committed docker-os.sbom.json. Three lanes: IMAGES="a:1 b:2" scans pre-existing image refs; DOCKERFILES="a/Dockerfile b/Dockerfile" builds & scans an explicit Dockerfile list; DISCOVER_ROOT=. discovers, builds & scans the repo Dockerfiles. NOT part of check (check reads the committed bytes offline).'
     cmds:
-      - mise x -- bun src/cli.ts generate-docker-sbom --base-dir {{.USER_WORKING_DIR | q}}{{if .DOCKER_OS_SBOM}} --docker-os-sbom {{.DOCKER_OS_SBOM | q}}{{end}}{{if .DISCOVER_ROOT}} --repo-root {{.DISCOVER_ROOT | q}}{{end}}{{range .DOCKERFILES | default "" | splitList " "}}{{if .}} --dockerfile {{. | q}}{{end}}{{end}}{{range .IMAGES | default "" | splitList " "}}{{if .}} --image {{. | q}}{{end}}{{end}}{{range .BUILT_IMAGES | default "" | splitList " "}}{{if .}} --built-image {{. | q}}{{end}}{{end}}
+      - mise x -- bun src/cli.ts generate-docker-sbom --base-dir {{.USER_WORKING_DIR | q}}{{if .DOCKER_OS_SBOM}} --docker-os-sbom {{.DOCKER_OS_SBOM | q}}{{end}}{{if .DISCOVER_ROOT}} --repo-root {{.DISCOVER_ROOT | q}}{{end}}{{range .DOCKERFILES | default "" | splitList " "}}{{if .}} --dockerfile {{. | q}}{{end}}{{end}}{{range .IMAGES | default "" | splitList " "}}{{if .}} --image {{. | q}}{{end}}{{end}}
 
   list-dockerfiles:
     desc: "Print the repository's discovered Dockerfile paths (policy-aware), one per line — the Docker-scan workflow's build set"
@@ -70,12 +69,11 @@ tasks:
 
   docker-scan:
     desc: 'Discover, build, and scan the repository''s Dockerfiles, then regenerate the inventory — the local equivalent of the docker-scan workflow. DOCKERFILES="a/Dockerfile b/Dockerfile" targets an explicit list instead of discovering. Needs a Docker daemon.'
-    vars:
-      TAGS:
-        sh: mise x -- bun scripts/build-scan-images.ts {{.DOCKERFILES | default ""}}
     cmds:
       - task: generate-docker-sbom
-        vars: { BUILT_IMAGES: '{{.TAGS}}' }
+        vars:
+          DOCKERFILES: '{{.DOCKERFILES}}'
+          DISCOVER_ROOT: '{{if .DOCKERFILES}}{{else}}{{.ROOT_DIR}}{{end}}'
       - task: generate
 
   quality:

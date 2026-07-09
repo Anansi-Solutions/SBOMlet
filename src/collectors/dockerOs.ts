@@ -492,11 +492,11 @@ export function parseRepoDigests(stdout: string, invocation: string): string[] {
  * images share a purl with DIFFERENT license claims, whichever image is
  * scanned first decides the committed license — an unsorted walk makes that
  * choice a function of argv order, breaking the byte-determinism contract
- * (D-14) for `--built-image b a` vs `--built-image a b` over the identical
- * image SET. Sorting here matches the existing resolveDiscoveredImages /
+ * (D-14) for `--image b a` vs `--image a b` over the identical image SET.
+ * Sorting here matches the existing resolveDiscoveredImages /
  * resolveTargetedDockerfiles convention (both already compareCodeUnits-sort
- * before scanning); this closes the one caller path (--built-image, --image)
- * that did not (adversarial review, 09-07, Lens 2).
+ * before scanning); this closes the one caller path (--image) that did not
+ * (adversarial review, 09-07, Lens 2).
  */
 /**
  * Scan + filter + identify ONE image with the single posture: probe local

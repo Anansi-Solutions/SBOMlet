@@ -37,7 +37,7 @@ import {
 
 import postgresFixture from "./fixtures/syft-postgres-trimmed.json";
 import nginxFixture from "./fixtures/syft-nginx-trimmed.json";
-import builtFixture from "./fixtures/syft-built-image-trimmed.json";
+import builtFixture from "./fixtures/syft-built-trimmed.json";
 
 describe("syftArgs (argv lock)", () => {
   test("returns exactly the verified syft 1.45.1 cyclonedx-json invocation", () => {

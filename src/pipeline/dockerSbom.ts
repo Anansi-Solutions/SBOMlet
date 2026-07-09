@@ -43,7 +43,7 @@ import { sanitizeForLog } from "./summary";
 /**
  * Defense-in-depth ref guard (#8): an image operand forwarded to syft must never
  * be empty/whitespace-only (a no-op operand) nor dash-prefixed (a token syft
- * could parse as a flag). Guards the --image / --built-image lane, whose refs
+ * could parse as a flag). Guards the --image lane, whose refs
  * are passed straight through to syft/docker as operands.
  */
 function isSafeImageRef(ref: string): boolean {
@@ -318,16 +318,6 @@ export interface GenerateDockerSbomOptions {
   /** Pass syft/docker/buildx child stdout/stderr through to process.stderr. */
   verbose?: boolean;
   /**
-   * TEMPORARY BRIDGE (--built-image): an alias into the image lane, kept for
-   * exactly one more push so `docker-scan.yml`'s current invocation (script ->
-   * list-dockerfiles -> BUILT_IMAGES) stays green while this wave touches the
-   * dockerfile*-prefixed files that trigger it. The refs are appended to the
-   * image-lane scan set (semantically identical under the generalized digest
-   * posture — a local-only built image records digest ""). REMOVED in 13-04
-   * together with the workflow flip; it is NOT one of the three ways in.
-   */
-  builtImages?: string[];
-  /**
    * --list-dockerfiles: print the policy-aware discovered Dockerfile identities
    * to stdout, one per line, and return before any build or write. This is the
    * CI workflow's discovery surface, so the build set comes from the tool's
@@ -436,24 +426,21 @@ async function runDiscoveryBuildLane(
 }
 
 /**
- * IMAGE LANE (--image, plus the temporary --built-image bridge): scan
- * pre-existing image refs. The refs are guarded through safeLiveScanImages
- * (#5/#8) before reaching syft/docker as operands; the whole set being unsafe is
- * a loud throw, never a silent empty scan. The collector probes local presence
- * and pulls only when a ref is absent (a locally-present built tag is scanned
- * as-is). The summary prints to stderr BEFORE the scan.
+ * IMAGE LANE (--image): scan pre-existing image refs. The refs are guarded
+ * through safeLiveScanImages (#5/#8) before reaching syft/docker as operands;
+ * the whole set being unsafe is a loud throw, never a silent empty scan. The
+ * collector probes local presence and pulls only when a ref is absent (a
+ * locally-present built tag is scanned as-is). The summary prints to stderr
+ * BEFORE the scan.
  */
 async function runImageLane(
   opts: GenerateDockerSbomOptions,
   outputPath: string,
 ): Promise<void> {
-  const requested = safeLiveScanImages([
-    ...(opts.images ?? []),
-    ...(opts.builtImages ?? []),
-  ]);
+  const requested = safeLiveScanImages(opts.images ?? []);
   if (requested.length === 0) {
     throw new Error(
-      "no safe image refs to scan — every --image/--built-image ref was empty, " +
+      "no safe image refs to scan — every --image ref was empty, " +
         "whitespace-only, or dash-prefixed (such tokens are rejected so they " +
         "can never be parsed by syft/docker as a flag)",
     );
@@ -528,11 +515,8 @@ export async function runGenerateDockerSbom(
     return runDiscoveryBuildLane(opts, outputPath, opts.repoRoot);
   }
 
-  // LANE 3 — image scan (--image, or the temporary --built-image bridge).
-  if (
-    (opts.images !== undefined && opts.images.length > 0) ||
-    (opts.builtImages !== undefined && opts.builtImages.length > 0)
-  ) {
+  // LANE 3 — image scan (--image).
+  if (opts.images !== undefined && opts.images.length > 0) {
     return runImageLane(opts, outputPath);
   }
 

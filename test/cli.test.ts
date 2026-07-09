@@ -2144,60 +2144,6 @@ describe("generate-docker-sbom three-lane contract", () => {
     }
   });
 
-  // The --built-image bridge is an image-lane alias; it obeys lane exclusivity,
-  // conflicting with every lane flag (built+repo-root is INVERTED from the old
-  // anchor-degradation allowance). It survives alone for one more push (13-04).
-  test("--built-image and --image conflict, naming both flags", () => {
-    const message = dockerSbomModeConflict({
-      "built-image": ["myapp:ci"],
-      image: ["postgres:18"],
-    });
-    expect(message).toBeDefined();
-    expect(message).toContain("--built-image");
-    expect(message).toContain("--image");
-  });
-
-  test("--built-image and --dockerfile conflict, naming both flags", () => {
-    const message = dockerSbomModeConflict({
-      "built-image": ["myapp:ci"],
-      dockerfile: ["Dockerfile"],
-    });
-    expect(message).toBeDefined();
-    expect(message).toContain("--built-image");
-    expect(message).toContain("--dockerfile");
-  });
-
-  test("--built-image and --repo-root conflict, naming both flags (INVERTED bridge exclusivity)", () => {
-    const message = dockerSbomModeConflict({
-      "built-image": ["myapp:ci"],
-      "repo-root": ".",
-    });
-    expect(message).toBeDefined();
-    expect(message).toContain("--built-image");
-    expect(message).toContain("--repo-root");
-  });
-
-  test("--built-image alone is NOT a conflict (the bridge survives until 13-04)", () => {
-    expect(
-      dockerSbomModeConflict({
-        "built-image": ["myapp:ci"],
-      }),
-    ).toBeUndefined();
-  });
-
-  test("dockerSbomOptionsFrom maps repeatable --built-image values to builtImages verbatim", () => {
-    const base = neutralBaseDir();
-    try {
-      const options = dockerSbomOptionsFrom({
-        "built-image": ["myapp:ci", "worker:ci"],
-        "base-dir": base,
-      });
-      expect(options.builtImages).toEqual(["myapp:ci", "worker:ci"]);
-    } finally {
-      rmSync(base, { recursive: true, force: true });
-    }
-  });
-
   // --list-dockerfiles is discovery-listing support: it never combines with a
   // build/scan lane and REQUIRES --repo-root.
   test("--list-dockerfiles and --image conflict", () => {
@@ -2220,17 +2166,6 @@ describe("generate-docker-sbom three-lane contract", () => {
     expect(message).toBeDefined();
     expect(message).toContain("--list-dockerfiles");
     expect(message).toContain("--dockerfile");
-  });
-
-  test("--list-dockerfiles and --built-image conflict", () => {
-    const message = dockerSbomModeConflict({
-      "list-dockerfiles": true,
-      "repo-root": ".",
-      "built-image": ["myapp:ci"],
-    });
-    expect(message).toBeDefined();
-    expect(message).toContain("--list-dockerfiles");
-    expect(message).toContain("--built-image");
   });
 
   test("--list-dockerfiles without --repo-root fails loudly", () => {

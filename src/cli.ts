@@ -156,14 +156,6 @@ interface CliValues {
   /** generate-docker-sbom output path; base-dir-resolved like every artifact. */
   "docker-os-sbom"?: string;
   /**
-   * TEMPORARY --built-image bridge for generate-docker-sbom: an alias into the
-   * image lane, kept for one more push so the Docker-scan CI workflow's current
-   * invocation stays green while this wave touches the dockerfile*-prefixed
-   * files that trigger it. Removed in 13-04 with the workflow flip. Not one of
-   * the three lanes.
-   */
-  "built-image"?: string[];
-  /**
    * generate-docker-sbom --list-dockerfiles: print the tool policy-aware
    * discovered Dockerfile identities to stdout, one per line, and exit --
    * scans nothing, writes nothing. Requires --repo-root.
@@ -233,10 +225,9 @@ export function optionsFrom(values: CliValues): GenerateOptions {
  * when the requested lane combination is valid. THE THREE LANES ARE PAIRWISE
  * MUTUALLY EXCLUSIVE (D-01): exactly one of --dockerfile (build named
  * Dockerfiles) / --repo-root (discover + build) / --image (scan pre-existing
- * images). The temporary --built-image bridge is an image-lane alias and obeys
- * the same exclusivity (it conflicts with every lane flag). --list-dockerfiles
- * is discovery-listing support: it never combines with a build/scan lane and
- * REQUIRES --repo-root (the walk root the listing reads). A bare invocation —
+ * images). --list-dockerfiles is discovery-listing support: it never combines
+ * with a build/scan lane and REQUIRES --repo-root (the walk root the listing
+ * reads). A bare invocation —
  * no lane, no listing — is a usage error naming the three lanes: there is no
  * default image set. Pair checks are walked as a table rather than an if-ladder
  * to keep this function under the complexity bound. Extracted from
@@ -247,8 +238,6 @@ export function dockerSbomModeConflict(values: CliValues): string | undefined {
   const hasRepoRoot = values["repo-root"] !== undefined;
   const hasDockerfile =
     values.dockerfile !== undefined && values.dockerfile.length > 0;
-  const hasBuiltImage =
-    values["built-image"] !== undefined && values["built-image"].length > 0;
   const hasListDockerfiles = values["list-dockerfiles"] === true;
   const pairs: Array<[boolean, boolean, string]> = [
     // --list-dockerfiles never combines with a build/scan lane (checked first so
@@ -263,11 +252,6 @@ export function dockerSbomModeConflict(values: CliValues): string | undefined {
       hasListDockerfiles,
       hasDockerfile,
       "--list-dockerfiles and --dockerfile are mutually exclusive",
-    ],
-    [
-      hasListDockerfiles,
-      hasBuiltImage,
-      "--list-dockerfiles and --built-image are mutually exclusive",
     ],
     // The three lanes are pairwise mutually exclusive (D-01) — choose one way in.
     [
@@ -288,22 +272,6 @@ export function dockerSbomModeConflict(values: CliValues): string | undefined {
       "--repo-root (discover + build) and --image (scan pre-existing images) " +
         "are mutually exclusive — choose one lane",
     ],
-    // The --built-image bridge is an image-lane alias; it obeys lane exclusivity.
-    [
-      hasBuiltImage,
-      hasImage,
-      "--built-image and --image are mutually exclusive",
-    ],
-    [
-      hasBuiltImage,
-      hasDockerfile,
-      "--built-image and --dockerfile are mutually exclusive",
-    ],
-    [
-      hasBuiltImage,
-      hasRepoRoot,
-      "--built-image and --repo-root are mutually exclusive",
-    ],
   ];
   for (const [left, right, message] of pairs) {
     if (left && right) return message;
@@ -313,13 +281,7 @@ export function dockerSbomModeConflict(values: CliValues): string | undefined {
   }
   // No lane and no listing — there is no default image set, so a bare
   // invocation is a usage error naming the three ways in.
-  if (
-    !hasImage &&
-    !hasRepoRoot &&
-    !hasDockerfile &&
-    !hasBuiltImage &&
-    !hasListDockerfiles
-  ) {
+  if (!hasImage && !hasRepoRoot && !hasDockerfile && !hasListDockerfiles) {
     return (
       "generate-docker-sbom requires one lane: --dockerfile <path>... (build " +
       "named Dockerfiles), --repo-root <dir> (discover + build), or --image " +
@@ -351,7 +313,6 @@ export function dockerSbomOptionsFrom(
   const hasImage = hasValues(values.image);
   const hasRepoRoot = values["repo-root"] !== undefined;
   const hasDockerfile = hasValues(values.dockerfile);
-  const hasBuiltImage = hasValues(values["built-image"]);
   // Discover the policy even without --policy so its `[cache] dir` steers the
   // committed-SBOM output to the same cache dir generate/check read from.
   const policyPath = values.policy ?? discoverDefaultPolicy(values);
@@ -359,7 +320,6 @@ export function dockerSbomOptionsFrom(
     ...(hasImage ? { images: values.image } : {}),
     ...(hasRepoRoot ? { repoRoot: values["repo-root"] } : {}),
     ...(hasDockerfile ? { dockerfilePaths: values.dockerfile } : {}),
-    ...(hasBuiltImage ? { builtImages: values["built-image"] } : {}),
     ...(values["list-dockerfiles"] === true ? { listDockerfiles: true } : {}),
     ...(values.exclude !== undefined ? { excludes: values.exclude } : {}),
     ...(policyPath !== undefined ? { policyPath } : {}),
@@ -454,7 +414,6 @@ async function main(argv: string[]): Promise<void> {
         image: { type: "string", multiple: true },
         dockerfile: { type: "string", multiple: true },
         "docker-os-sbom": { type: "string" },
-        "built-image": { type: "string", multiple: true },
         "list-dockerfiles": { type: "boolean", default: false },
         intensive: { type: "boolean" },
       },

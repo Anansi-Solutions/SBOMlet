@@ -40,7 +40,7 @@ import { compareCodeUnits } from "../src/model/dependencies";
 const REAL_EXEC = { ...execModule };
 
 /** The trimmed real-syft capture the scan reads back (apk + npm + pypi). */
-const FIXTURE = join(__dirname, "fixtures", "syft-built-image-trimmed.json");
+const FIXTURE = join(__dirname, "fixtures", "syft-built-trimmed.json");
 
 type ExecResult = { stdout: string; stderr: string };
 type ExecFn = (cmd: string, args: string[]) => Promise<ExecResult>;
