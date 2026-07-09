@@ -12,6 +12,7 @@
 
 import {
   copyFileSync,
+  mkdirSync,
   mkdtempSync,
   readFileSync,
   rmSync,
@@ -32,6 +33,8 @@ import {
 import * as execModule from "../src/collectors/exec";
 import { collectDockerOsSbom } from "../src/collectors/dockerOs";
 import { runGenerateDockerSbom } from "../src/pipeline/dockerSbom";
+import { imageTag } from "../src/collectors/dockerBuild";
+import { compareCodeUnits } from "../src/model/dependencies";
 
 /** Original exec export captured BEFORE any mock.module call (restore target). */
 const REAL_EXEC = { ...execModule };
@@ -362,5 +365,157 @@ describe("collectDockerOsSbom one posture (full contents, generalized digest, pr
     } finally {
       rmSync(outDir, { recursive: true, force: true });
     }
+  });
+
+  // --- Build lanes (13-03): --dockerfile and --repo-root build then scan ---
+
+  test("--dockerfile lane builds each named Dockerfile via buildx and scans the built tags, digest-less and sorted", async () => {
+    tempDir = mkdtempSync(join(tmpdir(), "licenses-docker-dockerfile-"));
+    writeFileSync(join(tempDir, "a.Dockerfile"), "FROM alpine:3.20\n");
+    writeFileSync(join(tempDir, "b.Dockerfile"), "FROM node:22-slim\n");
+    const out = join(tempDir, "docker-os.sbom.json");
+
+    await runGenerateDockerSbom({
+      dockerfilePaths: ["a.Dockerfile", "b.Dockerfile"],
+      baseDir: tempDir,
+      dockerOsSbomPath: out,
+    });
+
+    const argv = argvStrings();
+    // Each Dockerfile was built (buildx build -f <path> -t <tag> <context>).
+    expect(
+      argv.some(
+        (s) => s.includes("buildx build") && s.includes("a.Dockerfile"),
+      ),
+    ).toBe(true);
+    expect(
+      argv.some(
+        (s) => s.includes("buildx build") && s.includes("b.Dockerfile"),
+      ),
+    ).toBe(true);
+    // The two deterministic tags were scanned, digest-less (a built image has
+    // no RepoDigests), sorted by image.
+    const doc = JSON.parse(readFileSync(out, "utf8")) as {
+      dockerImages: { image: string; digest: string }[];
+    };
+    const expected = [imageTag("a.Dockerfile"), imageTag("b.Dockerfile")]
+      .sort(compareCodeUnits)
+      .map((image) => ({ image, digest: "" }));
+    expect(doc.dockerImages).toEqual(expected);
+  });
+
+  test("--dockerfile lane throws naming a missing path BEFORE any build argv is recorded", async () => {
+    tempDir = mkdtempSync(join(tmpdir(), "licenses-docker-dockerfile-"));
+    writeFileSync(join(tempDir, "real.Dockerfile"), "FROM alpine:3.20\n");
+    const out = join(tempDir, "docker-os.sbom.json");
+
+    await expect(
+      runGenerateDockerSbom({
+        dockerfilePaths: ["real.Dockerfile", "missing.Dockerfile"],
+        baseDir: tempDir,
+        dockerOsSbomPath: out,
+      }),
+    ).rejects.toThrow("missing.Dockerfile");
+    // Fail-fast: no build ran.
+    expect(argvStrings().some((s) => s.includes("buildx"))).toBe(false);
+  });
+
+  test("--repo-root lane builds each discovered Dockerfile from its DISCOVERY IDENTITY, then scans (committed-identity stability)", async () => {
+    tempDir = mkdtempSync(join(tmpdir(), "licenses-docker-discovery-"));
+    mkdirSync(join(tempDir, "svc"), { recursive: true });
+    writeFileSync(join(tempDir, "svc", "Dockerfile"), "FROM alpine:3.20\n");
+    const out = join(tempDir, "docker-os.sbom.json");
+
+    await runGenerateDockerSbom({
+      repoRoot: tempDir,
+      baseDir: tempDir,
+      dockerOsSbomPath: out,
+    });
+
+    // The build -f operand is the discovery identity string (forward-slash).
+    const argv = argvStrings();
+    expect(
+      argv.some(
+        (s) => s.includes("buildx build") && s.includes("svc/Dockerfile"),
+      ),
+    ).toBe(true);
+    // The tag scanned equals imageTag of the DISCOVERY identity — the exact
+    // string that produces today's committed sidecar identity (Pitfall 2).
+    const tag = imageTag("svc/Dockerfile");
+    const doc = JSON.parse(readFileSync(out, "utf8")) as {
+      dockerImages: { image: string; digest: string }[];
+    };
+    expect(doc.dockerImages).toEqual([{ image: tag, digest: "" }]);
+  });
+
+  test("--repo-root lane: a [docker]-ignored Dockerfile NEVER receives a build argv (Q4-new 5)", async () => {
+    tempDir = mkdtempSync(join(tmpdir(), "licenses-docker-discovery-"));
+    mkdirSync(join(tempDir, "keep"), { recursive: true });
+    mkdirSync(join(tempDir, "skip"), { recursive: true });
+    writeFileSync(join(tempDir, "keep", "Dockerfile"), "FROM alpine:3.20\n");
+    writeFileSync(join(tempDir, "skip", "Dockerfile"), "FROM node:22-slim\n");
+    writeFileSync(
+      join(tempDir, "policy.toml"),
+      '[docker]\nignore = ["skip/**"]\n',
+    );
+    const out = join(tempDir, "docker-os.sbom.json");
+
+    await runGenerateDockerSbom({
+      repoRoot: tempDir,
+      baseDir: tempDir,
+      policyPath: "policy.toml",
+      dockerOsSbomPath: out,
+    });
+
+    const argv = argvStrings();
+    expect(
+      argv.some(
+        (s) => s.includes("buildx build") && s.includes("keep/Dockerfile"),
+      ),
+    ).toBe(true);
+    // The ignored Dockerfile is never handed to a build.
+    expect(argv.some((s) => s.includes("skip/Dockerfile"))).toBe(false);
+  });
+
+  test("--repo-root lane throws (loud) when every discovered Dockerfile is [docker]-ignored — empty build set, no build", async () => {
+    tempDir = mkdtempSync(join(tmpdir(), "licenses-docker-discovery-"));
+    mkdirSync(join(tempDir, "svc"), { recursive: true });
+    writeFileSync(join(tempDir, "svc", "Dockerfile"), "FROM alpine:3.20\n");
+    writeFileSync(join(tempDir, "policy.toml"), '[docker]\nignore = ["**"]\n');
+    const out = join(tempDir, "docker-os.sbom.json");
+
+    await expect(
+      runGenerateDockerSbom({
+        repoRoot: tempDir,
+        baseDir: tempDir,
+        policyPath: "policy.toml",
+        dockerOsSbomPath: out,
+      }),
+    ).rejects.toThrow(/ignored/);
+    expect(argvStrings().some((s) => s.includes("buildx"))).toBe(false);
+  });
+
+  test("a build lane write is byte-identical on a double run (determinism, Q4-new 10)", async () => {
+    tempDir = mkdtempSync(join(tmpdir(), "licenses-docker-discovery-"));
+    mkdirSync(join(tempDir, "svc"), { recursive: true });
+    writeFileSync(join(tempDir, "svc", "Dockerfile"), "FROM alpine:3.20\n");
+    const out1 = join(tempDir, "one.sbom.json");
+    const out2 = join(tempDir, "two.sbom.json");
+
+    await runGenerateDockerSbom({
+      repoRoot: tempDir,
+      baseDir: tempDir,
+      dockerOsSbomPath: out1,
+    });
+    await runGenerateDockerSbom({
+      repoRoot: tempDir,
+      baseDir: tempDir,
+      dockerOsSbomPath: out2,
+    });
+
+    const a = readFileSync(out1, "utf8");
+    const b = readFileSync(out2, "utf8");
+    expect(a).toBe(b);
+    expect(a.includes("\r")).toBe(false);
   });
 });

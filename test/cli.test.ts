@@ -2088,7 +2088,7 @@ describe("dispatch wiring: bun branch + per-kind firstPartyNames (04.5-04)", () 
   });
 });
 
-describe("generate-docker-sbom mode contract", () => {
+describe("generate-docker-sbom three-lane contract", () => {
   /**
    * A fresh temp dir with no .sbomlet.policy.toml, passed as --base-dir so
    * discoverDefaultPolicy (invoked internally by dockerSbomOptionsFrom) never
@@ -2098,22 +2098,37 @@ describe("generate-docker-sbom mode contract", () => {
     return mkdtempSync(join(tmpdir(), "licenses-cli-docker-"));
   }
 
-  test("--dockerfile + --repo-root is NOT a conflict (anchor degradation)", () => {
-    expect(
-      dockerSbomModeConflict({
-        dockerfile: ["Dockerfile"],
-        "repo-root": ".",
-      }),
-    ).toBeUndefined();
+  // The three lanes are PAIRWISE mutually exclusive (D-01). The old union
+  // allowances (--dockerfile+--repo-root, --dockerfile+--image) are consciously
+  // INVERTED to conflicts here.
+  test("--dockerfile and --repo-root conflict, naming both flags", () => {
+    const message = dockerSbomModeConflict({
+      dockerfile: ["Dockerfile"],
+      "repo-root": ".",
+    });
+    expect(message).toBeDefined();
+    expect(message).toContain("--dockerfile");
+    expect(message).toContain("--repo-root");
   });
 
-  test("--dockerfile + --image is NOT a conflict (union)", () => {
-    expect(
-      dockerSbomModeConflict({
-        dockerfile: ["Dockerfile"],
-        image: ["postgres:18"],
-      }),
-    ).toBeUndefined();
+  test("--dockerfile and --image conflict, naming both flags", () => {
+    const message = dockerSbomModeConflict({
+      dockerfile: ["Dockerfile"],
+      image: ["postgres:18"],
+    });
+    expect(message).toBeDefined();
+    expect(message).toContain("--dockerfile");
+    expect(message).toContain("--image");
+  });
+
+  test("--repo-root and --image conflict, naming both flags", () => {
+    const message = dockerSbomModeConflict({
+      "repo-root": ".",
+      image: ["postgres:18"],
+    });
+    expect(message).toBeDefined();
+    expect(message).toContain("--repo-root");
+    expect(message).toContain("--image");
   });
 
   test("dockerSbomOptionsFrom maps a repeatable --dockerfile list to dockerfilePaths verbatim", () => {
@@ -2129,6 +2144,9 @@ describe("generate-docker-sbom mode contract", () => {
     }
   });
 
+  // The --built-image bridge is an image-lane alias; it obeys lane exclusivity,
+  // conflicting with every lane flag (built+repo-root is INVERTED from the old
+  // anchor-degradation allowance). It survives alone for one more push (13-04).
   test("--built-image and --image conflict, naming both flags", () => {
     const message = dockerSbomModeConflict({
       "built-image": ["myapp:ci"],
@@ -2149,19 +2167,20 @@ describe("generate-docker-sbom mode contract", () => {
     expect(message).toContain("--dockerfile");
   });
 
-  test("--built-image alone is NOT a conflict", () => {
-    expect(
-      dockerSbomModeConflict({
-        "built-image": ["myapp:ci"],
-      }),
-    ).toBeUndefined();
+  test("--built-image and --repo-root conflict, naming both flags (INVERTED bridge exclusivity)", () => {
+    const message = dockerSbomModeConflict({
+      "built-image": ["myapp:ci"],
+      "repo-root": ".",
+    });
+    expect(message).toBeDefined();
+    expect(message).toContain("--built-image");
+    expect(message).toContain("--repo-root");
   });
 
-  test("--built-image + --repo-root is NOT a conflict (anchor degradation)", () => {
+  test("--built-image alone is NOT a conflict (the bridge survives until 13-04)", () => {
     expect(
       dockerSbomModeConflict({
         "built-image": ["myapp:ci"],
-        "repo-root": ".",
       }),
     ).toBeUndefined();
   });
@@ -2179,6 +2198,8 @@ describe("generate-docker-sbom mode contract", () => {
     }
   });
 
+  // --list-dockerfiles is discovery-listing support: it never combines with a
+  // build/scan lane and REQUIRES --repo-root.
   test("--list-dockerfiles and --image conflict", () => {
     const message = dockerSbomModeConflict({
       "list-dockerfiles": true,
@@ -2229,8 +2250,17 @@ describe("generate-docker-sbom mode contract", () => {
       }),
     ).toBeUndefined();
   });
-});
 
+  // DEFAULT_IMAGES is gone: a bare invocation (no lane, no listing) is a usage
+  // error naming the three lanes, never a silent default scan.
+  test("a bare invocation (no lane, no listing) is a usage error naming the three lanes", () => {
+    const message = dockerSbomModeConflict({});
+    expect(message).toBeDefined();
+    expect(message).toContain("--dockerfile");
+    expect(message).toContain("--repo-root");
+    expect(message).toContain("--image");
+  });
+});
 describe("optionsFrom --intensive threading (10-05, D-07 absent-not-false)", () => {
   test("intensive absent from CliValues leaves options.intensive ABSENT (own-property, not false)", () => {
     const options = optionsFrom({});

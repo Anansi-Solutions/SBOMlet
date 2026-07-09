@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, test } from "bun:test";
 
-import { MAX_DOCKERFILE_BYTES } from "../src/collectors/dockerfile";
+import { imageTag } from "../src/collectors/dockerBuild";
 import { resolveTargetedDockerfiles } from "../src/pipeline/dockerSbom";
 
 const tempRoots: string[] = [];
@@ -28,79 +28,71 @@ afterEach(() => {
   }
 });
 
-describe("resolveTargetedDockerfiles (targeted mode, NO docker)", () => {
-  test("derives the shipped base of each named Dockerfile, deduped and sorted", () => {
+describe("resolveTargetedDockerfiles (targeted build lane, NO docker, NO file reads)", () => {
+  test("builds each named Dockerfile to its own deterministic tag, sorted by identity", () => {
     const root = makeTempRoot();
+    // Two files with the SAME FROM: there is no base derivation any more, so
+    // each named Dockerfile is a DISTINCT build input (no base dedup).
     const a = writeFile(root, "backend/Dockerfile", "FROM node:22-slim\n");
     const b = writeFile(root, "frontend/Dockerfile", "FROM node:22-slim\n");
     const c = writeFile(root, "db/Dockerfile", "FROM postgres:18\n");
 
-    const { images } = resolveTargetedDockerfiles([
+    const { build } = resolveTargetedDockerfiles([
       { identity: "backend/Dockerfile", path: a },
       { identity: "frontend/Dockerfile", path: b },
       { identity: "db/Dockerfile", path: c },
     ]);
-    // node:22-slim deduped across the two Dockerfiles; sorted by code units.
-    expect(images).toEqual(["node:22-slim", "postgres:18"]);
-  });
-
-  test("explicit --image refs are unioned and deduped with the derived bases", () => {
-    const root = makeTempRoot();
-    const a = writeFile(root, "app/Dockerfile", "FROM node:22-slim\n");
-
-    const { images } = resolveTargetedDockerfiles(
-      [{ identity: "app/Dockerfile", path: a }],
-      { extraImages: ["postgres:18", "node:22-slim"] },
-    );
-    expect(images).toEqual(["node:22-slim", "postgres:18"]);
-  });
-
-  test("scratch and unresolved Dockerfiles contribute no image", () => {
-    const root = makeTempRoot();
-    const a = writeFile(root, "app/Dockerfile", "FROM alpine:3.20\n");
-    const s = writeFile(root, "empty/Dockerfile", "FROM scratch\n");
-    const u = writeFile(root, "broken/Dockerfile", "FROM ${UNSET}\n");
-
-    const { images } = resolveTargetedDockerfiles([
-      { identity: "app/Dockerfile", path: a },
-      { identity: "empty/Dockerfile", path: s },
-      { identity: "broken/Dockerfile", path: u },
+    // Sorted by identity; each file → its own imageTag (no base collapse).
+    expect(build.map((x) => x.identity)).toEqual([
+      "backend/Dockerfile",
+      "db/Dockerfile",
+      "frontend/Dockerfile",
     ]);
-    expect(images).toEqual(["alpine:3.20"]);
+    expect(build.map((x) => x.tag)).toEqual([
+      imageTag("backend/Dockerfile"),
+      imageTag("db/Dockerfile"),
+      imageTag("frontend/Dockerfile"),
+    ]);
   });
 
-  test("the summary names each targeted file and its resolved base / scratch / unresolved", () => {
+  test("a repeated identity collapses to a single build (dedup by identity)", () => {
     const root = makeTempRoot();
     const a = writeFile(root, "app/Dockerfile", "FROM alpine:3.20\n");
-    const s = writeFile(root, "empty/Dockerfile", "FROM scratch\n");
-    const u = writeFile(root, "broken/Dockerfile", "FROM ${UNSET}\n");
+
+    const { build } = resolveTargetedDockerfiles([
+      { identity: "app/Dockerfile", path: a },
+      { identity: "app/Dockerfile", path: a },
+    ]);
+    expect(build.map((x) => x.identity)).toEqual(["app/Dockerfile"]);
+  });
+
+  test("the summary names each targeted file, its build tag, and the build set", () => {
+    const root = makeTempRoot();
+    const a = writeFile(root, "app/Dockerfile", "FROM alpine:3.20\n");
+    const b = writeFile(root, "db/Dockerfile", "FROM postgres:18\n");
 
     const { summary } = resolveTargetedDockerfiles([
       { identity: "app/Dockerfile", path: a },
-      { identity: "empty/Dockerfile", path: s },
-      { identity: "broken/Dockerfile", path: u },
+      { identity: "db/Dockerfile", path: b },
     ]);
-    expect(summary).toContain("targeted 3 Dockerfile(s):");
-    expect(summary).toContain("app/Dockerfile: alpine:3.20");
-    expect(summary).toContain("empty/Dockerfile: scratch");
-    expect(summary).toContain("broken/Dockerfile: unresolved:");
-    expect(summary).toContain("scan set (1): alpine:3.20");
+    expect(summary).toContain("building 2 targeted Dockerfile(s):");
+    expect(summary).toContain(
+      `app/Dockerfile -> ${imageTag("app/Dockerfile")}`,
+    );
+    expect(summary).toContain(`db/Dockerfile -> ${imageTag("db/Dockerfile")}`);
+    expect(summary).toContain("build set (2):");
   });
 
-  test("an empty scan set is announced (every file is scratch/unresolved)", () => {
-    const root = makeTempRoot();
-    const s = writeFile(root, "empty/Dockerfile", "FROM scratch\n");
-
-    const { images, summary } = resolveTargetedDockerfiles([
-      { identity: "empty/Dockerfile", path: s },
-    ]);
-    expect(images).toEqual([]);
-    expect(summary).toContain("scan set is EMPTY");
+  test("an empty targeted list yields an empty build set, announced", () => {
+    const { build, summary } = resolveTargetedDockerfiles([]);
+    expect(build).toEqual([]);
+    expect(summary).toContain("build set is EMPTY");
   });
 
-  test("the identity is routed through sanitizeForLog (control char neutralized)", () => {
+  test("the identity is routed through sanitizeForLog in the per-file line (control char neutralized)", () => {
     // --dockerfile input is caller-supplied, so a crafted identity carrying a
-    // control char must not reach the stderr summary verbatim.
+    // control char must not reach the stderr summary verbatim. The path is a
+    // real file (fail-fast checks existence); only the identity is crafted.
     const root = makeTempRoot();
     const a = writeFile(root, "app/Dockerfile", "FROM alpine:3.20\n");
     const craftedIdentity = `app${String.fromCharCode(7)}/Dockerfile`; // embedded BEL
@@ -109,62 +101,40 @@ describe("resolveTargetedDockerfiles (targeted mode, NO docker)", () => {
       { identity: craftedIdentity, path: a },
     ]);
     expect(summary).not.toContain(String.fromCharCode(7));
-    expect(summary).toContain("app /Dockerfile: alpine:3.20");
+    expect(summary).toContain(
+      `app /Dockerfile -> ${imageTag(craftedIdentity)}`,
+    );
   });
 
-  test("#8: an empty/whitespace/dash-prefixed extraImage is never added to the scan set", () => {
+  test("WR-07: the build-set summary line also routes the identity through sanitizeForLog", () => {
+    // Parity with the per-file line above: the `build set (N): ...` line joins
+    // the SAME caller-supplied identities, so a control char must not reach
+    // stderr verbatim there either.
     const root = makeTempRoot();
     const a = writeFile(root, "app/Dockerfile", "FROM alpine:3.20\n");
+    const craftedIdentity = `app${String.fromCharCode(7)}/Dockerfile`; // embedded BEL
 
-    const { images } = resolveTargetedDockerfiles(
-      [{ identity: "app/Dockerfile", path: a }],
-      { extraImages: ["", "   ", "-rf", "--quiet", "postgres:18"] },
-    );
-    expect(images).toEqual(["alpine:3.20", "postgres:18"]);
+    const { summary } = resolveTargetedDockerfiles([
+      { identity: craftedIdentity, path: a },
+    ]);
+    const buildSetLine = summary
+      .split("\n")
+      .find((l) => l.includes("build set"));
+    expect(buildSetLine).toBeDefined();
+    expect(buildSetLine).not.toContain(String.fromCharCode(7));
+    expect(buildSetLine).toContain("app /Dockerfile");
   });
 
-  test("WR-07: the scan set summary line routes refs through sanitizeForLog", () => {
-    // Same invariant as the discovery-mode summary: refs joined into the
-    // `scan set (N): ...` line must be sanitized, not just the
-    // `(explicit --image: ...)` line.
+  test("a missing/unreadable targeted path throws naming the path BEFORE any build (caller typo, fail fast)", () => {
     const root = makeTempRoot();
-    const a = writeFile(root, "app/Dockerfile", "FROM alpine:3.20\n");
-    const crafted = `evil${String.fromCharCode(7)}:1.0`; // embedded BEL (U+0007)
-    const { summary } = resolveTargetedDockerfiles(
-      [{ identity: "app/Dockerfile", path: a }],
-      { extraImages: [crafted] },
-    );
-    const scanSetLine = summary.split("\n").find((l) => l.includes("scan set"));
-    expect(scanSetLine).toBeDefined();
-    expect(scanSetLine).not.toContain(String.fromCharCode(7));
-    expect(scanSetLine).toContain("evil :1.0");
-  });
-
-  test("a missing/unreadable targeted path throws naming the path (caller typo, fail fast)", () => {
-    const root = makeTempRoot();
+    const real = writeFile(root, "real/Dockerfile", "FROM alpine:3.20\n");
     const missing = join(root, "nope", "Dockerfile");
 
     expect(() =>
       resolveTargetedDockerfiles([
+        { identity: "real/Dockerfile", path: real },
         { identity: "nope/Dockerfile", path: missing },
       ]),
     ).toThrow(missing);
-  });
-
-  test("an oversized Dockerfile loud-skips as unresolved rather than being parsed", () => {
-    const root = makeTempRoot();
-    // One byte over the cap — never read, surfaced unresolved in the summary.
-    const big = writeFile(
-      root,
-      "huge/Dockerfile",
-      "x".repeat(MAX_DOCKERFILE_BYTES + 1),
-    );
-
-    const { images, summary } = resolveTargetedDockerfiles([
-      { identity: "huge/Dockerfile", path: big },
-    ]);
-    expect(images).toEqual([]);
-    expect(summary).toContain("huge/Dockerfile: unresolved:");
-    expect(summary).toContain("size cap");
   });
 });

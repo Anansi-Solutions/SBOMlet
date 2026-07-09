@@ -72,31 +72,21 @@ const USAGE =
   "the stored license (run before a release/audit, or when the cache changes).\n" +
   "           exit codes: 0 all match, 1 at least one mismatch, 3 tool/network " +
   "error\n" +
-  "  generate-docker-sbom (--image <ref>... | " +
-  "--built-image <ref>... | --list-dockerfiles --repo-root <dir> | " +
-  "--repo-root <dir> [--policy <file>] [--exclude <glob>]... [--image <ref>]... | " +
-  "--dockerfile <path>... [--image <ref>]...) " +
+  "  generate-docker-sbom (--dockerfile <path>... | " +
+  "--repo-root <dir> [--policy <file>] [--exclude <glob>]... | " +
+  "--image <ref>... | --list-dockerfiles --repo-root <dir>) " +
   "[--docker-os-sbom <path>] [--base-dir <path>] [--verbose]\n" +
-  "           Writes the committed docker-os.sbom.json. FOUR modes:\n" +
-  "           --image <ref>...: MAINTAINER-ONLY, REQUIRES A DOCKER DAEMON — " +
-  "scans the image set (default: the documented image set) with the pinned " +
-  "syft and digest-pins each.\n" +
-  "           --repo-root <dir>: DISCOVERY — walks the repo for Dockerfiles, " +
-  "derives each shipped FROM base image, and scans the resolved bases (union " +
-  "with any explicit --image). --policy reads [docker] ignore globs; scratch/" +
-  "unresolved/ignored Dockerfiles contribute no image. Derives the BASE image's " +
-  "OS packages only (not the Dockerfile's own RUN apt/apk installs).\n" +
-  "           --dockerfile <path>...: TARGETED — same derive+scan as discovery " +
-  "but over an explicit Dockerfile list instead of a repo walk (union with any " +
-  "explicit --image). --repo-root, if also given, is only the cache-dir anchor.\n" +
-  "           --built-image <ref>...: BUILT-IMAGE — scans locally built, " +
-  "never-pushed images (full contents: application + OS layers); records " +
-  'each ref digest-less in the sidecar ({image, digest: ""}); local ' +
-  "tags only.\n" +
+  "           Writes the committed docker-os.sbom.json. MAINTAINER-ONLY, " +
+  "REQUIRES A DOCKER DAEMON. THREE mutually exclusive lanes:\n" +
+  "           --dockerfile <path>...: build each explicitly named Dockerfile " +
+  "to a deterministic tag, then scan the built image (full contents).\n" +
+  "           --repo-root <dir>: discover the repo's Dockerfiles (policy-aware, " +
+  "[docker] ignore + --exclude honored), build each, then scan.\n" +
+  "           --image <ref>...: scan pre-existing image refs with the pinned " +
+  "syft, pulling any ref that is absent locally and digest-pinning each.\n" +
   "           --list-dockerfiles --repo-root <dir>: print the discovered " +
-  "Dockerfile paths (policy-aware, [docker] ignore honored) one per line " +
-  "and exit — scans nothing, writes nothing; the Docker-scan workflow's " +
-  "default build set.\n" +
+  "Dockerfile paths (policy-aware) one per line and exit — scans nothing, " +
+  "writes nothing; the Docker-scan workflow's default build set.\n" +
   "           generate/check NEVER touch docker — they read the committed bytes " +
   "this writes (offline contract).\n";
 
@@ -155,21 +145,22 @@ interface CliValues {
    */
   "scancode-cache"?: string;
   verbose?: boolean;
-  /** Repeatable --image refs for generate-docker-sbom (the live-scan set). */
+  /** Repeatable --image refs for generate-docker-sbom (the image lane). */
   image?: string[];
   /**
-   * Repeatable --dockerfile paths for generate-docker-sbom (targeted mode):
-   * derive + scan the shipped base of each named Dockerfile instead of walking
-   * the repo. Base-dir-resolved.
+   * Repeatable --dockerfile paths for generate-docker-sbom (the targeted build
+   * lane): build the shipped image of each named Dockerfile and scan it.
+   * Base-dir-resolved.
    */
   dockerfile?: string[];
   /** generate-docker-sbom output path; base-dir-resolved like every artifact. */
   "docker-os-sbom"?: string;
   /**
-   * Repeatable --built-image refs for generate-docker-sbom: BUILT-IMAGE mode.
-   * Scans locally built, never-pushed tags full-contents and digest-less (the
-   * built posture); the Docker-scan CI workflow is the consumer. Local tags
-   * only.
+   * TEMPORARY --built-image bridge for generate-docker-sbom: an alias into the
+   * image lane, kept for one more push so the Docker-scan CI workflow's current
+   * invocation stays green while this wave touches the dockerfile*-prefixed
+   * files that trigger it. Removed in 13-04 with the workflow flip. Not one of
+   * the three lanes.
    */
   "built-image"?: string[];
   /**
@@ -239,17 +230,17 @@ export function optionsFrom(values: CliValues): GenerateOptions {
 
 /**
  * Compute the first generate-docker-sbom mode-conflict message, or undefined
- * when the requested mode combination is valid. EXACTLY one of --image (live
- * scan) / --built-image (built posture) may be active. --dockerfile MAY
- * combine with --repo-root (the latter then serves only as the cache-dir
- * anchor) and with --image (union). --built-image is EXPLICIT and stand-alone:
- * never combined with --image or --dockerfile; it MAY combine with --repo-root
- * (anchor degradation, same as --dockerfile).
- * --list-dockerfiles never combines with any scan mode and REQUIRES
- * --repo-root (the walk root the listing reads). Pair checks are walked as a
- * table rather than an if-ladder to keep this function under the complexity
- * bound as the mode count grows. Extracted from dockerSbomOptionsFrom to keep
- * that function under the complexity bound.
+ * when the requested lane combination is valid. THE THREE LANES ARE PAIRWISE
+ * MUTUALLY EXCLUSIVE (D-01): exactly one of --dockerfile (build named
+ * Dockerfiles) / --repo-root (discover + build) / --image (scan pre-existing
+ * images). The temporary --built-image bridge is an image-lane alias and obeys
+ * the same exclusivity (it conflicts with every lane flag). --list-dockerfiles
+ * is discovery-listing support: it never combines with a build/scan lane and
+ * REQUIRES --repo-root (the walk root the listing reads). A bare invocation —
+ * no lane, no listing — is a usage error naming the three lanes: there is no
+ * default image set. Pair checks are walked as a table rather than an if-ladder
+ * to keep this function under the complexity bound. Extracted from
+ * dockerSbomOptionsFrom to keep that function under the complexity bound.
  */
 export function dockerSbomModeConflict(values: CliValues): string | undefined {
   const hasImage = values.image !== undefined && values.image.length > 0;
@@ -260,16 +251,9 @@ export function dockerSbomModeConflict(values: CliValues): string | undefined {
     values["built-image"] !== undefined && values["built-image"].length > 0;
   const hasListDockerfiles = values["list-dockerfiles"] === true;
   const pairs: Array<[boolean, boolean, string]> = [
-    [
-      hasBuiltImage,
-      hasImage,
-      "--built-image (built) and --image (live scan) are mutually exclusive",
-    ],
-    [
-      hasBuiltImage,
-      hasDockerfile,
-      "--built-image (built) and --dockerfile (targeted) are mutually exclusive",
-    ],
+    // --list-dockerfiles never combines with a build/scan lane (checked first so
+    // the message names --list-dockerfiles even when --repo-root is also set as
+    // its required walk root).
     [
       hasListDockerfiles,
       hasImage,
@@ -285,12 +269,62 @@ export function dockerSbomModeConflict(values: CliValues): string | undefined {
       hasBuiltImage,
       "--list-dockerfiles and --built-image are mutually exclusive",
     ],
+    // The three lanes are pairwise mutually exclusive (D-01) — choose one way in.
+    [
+      hasDockerfile,
+      hasRepoRoot,
+      "--dockerfile (build named Dockerfiles) and --repo-root (discover + " +
+        "build) are mutually exclusive — choose one lane",
+    ],
+    [
+      hasDockerfile,
+      hasImage,
+      "--dockerfile (build named Dockerfiles) and --image (scan pre-existing " +
+        "images) are mutually exclusive — choose one lane",
+    ],
+    [
+      hasRepoRoot,
+      hasImage,
+      "--repo-root (discover + build) and --image (scan pre-existing images) " +
+        "are mutually exclusive — choose one lane",
+    ],
+    // The --built-image bridge is an image-lane alias; it obeys lane exclusivity.
+    [
+      hasBuiltImage,
+      hasImage,
+      "--built-image and --image are mutually exclusive",
+    ],
+    [
+      hasBuiltImage,
+      hasDockerfile,
+      "--built-image and --dockerfile are mutually exclusive",
+    ],
+    [
+      hasBuiltImage,
+      hasRepoRoot,
+      "--built-image and --repo-root are mutually exclusive",
+    ],
   ];
   for (const [left, right, message] of pairs) {
     if (left && right) return message;
   }
   if (hasListDockerfiles && !hasRepoRoot) {
     return "--list-dockerfiles requires --repo-root <dir>";
+  }
+  // No lane and no listing — there is no default image set, so a bare
+  // invocation is a usage error naming the three ways in.
+  if (
+    !hasImage &&
+    !hasRepoRoot &&
+    !hasDockerfile &&
+    !hasBuiltImage &&
+    !hasListDockerfiles
+  ) {
+    return (
+      "generate-docker-sbom requires one lane: --dockerfile <path>... (build " +
+      "named Dockerfiles), --repo-root <dir> (discover + build), or --image " +
+      "<ref>... (scan pre-existing images)"
+    );
   }
   return undefined;
 }
@@ -301,13 +335,11 @@ function hasValues(list: string[] | undefined): boolean {
 }
 
 /**
- * Assemble the generate-docker-sbom options. The repeatable --image flags are
- * the configurable image set; when none are passed, runGenerateDockerSbom
- * falls back to its documented default image set (the defaults live in
- * the dogfood layer, never in core — the independence constraint). Mode-flag
- * computation is routed through {@link hasValues} (rather than an inline
- * `!== undefined && .length > 0` per flag) to keep this function under the
- * complexity bound as the mode count grows.
+ * Assemble the generate-docker-sbom options for one of the three lanes. The
+ * lane exclusivity is validated first via {@link dockerSbomModeConflict} (a bad
+ * combination, or a bare no-lane invocation, exits 3 with the usage). Mode-flag
+ * computation is routed through {@link hasValues} to keep this function under
+ * the complexity bound.
  */
 export function dockerSbomOptionsFrom(
   values: CliValues,

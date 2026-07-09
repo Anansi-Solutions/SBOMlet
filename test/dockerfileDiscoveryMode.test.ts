@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, test } from "bun:test";
 
+import { imageTag } from "../src/collectors/dockerBuild";
 import {
   dockerfileListing,
   resolveDiscoveredImages,
@@ -30,112 +31,68 @@ afterEach(() => {
   }
 });
 
-describe("resolveDiscoveredImages (discovery mode, NO docker)", () => {
-  test("a [docker] ignore'd dev Dockerfile contributes NO image; only the app base is scanned", () => {
+describe("resolveDiscoveredImages (discovery build lane, NO docker, NO file reads)", () => {
+  test("a [docker]-ignored Dockerfile is NEVER in the build set", () => {
     const root = makeTempRoot();
     writeFile(root, "backend/Dockerfile", "FROM node:22-slim\n");
     writeFile(root, "docker/dev/Dockerfile", "FROM ubuntu:24.04\n");
 
-    const { images } = resolveDiscoveredImages(root, {
+    const { build } = resolveDiscoveredImages(root, {
       dockerIgnore: ["docker/dev/**"],
     });
-    expect(images).toEqual(["node:22-slim"]);
+    // Every discovered (non-ignored) Dockerfile is a build input; the ignored
+    // one contributes no build entry (T-13-10 name-pattern-only contract).
+    expect(build.map((b) => b.identity)).toEqual(["backend/Dockerfile"]);
+    expect(build.map((b) => b.tag)).toEqual([imageTag("backend/Dockerfile")]);
   });
 
-  test("explicit --image refs are unioned and deduped with discovered bases", () => {
-    const root = makeTempRoot();
-    writeFile(root, "backend/Dockerfile", "FROM node:22-slim\n");
-    writeFile(root, "frontend/Dockerfile", "FROM node:22-slim\n");
-
-    const { images } = resolveDiscoveredImages(root, {
-      extraImages: ["postgres:18", "node:22-slim"],
-    });
-    // node:22-slim deduped across the two Dockerfiles AND the explicit flag.
-    expect(images).toEqual(["node:22-slim", "postgres:18"]);
-  });
-
-  test("scratch and unresolved Dockerfiles contribute no image", () => {
+  test("the summary names found Dockerfiles, their build tags, the ignored, and the build set", () => {
     const root = makeTempRoot();
     writeFile(root, "app/Dockerfile", "FROM alpine:3.20\n");
-    writeFile(root, "empty/Dockerfile", "FROM scratch\n");
-    writeFile(root, "broken/Dockerfile", "FROM ${UNSET}\n");
-
-    const { images } = resolveDiscoveredImages(root);
-    expect(images).toEqual(["alpine:3.20"]);
-  });
-
-  test("the summary names found, ignored, resolved bases, scratch and unresolved", () => {
-    const root = makeTempRoot();
-    writeFile(root, "app/Dockerfile", "FROM alpine:3.20\n");
-    writeFile(root, "empty/Dockerfile", "FROM scratch\n");
-    writeFile(root, "broken/Dockerfile", "FROM ${UNSET}\n");
+    writeFile(root, "svc/build.dockerfile", "FROM postgres:18\n");
     writeFile(root, "docker/dev/Dockerfile", "FROM ubuntu:24.04\n");
 
     const { summary } = resolveDiscoveredImages(root, {
       dockerIgnore: ["docker/dev/**"],
     });
-    expect(summary).toContain("app/Dockerfile");
-    expect(summary).toContain("alpine:3.20");
-    expect(summary).toContain("scratch");
-    expect(summary).toContain("unresolved");
-    // The ignored dev Dockerfile is named as ignored.
+    // Found files with their deterministic build tags.
+    expect(summary).toContain(
+      `app/Dockerfile -> ${imageTag("app/Dockerfile")}`,
+    );
+    expect(summary).toContain(
+      `svc/build.dockerfile -> ${imageTag("svc/build.dockerfile")}`,
+    );
+    // The ignored dev Dockerfile is named as ignored, never built.
     expect(summary).toContain("docker/dev/Dockerfile");
+    expect(summary).toContain("ignored");
+    // The build set line enumerates the tags to build.
+    expect(summary).toContain("build set (2):");
   });
 
-  test("finding #3: explicit --image refs are routed through sanitizeForLog in the summary", () => {
-    // The summary line interpolating the explicit --image refs must sanitize
-    // control characters (parity with the repoRoot line, which already uses
-    // sanitizeForLog). A crafted ref carrying a control char must not appear
-    // verbatim in the summary.
+  test("--exclude prunes a Dockerfile from the build set", () => {
     const root = makeTempRoot();
-    writeFile(root, "app/Dockerfile", "FROM alpine:3.20\n");
-    const crafted = `evil${String.fromCharCode(7)}:1.0`; // embedded BEL (U+0007)
-    const { summary } = resolveDiscoveredImages(root, {
-      extraImages: [crafted, "postgres:18"],
+    writeFile(root, "backend/Dockerfile", "FROM node:22-slim\n");
+    writeFile(root, "legacy/Dockerfile", "FROM node:18\n");
+
+    const { build } = resolveDiscoveredImages(root, {
+      excludes: ["legacy/**"],
     });
-    const explicitLine = summary
-      .split("\n")
-      .find((l) => l.includes("explicit --image"));
-    expect(explicitLine).toBeDefined();
-    // The explicit --image summary line must NOT contain the raw control char…
-    expect(explicitLine).not.toContain(String.fromCharCode(7));
-    // …but the sanitized form (control char → space) is present, alongside the
-    // clean postgres:18 ref.
-    expect(explicitLine).toContain("evil :1.0");
-    expect(explicitLine).toContain("postgres:18");
+    expect(build.map((b) => b.identity)).toEqual(["backend/Dockerfile"]);
   });
 
-  test("#8: an empty/whitespace/dash-prefixed extraImage is never added to the scan set", () => {
+  test("an all-ignored tree yields an EMPTY build set, announced in the summary", () => {
     const root = makeTempRoot();
-    writeFile(root, "app/Dockerfile", "FROM alpine:3.20\n");
-    // Defense-in-depth: even if a hostile/garbage explicit --image ref reaches
-    // here, an empty, whitespace-only, or dash-prefixed ref is dropped — never
-    // forwarded to syft as an operand (which could be parsed as a flag).
-    const { images } = resolveDiscoveredImages(root, {
-      extraImages: ["", "   ", "-rf", "--quiet", "postgres:18"],
-    });
-    expect(images).toEqual(["alpine:3.20", "postgres:18"]);
-  });
+    writeFile(root, "svc/Dockerfile", "FROM alpine:3.20\n");
 
-  test("WR-07: the scan set summary line routes refs through sanitizeForLog", () => {
-    // Parity with the finding-#3 fix above: the `scan set (N): ...` line
-    // joins the SAME refs, so a control char that passes isSafeImageRef
-    // (non-empty, non-dash-prefixed) must not reach stderr verbatim there
-    // either.
-    const root = makeTempRoot();
-    writeFile(root, "app/Dockerfile", "FROM alpine:3.20\n");
-    const crafted = `evil${String.fromCharCode(7)}:1.0`; // embedded BEL (U+0007)
-    const { summary } = resolveDiscoveredImages(root, {
-      extraImages: [crafted],
+    const { build, summary } = resolveDiscoveredImages(root, {
+      dockerIgnore: ["**"],
     });
-    const scanSetLine = summary.split("\n").find((l) => l.includes("scan set"));
-    expect(scanSetLine).toBeDefined();
-    expect(scanSetLine).not.toContain(String.fromCharCode(7));
-    expect(scanSetLine).toContain("evil :1.0");
+    expect(build).toEqual([]);
+    expect(summary).toContain("build set is EMPTY");
   });
 });
 
-describe("safeLiveScanImages (PURE live-scan --image hardening, finding #5)", () => {
+describe("safeLiveScanImages (image-lane ref hardening, #5/#8)", () => {
   test("drops empty/whitespace/dash-prefixed refs before they reach syft", () => {
     expect(
       safeLiveScanImages(["", "   ", "-rf", "--image", "postgres:18"]),
@@ -183,10 +140,10 @@ describe("runGenerateDockerSbom (--list-dockerfiles API invariant)", () => {
     // The CLI conflict table pairs --list-dockerfiles with --repo-root at the
     // flag surface, but runGenerateDockerSbom is a public export: a
     // programmatic caller passing { listDockerfiles: true } alone must hit the
-    // same invariant at the API boundary -- never fall through the mode
-    // ladder into the default live scan (which would spawn docker/syft and
-    // overwrite the committed SBOM). The temp baseDir/output confine any
-    // regression to this test's sandbox.
+    // same invariant at the API boundary -- never fall through into a
+    // build/scan lane (which would spawn docker/syft and overwrite the
+    // committed SBOM). The temp baseDir/output confine any regression to this
+    // test's sandbox.
     const root = makeTempRoot();
     await expect(
       runGenerateDockerSbom({
