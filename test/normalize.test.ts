@@ -1795,6 +1795,26 @@ describe("annotateFindings — scancode senior assessment (12-01 relock of the 1
     });
   });
 
+  test("resolution (guarded): a staleness-GUARDED clarify (expects present and matched) that applies STILL clears the conflict marker — the guarded-apply path, not only the blind path, drops it (worked example: registry MIT vs scancode BSD-3-Clause)", () => {
+    const entry = pkg("guarded-clarified-pkg", "1.0.0", [
+      claim("MIT"),
+      scancodeClaim("BSD-3-Clause"),
+    ]);
+    const clarify: ClarifyInput[] = [
+      {
+        name: "guarded-clarified-pkg",
+        expects: "MIT",
+        expression: "BSD-3-Clause",
+      },
+    ];
+    const { model } = annotateFindings(modelOf(entry), clarify);
+    const finding = model.packages[0]!.finding!;
+    expect(finding.source).toBe("override");
+    expect(finding.expression).toBe("BSD-3-Clause");
+    expect(finding.conflict).toBeUndefined();
+    expect(finding.staleOverride).toBeUndefined();
+  });
+
   test("deny visibility: a scancode win never drops the quick-check members from observedExpressions — a denied license present only in a non-scancode claim stays visible to the deny terminal", () => {
     const entry = pkg("deny-visible-pkg", "1.0.0", [
       claim("BUSL-1.1 OR MIT", "expression"),

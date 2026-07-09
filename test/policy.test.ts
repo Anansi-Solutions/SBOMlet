@@ -1490,6 +1490,85 @@ describe("evaluate — conflict:scancode fail verdict (SCAN-05)", () => {
   });
 });
 
+// ===========================================================================
+// SCAN-05 (12-02, Task 2): the [[clarify]] resolution path, end to end. The
+// conflict machinery (marker set in 12-01, verdict in Task 1) is cleared by a
+// human decision recorded as a clarify override — the SCAN-05 "documented
+// resolution path" (cited by the 12-06 docs). Worked example from research Q2:
+// the declared/registry quick check reads MIT; the in-depth ScanCode assessment
+// reads BSD-3-Clause. These are verdict-level proofs; the annotate-level marker
+// semantics are locked in normalize.test.ts.
+// ===========================================================================
+
+describe("evaluate — conflict:scancode resolution via [[clarify]] (SCAN-05)", () => {
+  // The human's recorded call: "I still expect the quick check to read MIT, and
+  // I decide the license IS BSD-3-Clause (the in-depth scan is right)." expects
+  // MIT is present in the signal and no non-expects member contradicts
+  // BSD-3-Clause, so the override APPLIES — the conflict is the human's to
+  // resolve, and it is.
+  const clarifyResolvesToScancode = [
+    "[[clarify]]",
+    'package = { name = "disputed-pkg" }',
+    'expects = "MIT"',
+    'expression = "BSD-3-Clause"',
+    'reason = "reviewed: the in-depth scan is correct"',
+  ].join("\n");
+
+  test("HEADLINE: a [[clarify]] recording the decision APPLIES, clears the conflict, and the verdict is clarify[0] ok (exit 0) — never a lingering conflict:scancode", () => {
+    const { verdicts } = runEngine(
+      [scanPkgSpec("disputed-pkg", "MIT", "BSD-3-Clause", ["backend"])],
+      clarifyResolvesToScancode,
+    );
+    expect(verdicts).toHaveLength(1);
+    expect(verdicts[0].status).toBe("ok"); // → exit 0
+    expect(verdicts[0].rule).toBe("clarify[0]");
+    expect(verdicts[0].rule).not.toBe("conflict:scancode");
+  });
+
+  test("Pitfall 5: an APPLIED override never lets a conflict marker survive into a fail — the resolved package yields no conflict verdict, deterministically across repeated runs (no permanent, un-clearable fail)", () => {
+    const run = (): Verdict[] =>
+      runEngine(
+        [scanPkgSpec("disputed-pkg", "MIT", "BSD-3-Clause", ["backend"])],
+        clarifyResolvesToScancode,
+      ).verdicts;
+    const a = run();
+    const b = run();
+    expect(a).toEqual(b);
+    expect(a.every((v) => v.rule !== "conflict:scancode")).toBe(true);
+    expect(a[0].status).toBe("ok");
+  });
+
+  test("the stale guard reopens it: after the registry relicenses away from the recorded expectation, the SAME clarify FAILS override:stale (the guard works both ways with zero new machinery)", () => {
+    // The declared/registry answer has moved from MIT to GPL-3.0-only; expects
+    // "MIT" is no longer in the signal and the standing base (GPL-3.0-only) does
+    // not satisfy the asserted BSD-3-Clause → the override is stale, fail closed,
+    // and fires above the co-present conflict.
+    const { verdicts } = runEngine(
+      [
+        scanPkgSpec("disputed-pkg", "GPL-3.0-only", "BSD-3-Clause", [
+          "backend",
+        ]),
+      ],
+      clarifyResolvesToScancode,
+    );
+    expect(verdicts[0].status).toBe("fail");
+    expect(verdicts[0].rule).toContain("override:stale");
+  });
+
+  test("determinism: a conflict with NO clarify stays a conflict:scancode fail across repeated runs — same rule, byte-identical reason (no flapping)", () => {
+    const run = (): Verdict[] =>
+      runEngine(
+        [scanPkgSpec("unresolved-pkg", "Apache-2.0", "MIT", ["backend"])],
+        "",
+      ).verdicts;
+    const a = run();
+    const b = run();
+    expect(a).toEqual(b); // byte-identical verdict incl. reason
+    expect(a[0].status).toBe("fail");
+    expect(a[0].rule).toBe("conflict:scancode");
+  });
+});
+
 describe("unusedRuleIds — stale-policy hygiene", () => {
   test("unused compatible and clarify entries are reported; suppressions never are", () => {
     const policyText = [
