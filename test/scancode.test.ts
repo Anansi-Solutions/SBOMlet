@@ -344,6 +344,93 @@ describe("scanPackageSources (subprocess-free, exec recorder harness)", () => {
     }));
   });
 
+  test("partial-file-error exit: a NON-ZERO scancode exit that still wrote a valid, version-asserted output is TOLERATED — the produced result is elected, the run is not aborted (a bundled undecodable file must not sink the whole scan)", async () => {
+    // ScanCode exits code 1 when some files fail to scan (an undecodable or
+    // oversized bundled data file) yet writes complete output for the rest.
+    const failButWroteFixture = (
+      cmd: string,
+      args: string[],
+    ): Promise<{ stdout: string; stderr: string }> => {
+      invocations.push([cmd, ...args]);
+      const i = args.indexOf("--json-pp");
+      if (i !== -1) copyFileSync(FIXTURE_PATH, args[i + 1] as string);
+      return Promise.reject(
+        new Error(
+          "scancode exited with code 1\nSome files failed to scan properly",
+        ),
+      );
+    };
+    mock.module("../src/collectors/exec", () => ({
+      ...REAL_EXEC,
+      execTool: failButWroteFixture,
+    }));
+    tempDir = mkdtempSync(join(tmpdir(), "scancode-partial-"));
+    const result = await scanPackageSources("/some/source/dir", { tempDir });
+    expect(result?.raw).toBe("MIT");
+    expect(result?.via).toBe(
+      `${SCANCODE_TOOL.name}@${SCANCODE_TOOL.version}/license-file`,
+    );
+    mock.module("../src/collectors/exec", () => ({
+      ...REAL_EXEC,
+      execTool: fakeExecTool,
+    }));
+  });
+
+  test("non-zero exit with NO output file still throws (the failure is real — tolerance requires a produced result)", async () => {
+    const failNoOutput = (
+      cmd: string,
+      args: string[],
+    ): Promise<{ stdout: string; stderr: string }> => {
+      invocations.push([cmd, ...args]);
+      return Promise.reject(new Error("scancode exited with code 1"));
+    };
+    mock.module("../src/collectors/exec", () => ({
+      ...REAL_EXEC,
+      execTool: failNoOutput,
+    }));
+    tempDir = mkdtempSync(join(tmpdir(), "scancode-fail-noout-"));
+    await expect(
+      scanPackageSources("/some/source/dir", { tempDir }),
+    ).rejects.toThrow(/exited with code 1|produced no output/);
+    mock.module("../src/collectors/exec", () => ({
+      ...REAL_EXEC,
+      execTool: fakeExecTool,
+    }));
+  });
+
+  test("non-zero exit whose output fails the tool_version assert still throws (the integrity gate survives tolerance — a substituted binary is never silently accepted)", async () => {
+    const fixture = JSON.parse(readFileSync(FIXTURE_PATH, "utf8")) as {
+      headers: { tool_version: string }[];
+      files: unknown[];
+    };
+    const wrongVersion = {
+      ...fixture,
+      headers: [{ ...fixture.headers[0], tool_version: "31.0.0" }],
+    };
+    const failWrongVersion = (
+      cmd: string,
+      args: string[],
+    ): Promise<{ stdout: string; stderr: string }> => {
+      invocations.push([cmd, ...args]);
+      const i = args.indexOf("--json-pp");
+      if (i !== -1)
+        writeFileSync(args[i + 1] as string, JSON.stringify(wrongVersion));
+      return Promise.reject(new Error("scancode exited with code 1"));
+    };
+    mock.module("../src/collectors/exec", () => ({
+      ...REAL_EXEC,
+      execTool: failWrongVersion,
+    }));
+    tempDir = mkdtempSync(join(tmpdir(), "scancode-fail-version-"));
+    await expect(
+      scanPackageSources("/some/source/dir", { tempDir }),
+    ).rejects.toThrow(/31\.0\.0.*32\.5\.0|invocation:/s);
+    mock.module("../src/collectors/exec", () => ({
+      ...REAL_EXEC,
+      execTool: fakeExecTool,
+    }));
+  });
+
   test("a shared tempDir never lets a previous scan's output masquerade as a later scan's result", async () => {
     // One caller-supplied tempDir threaded into two scans (exactly what
     // the assessment stage scan loop does when IntensiveOptions.tempDir is
