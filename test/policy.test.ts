@@ -585,6 +585,12 @@ interface PackageSpec {
   occurrences: ReadonlyArray<OccurrenceSpec>;
   /** Package-level taxonomy; defaults to "app" (COLL-04: "os" routes applyOsScope). */
   scope?: "app" | "os";
+  /**
+   * A ScanCode-sourced claim raw (12-02): appended as a { source: "scancode" }
+   * claim so annotateFindings runs applyScancodeAssessment and can attach a
+   * conflict marker. Absent = the common quick-check-only case.
+   */
+  scancode?: string;
 }
 
 /**
@@ -603,11 +609,22 @@ function makeModel(specs: ReadonlyArray<PackageSpec>): CanonicalDependencies {
           ? { target: o, isDevDependency: false }
           : { target: o.target, isDevDependency: o.dev },
       ),
-      licenseClaims: spec.claims.map((raw) => {
-        const kind: LicenseClaimKind =
-          raw.includes(" ") || raw.includes("(") ? "expression" : "spdx-id";
-        return { raw, kind, source: "generator" as const };
-      }),
+      licenseClaims: [
+        ...spec.claims.map((raw) => {
+          const kind: LicenseClaimKind =
+            raw.includes(" ") || raw.includes("(") ? "expression" : "spdx-id";
+          return { raw, kind, source: "generator" as const };
+        }),
+        ...(spec.scancode !== undefined
+          ? [
+              {
+                raw: spec.scancode,
+                kind: "expression" as const,
+                source: "scancode" as const,
+              },
+            ]
+          : []),
+      ],
       scope: spec.scope ?? "app",
     })),
   };
@@ -644,6 +661,28 @@ function pkgSpec(
     version,
     claims: claim === null ? [] : [claim],
     occurrences,
+  };
+}
+
+/**
+ * Shorthand for a package carrying a quick-check claim PLUS a scancode claim —
+ * the assessment/conflict trigger (12-02). `claim === null` means the scancode
+ * claim is the only license evidence (the vacuous-agreement case).
+ */
+function scanPkgSpec(
+  name: string,
+  claim: string | null,
+  scancode: string,
+  occurrences: ReadonlyArray<OccurrenceSpec>,
+  version = "1.0.0",
+): PackageSpec {
+  return {
+    purl: `pkg:npm/${name}@${version}`,
+    name,
+    version,
+    claims: claim === null ? [] : [claim],
+    occurrences,
+    scancode,
   };
 }
 
@@ -1366,6 +1405,88 @@ describe("evaluate — staleness-guarded overrides (POL-07)", () => {
     );
     expect(verdicts[0].status).toBe("fail");
     expect(verdicts[0].rule).toContain("override:stale");
+  });
+});
+
+// ===========================================================================
+// SCAN-05 (12-02): the conflict:scancode fail verdict. A ScanCode-vs-quick-check
+// disagreement (marker set by applyScancodeAssessment in 12-01) becomes a
+// distinct fail in verdictFor, slotted directly below stale and ABOVE
+// compatible. Fail-not-warn (D-03: human involvement is NECESSARY; a warn is
+// ignorable). Exit 1 is automatic — a "fail" verdict is a violation in
+// exitCodeFor's mapping (check.ts), no new machinery.
+// ===========================================================================
+
+describe("evaluate — conflict:scancode fail verdict (SCAN-05)", () => {
+  test("HEADLINE: a scancode assessment disagreeing with a precise declared claim FAILS conflict:scancode, naming both sides and the clarify remedy", () => {
+    const { verdicts } = runEngine(
+      [scanPkgSpec("disputed-pkg", "Apache-2.0", "MIT", ["backend"])],
+      "",
+    );
+    expect(verdicts).toHaveLength(1);
+    expect(verdicts[0].status).toBe("fail"); // → exitCodeFor violation → exit 1
+    expect(verdicts[0].rule).toBe("conflict:scancode");
+    expect(verdicts[0].reason).toContain("disputed-pkg");
+    expect(verdicts[0].reason).toContain("MIT"); // the in-depth assessment
+    expect(verdicts[0].reason).toContain("Apache-2.0"); // the quick-check answer
+    expect(verdicts[0].reason).toContain("[[clarify]]"); // the remedy
+  });
+
+  test("chain order: an entry with BOTH a stale override and a conflict fires override:stale FIRST (a stale override is strictly more urgent)", () => {
+    const policyText = [
+      "[[clarify]]",
+      'package = { name = "stale-and-conflicted" }',
+      'expects = "BSD"',
+      'expression = "MIT"',
+      'reason = "was BSD upstream"',
+    ].join("\n");
+    const { verdicts } = runEngine(
+      [scanPkgSpec("stale-and-conflicted", "Apache-2.0", "MIT", ["backend"])],
+      policyText,
+    );
+    expect(verdicts[0].status).toBe("fail");
+    expect(verdicts[0].rule).toContain("override:stale");
+    expect(verdicts[0].rule).not.toBe("conflict:scancode");
+  });
+
+  test("chain order: a denied observed member AND a conflict fires deny FIRST (deny is terminal above every lane incl. conflict)", () => {
+    const { verdicts } = runEngine(
+      [scanPkgSpec("denied-and-conflicted", "BUSL-1.1", "MIT", ["backend"])],
+      denyLicenseFixture("BUSL-1.1"),
+    );
+    expect(verdicts[0].status).toBe("fail");
+    expect(verdicts[0].rule).toBe("denied[0]");
+    expect(verdicts[0].rule).not.toBe("conflict:scancode");
+  });
+
+  test("placement ABOVE compatible: a conflict on a package whose base a compatible license rule would accept still FAILS conflict:scancode", () => {
+    // base = "Apache-2.0 AND MIT" (the AND-combine of the declared claim and the
+    // scancode claim); the compatible allowlist [Apache-2.0, MIT] satisfies it,
+    // so WITHOUT the conflict slot this would pass compatible[0]. A disputed
+    // answer must never be auto-absorbed by a compatible rule.
+    const { verdicts } = runEngine(
+      [scanPkgSpec("compat-but-disputed", "Apache-2.0", "MIT", ["backend"])],
+      licenseRuleFixture("(Apache-2.0 OR MIT)"),
+    );
+    expect(verdicts[0].status).toBe("fail");
+    expect(verdicts[0].rule).toBe("conflict:scancode");
+  });
+
+  test("no warn-bucket regression: a conflict is a fail, never a warn — and an AGREEING scancode assessment yields no conflict verdict at all", () => {
+    const conflicted = runEngine(
+      [scanPkgSpec("c-pkg", "Apache-2.0", "MIT", ["backend"])],
+      "",
+    ).verdicts;
+    expect(conflicted.every((v) => v.status !== "warn")).toBe(true);
+
+    // Agreement: scancode MIT corroborates declared MIT → scancode-sourced ok,
+    // no conflict verdict, no warn.
+    const agreed = runEngine(
+      [scanPkgSpec("agree-pkg", "MIT", "MIT", ["backend"])],
+      "",
+    ).verdicts;
+    expect(agreed.every((v) => v.rule !== "conflict:scancode")).toBe(true);
+    expect(agreed[0].status).toBe("ok");
   });
 });
 

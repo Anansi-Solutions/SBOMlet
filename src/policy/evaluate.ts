@@ -350,6 +350,40 @@ function staleVerdict(
 }
 
 /**
+ * An unresolved ScanCode-vs-quick-check disagreement (SCAN-05 / D-03) FAILS the
+ * gate. The in-depth assessment and the declared/registry answer disagree, and
+ * D-03 makes human involvement NECESSARY: a warn is ignorable, which recreates
+ * the silent-absorption failure mode the decision forbids — so this is a fail,
+ * not a warn. It sits below deny (terminal) and stale (a stale override is
+ * strictly more urgent) and ABOVE compatible (a compatible rule must never
+ * auto-absorb a disputed answer). The reason names the package, the in-depth
+ * assessed expression, the disagreeing quick-check values, and the [[clarify]]
+ * remedy; a `fail` mapped to exit 1 by the violations -> exitCodeFor mapping.
+ * The reason is plain single-line text routed through the same downstream
+ * sanitization as sibling verdicts (escapeCell in render, sanitizeForLog on
+ * stderr) — no channel of its own.
+ */
+function conflictVerdict(
+  base: { purl: string; occurrenceTarget: string },
+  entry: PackageEntry,
+  conflict: NonNullable<PackageEntry["finding"]>["conflict"],
+): Verdict {
+  const c = conflict as NonNullable<typeof conflict>;
+  const disagreeing =
+    c.disagreeing.length > 0 ? c.disagreeing.join(", ") : "(none)";
+  return {
+    ...base,
+    status: "fail",
+    rule: "conflict:scancode",
+    reason:
+      `ASSESSMENT CONFLICT on "${entry.name}@${entry.version}": the in-depth ` +
+      `ScanCode assessment found "${c.assessed}" but the declared/registry ` +
+      `answer says "${disagreeing}" — resolve via a [[clarify]] override ` +
+      `recording your decision (question the quick check, or re-assess).`,
+  };
+}
+
+/**
  * Citation for an override that fell through to the default:ok lane (POL-07).
  * A project clarify (clarifyIndexFor !== -1) keeps its "clarify[i]" citation; a
  * tool-level builtin (no clarify entry) cites the distinct "override:builtin[i]"
@@ -629,6 +663,56 @@ function unknownVerdict(
     : verdict;
 }
 
+/**
+ * Copyleft lane: a copyleft elected branch is SUPPRESSED when its occurrence
+ * sits in a family-justified suppressed workspace, otherwise it is a would-be
+ * default:copyleft FAIL routed through the scope downgraders (POL-08/COLL-04).
+ * Split out of verdictFor to keep the precedence walk within the complexity
+ * budget; the behavior is unchanged — it runs only when assessment.copyleft is
+ * true, below compatible and above the imprecise/unknown lanes.
+ */
+function copyleftVerdict(
+  base: { purl: string; occurrenceTarget: string },
+  entry: PackageEntry,
+  occurrence: Occurrence,
+  assessment: Assessment,
+  policy: Policy,
+): Verdict {
+  const target = occurrence.target;
+  const suppression = suppressionFor(target, policy);
+  if (
+    suppression !== undefined &&
+    assessment.electedNode !== null &&
+    assessment.elected !== null
+  ) {
+    const { index, rule } = suppression;
+    const justification = suppressionJustification(
+      assessment.electedNode,
+      assessment.elected,
+      rule,
+    );
+    if (justification !== undefined) {
+      return {
+        ...base,
+        status: "suppressed",
+        rule: `workspace.copyleft_suppressed[${index}]`,
+        reason: `copyleft "${assessment.elected}" suppressed in "${target}": ${justification} — workspace "${rule.path}" (${rule.description})`,
+      };
+    }
+  }
+  return applyScopeDowngrades(
+    {
+      ...base,
+      status: "fail",
+      rule: "default:copyleft",
+      reason: `copyleft license "${assessment.elected}" (from "${assessment.expression}") is not allowed in "${target}" and no compatible rule or workspace suppression applies`,
+    },
+    entry,
+    occurrence,
+    policy,
+  );
+}
+
 /** Walk the precedence chain for one (package × occurrence). */
 function verdictFor(
   entry: PackageEntry,
@@ -652,6 +736,14 @@ function verdictFor(
   const stale = entry.finding?.staleOverride;
   if (stale !== undefined) return staleVerdict(base, entry, stale);
 
+  // conflict:scancode sits directly below stale and ABOVE compatible — a fail,
+  // not a warn, because D-03 makes human involvement NECESSARY and a warn is
+  // ignorable (rationale on conflictVerdict). A stale override is strictly more
+  // urgent so it fires first; no compatible rule may auto-absorb a disputed
+  // answer, so this precedes the compatible lanes.
+  const conflict = entry.finding?.conflict;
+  if (conflict !== undefined) return conflictVerdict(base, entry, conflict);
+
   if (packageRule !== undefined) {
     const { index, rule } = packageRule;
     const pin = rule.version === undefined ? "" : `@${rule.version}`;
@@ -674,38 +766,7 @@ function verdictFor(
   }
 
   if (assessment.copyleft) {
-    const suppression = suppressionFor(target, policy);
-    if (
-      suppression !== undefined &&
-      assessment.electedNode !== null &&
-      assessment.elected !== null
-    ) {
-      const { index, rule } = suppression;
-      const justification = suppressionJustification(
-        assessment.electedNode,
-        assessment.elected,
-        rule,
-      );
-      if (justification !== undefined) {
-        return {
-          ...base,
-          status: "suppressed",
-          rule: `workspace.copyleft_suppressed[${index}]`,
-          reason: `copyleft "${assessment.elected}" suppressed in "${target}": ${justification} — workspace "${rule.path}" (${rule.description})`,
-        };
-      }
-    }
-    return applyScopeDowngrades(
-      {
-        ...base,
-        status: "fail",
-        rule: "default:copyleft",
-        reason: `copyleft license "${assessment.elected}" (from "${assessment.expression}") is not allowed in "${target}" and no compatible rule or workspace suppression applies`,
-      },
-      entry,
-      occurrence,
-      policy,
-    );
+    return copyleftVerdict(base, entry, occurrence, assessment, policy);
   }
 
   if (assessment.impreciseFamily !== undefined) {
