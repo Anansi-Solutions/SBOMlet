@@ -23,3 +23,16 @@ handling = "warn"
 # its test). Neither is a real Dockerfile; both resolve to no FROM instruction
 # and would abort a build. Excluded from the Docker-scan workflow's build set.
 ignore = ["src/collectors/dockerfile.ts", "test/dockerfile.test.ts"]
+
+# Two source-vs-registry assessment conflicts, resolved by hand.
+
+[[clarify]]
+package = { name = "spdx-ranges", version = "2.1.1" }
+expression = "(MIT AND CC-BY-3.0)"
+reason = "The npm registry declares (MIT AND CC-BY-3.0); the in-depth scan read only the root LICENSE and saw MIT, missing the CC-BY-3.0 that covers the bundled SPDX range data this package ships. I record the broader registry reading so that data obligation stays on the inventory."
+
+[[clarify]]
+package = { name = "uri-js", version = "4.4.1" }
+expects = "BSD-2-Clause"
+expression = "BSD-2-Clause-Views"
+reason = "The scan read the actual LICENSE file and found the BSD-2-Clause-Views variant: plain BSD-2-Clause plus the views-and-conclusions advertising sentence. The registry flattened it to plain BSD-2-Clause. I adopt the precise variant the file carries."

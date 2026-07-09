@@ -6,6 +6,722 @@ Attribution is grouped to avoid duplication: the per-package sections below repr
 
 ## Package attributions
 
+### @ark/schema@0.56.0
+
+License: MIT
+
+- Copyright 2025 ArkType
+
+### @ark/util@0.56.0
+
+License: MIT
+
+- Copyright 2025 ArkType
+
+### @eslint-community/eslint-utils@4.9.1
+
+License: MIT
+
+- Copyright (c) 2018 Toru Nagashima
+
+### @eslint-community/regexpp@4.12.2
+
+License: MIT
+
+- Copyright (c) 2018 Toru Nagashima
+
+### @eslint/config-array@0.23.5
+
+License: Apache-2.0
+
+- Copyright 2018-2025 the Deno authors
+
+### @eslint/js@10.0.1
+
+License: MIT
+
+- Copyright OpenJS Foundation and other contributors, &lt;www.openjsf.org&gt;
+
+### @humanwhocodes/retry@0.4.3
+
+License: Apache-2.0
+
+- Copyright (c) 2011-2023 Isaac Z. Schlueter, Ben Noordhuis, and Contributors
+
+### @package-json/types@0.0.12
+
+License: MIT
+
+- Copyright (c) 2024 Lan
+
+### @types/bun@1.3.14
+
+License: MIT
+
+- Copyright (c) Microsoft Corporation
+
+### @types/esrecurse@4.3.1
+
+License: MIT
+
+- Copyright (c) Microsoft Corporation
+
+### @types/estree@1.0.9
+
+License: MIT
+
+- Copyright (c) Microsoft Corporation
+
+### @types/json-schema@7.0.15
+
+License: MIT
+
+- Copyright (c) Microsoft Corporation
+
+### @types/node@25.9.2
+
+License: MIT
+
+- Copyright (c) Microsoft Corporation
+- Copyright Node.js contributors
+
+### @types/spdx-correct@3.1.3
+
+License: MIT
+
+- Copyright (c) Microsoft Corporation
+
+### @types/spdx-expression-parse@4.0.0
+
+License: MIT
+
+- Copyright (c) Microsoft Corporation
+
+### @types/spdx-satisfies@6.0.0
+
+License: MIT
+
+- Copyright (c) Microsoft Corporation
+
+### @typescript-eslint/eslint-plugin@8.61.0
+
+License: MIT
+
+- Copyright (c) 2013 Kael Zhang &lt;i@kael.me&gt; , contributors http://kael.me
+- Copyright (c) 2019 typescript-eslint and other contributors
+
+### @typescript-eslint/parser@8.61.0
+
+License: MIT
+
+- Copyright (c) 2019 typescript-eslint and other contributors
+
+### @typescript-eslint/project-service@8.61.0
+
+License: MIT
+
+- Copyright (c) 2025 typescript-eslint and other contributors
+
+### @typescript-eslint/scope-manager@8.61.0
+
+License: MIT
+
+- Copyright (c) 2019 typescript-eslint and other contributors
+
+### @typescript-eslint/tsconfig-utils@8.61.0
+
+License: MIT
+
+- Copyright (c) 2025 typescript-eslint and other contributors
+
+### @typescript-eslint/type-utils@8.61.0
+
+License: MIT
+
+- Copyright (c) 2021 typescript-eslint and other contributors
+
+### @typescript-eslint/types@8.61.0
+
+License: MIT
+
+- Copyright (c) 2019 typescript-eslint and other contributors
+
+### @typescript-eslint/typescript-estree@8.61.0
+
+License: MIT
+
+- Copyright (c) 2019 typescript-eslint and other contributors
+
+### @typescript-eslint/utils@8.61.0
+
+License: MIT
+
+- Copyright (c) 2019 typescript-eslint and other contributors
+
+### @typescript-eslint/visitor-keys@8.61.0
+
+License: MIT
+
+- Copyright (c) 2019 typescript-eslint and other contributors
+
+### acorn@8.17.0
+
+License: MIT
+
+- Copyright (c) 2012-2022 by various contributors
+
+### acorn-jsx@5.3.2
+
+License: MIT
+
+- Copyright (c) 2012-2017 by Ingvar Stepanyan
+
+### ajv@6.15.0
+
+License: MIT
+
+- (c) 2011 Gary Court
+- Copyright (c) 2015-2017 Evgeny Poberezkin
+- Copyright 2011 Gary Court
+
+### arkregex@0.0.5
+
+License: MIT
+
+- Copyright 2025 ArkType
+
+### arktype@2.2.0
+
+License: MIT
+
+- Copyright 2025 ArkType
+
+### array-find-index@1.0.2
+
+License: MIT
+
+- (c) Sindre Sorhus (https://sindresorhus.com)
+- Copyright (c) Sindre Sorhus &lt;sindresorhus@gmail.com&gt; (sindresorhus.com)
+
+### balanced-match@4.0.4
+
+License: MIT
+
+- Copyright Isaac Z. Schlueter &lt;i@izs.me&gt;
+- Copyright Julian Gruber &lt;julian@juliangruber.com&gt;
+
+### brace-expansion@5.0.6
+
+License: MIT
+
+- Copyright Isaac Z. Schlueter &lt;i@izs.me&gt;
+- Copyright Julian Gruber &lt;julian@juliangruber.com&gt;
+
+### bun-types@1.3.14
+
+License: MIT
+
+- Copyright (c) Meta Platforms, Inc. and affiliates
+- Copyright 2024
+- Copyright 2024 Misha Kaletsky
+
+### comment-parser@1.4.7
+
+License: MIT
+
+- Copyright (c) 2014 Sergii Iavorskyi
+
+### cross-spawn@7.0.6
+
+License: MIT
+
+- Copyright (c) 2018 Made With MOXY Lda
+
+### debug@4.4.3
+
+License: MIT
+
+- Copyright (c) 2014-2017 TJ Holowaychuk &lt;tj@vision-media.ca&gt;
+- Copyright (c) 2018-2021 Josh Junon
+
+### deep-is@0.1.4
+
+License: MIT
+
+- Copyright (c) 2009 Thomas Robinson 280north.com
+- Copyright (c) 2012 James Halliday &lt;mail@substack.net&gt;
+- Copyright (c) 2012, 2013 Thorsten Lorenz &lt;thlorenz@gmx.de&gt;
+
+### escape-string-regexp@4.0.0
+
+License: MIT
+
+- Copyright (c) Sindre Sorhus &lt;sindresorhus@gmail.com&gt; (https://sindresorhus.com)
+
+### eslint@10.4.1
+
+License: MIT
+
+- Copyright (c) 2013, Joel Feenstra
+- Copyright (c) Microsoft Corporation
+- Copyright OpenJS Foundation and other contributors, &lt;www.openjsf.org&gt;
+
+### eslint-config-prettier@10.1.8
+
+License: MIT
+
+- Copyright (c) 2017, 2018, 2019, 2020, 2021, 2022, 2023 Simon Lydell and contributors
+
+### eslint-import-context@0.1.9
+
+License: MIT
+
+- Copyright (c) 2021-present UnTS
+
+### eslint-plugin-import-x@4.16.2
+
+License: MIT
+
+- Copyright (c) 2015 Ben Mosher
+
+### eslint-scope@9.1.2
+
+License: BSD-2-Clause
+
+- Copyright (c) 2012-2013 Yusuke Suzuki
+- Copyright (c) 2012-2014 Yusuke Suzuki &lt;utatane.tea@gmail.com&gt;
+- Copyright (c) 2013 Alex Seville &lt;hi@alexanderseville.com&gt;
+- Copyright (c) 2014 Thiago de Arruda &lt;tpadilha84@gmail.com&gt;
+- Copyright (c) 2015 Yusuke Suzuki &lt;utatane.tea@gmail.com&gt;
+- Copyright (c) Microsoft Corporation
+- Copyright JS Foundation and other contributors, https://js.foundation
+
+### espree@11.2.0
+
+License: BSD-2-Clause
+
+- Copyright (c) Open JS Foundation
+- Copyright (c) jQuery Foundation, Inc. and Contributors
+- Copyright 2012-2015 Acorn
+- Copyright 2014-2015 Sebastian McKenzie &lt;sebmck@gmail.com&gt;
+- Copyright 2014-2015 various
+
+### esquery@1.7.0
+
+License: BSD-3-Clause
+
+- Copyright (c) 2012 Ariya Hidayat &lt;ariya.hidayat@gmail.com&gt;
+- Copyright (c) 2012-2013 Yusuke Suzuki &lt;utatane.tea@gmail.com&gt;
+- Copyright (c) 2013, Joel Feenstra
+
+### esrecurse@4.3.0
+
+License: BSD-2-Clause
+
+- Copyright (c) 2014 Yusuke Suzuki (https://github.com/Constellation) (twitter @Constellation (https://twitter.com/Constellation)) and other contributors
+- Copyright (c) 2014 Yusuke Suzuki &lt;utatane.tea@gmail.com&gt;
+
+### estraverse@5.3.0
+
+License: BSD-2-Clause
+
+- Copyright (c) 2012 Ariya Hidayat &lt;ariya.hidayat@gmail.com&gt;
+- Copyright (c) 2012-2013 Yusuke Suzuki &lt;utatane.tea@gmail.com&gt;
+- Copyright (c) 2012-2016 Yusuke Suzuki (http://github.com/Constellation) (twitter @Constellation (http://twitter.com/Constellation)) and other contributors
+- Copyright (c) 2014 Yusuke Suzuki &lt;utatane.tea@gmail.com&gt;
+
+### esutils@2.0.3
+
+License: BSD-2-Clause
+
+- Copyright (c) 2013 Yusuke Suzuki (http://github.com/Constellation) (twitter @Constellation (http://twitter.com/Constellation)) and other contributors
+- Copyright (c) 2013 Yusuke Suzuki &lt;utatane.tea@gmail.com&gt;
+- Copyright (c) 2013-2014 Yusuke Suzuki &lt;utatane.tea@gmail.com&gt;
+- Copyright (c) 2014 Ivan Nikulin &lt;ifaaan@gmail.com&gt;
+
+### fast-deep-equal@3.1.3
+
+License: MIT
+
+- Copyright (c) 2017 Evgeny Poberezkin
+
+### fast-json-stable-stringify@2.1.0
+
+License: MIT
+
+- Copyright (c) 2013 James Halliday
+- Copyright (c) 2017 Evgeny Poberezkin
+
+### fast-levenshtein@2.0.6
+
+License: MIT
+
+- Copyright (c) 2013 Ramesh Nair (http://www.hiddentao.com/)
+
+### fdir@6.5.0
+
+License: MIT
+
+- Copyright (c) 2024 Abdullah Atta
+- Copyright 2023 Abdullah Atta
+
+### file-entry-cache@8.0.0
+
+License: MIT
+
+- Copyright (c) Roy Riojas & Jared Wray
+
+### find-up@5.0.0
+
+License: MIT
+
+- Copyright (c) Sindre Sorhus &lt;sindresorhus@gmail.com&gt; (https://sindresorhus.com)
+
+### flat-cache@4.0.1
+
+License: MIT
+
+- Copyright (c) Roy Riojas and Jared Wray
+
+### flatted@3.4.2
+
+License: ISC
+
+- (c) 2020-present Andrea Giammarchi
+- Copyright (c) 2018-2020, Andrea Giammarchi
+- Copyright (c) 2018-2021, Andrea Giammarchi
+- Copyright (c) 2018-2025, Andrea Giammarchi
+
+### get-tsconfig@4.14.0
+
+License: MIT
+
+- Copyright (c) Hiroki Osame &lt;hiroki.osame@gmail.com&gt;
+
+### glob-parent@6.0.2
+
+License: ISC
+
+- Copyright (c) 2015, 2019 Elan Shanker, 2021 Blaine Bublitz &lt;blaine.bublitz@gmail.com&gt; , Eric Schoffstall &lt;yo@contra.io&gt; and other contributors
+
+### ignore@5.3.2
+
+License: MIT
+
+- Copyright (c) 2013 Kael Zhang &lt;i@kael.me&gt; , contributors http://kael.me
+
+### imurmurhash@0.1.4
+
+License: MIT
+
+- Copyright (c) 2013 Gary Court, Jens Taylor
+
+### is-extglob@2.1.1
+
+License: MIT
+
+- Copyright (c) 2014-2016, Jon Schlinkert
+- Copyright (c) 2016, Jon Schlinkert (https://github.com/jonschlinkert)
+
+### is-glob@4.0.3
+
+License: MIT
+
+- Copyright (c) 2014-2017, Jon Schlinkert
+- Copyright (c) 2019, Jon Schlinkert (https://github.com/jonschlinkert)
+
+### isexe@2.0.0
+
+License: ISC
+
+- Copyright (c) Isaac Z. Schlueter and Contributors
+
+### json-buffer@3.0.1
+
+License: MIT
+
+- Copyright (c) 2013 Dominic Tarr
+
+### json-schema-traverse@0.4.1
+
+License: MIT
+
+- Copyright (c) 2017 Evgeny Poberezkin
+
+### keyv@4.5.4
+
+License: MIT
+
+- (c) Jared Wray
+
+### levn@0.4.1
+
+License: MIT
+
+- Copyright (c) George Zahariev
+
+### locate-path@6.0.0
+
+License: MIT
+
+- Copyright (c) Sindre Sorhus &lt;sindresorhus@gmail.com&gt; (https://sindresorhus.com)
+
+### ms@2.1.3
+
+License: MIT
+
+- Copyright (c) 2020 Vercel, Inc.
+
+### napi-postinstall@0.3.4
+
+License: MIT
+
+- Copyright (c) 2021-present UnTS
+
+### natural-compare@1.4.0
+
+License: MIT
+
+- Copyright (c) 2012-2015 Lauri Rooden &lt;lauri@rooden.ee&gt;
+
+### optionator@0.9.4
+
+License: MIT
+
+- Copyright (c) George Zahariev
+
+### p-limit@3.1.0
+
+License: MIT
+
+- Copyright (c) Sindre Sorhus &lt;sindresorhus@gmail.com&gt; (https://sindresorhus.com)
+
+### p-locate@5.0.0
+
+License: MIT
+
+- Copyright (c) Sindre Sorhus &lt;sindresorhus@gmail.com&gt; (https://sindresorhus.com)
+
+### path-exists@4.0.0
+
+License: MIT
+
+- (c) Sindre Sorhus (https://sindresorhus.com)
+- Copyright (c) Sindre Sorhus &lt;sindresorhus@gmail.com&gt; (sindresorhus.com)
+
+### path-key@3.1.1
+
+License: MIT
+
+- Copyright (c) Sindre Sorhus &lt;sindresorhus@gmail.com&gt; (sindresorhus.com)
+
+### picomatch@4.0.4
+
+License: MIT
+
+- Copyright (c) 2017-present, Jon Schlinkert
+- Copyright (c) 2017-present, Jon Schlinkert (https://github.com/jonschlinkert)
+
+### prelude-ls@1.2.1
+
+License: MIT
+
+- Copyright (c) George Zahariev
+
+### prettier@3.8.4
+
+License: MIT
+
+- (c) GraphQL Contributors
+- (c) Jared Wray
+- Copyright (c) 2009-2015, Kevin Decker &lt;kpdecker@gmail.com&gt;
+- Copyright (c) 2010-2026 Google LLC. https://angular.dev/license
+- Copyright (c) 2011-2015 by Vitaly Puzrin
+- Copyright (c) 2012 EditorConfig Team
+- Copyright (c) 2012-2014 Raynos
+- Copyright (c) 2012-2014 by Woong Jun and Tim Oxley
+- Copyright (c) 2012-2014 by various contributors
+- Copyright (c) 2012-2017 by Ingvar Stepanyan
+- Copyright (c) 2012-2018 Aseem Kishore, and others
+- Copyright (c) 2012-2022 by various contributors
+- Copyright (c) 2013 Andrey Sitnik &lt;andrey@sitnik.ru&gt;
+- Copyright (c) 2013 Dominic Tarr
+- Copyright (c) 2013 James Halliday
+- Copyright (c) 2013 Kael Zhang &lt;i@kael.me&gt; , contributors http://kael.me
+- Copyright (c) 2013 Liucw
+- Copyright (c) 2013 Mikola Lysenko
+- Copyright (c) 2014 Alex Bell
+- Copyright (c) 2014 Stefan Thomas
+
+### punycode@2.3.1
+
+License: MIT
+
+- Copyright Mathias Bynens https://mathiasbynens.be
+
+### resolve-pkg-maps@1.0.0
+
+License: MIT
+
+- Copyright (c) Hiroki Osame &lt;hiroki.osame@gmail.com&gt;
+
+### semver@7.8.4
+
+License: ISC
+
+- Copyright (c) Isaac Z. Schlueter and Contributors
+- Copyright Isaac Z. Schlueter
+
+### shebang-command@2.0.0
+
+License: MIT
+
+- Copyright (c) Kevin Martensson &lt;kevinmartensson@gmail.com&gt;
+
+### shebang-regex@3.0.0
+
+License: MIT
+
+- (c) Sindre Sorhus (https://sindresorhus.com)
+- Copyright (c) Sindre Sorhus &lt;sindresorhus@gmail.com&gt; (sindresorhus.com)
+
+### smol-toml@1.6.1
+
+License: BSD-3-Clause
+
+- Copyright (c) Squirrel Chat et al
+
+### spdx-compare@1.0.0
+
+License: MIT
+
+- Copyright (c) 2015 Kyle E. Mitchell
+
+### spdx-correct@3.2.0
+
+License: Apache-2.0
+
+- Copyright (c) 2015 Kyle E. Mitchell
+- Copyright spdx-correct.js contributors
+
+### spdx-exceptions@2.5.0
+
+License: CC-BY-3.0
+
+- Copyright (c) 2010-2015 Linux Foundation and its Contributors
+
+### spdx-expression-parse@4.0.0
+
+License: MIT
+
+- Copyright (c) 2015 Kyle E. Mitchell
+
+### spdx-license-list@6.11.0
+
+License: CC0-1.0
+
+- (c) 1988, 1989 by Adobe Systems Incorporated
+- (c) 1996-1999 Corporation for National Research Initiatives
+- (c) 2006 Amazon Digital Services, Inc.
+- (c) 2015
+- (c) COPYRIGHT 2004 UNIVERSITY OF CHICAGO
+- (c) Copyright 1984 by Third Eye Software, Inc. Third Eye Software, Inc.
+- (c) Copyright 1986 HEWLETT-PACKARD COMPANY
+- (c) Copyright 1988,1991 Adobe Systems Incorporated
+- (c) Copyright 1989 Sun Microsystems, Inc.
+- (c) Copyright 1989-1992, Bitstream Inc., Cambridge, MA.
+- (c) Copyright 1992 by Panagiotis Tsirigotis
+- (c) Copyright 1993, Silicon Graphics, Inc.
+- (c) Copyright 1994-2002 by Akinori Ito
+- (c) Copyright 1995 - 2012 Fraunhofer-Gesellschaft zur Forderung der angewandten Forschung e.V.
+- (c) Copyright 1998 by Akinori Ito
+- (c) Copyright 1998-2007 by Mark Mielke Freedom
+- (c) Copyright 2002-2011 by Akinori Ito, Hironori Sakamoto, Fumitoshi Ukai
+- (c) Copyright Bigelow & Holmes 1986, 1985
+- (c) Jim Davies
+- (c) Ministerium fur Wissenschaft und Forschung Nordrhein-Westfalen 2004 Erstellt von Axel Metzger und Till Jaeger, Institut fur Rechtsfragen der Freien
+
+### spdx-ranges@2.1.1
+
+License: (MIT AND CC-BY-3.0)
+
+- Copyright (c) 2015 Kyle E. Mitchell
+
+### spdx-satisfies@6.0.0
+
+License: MIT
+
+- Copyright (c) 2015 Kyle E. Mitchell
+- Copyright (c) spdx-satisfies.js contributors
+
+### stable-hash-x@0.2.0
+
+License: MIT
+
+- Copyright (c) 2025-present UnTS
+
+### tinyglobby@0.2.17
+
+License: MIT
+
+- Copyright (c) 2024 Madeline Gurriaran
+
+### type-check@0.4.0
+
+License: MIT
+
+- Copyright (c) George Zahariev
+
+### typescript@5.9.3
+
+License: Apache-2.0
+
+- (c) by W3C
+- Copyright (c) 1991-2017 Unicode, Inc.
+- Copyright (c) 2018 The Khronos Group Inc.
+- Copyright (c) 2018 WHATWG Apple, Google, Mozilla
+- Copyright (c) Microsoft Corporation
+- Copyright (c) YEAR W3C(r) (MIT, ERCIM, Keio, Beihang) Disclaimers
+
+### typescript-eslint@8.61.0
+
+License: MIT
+
+- Copyright (c) 2019 typescript-eslint and other contributors
+
+### undici-types@7.24.6
+
+License: MIT
+
+- Copyright (c) Matteo Collina and Undici contributors
+
+### uri-js@4.4.1
+
+License: BSD-2-Clause-Views
+
+- (c) 2011 Gary Court
+- Copyright 2011 Gary Court
+
+### which@2.0.2
+
+License: ISC
+
+- Copyright (c) Isaac Z. Schlueter and Contributors
+
+### word-wrap@1.2.5
+
+License: MIT
+
+- Copyright (c) 2014-2016, Jon Schlinkert
+- Copyright (c) 2014-2023, Jon Schlinkert
+- Copyright (c) 2023, Jon Schlinkert (https://github.com/jonschlinkert)
+
+### yocto-queue@0.1.0
+
+License: MIT
+
+- Copyright (c) Sindre Sorhus &lt;sindresorhus@gmail.com&gt; (https://sindresorhus.com)
+
 ## License texts
 
 ### 0BSD
@@ -112,6 +828,24 @@ Redistribution and use in source and binary forms, with or without modification,
 2. Redistributions in binary form must reproduce the above copyright notice, this list of conditions and the following disclaimer in the documentation and/or other materials provided with the distribution.
 
 THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+```
+
+(canonical SPDX text — package-specific copyright not located)
+
+### BSD-2-Clause-Views
+
+```
+Copyright (c) <year> <owner> All rights reserved.
+
+Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions are met:
+
+1. Redistributions of source code must retain the above copyright notice, this list of conditions and the following disclaimer.
+
+2. Redistributions in binary form must reproduce the above copyright notice, this list of conditions and the following disclaimer in the documentation and/or other materials provided with the distribution.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+The views and conclusions contained in the software and documentation are those of the authors and should not be interpreted as representing official policies, either expressed or implied, of the copyright holders or contributors.
 ```
 
 (canonical SPDX text — package-specific copyright not located)

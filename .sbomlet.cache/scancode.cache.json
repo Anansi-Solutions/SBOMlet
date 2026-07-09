@@ -1,0 +1,1004 @@
+{
+  "entries": {
+    "pkg:npm/%40ark/schema@0.56.0": {
+      "copyrights": [
+        "Copyright 2025 ArkType"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-07-09T14:19:52.047Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/%40ark/util@0.56.0": {
+      "copyrights": [
+        "Copyright 2025 ArkType"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-07-09T14:20:17.266Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/%40eslint-community/eslint-utils@4.9.1": {
+      "copyrights": [
+        "Copyright (c) 2018 Toru Nagashima"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-07-09T14:20:39.042Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/%40eslint-community/regexpp@4.12.2": {
+      "copyrights": [
+        "Copyright (c) 2018 Toru Nagashima"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-07-09T14:20:53.553Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/%40eslint/config-array@0.23.5": {
+      "copyrights": [
+        "Copyright 2018-2025 the Deno authors"
+      ],
+      "license": "Apache-2.0",
+      "scannedAt": "2026-07-09T14:21:11.520Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/%40eslint/config-helpers@0.6.0": {
+      "license": "Apache-2.0",
+      "scannedAt": "2026-07-09T14:21:24.544Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/%40eslint/core@1.2.1": {
+      "license": "Apache-2.0",
+      "scannedAt": "2026-07-09T14:21:34.471Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/%40eslint/js@10.0.1": {
+      "copyrights": [
+        "Copyright OpenJS Foundation and other contributors, <www.openjsf.org>"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-07-09T14:21:44.694Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/%40eslint/object-schema@3.0.5": {
+      "license": "Apache-2.0",
+      "scannedAt": "2026-07-09T14:21:57.087Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/%40eslint/plugin-kit@0.7.2": {
+      "license": "Apache-2.0",
+      "scannedAt": "2026-07-09T14:22:11.364Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/%40humanfs/core@0.19.2": {
+      "license": "Apache-2.0",
+      "scannedAt": "2026-07-09T14:22:25.661Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/%40humanfs/node@0.16.8": {
+      "license": "Apache-2.0",
+      "scannedAt": "2026-07-09T14:22:37.458Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/%40humanfs/types@0.15.0": {
+      "license": "Apache-2.0",
+      "scannedAt": "2026-07-09T14:22:46.996Z",
+      "via": "scancode-toolkit@32.5.0/manifest"
+    },
+    "pkg:npm/%40humanwhocodes/module-importer@1.0.1": {
+      "license": "Apache-2.0",
+      "scannedAt": "2026-07-09T14:22:59.079Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/%40humanwhocodes/retry@0.4.3": {
+      "copyrights": [
+        "Copyright (c) 2011-2023 Isaac Z. Schlueter, Ben Noordhuis, and Contributors"
+      ],
+      "license": "Apache-2.0",
+      "scannedAt": "2026-07-09T14:23:10.834Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/%40package-json/types@0.0.12": {
+      "copyrights": [
+        "Copyright (c) 2024 Lan"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-07-09T14:23:20.412Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/%40types/bun@1.3.14": {
+      "copyrights": [
+        "Copyright (c) Microsoft Corporation"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-07-09T14:23:29.096Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/%40types/esrecurse@4.3.1": {
+      "copyrights": [
+        "Copyright (c) Microsoft Corporation"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-07-09T14:23:37.929Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/%40types/estree@1.0.9": {
+      "copyrights": [
+        "Copyright (c) Microsoft Corporation"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-07-09T14:23:47.710Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/%40types/json-schema@7.0.15": {
+      "copyrights": [
+        "Copyright (c) Microsoft Corporation"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-07-09T14:23:57.007Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/%40types/node@25.9.2": {
+      "copyrights": [
+        "Copyright (c) Microsoft Corporation",
+        "Copyright Node.js contributors"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-07-09T14:24:29.281Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/%40types/spdx-correct@3.1.3": {
+      "copyrights": [
+        "Copyright (c) Microsoft Corporation"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-07-09T14:24:38.388Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/%40types/spdx-expression-parse@4.0.0": {
+      "copyrights": [
+        "Copyright (c) Microsoft Corporation"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-07-09T14:24:47.777Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/%40types/spdx-satisfies@6.0.0": {
+      "copyrights": [
+        "Copyright (c) Microsoft Corporation"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-07-09T14:24:56.677Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/%40typescript-eslint/eslint-plugin@8.61.0": {
+      "copyrights": [
+        "Copyright (c) 2013 Kael Zhang <i@kael.me> , contributors http://kael.me",
+        "Copyright (c) 2019 typescript-eslint and other contributors"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-07-09T14:25:31.947Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/%40typescript-eslint/parser@8.61.0": {
+      "copyrights": [
+        "Copyright (c) 2019 typescript-eslint and other contributors"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-07-09T14:25:43.325Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/%40typescript-eslint/project-service@8.61.0": {
+      "copyrights": [
+        "Copyright (c) 2025 typescript-eslint and other contributors"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-07-09T14:25:55.545Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/%40typescript-eslint/scope-manager@8.61.0": {
+      "copyrights": [
+        "Copyright (c) 2019 typescript-eslint and other contributors"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-07-09T14:26:27.700Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/%40typescript-eslint/tsconfig-utils@8.61.0": {
+      "copyrights": [
+        "Copyright (c) 2025 typescript-eslint and other contributors"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-07-09T14:26:39.801Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/%40typescript-eslint/type-utils@8.61.0": {
+      "copyrights": [
+        "Copyright (c) 2021 typescript-eslint and other contributors"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-07-09T14:27:06.621Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/%40typescript-eslint/types@8.61.0": {
+      "copyrights": [
+        "Copyright (c) 2019 typescript-eslint and other contributors"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-07-09T14:27:22.493Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/%40typescript-eslint/typescript-estree@8.61.0": {
+      "copyrights": [
+        "Copyright (c) 2019 typescript-eslint and other contributors"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-07-09T14:27:53.544Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/%40typescript-eslint/utils@8.61.0": {
+      "copyrights": [
+        "Copyright (c) 2019 typescript-eslint and other contributors"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-07-09T14:28:22.157Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/%40typescript-eslint/visitor-keys@8.61.0": {
+      "copyrights": [
+        "Copyright (c) 2019 typescript-eslint and other contributors"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-07-09T14:28:34.265Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/%40unrs/resolver-binding-win32-x64-msvc@1.12.2": {
+      "license": "MIT",
+      "scannedAt": "2026-07-09T14:28:46.195Z",
+      "via": "scancode-toolkit@32.5.0/manifest"
+    },
+    "pkg:npm/acorn-jsx@5.3.2": {
+      "copyrights": [
+        "Copyright (c) 2012-2017 by Ingvar Stepanyan"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-07-09T14:29:17.020Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/acorn@8.17.0": {
+      "copyrights": [
+        "Copyright (c) 2012-2022 by various contributors"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-07-09T14:29:06.407Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/ajv@6.15.0": {
+      "copyrights": [
+        "(c) 2011 Gary Court",
+        "Copyright (c) 2015-2017 Evgeny Poberezkin",
+        "Copyright 2011 Gary Court"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-07-09T14:29:51.660Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/arkregex@0.0.5": {
+      "copyrights": [
+        "Copyright 2025 ArkType"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-07-09T14:30:11.263Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/arktype@2.2.0": {
+      "copyrights": [
+        "Copyright 2025 ArkType"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-07-09T14:30:38.963Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/array-find-index@1.0.2": {
+      "copyrights": [
+        "(c) Sindre Sorhus (https://sindresorhus.com)",
+        "Copyright (c) Sindre Sorhus <sindresorhus@gmail.com> (sindresorhus.com)"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-07-09T14:30:48.627Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/balanced-match@4.0.4": {
+      "copyrights": [
+        "Copyright Isaac Z. Schlueter <i@izs.me>",
+        "Copyright Julian Gruber <julian@juliangruber.com>"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-07-09T14:31:02.856Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/brace-expansion@5.0.6": {
+      "copyrights": [
+        "Copyright Isaac Z. Schlueter <i@izs.me>",
+        "Copyright Julian Gruber <julian@juliangruber.com>"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-07-09T14:31:17.337Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/bun-types@1.3.14": {
+      "copyrights": [
+        "Copyright (c) Meta Platforms, Inc. and affiliates",
+        "Copyright 2024",
+        "Copyright 2024 Misha Kaletsky"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-07-09T14:31:55.184Z",
+      "via": "scancode-toolkit@32.5.0/manifest"
+    },
+    "pkg:npm/comment-parser@1.4.7": {
+      "copyrights": [
+        "Copyright (c) 2014 Sergii Iavorskyi"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-07-09T14:32:26.686Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/cross-spawn@7.0.6": {
+      "copyrights": [
+        "Copyright (c) 2018 Made With MOXY Lda"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-07-09T14:32:38.710Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/debug@4.4.3": {
+      "copyrights": [
+        "Copyright (c) 2014-2017 TJ Holowaychuk <tj@vision-media.ca>",
+        "Copyright (c) 2018-2021 Josh Junon"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-07-09T14:32:49.919Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/deep-is@0.1.4": {
+      "copyrights": [
+        "Copyright (c) 2009 Thomas Robinson 280north.com",
+        "Copyright (c) 2012 James Halliday <mail@substack.net>",
+        "Copyright (c) 2012, 2013 Thorsten Lorenz <thlorenz@gmx.de>"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-07-09T14:33:01.633Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/escape-string-regexp@4.0.0": {
+      "copyrights": [
+        "Copyright (c) Sindre Sorhus <sindresorhus@gmail.com> (https://sindresorhus.com)"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-07-09T14:33:10.867Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/eslint-config-prettier@10.1.8": {
+      "copyrights": [
+        "Copyright (c) 2017, 2018, 2019, 2020, 2021, 2022, 2023 Simon Lydell and contributors"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-07-09T14:34:10.033Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/eslint-import-context@0.1.9": {
+      "copyrights": [
+        "Copyright (c) 2021-present UnTS"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-07-09T14:34:23.768Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/eslint-plugin-import-x@4.16.2": {
+      "copyrights": [
+        "Copyright (c) 2015 Ben Mosher"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-07-09T14:35:00.665Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/eslint-scope@9.1.2": {
+      "copyrights": [
+        "Copyright (c) 2012-2013 Yusuke Suzuki",
+        "Copyright (c) 2012-2014 Yusuke Suzuki <utatane.tea@gmail.com>",
+        "Copyright (c) 2013 Alex Seville <hi@alexanderseville.com>",
+        "Copyright (c) 2014 Thiago de Arruda <tpadilha84@gmail.com>",
+        "Copyright (c) 2015 Yusuke Suzuki <utatane.tea@gmail.com>",
+        "Copyright (c) Microsoft Corporation",
+        "Copyright JS Foundation and other contributors, https://js.foundation"
+      ],
+      "license": "BSD-2-Clause",
+      "scannedAt": "2026-07-09T14:35:20.183Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/eslint-visitor-keys@5.0.1": {
+      "license": "Apache-2.0",
+      "scannedAt": "2026-07-09T14:35:32.250Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/eslint@10.4.1": {
+      "copyrights": [
+        "Copyright (c) 2013, Joel Feenstra",
+        "Copyright (c) Microsoft Corporation",
+        "Copyright OpenJS Foundation and other contributors, <www.openjsf.org>"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-07-09T14:33:56.693Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/espree@11.2.0": {
+      "copyrights": [
+        "Copyright (c) Open JS Foundation",
+        "Copyright (c) jQuery Foundation, Inc. and Contributors",
+        "Copyright 2012-2015 Acorn",
+        "Copyright 2014-2015 Sebastian McKenzie <sebmck@gmail.com>",
+        "Copyright 2014-2015 various"
+      ],
+      "license": "BSD-2-Clause",
+      "scannedAt": "2026-07-09T14:35:48.542Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/esquery@1.7.0": {
+      "copyrights": [
+        "Copyright (c) 2012 Ariya Hidayat <ariya.hidayat@gmail.com>",
+        "Copyright (c) 2012-2013 Yusuke Suzuki <utatane.tea@gmail.com>",
+        "Copyright (c) 2013, Joel Feenstra"
+      ],
+      "license": "BSD-3-Clause",
+      "scannedAt": "2026-07-09T14:36:10.416Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/esrecurse@4.3.0": {
+      "copyrights": [
+        "Copyright (c) 2014 Yusuke Suzuki (https://github.com/Constellation) (twitter @Constellation (https://twitter.com/Constellation)) and other contributors",
+        "Copyright (c) 2014 Yusuke Suzuki <utatane.tea@gmail.com>"
+      ],
+      "license": "BSD-2-Clause",
+      "scannedAt": "2026-07-09T14:36:20.624Z",
+      "via": "scancode-toolkit@32.5.0/manifest"
+    },
+    "pkg:npm/estraverse@5.3.0": {
+      "copyrights": [
+        "Copyright (c) 2012 Ariya Hidayat <ariya.hidayat@gmail.com>",
+        "Copyright (c) 2012-2013 Yusuke Suzuki <utatane.tea@gmail.com>",
+        "Copyright (c) 2012-2016 Yusuke Suzuki (http://github.com/Constellation) (twitter @Constellation (http://twitter.com/Constellation)) and other contributors",
+        "Copyright (c) 2014 Yusuke Suzuki <utatane.tea@gmail.com>"
+      ],
+      "license": "BSD-2-Clause",
+      "scannedAt": "2026-07-09T14:36:32.299Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/esutils@2.0.3": {
+      "copyrights": [
+        "Copyright (c) 2013 Yusuke Suzuki (http://github.com/Constellation) (twitter @Constellation (http://twitter.com/Constellation)) and other contributors",
+        "Copyright (c) 2013 Yusuke Suzuki <utatane.tea@gmail.com>",
+        "Copyright (c) 2013-2014 Yusuke Suzuki <utatane.tea@gmail.com>",
+        "Copyright (c) 2014 Ivan Nikulin <ifaaan@gmail.com>"
+      ],
+      "license": "BSD-2-Clause",
+      "scannedAt": "2026-07-09T14:36:43.243Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/fast-deep-equal@3.1.3": {
+      "copyrights": [
+        "Copyright (c) 2017 Evgeny Poberezkin"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-07-09T14:36:56.058Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/fast-json-stable-stringify@2.1.0": {
+      "copyrights": [
+        "Copyright (c) 2013 James Halliday",
+        "Copyright (c) 2017 Evgeny Poberezkin"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-07-09T14:37:13.629Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/fast-levenshtein@2.0.6": {
+      "copyrights": [
+        "Copyright (c) 2013 Ramesh Nair (http://www.hiddentao.com/)"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-07-09T14:37:23.163Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/fdir@6.5.0": {
+      "copyrights": [
+        "Copyright (c) 2024 Abdullah Atta",
+        "Copyright 2023 Abdullah Atta"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-07-09T14:37:34.021Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/file-entry-cache@8.0.0": {
+      "copyrights": [
+        "Copyright (c) Roy Riojas & Jared Wray"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-07-09T14:37:43.731Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/find-up@5.0.0": {
+      "copyrights": [
+        "Copyright (c) Sindre Sorhus <sindresorhus@gmail.com> (https://sindresorhus.com)"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-07-09T14:37:53.507Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/flat-cache@4.0.1": {
+      "copyrights": [
+        "Copyright (c) Roy Riojas and Jared Wray"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-07-09T14:38:04.195Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/flatted@3.4.2": {
+      "copyrights": [
+        "(c) 2020-present Andrea Giammarchi",
+        "Copyright (c) 2018-2020, Andrea Giammarchi",
+        "Copyright (c) 2018-2021, Andrea Giammarchi",
+        "Copyright (c) 2018-2025, Andrea Giammarchi"
+      ],
+      "license": "ISC",
+      "scannedAt": "2026-07-09T14:38:19.522Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/get-tsconfig@4.14.0": {
+      "copyrights": [
+        "Copyright (c) Hiroki Osame <hiroki.osame@gmail.com>"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-07-09T14:38:31.268Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/glob-parent@6.0.2": {
+      "copyrights": [
+        "Copyright (c) 2015, 2019 Elan Shanker, 2021 Blaine Bublitz <blaine.bublitz@gmail.com> , Eric Schoffstall <yo@contra.io> and other contributors"
+      ],
+      "license": "ISC",
+      "scannedAt": "2026-07-09T14:38:40.815Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/ignore@5.3.2": {
+      "copyrights": [
+        "Copyright (c) 2013 Kael Zhang <i@kael.me> , contributors http://kael.me"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-07-09T14:38:51.713Z",
+      "via": "scancode-toolkit@32.5.0/manifest"
+    },
+    "pkg:npm/imurmurhash@0.1.4": {
+      "copyrights": [
+        "Copyright (c) 2013 Gary Court, Jens Taylor"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-07-09T14:39:01.012Z",
+      "via": "scancode-toolkit@32.5.0/manifest"
+    },
+    "pkg:npm/is-extglob@2.1.1": {
+      "copyrights": [
+        "Copyright (c) 2014-2016, Jon Schlinkert",
+        "Copyright (c) 2016, Jon Schlinkert (https://github.com/jonschlinkert)"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-07-09T14:39:10.455Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/is-glob@4.0.3": {
+      "copyrights": [
+        "Copyright (c) 2014-2017, Jon Schlinkert",
+        "Copyright (c) 2019, Jon Schlinkert (https://github.com/jonschlinkert)"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-07-09T14:39:20.238Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/isexe@2.0.0": {
+      "copyrights": [
+        "Copyright (c) Isaac Z. Schlueter and Contributors"
+      ],
+      "license": "ISC",
+      "scannedAt": "2026-07-09T14:39:31.657Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/json-buffer@3.0.1": {
+      "copyrights": [
+        "Copyright (c) 2013 Dominic Tarr"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-07-09T14:39:41.751Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/json-schema-traverse@0.4.1": {
+      "copyrights": [
+        "Copyright (c) 2017 Evgeny Poberezkin"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-07-09T14:39:53.259Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/json-stable-stringify-without-jsonify@1.0.1": {
+      "license": "MIT",
+      "scannedAt": "2026-07-09T14:40:09.567Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/keyv@4.5.4": {
+      "copyrights": [
+        "(c) Jared Wray"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-07-09T14:40:19.549Z",
+      "via": "scancode-toolkit@32.5.0/manifest"
+    },
+    "pkg:npm/levn@0.4.1": {
+      "copyrights": [
+        "Copyright (c) George Zahariev"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-07-09T14:40:30.484Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/locate-path@6.0.0": {
+      "copyrights": [
+        "Copyright (c) Sindre Sorhus <sindresorhus@gmail.com> (https://sindresorhus.com)"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-07-09T14:40:40.199Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/minimatch@10.2.5": {
+      "license": "BlueOak-1.0.0",
+      "scannedAt": "2026-07-09T14:41:09.108Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/ms@2.1.3": {
+      "copyrights": [
+        "Copyright (c) 2020 Vercel, Inc."
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-07-09T14:41:18.856Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/napi-postinstall@0.3.4": {
+      "copyrights": [
+        "Copyright (c) 2021-present UnTS"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-07-09T14:41:39.808Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/natural-compare@1.4.0": {
+      "copyrights": [
+        "Copyright (c) 2012-2015 Lauri Rooden <lauri@rooden.ee>"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-07-09T14:41:49.175Z",
+      "via": "scancode-toolkit@32.5.0/manifest"
+    },
+    "pkg:npm/optionator@0.9.4": {
+      "copyrights": [
+        "Copyright (c) George Zahariev"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-07-09T14:41:59.843Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/p-limit@3.1.0": {
+      "copyrights": [
+        "Copyright (c) Sindre Sorhus <sindresorhus@gmail.com> (https://sindresorhus.com)"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-07-09T14:42:09.210Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/p-locate@5.0.0": {
+      "copyrights": [
+        "Copyright (c) Sindre Sorhus <sindresorhus@gmail.com> (https://sindresorhus.com)"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-07-09T14:42:18.611Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/path-exists@4.0.0": {
+      "copyrights": [
+        "(c) Sindre Sorhus (https://sindresorhus.com)",
+        "Copyright (c) Sindre Sorhus <sindresorhus@gmail.com> (sindresorhus.com)"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-07-09T14:42:28.194Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/path-key@3.1.1": {
+      "copyrights": [
+        "Copyright (c) Sindre Sorhus <sindresorhus@gmail.com> (sindresorhus.com)"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-07-09T14:42:37.808Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/picomatch@4.0.4": {
+      "copyrights": [
+        "Copyright (c) 2017-present, Jon Schlinkert",
+        "Copyright (c) 2017-present, Jon Schlinkert (https://github.com/jonschlinkert)"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-07-09T14:42:51.992Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/prelude-ls@1.2.1": {
+      "copyrights": [
+        "Copyright (c) George Zahariev"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-07-09T14:43:05.230Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/prettier@3.8.4": {
+      "copyrights": [
+        "(c) GraphQL Contributors",
+        "(c) Jared Wray",
+        "Copyright (c) 2009-2015, Kevin Decker <kpdecker@gmail.com>",
+        "Copyright (c) 2010-2026 Google LLC. https://angular.dev/license",
+        "Copyright (c) 2011-2015 by Vitaly Puzrin",
+        "Copyright (c) 2012 EditorConfig Team",
+        "Copyright (c) 2012-2014 Raynos",
+        "Copyright (c) 2012-2014 by Woong Jun and Tim Oxley",
+        "Copyright (c) 2012-2014 by various contributors",
+        "Copyright (c) 2012-2017 by Ingvar Stepanyan",
+        "Copyright (c) 2012-2018 Aseem Kishore, and others",
+        "Copyright (c) 2012-2022 by various contributors",
+        "Copyright (c) 2013 Andrey Sitnik <andrey@sitnik.ru>",
+        "Copyright (c) 2013 Dominic Tarr",
+        "Copyright (c) 2013 James Halliday",
+        "Copyright (c) 2013 Kael Zhang <i@kael.me> , contributors http://kael.me",
+        "Copyright (c) 2013 Liucw",
+        "Copyright (c) 2013 Mikola Lysenko",
+        "Copyright (c) 2014 Alex Bell",
+        "Copyright (c) 2014 Stefan Thomas"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-07-09T14:43:56.745Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/punycode@2.3.1": {
+      "copyrights": [
+        "Copyright Mathias Bynens https://mathiasbynens.be"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-07-09T14:44:07.432Z",
+      "via": "scancode-toolkit@32.5.0/manifest"
+    },
+    "pkg:npm/resolve-pkg-maps@1.0.0": {
+      "copyrights": [
+        "Copyright (c) Hiroki Osame <hiroki.osame@gmail.com>"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-07-09T14:44:18.152Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/semver@7.8.4": {
+      "copyrights": [
+        "Copyright (c) Isaac Z. Schlueter and Contributors",
+        "Copyright Isaac Z. Schlueter"
+      ],
+      "license": "ISC",
+      "scannedAt": "2026-07-09T14:44:45.016Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/shebang-command@2.0.0": {
+      "copyrights": [
+        "Copyright (c) Kevin Martensson <kevinmartensson@gmail.com>"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-07-09T14:44:54.490Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/shebang-regex@3.0.0": {
+      "copyrights": [
+        "(c) Sindre Sorhus (https://sindresorhus.com)",
+        "Copyright (c) Sindre Sorhus <sindresorhus@gmail.com> (sindresorhus.com)"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-07-09T14:45:04.023Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/smol-toml@1.6.1": {
+      "copyrights": [
+        "Copyright (c) Squirrel Chat et al"
+      ],
+      "license": "BSD-3-Clause",
+      "scannedAt": "2026-07-09T14:45:25.502Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/spdx-compare@1.0.0": {
+      "copyrights": [
+        "Copyright (c) 2015 Kyle E. Mitchell"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-07-09T14:45:39.274Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/spdx-correct@3.2.0": {
+      "copyrights": [
+        "Copyright (c) 2015 Kyle E. Mitchell",
+        "Copyright spdx-correct.js contributors"
+      ],
+      "license": "Apache-2.0",
+      "scannedAt": "2026-07-09T14:45:52.655Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/spdx-exceptions@2.5.0": {
+      "copyrights": [
+        "Copyright (c) 2010-2015 Linux Foundation and its Contributors"
+      ],
+      "license": "CC-BY-3.0",
+      "scannedAt": "2026-07-09T14:46:02.002Z",
+      "via": "scancode-toolkit@32.5.0/manifest"
+    },
+    "pkg:npm/spdx-expression-parse@4.0.0": {
+      "copyrights": [
+        "Copyright (c) 2015 Kyle E. Mitchell"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-07-09T14:46:12.579Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/spdx-license-ids@3.0.23": {
+      "license": "CC0-1.0",
+      "scannedAt": "2026-07-09T14:46:22.374Z",
+      "via": "scancode-toolkit@32.5.0/manifest"
+    },
+    "pkg:npm/spdx-license-list@6.11.0": {
+      "copyrights": [
+        "(c) 1988, 1989 by Adobe Systems Incorporated",
+        "(c) 1996-1999 Corporation for National Research Initiatives",
+        "(c) 2006 Amazon Digital Services, Inc.",
+        "(c) 2015",
+        "(c) COPYRIGHT 2004 UNIVERSITY OF CHICAGO",
+        "(c) Copyright 1984 by Third Eye Software, Inc. Third Eye Software, Inc.",
+        "(c) Copyright 1986 HEWLETT-PACKARD COMPANY",
+        "(c) Copyright 1988,1991 Adobe Systems Incorporated",
+        "(c) Copyright 1989 Sun Microsystems, Inc.",
+        "(c) Copyright 1989-1992, Bitstream Inc., Cambridge, MA.",
+        "(c) Copyright 1992 by Panagiotis Tsirigotis",
+        "(c) Copyright 1993, Silicon Graphics, Inc.",
+        "(c) Copyright 1994-2002 by Akinori Ito",
+        "(c) Copyright 1995 - 2012 Fraunhofer-Gesellschaft zur Forderung der angewandten Forschung e.V.",
+        "(c) Copyright 1998 by Akinori Ito",
+        "(c) Copyright 1998-2007 by Mark Mielke Freedom",
+        "(c) Copyright 2002-2011 by Akinori Ito, Hironori Sakamoto, Fumitoshi Ukai",
+        "(c) Copyright Bigelow & Holmes 1986, 1985",
+        "(c) Jim Davies",
+        "(c) Ministerium fur Wissenschaft und Forschung Nordrhein-Westfalen 2004 Erstellt von Axel Metzger und Till Jaeger, Institut fur Rechtsfragen der Freien"
+      ],
+      "license": "CC0-1.0",
+      "scannedAt": "2026-07-09T14:49:26.103Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/spdx-ranges@2.1.1": {
+      "copyrights": [
+        "Copyright (c) 2015 Kyle E. Mitchell"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-07-09T14:49:35.894Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/spdx-satisfies@6.0.0": {
+      "copyrights": [
+        "Copyright (c) 2015 Kyle E. Mitchell",
+        "Copyright (c) spdx-satisfies.js contributors"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-07-09T14:49:48.870Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/stable-hash-x@0.2.0": {
+      "copyrights": [
+        "Copyright (c) 2025-present UnTS"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-07-09T14:49:59.616Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/tinyglobby@0.2.17": {
+      "copyrights": [
+        "Copyright (c) 2024 Madeline Gurriaran"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-07-09T14:50:10.214Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/ts-api-utils@2.5.0": {
+      "license": "MIT",
+      "scannedAt": "2026-07-09T14:50:23.298Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/type-check@0.4.0": {
+      "copyrights": [
+        "Copyright (c) George Zahariev"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-07-09T14:50:33.630Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/typescript-eslint@8.61.0": {
+      "copyrights": [
+        "Copyright (c) 2019 typescript-eslint and other contributors"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-07-09T14:52:23.697Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/typescript@5.9.3": {
+      "copyrights": [
+        "(c) by W3C",
+        "Copyright (c) 1991-2017 Unicode, Inc.",
+        "Copyright (c) 2018 The Khronos Group Inc.",
+        "Copyright (c) 2018 WHATWG Apple, Google, Mozilla",
+        "Copyright (c) Microsoft Corporation",
+        "Copyright (c) YEAR W3C(r) (MIT, ERCIM, Keio, Beihang) Disclaimers"
+      ],
+      "license": "Apache-2.0",
+      "scannedAt": "2026-07-09T14:52:10.396Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/undici-types@7.24.6": {
+      "copyrights": [
+        "Copyright (c) Matteo Collina and Undici contributors"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-07-09T14:52:50.133Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/unrs-resolver@1.12.2": {
+      "license": "MIT",
+      "scannedAt": "2026-07-09T14:53:01.220Z",
+      "via": "scancode-toolkit@32.5.0/manifest"
+    },
+    "pkg:npm/uri-js@4.4.1": {
+      "copyrights": [
+        "(c) 2011 Gary Court",
+        "Copyright 2011 Gary Court"
+      ],
+      "license": "BSD-2-Clause-Views",
+      "scannedAt": "2026-07-09T14:53:30.657Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/which@2.0.2": {
+      "copyrights": [
+        "Copyright (c) Isaac Z. Schlueter and Contributors"
+      ],
+      "license": "ISC",
+      "scannedAt": "2026-07-09T14:53:40.957Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/word-wrap@1.2.5": {
+      "copyrights": [
+        "Copyright (c) 2014-2016, Jon Schlinkert",
+        "Copyright (c) 2014-2023, Jon Schlinkert",
+        "Copyright (c) 2023, Jon Schlinkert (https://github.com/jonschlinkert)"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-07-09T14:53:50.960Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/yocto-queue@0.1.0": {
+      "copyrights": [
+        "Copyright (c) Sindre Sorhus <sindresorhus@gmail.com> (https://sindresorhus.com)"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-07-09T14:54:00.569Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    }
+  },
+  "version": 1
+}
