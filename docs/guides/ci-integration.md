@@ -268,58 +268,78 @@ bad entry — a commit that edits the cache — and stays idle the rest of the t
 Point the filter at wherever your repository keeps the cache if it isn't at the
 root.
 
-## Run an intensive scan for stubborn licenses
+## Run an intensive scan to assess licenses at the source
 
-Registry enrichment answers most licenses, but not all of them. A package with
-no machine-readable license field anywhere the registry looks stays unknown or
-imprecise, and that gap either blocks the gate or gets a manual policy
-override. `--intensive` closes some of those gaps by scanning the package's
-actual source with [ScanCode](https://github.com/aboutcode-org/scancode-toolkit),
-the same detector suite the wider license-scanning ecosystem is built on,
-instead of asking a person to open the source and read the license by hand.
+Registry enrichment reads the license a package declares. That is a quick check,
+and for some packages it is thin, missing, or wrong. `--intensive` adds a deeper
+reading: it scans each package's actual source with
+[ScanCode](https://github.com/aboutcode-org/scancode-toolkit), the same detector
+suite the wider license-scanning ecosystem is built on, and treats that reading
+as the senior one.
 
-It only looks at what registry enrichment left unresolved, and only at
-directories `generate` already collected for this run. A package the registry
-already answered is never rescanned, and a clean tree with nothing left
-unresolved makes this flag a no-op.
+Unlike the registry lane, an intensive run assesses the **full** package set,
+not just the unresolved leftovers. Where ScanCode reads a license, that reading
+takes priority over the declared and registry answer. Where the two disagree,
+the package fails the gate as a `conflict:scancode` finding for a person to
+resolve with a `[[clarify]]` entry — the tool never silently picks a side. See
+the [CLI reference](../reference/cli.md#generate) for the flag and a worked
+`[[clarify]]` resolution.
 
 ```sh
 task generate INTENSIVE=1
 ```
 
-This is occasional/scheduled CI, not every build. ScanCode needs its own
-install and takes real time to run, so the right place for it is a scheduled
-job, not a step on every push:
+This is occasional/scheduled CI, not every build. ScanCode needs its own install
+and takes real time to run, so the right place for it is a scheduled job, not a
+step on every push:
 
-- ScanCode is a real DEPENDENCY, so it is pinned in `mise.toml` like every
-  other tool and arrives through the same `mise install` step every workflow
-  already runs — no separate acquisition command.
+- ScanCode is a real DEPENDENCY, so it is pinned in `mise.toml` like every other
+  tool and arrives through the same `mise install` step every workflow already
+  runs — no separate acquisition command.
 - Installing it (`mise install`, cold) took about 90 seconds in a one-time
-  measurement. Every `mise install` now pays this cost once per cache, not
-  just the scheduled scan job — it is part of the pinned toolchain, the
-  same trade-off every other pinned tool already makes.
-- The scanner's own first-run self-check took about 2 seconds.
-- Scanning a single unresolved package's source tree took about 37 seconds
-  wall-clock for a 92-file dependency in this project's own measurements —
-  call it on the order of a couple of files per second, so cost scales with
-  the size of the package, not with the size of your repository.
+  measurement. Every `mise install` now pays this cost once per cache, whether
+  or not that run scans — it is part of the pinned toolchain.
+- Scanning one package's source tree took about 37 seconds wall-clock for a
+  92-file dependency in this project's own measurements — cost scales with the
+  size of each package, not the size of your repository.
 
-A repository with several unresolved packages in a single run pays that
-per-package cost several times over, which is the other reason this belongs on
-a schedule: a monthly run absorbs it once, off the critical path of every
-commit.
+### The first run is a backfill
+
+Because the first intensive run assesses every package with locally-present
+sources, it is long — on this repository, on the order of tens of minutes; on a
+larger tree, a few hours. That one-time cost is why the scheduled workflow's
+`timeout-minutes` is set generously (240 here). Rather than waiting for the cron
+to reach it, trigger the first run yourself with `workflow_dispatch`, so the
+backfill runs when you expect it.
+
+After the backfill, steady state is cheap. ScanCode's answers are memoized in a
+committed cache, `scancode.cache.json`, keyed by package version — including the
+versions it scanned and found no license in. A later run only scans versions it
+has never assessed, so a monthly run after a routine dependency bump scans a
+handful of packages, and an unchanged lockfile scans nothing. A package whose
+sources aren't installed that run is reported on stderr and skipped, never
+memoized, so a later install can still assess it.
 
 Wire it up the same way as the [cache-integrity audit](#verify-the-cache-before-a-release) —
 a separate scheduled workflow, not the gate. This repository's own
-`.github/workflows/intensive-scan.yml` runs it monthly and on manual dispatch
-only, then commits any refreshed cache entries back the same way the Docker
-scan below does. Results land in the same committed enrichment cache
-`generate` and `check` already read, so once a scan resolves a package, every
-later run — including the offline gate — reuses the answer without scanning
-again.
+`.github/workflows/intensive-scan.yml` runs it monthly and on manual dispatch,
+then commits any new memo entries back the same way the Docker scan below does.
+The gate reads the committed memo offline: once a scan assesses a package, every
+later `generate` and `check` reuses the answer without scanning again.
 
-`--intensive` is generate-only; passing it to `check` is a config error,
-because the gate never scans anything.
+### A scheduled scan can turn the main gate red
+
+This is by design, and worth expecting. When a scheduled intensive run finds a
+new disagreement between ScanCode and the registry, it commits a memo whose
+presence makes the next `check` on `main` exit 1 — the `conflict:scancode`
+finding demands a decision. That is not CI breaking; it is the tool asking a
+person to resolve a real disagreement. The fix is to read the "Assessment
+conflicts" section, decide which reading to trust, and record it with a
+`[[clarify]]` entry. Until then the gate stays red, which is the point: an
+unresolved conflict should not pass.
+
+`--intensive` is generate-only; passing it to `check` is a config error, because
+the gate never scans anything.
 
 ## The Docker scan is a separate step from the gate
 
@@ -441,5 +461,5 @@ your `.gitattributes` LF pins so it byte-compares the same way on every checkout
   enrichment, scope, verdict.
 - [design-principles](../explanation/design-principles.md) — why the gate is
   built on determinism, an offline check, and honest residuals.
-- [ADR-0019](../explanation/adr/0019-scancode-intensive-collector.md) — why
-  the intensive scan installs its own way and shares the enrichment cache.
+- [ADR-0019](../explanation/adr/0019-scancode-senior-assessment.md) — why the
+  in-depth scan outranks the registry answer and keeps its own memo.

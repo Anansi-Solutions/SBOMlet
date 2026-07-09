@@ -44,7 +44,8 @@ is evaluated and its verdicts print to stderr, but the gate is `check`, never
 | `--dump-model <path>` | Write the internal merged model as JSON, for inspecting what the tool built. | not written |
 | `--base-dir <path>` | Anchor every relative path flag to this directory instead of the working directory. | working directory |
 | `--enrichment-cache <path>` | Where to read and write the enrichment cache. | tool default |
-| `--intensive` | Scan the local sources of packages still unresolved after registry enrichment, with ScanCode. Generate-only; meant for occasional, scheduled CI, not every build. | off |
+| `--scancode-cache <path>` | Where to read and write the ScanCode assessment memo (`scancode.cache.json`). | tool default |
+| `--intensive` | Assess every package with ScanCode, an in-depth source scan that outranks the registry answer where present; a disagreement fails the gate as a conflict. Generate-only; for occasional, scheduled CI, not every build. | off |
 | `--verbose` | Print per-stage progress to stderr. | off |
 
 `--target` and `--repo-root` are mutually exclusive; pass at most one. With
@@ -55,13 +56,45 @@ workspace member ([ADR-0020](../explanation/adr/0020-yarn-workspace-scan-units.m
 single-target mode narrows which directory the loop starts from, not whether a
 Yarn lockfile's own workspace members get expanded.
 
-`--intensive` runs after registry enrichment, against whatever [target](../glossary.md#target)
-directories `generate` already collected — it never triggers a second discovery
-walk. It has no effect on a package the registry already resolved; it only
-scans the local source tree of a package still unknown or imprecise once
-enrichment finishes, and if nothing is left unresolved it does nothing. When
-requested but the scanner isn't on `PATH`, the run fails loudly rather than
-skipping the scan silently:
+`--intensive` assesses the full package set with
+[ScanCode](https://github.com/aboutcode-org/scancode-toolkit), a deep read of
+each package's own source. It runs after registry enrichment, against whatever
+[target](../glossary.md#target) directories `generate` already collected — it
+never triggers a second discovery walk.
+
+Where ScanCode reads a licence, that reading is the senior one: it takes
+priority over the declared and registry answer for that package. A `[[clarify]]`
+override still outranks it, since that is where you record a human decision. When
+ScanCode disagrees with the registry answer, neither is taken automatically — the
+package fails the gate as a distinct `conflict:scancode` finding, and the
+document grows an "Assessment conflicts (in-depth scan vs quick check)" section
+naming both readings. You resolve it with a `[[clarify]]` entry recording which
+to trust. For a package the registry calls `MIT` while ScanCode reads
+`BSD-3-Clause`, trusting the scan:
+
+```toml
+[[clarify]]
+package = { name = "example-pkg", version = "1.2.3" }
+expects = "MIT"             # the quick-check answer you are overriding away from
+expression = "BSD-3-Clause" # the reading you trust
+reason = "ScanCode read BSD-3-Clause from the vendored LICENSE file."
+```
+
+The `expects` guard keeps the decision honest: if the registry later relicenses
+off `MIT`, the override no longer matches and the gate fails as
+[stale](../glossary.md#staleness), so a resolved conflict cannot silently mask a
+real relicence. See the [policy reference](policy.md#clarify) for the full
+`[[clarify]]` semantics.
+
+ScanCode's answers live in their own committed memo, `scancode.cache.json`, keyed
+by package version — override its path with `--scancode-cache`. The memo also
+records the versions that were scanned and found no licence, so an
+already-assessed version is never re-scanned. A package whose sources are not
+present locally is skipped and reported on stderr, never memoised, so a later
+install can still scan it.
+
+When `--intensive` is requested but the scanner isn't on `PATH`, the run fails
+loudly rather than skipping the scan silently:
 
 ```
 scancode binary not found on PATH — run mise install
@@ -92,6 +125,7 @@ either is a config error (exit 3).
 | `--cyclonedx <path>` | Also compare a committed CycloneDX export at this path. | not compared |
 | `--base-dir <path>` | Anchor every relative path flag to this directory. | working directory |
 | `--enrichment-cache <path>` | The committed enrichment cache to read. | tool default |
+| `--scancode-cache <path>` | The committed ScanCode memo to replay. | tool default |
 | `--verbose` | Print per-stage progress to stderr. | off |
 | `--dump-model <path>` | Rejected — valid only on `generate`. | — |
 | `--intensive` | Rejected — the gate never scans; valid only on `generate`. | — |

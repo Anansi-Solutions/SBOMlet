@@ -57,8 +57,10 @@ const USAGE =
   "[--cyclonedx <path>] [--dump-model <path>] [--base-dir <path>] " +
   "[--enrichment-cache <path>] [--scancode-cache <path>] [--intensive] " +
   "[--verbose]\n" +
-  "           --intensive: scan the locally-present sources of still-" +
-  "unresolved packages with ScanCode after registry enrichment (generate-" +
+  "           --intensive: assess the FULL package set with ScanCode, an " +
+  "in-depth source scan that outranks the registry answer where present and " +
+  "flags any disagreement as a conflict to resolve; skips versions already " +
+  "in the memo and packages whose sources are not locally present (generate-" +
   "only; meant for occasional runs, not the default fast path).\n" +
   "  check    same flags as generate (minus --dump-model, minus --intensive) — regenerates in " +
   "memory and byte-compares every configured output; writes nothing\n" +
@@ -193,12 +195,12 @@ interface CliValues {
    */
   "list-dockerfiles"?: boolean;
   /**
-   * generate --intensive (10-05, SCAN-01/SCAN-02/SCAN-03): opt-in ScanCode
-   * residual-scan lane over still-unresolved packages with locally-present
-   * sources. GENERATE-ONLY — check rejects it outright (gate/check.ts). No
-   * `default` here: absent must stay absent, never coerced to false, so
-   * optionsFrom's own-property spread can gate the intensive lane on mere
-   * presence.
+   * generate --intensive: opt-in ScanCode assessment over the FULL package
+   * set — the in-depth source scan that outranks the registry answer where
+   * present, memo-gated so an already-analysed version is never re-scanned.
+   * GENERATE-ONLY — check rejects it outright (gate/check.ts). No `default`
+   * here: absent must stay absent, never coerced to false, so optionsFrom's
+   * own-property spread can gate the intensive lane on mere presence.
    */
   intensive?: boolean;
 }
