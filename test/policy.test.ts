@@ -1459,6 +1459,25 @@ describe("evaluate — conflict:scancode fail verdict (SCAN-05)", () => {
     expect(verdicts[0].rule).not.toBe("conflict:scancode");
   });
 
+  test("chain order (inverse): a denied license the ScanCode assessment ITSELF surfaces, over a permissive declared answer, fires deny FIRST — the senior assessment can never license a denied member in, and a disagreement never downgrades a deny to a mere conflict", () => {
+    // The mirror of the sibling above: here the DENIED license is the in-depth
+    // ScanCode answer and the declared quick-check answer is permissive. The
+    // assessment disagrees with the declared claim (a conflict marker is set),
+    // but the denied member still reaches the deny terminal through
+    // observedExpressions (every per-claim precise expression, the scancode
+    // claim included), so deny fires above the conflict lane. A denied license
+    // that only the deep scan detected can never be masked by the disagreement
+    // being surfaced as a conflict rather than a deny.
+    const { verdicts } = runEngine(
+      [scanPkgSpec("scancode-denied", "MIT", "BUSL-1.1", ["backend"])],
+      denyLicenseFixture("BUSL-1.1"),
+    );
+    expect(verdicts[0].status).toBe("fail");
+    expect(verdicts[0].rule).toBe("denied[0]");
+    expect(verdicts[0].rule).not.toBe("conflict:scancode");
+    expect(verdicts[0].reason).toContain("BUSL-1.1");
+  });
+
   test("placement ABOVE compatible: a conflict on a package whose base a compatible license rule would accept still FAILS conflict:scancode", () => {
     // base = "Apache-2.0 AND MIT" (the AND-combine of the declared claim and the
     // scancode claim); the compatible allowlist [Apache-2.0, MIT] satisfies it,
