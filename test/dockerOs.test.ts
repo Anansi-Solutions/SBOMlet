@@ -89,7 +89,7 @@ describe("dockerInspectArgs (argv lock, finding #5)", () => {
   });
 });
 
-describe("dockerPullArgs (argv lock, opt-in --pull)", () => {
+describe("dockerPullArgs (argv lock, implicit probe-first pull)", () => {
   test("the image operand is placed AFTER a `--` end-of-options separator", () => {
     const args = dockerPullArgs("postgres:18");
     const sepIndex = args.indexOf("--");
@@ -108,30 +108,37 @@ describe("dockerPullArgs (argv lock, opt-in --pull)", () => {
   });
 });
 
-describe("filterOsComponents (OS-purl filter)", () => {
-  test("keeps ONLY pkg:deb components from a dpkg SBOM, dropping all noise", () => {
-    const os = filterOsComponents(postgresFixture);
-    // generic/golang/purl-less-file/operating-system all dropped.
-    expect(os.length).toBeGreaterThan(0);
-    expect(os.every((c) => c.purl.startsWith("pkg:deb/"))).toBe(true);
-    // Every retained component carries name + version + purl.
-    expect(
-      os.every(
-        (c) =>
-          typeof c.name === "string" &&
-          c.name.length > 0 &&
-          typeof c.version === "string" &&
-          c.version.length > 0 &&
-          typeof c.purl === "string" &&
-          c.purl.length > 0,
-      ),
-    ).toBe(true);
-  });
-
-  test("keeps ONLY pkg:apk components from an apk SBOM", () => {
-    const os = filterOsComponents(nginxFixture);
-    expect(os.length).toBeGreaterThan(0);
-    expect(os.every((c) => c.purl.startsWith("pkg:apk/"))).toBe(true);
+describe("filterOsComponents (image-contents purl filter, all ecosystems)", () => {
+  test("keeps every component carrying a non-empty name+version+purl, across ecosystems", () => {
+    // The single predicate is ecosystem-agnostic (D-03): deb, apk, and npm all
+    // survive as long as they carry name+version+purl. purl-less file /
+    // operating-system noise and empty-field entries are still dropped.
+    const mixed = {
+      components: [
+        {
+          type: "library",
+          name: "libc6",
+          version: "2",
+          purl: "pkg:deb/libc6@2",
+        },
+        { type: "library", name: "musl", version: "1", purl: "pkg:apk/musl@1" },
+        {
+          type: "library",
+          name: "left-pad",
+          version: "1.3.0",
+          purl: "pkg:npm/left-pad@1.3.0",
+        },
+        { type: "operating-system", name: "alpine", version: "3.23" },
+        { type: "library", name: "empty", version: "", purl: "pkg:deb/empty@" },
+      ],
+    };
+    const kept = filterOsComponents(mixed);
+    // purl-sorted (apk < deb < npm); noise + empty-version entries dropped.
+    expect(kept.map((c) => c.purl)).toEqual([
+      "pkg:apk/musl@1",
+      "pkg:deb/libc6@2",
+      "pkg:npm/left-pad@1.3.0",
+    ]);
   });
 
   test("PRESERVES syft's license id/name shapes on deb components (the bug fix)", () => {
@@ -243,22 +250,28 @@ describe("filterOsComponents (OS-purl filter)", () => {
     expect(purls).toEqual(sorted);
   });
 
-  test("duplicate purls are deduped first-wins", () => {
+  test("duplicate purls are deduped first-wins, across ecosystems", () => {
     const dup = {
       components: [
         { type: "library", name: "a", version: "1", purl: "pkg:deb/a@1" },
         { type: "library", name: "a", version: "1", purl: "pkg:deb/a@1" },
         { type: "library", name: "b", version: "2", purl: "pkg:deb/b@2" },
+        { type: "library", name: "lp", version: "1", purl: "pkg:npm/lp@1" },
+        { type: "library", name: "lp", version: "1", purl: "pkg:npm/lp@1" },
       ],
     };
     const os = filterOsComponents(dup);
-    expect(os.map((c) => c.purl)).toEqual(["pkg:deb/a@1", "pkg:deb/b@2"]);
+    expect(os.map((c) => c.purl)).toEqual([
+      "pkg:deb/a@1",
+      "pkg:deb/b@2",
+      "pkg:npm/lp@1",
+    ]);
   });
 });
 
-describe("filterOsComponents fullContents (widened purl gate, DOCK-01)", () => {
-  test("fullContents keeps apk AND npm AND pypi components, purl-sorted, licenses preserved", () => {
-    const full = filterOsComponents(builtFixture, { fullContents: true });
+describe("filterOsComponents (full image contents by default)", () => {
+  test("keeps apk AND npm AND pypi components, purl-sorted, licenses preserved", () => {
+    const full = filterOsComponents(builtFixture);
     const purls = full.map((c) => c.purl);
     const sorted = [...purls].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
     expect(purls).toEqual(sorted);
@@ -284,8 +297,8 @@ describe("filterOsComponents fullContents (widened purl gate, DOCK-01)", () => {
     expect(pypi?.licenses).toEqual([{ license: { name: "PSF-2.0" } }]);
   });
 
-  test("fullContents still drops purl-less noise and empty-name/version/purl entries", () => {
-    const full = filterOsComponents(builtFixture, { fullContents: true });
+  test("drops purl-less noise and empty-name/version/purl entries", () => {
+    const full = filterOsComponents(builtFixture);
     const names = full.map((c) => c.name);
     // syft's purl-less file/operating-system noise never survives.
     expect(names).not.toContain("/etc/os-release");
@@ -306,23 +319,8 @@ describe("filterOsComponents fullContents (widened purl gate, DOCK-01)", () => {
     ).toBe(true);
   });
 
-  test("regression: the default call (no options) stays deb/apk-only on the SAME fixture", () => {
-    const defaultFiltered = filterOsComponents(builtFixture);
-    expect(defaultFiltered.length).toBeGreaterThan(0);
-    expect(defaultFiltered.every((c) => c.purl.startsWith("pkg:apk/"))).toBe(
-      true,
-    );
-    // No npm/pypi entries leak into the default (unwidened) gate.
-    expect(defaultFiltered.some((c) => c.purl.startsWith("pkg:npm/"))).toBe(
-      false,
-    );
-    expect(defaultFiltered.some((c) => c.purl.startsWith("pkg:pypi/"))).toBe(
-      false,
-    );
-  });
-
-  test("double-emit of the widened fullContents doc is byte-identical, with no volatile fields", () => {
-    const full = filterOsComponents(builtFixture, { fullContents: true });
+  test("double-emit of the full-contents doc is byte-identical, with no volatile fields", () => {
+    const full = filterOsComponents(builtFixture);
     const digests = [{ image: "local/scan-image:built", digest: "" }];
     const first = emitDockerOsDoc(full, digests);
     const second = emitDockerOsDoc(full, digests);

@@ -2116,7 +2116,7 @@ describe("generate-docker-sbom mode contract", () => {
     ).toBeUndefined();
   });
 
-  test("dockerSbomOptionsFrom maps a repeatable --dockerfile list to dockerfilePaths verbatim, no pull field", () => {
+  test("dockerSbomOptionsFrom maps a repeatable --dockerfile list to dockerfilePaths verbatim", () => {
     const base = neutralBaseDir();
     try {
       const options = dockerSbomOptionsFrom({
@@ -2124,35 +2124,6 @@ describe("generate-docker-sbom mode contract", () => {
         "base-dir": base,
       });
       expect(options.dockerfilePaths).toEqual(["a/Dockerfile", "b/Dockerfile"]);
-      expect(options.pull).toBeUndefined();
-    } finally {
-      rmSync(base, { recursive: true, force: true });
-    }
-  });
-
-  test("dockerSbomOptionsFrom sets pull:true only when --pull is passed", () => {
-    const base = neutralBaseDir();
-    try {
-      const options = dockerSbomOptionsFrom({
-        dockerfile: ["a/Dockerfile"],
-        pull: true,
-        "base-dir": base,
-      });
-      expect(options.pull).toBe(true);
-    } finally {
-      rmSync(base, { recursive: true, force: true });
-    }
-  });
-
-  test("--pull defaults to false/absent through parseArgs (option table default)", () => {
-    const base = neutralBaseDir();
-    try {
-      const options = dockerSbomOptionsFrom({
-        dockerfile: ["a/Dockerfile"],
-        pull: false,
-        "base-dir": base,
-      });
-      expect(options.pull).toBeUndefined();
     } finally {
       rmSync(base, { recursive: true, force: true });
     }
@@ -2178,16 +2149,6 @@ describe("generate-docker-sbom mode contract", () => {
     expect(message).toContain("--dockerfile");
   });
 
-  test("--built-image and --pull conflict, naming both flags", () => {
-    const message = dockerSbomModeConflict({
-      "built-image": ["myapp:ci"],
-      pull: true,
-    });
-    expect(message).toBeDefined();
-    expect(message).toContain("--built-image");
-    expect(message).toContain("--pull");
-  });
-
   test("--built-image alone is NOT a conflict", () => {
     expect(
       dockerSbomModeConflict({
@@ -2205,7 +2166,7 @@ describe("generate-docker-sbom mode contract", () => {
     ).toBeUndefined();
   });
 
-  test("dockerSbomOptionsFrom maps repeatable --built-image values to builtImages verbatim, never sets pull", () => {
+  test("dockerSbomOptionsFrom maps repeatable --built-image values to builtImages verbatim", () => {
     const base = neutralBaseDir();
     try {
       const options = dockerSbomOptionsFrom({
@@ -2213,7 +2174,6 @@ describe("generate-docker-sbom mode contract", () => {
         "base-dir": base,
       });
       expect(options.builtImages).toEqual(["myapp:ci", "worker:ci"]);
-      expect(options.pull).toBeUndefined();
     } finally {
       rmSync(base, { recursive: true, force: true });
     }
@@ -2300,7 +2260,7 @@ describe("optionsFrom --intensive threading (10-05, D-07 absent-not-false)", () 
 });
 
 describe("Taskfile.yml --intensive plumbing (10-05, static/string-locked, no YAML parser)", () => {
-  test("generate task composes --intensive from the INTENSIVE var (bare boolean, PULL idiom)", () => {
+  test("generate task composes --intensive from the INTENSIVE var (bare boolean idiom)", () => {
     const taskfile = readFileSync(
       join(import.meta.dir, "..", "Taskfile.yml"),
       "utf8",

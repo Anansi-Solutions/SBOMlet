@@ -1,9 +1,9 @@
 /**
- * Subprocess-free orchestration tests for the built-image collection posture
- * (DOCK-01): a locally built, never-pushed image has no RepoDigests
- * (resolveDigest throws by design) and any per-build digest is volatile, so
- * built collection records the stable, digest-less identity
- * {image: <ref>, digest: ""} and never invokes docker inspect/pull.
+ * Subprocess-free orchestration tests for the single collection posture: every
+ * image scan reads FULL contents, resolves a RepoDigest when present and records
+ * digest "" when absent (a local-only / never-pushed image), and pulls only when
+ * the ref is not already present locally (probe-first). A locally present ref is
+ * never re-pulled — the never-race-the-network determinism posture.
  *
  * Isolated from dockerOs.test.ts (which stays un-mocked) because this file
  * replaces execTool via mock.module — the cli.test.ts precedent, restored in
@@ -36,52 +36,124 @@ import { runGenerateDockerSbom } from "../src/pipeline/dockerSbom";
 /** Original exec export captured BEFORE any mock.module call (restore target). */
 const REAL_EXEC = { ...execModule };
 
+/** The trimmed real-syft capture the scan reads back (apk + npm + pypi). */
+const FIXTURE = join(__dirname, "fixtures", "syft-built-image-trimmed.json");
+
+type ExecResult = { stdout: string; stderr: string };
+type ExecFn = (cmd: string, args: string[]) => Promise<ExecResult>;
+
 /** Every recorded execTool invocation: [cmd, ...args]. */
 let invocations: string[][] = [];
 
+/** The syft output-target operand a `cyclonedx-json=<file>` argv carries, else undefined. */
+function syftOutFile(args: string[]): string | undefined {
+  const arg = args.find((a) => a.startsWith("cyclonedx-json="));
+  return arg === undefined ? undefined : arg.slice("cyclonedx-json=".length);
+}
+
 /**
- * A subprocess-free execTool recorder. For a syft invocation (argv containing
- * a "cyclonedx-json=<file>" option), copies the built-image fixture to the
- * parsed outFile so the collector's read-back succeeds without ever spawning
- * anything. Any other invocation (docker inspect/pull) is just recorded.
+ * The default recorder: copies the fixture for a syft scan and resolves every
+ * docker call with an EMPTY RepoDigests array ("[]") — i.e. the image is present
+ * locally (inspect exit 0) but carries no RepoDigests, so the digest resolves to
+ * "" (a local-only / never-pushed image). No pull is ever needed.
  */
-function fakeExecTool(
-  cmd: string,
-  args: string[],
-): Promise<{ stdout: string; stderr: string }> {
+function fakeExecTool(cmd: string, args: string[]): Promise<ExecResult> {
   invocations.push([cmd, ...args]);
-  const cyclonedxArg = args.find((a) => a.startsWith("cyclonedx-json="));
-  if (cyclonedxArg !== undefined) {
-    const outFile = cyclonedxArg.slice("cyclonedx-json=".length);
-    copyFileSync(
-      join(__dirname, "fixtures", "syft-built-image-trimmed.json"),
-      outFile,
-    );
+  const outFile = syftOutFile(args);
+  if (outFile !== undefined) {
+    copyFileSync(FIXTURE, outFile);
+    return Promise.resolve({ stdout: "", stderr: "" });
   }
   return Promise.resolve({ stdout: "[]", stderr: "" });
 }
 
 /**
- * A per-image execTool stub: writes a distinct one-component doc keyed by the
- * scanned image ref (the last argv operand, after the `--` separator), so a
- * shared purl across two images can carry DIFFERENT license claims per image —
- * the adversarial-review Lens 2 probe (09-07). Only the syft invocation (argv
- * carrying "cyclonedx-json=<file>") writes; built collection never calls
- * docker inspect/pull, so every recorded invocation here is a syft scan.
+ * A recorder that reports the image as present (inspect exit 0) and pins a fixed
+ * RepoDigest — the generalized "RepoDigests present" posture.
+ */
+function makePinnedExec(digestRef: string): ExecFn {
+  return (cmd, args) => {
+    invocations.push([cmd, ...args]);
+    const outFile = syftOutFile(args);
+    if (outFile !== undefined) {
+      copyFileSync(FIXTURE, outFile);
+      return Promise.resolve({ stdout: "", stderr: "" });
+    }
+    if (args[0] === "inspect") {
+      return Promise.resolve({
+        stdout: JSON.stringify([digestRef]),
+        stderr: "",
+      });
+    }
+    return Promise.resolve({ stdout: "", stderr: "" });
+  };
+}
+
+/**
+ * A stateful recorder: `docker inspect` FAILS (nonzero exit → the probe reads it
+ * as absent) until the image has been pulled; after the pull it succeeds and
+ * pins the digest. Models an absent ref that the probe-first path must pull
+ * before scanning.
+ */
+function makeAbsentThenPresentExec(digestRef: string): ExecFn {
+  const pulled = new Set<string>();
+  return (cmd, args) => {
+    invocations.push([cmd, ...args]);
+    const outFile = syftOutFile(args);
+    if (outFile !== undefined) {
+      copyFileSync(FIXTURE, outFile);
+      return Promise.resolve({ stdout: "", stderr: "" });
+    }
+    const image = args[args.length - 1] as string;
+    if (args[0] === "inspect") {
+      if (!pulled.has(image)) {
+        return Promise.reject(new Error("docker inspect: No such object"));
+      }
+      return Promise.resolve({
+        stdout: JSON.stringify([digestRef]),
+        stderr: "",
+      });
+    }
+    if (args[0] === "pull") {
+      pulled.add(image);
+      return Promise.resolve({ stdout: "", stderr: "" });
+    }
+    return Promise.resolve({ stdout: "", stderr: "" });
+  };
+}
+
+/**
+ * A recorder where the ref is absent (inspect fails) AND the implicit pull fails
+ * too — nothing can be scanned. Pitfall 6 / T-13-05: the error must surface and
+ * digest resolution must never run (no "" masking a typo'd ref).
+ */
+function makeFailingPullExec(): ExecFn {
+  return (cmd, args) => {
+    invocations.push([cmd, ...args]);
+    if (args[0] === "inspect") {
+      return Promise.reject(new Error("docker inspect: No such object"));
+    }
+    if (args[0] === "pull") {
+      return Promise.reject(new Error("docker pull: access denied"));
+    }
+    return Promise.resolve({ stdout: "", stderr: "" });
+  };
+}
+
+/**
+ * A per-image recorder: writes a distinct one-component doc keyed by the scanned
+ * image ref (the last argv operand), so a shared purl across two images can carry
+ * DIFFERENT license claims per image — the adversarial-review Lens 2 probe. Every
+ * docker call resolves with "[]" (present, digest "").
  */
 function makePerImageExecTool(
   licenseByImage: Readonly<Record<string, string>>,
-): (
-  cmd: string,
-  args: string[],
-) => Promise<{ stdout: string; stderr: string }> {
-  return (cmd: string, args: string[]) => {
+): ExecFn {
+  return (cmd, args) => {
     invocations.push([cmd, ...args]);
-    const cyclonedxArg = args.find((a) => a.startsWith("cyclonedx-json="));
-    if (cyclonedxArg !== undefined) {
-      const outFile = cyclonedxArg.slice("cyclonedx-json=".length);
+    const outFile = syftOutFile(args);
+    if (outFile !== undefined) {
       const image = args[args.length - 1] as string;
-      const license = licenseByImage[image];
       const doc = {
         bomFormat: "CycloneDX",
         specVersion: "1.6",
@@ -91,23 +163,31 @@ function makePerImageExecTool(
             name: "shared",
             version: "1.0.0",
             purl: "pkg:npm/shared@1.0.0",
-            licenses: [{ license: { id: license } }],
+            licenses: [{ license: { id: licenseByImage[image] } }],
           },
         ],
       };
       writeFileSync(outFile, JSON.stringify(doc));
+      return Promise.resolve({ stdout: "", stderr: "" });
     }
     return Promise.resolve({ stdout: "[]", stderr: "" });
   };
 }
 
-describe("collectDockerOsSbom built-image collection posture (DOCK-01)", () => {
-  let tempDir: string;
+/** The active recorder for the current test; reset to fakeExecTool after each. */
+let currentExec: ExecFn = fakeExecTool;
+
+function dispatchExec(cmd: string, args: string[]): Promise<ExecResult> {
+  return currentExec(cmd, args);
+}
+
+describe("collectDockerOsSbom one posture (full contents, generalized digest, probe-first pull)", () => {
+  let tempDir: string | undefined;
 
   beforeAll(() => {
     mock.module("../src/collectors/exec", () => ({
       ...REAL_EXEC,
-      execTool: fakeExecTool,
+      execTool: dispatchExec,
     }));
   });
 
@@ -117,87 +197,130 @@ describe("collectDockerOsSbom built-image collection posture (DOCK-01)", () => {
 
   afterEach(() => {
     invocations = [];
+    currentExec = fakeExecTool;
     if (tempDir !== undefined)
       rmSync(tempDir, { recursive: true, force: true });
+    tempDir = undefined;
   });
 
-  test('records digest-less {image, digest:""} per image, sorted, with NO inspect/pull argv', async () => {
-    tempDir = mkdtempSync(join(tmpdir(), "licenses-docker-built-"));
+  const argvStrings = (): string[] => invocations.map((argv) => argv.join(" "));
+
+  test('records {image, digest:""} for local-only images (absent RepoDigests), sorted, with NO pull argv', async () => {
+    tempDir = mkdtempSync(join(tmpdir(), "licenses-docker-posture-"));
     const { doc } = await collectDockerOsSbom(
       ["local/scan-b", "local/scan-a"],
-      { built: true, tempDir },
+      {
+        tempDir,
+      },
     );
     const parsed = JSON.parse(doc) as {
       dockerImages: { image: string; digest: string }[];
     };
+    // Absent RepoDigests → the generalized digest-less identity, sorted by image.
     expect(parsed.dockerImages).toEqual([
       { image: "local/scan-a", digest: "" },
       { image: "local/scan-b", digest: "" },
     ]);
-
-    const argvStrings = invocations.map((argv) => argv.join(" "));
-    expect(argvStrings.some((s) => s.includes("inspect"))).toBe(false);
-    expect(argvStrings.some((s) => s.includes("pull"))).toBe(false);
+    // The present-probe means inspect IS used, but nothing is ever pulled.
+    expect(argvStrings().some((s) => s.includes("pull"))).toBe(false);
   });
 
-  test("applies fullContents on the built path — components include a pkg:npm purl", async () => {
-    tempDir = mkdtempSync(join(tmpdir(), "licenses-docker-built-"));
-    const { doc } = await collectDockerOsSbom(["local/scan-a"], {
-      built: true,
-      tempDir,
-    });
-    const parsed = JSON.parse(doc) as {
-      components: { purl: string }[];
-    };
+  test("reads FULL image contents — a pkg:npm component survives alongside apk", async () => {
+    tempDir = mkdtempSync(join(tmpdir(), "licenses-docker-posture-"));
+    const { doc } = await collectDockerOsSbom(["local/scan-a"], { tempDir });
+    const parsed = JSON.parse(doc) as { components: { purl: string }[] };
     expect(parsed.components.some((c) => c.purl.startsWith("pkg:npm/"))).toBe(
+      true,
+    );
+    expect(parsed.components.some((c) => c.purl.startsWith("pkg:apk/"))).toBe(
       true,
     );
   });
 
-  test("built + pull rejects synchronously BEFORE any execTool call", async () => {
-    tempDir = mkdtempSync(join(tmpdir(), "licenses-docker-built-"));
-    await expect(
-      collectDockerOsSbom(["local/scan-a"], {
-        built: true,
-        pull: true,
-        tempDir,
-      }),
-    ).rejects.toThrow("built images are local-only and cannot be pulled");
-    expect(invocations).toEqual([]);
+  test("a locally-present image is probed and scanned as-is, never pulled (T-13-06)", async () => {
+    tempDir = mkdtempSync(join(tmpdir(), "licenses-docker-posture-"));
+    await collectDockerOsSbom(["local/scan-a"], { tempDir });
+    const argv = argvStrings();
+    // The presence probe ran (inspect) and the scan ran (syft), but no pull.
+    expect(argv.some((s) => s.includes("inspect"))).toBe(true);
+    expect(argv.some((s) => s.includes("cyclonedx-json="))).toBe(true);
+    expect(argv.some((s) => s.includes("pull"))).toBe(false);
   });
 
-  // Adversarial review (09-07), Lens 2: two built images sharing a purl with
-  // DIFFERENT licenses — is the result order-dependent on the images argument?
-  // filterOsComponents dedupes first-wins WITHIN one syft doc, but the
-  // cross-image fold in collectDockerOsSbom walks `images` in the CALLER'S
-  // order (unlike resolveDiscoveredImages/resolveTargetedDockerfiles, which
-  // both compareCodeUnits-sort before scanning) — so the license claim
-  // attached to a shared purl must be a pure function of the image SET, never
-  // of argv order, for the committed artifact to stay byte-deterministic
-  // (D-14) regardless of how a caller lists --built-image refs.
-  test("a purl shared between two built images resolves the SAME license regardless of images argument order", async () => {
+  test("present RepoDigests pin the digest via selectDigest (generalized posture)", async () => {
+    const digestRef = "docker.io/library/scan-a@sha256:" + "a".repeat(64);
+    currentExec = makePinnedExec(digestRef);
+    tempDir = mkdtempSync(join(tmpdir(), "licenses-docker-posture-"));
+    const { doc } = await collectDockerOsSbom(["docker.io/library/scan-a"], {
+      tempDir,
+    });
+    const parsed = JSON.parse(doc) as {
+      dockerImages: { image: string; digest: string }[];
+    };
+    expect(parsed.dockerImages).toEqual([
+      { image: "docker.io/library/scan-a", digest: digestRef },
+    ]);
+    expect(argvStrings().some((s) => s.includes("pull"))).toBe(false);
+  });
+
+  test("an absent ref is pulled then scanned (probe-first): pull argv precedes the syft scan", async () => {
+    const digestRef = "registry.example.com/absent@sha256:" + "b".repeat(64);
+    currentExec = makeAbsentThenPresentExec(digestRef);
+    tempDir = mkdtempSync(join(tmpdir(), "licenses-docker-posture-"));
+    const { doc } = await collectDockerOsSbom(
+      ["registry.example.com/absent:1"],
+      {
+        tempDir,
+      },
+    );
+    const argv = argvStrings();
+    const firstPull = argv.findIndex((s) => s.includes("pull"));
+    const firstScan = argv.findIndex((s) => s.includes("cyclonedx-json="));
+    // The pull happened, before the scan (the image is fetched, then inventoried).
+    expect(firstPull).toBeGreaterThanOrEqual(0);
+    expect(firstScan).toBeGreaterThan(firstPull);
+    // After the pull the image is present, so its RepoDigest pins.
+    const parsed = JSON.parse(doc) as {
+      dockerImages: { image: string; digest: string }[];
+    };
+    expect(parsed.dockerImages[0]?.digest).toBe(digestRef);
+  });
+
+  test("a ref whose implicit pull fails throws before any scan — digest is never reached (T-13-05)", async () => {
+    currentExec = makeFailingPullExec();
+    tempDir = mkdtempSync(join(tmpdir(), "licenses-docker-posture-"));
+    await expect(
+      collectDockerOsSbom(["registry.example.com/typo"], { tempDir }),
+    ).rejects.toThrow();
+    // The scan never ran, so no "" digest could ever mask a typo'd ref.
+    expect(argvStrings().some((s) => s.includes("cyclonedx-json="))).toBe(
+      false,
+    );
+  });
+
+  // Adversarial review (Lens 2): two images sharing a purl with DIFFERENT
+  // licenses — the license claim attached to a shared purl must be a pure
+  // function of the image SET, never of argument order, for byte-determinism.
+  test("a purl shared between two images resolves the SAME license regardless of argument order", async () => {
     const licenseByImage = {
       "local/scan-mit": "MIT",
       "local/scan-gpl": "GPL-3.0-only",
     };
-    mock.module("../src/collectors/exec", () => ({
-      ...REAL_EXEC,
-      execTool: makePerImageExecTool(licenseByImage),
-    }));
+    currentExec = makePerImageExecTool(licenseByImage);
 
-    const tempDirAB = mkdtempSync(join(tmpdir(), "licenses-docker-built-"));
+    const dirAB = mkdtempSync(join(tmpdir(), "licenses-docker-posture-"));
     const { doc: docAB } = await collectDockerOsSbom(
       ["local/scan-mit", "local/scan-gpl"],
-      { built: true, tempDir: tempDirAB },
+      { tempDir: dirAB },
     );
-    rmSync(tempDirAB, { recursive: true, force: true });
+    rmSync(dirAB, { recursive: true, force: true });
 
-    const tempDirBA = mkdtempSync(join(tmpdir(), "licenses-docker-built-"));
+    const dirBA = mkdtempSync(join(tmpdir(), "licenses-docker-posture-"));
     const { doc: docBA } = await collectDockerOsSbom(
       ["local/scan-gpl", "local/scan-mit"],
-      { built: true, tempDir: tempDirBA },
+      { tempDir: dirBA },
     );
-    rmSync(tempDirBA, { recursive: true, force: true });
+    rmSync(dirBA, { recursive: true, force: true });
 
     const licenseOf = (doc: string): unknown => {
       const parsed = JSON.parse(doc) as {
@@ -206,77 +329,23 @@ describe("collectDockerOsSbom built-image collection posture (DOCK-01)", () => {
           licenses?: { license?: { id?: string } }[];
         }[];
       };
-      const shared = parsed.components.find(
-        (c) => c.purl === "pkg:npm/shared@1.0.0",
-      );
-      return shared?.licenses?.[0]?.license?.id;
+      return parsed.components.find((c) => c.purl === "pkg:npm/shared@1.0.0")
+        ?.licenses?.[0]?.license?.id;
     };
 
     expect(licenseOf(docAB)).toBe(licenseOf(docBA));
-
-    // Restore the shared fixture-based stub for every subsequent test in this
-    // file (beforeAll only runs once; each test after this one relies on the
-    // fixture-copying fakeExecTool, not this test's per-image stub).
-    mock.module("../src/collectors/exec", () => ({
-      ...REAL_EXEC,
-      execTool: fakeExecTool,
-    }));
-  });
-});
-
-/**
- * The daemon-free end-to-end write test relocated from the removed
- * pre-made-SBOM ingest orchestrator suite (D-09 ADAPT): the outputPath-write contract
- * now rides the --image lane. A fake execTool copies the syft fixture for the
- * scan and returns a fixed RepoDigest for `docker inspect`, so
- * runGenerateDockerSbom writes a real committed doc with no docker daemon.
- */
-describe("runGenerateDockerSbom end-to-end write (daemon-free, --image lane)", () => {
-  const DIGEST_REF = "docker.io/library/scan-a@sha256:" + "a".repeat(64);
-
-  function fakeImageExecTool(
-    cmd: string,
-    args: string[],
-  ): Promise<{ stdout: string; stderr: string }> {
-    invocations.push([cmd, ...args]);
-    const cyclonedxArg = args.find((a) => a.startsWith("cyclonedx-json="));
-    if (cyclonedxArg !== undefined) {
-      const outFile = cyclonedxArg.slice("cyclonedx-json=".length);
-      copyFileSync(
-        join(__dirname, "fixtures", "syft-built-image-trimmed.json"),
-        outFile,
-      );
-      return Promise.resolve({ stdout: "", stderr: "" });
-    }
-    if (args[0] === "inspect") {
-      return Promise.resolve({
-        stdout: JSON.stringify([DIGEST_REF]),
-        stderr: "",
-      });
-    }
-    return Promise.resolve({ stdout: "", stderr: "" });
-  }
-
-  beforeAll(() => {
-    mock.module("../src/collectors/exec", () => ({
-      ...REAL_EXEC,
-      execTool: fakeImageExecTool,
-    }));
   });
 
-  afterAll(() => {
-    mock.module("../src/collectors/exec", () => REAL_EXEC);
-  });
-
-  afterEach(() => {
-    invocations = [];
-  });
-
-  test("writes the committed doc via the --image lane, digest-pinned, LF-only", async () => {
+  // The daemon-free end-to-end write test relocated from the removed
+  // pre-made-SBOM ingest suite (D-09 ADAPT): the outputPath-write contract now
+  // rides the --image lane through the orchestrator.
+  test("runGenerateDockerSbom writes the committed doc via the --image lane, digest-pinned, LF-only", async () => {
+    const digestRef = "docker.io/library/scan-a@sha256:" + "c".repeat(64);
+    currentExec = makePinnedExec(digestRef);
     const outDir = mkdtempSync(join(tmpdir(), "licenses-docker-image-e2e-"));
     try {
       await runGenerateDockerSbom({
-        images: ["scan-a"],
+        images: ["docker.io/library/scan-a"],
         dockerOsSbomPath: "docker-os.sbom.json",
         baseDir: outDir,
       });
@@ -285,10 +354,8 @@ describe("runGenerateDockerSbom end-to-end write (daemon-free, --image lane)", (
         components: { purl: string }[];
         dockerImages: { image: string; digest: string }[];
       };
-      // The outputPath-write contract: a real committed doc lands at the
-      // base-dir-resolved path, digest-pinned, LF-only.
       expect(parsed.dockerImages).toEqual([
-        { image: "scan-a", digest: DIGEST_REF },
+        { image: "docker.io/library/scan-a", digest: digestRef },
       ]);
       expect(parsed.components.length).toBeGreaterThan(0);
       expect(written.includes("\r")).toBe(false);

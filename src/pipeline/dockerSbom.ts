@@ -408,23 +408,16 @@ export interface GenerateDockerSbomOptions {
    * resolveDiscoveredImages → discoverDockerfiles.
    */
   toolDir?: string;
-  /**
-   * `docker pull` each resolved image before scanning it (opt-in, live paths
-   * only — targeted/discovery/live-scan). Off by default so the standard
-   * maintainer path fails loudly on an absent image; the GitHub Action turns it
-   * on because it derives its base set only at runtime and cannot pre-pull.
-   */
-  pull?: boolean;
   /** Pass syft/docker child stdout/stderr through to process.stderr. */
   verbose?: boolean;
   /**
-   * Repeatable --built-image refs: BUILT-IMAGE mode (explicit, never inferred,
-   * never combined with --pull). This is the CI build+scan set — scanned with
-   * collectDockerOsSbom built:true (full contents, digest-less identity).
-   * Identity = the ref exactly as given, so a caller (the Docker-scan CI
-   * workflow) must pass DETERMINISTIC tags derived from each Dockerfile path
-   * — the identity is what gets committed to the sidecar. Mutually exclusive
-   * with images/dockerfilePaths/pull (validated in the CLI).
+   * Repeatable --built-image refs: BUILT-IMAGE mode (explicit, never inferred).
+   * This is the CI build+scan set — scanned with the single collector posture
+   * (full contents; a local-only built image has no RepoDigests, so its sidecar
+   * identity is digest-less). Identity = the ref exactly as given, so a caller
+   * (the Docker-scan CI workflow) must pass DETERMINISTIC tags derived from each
+   * Dockerfile path — the identity is what gets committed to the sidecar.
+   * Mutually exclusive with images/dockerfilePaths (validated in the CLI).
    */
   builtImages?: string[];
   /**
@@ -468,7 +461,6 @@ async function runTargetedMode(
   }
   const { doc } = await collectDockerOsSbom(derived, {
     verbose: opts.verbose ?? false,
-    pull: opts.pull ?? false,
   });
   writeArtifact(outputPath, doc);
   process.stderr.write(
@@ -479,14 +471,13 @@ async function runTargetedMode(
 
 /**
  * BUILT-IMAGE PATH: scan an EXPLICIT, never-inferred set of locally built,
- * never-pushed image tags (--built-image) with the built posture (full
- * contents, digest-less sidecar identity, no docker inspect/pull — the 09-02
- * collector posture). The refs are guarded through safeLiveScanImages
- * (finding #5 symmetry) before reaching syft/docker as operands; the whole
- * set being unsafe is a loud throw, never a silent empty scan. The summary
- * prints to stderr BEFORE the scan, mirroring every other mode. pull is NEVER
- * forwarded — built images are local-only and cannot be pulled (the CLI
- * already rejects --built-image + --pull, this is defense-in-depth).
+ * never-pushed image tags (--built-image) with the single collector posture
+ * (full contents; a local-only image has no RepoDigests, so its sidecar
+ * identity is digest-less). The refs are guarded through safeLiveScanImages
+ * (finding #5 symmetry) before reaching syft/docker as operands; the whole set
+ * being unsafe is a loud throw, never a silent empty scan. A locally-present
+ * built tag is found by the collector's presence probe and is never pulled. The
+ * summary prints to stderr BEFORE the scan, mirroring every other mode.
  * Extracted from runGenerateDockerSbom to keep that orchestrator under the
  * complexity bound.
  */
@@ -508,7 +499,6 @@ async function runBuiltImageMode(
   );
   const { doc } = await collectDockerOsSbom(safe, {
     verbose: opts.verbose ?? false,
-    built: true,
   });
   writeArtifact(outputPath, doc);
   process.stderr.write(
@@ -552,7 +542,6 @@ async function runDiscoveryMode(
   }
   const { doc } = await collectDockerOsSbom(discovered, {
     verbose: opts.verbose ?? false,
-    pull: opts.pull ?? false,
   });
   writeArtifact(outputPath, doc);
   process.stderr.write(
@@ -577,7 +566,6 @@ async function runLiveScanMode(
 
   const { doc } = await collectDockerOsSbom(requested, {
     verbose: opts.verbose ?? false,
-    pull: opts.pull ?? false,
   });
 
   writeArtifact(outputPath, doc);

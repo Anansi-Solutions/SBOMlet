@@ -76,7 +76,7 @@ const USAGE =
   "--built-image <ref>... | --list-dockerfiles --repo-root <dir> | " +
   "--repo-root <dir> [--policy <file>] [--exclude <glob>]... [--image <ref>]... | " +
   "--dockerfile <path>... [--image <ref>]...) " +
-  "[--pull] [--docker-os-sbom <path>] [--base-dir <path>] [--verbose]\n" +
+  "[--docker-os-sbom <path>] [--base-dir <path>] [--verbose]\n" +
   "           Writes the committed docker-os.sbom.json. FOUR modes:\n" +
   "           --image <ref>...: MAINTAINER-ONLY, REQUIRES A DOCKER DAEMON — " +
   "scans the image set (default: the documented image set) with the pinned " +
@@ -89,13 +89,10 @@ const USAGE =
   "           --dockerfile <path>...: TARGETED — same derive+scan as discovery " +
   "but over an explicit Dockerfile list instead of a repo walk (union with any " +
   "explicit --image). --repo-root, if also given, is only the cache-dir anchor.\n" +
-  "           --pull: docker pull each resolved image before scanning it (live " +
-  "modes only) — off by default; used by the GitHub Action for its runtime-" +
-  "derived base set.\n" +
   "           --built-image <ref>...: BUILT-IMAGE — scans locally built, " +
   "never-pushed images (full contents: application + OS layers); records " +
   'each ref digest-less in the sidecar ({image, digest: ""}); local ' +
-  "tags only — never combined with --pull.\n" +
+  "tags only.\n" +
   "           --list-dockerfiles --repo-root <dir>: print the discovered " +
   "Dockerfile paths (policy-aware, [docker] ignore honored) one per line " +
   "and exit — scans nothing, writes nothing; the Docker-scan workflow's " +
@@ -166,19 +163,13 @@ interface CliValues {
    * the repo. Base-dir-resolved.
    */
   dockerfile?: string[];
-  /**
-   * generate-docker-sbom --pull: `docker pull` each resolved image before
-   * scanning it. Off by default (the standard path fails loudly on an absent
-   * image); the GitHub Action turns it on for the runtime-derived base set.
-   */
-  pull?: boolean;
   /** generate-docker-sbom output path; base-dir-resolved like every artifact. */
   "docker-os-sbom"?: string;
   /**
    * Repeatable --built-image refs for generate-docker-sbom: BUILT-IMAGE mode.
    * Scans locally built, never-pushed tags full-contents and digest-less (the
    * built posture); the Docker-scan CI workflow is the consumer. Local tags
-   * only -- never combined with --pull.
+   * only.
    */
   "built-image"?: string[];
   /**
@@ -252,9 +243,8 @@ export function optionsFrom(values: CliValues): GenerateOptions {
  * scan) / --built-image (built posture) may be active. --dockerfile MAY
  * combine with --repo-root (the latter then serves only as the cache-dir
  * anchor) and with --image (union). --built-image is EXPLICIT and stand-alone:
- * never combined with --image, --dockerfile, or --pull (built images are
- * local-only and cannot be pulled); it MAY combine with --repo-root (anchor
- * degradation, same as --dockerfile).
+ * never combined with --image or --dockerfile; it MAY combine with --repo-root
+ * (anchor degradation, same as --dockerfile).
  * --list-dockerfiles never combines with any scan mode and REQUIRES
  * --repo-root (the walk root the listing reads). Pair checks are walked as a
  * table rather than an if-ladder to keep this function under the complexity
@@ -268,7 +258,6 @@ export function dockerSbomModeConflict(values: CliValues): string | undefined {
     values.dockerfile !== undefined && values.dockerfile.length > 0;
   const hasBuiltImage =
     values["built-image"] !== undefined && values["built-image"].length > 0;
-  const hasPull = values.pull === true;
   const hasListDockerfiles = values["list-dockerfiles"] === true;
   const pairs: Array<[boolean, boolean, string]> = [
     [
@@ -280,11 +269,6 @@ export function dockerSbomModeConflict(values: CliValues): string | undefined {
       hasBuiltImage,
       hasDockerfile,
       "--built-image (built) and --dockerfile (targeted) are mutually exclusive",
-    ],
-    [
-      hasBuiltImage,
-      hasPull,
-      "--built-image (built) and --pull are mutually exclusive — built images are local-only and cannot be pulled",
     ],
     [
       hasListDockerfiles,
@@ -345,7 +329,6 @@ export function dockerSbomOptionsFrom(
     ...(hasDockerfile ? { dockerfilePaths: values.dockerfile } : {}),
     ...(hasBuiltImage ? { builtImages: values["built-image"] } : {}),
     ...(values["list-dockerfiles"] === true ? { listDockerfiles: true } : {}),
-    ...(values.pull === true ? { pull: true } : {}),
     ...(values.exclude !== undefined ? { excludes: values.exclude } : {}),
     ...(policyPath !== undefined ? { policyPath } : {}),
     // The tool's OWN directory, so Dockerfile discovery prunes it from the walk
@@ -438,7 +421,6 @@ async function main(argv: string[]): Promise<void> {
         verbose: { type: "boolean", default: false },
         image: { type: "string", multiple: true },
         dockerfile: { type: "string", multiple: true },
-        pull: { type: "boolean", default: false },
         "docker-os-sbom": { type: "string" },
         "built-image": { type: "string", multiple: true },
         "list-dockerfiles": { type: "boolean", default: false },
