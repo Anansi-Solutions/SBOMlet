@@ -153,6 +153,107 @@ describe("renderMarkdown — cell escaping", () => {
   });
 });
 
+// SCAN-05: a package whose in-depth ScanCode assessment (MIT) disagrees with
+// the declared quick check (Apache-2.0). annotateFindings attaches the conflict
+// marker exactly as the live pipeline does.
+function conflictModel(): CanonicalDependencies {
+  return annotateFindings(
+    {
+      packages: [
+        {
+          purl: "pkg:npm/disputed-pkg@1.0.0",
+          name: "disputed-pkg",
+          version: "1.0.0",
+          occurrences: [{ target: SYNTHETIC_TARGET, isDevDependency: false }],
+          licenseClaims: [
+            { raw: "Apache-2.0", kind: "expression", source: "generator" },
+            { raw: "MIT", kind: "expression", source: "scancode" },
+          ],
+          scope: "app",
+        },
+      ],
+    },
+    [],
+  ).model;
+}
+
+describe("renderMarkdown — assessment conflicts section (SCAN-05)", () => {
+  test("a conflicted package renders the dedicated section naming the in-depth value, the quick-check value, and where it is used", () => {
+    const out = renderMarkdown(conflictModel());
+    expect(
+      out.includes("## Assessment conflicts (in-depth scan vs quick check)"),
+    ).toBe(true);
+    // row shape: Package | In-depth (ScanCode) | Quick check | Used in
+    expect(
+      out.includes("| disputed-pkg | MIT | Apache-2.0 | apps/synthetic |"),
+    ).toBe(true);
+  });
+
+  test("the same conflict also surfaces as a row in the Problematic licenses table (free, via the fail-verdict grouping) — no separate wiring", () => {
+    const view: PolicyView = {
+      policyPath: "policy.toml",
+      suppressedWorkspaces: [],
+      verdicts: [
+        {
+          purl: "pkg:npm/disputed-pkg@1.0.0",
+          occurrenceTarget: SYNTHETIC_TARGET,
+          status: "fail",
+          rule: "conflict:scancode",
+          reason: "assessment conflict — resolve via [[clarify]]",
+        },
+      ],
+    };
+    const problematic = renderMarkdown(conflictModel(), view).slice(
+      renderMarkdown(conflictModel(), view).indexOf("## Problematic licenses"),
+    );
+    expect(problematic.includes("conflict:scancode")).toBe(true);
+    expect(problematic.includes("disputed-pkg")).toBe(true);
+  });
+
+  test("zero conflicts → the section is ABSENT entirely (absent-not-empty; the shapes goldens stay byte-identical)", () => {
+    expect(
+      renderMarkdown(shapesModel).includes("## Assessment conflicts"),
+    ).toBe(false);
+    expect(
+      renderMarkdown(annotatedShapes).includes("## Assessment conflicts"),
+    ).toBe(false);
+  });
+
+  test("hostile expression strings in the conflict cells are escaped via escapeCell — pipes and backticks cannot break the table (T-12-04)", () => {
+    const hostile: CanonicalDependencies = {
+      packages: [
+        {
+          purl: "pkg:npm/evil-pkg@1.0.0",
+          name: "evil-pkg",
+          version: "1.0.0",
+          occurrences: [{ target: SYNTHETIC_TARGET, isDevDependency: false }],
+          licenseClaims: [],
+          scope: "app",
+          finding: {
+            expression: "MIT",
+            elected: "MIT",
+            source: "generator",
+            confidence: "exact",
+            conflict: {
+              assessed: "MIT | `evil`",
+              disagreeing: ["Apache-2.0 | `x`"],
+            },
+          },
+        },
+      ],
+    };
+    const out = renderMarkdown(hostile);
+    expect(out.includes("MIT \\| \\`evil\\`")).toBe(true);
+    // the raw unescaped pipe+backtick payload never appears
+    expect(out.includes("MIT | `evil`")).toBe(false);
+  });
+
+  test("determinism: two renders of a conflicted model are byte-identical, conflict section included", () => {
+    const model = conflictModel();
+    expect(renderMarkdown(model)).toBe(renderMarkdown(model));
+  });
+});
+
 describe("renderMarkdown — table content", () => {
   test("a package with zero licenseClaims renders License cell 'unknown'", () => {
     const output = renderMarkdown(trimmedModel);

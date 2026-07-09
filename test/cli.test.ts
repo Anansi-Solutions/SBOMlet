@@ -469,6 +469,52 @@ describe("writePolicySummary — imprecise count line (INV-04)", () => {
   });
 });
 
+describe("writePolicySummary — assessment conflict count line (SCAN-05)", () => {
+  const conflictVerdict = (purl: string): Verdict => ({
+    purl,
+    occurrenceTarget: "apps/synthetic",
+    status: "fail",
+    rule: "conflict:scancode",
+    reason: "assessment conflict — resolve via [[clarify]]",
+  });
+
+  test("an assessment-conflict count line is added without reshaping the locked counts line", async () => {
+    const verdicts: Verdict[] = [
+      conflictVerdict("pkg:npm/a@1.0.0"),
+      conflictVerdict("pkg:npm/b@1.0.0"),
+    ];
+    const stderr = await withCapturedStderr(async () => {
+      writePolicySummary(parsePolicy(""), verdicts, new Set());
+    });
+    // The locked counts-line shape is intact (both conflicts are fails).
+    expect(stderr).toContain(
+      "policy: 2 fail, 0 warn, 0 suppressed, 0 ok (2 verdicts)\n",
+    );
+    // ...plus a NEW conflict line, mirroring the imprecise-count shape with an
+    // explicit "(N verdicts)" per-occurrence denominator.
+    expect(stderr).toContain(
+      "policy: 2 assessment conflict(s) — resolve via [[clarify]] " +
+        "(2 verdicts)\n",
+    );
+  });
+
+  test("no conflict line is printed when there are no conflict verdicts", async () => {
+    const verdicts: Verdict[] = [
+      {
+        purl: "pkg:npm/x@1.0.0",
+        occurrenceTarget: "proj",
+        status: "ok",
+        rule: "default:ok",
+        reason: "no copyleft",
+      },
+    ];
+    const stderr = await withCapturedStderr(async () => {
+      writePolicySummary(parsePolicy(""), verdicts, new Set());
+    });
+    expect(stderr).not.toContain("assessment conflict");
+  });
+});
+
 describe("resolveFrom — base-dir path anchoring (CR-01)", () => {
   test("relative paths join the base; absolute paths pass through; absent base degrades to cwd", () => {
     const base = tmpdir();

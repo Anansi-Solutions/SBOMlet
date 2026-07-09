@@ -100,6 +100,20 @@ export function writePolicySummary(
         `[[clarify]]) (${impreciseCount} verdicts)\n`,
     );
   }
+  // SCAN-05: surface the assessment-conflict count on its OWN line (the locked
+  // counts-line shape above is unchanged). A conflict:scancode verdict is a FAIL
+  // (a subset of the fail count) — the in-depth scan disagrees with the quick
+  // check and a human must resolve it via [[clarify]]. Printed only when any
+  // exist, so policies with no conflicts keep byte-identical output.
+  const conflictCount = verdicts.filter(
+    (v) => v.rule === "conflict:scancode",
+  ).length;
+  if (conflictCount > 0) {
+    process.stderr.write(
+      `policy: ${conflictCount} assessment conflict(s) — resolve via ` +
+        `[[clarify]] (${conflictCount} verdicts)\n`,
+    );
+  }
   // POL-08: surface how many would-be fails were dev-downgraded to warn on
   // their own line (the locked counts-line shape above is unchanged). These are
   // a subset of the warn count — a build-time-only copyleft/unknown that carries

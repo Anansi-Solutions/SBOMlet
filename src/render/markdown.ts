@@ -377,6 +377,41 @@ function impreciseSectionLines(sorted: readonly PackageEntry[]): string[] {
 }
 
 /**
+ * The dedicated assessment-conflicts review section (SCAN-05): every package
+ * whose in-depth ScanCode assessment disagrees with the declared/registry quick
+ * check carries a conflict marker (set by applyScancodeAssessment), and each is
+ * a gate failure until a `[[clarify]]` override records the human's decision.
+ * The section names, per package, the in-depth (ScanCode) value, the
+ * disagreeing quick-check value(s), and where the package is used — mirroring
+ * the imprecise-section precedent. Empty (omitted) when no package carries a
+ * conflict marker (absent-not-empty for golden stability). Input is already
+ * comparePackages-sorted; every cell routes through escapeCell so a hostile
+ * expression string cannot break the table (T-12-04).
+ */
+function conflictSectionLines(sorted: readonly PackageEntry[]): string[] {
+  const rows: string[] = [];
+  for (const pkg of sorted) {
+    const conflict = pkg.finding?.conflict;
+    if (conflict === undefined) continue;
+    const usedIn = pkg.occurrences.map((o) => o.target).join(", ");
+    rows.push(
+      `| ${escapeCell(pkg.name)} | ${escapeCell(conflict.assessed)} | ${escapeCell(conflict.disagreeing.join(", "))} | ${escapeCell(usedIn)} |`,
+    );
+  }
+  if (rows.length === 0) return [];
+  return [
+    "## Assessment conflicts (in-depth scan vs quick check)",
+    "",
+    "For these packages the in-depth ScanCode assessment disagrees with the declared/registry quick check. Each is a gate failure until a policy `[[clarify]]` override records the decision — accept the in-depth value, or re-assess.",
+    "",
+    "| Package | In-depth (ScanCode) | Quick check | Used in |",
+    "| --- | --- | --- | --- |",
+    ...rows,
+    "",
+  ];
+}
+
+/**
  * The package-counts block: total, per-ecosystem (compareCodeUnits-sorted),
  * production / development-only / Docker-OS / unknown-license counts. App-scope
  * packages feed the prod/dev split (an app concept); os-scope packages are
@@ -690,6 +725,11 @@ export function renderMarkdown(
   // Imprecise-licenses review section — finding-level (rendered with or without
   // a policy view).
   lines.push(...impreciseSectionLines(sorted));
+
+  // Assessment-conflicts review section (SCAN-05) — finding-level, mirrors
+  // the imprecise section: absent when no package carries a conflict marker so
+  // zero-conflict documents stay byte-identical (D-06).
+  lines.push(...conflictSectionLines(sorted));
 
   // Summary tables, split by package-level dev/prod classification (POL-08) for
   // APP-scope packages, then a dedicated Docker image packages section (COLL-04).
