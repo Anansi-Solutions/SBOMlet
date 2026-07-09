@@ -88,6 +88,16 @@ export interface BuildImageOptions {
   timeoutMs?: number;
   /** Pass child stdout/stderr through to process.stderr. */
   verbose?: boolean;
+  /**
+   * Working directory for the buildx spawn. The argv from {@link buildImageArgs}
+   * is intentionally repo-relative (the `-f` value and the POSIX-dirname build
+   * context), so buildx resolves both against THIS directory. The discovery
+   * lane anchors it to the repo root; when unset the child inherits the tool's
+   * process cwd (the explicit `--dockerfile` lane, where the caller's paths are
+   * relative to their own cwd). Threaded through to the exec seam untouched, so
+   * the argv — and therefore {@link imageTag} — stays a pure function of the path.
+   */
+  cwd?: string;
 }
 
 /**
@@ -108,6 +118,7 @@ export async function buildImage(
     await exec(dockerBin, args, {
       timeoutMs: opts.timeoutMs ?? DEFAULT_BUILD_TIMEOUT_MS,
       verbose: opts.verbose ?? false,
+      cwd: opts.cwd,
     });
   } catch (error) {
     throw new Error(

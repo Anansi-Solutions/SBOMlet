@@ -3,13 +3,15 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, test } from "bun:test";
 
-import { imageTag } from "../src/collectors/dockerBuild";
+import { imageTag, type ExecFn } from "../src/collectors/dockerBuild";
 import {
+  buildImages,
   dockerfileListing,
   resolveDiscoveredImages,
   runGenerateDockerSbom,
   safeLiveScanImages,
 } from "../src/pipeline/dockerSbom";
+import type { ExecOptions } from "../src/collectors/exec";
 
 const tempRoots: string[] = [];
 
@@ -152,5 +154,53 @@ describe("runGenerateDockerSbom (--list-dockerfiles API invariant)", () => {
         dockerOsSbomPath: join(root, "docker-os.sbom.json"),
       }),
     ).rejects.toThrow("--list-dockerfiles requires a repo root");
+  });
+});
+
+describe("buildImages (buildx cwd threading)", () => {
+  /** An exec recorder in the ExecFn shape that captures each opts.cwd. */
+  function makeCwdRecorder(): {
+    cwds: (string | undefined)[];
+    exec: ExecFn;
+  } {
+    const cwds: (string | undefined)[] = [];
+    const exec = (
+      _cmd: string,
+      _args: string[],
+      opts: ExecOptions,
+    ): Promise<{ stdout: string; stderr: string }> => {
+      cwds.push(opts.cwd);
+      return Promise.resolve({ stdout: "", stderr: "" });
+    };
+    return { cwds, exec };
+  }
+
+  test("discovery lane anchors every buildx spawn's cwd to the repo root", async () => {
+    // The consumer bug: the discovery build lane ran buildx with no cwd, so the
+    // repo-relative -f/context resolved against the tool's process cwd. When the
+    // caller invokes from a subdir (e.g. tools/sbomlet with --repo-root ..) the
+    // build failed with "unable to prepare context: path not found". buildImages
+    // must thread the repo root into each spawn's cwd.
+    const { cwds, exec } = makeCwdRecorder();
+    const tags = await buildImages(
+      ["backend/Dockerfile", "svc/build.dockerfile"],
+      false,
+      "/repo/root",
+      exec,
+    );
+    expect(cwds).toEqual(["/repo/root", "/repo/root"]);
+    // Tags remain a pure function of the identity — the cwd never touches argv.
+    expect(tags).toEqual([
+      imageTag("backend/Dockerfile"),
+      imageTag("svc/build.dockerfile"),
+    ]);
+  });
+
+  test("no cwd (explicit --dockerfile lane) leaves each spawn's cwd unset", async () => {
+    // The targeted lane's paths are relative to the caller's own cwd, so
+    // buildImages must NOT anchor them — spawn then inherits process.cwd().
+    const { cwds, exec } = makeCwdRecorder();
+    await buildImages(["a/Dockerfile"], false, undefined, exec);
+    expect(cwds).toEqual([undefined]);
   });
 });

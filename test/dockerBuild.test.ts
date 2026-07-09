@@ -147,3 +147,45 @@ describe("buildImage (execTool seam)", () => {
     expect(first.invocations).toEqual(second.invocations);
   });
 });
+
+describe("buildImage (cwd threading — repo-root anchoring)", () => {
+  test("forwards opts.cwd to the exec seam so the repo-relative -f/context resolve against the repo root", async () => {
+    // The consumer bug: buildImage ran the exec with NO cwd, so buildx resolved
+    // the repo-relative `-f` and build-context against the tool's PROCESS cwd.
+    // Any consumer invoking from a subdir (e.g. tools/sbomlet) hit
+    // "unable to prepare context: path not found". The fix threads a cwd through
+    // to the exec seam; here we assert it lands in ExecOptions.cwd.
+    const seen: (ExecOptions | undefined)[] = [];
+    const exec = (
+      _cmd: string,
+      _args: string[],
+      opts: ExecOptions,
+    ): Promise<{ stdout: string; stderr: string }> => {
+      seen.push(opts);
+      return Promise.resolve({ stdout: "", stderr: "" });
+    };
+    await buildImage("examples/docker-scan/Dockerfile", exec, {
+      cwd: "/some/repo/root",
+    });
+    expect(seen).toHaveLength(1);
+    expect(seen[0]?.cwd).toBe("/some/repo/root");
+  });
+
+  test("no cwd option leaves ExecOptions.cwd unset (inherits process cwd — the explicit --dockerfile lane)", async () => {
+    // The targeted/explicit lane resolves user-given relative paths against the
+    // user's cwd, so buildImage without a cwd must NOT set one (spawn then
+    // inherits process.cwd()).
+    const seen: (ExecOptions | undefined)[] = [];
+    const exec = (
+      _cmd: string,
+      _args: string[],
+      opts: ExecOptions,
+    ): Promise<{ stdout: string; stderr: string }> => {
+      seen.push(opts);
+      return Promise.resolve({ stdout: "", stderr: "" });
+    };
+    await buildImage("examples/docker-scan/Dockerfile", exec);
+    expect(seen).toHaveLength(1);
+    expect(seen[0]?.cwd).toBeUndefined();
+  });
+});

@@ -30,7 +30,7 @@
 
 import { readFileSync, statSync } from "node:fs";
 
-import { buildImage, imageTag } from "../collectors/dockerBuild";
+import { buildImage, imageTag, type ExecFn } from "../collectors/dockerBuild";
 import { collectDockerOsSbom } from "../collectors/dockerOs";
 import { discoverDockerfiles } from "../collectors/dockerfile";
 import { execTool } from "../collectors/exec";
@@ -333,14 +333,23 @@ export interface GenerateDockerSbomOptions {
  * string is passed to buildImage verbatim so imageTag(identity) — the committed
  * sidecar identity — is stable (the discovery/targeted lanes hand this the exact
  * string the listing prints).
+ *
+ * `cwd` is the buildx working directory: buildImageArgs is repo-relative, so the
+ * `-f` value and build context resolve against `cwd`. The DISCOVERY lane anchors
+ * it to the repo root (its identities are repo-relative); the TARGETED lane
+ * leaves it undefined so a caller's `--dockerfile` path resolves against their
+ * own process cwd. `exec` is injectable so the lane wiring is testable without a
+ * docker daemon; it defaults to the real execTool seam.
  */
-async function buildImages(
+export async function buildImages(
   identities: readonly string[],
   verbose: boolean,
+  cwd?: string,
+  exec: ExecFn = execTool,
 ): Promise<string[]> {
   const tags: string[] = [];
   for (const identity of identities) {
-    tags.push(await buildImage(identity, execTool, { verbose }));
+    tags.push(await buildImage(identity, exec, { verbose, cwd }));
   }
   return tags;
 }
@@ -380,6 +389,8 @@ async function runTargetedBuildLane(
   }));
   const { build, summary } = resolveTargetedDockerfiles(targeted);
   process.stderr.write(`${summary}\n`);
+  // No cwd: an explicit --dockerfile path is relative to the caller's own cwd,
+  // so the build must resolve it against process.cwd(), not any repo anchor.
   const tags = await buildImages(
     build.map((b) => b.identity),
     opts.verbose ?? false,
@@ -418,9 +429,15 @@ async function runDiscoveryBuildLane(
         `(${ignored.length} ignored); nothing to scan`,
     );
   }
+  // Anchor the buildx cwd to the resolved repo root: discovery identities are
+  // repo-relative, so the repo-relative -f/context in buildImageArgs resolve
+  // against repoRoot regardless of the tool's process cwd. Without this a
+  // consumer invoking from a subdir (e.g. tools/sbomlet) hits
+  // "unable to prepare context: path not found".
   const tags = await buildImages(
     build.map((b) => b.identity),
     opts.verbose ?? false,
+    repoRoot,
   );
   await scanAndWrite(tags, outputPath, opts.verbose ?? false);
 }
