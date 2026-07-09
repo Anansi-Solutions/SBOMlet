@@ -18,8 +18,8 @@ writes the attribution files you redistribute, and runs as a CI gate that fails
 the build when a licence breaks your policy.
 
 It covers JS/TS, Python, Terraform/OpenTofu, and the packages in your Docker
-images — base-image OS packages always, plus the application packages a
-built-image scan finds. It has no dependency on the project it audits — you add
+images — their full contents, the OS layer and the application packages on top. It
+has no dependency on the project it audits — you add
 it as one directory and one policy file.
 
 ## What you get
@@ -139,7 +139,7 @@ the same mise + Task pipeline as the Taskfile path — pick whichever fits your 
 | JS / TypeScript | `yarn.lock`, `package-lock.json`, `pnpm-lock.yaml`, `bun.lock` |
 | Python | `poetry.lock`, `uv.lock` |
 | Terraform / OpenTofu | `.terraform.lock.hcl` |
-| Docker images (OS and, for a built-image scan, application packages) | a committed `.sbomlet.cache/docker-os.sbom.json` (see below) |
+| Docker images (full contents — OS and application packages) | a committed `.sbomlet.cache/docker-os.sbom.json` (see below) |
 
 Discovery walks the repository and hands each [target](docs/glossary.md#target) to
 its [collector](docs/glossary.md#collector). The per-ecosystem detail — which
@@ -167,8 +167,8 @@ way it is.
 ## Good to know
 
 - **Docker image packages** aren't discovered from lockfiles. Run
-  `generate-docker-sbom` — by hand against a base image, or wired into CI to
-  build and scan the images the repository ships — to produce a committed
+  `generate-docker-sbom` — by hand over named Dockerfiles or images, or wired into
+  CI to discover and build the repository's Dockerfiles — to produce a committed
   `.sbomlet.cache/docker-os.sbom.json`, and `generate`/`check` merge it in. It's
   the only subcommand that talks to a Docker daemon or registry; `generate` and
   `check` never do.

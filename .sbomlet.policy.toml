@@ -20,8 +20,8 @@ handling = "warn"
 # The Dockerfile-name-pattern walk is intentionally name-only (no content
 # sniffing), so it also matches the tool's own source files that merely SHARE
 # the "dockerfile.<suffix>" naming convention (the discovery module itself and
-# its test). Neither is a real Dockerfile; both resolve to no FROM instruction
-# and would abort a build. Excluded from the Docker-scan workflow's build set.
+# its test). Neither is a real Dockerfile; handing either to docker build would
+# abort the run. Excluded from the Docker-scan workflow's build set.
 ignore = ["src/collectors/dockerfile.ts", "test/dockerfile.test.ts"]
 
 # Two source-vs-registry assessment conflicts, resolved by hand.

@@ -324,19 +324,18 @@ when a fetch resolves a new licence, so a warm run rewrites identical bytes.
 
 `.sbomlet.cache/docker-os.sbom.json` is the Docker image package inventory, the
 [`scope:os`](../glossary.md#scope-app-and-os) merge input. Despite the filename, it
-holds more than OS packages when it was produced from a built-image scan: a base-image
-scan keeps only `deb`/`apk` packages, a built-image scan keeps every component the
-image carries, application packages included. It is a minimal CycloneDX-shaped
-document holding `bomFormat`, `specVersion`, `components`, and a `dockerImages`
-array pinning each scanned image to its content digest (empty for a locally built,
-never-pushed image, which has none), and nothing else. It is **not** written by
-`generate`. It is produced by the `generate-docker-sbom` subcommand, the only path
-in the tool that touches Docker or syft — run by hand for a maintainer-driven base-image
-scan, or by CI for the built-image scan of each discovered Dockerfile — and
-committed separately from `generate`'s own outputs. `generate` and `check` never
-run Docker; they read these committed bytes as one more merge input. The digest
-pin is why a pulled base image carries no timestamp: it is identified by content,
-which is stable.
+holds the full contents of each scanned image, not only the OS layer: every
+component the image carries, application packages included. It is a minimal
+CycloneDX-shaped document holding `bomFormat`, `specVersion`, `components`, and a
+`dockerImages` array pinning each scanned image to its content digest (empty for a
+locally built, never-pushed image, which has none), and nothing else. It is **not**
+written by `generate`. It is produced by the `generate-docker-sbom` subcommand, the
+only path in the tool that touches Docker or syft — run by hand over named
+Dockerfiles or images, or by CI discovering and building each of the repository's
+Dockerfiles — and committed separately from `generate`'s own outputs. `generate`
+and `check` never run Docker; they read these committed bytes as one more merge
+input. The digest pin is why a pulled image carries no timestamp: it is identified
+by content, which is stable.
 
 ```sh
 # Maintainer-only: scan the configured images and write the OS sidecar

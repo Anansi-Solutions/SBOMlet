@@ -259,7 +259,7 @@ deny still wins above this lane.
 A table governing what a would-be-fail does on an
 [OS-scope](../glossary.md#scope-app-and-os) package: a row from the committed
 `.sbomlet.cache/docker-os.sbom.json` that isn't also seen at the application level —
-usually `pkg:deb`/`pkg:apk` from a base image, or any ecosystem a built-image scan
+usually `pkg:deb`/`pkg:apk` from the base layer, or any ecosystem the image scan
 found that the project doesn't also declare directly. Absent table: defaults to `warn`.
 
 | Field | Type | Required | Meaning |
@@ -271,7 +271,7 @@ or bash and coreutils under GPL, is the operating system the container ships on,
 not code your project authored. Those obligations are satisfied by shipping the
 image, so by default the gate lists the OS packages in their own section rather
 than failing your build on every standard base image. The same downgrade applies
-to an application package a built-image scan found that the project doesn't
+to an application package the image scan found that the project doesn't
 declare directly — it entered the inventory only because it ships inside the
 image, so it is judged as an image package, not app code. Use `fail` if you
 vendor or rebuild your base, or you want every image-sourced copyleft reviewed.
@@ -279,8 +279,8 @@ As with `[dev_dependencies]`, deny still wins, so a source-available licence in
 an OS-scope package fails regardless of this knob.
 
 The `.sbomlet.cache/docker-os.sbom.json` this lane reads is produced separately by the
-`generate-docker-sbom` subcommand — run by hand for a base-image scan, or by CI
-for a built-image scan of the images a project actually ships — and committed;
+`generate-docker-sbom` subcommand — run by hand over named Dockerfiles or images,
+or by CI discovering and building the repository's Dockerfiles — and committed;
 `generate` and `check` only read it as a `scope:os` merge input. They never
 discover or scan Docker images themselves. See the
 [`generate-docker-sbom` reference](cli.md) for how that file is
@@ -306,8 +306,8 @@ Write the `preamble` as a multi-line string if it spans paragraphs.
 
 An optional table holding Dockerfile-discovery exclusion globs, consulted by the
 maintainer-only `generate-docker-sbom` subcommand. A Dockerfile whose
-repo-relative path matches an `ignore` glob is excluded entirely, so its base
-image is never derived or scanned. Absent table: nothing is excluded. A present
+repo-relative path matches an `ignore` glob is excluded entirely, so it is never
+built or scanned. Absent table: nothing is excluded. A present
 table without `ignore` is the same as an empty list.
 
 | Field | Type | Required | Meaning |

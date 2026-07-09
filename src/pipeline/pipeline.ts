@@ -55,12 +55,13 @@ export const ENRICHMENT_CACHE_FILE = "licenses.cache.json";
 export const SCANCODE_CACHE_FILE = "scancode.cache.json";
 
 /**
- * The committed Docker OS-package SBOM filename inside the cache dir (COLL-04):
- * 07-01's deterministic emitter output, committed and consumed as a scope:"os"
- * MERGE INPUT, never scanned per-run. A MISSING file is the enrichment-cache-miss
- * equivalent (NO os entries, NO docker, NO syft, fully offline). The live scan that
- * POPULATES it is the dedicated generate-docker-sbom subcommand; generate and check
- * read the same committed bytes, so determinism is trivial.
+ * The committed Docker image SBOM filename inside the cache dir (COLL-04): a
+ * deterministic emitter's output, committed and consumed as a scope:"os" MERGE
+ * INPUT, never scanned per-run. A MISSING file is the enrichment-cache-miss
+ * equivalent (NO os entries, NO docker, NO syft, fully offline). What POPULATES it
+ * is the dedicated generate-docker-sbom subcommand, which builds or pulls a real
+ * image and scans its full contents; generate and check read the same committed
+ * bytes, so determinism is trivial.
  */
 export const DOCKER_OS_SBOM_FILE = "docker-os.sbom.json";
 

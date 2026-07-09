@@ -166,52 +166,40 @@ fires only when the filesystem shape is incoherent (an empty `.terraform/`, or a
 `.terraform/modules/` with no `modules.json` inside it), which means init didn't
 finish.
 
-## A Docker base image shows up as unresolved
+## A Docker build fails during generate-docker-sbom
 
-A Dockerfile is discovered but its base image comes back unresolved, and Docker
-[scope (os)](../glossary.md#scope-app-and-os) packages for it are skipped with a
-warning. The reason names what the tool couldn't get past:
+`generate-docker-sbom` builds a Dockerfile and the build fails, so the run stops
+with exit `3` (a tool error, never a gate verdict) and names the Dockerfile that
+could not be built:
 
 ```text
-heredoc present — base not derived; pin the base via --image
-escape directive present — base not derived; pin via --image
-continuation altered FROM structure — base uncertain; pin via --image
+docker build failed for examples/app/Dockerfile
 ```
 
-The cause is an ambiguous Dockerfile. The tool reads each Dockerfile only far
-enough to resolve the final `FROM`'s base image, and it [abstains](../glossary.md#abstain)
-the moment the structure becomes ambiguous rather than risk naming the wrong
-base. The common triggers are a heredoc anywhere in the file (a `<<EOF` block),
-a `# escape=` parser directive that remaps the line-continuation character (most
-often on Windows Dockerfiles where a path like `C:\dist\` would otherwise look
-like a continuation), and a backslash continuation that merges or swallows a
-`FROM` line. In a compliance tool, abstaining and asking you to pin the base is
-safer than silently inheriting the wrong image's packages.
+The tool does not inspect a Dockerfile before building it — it hands each one to
+`docker build` and lets the build speak for itself. A failure is almost always one
+of two things: the Dockerfile is broken (a bad base ref, a failing `RUN` step, a
+missing build context), or a file matched as a Dockerfile isn't one the project
+means to build — a fixture, a template, or a snippet a discovery walk swept up by
+name.
 
-Note that this is only about the *declared base image's* OS packages. The tool
-does not build the image or capture what the Dockerfile's own `RUN apt install`
-steps add; that's a separate path described below.
+Fix a broken Dockerfile the way you would fix any build: run `docker build` on it
+directly and read the output. When the file simply should not be built, exclude it
+with a `[docker] ignore` glob in your policy so the discovery lane skips it:
 
-To fix it, pin the base image explicitly so resolution doesn't depend on parsing
-the Dockerfile. Pass the resolved base ref to `--image` when you produce the
-Docker OS SBOM:
-
-```sh
-task generate-docker-sbom IMAGES="debian:12 node:22-slim"
+```toml
+[docker]
+ignore = ["test/fixtures/**/Dockerfile"]
 ```
 
-This is the maintainer-only `generate-docker-sbom` subcommand, and what touches
-Docker and what doesn't matters here. `generate` and `check` never run Docker and
-never scan an image. They only read a separately committed `.sbomlet.cache/docker-os.sbom.json`
-as a [scope (os)](../glossary.md#scope-app-and-os) input. That file is produced
-ahead of time by a maintainer running `generate-docker-sbom`, which requires a
-Docker daemon and uses syft to scan the images. So when a base shows unresolved,
-you pin it with `--image`, regenerate `.sbomlet.cache/docker-os.sbom.json`, commit it, and from
-then on the offline `generate`/`check` flow reads those committed bytes.
-
-If you'd rather not have the tool try to derive a particular Dockerfile's base at
-all, you can exclude it with an `[docker] ignore` glob in your policy instead of
-pinning it.
+An ignored Dockerfile never reaches `docker build`, so it cannot abort the run.
+This is the maintainer-only `generate-docker-sbom` subcommand: `generate` and
+`check` never run Docker and never build or scan an image. They only read the
+separately committed `.sbomlet.cache/docker-os.sbom.json` as a
+[scope (os)](../glossary.md#scope-app-and-os) input, produced ahead of time by a
+maintainer running `generate-docker-sbom` with a Docker daemon. Once the build
+succeeds and you commit the regenerated file, the offline `generate`/`check` flow
+reads those committed bytes.
 
 ## A copyleft or denied dependency fails the gate (exit 1)
 

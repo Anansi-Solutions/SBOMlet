@@ -210,7 +210,7 @@ export type ScopeTaxonomy = "app" | "os";
  * - python via poetry.lock + pyproject: the lockfile `[package.dependencies]`
  *   tables + the declared roots give `direct`/`introducedBy`/`path`.
  *
- * Every OTHER source (terraform, Docker OS deb/apk, bun, any npm BOM lacking a
+ * Every OTHER source (terraform, Docker image packages, bun, any npm BOM lacking a
  * graph) leaves `introduction` ABSENT — the render layer shows an honest "—"
  * rather than a fabricated value.
  *

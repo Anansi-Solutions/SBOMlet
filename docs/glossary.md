@@ -7,9 +7,9 @@ here is correct — there are no synonyms.
 ### abstain
 
 To return no answer on purpose, rather than a possibly-wrong one. When the tool
-can't determine a value with confidence, it abstains: a Dockerfile base it can't
-resolve is reported `unresolved`; an unknowable licence is left blank. See
-[honest residual](#honest-residual).
+can't determine a value with confidence, it abstains: an unknowable licence is
+left blank rather than guessed, and a dependency whose provenance can't be traced
+is surfaced without one. See [honest residual](#honest-residual).
 
 ### collector
 
@@ -142,8 +142,8 @@ software is built from. The tool produces one and consumes several (see
 
 Where a package comes from. **App** scope is your declared dependencies (npm,
 Python, Terraform). **OS** scope is the packages a Docker image scan finds that
-aren't also declared as an app dependency — the base image's OS packages always,
-plus any application package a built-image scan finds that the project doesn't
+aren't also declared as an app dependency — the full contents of a scanned image,
+its OS layer and any application package it carries that the project doesn't
 declare directly. They're listed separately and the policy can gate them
 differently — base-image GPL is expected and isn't a violation.
 

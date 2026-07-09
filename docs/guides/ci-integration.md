@@ -352,102 +352,76 @@ and `check` read it as a merge input the same way they read a lockfile. This
 keeps a Docker daemon off the gate path: a CI `check` never needs Docker, even
 for a repository that ships container images.
 
-There are two ways to run it: by hand against a project's base images, or as a
-CI job that builds and scans the images the repository actually produces.
+There are three lanes, all reaching the same result: syft scans a real image's
+full contents — OS packages and application packages alike. You pick a lane by the
+flag you pass, and use exactly one at a time.
 
-### By hand: scan the images you name or discover
+### By hand: build a Dockerfile or scan an image
 
-You run this when a base image changes, not on every CI run:
-
-```sh
-task generate-docker-sbom
-```
-
-The command's manual modes are mutually exclusive. The right one depends on
-whether you have a daemon, a repository full of Dockerfiles, or a pre-built SBOM
-from your image pipeline.
-
-| Mode | When to use it | Needs a Docker daemon |
-| ---- | -------------- | --------------------- |
-| `--image <ref>…` | You can pull or build the images and want to scan them directly | Yes |
-| `--repo-root <dir>` | You want the tool to discover Dockerfiles and scan each shipped base image | Yes |
-| `--from-sbom <path>…` | Your build pipeline already produced syft SBOMs and attested them by digest | No |
-
-`--image` scans each ref directly with the pinned syft, and pins each scanned
-image by content digest so the committed file is stable across machines. With no
-`--image` and no other mode, the command falls back to the maintainer's
-documented default image set, which is why the bare
-`task generate-docker-sbom` above works for the project that ships the
-tool. Pull or build each image first, since the scanner fails loudly on an image
-that isn't present locally.
-
-`--repo-root` is the discovery mode. The tool walks the repository for
-Dockerfiles, derives the external base image each shipped (final) stage declares,
-and scans those bases. A Dockerfile whose base it can't pin down (an unresolvable
-build argument, a heredoc, a Windows escape directive) contributes no image and
-is skipped loudly rather than guessed at, so you can pin that base with an
-explicit `--image`. Discovery derives the base image's own OS packages, not the
-packages a Dockerfile's `RUN apt install` lines add on top; capturing those needs
-a built image, which is what the CI lane below and `--from-sbom` are for.
+You run this when a Dockerfile or a base image changes, not on every CI run:
 
 ```sh
-# Discover Dockerfiles under the repo and scan their bases, plus an explicit one
-task generate-docker-sbom DISCOVER_ROOT=. IMAGES="postgres:18"
+# Build named Dockerfiles and scan the images they produce
+task generate-docker-sbom DOCKERFILES="backend/Dockerfile frontend/Dockerfile"
+
+# Or scan images you already have or can pull
+task generate-docker-sbom IMAGES="postgres:18 redis:7"
 ```
 
-`--from-sbom` is the daemon-free consumer path, and the one to use in a mature
-pipeline. Your image build already produces a syft SBOM by registry digest as a
-build attestation; this mode ingests those SBOMs without running Docker or the
-network. Scan a platform-specific (single-arch) image when you produce the SBOM,
-so the recorded digest is the real image digest and not a multi-arch
-manifest-list digest.
+`--dockerfile` (the `DOCKERFILES` var) builds each named Dockerfile to a local tag
+and scans the image it produces, so the inventory covers what the Dockerfile
+actually ships: its base, the packages its own `RUN apt install`/`apk add` steps
+add, and the application layered on top. It needs a Docker daemon.
+
+`--image` (the `IMAGES` var) scans image references directly with the pinned syft
+and pins each by content digest, so the committed file is stable across machines.
+An image absent locally is pulled first; one already present is scanned as-is.
+
+### Discover and build every Dockerfile in the repository
+
+`--repo-root` walks the repository, builds each Dockerfile it finds, and scans the
+image. A Dockerfile you don't want built — a fixture, or a template that is not a
+real build — is kept out with the policy's `[docker]` ignore globs (see below), so
+it never reaches `docker build`.
 
 ```sh
-# Ingest pre-built, attested SBOMs — no daemon, no network
-task generate-docker-sbom FROM_SBOM="build/backend.cdx.json build/frontend.cdx.json"
+# Discover, build & scan every Dockerfile under the repo root
+task generate-docker-sbom DISCOVER_ROOT=.
 ```
 
-### In CI: build and scan the images the repository produces
+### In CI: the Docker-scan workflow
 
-The manual modes above all scan a base image — what a Dockerfile builds `FROM`,
-not what it ships. To also capture the packages a Dockerfile's own `RUN` steps
-install and the application layered on top, build the image and scan the result
-with `--built-image`. This is what this repository's own
-`.github/workflows/docker-scan.yml` does on a path-filtered push or pull
-request: it lists the repository's Dockerfiles with `--list-dockerfiles`,
-builds each one to a local, never-pushed tag, scans those tags with
-`--built-image`, and regenerates the inventory.
-
-`task docker-scan` runs that same discover-build-scan-generate sequence locally
-(needs a Docker daemon):
+This repository's own `.github/workflows/docker-scan.yml` runs the discovery lane
+on a path-filtered push or pull request: it discovers the repository's Dockerfiles,
+builds each to a local, never-pushed tag, scans those tags, and regenerates the
+inventory. `task docker-scan` runs that same discover-build-scan-generate sequence
+locally (needs a Docker daemon):
 
 ```sh
 task docker-scan
 ```
 
-Or drive the steps individually — this is what the Taskfile task above wraps:
+`--list-dockerfiles` prints the exact set the discovery lane would build, with no
+daemon and no writes — useful to preview it or drive a build from a shell:
 
 ```sh
-# List the Dockerfiles a CI job should build (no Docker, no writes)
 task list-dockerfiles
-
-# Scan already-built local tags — full contents, no daemon digest to pin
-task generate-docker-sbom BUILT_IMAGES="myapp:ci myworker:ci"
 ```
 
 A locally built, never-pushed tag has no registry digest, so the sidecar records
-an empty one for it — that is expected, not a gap. On a push, the workflow commits
-the regenerated artifacts back with a signed bot commit; on a pull request, it
-fails the check red instead and uploads the regenerated artifacts, so a
-contributor commits them deliberately. See
+an empty one for it — that is expected, not a gap. A rebuild that changes the
+image's contents changes the committed artifact, which is the scan recording a real
+change. On a push, the workflow commits the regenerated artifacts back with a
+signed bot commit; on a pull request, it fails the check red instead and uploads
+the regenerated artifacts, so a contributor commits them deliberately. See
 [ADR-0018](../explanation/adr/0018-docker-generated-image-scan.md) for why the
 two events take different lanes.
 
-### Whichever way you produce it
+### Whichever lane you use
 
-The result is one committed `.sbomlet.cache/docker-os.sbom.json`, whether it came
-from a manual base-image scan or a CI built-image scan. A scan or build failure
-exits `3`, the same tool-error code as a bad flag. It is never a gate verdict,
+The result is one committed `.sbomlet.cache/docker-os.sbom.json`. A scan or build
+failure exits `3`, the same tool-error code as a bad flag — a Dockerfile that fails
+`docker build` stops the run loudly, naming the file. It is never a gate verdict,
 because this command is not the gate. After the file is committed, its packages
 flow into the merged inventory, and `generate` and `check` go on reading the
 committed bytes offline. Remember to add `.sbomlet.cache/docker-os.sbom.json` to

@@ -176,81 +176,53 @@ Maintainer-only. This is the only subcommand that touches Docker. It produces th
 `check` later read as an OS-scope merge input. Neither of those subcommands runs
 this one or touches Docker; they read the bytes this subcommand writes.
 
-It has five modes, chosen by which flag you pass.
+It has three lanes, chosen by which flag you pass. Whichever lane you use, the run
+ends the same way: [syft](../glossary.md#generator) scans a real image's full
+contents — the OS packages and the application packages alike — and the result is
+written to the committed SBOM.
 
-`--image` runs a live [syft](../glossary.md#generator) scan and needs a running
-Docker daemon. It scans the given image references and pins each by content digest.
-With no `--image` and no other mode flag, it falls back to a built-in default image
-set, which is what the zero-flag Taskfile entry uses.
+`--dockerfile` builds each named Dockerfile and scans the image it produces. Pass it
+more than once to build and scan several. Each Dockerfile is built to a local tag
+derived from its path, so the same Dockerfile always scans under the same identity.
+Needs a running Docker daemon.
 
-`--repo-root` is discovery mode. It walks the repository for Dockerfiles, derives
-the base image each shipped Dockerfile builds `FROM`, and scans those resolved base
-images. It can be combined with explicit `--image` references, which are unioned
-into the scan set. It records the base image's OS packages, not the packages a
-Dockerfile installs itself in a `RUN apt`/`apk` step.
+`--repo-root` discovers the repository's Dockerfiles, builds each, and scans the
+images. It runs the same policy-aware walk `--list-dockerfiles` uses: a Dockerfile
+matched by the policy's `[docker]` ignore globs, or by `--exclude`, is left out of
+the build set. This is the lane the Docker-scan workflow drives. Needs a Docker
+daemon.
 
-`--dockerfile` is targeted mode: the same derive-then-scan as discovery, but over
-an explicit list of Dockerfile paths instead of a repository walk. Pass it more than
-once to target several Dockerfiles. It can be combined with explicit `--image`
-references, which are unioned into the scan set. If you also pass `--repo-root`, it
-no longer triggers a discovery walk — it only anchors the cache directory the
-committed SBOM is written to.
+`--image` scans image references you already have locally or that live in a
+registry, and pins each by content digest. An image that is absent locally is
+pulled first with `docker pull`; one already present is scanned as-is and never
+re-pulled, so a run never races a newer registry copy into the committed bytes. A
+locally built, never-pushed tag has no registry digest, so its entry records an
+empty one. Needs a Docker daemon.
 
-`--from-sbom` is the CI-attestation consumer path. It ingests pre-made
-syft/CycloneDX SBOMs from disk with no Docker and no network. The build CI attests
-an image's SBOM by registry digest and this tool ingests that attested SBOM. Point
-it at a platform-specific (single-architecture) image SBOM so the recorded digest is
-the real image digest rather than a multi-arch manifest-list digest.
-
-`--pull` pulls each resolved image with `docker pull` before scanning it. It
-applies to the live modes only (`--image`, `--repo-root`, `--dockerfile`), never to
-`--from-sbom` or `--built-image`. It is off by default, so the everyday maintainer
-path fails loudly on a missing image instead of racing a network fetch. The GitHub
-Action turns it on because it derives its base image set only at runtime and cannot
-pre-pull.
-
-`--built-image` is built-image mode: it scans image tags you already built locally
-and never pushed. It scans full contents (application packages as well as OS
-packages), never resolves a registry digest, and records each ref in the sidecar
-with an empty digest, since a local-only tag has none. Pass it more than once to
-scan several built images. It never combines with `--pull` — a locally built image
-cannot be pulled — and it is never inferred: you always request it explicitly.
-
-`--list-dockerfiles` prints the repository's Dockerfiles instead of scanning
-anything. It runs the same policy-aware walk discovery mode uses, prints each
-discovered Dockerfile's repository-relative path to standard output, one per line,
-and exits — no Docker, no syft, no file written. A Dockerfile matched by the
-policy's `[docker]` ignore globs is left out of the list. Point a CI workflow at it
-to build the exact Dockerfile set the tool would otherwise discover itself, rather
-than reimplementing the walk in shell. It requires `--repo-root`.
+`--list-dockerfiles` prints the repository's Dockerfiles instead of building
+anything. It runs the same discovery walk `--repo-root` uses, prints each
+Dockerfile's repository-relative path to standard output one per line, and exits —
+no Docker, no syft, no file written. A Dockerfile matched by the policy's `[docker]`
+ignore globs is left out. Point a CI workflow at it to build the exact set the tool
+would discover itself. It requires `--repo-root`, the root it walks.
 
 | Flag | Meaning | Default |
 | --- | --- | --- |
-| `--image <ref>` | Live mode: scan this image reference with syft. Repeatable. Needs a Docker daemon. | built-in default image set |
-| `--from-sbom <path>` | Consumer mode: ingest this pre-made SBOM. Repeatable. No Docker, no network. | — |
-| `--repo-root <path>` | Discovery mode: derive base images from the repository's Dockerfiles. | — |
-| `--dockerfile <path>` | Targeted mode: derive the base image of this Dockerfile. Repeatable. | — |
-| `--built-image <ref>` | Built-image mode: scan this locally built, never-pushed tag. Repeatable. Needs a Docker daemon, never `--pull`. | — |
-| `--list-dockerfiles` | List mode: print discovered Dockerfile paths and exit. Requires `--repo-root`. | off |
-| `--pull` | Run `docker pull` on each resolved image before scanning it. Live modes only, never with `--built-image`. | off |
-| `--exclude <glob>` | Drop targets whose identity matches the glob. Repeatable. | none |
-| `--policy <path>` | TOML policy; its `[docker]` ignore globs prune Dockerfiles in discovery mode. | none |
+| `--dockerfile <path>` | Build this Dockerfile and scan the image it produces. Repeatable. Needs a Docker daemon. | — |
+| `--repo-root <path>` | Discover the repository's Dockerfiles, build each, and scan. Needs a Docker daemon. | — |
+| `--image <ref>` | Scan this image reference; pull it first if absent locally. Repeatable. Needs a Docker daemon. | — |
+| `--list-dockerfiles` | Print discovered Dockerfile paths and exit. Requires `--repo-root`. No Docker. | off |
+| `--exclude <glob>` | Drop Dockerfiles whose identity matches the glob. Repeatable. | none |
+| `--policy <path>` | TOML policy; its `[docker]` ignore globs prune Dockerfiles in the discovery lane. | none |
 | `--docker-os-sbom <path>` | Where to write the committed `.sbomlet.cache/docker-os.sbom.json`. | tool default |
 | `--base-dir <path>` | Anchor every relative path flag to this directory. | working directory |
 | `--verbose` | Print per-stage progress to stderr. | off |
 
-`--image` and `--from-sbom` are mutually exclusive: a single run is either a live
-scan or an ingest, not a mix. `--repo-root` (discovery) and `--from-sbom` (ingest)
-are also mutually exclusive, since a pre-made ingest is not a live discovery scan.
-`--dockerfile` (targeted) and `--from-sbom` (ingest) are mutually exclusive for the
-same reason. `--repo-root` may be combined with `--image` or with `--dockerfile`
-(where it serves only as the cache-dir anchor).
-
-`--built-image` is exclusive with `--from-sbom`, `--image`, `--dockerfile`, and
-`--pull`. It may be combined with `--repo-root`, where it too serves only as the
-cache-dir anchor. `--list-dockerfiles` is exclusive with every scan-mode flag
-(`--image`, `--from-sbom`, `--dockerfile`, `--built-image`) and requires
-`--repo-root`, since that is the root it walks.
+The three lanes are mutually exclusive: one run is one way in. `--dockerfile`,
+`--repo-root`, and `--image` cannot be combined with each other — pass exactly one.
+A run with no lane and no `--list-dockerfiles` is a usage error, since there is no
+default image set. `--list-dockerfiles` combines with no scan lane and requires
+`--repo-root`, the walk root it lists.
 
 ## Taskfile entry points
 
@@ -294,12 +266,9 @@ task generate-docker-sbom IMAGES="app:latest worker:latest"
 | `NOTICES` | `generate`, `check` | `THIRD_PARTY_NOTICES.md` path. | `THIRD_PARTY_NOTICES.md` beside `REPO_ROOT` |
 | `POLICY` | `generate`, `check`, `list-dockerfiles` | Policy file; the `--policy` flag is added only when set. | unset (no policy) |
 | `CYCLONEDX` | `generate`, `check` | CycloneDX export path; the `--cyclonedx` flag is added only when set. | unset (no export) |
-| `IMAGES` | `generate-docker-sbom` | Space-separated image references to scan. | unset (built-in default image set) |
-| `FROM_SBOM` | `generate-docker-sbom` | Space-separated pre-built syft SBOM paths to ingest (no Docker). | unset |
-| `DISCOVER_ROOT` | `generate-docker-sbom`, `list-dockerfiles` | Repository root whose Dockerfiles to derive or list (discovery mode; the repository root for `list-dockerfiles`). | this Taskfile's directory for `list-dockerfiles`, unset otherwise |
-| `DOCKERFILES` | `generate-docker-sbom` | Space-separated Dockerfile paths to target (targeted mode). | unset |
-| `BUILT_IMAGES` | `generate-docker-sbom` | Space-separated locally built image tags to scan (built-image mode). | unset |
-| `PULL` | `generate-docker-sbom` | Set to a non-empty value to `docker pull` each resolved image before scanning. | unset (off) |
+| `IMAGES` | `generate-docker-sbom` | Space-separated pre-existing image refs to scan (the image lane). | unset |
+| `DISCOVER_ROOT` | `generate-docker-sbom`, `list-dockerfiles` | Repository root whose Dockerfiles to discover, build & scan (the discovery lane; the walk root for `list-dockerfiles`). | this Taskfile's directory for `list-dockerfiles`, unset otherwise |
+| `DOCKERFILES` | `generate-docker-sbom` | Space-separated Dockerfile paths to build & scan (the targeted lane). | unset |
 | `DOCKER_OS_SBOM` | `generate-docker-sbom` | `.sbomlet.cache/docker-os.sbom.json` output path. | `.sbomlet.cache/docker-os.sbom.json` beside `REPO_ROOT` |
 
 Relative paths you pass are anchored to the directory you ran `task` from, not to

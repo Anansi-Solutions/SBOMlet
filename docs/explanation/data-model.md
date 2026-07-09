@@ -21,7 +21,7 @@ The model is built in two stages.
 First, per-target collection. Each [target](../glossary.md#target) — a yarn,
 npm, pnpm, or bun workspace, a poetry project, the Terraform tree — is scanned
 into one [CycloneDX](../glossary.md#cyclonedx) document and wrapped as a
-`CollectedSbom`. The committed Docker-OS [SBOM](../glossary.md#sbom) is read
+`CollectedSbom`. The committed Docker image [SBOM](../glossary.md#sbom) is read
 straight from disk and wrapped the same way, as a `scope:os` merge input;
 `generate` and `check` never scan a Docker image themselves. The wrapper is the
 document plus the side-band metadata the [merge](../glossary.md#merge) needs:

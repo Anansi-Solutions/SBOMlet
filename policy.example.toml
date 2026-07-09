@@ -253,11 +253,12 @@ handling = "warn"
 # ---------------------------------------------------------------------------
 
 # ---------------------------------------------------------------------------
-# Docker base-image OS-package handling (COLL-04)
+# Docker image-package handling (COLL-04)
 #
-# Governs the deb/apk OS packages scanned out of your Docker base images (the
-# committed .sbomlet.cache/docker-os.sbom.json, produced by the maintainer-run
-# `generate-docker-sbom` subcommand and threaded into the merge as scope "os").
+# Governs the packages scanned out of your Docker images -- the full image
+# contents in the committed .sbomlet.cache/docker-os.sbom.json, produced by the
+# maintainer-run `generate-docker-sbom` subcommand and threaded into the merge as
+# scope "os".
 # A would-be FAIL on an OS package downgrades to WARN under "warn".
 #
 # WHY a separate, non-failing scope by default: the EXPECTED copyleft in a
@@ -266,7 +267,7 @@ handling = "warn"
 # project authored or redistributes as a library. Those obligations are
 # satisfied by shipping the image (the base distro handles its own compliance),
 # so the gate LISTS the OS packages in a dedicated
-# "## Docker base-image OS packages" section for the inventory rather than
+# "## Docker image packages" section for the inventory rather than
 # FAILING your build on every standard base image. Mirrors [dev_dependencies]:
 # a scope whose would-be fails are a list, not a gate, by default.
 #
@@ -284,30 +285,30 @@ handling = "warn"
 # table defaults to "warn".
 #
 # ---------------------------------------------------------------------------
-# HOW the .sbomlet.cache/docker-os.sbom.json is produced -- TWO modes (the second is the
-# state-of-the-art standard for CI):
+# HOW the .sbomlet.cache/docker-os.sbom.json is produced -- THREE lanes, each a
+# way into the same result (syft over a real image's full contents). A run picks
+# exactly one; all three require a docker daemon:
 #
-#   1. Live scan (maintainer, requires docker):
+#   1. Build named Dockerfiles:
+#        task generate-docker-sbom DOCKERFILES="backend/Dockerfile app/Dockerfile"
+#      Builds each Dockerfile to a deterministic local tag and scans the image it
+#      produces -- its base, the packages its own RUN apt/apk steps add, and the
+#      application layered on top.
+#
+#   2. Discover and build the repo's Dockerfiles:
+#        task generate-docker-sbom DISCOVER_ROOT=.
+#      Walks the repo, builds each Dockerfile it finds (skipping any [docker]
+#      ignore match), and scans the results -- what the Docker-scan workflow drives.
+#
+#   3. Scan pre-existing images:
 #        task generate-docker-sbom IMAGES="postgres:18 nginx:stable-alpine"
-#      Spawns the pinned syft over each LOCALLY-PRESENT image and digest-pins
-#      it. Good for a one-off local dogfood; needs a docker daemon.
+#      Scans each image ref with the pinned syft, pulling any that is absent
+#      locally and digest-pinning each.
 #
-#   2. Consume a pre-made SBOM (CI attestation -- PREFERRED):
-#        task generate-docker-sbom FROM_SBOM="build/postgres.cdx.json build/app.cdx.json"
-#      Ingests syft/CycloneDX SBOMs your BUILD PIPELINE already produced, with
-#      NO docker and NO network. The standard flow: the build CI runs syft
-#      against the image it just pushed, BY REGISTRY DIGEST -- e.g.
-#        syft registry.example/app@sha256:... -o cyclonedx-json=app.cdx.json
-#      -- as a build attestation, then this tool consumes that attested SBOM.
-#      This captures the BUILT image's real OS surface (including apt/apk
-#      deltas layered over the base, such as a backend's extra openssl) that a
-#      base-image-only scan would miss, and keeps the compliance tool a thin
-#      CONSUMER of standard SBOM tooling rather than a docker orchestrator.
-#
-# Either mode writes the SAME deterministic committed .sbomlet.cache/docker-os.sbom.json,
-# carrying each OS package's syft-resolved licenses, which generate/check then
-# read OFFLINE (never re-scanning). --image and --from-sbom are mutually
-# exclusive -- a run is one mode or the other.
+# Every lane writes the SAME deterministic committed .sbomlet.cache/docker-os.sbom.json,
+# carrying each package's syft-resolved licenses, which generate/check then read
+# OFFLINE (never re-scanning). The three lanes are mutually exclusive -- a run is
+# one way in.
 # ---------------------------------------------------------------------------
 
 [os_dependencies]

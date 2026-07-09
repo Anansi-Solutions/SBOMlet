@@ -79,9 +79,9 @@ The next three lines partition that total exactly:
   split.
 - Development-only packages are ones whose every use is a dev dependency: build
   tools, test runners, and the like.
-- Docker image packages come from inside a scanned Docker image — the base
-  image's OS packages always, plus the application packages a built-image scan
-  adds on top ([`os` scope](../glossary.md#scope-app-and-os)). They are counted
+- Docker image packages come from inside a scanned Docker image — its full
+  contents, the OS layer and the application packages layered on top
+  ([`os` scope](../glossary.md#scope-app-and-os)). They are counted
   on their own because a package that also ships at the application level keeps
   its production/development-only classification there instead.
 
@@ -228,8 +228,8 @@ them:
 
 - Production dependencies are everything you ship.
 - Development-only dependencies are build- and test-time packages only.
-- Docker image packages are the packages from your scanned Docker images — OS
-  packages always, plus application packages when the scan was a built-image scan.
+- Docker image packages are the packages from inside your scanned Docker images —
+  their full contents, the OS layer and the application packages on top.
 
 All three always render, even when empty, so the document's shape is stable. They
 share five columns:

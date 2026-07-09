@@ -243,8 +243,8 @@ package used as a dev dependency in one workspace and a production dependency in
 another still fails on the production side. A shipped copyleft can't be
 dev-downgraded.
 
-Docker image packages — OS packages from your base images, plus application
-packages a built-image scan finds inside the image you actually ship:
+Docker image packages — the full contents of the images you ship, the OS layer
+and the application packages an image scan finds inside it:
 
 ```toml
 [os_dependencies]
@@ -256,7 +256,7 @@ and coreutils under GPL — is the operating system the container ships on, not
 code your project redistributes as a library. Its obligations are satisfied by
 shipping the image, so `warn` (the default) lists those packages in a dedicated
 section rather than failing your build on every standard base image. The same
-downgrade covers an application package a built-image scan finds that isn't also
+downgrade covers an application package the image scan finds that isn't also
 declared directly — it entered the inventory only because the image ships it.
 `fail` gates [OS-scope](../glossary.md#scope-app-and-os) packages like app code,
 for projects that rebuild their base, or that want every image-sourced copyleft
@@ -265,8 +265,8 @@ package still fails regardless, because deny sits above this knob.
 
 These packages reach the merge only if a `.sbomlet.cache/docker-os.sbom.json` is present in your
 repo, produced separately by the `generate-docker-sbom` subcommand — run by hand
-for a base-image scan, or by CI for a built-image scan of the images the project
-ships. `generate` and `check` never scan images themselves; they only read that
+over named Dockerfiles or images, or by CI discovering and building the
+repository's Dockerfiles. `generate` and `check` never scan images themselves; they only read that
 committed file as an OS-scope input. See the
 [getting-started guide](../getting-started.md) for producing it.
 
@@ -292,10 +292,11 @@ document, not the [notices companion](../glossary.md#sbom). The preamble is
 trusted as author markdown and isn't escaped, so write it as you'd write any
 Markdown in your repo.
 
-## Exclude development Dockerfiles from scanning
+## Exclude Dockerfiles you don't want built
 
-Your repo has Dockerfiles you don't ship, such as a local dev image or a CI
-helper, and you don't want their base images discovered or scanned.
+Your repo has Dockerfiles you don't want the tool to build, such as a fixture or a
+template that isn't a real image, and a discovery walk would otherwise hand each
+one to `docker build`.
 
 ```toml
 [docker]
@@ -303,8 +304,8 @@ ignore = ["docker/dev.Dockerfile", "ci/runner.Dockerfile"]
 ```
 
 When `generate-docker-sbom` discovers Dockerfiles under `--repo-root`, any whose
-repo-relative path matches an `ignore` glob is excluded entirely, so its base
-image is never derived and never scanned. The globs follow the same path rules as
+repo-relative path matches an `ignore` glob is excluded entirely, so it is never
+built and never scanned. The globs follow the same path rules as
 suppression paths: forward slashes only, no `..` segments, no leading or trailing
 slash. An empty `ignore` (or no `[docker]` table at all) excludes nothing.
 
