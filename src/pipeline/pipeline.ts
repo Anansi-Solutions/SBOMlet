@@ -8,6 +8,7 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { basename, relative } from "node:path";
 
 import { assertSyftSbomSize } from "../collectors/dockerOs";
+import { assessPackages } from "../enrich/assess";
 import { enrichUnknowns } from "../enrich/enrich";
 import { type IntensiveOptions } from "../enrich/scancode";
 import { mergeSboms, type CollectedSbom } from "../merge/merge";
@@ -84,11 +85,11 @@ export interface GenerateOptions {
   cyclonedxPath?: string;
   dumpModelPath?: string;
   /**
-   * generate --intensive (10-05, SCAN-01/SCAN-02/SCAN-03): opt-in ScanCode
-   * residual-scan lane over still-unresolved packages with locally-present
-   * sources. Absent-not-false (own-property gated at the enrichUnknowns call
-   * site below) so a default generate never constructs {@link IntensiveOptions}
-   * and stays structurally scan-free. check REJECTS this flag outright
+   * generate --intensive: opt-in ScanCode assessment over the FULL package set
+   * (every package with locally-present sources not already in the analysis
+   * memo). Absent-not-false (own-property gated at the assessPackages call site
+   * below) so a default generate never constructs {@link IntensiveOptions} and
+   * stays structurally scan-free. check REJECTS this flag outright
    * (gate/check.ts, the dump-model precedent) — the shared optionsFrom parses
    * it, but only runGenerate ever threads it through as true.
    */
@@ -313,8 +314,7 @@ function enrichmentCachePath(opts: GenerateOptions, dir: string): string {
  * The committed ScanCode memo path: {@link SCANCODE_CACHE_FILE} inside the cache
  * `dir`, unless --scancode-cache overrides it (resolved against the repo root,
  * symmetric with the enrichment cache path). Exported for direct testing and for
- * the ScanCode replay stage; buildOutputs does not consume it yet — no behavior
- * is wired to the memo in this plan.
+ * the ScanCode replay stage — buildOutputs threads it into assessPackages.
  */
 export function scancodeCachePath(opts: GenerateOptions, dir: string): string {
   return opts.scancodeCachePath !== undefined
@@ -332,7 +332,7 @@ export function scancodeCachePath(opts: GenerateOptions, dir: string): string {
  * forces "check"), and a default generate call has opts.intensive absent, so
  * the common case returns undefined and the intensive lane is never even
  * constructed, let alone invoked. targetDirs comes from the SAME collect loop
- * this run already walked (10-05) — never a fresh discovery — so the residual
+ * this run already walked — never a fresh discovery — so the assessment
  * scan's candidate roots can never drift from what generate actually scanned.
  */
 function intensiveOptionsFor(
@@ -422,6 +422,22 @@ export async function buildOutputs(
     mode,
     cachePath: enrichmentCachePath(opts, dir),
     verbose: opts.verbose,
+  });
+
+  // ScanCode ASSESSMENT stage — a peer stage, not a subordinate lane inside
+  // enrichUnknowns. It runs AFTER registry enrichment so that, for each
+  // package, both the quick-check answer and the in-depth answer exist: the
+  // registry lane keeps its own cache/negative semantics untouched, and
+  // conflicts stay detectable downstream. It replays the committed ScanCode
+  // memo for EVERY package in both modes and, under generate --intensive only,
+  // analyzes the full package set. Consciously accepted: a package whose ONLY
+  // answer is a memoized ScanCode claim is still registry-fetched on the next
+  // generate (it is zero-claim entering this stage) — desired, because both
+  // assessments must exist for a disagreement to surface.
+  const { model: assessed } = await assessPackages(enriched, {
+    mode,
+    memoPath: scancodeCachePath(opts, dir),
+    verbose: opts.verbose,
     ...(intensive !== undefined ? { intensive } : {}),
   });
 
@@ -433,7 +449,7 @@ export async function buildOutputs(
   // (pure — no I/O in the engine), staleness-guarded, and project [[clarify]]
   // wins over it on conflict.
   const { model: annotated, usedClarifyIndices } = annotateFindings(
-    enriched,
+    assessed,
     policy?.clarify ?? [],
     BUILTIN_OVERRIDES,
   );

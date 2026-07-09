@@ -194,7 +194,7 @@ export function resolveFromDocument(
  * a cache hit appends whatever provenance the entry carries (D-04: replay is
  * exact in every mode, never hardcoded).
  */
-function withCacheClaim(
+export function withCacheClaim(
   entry: PackageEntry,
   raw: string,
   source: LicenseClaimSource,
@@ -212,9 +212,9 @@ function withCacheClaim(
  * {@link compareCodeUnits}, and capped — idempotent by construction, so a
  * second replay of the same cache entry produces byte-identical output.
  */
-function withReplayAttribution(
+export function withReplayAttribution(
   entry: PackageEntry,
-  hit: CacheEntry,
+  hit: { copyrights?: readonly string[] },
 ): PackageEntry {
   if (entry.attribution !== undefined) return entry;
   if (hit.copyrights === undefined || hit.copyrights.length === 0) return entry;

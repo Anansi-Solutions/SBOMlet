@@ -44,6 +44,18 @@ import { enrichUnknowns } from "../src/enrich/enrich";
 import { getEntry, readCache, serializeCache } from "../src/enrich/cache";
 import { annotateFindings } from "../src/normalize/normalize";
 import { runGenerate } from "../src/pipeline/pipeline";
+import { assessPackages } from "../src/enrich/assess";
+import {
+  getMemoEntry,
+  putMemoEntry,
+  readScancodeMemo,
+  serializeScancodeMemo,
+} from "../src/enrich/scancode-cache";
+import {
+  toSortedDependenciesJson,
+  type LicenseClaim,
+  type PackageEntry,
+} from "../src/model/dependencies";
 
 /** Original exec export captured BEFORE any mock.module call (restore target). */
 const REAL_EXEC = { ...execModule };
@@ -1296,6 +1308,691 @@ describe("enrichUnknowns intensive lane (10-04: residual scan, provenance write,
     );
     expect(invocations.length).toBe(0);
     expect(scancodeClaim(result.model.packages[0])).toBeUndefined();
+  });
+});
+
+/**
+ * Capture process.stderr.write for the duration of a callback; always restores
+ * in finally so a failing assertion can never poison later tests.
+ */
+async function withCapturedStderr(fn: () => Promise<void>): Promise<string> {
+  const original = process.stderr.write.bind(process.stderr);
+  let captured = "";
+  process.stderr.write = ((chunk: unknown): boolean => {
+    captured += String(chunk);
+    return true;
+  }) as typeof process.stderr.write;
+  try {
+    await fn();
+  } finally {
+    process.stderr.write = original;
+  }
+  return captured;
+}
+
+// ---------------------------------------------------------------------------
+// The ScanCode peer assessment STAGE (12-04): assessPackages replays the
+// committed analysis memo across EVERY package in both modes and, under
+// generate --intensive only, analyzes the FULL package set — memoizing
+// positives and no-results, reporting honest skips, never memoizing an absent
+// tree. Uses the SAME exec recorder harness as above plus the dedicated memo
+// module (../src/enrich/scancode-cache). The end-to-end mechanism proof is that
+// a replayed/analyzed answer actually changes the RENDERED finding, not just
+// the memo entry.
+// ---------------------------------------------------------------------------
+
+describe("assessPackages — ScanCode peer assessment stage (12-04)", () => {
+  let repoDir: string | undefined;
+  let memoDir: string | undefined;
+
+  beforeAll(() => {
+    mock.module("../src/collectors/exec", () => ({
+      ...REAL_EXEC,
+      execTool: fakeExecTool,
+    }));
+  });
+
+  afterAll(() => {
+    mock.module("../src/collectors/exec", () => REAL_EXEC);
+  });
+
+  afterEach(() => {
+    invocations = [];
+    if (repoDir !== undefined)
+      rmSync(repoDir, { recursive: true, force: true });
+    if (memoDir !== undefined)
+      rmSync(memoDir, { recursive: true, force: true });
+    repoDir = undefined;
+    memoDir = undefined;
+  });
+
+  function newRepo(): string {
+    repoDir = mkdtempSync(join(tmpdir(), "assess-repo-"));
+    return repoDir;
+  }
+
+  function newMemoPath(): string {
+    memoDir = mkdtempSync(join(tmpdir(), "assess-memo-"));
+    return join(memoDir, "scancode.cache.json");
+  }
+
+  /** A minimal node_modules/<name> tree with a version-matched package.json + LICENSE. */
+  function writeNpmSource(
+    targetDir: string,
+    name: string,
+    version: string,
+    licenseText = "MIT License\n\nCopyright (c) 2020 Example Author\n",
+  ): void {
+    const pkgDir = join(targetDir, "node_modules", ...name.split("/"));
+    mkdirSync(pkgDir, { recursive: true });
+    writeFileSync(
+      join(pkgDir, "package.json"),
+      JSON.stringify({ name, version }),
+    );
+    writeFileSync(join(pkgDir, "LICENSE"), licenseText);
+  }
+
+  function npmPackage(
+    name: string,
+    version: string,
+    claims: LicenseClaim[] = [],
+  ): PackageEntry {
+    return {
+      purl: `pkg:npm/${name}@${version}`,
+      name,
+      version,
+      occurrences: [{ target: "proj", isDevDependency: false }],
+      licenseClaims: claims,
+      scope: "app",
+    };
+  }
+
+  function generatorClaim(raw: string): LicenseClaim {
+    return { raw, kind: "expression", source: "generator" };
+  }
+
+  function scancodeClaim(
+    entry: PackageEntry | undefined,
+  ): LicenseClaim | undefined {
+    return entry?.licenseClaims.find((c) => c.source === "scancode");
+  }
+
+  /** Seed a committed memo file with the given purl→entry map, returning the path. */
+  function seedMemo(
+    entries: Array<
+      [string, import("../src/enrich/scancode-cache").ScancodeMemoEntry]
+    >,
+  ): string {
+    const path = newMemoPath();
+    const memo = new Map<
+      string,
+      import("../src/enrich/scancode-cache").ScancodeMemoEntry
+    >();
+    for (const [purl, entry] of entries) {
+      putMemoEntry(
+        memo,
+        purl,
+        entry,
+        () => new Date("2026-01-01T00:00:00.000Z"),
+      );
+    }
+    writeFileSync(path, serializeScancodeMemo(memo));
+    return path;
+  }
+
+  /** The finding annotateFindings computes for the first package. */
+  function findingOf(packages: PackageEntry[]): {
+    expression: string | null;
+    confidence: string;
+    source?: string;
+    conflict?: unknown;
+  } {
+    const { model } = annotateFindings({ packages } as never, []);
+    return (
+      model.packages[0] as {
+        finding?: {
+          expression: string | null;
+          confidence: string;
+          source?: string;
+          conflict?: unknown;
+        };
+      }
+    ).finding as {
+      expression: string | null;
+      confidence: string;
+      source?: string;
+      conflict?: unknown;
+    };
+  }
+
+  const FIXED_NOW = (): Date => new Date("2026-01-01T00:00:00.000Z");
+
+  // --- Replay (both modes, unconditional, EVERY package) -------------------
+
+  test("replay: a positive memo entry lands a ScanCode claim on a PRECISELY-declared package — the finding becomes the assessment (the load-bearing full-replay change)", async () => {
+    const path = seedMemo([
+      [
+        "pkg:npm/left-pad@1.3.0",
+        { license: "MIT", via: "scancode-toolkit@32.5.0/license-file" },
+      ],
+    ]);
+    const model: CanonicalDependenciesLike = {
+      packages: [npmPackage("left-pad", "1.3.0", [generatorClaim("MIT")])],
+    };
+
+    const { model: assessed } = await assessPackages(model as never, {
+      mode: "check",
+      memoPath: path,
+      verbose: false,
+    });
+
+    expect(scancodeClaim(assessed.packages[0])).toEqual({
+      raw: "MIT",
+      kind: "expression",
+      source: "scancode",
+    });
+    const finding = findingOf(assessed.packages);
+    expect(finding.source).toBe("scancode");
+    expect(finding.confidence).toBe("exact");
+  });
+
+  test("replay: a positive memo entry DISAGREEING with a precise declared claim sets the conflict marker — detection reaches declared packages too", async () => {
+    const path = seedMemo([
+      [
+        "pkg:npm/disputed@2.0.0",
+        { license: "Apache-2.0", via: "scancode-toolkit@32.5.0/license-file" },
+      ],
+    ]);
+    const model: CanonicalDependenciesLike = {
+      packages: [npmPackage("disputed", "2.0.0", [generatorClaim("MIT")])],
+    };
+
+    const { model: assessed } = await assessPackages(model as never, {
+      mode: "check",
+      memoPath: path,
+      verbose: false,
+    });
+
+    const finding = findingOf(assessed.packages);
+    expect(finding.conflict).toBeDefined();
+  });
+
+  test("replay: a zero-claim package gains the memo's answer WITH attribution (copyrights sanitized/sorted/deduped)", async () => {
+    const path = seedMemo([
+      [
+        "pkg:npm/quiet@1.0.0",
+        {
+          license: "Apache-2.0",
+          via: "scancode-toolkit@32.5.0/license-file",
+          copyrights: [
+            "Copyright (c) 2020 Zeta Corp",
+            "Copyright (c) 2019 Alpha Author",
+          ],
+        },
+      ],
+    ]);
+    const model: CanonicalDependenciesLike = {
+      packages: [npmPackage("quiet", "1.0.0")],
+    };
+
+    const { model: assessed } = await assessPackages(model as never, {
+      mode: "check",
+      memoPath: path,
+      verbose: false,
+    });
+
+    expect(assessed.packages[0]?.attribution).toEqual({
+      copyrightLines: [
+        "Copyright (c) 2019 Alpha Author",
+        "Copyright (c) 2020 Zeta Corp",
+      ],
+      noticeTexts: [],
+      hasVerbatimText: false,
+    });
+  });
+
+  test("replay: a no-result memo entry (license null) appends NOTHING and never conflicts with a positive registry answer (Pitfall 4)", async () => {
+    const path = seedMemo([
+      [
+        "pkg:npm/no-evidence@1.0.0",
+        { license: null, via: "scancode-toolkit@32.5.0/no-answer" },
+      ],
+    ]);
+    const model: CanonicalDependenciesLike = {
+      packages: [
+        npmPackage("no-evidence", "1.0.0", [
+          { raw: "MIT", kind: "expression", source: "registry" },
+        ]),
+      ],
+    };
+
+    const { model: assessed } = await assessPackages(model as never, {
+      mode: "check",
+      memoPath: path,
+      verbose: false,
+    });
+
+    expect(scancodeClaim(assessed.packages[0])).toBeUndefined();
+    const finding = findingOf(assessed.packages);
+    expect(finding.expression).toBe("MIT");
+    expect(finding.conflict).toBeUndefined();
+  });
+
+  test("replay: a MISSING memo file is a no-op — no claim appended, no file created (D-06)", async () => {
+    const path = newMemoPath();
+    rmSync(path, { force: true }); // ensure absent
+    const model: CanonicalDependenciesLike = {
+      packages: [npmPackage("left-pad", "1.3.0", [generatorClaim("MIT")])],
+    };
+
+    const { model: assessed } = await assessPackages(model as never, {
+      mode: "check",
+      memoPath: path,
+      verbose: false,
+    });
+
+    expect(scancodeClaim(assessed.packages[0])).toBeUndefined();
+    expect(assessed.packages[0]?.licenseClaims).toEqual([
+      generatorClaim("MIT"),
+    ]);
+    expect(existsSync(path)).toBe(false);
+  });
+
+  // --- Scan (generate --intensive only) ------------------------------------
+
+  test("scan (D-09 full set): a package with a PRECISE declared answer and no memo entry IS analyzed — the analysis set is not the residual", async () => {
+    const repo = newRepo();
+    writeNpmSource(repo, "left-pad", "1.3.0");
+    const path = newMemoPath();
+    const model: CanonicalDependenciesLike = {
+      packages: [npmPackage("left-pad", "1.3.0", [generatorClaim("MIT")])],
+    };
+
+    await assessPackages(model as never, {
+      mode: "generate",
+      memoPath: path,
+      verbose: false,
+      now: FIXED_NOW,
+      intensive: { targetDirs: [repo] },
+    });
+
+    expect(invocations.length).toBe(1);
+    expect(
+      getMemoEntry(readScancodeMemo(path), "pkg:npm/left-pad@1.3.0"),
+    ).toBeDefined();
+  });
+
+  test("scan: a memo hit — positive OR no-result — is skipped, never re-analyzed (memo presence is the skip test, D-11)", async () => {
+    const repo = newRepo();
+    writeNpmSource(repo, "left-pad", "1.3.0");
+    writeNpmSource(repo, "silent", "1.0.0");
+
+    const path = seedMemo([
+      [
+        "pkg:npm/left-pad@1.3.0",
+        { license: "MIT", via: "scancode-toolkit@32.5.0/license-file" },
+      ],
+      [
+        "pkg:npm/silent@1.0.0",
+        { license: null, via: "scancode-toolkit@32.5.0/no-answer" },
+      ],
+    ]);
+    const model: CanonicalDependenciesLike = {
+      packages: [
+        npmPackage("left-pad", "1.3.0"),
+        npmPackage("silent", "1.0.0"),
+      ],
+    };
+
+    await assessPackages(model as never, {
+      mode: "generate",
+      memoPath: path,
+      verbose: false,
+      intensive: { targetDirs: [repo] },
+    });
+
+    expect(invocations.length).toBe(0);
+  });
+
+  test("scan: a package whose sources are absent is reported but NEVER memoized (Pitfall 3 — a memo entry means the tree was analyzed)", async () => {
+    const repo = newRepo();
+    mkdirSync(join(repo, "node_modules"), { recursive: true });
+    const path = newMemoPath();
+    const model: CanonicalDependenciesLike = {
+      packages: [npmPackage("absent", "1.0.0")],
+    };
+
+    await assessPackages(model as never, {
+      mode: "generate",
+      memoPath: path,
+      verbose: false,
+      intensive: { targetDirs: [repo] },
+    });
+
+    expect(invocations.length).toBe(0);
+    expect(
+      getMemoEntry(readScancodeMemo(path), "pkg:npm/absent@1.0.0"),
+    ).toBeUndefined();
+  });
+
+  test("scan + replay (mechanism proof, D-10): a fresh positive is memoized {license, via, copyrights, scannedAt} and its claim + attribution + PRECISE finding land in the SAME run", async () => {
+    const repo = newRepo();
+    writeNpmSource(repo, "left-pad", "1.3.0");
+    const path = newMemoPath();
+    const model: CanonicalDependenciesLike = {
+      packages: [npmPackage("left-pad", "1.3.0")],
+    };
+
+    const { model: assessed } = await assessPackages(model as never, {
+      mode: "generate",
+      memoPath: path,
+      verbose: false,
+      now: FIXED_NOW,
+      intensive: { targetDirs: [repo] },
+    });
+
+    expect(invocations.length).toBe(1);
+    const entry = getMemoEntry(
+      readScancodeMemo(path),
+      "pkg:npm/left-pad@1.3.0",
+    );
+    expect(entry?.license).toBe("MIT");
+    expect(entry?.via).toBe("scancode-toolkit@32.5.0/license-file");
+    expect(entry?.copyrights?.length).toBeGreaterThan(0);
+    expect(entry?.scannedAt).toBe("2026-01-01T00:00:00.000Z");
+
+    expect(scancodeClaim(assessed.packages[0])).toEqual({
+      raw: "MIT",
+      kind: "expression",
+      source: "scancode",
+    });
+    expect(
+      assessed.packages[0]?.attribution?.copyrightLines.length,
+    ).toBeGreaterThan(0);
+    const finding = findingOf(assessed.packages);
+    expect(finding.expression).toBe("MIT");
+    expect(finding.confidence).toBe("exact");
+  });
+
+  test("scan: a fresh no-answer is memoized as license:null on the no-answer lane and appends no claim", async () => {
+    const repo = newRepo();
+    const pkgDir = join(repo, "node_modules", "no-answer-pkg");
+    mkdirSync(pkgDir, { recursive: true });
+    writeFileSync(
+      join(pkgDir, "package.json"),
+      JSON.stringify({ name: "no-answer-pkg", version: "1.0.0" }),
+    );
+
+    const fixture = JSON.parse(readFileSync(FIXTURE_PATH, "utf8")) as {
+      headers: unknown[];
+    };
+    const noiseOnly = {
+      headers: fixture.headers,
+      files: [
+        {
+          path: "no-answer-pkg/LICENSE",
+          detected_license_expression_spdx: "LicenseRef-scancode-unknown",
+          copyrights: [],
+        },
+      ],
+    };
+    mock.module("../src/collectors/exec", () => ({
+      ...REAL_EXEC,
+      execTool: makeFakeExecToolWithDoc(noiseOnly),
+    }));
+
+    const path = newMemoPath();
+    const model: CanonicalDependenciesLike = {
+      packages: [npmPackage("no-answer-pkg", "1.0.0")],
+    };
+    try {
+      const { model: assessed } = await assessPackages(model as never, {
+        mode: "generate",
+        memoPath: path,
+        verbose: false,
+        now: FIXED_NOW,
+        intensive: { targetDirs: [repo] },
+      });
+      expect(invocations.length).toBe(1);
+      const entry = getMemoEntry(
+        readScancodeMemo(path),
+        "pkg:npm/no-answer-pkg@1.0.0",
+      );
+      expect(entry?.license).toBeNull();
+      expect(entry?.via).toBe("scancode-toolkit@32.5.0/no-answer");
+      expect(entry?.scannedAt).toBe("2026-01-01T00:00:00.000Z");
+      expect(scancodeClaim(assessed.packages[0])).toBeUndefined();
+    } finally {
+      mock.module("../src/collectors/exec", () => ({
+        ...REAL_EXEC,
+        execTool: fakeExecTool,
+      }));
+    }
+  });
+
+  // --- Honest skip reporting ------------------------------------------------
+
+  test("the stderr counts line reports the full-set partition in the locked house style", async () => {
+    const repo = newRepo();
+    writeNpmSource(repo, "left-pad", "1.3.0"); // scanned 1
+    const path = seedMemo([
+      [
+        "pkg:npm/hit@1.0.0",
+        { license: "MIT", via: "scancode-toolkit@32.5.0/license-file" },
+      ],
+    ]);
+    const model: CanonicalDependenciesLike = {
+      packages: [
+        npmPackage("left-pad", "1.3.0"),
+        npmPackage("hit", "1.0.0"), // memoized 1 (hit)
+        npmPackage("absent", "1.0.0"), // no local sources 1
+        {
+          purl: "pkg:apk/musl@1.2.3",
+          name: "musl",
+          version: "1.2.3",
+          occurrences: [{ target: "proj", isDevDependency: false }],
+          licenseClaims: [],
+          scope: "os",
+        }, // unsupported 1
+      ],
+    };
+
+    const stderr = await withCapturedStderr(async () => {
+      await assessPackages(model as never, {
+        mode: "generate",
+        memoPath: path,
+        verbose: false,
+        intensive: { targetDirs: [repo] },
+      });
+    });
+
+    expect(stderr).toContain(
+      "intensive: scanned 1, memoized 1 (hits), no local sources 1, unsupported 1",
+    );
+  });
+
+  test("per-package skip lines name the purl ONLY under --verbose (run mechanics, never rendered)", async () => {
+    const repo = newRepo();
+    mkdirSync(join(repo, "node_modules"), { recursive: true });
+    const model: CanonicalDependenciesLike = {
+      packages: [npmPackage("absent", "1.0.0")],
+    };
+
+    const verbose = await withCapturedStderr(async () => {
+      await assessPackages(model as never, {
+        mode: "generate",
+        memoPath: newMemoPath(),
+        verbose: true,
+        intensive: { targetDirs: [repo] },
+      });
+    });
+    expect(verbose).toContain("intensive skip: pkg:npm/absent@1.0.0");
+
+    const quiet = await withCapturedStderr(async () => {
+      await assessPackages(model as never, {
+        mode: "generate",
+        memoPath: newMemoPath(),
+        verbose: false,
+        intensive: { targetDirs: [repo] },
+      });
+    });
+    expect(quiet).not.toContain("intensive skip:");
+  });
+
+  // --- Determinism ----------------------------------------------------------
+
+  test("warm run: a second intensive generate records ZERO invocations and leaves the committed memo byte-identical (a different clock never restamps)", async () => {
+    const repo = newRepo();
+    writeNpmSource(repo, "left-pad", "1.3.0");
+    const path = newMemoPath();
+    const model: CanonicalDependenciesLike = {
+      packages: [npmPackage("left-pad", "1.3.0")],
+    };
+
+    await assessPackages(model as never, {
+      mode: "generate",
+      memoPath: path,
+      verbose: false,
+      now: () => new Date("2026-01-01T00:00:00.000Z"),
+      intensive: { targetDirs: [repo] },
+    });
+    const firstBytes = readFileSync(path, "utf8");
+    invocations = [];
+
+    const { model: second } = await assessPackages(model as never, {
+      mode: "generate",
+      memoPath: path,
+      verbose: false,
+      now: () => new Date("2026-02-01T00:00:00.000Z"),
+      intensive: { targetDirs: [repo] },
+    });
+
+    expect(invocations.length).toBe(0);
+    expect(readFileSync(path, "utf8")).toBe(firstBytes);
+    expect(scancodeClaim(second.packages[0])).toEqual({
+      raw: "MIT",
+      kind: "expression",
+      source: "scancode",
+    });
+  });
+
+  test("hermetic check (Pitfall 2): an intensive generate that finds a CONFLICT, then an offline check with the scanner stubbed-to-throw, yields a byte-identical annotated model INCLUDING the conflict marker", async () => {
+    const repo = newRepo();
+    writeNpmSource(repo, "left-pad", "1.3.0");
+    const path = newMemoPath();
+
+    const fixture = JSON.parse(readFileSync(FIXTURE_PATH, "utf8")) as {
+      headers: unknown[];
+    };
+    // Declared MIT vs an in-depth Apache-2.0 → a conflict.
+    const apacheDoc = {
+      headers: fixture.headers,
+      files: [
+        {
+          path: "left-pad/LICENSE",
+          detected_license_expression_spdx: "Apache-2.0",
+          copyrights: [{ copyright: "Copyright (c) 2020 Example Author" }],
+        },
+      ],
+    };
+    mock.module("../src/collectors/exec", () => ({
+      ...REAL_EXEC,
+      execTool: makeFakeExecToolWithDoc(apacheDoc),
+    }));
+
+    const declaredModel = (): CanonicalDependenciesLike => ({
+      packages: [npmPackage("left-pad", "1.3.0", [generatorClaim("MIT")])],
+    });
+
+    let dumpGenerated: string;
+    try {
+      const generated = await assessPackages(declaredModel() as never, {
+        mode: "generate",
+        memoPath: path,
+        verbose: false,
+        intensive: { targetDirs: [repo] },
+      });
+      const { model } = annotateFindings(
+        { packages: generated.model.packages } as never,
+        [],
+      );
+      dumpGenerated = toSortedDependenciesJson(model as never);
+      expect(dumpGenerated).toContain("conflict");
+    } finally {
+      mock.module("../src/collectors/exec", () => ({
+        ...REAL_EXEC,
+        execTool: fakeExecTool,
+      }));
+    }
+
+    invocations = [];
+    // check NEVER receives intensive; the scanner is stubbed to throw so any
+    // scan attempt would fail loudly. The replay alone reproduces the conflict.
+    mock.module("../src/collectors/exec", () => ({
+      ...REAL_EXEC,
+      execTool: (): Promise<{ stdout: string; stderr: string }> => {
+        throw new Error("check must never invoke scancode");
+      },
+    }));
+    try {
+      const checked = await assessPackages(declaredModel() as never, {
+        mode: "check",
+        memoPath: path,
+        verbose: false,
+      });
+      const { model } = annotateFindings(
+        { packages: checked.model.packages } as never,
+        [],
+      );
+      const dumpChecked = toSortedDependenciesJson(model as never);
+      expect(dumpChecked).toBe(dumpGenerated);
+      expect(invocations.length).toBe(0);
+    } finally {
+      mock.module("../src/collectors/exec", () => ({
+        ...REAL_EXEC,
+        execTool: fakeExecTool,
+      }));
+    }
+  });
+
+  test("dedicated files: a fresh positive lands ONLY in the ScanCode memo — a pre-seeded registry enrichment cache is byte-untouched (separate files by design, the 5a reshape)", async () => {
+    const repo = newRepo();
+    writeNpmSource(repo, "left-pad", "1.3.0");
+    const memoPath = newMemoPath();
+
+    // A separate registry enrichment cache carrying a NEGATIVE for the package:
+    // under the memo-presence skip test the package is STILL analyzed (the
+    // enrichment cache is not consulted here), and the enrichment cache stays
+    // byte-identical because this stage never writes it.
+    const enrichPath = join(memoDir as string, "licenses.cache.json");
+    const enrichCache = new Map();
+    enrichCache.set("pkg:npm/left-pad@1.3.0", {
+      license: null,
+      source: "registry",
+      fetchedFrom: "npm",
+      via: "unresolved",
+      resolvable: false,
+    });
+    const enrichBytes = serializeCache(enrichCache);
+    writeFileSync(enrichPath, enrichBytes);
+
+    await assessPackages(
+      { packages: [npmPackage("left-pad", "1.3.0")] } as never,
+      {
+        mode: "generate",
+        memoPath,
+        verbose: false,
+        now: FIXED_NOW,
+        intensive: { targetDirs: [repo] },
+      },
+    );
+
+    expect(invocations.length).toBe(1);
+    expect(
+      getMemoEntry(readScancodeMemo(memoPath), "pkg:npm/left-pad@1.3.0")
+        ?.license,
+    ).toBe("MIT");
+    expect(readFileSync(enrichPath, "utf8")).toBe(enrichBytes);
   });
 });
 
