@@ -13,7 +13,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import { describe, expect, test } from "bun:test";
 
 import {
@@ -23,9 +23,23 @@ import {
   serializeScancodeMemo,
   type ScancodeMemoEntry,
 } from "../src/enrich/scancode-cache";
+import {
+  ENRICHMENT_CACHE_FILE,
+  SCANCODE_CACHE_FILE,
+  scancodeCachePath,
+  type GenerateOptions,
+} from "../src/pipeline/pipeline";
+import { optionsFrom } from "../src/cli";
 
-/** The committed memo filename (the resolved-path constant is locked in Task 2). */
+/** The committed memo filename (kept as a literal so the block above stays module-only). */
 const MEMO_FILE = "scancode.cache.json";
+
+/** A minimal valid GenerateOptions for exercising the path resolver directly. */
+const baseOpts: GenerateOptions = {
+  outputPath: "THIRD_PARTY_LICENSES.md",
+  noticesPath: "THIRD_PARTY_NOTICES.md",
+  verbose: false,
+};
 
 /** A positive memo entry: raw expression + copyrights + a fixed creation stamp. */
 const positive: ScancodeMemoEntry = {
@@ -223,5 +237,43 @@ describe("scancode memo — envelope, entry shape, deterministic read/write (SCA
     const memo = new Map<string, ScancodeMemoEntry>();
     memo.set("pkg:npm/no-license-pkg@2.0.0", noResult);
     expect(serializeScancodeMemo(memo)).not.toContain("copyrights");
+  });
+});
+
+describe("scancode memo path resolution + --scancode-cache flag (SCAN-06 / D-04)", () => {
+  test("SCANCODE_CACHE_FILE is scancode.cache.json — a distinct sibling of the enrichment cache filename", () => {
+    expect(SCANCODE_CACHE_FILE).toBe("scancode.cache.json");
+    expect(SCANCODE_CACHE_FILE).not.toBe(ENRICHMENT_CACHE_FILE);
+  });
+
+  test("the default memo path is the sibling of licenses.cache.json inside the resolved cache dir", () => {
+    const dir = join(tmpdir(), "repo", ".sbomlet.cache");
+    const resolved = scancodeCachePath(baseOpts, dir);
+    expect(basename(resolved)).toBe("scancode.cache.json");
+    expect(dirname(resolved)).toBe(dir);
+  });
+
+  test("the memo path honors whatever cache dir it is given — the [cache] dir override mechanism, shared with the enrichment path via cacheDir", () => {
+    const overrideDir = join(tmpdir(), "custom-cache-dir");
+    const resolved = scancodeCachePath(baseOpts, overrideDir);
+    expect(dirname(resolved)).toBe(overrideDir);
+    expect(basename(resolved)).toBe("scancode.cache.json");
+  });
+
+  test("--scancode-cache <path> overrides the resolved path, symmetric with --enrichment-cache", () => {
+    const dir = join(tmpdir(), "repo", ".sbomlet.cache");
+    const resolved = scancodeCachePath(
+      { ...baseOpts, scancodeCachePath: "custom/memo.json" },
+      dir,
+    );
+    expect(basename(resolved)).toBe("memo.json");
+    expect(resolved.endsWith(join("custom", "memo.json"))).toBe(true);
+  });
+
+  test("optionsFrom threads --scancode-cache into scancodeCachePath (undefined when absent) — the shared parser both generate and check consume", () => {
+    expect(optionsFrom({}).scancodeCachePath).toBeUndefined();
+    expect(
+      optionsFrom({ "scancode-cache": "custom/memo.json" }).scancodeCachePath,
+    ).toBe("custom/memo.json");
   });
 });

@@ -44,6 +44,16 @@ export const DEFAULT_CACHE_DIR = ".sbomlet.cache";
 export const ENRICHMENT_CACHE_FILE = "licenses.cache.json";
 
 /**
+ * The dedicated ScanCode analysis memo filename inside the resolved cache dir
+ * (D-04, SCAN-06): a COMMITTED cache with a lifecycle separate from the registry
+ * enrichment cache — the intensive ScanCode lane results live here, not in
+ * {@link ENRICHMENT_CACHE_FILE}, so the two caches version and invalidate
+ * independently. Resolved via the same {@link cacheDir}, so a policy `[cache]
+ * dir` steers both to the same directory.
+ */
+export const SCANCODE_CACHE_FILE = "scancode.cache.json";
+
+/**
  * The committed Docker OS-package SBOM filename inside the cache dir (COLL-04):
  * 07-01's deterministic emitter output, committed and consumed as a scope:"os"
  * MERGE INPUT, never scanned per-run. A MISSING file is the enrichment-cache-miss
@@ -113,6 +123,13 @@ export interface GenerateOptions {
    * dir ({@link DEFAULT_CACHE_DIR}, or the policy `[cache] dir`).
    */
   enrichmentCachePath?: string;
+  /**
+   * Optional override for the ScanCode memo path (--scancode-cache), symmetric
+   * with --enrichment-cache. When unset it defaults to {@link
+   * SCANCODE_CACHE_FILE} inside the resolved cache dir. Threaded through for the
+   * ScanCode replay stage to consume; the memo module owns the read/write.
+   */
+  scancodeCachePath?: string;
   /**
    * Optional override for the committed Docker OS SBOM path (--docker-os-sbom).
    * When unset it defaults to {@link DOCKER_OS_SBOM_FILE} inside the resolved cache
@@ -290,6 +307,22 @@ function enrichmentCachePath(opts: GenerateOptions, dir: string): string {
         opts.enrichmentCachePath,
       )
     : resolveFrom(dir, ENRICHMENT_CACHE_FILE);
+}
+
+/**
+ * The committed ScanCode memo path: {@link SCANCODE_CACHE_FILE} inside the cache
+ * `dir`, unless --scancode-cache overrides it (resolved against the repo root,
+ * symmetric with the enrichment cache path). Exported for direct testing and for
+ * the ScanCode replay stage; buildOutputs does not consume it yet — no behavior
+ * is wired to the memo in this plan.
+ */
+export function scancodeCachePath(opts: GenerateOptions, dir: string): string {
+  return opts.scancodeCachePath !== undefined
+    ? resolveFrom(
+        resolvedRepoRoot(opts) ?? opts.baseDir,
+        opts.scancodeCachePath,
+      )
+    : resolveFrom(dir, SCANCODE_CACHE_FILE);
 }
 
 /**

@@ -55,7 +55,8 @@ const USAGE =
   "  generate [--repo-root <path> | --target <path>] [--exclude <glob>]... " +
   "[--policy <path>] [--output <path>] [--notices <path>] " +
   "[--cyclonedx <path>] [--dump-model <path>] [--base-dir <path>] " +
-  "[--enrichment-cache <path>] [--intensive] [--verbose]\n" +
+  "[--enrichment-cache <path>] [--scancode-cache <path>] [--intensive] " +
+  "[--verbose]\n" +
   "           --intensive: scan the locally-present sources of still-" +
   "unresolved packages with ScanCode after registry enrichment (generate-" +
   "only; meant for occasional runs, not the default fast path).\n" +
@@ -161,6 +162,12 @@ interface CliValues {
   "dump-model"?: string;
   "base-dir"?: string;
   "enrichment-cache"?: string;
+  /**
+   * Optional override for the ScanCode memo path (--scancode-cache), symmetric
+   * with --enrichment-cache. Threaded into GenerateOptions.scancodeCachePath;
+   * check reads it exactly as generate does (both go through optionsFrom).
+   */
+  "scancode-cache"?: string;
   verbose?: boolean;
   /** Repeatable --image refs for generate-docker-sbom (the live-scan set). */
   image?: string[];
@@ -243,6 +250,7 @@ export function optionsFrom(values: CliValues): GenerateOptions {
     policyPath: values.policy ?? discoverDefaultPolicy(values),
     baseDir: values["base-dir"],
     enrichmentCachePath: values["enrichment-cache"],
+    scancodeCachePath: values["scancode-cache"],
     verbose: values.verbose ?? false,
     // Absent-not-false (D-07): own-property spread so a default generate
     // never sets this key at all, and check's runCheck rejection reads
@@ -470,6 +478,7 @@ async function main(argv: string[]): Promise<void> {
         "dump-model": { type: "string" },
         "base-dir": { type: "string" },
         "enrichment-cache": { type: "string" },
+        "scancode-cache": { type: "string" },
         verbose: { type: "boolean", default: false },
         image: { type: "string", multiple: true },
         "from-sbom": { type: "string", multiple: true },
