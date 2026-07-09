@@ -1,9 +1,9 @@
 name: Docker scan
 
-# Builds the repository's Dockerfile-derived images and scans the built
-# images, so the committed SBOM covers application-layer packages too, then
-# commits the regenerated artifacts back. Path-filtered because a build-and-
-# scan is expensive and only a change to an image source can alter the
+# Discovers, builds, and scans the repository's Dockerfiles through the tool's
+# discovery lane, so the committed SBOM covers application-layer packages too,
+# then commits the regenerated artifacts back. Path-filtered because a build-
+# and-scan is expensive and only a change to an image source can alter the
 # result; the committed artifact paths are deliberately absent from the
 # triggers below, so the bot's own commit-back can never re-trigger this
 # workflow. See docs/guides/ci-integration.md for the full loop-prevention
@@ -56,12 +56,7 @@ jobs:
       - name: Build and scan the Dockerfiles
         env:
           DOCKERFILES: ${{ inputs.dockerfiles }}
-        run: |
-          tags=$(mise x -- bun scripts/build-scan-images.ts $DOCKERFILES)
-          mise x -- task generate-docker-sbom BUILT_IMAGES="$tags"
-
-      - name: Regenerate the inventory
-        run: mise x -- task generate
+        run: mise x -- task docker-scan DOCKERFILES="$DOCKERFILES"
 
       - name: Commit regenerated scan artifacts
         if: github.event_name != 'pull_request'
