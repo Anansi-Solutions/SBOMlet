@@ -2098,36 +2098,6 @@ describe("generate-docker-sbom mode contract", () => {
     return mkdtempSync(join(tmpdir(), "licenses-cli-docker-"));
   }
 
-  test("--image and --from-sbom conflict, naming both flags", () => {
-    const message = dockerSbomModeConflict({
-      image: ["postgres:18"],
-      "from-sbom": ["sbom.json"],
-    });
-    expect(message).toBeDefined();
-    expect(message).toContain("--image");
-    expect(message).toContain("--from-sbom");
-  });
-
-  test("--repo-root (discovery) and --from-sbom conflict, naming both flags", () => {
-    const message = dockerSbomModeConflict({
-      "repo-root": ".",
-      "from-sbom": ["sbom.json"],
-    });
-    expect(message).toBeDefined();
-    expect(message).toContain("--repo-root");
-    expect(message).toContain("--from-sbom");
-  });
-
-  test("--dockerfile (targeted) and --from-sbom conflict, naming both flags", () => {
-    const message = dockerSbomModeConflict({
-      dockerfile: ["Dockerfile"],
-      "from-sbom": ["sbom.json"],
-    });
-    expect(message).toBeDefined();
-    expect(message).toContain("--dockerfile");
-    expect(message).toContain("--from-sbom");
-  });
-
   test("--dockerfile + --repo-root is NOT a conflict (anchor degradation)", () => {
     expect(
       dockerSbomModeConflict({
@@ -2186,16 +2156,6 @@ describe("generate-docker-sbom mode contract", () => {
     } finally {
       rmSync(base, { recursive: true, force: true });
     }
-  });
-
-  test("--built-image and --from-sbom conflict, naming both flags", () => {
-    const message = dockerSbomModeConflict({
-      "built-image": ["myapp:ci"],
-      "from-sbom": ["sbom.json"],
-    });
-    expect(message).toBeDefined();
-    expect(message).toContain("--built-image");
-    expect(message).toContain("--from-sbom");
   });
 
   test("--built-image and --image conflict, naming both flags", () => {
@@ -2268,16 +2228,6 @@ describe("generate-docker-sbom mode contract", () => {
     expect(message).toBeDefined();
     expect(message).toContain("--list-dockerfiles");
     expect(message).toContain("--image");
-  });
-
-  test("--list-dockerfiles and --from-sbom conflict", () => {
-    const message = dockerSbomModeConflict({
-      "list-dockerfiles": true,
-      "from-sbom": ["sbom.json"],
-    });
-    expect(message).toBeDefined();
-    expect(message).toContain("--list-dockerfiles");
-    expect(message).toContain("--from-sbom");
   });
 
   test("--list-dockerfiles and --dockerfile conflict", () => {

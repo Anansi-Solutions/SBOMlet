@@ -33,7 +33,7 @@
 
 import { existsSync, mkdtempSync, readFileSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { basename, join } from "node:path";
+import { join } from "node:path";
 
 import { compareCodeUnits, toSortedJson } from "../model/dependencies";
 import { execTool } from "./exec";
@@ -349,7 +349,7 @@ export interface DockerOsCollectOptions {
    * RepoDigests (resolveDigest throws by design, never weakened), and any
    * per-build digest (image ID, buildx digest) varies per rebuild — so the
    * committed identity is the stable ref with digest "" (the
-   * consumeDockerOsSbom digest-less posture, #6). Built collection also
+   * digest-less posture, #6). Built collection also
    * applies fullContents: true (the generated-image posture, DOCK-01) and
    * skips resolveDigest and docker inspect entirely; built + pull is rejected
    * synchronously (a built image is local-only and cannot be pulled).
@@ -583,7 +583,7 @@ async function collectOneImage(
   if (opts.built) {
     // Never resolveDigest for a built image — it has no RepoDigests by
     // construction and any per-build digest is volatile (WR-01 lesson).
-    // Record the stable, digest-less identity (consumeDockerOsSbom #6
+    // Record the stable, digest-less identity (the digest-less
     // posture) instead.
     return { components, digest: { image, digest: "" }, sbomPath: outFile };
   }
@@ -638,126 +638,4 @@ export async function collectDockerOsSbom(
   );
 
   return { doc: emitDockerOsDoc(components, dockerImages), sbomPaths };
-}
-
-/** The `@sha256:<64 hex>` digest pattern as it appears in an image reference. */
-const SHA256_DIGEST_RE = /@(sha256:[0-9a-f]{64})/;
-
-/**
- * Recover the scanned image's @sha256 digest from a syft CycloneDX SBOM's
- * `metadata.component`. syft records the image identity there for a container
- * scan: the manifest digest in `version` (e.g. "sha256:abc…") and/or embedded
- * in the digest-pinned `name` ("registry/app@sha256:abc…"). Returns undefined
- * when no digest is recoverable — the SBOM may have been produced from a tag,
- * not a digest. NEVER fabricates one.
- */
-export function digestFromSbom(sbom: unknown): string | undefined {
-  const component = (sbom as { metadata?: { component?: unknown } }).metadata
-    ?.component;
-  if (typeof component !== "object" || component === null) return undefined;
-  const { version, name } = component as { version?: unknown; name?: unknown };
-  if (typeof version === "string" && /^sha256:[0-9a-f]{64}$/.test(version)) {
-    return version;
-  }
-  if (typeof name === "string") {
-    const match = SHA256_DIGEST_RE.exec(name);
-    if (match) return match[1];
-  }
-  return undefined;
-}
-
-/**
- * Path-INDEPENDENT image identity for a digest-less SBOM (#6 determinism). A
- * digest-less SBOM (produced from a tag, not a registry digest) must never be
- * identified by its machine-specific ABSOLUTE source path — that drifts per
- * machine and makes the committed docker-os.sbom.json non-deterministic.
- * Instead:
- *   1. prefer metadata.component.name (the image ref/tag — path-free and the
- *      most meaningful identity, e.g. "postgres:18-bookworm");
- *   2. last resort, the file BASENAME (path-free), never the absolute path.
- * Never fabricates a digest; the caller records digest "" alongside this.
- */
-function pathFreeImageIdentity(sbom: unknown, path: string): string {
-  const component = (sbom as { metadata?: { component?: unknown } }).metadata
-    ?.component;
-  if (typeof component === "object" && component !== null) {
-    const { name } = component as { name?: unknown };
-    if (typeof name === "string" && name.trim() !== "") return name;
-  }
-  return basename(path);
-}
-
-/** Options for the pre-made-SBOM ingest path. */
-export interface ConsumeDockerOsOptions {
-  /** Pass through to the size gate / read; reserved for symmetry. */
-  verbose?: boolean;
-}
-
-/**
- * INGEST a set of PRE-MADE syft/CycloneDX SBOM file paths WITHOUT running
- * docker/syft — the CI-attestation consumer path. For each SBOM: size-gate (DoS
- * bound, reusing assertSyftSbomSize), parse, filter to pkg:deb/pkg:apk
- * (PRESERVING licenses via filterOsComponents), and record the image's digest
- * from `metadata.component` when present — else the source path, so provenance
- * is never silently lost. Components merge purl-deduped first-wins across files;
- * the emit is the same deterministic doc as the live-scan path.
- *
- * This is the STATE-OF-THE-ART standard: the build CI generates the image's
- * syft SBOM by registry digest (an attestation), and the compliance tool
- * CONSUMES it via `--from-sbom` — no daemon, no network, fully offline.
- *
- * PROVENANCE NOTE (#7): produce the `--from-sbom` SBOM by scanning a
- * PLATFORM-SPECIFIC (single-arch) image, not a multi-arch tag. A manifest-LIST
- * tag resolves to a manifest-list digest, which is NOT the digest of the actual
- * scanned image layers — so the recorded `digest` would not pin the artifact
- * whose packages were inventoried. Scan e.g. `image@sha256:<single-arch>` (or
- * `--platform linux/amd64`) so the recorded digest is the real image digest.
- */
-export async function consumeDockerOsSbom(
-  sbomPaths: string[],
-  _opts: ConsumeDockerOsOptions = {},
-): Promise<DockerOsResult> {
-  const byPurl = new Map<string, OsComponent>();
-  const dockerImages: DockerImageDigest[] = [];
-
-  for (const path of sbomPaths) {
-    // Size gate BEFORE read (DoS bound, T-07-02/T-07-04).
-    assertSyftSbomSize(path);
-    const raw = readFileSync(path, "utf8");
-    let sbom: unknown;
-    try {
-      sbom = JSON.parse(raw);
-    } catch (error) {
-      throw new Error(
-        `--from-sbom file at ${path} is not valid JSON: ${String(error)}`,
-        { cause: error },
-      );
-    }
-
-    for (const component of filterOsComponents(sbom)) {
-      // First-wins across SBOMs: a package shared between images is one row.
-      if (!byPurl.has(component.purl)) byPurl.set(component.purl, component);
-    }
-
-    const digest = digestFromSbom(sbom);
-    // When the SBOM carries a digest, the image identity IS that digest; when it
-    // does not, record a PATH-INDEPENDENT identity (metadata.component.name, else
-    // the file basename — #6) so the committed docker-os.sbom.json is
-    // byte-identical across machines. Provenance is preserved without leaking the
-    // machine-specific absolute path; the digest is never fabricated (left "").
-    dockerImages.push(
-      digest !== undefined
-        ? { image: digest, digest }
-        : { image: pathFreeImageIdentity(sbom, path), digest: "" },
-    );
-  }
-
-  const components = [...byPurl.values()].sort((a, b) =>
-    compareCodeUnits(a.purl, b.purl),
-  );
-
-  return {
-    doc: emitDockerOsDoc(components, dockerImages),
-    sbomPaths: [...sbomPaths],
-  };
 }

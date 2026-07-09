@@ -26,10 +26,7 @@
 
 import { readFileSync, statSync } from "node:fs";
 
-import {
-  collectDockerOsSbom,
-  consumeDockerOsSbom,
-} from "../collectors/dockerOs";
+import { collectDockerOsSbom } from "../collectors/dockerOs";
 import {
   type DerivedBase,
   deriveBaseImage,
@@ -362,21 +359,10 @@ function dockerIgnoreFromPolicy(
 export interface GenerateDockerSbomOptions {
   /**
    * The configurable image set to scan with the live syft+docker path. Defaults
-   * to the documented default image set (DEFAULT_IMAGES) when the caller
-   * passes NEITHER --image NOR --from-sbom — the documented dogfood default,
-   * overridable per consumer repo. Mutually combinable with fromSbomPaths is
-   * NOT supported: a run is either a live scan or a pre-made ingest.
+   * to the documented default image set (DEFAULT_IMAGES) when the caller passes
+   * no --image — the documented dogfood default, overridable per consumer repo.
    */
   images?: string[];
-  /**
-   * Pre-made syft/CycloneDX SBOM file paths to INGEST instead of scanning live
-   * (the CI-attestation consumer path, base-dir-resolved). When set, the tool
-   * runs NO docker/syft — it reads these committed/attested SBOMs, filters to
-   * deb/apk, preserves licenses, and extracts each image's digest. Mutually
-   * exclusive with `images` (validated in the CLI: at least one of
-   * --image/--from-sbom, never both).
-   */
-  fromSbomPaths?: string[];
   /**
    * Discovery mode (07-23): walk this repo root for Dockerfiles, derive each
    * shipped base image, and scan the resolved bases (union+dedup with any
@@ -390,8 +376,7 @@ export interface GenerateDockerSbomOptions {
    * Dockerfile (base-dir-resolved), rather than walking a repo. The file-list
    * counterpart to `repoRoot` discovery — same derivation, honest residual, and
    * `--image` union. When `repoRoot` is ALSO set it is used only as the cache-dir
-   * anchor, never as a discovery root: the explicit list wins. Mutually exclusive
-   * with `fromSbomPaths` (a pre-made ingest is not a live derive+scan).
+   * anchor, never as a discovery root: the explicit list wins.
    */
   dockerfilePaths?: string[];
   /** --exclude globs forwarded to Dockerfile discovery (discovery mode only). */
@@ -425,10 +410,9 @@ export interface GenerateDockerSbomOptions {
   toolDir?: string;
   /**
    * `docker pull` each resolved image before scanning it (opt-in, live paths
-   * only — targeted/discovery/live-scan; never the daemon-free `fromSbomPaths`
-   * ingest). Off by default so the standard maintainer path fails loudly on an
-   * absent image; the GitHub Action turns it on because it derives its base set
-   * only at runtime and cannot pre-pull.
+   * only — targeted/discovery/live-scan). Off by default so the standard
+   * maintainer path fails loudly on an absent image; the GitHub Action turns it
+   * on because it derives its base set only at runtime and cannot pre-pull.
    */
   pull?: boolean;
   /** Pass syft/docker child stdout/stderr through to process.stderr. */
@@ -440,7 +424,7 @@ export interface GenerateDockerSbomOptions {
    * Identity = the ref exactly as given, so a caller (the Docker-scan CI
    * workflow) must pass DETERMINISTIC tags derived from each Dockerfile path
    * — the identity is what gets committed to the sidecar. Mutually exclusive
-   * with images/fromSbomPaths/dockerfilePaths/pull (validated in the CLI).
+   * with images/dockerfilePaths/pull (validated in the CLI).
    */
   builtImages?: string[];
   /**
@@ -451,28 +435,6 @@ export interface GenerateDockerSbomOptions {
    * the CLI).
    */
   listDockerfiles?: boolean;
-}
-
-/**
- * CONSUMER PATH: ingest pre-made syft/CycloneDX SBOMs — NO docker, NO syft.
- * This is the CI-attestation flow: the build pipeline produces the SBOM by
- * registry digest, this command consumes it. Extracted from
- * runGenerateDockerSbom to keep that orchestrator under the complexity bound.
- */
-async function runIngestMode(
-  opts: GenerateDockerSbomOptions,
-  outputPath: string,
-): Promise<void> {
-  const fromSbomPaths = opts.fromSbomPaths ?? [];
-  const resolved = fromSbomPaths.map((p) => resolveFrom(opts.baseDir, p));
-  const { doc } = await consumeDockerOsSbom(resolved, {
-    verbose: opts.verbose ?? false,
-  });
-  writeArtifact(outputPath, doc);
-  process.stderr.write(
-    `wrote ${sanitizeForLog(outputPath)} ` +
-      `(${resolved.length} pre-made SBOM(s) consumed, no docker)\n`,
-  );
 }
 
 /**
@@ -636,8 +598,9 @@ async function runLiveScanMode(
  * than racing a network fetch into the determinism contract.
  *
  * Kept to outputPath resolution + a dispatch ladder — each mode's logic lives
- * in its own extracted helper (runIngestMode/runTargetedMode/runDiscoveryMode/
- * runLiveScanMode) so this orchestrator stays under the complexity bound.
+ * in its own extracted helper (runBuiltImageMode/runTargetedMode/
+ * runDiscoveryMode/runLiveScanMode) so this orchestrator stays under the
+ * complexity bound.
  */
 export async function runGenerateDockerSbom(
   opts: GenerateDockerSbomOptions,
@@ -685,11 +648,6 @@ export async function runGenerateDockerSbom(
           }),
           DOCKER_OS_SBOM_FILE,
         );
-
-  // CONSUMER PATH takes priority when set.
-  if (opts.fromSbomPaths !== undefined && opts.fromSbomPaths.length > 0) {
-    return runIngestMode(opts, outputPath);
-  }
 
   // BUILT-IMAGE PATH: an explicit --built-image set is the most specific live
   // mode (never inferred, never combined with the other scan modes).

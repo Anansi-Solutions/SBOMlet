@@ -10,7 +10,13 @@
  * afterAll so no other suite observes the stub.
  */
 
-import { copyFileSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import {
+  copyFileSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -25,6 +31,7 @@ import {
 
 import * as execModule from "../src/collectors/exec";
 import { collectDockerOsSbom } from "../src/collectors/dockerOs";
+import { runGenerateDockerSbom } from "../src/pipeline/dockerSbom";
 
 /** Original exec export captured BEFORE any mock.module call (restore target). */
 const REAL_EXEC = { ...execModule };
@@ -214,5 +221,79 @@ describe("collectDockerOsSbom built-image collection posture (DOCK-01)", () => {
       ...REAL_EXEC,
       execTool: fakeExecTool,
     }));
+  });
+});
+
+/**
+ * The daemon-free end-to-end write test relocated from the removed
+ * pre-made-SBOM ingest orchestrator suite (D-09 ADAPT): the outputPath-write contract
+ * now rides the --image lane. A fake execTool copies the syft fixture for the
+ * scan and returns a fixed RepoDigest for `docker inspect`, so
+ * runGenerateDockerSbom writes a real committed doc with no docker daemon.
+ */
+describe("runGenerateDockerSbom end-to-end write (daemon-free, --image lane)", () => {
+  const DIGEST_REF = "docker.io/library/scan-a@sha256:" + "a".repeat(64);
+
+  function fakeImageExecTool(
+    cmd: string,
+    args: string[],
+  ): Promise<{ stdout: string; stderr: string }> {
+    invocations.push([cmd, ...args]);
+    const cyclonedxArg = args.find((a) => a.startsWith("cyclonedx-json="));
+    if (cyclonedxArg !== undefined) {
+      const outFile = cyclonedxArg.slice("cyclonedx-json=".length);
+      copyFileSync(
+        join(__dirname, "fixtures", "syft-built-image-trimmed.json"),
+        outFile,
+      );
+      return Promise.resolve({ stdout: "", stderr: "" });
+    }
+    if (args[0] === "inspect") {
+      return Promise.resolve({
+        stdout: JSON.stringify([DIGEST_REF]),
+        stderr: "",
+      });
+    }
+    return Promise.resolve({ stdout: "", stderr: "" });
+  }
+
+  beforeAll(() => {
+    mock.module("../src/collectors/exec", () => ({
+      ...REAL_EXEC,
+      execTool: fakeImageExecTool,
+    }));
+  });
+
+  afterAll(() => {
+    mock.module("../src/collectors/exec", () => REAL_EXEC);
+  });
+
+  afterEach(() => {
+    invocations = [];
+  });
+
+  test("writes the committed doc via the --image lane, digest-pinned, LF-only", async () => {
+    const outDir = mkdtempSync(join(tmpdir(), "licenses-docker-image-e2e-"));
+    try {
+      await runGenerateDockerSbom({
+        images: ["scan-a"],
+        dockerOsSbomPath: "docker-os.sbom.json",
+        baseDir: outDir,
+      });
+      const written = readFileSync(join(outDir, "docker-os.sbom.json"), "utf8");
+      const parsed = JSON.parse(written) as {
+        components: { purl: string }[];
+        dockerImages: { image: string; digest: string }[];
+      };
+      // The outputPath-write contract: a real committed doc lands at the
+      // base-dir-resolved path, digest-pinned, LF-only.
+      expect(parsed.dockerImages).toEqual([
+        { image: "scan-a", digest: DIGEST_REF },
+      ]);
+      expect(parsed.components.length).toBeGreaterThan(0);
+      expect(written.includes("\r")).toBe(false);
+    } finally {
+      rmSync(outDir, { recursive: true, force: true });
+    }
   });
 });

@@ -72,12 +72,12 @@ const USAGE =
   "the stored license (run before a release/audit, or when the cache changes).\n" +
   "           exit codes: 0 all match, 1 at least one mismatch, 3 tool/network " +
   "error\n" +
-  "  generate-docker-sbom (--image <ref>... | --from-sbom <path>... | " +
+  "  generate-docker-sbom (--image <ref>... | " +
   "--built-image <ref>... | --list-dockerfiles --repo-root <dir> | " +
   "--repo-root <dir> [--policy <file>] [--exclude <glob>]... [--image <ref>]... | " +
   "--dockerfile <path>... [--image <ref>]...) " +
   "[--pull] [--docker-os-sbom <path>] [--base-dir <path>] [--verbose]\n" +
-  "           Writes the committed docker-os.sbom.json. FIVE modes:\n" +
+  "           Writes the committed docker-os.sbom.json. FOUR modes:\n" +
   "           --image <ref>...: MAINTAINER-ONLY, REQUIRES A DOCKER DAEMON — " +
   "scans the image set (default: the documented image set) with the pinned " +
   "syft and digest-pins each.\n" +
@@ -92,11 +92,6 @@ const USAGE =
   "           --pull: docker pull each resolved image before scanning it (live " +
   "modes only) — off by default; used by the GitHub Action for its runtime-" +
   "derived base set.\n" +
-  "           --from-sbom <path>...: CI-ATTESTATION CONSUMER — ingests pre-made " +
-  "syft/CycloneDX SBOMs (NO docker, NO network); the standard flow is the build " +
-  "CI attests the image SBOM by registry digest and this tool consumes it. " +
-  "Scan a PLATFORM-SPECIFIC (single-arch) image so the recorded digest is the " +
-  "real image digest, not a multi-arch manifest-list digest (#7).\n" +
   "           --built-image <ref>...: BUILT-IMAGE — scans locally built, " +
   "never-pushed images (full contents: application + OS layers); records " +
   'each ref digest-less in the sidecar ({image, digest: ""}); local ' +
@@ -165,8 +160,6 @@ interface CliValues {
   verbose?: boolean;
   /** Repeatable --image refs for generate-docker-sbom (the live-scan set). */
   image?: string[];
-  /** Repeatable --from-sbom paths: pre-made SBOMs to ingest (consumer path). */
-  "from-sbom"?: string[];
   /**
    * Repeatable --dockerfile paths for generate-docker-sbom (targeted mode):
    * derive + scan the shipped base of each named Dockerfile instead of walking
@@ -256,14 +249,12 @@ export function optionsFrom(values: CliValues): GenerateOptions {
 /**
  * Compute the first generate-docker-sbom mode-conflict message, or undefined
  * when the requested mode combination is valid. EXACTLY one of --image (live
- * scan) / --from-sbom (pre-made ingest) / --built-image (built posture) may
- * be active, and --repo-root (discovery) / --dockerfile (targeted) each cannot
- * combine with --from-sbom — a pre-made ingest is never a live scan or
- * derive+scan. --dockerfile MAY combine with --repo-root (the latter then
- * serves only as the cache-dir anchor) and with --image (union). --built-image
- * is EXPLICIT and stand-alone: never combined with --from-sbom, --image,
- * --dockerfile, or --pull (built images are local-only and cannot be pulled);
- * it MAY combine with --repo-root (anchor degradation, same as --dockerfile).
+ * scan) / --built-image (built posture) may be active. --dockerfile MAY
+ * combine with --repo-root (the latter then serves only as the cache-dir
+ * anchor) and with --image (union). --built-image is EXPLICIT and stand-alone:
+ * never combined with --image, --dockerfile, or --pull (built images are
+ * local-only and cannot be pulled); it MAY combine with --repo-root (anchor
+ * degradation, same as --dockerfile).
  * --list-dockerfiles never combines with any scan mode and REQUIRES
  * --repo-root (the walk root the listing reads). Pair checks are walked as a
  * table rather than an if-ladder to keep this function under the complexity
@@ -272,8 +263,6 @@ export function optionsFrom(values: CliValues): GenerateOptions {
  */
 export function dockerSbomModeConflict(values: CliValues): string | undefined {
   const hasImage = values.image !== undefined && values.image.length > 0;
-  const hasFromSbom =
-    values["from-sbom"] !== undefined && values["from-sbom"].length > 0;
   const hasRepoRoot = values["repo-root"] !== undefined;
   const hasDockerfile =
     values.dockerfile !== undefined && values.dockerfile.length > 0;
@@ -282,26 +271,6 @@ export function dockerSbomModeConflict(values: CliValues): string | undefined {
   const hasPull = values.pull === true;
   const hasListDockerfiles = values["list-dockerfiles"] === true;
   const pairs: Array<[boolean, boolean, string]> = [
-    [
-      hasImage,
-      hasFromSbom,
-      "--image and --from-sbom are mutually exclusive — pass one mode",
-    ],
-    [
-      hasRepoRoot,
-      hasFromSbom,
-      "--repo-root (discovery) and --from-sbom (ingest) are mutually exclusive",
-    ],
-    [
-      hasDockerfile,
-      hasFromSbom,
-      "--dockerfile (targeted) and --from-sbom (ingest) are mutually exclusive",
-    ],
-    [
-      hasBuiltImage,
-      hasFromSbom,
-      "--built-image (built) and --from-sbom (ingest) are mutually exclusive",
-    ],
     [
       hasBuiltImage,
       hasImage,
@@ -321,11 +290,6 @@ export function dockerSbomModeConflict(values: CliValues): string | undefined {
       hasListDockerfiles,
       hasImage,
       "--list-dockerfiles and --image are mutually exclusive",
-    ],
-    [
-      hasListDockerfiles,
-      hasFromSbom,
-      "--list-dockerfiles and --from-sbom are mutually exclusive",
     ],
     [
       hasListDockerfiles,
@@ -369,7 +333,6 @@ export function dockerSbomOptionsFrom(
     fail(`${conflict}\n${USAGE}`);
   }
   const hasImage = hasValues(values.image);
-  const hasFromSbom = hasValues(values["from-sbom"]);
   const hasRepoRoot = values["repo-root"] !== undefined;
   const hasDockerfile = hasValues(values.dockerfile);
   const hasBuiltImage = hasValues(values["built-image"]);
@@ -378,7 +341,6 @@ export function dockerSbomOptionsFrom(
   const policyPath = values.policy ?? discoverDefaultPolicy(values);
   return {
     ...(hasImage ? { images: values.image } : {}),
-    ...(hasFromSbom ? { fromSbomPaths: values["from-sbom"] } : {}),
     ...(hasRepoRoot ? { repoRoot: values["repo-root"] } : {}),
     ...(hasDockerfile ? { dockerfilePaths: values.dockerfile } : {}),
     ...(hasBuiltImage ? { builtImages: values["built-image"] } : {}),
@@ -475,7 +437,6 @@ async function main(argv: string[]): Promise<void> {
         "scancode-cache": { type: "string" },
         verbose: { type: "boolean", default: false },
         image: { type: "string", multiple: true },
-        "from-sbom": { type: "string", multiple: true },
         dockerfile: { type: "string", multiple: true },
         pull: { type: "boolean", default: false },
         "docker-os-sbom": { type: "string" },

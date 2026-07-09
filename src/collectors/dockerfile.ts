@@ -60,7 +60,7 @@
  * image's OS packages — NOT the packages a Dockerfile's own `RUN apt/apk
  * install` steps add to the final image. Capturing those requires BUILDING the
  * image and scanning the built layers, which is the existing
- * `generate-docker-sbom --image` / `--from-sbom` path. Discovery is the additive,
+ * `generate-docker-sbom --image` path. Discovery is the additive,
  * daemon-free "what base do we inherit?" inventory; the build path remains the
  * authority for the fully-assembled image.
  *
