@@ -173,17 +173,16 @@ regex over the committed lock file — the lock is the pin, no `.tf` constraint
 blocks are read — and module versions from `modules.json` verbatim. The
 mis-tokenization bug class disappears because no `.tf` source is ever inspected.
 
-Dockerfile base derivation emits `unresolved` rather than a wrong base. The
-deriver resolves a Dockerfile's shipped `FROM` ref, stripping `--platform`,
-substituting `ARG` defaults to a fixpoint, and following `AS` aliases, but it is a
-tight parser, not a full Dockerfile AST, and it is honest on anything ambiguous.
-Its result is a discriminated union of image, scratch, or unresolved. A residual
-`$` after substitution, an empty or flag-shaped token, a missing `FROM`, a cyclic
-alias, or any ref that fails the conservative validator becomes `unresolved`,
-which the caller warns about and skips rather than emitting a guess. Discovery is
-honest too: it matches Dockerfiles by name pattern with no extension blocklist,
-because a blocklist silently drops real variants; a stray non-Dockerfile that
-matches the name resolves to `unresolved` and is skipped.
+Dockerfiles are never parsed at all. An earlier design read each Dockerfile far
+enough to resolve its shipped `FROM` base and abstained — emitting `unresolved`
+rather than a wrong base — the moment the structure turned ambiguous;
+[ADR-0015](adr/) records that abstention. The tool now goes further and reads no
+Dockerfile contents: a Dockerfile is a build input, built and scanned as the image
+it produces, and a build that fails stops the run loudly, naming the file. A
+name-pattern match that is not a real Dockerfile is kept out of the build set with
+a `[docker]` ignore glob rather than sniffed and skipped. Deleting the parser
+outright is the same move as the Terraform lexer's — a fragile grammar replaced by
+a structural signal, here the build itself.
 
 [Provenance](../glossary.md#dependency-provenance) introducers are always
 root-reachable. The reason a dependency is present is derived from real dependency
@@ -226,8 +225,8 @@ decoy edge cases.
 
 Source: `normalize/normalize.ts` (`AMBIGUOUS_FAMILY`, `findingFromClaims`),
 `policy/copyleftFamily.ts`, `collectors/terraform.ts`
-(`absentModulesJsonShouldFail`), `collectors/dockerfile.ts` (`deriveBaseImage`,
-`isValidImageRef`), `collectors/provenanceGraph.ts` (`reachableFromRoots`),
+(`absentModulesJsonShouldFail`), `collectors/dockerfile.ts` (`discoverDockerfiles`),
+`collectors/provenanceGraph.ts` (`reachableFromRoots`),
 `collectors/npmProvenance.ts`, `render/markdown.ts` (`whyCellOf`,
 `licenseCellOf`).
 See [ADR-0007](adr/) (imprecise families surfaced), [ADR-0015](adr/) (Terraform
@@ -344,7 +343,7 @@ another valid-HCL shape the prior lexer mis-tokenized. Poetry optionality was
 removed after being flagged in three of four review rounds. Deny's three-source
 evaluation carries inline markers, each recording a specific way a denied license
 could otherwise have been hidden. The provenance "why" cell's orphan-exclusion
-logic and the Dockerfile deriver's numbered residual guards are each a
+logic and the Dockerfile discovery walk's containment guards are each a
 review-caught case. The labels are the artifact: a comment that says a branch
 closes a specific finding from a specific round is telling you that branch is
 load-bearing and was added to fix a real bypass, not for tidiness.
@@ -371,7 +370,7 @@ terminal stays correct across imprecise and unknown findings only because honest
 normalization refuses to guess a family into a precise id. Those residuals are
 credible only because the tool speaks SPDX and CycloneDX faithfully. And the whole
 set is kept honest by adversarial review, the discipline that turned a fragile HCL
-lexer into a filesystem signal and a guessable base image into an explicit
-`unresolved`. Minimal dependencies and orchestration keep the surface small enough
+lexer into a filesystem signal and retired a hand-parsed Dockerfile base for
+building the image itself. Minimal dependencies and orchestration keep the surface small enough
 for that scrutiny to stay tractable. Change one in isolation and you risk
 undermining the others, so weigh a change against the whole set.

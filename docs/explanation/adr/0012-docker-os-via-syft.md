@@ -1,6 +1,6 @@
 # ADR-0012: Docker OS packages via syft, consumed as a committed digest-pinned SBOM
 
-- **Status:** Accepted, evolved by ADR-0018
+- **Status:** Superseded by ADR-0018
 - **Date:** 2026-06-15
 
 ## Context and problem

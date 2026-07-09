@@ -16,8 +16,8 @@ in [data-flow](data-flow.md), and the reasoning behind the design in
 
 It produces a complete, legally compliant license inventory for any repository,
 across JS/TS, Python, Terraform/OpenTofu, and the packages inside a project's
-Docker images — the base image's OS packages always, plus the application
-packages a built-image scan finds — and it fails CI when a dependency violates a
+Docker images — their full contents, the OS layer and the application packages
+layered on top — and it fails CI when a dependency violates a
 [policy](../glossary.md#policy-lanes).
 
 It does not detect licenses itself. That work is left to standard
@@ -47,10 +47,11 @@ footprint small.
   the policy, and exits with a code that says which class of thing is wrong. It
   writes nothing.
 - **`generate-docker-sbom`** is the only path that touches the Docker daemon or
-  syft. It scans a project's Docker images — base images, or the images CI
-  actually builds — into a committed `.sbomlet.cache/docker-os.sbom.json`, which
-  `generate` and `check` then read as an ordinary merge input. `generate` and
-  `check` themselves never produce this file.
+  syft. It builds and scans a project's Docker images — from named Dockerfiles, a
+  discovered directory, or pre-existing image refs — into a committed
+  `.sbomlet.cache/docker-os.sbom.json`, which `generate` and `check` then read as
+  an ordinary merge input. `generate` and `check` themselves never produce this
+  file.
 
 All process exit codes live in the CLI module. The tool runs through mise and a
 Taskfile (`task generate`, `task check`), and the Taskfile
@@ -437,18 +438,17 @@ Everyday `generate` and `check` stay daemon-free and fully offline. The Docker
 side-effect is confined to one subcommand.
 
 `generate-docker-sbom` is the only path that touches the Docker daemon or syft.
-The scanner is pinned to a single version, mirrored in `mise.toml`. It scans each
-image into a temp file and filters the result: a base-image scan (`--image`,
-`--repo-root`, `--dockerfile`) keeps only the `pkg:deb`/`pkg:apk` components
-that carry a name, version, and purl; a built-image scan (`--built-image`) keeps
-every such component, application packages included, since the built image is
-what the project actually ships. It records each image's platform RepoDigest via
-`docker inspect`, not the manifest-list digest — a locally built, never-pushed
-tag has no registry digest, so a built-image scan records an empty one. The
-arguments are passed as an argv array with the image operand last, behind an
-end-of-options separator, so command injection is impossible by construction.
-The emitted document is a minimal, deterministic shape serialized with the
-tool-wide sorted-JSON contract, so scanning the same images twice produces
+Whichever lane produces the image, the scan is the same: syft, pinned to a single
+version mirrored in `mise.toml`, reads the image's full contents — every component
+that carries a name, version, and purl, the OS layer and the application packages
+alike. It records each image's platform RepoDigest via `docker inspect`, not the
+manifest-list digest; a locally built, never-pushed tag has no registry digest, so
+its entry records an empty one. A rebuild that changes the image's contents changes
+the scanned components, the scan recording a real change rather than a determinism
+violation. The scanner arguments are passed as an argv array with the image operand
+last, behind an end-of-options separator, so command injection is impossible by
+construction. The emitted document is a minimal, deterministic shape serialized
+with the tool-wide sorted-JSON contract, so scanning the same image twice produces
 byte-identical output.
 
 syft is deliberately not a registered collector. The gate runs the collector loop
@@ -464,62 +464,51 @@ equivalent rather than a live scan. `generate` and `check` read the same
 committed bytes, so determinism follows. Every purl the file contributes enters
 the merge with scope `"os"`; a purl the merge also sees at the application level
 keeps its application scope instead (prod wins over os on a purl collision), so
-an application dependency that a built-image scan finds is judged as app code,
-not an image package, whenever the project also declares it directly. The
-packages that stay `os`-scoped route through the `[os_dependencies]` policy lane
-and render in their own Docker image packages section, where
+an application dependency the image scan finds is judged as app code, not an image
+package, whenever the project also declares it directly. The packages that stay
+`os`-scoped route through the `[os_dependencies]` policy lane and render in their
+own Docker image packages section, where
 [scope](../glossary.md#scope-app-and-os) lets the policy treat them differently:
 base-image GPL is expected, not a violation, and the same downgrade covers an
 image-only application package.
 
-`generate-docker-sbom` has five mutually exclusive modes:
+`generate-docker-sbom` has three mutually exclusive lanes:
 
-| Mode | What it does |
+| Lane | What it does |
 | --- | --- |
-| `--image <ref>…` | Live syft scan of an explicit image set; needs a daemon. With no images it defaults to a documented default image set that lives in the dogfood layer rather than core, to keep the tool independent of any one project. Base-image filtering (OS packages only). |
-| `--repo-root <dir>` | Discovery. Walks the repo for Dockerfiles, derives each shipped `FROM` base, and scans the resolved bases (unioned with any explicit `--image`). Base-image filtering. |
-| `--dockerfile <path>…` | Targeted. The same derive-then-scan as discovery, over an explicit Dockerfile list. Base-image filtering. |
-| `--built-image <ref>…` | Scans image tags already built locally and never pushed. Full-content filtering (OS and application packages); records an empty digest, since a local-only tag has none. Never combines with `--pull`. |
-| `--from-sbom <path>…` | Ingests pre-made syft/CycloneDX SBOMs with no Docker and no network, the CI-attestation consumer. Base-image-shaped. |
+| `--dockerfile <path>…` | Builds each named Dockerfile to a deterministic local tag and scans the image it produces. Needs a daemon. |
+| `--repo-root <dir>` | Discovers the repo's Dockerfiles, builds each (skipping `[docker]` ignore matches), and scans the results. Needs a daemon. |
+| `--image <ref>…` | Scans pre-existing image refs, pulling any that is absent locally and digest-pinning each. Needs a daemon. |
 
-A sixth flag, `--list-dockerfiles`, is not a scan mode: it runs the same
+A fourth flag, `--list-dockerfiles`, is not a scan lane: it runs the same
 policy-aware discovery walk and prints the discovered Dockerfile paths, with no
-Docker and no writes, so a CI workflow can build the exact set the tool would
-otherwise discover itself. This project's own `.github/workflows/docker-scan.yml`
-chains `--list-dockerfiles` into a build step and then a `--built-image` scan on
-every push or pull request that touches an image source, and commits the
-regenerated inventory back — the built-image lane's live, automated use. See
+Docker and no writes, so a CI workflow can preview or drive the exact set the
+discovery lane would build. This project's own `.github/workflows/docker-scan.yml`
+runs the discovery lane on every push or pull request that touches an image
+source — building each Dockerfile, scanning it, and committing the regenerated
+inventory back. See
 [ADR-0018](adr/0018-docker-generated-image-scan.md) for the decision and its
-sharp edges (built-image identity, the commit-back lane per event type, and the
-dedup/dev-flip consequence).
+sharp edges (the empty digest for a local-only build, the commit-back lane per
+event type, and the dedup/dev-flip consequence).
 
 Source: `src/pipeline/dockerSbom.ts`, `src/collectors/dockerOs.ts`,
 `src/cli.ts`.
 
-### Dockerfile discovery and base derivation
+### Dockerfile discovery and the build set
 
-Discovery mode is a pure, daemon-free computation. It walks the repo using the
-same directory-exclusion predicate as lockfile discovery, reused by reference so
-the two cannot drift, then applies `--exclude` globs, then the `[docker]` ignore
-globs. For each Dockerfile it resolves the shipped (last) stage's `FROM`: it
-strips `--platform`, substitutes global `ARG` defaults to a fixpoint, follows
-stage aliases under a cycle guard, and produces a base that is one of `image`,
-`scratch`, or `unresolved`.
+The discovery lane is a pure, daemon-free walk. It uses the same
+directory-exclusion predicate as lockfile discovery, reused by reference so the
+two cannot drift, then applies `--exclude` globs, then the `[docker]` ignore
+globs. What survives is the build set: the Dockerfiles the lane will hand to
+`docker build`, each identified by its repository-relative path.
 
-It does not guess. An ARG it cannot resolve, a leftover `${…}`, or a malformed ref
-yields `unresolved` with a reason, a loud-skip
-[honest residual](../glossary.md#honest-residual) rather than a wrong base. The
-scan set is the union of every resolved `image` base and any explicit `--image`,
-deduped and sorted; a `scratch`, unresolved, or ignored Dockerfile contributes
-nothing. `--list-dockerfiles` and CI's built-image lane reuse this same walk and
-the same `[docker]` ignore globs to decide which Dockerfiles to build, so a
-Dockerfile excluded from base-image discovery is also excluded from the
-built-image build set.
-
-One scope limit is worth stating: base-image modes derive the base image's OS
-packages, not the Dockerfile's own `RUN apt/apk install` steps, and not the
-application copied into later layers. Capturing those requires building and
-scanning the image, which is the `--built-image` or `--from-sbom` path.
+The tool never reads a Dockerfile's contents. A Dockerfile is a build input, not
+an object of analysis — the tool builds it and scans the resulting image, and a
+build that fails stops the run loudly, naming the file. A name-pattern match that
+is not a real Dockerfile (a fixture, a template) is kept out of the build set with
+a `[docker]` ignore glob rather than sniffed and skipped. `--list-dockerfiles` and
+the CI lane reuse this same walk, so a Dockerfile excluded from discovery is also
+excluded from the build set.
 
 Source: `src/pipeline/dockerSbom.ts`, `src/collectors/dockerfile.ts`.
 
