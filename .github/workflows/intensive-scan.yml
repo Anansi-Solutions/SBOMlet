@@ -17,7 +17,9 @@ on:
 jobs:
   scan:
     runs-on: ubuntu-latest
-    timeout-minutes: 60 # ScanCode is slow by design; give it room
+    # The first full-set run backfills the analysis memo (measured ~16-75
+    # minutes on this repo); later runs only scan versions never analyzed.
+    timeout-minutes: 240
     permissions:
       contents: write
     steps:

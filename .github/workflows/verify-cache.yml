@@ -8,7 +8,7 @@ on:
   push:
     branches: [main]
     paths:
-      - .sbomlet.cache/**
+      - .sbomlet.cache/licenses.cache.json
 
 jobs:
   verify-cache:
