@@ -224,23 +224,23 @@
           }
         }
       ],
-      "name": "is-odd",
-      "purl": "pkg:npm/is-odd@3.0.1",
+      "name": "demo-npm-package",
+      "purl": "pkg:npm/demo-npm-package@0.0.0",
       "type": "library",
-      "version": "3.0.1"
+      "version": "0.0.0"
     },
     {
       "licenses": [
         {
           "license": {
-            "id": "PSF-2.0"
+            "id": "Apache-2.0"
           }
         }
       ],
-      "name": "typing-extensions",
-      "purl": "pkg:pypi/typing-extensions@4.12.2",
+      "name": "demo-python-package",
+      "purl": "pkg:pypi/demo-python-package@0.0.0",
       "type": "library",
-      "version": "4.12.2"
+      "version": "0.0.0"
     }
   ],
   "dockerImages": [

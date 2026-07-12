@@ -200,7 +200,8 @@ Copyleft notice rules are configured in .sbomlet.policy.toml.
 | busybox-binsh          | apk       | 1.37.0-r20  | GPL-2.0-only                              | docker:os-packages |
 | ca-certificates        | apk       | 20260611-r0 | MPL-2.0 AND MIT                           | docker:os-packages |
 | ca-certificates-bundle | apk       | 20260611-r0 | MPL-2.0 AND MIT                           | docker:os-packages |
-| is-odd                 | npm       | 3.0.1       | MIT                                       | docker:os-packages |
+| demo-npm-package       | npm       | 0.0.0       | MIT                                       | docker:os-packages |
+| demo-python-package    | pypi      | 0.0.0       | Apache-2.0                                | docker:os-packages |
 | libapk2                | apk       | 2.14.10-r0  | GPL-2.0-only                              | docker:os-packages |
 | libcrypto3             | apk       | 3.5.7-r0    | Apache-2.0                                | docker:os-packages |
 | libssl3                | apk       | 3.5.7-r0    | Apache-2.0                                | docker:os-packages |
@@ -208,5 +209,4 @@ Copyleft notice rules are configured in .sbomlet.policy.toml.
 | musl-utils             | apk       | 1.2.5-r12   | MIT AND BSD-2-Clause AND GPL-2.0-or-later | docker:os-packages |
 | scanelf                | apk       | 1.3.8-r1    | GPL-2.0-only                              | docker:os-packages |
 | ssl_client             | apk       | 1.37.0-r20  | GPL-2.0-only                              | docker:os-packages |
-| typing-extensions      | pypi      | 4.12.2      | PSF-2.0                                   | docker:os-packages |
 | zlib                   | apk       | 1.3.2-r0    | Zlib                                      | docker:os-packages |
