@@ -40,23 +40,23 @@ packages into one row or splits one into two.
 
 ## Decision
 
-Every collector emits CycloneDX, and the merge joins components on their purl into
-one canonical model, keyed by the purl string verbatim. We write the merge
+Every collector emits CycloneDX, and the merge joins components on their purl
+into one canonical model, keyed by the purl string verbatim. We write the merge
 ourselves.
 
 Purl gives correct identity: it encodes the ecosystem (`pkg:npm/…` vs
-`pkg:pypi/…`), namespace, name, and version, so it never merges two different
-packages or collides same-named npm and PyPI ones the way name+version does.
-CycloneDX is the format because cdxgen and syft emit it natively, carrying purls,
-the licence-claim shapes we need, and the `cdx:*` properties for dev/prod and
-workspace markers; SPDX is equally standard but would add a second parse path for
-no coverage gain.
+`pkg:pypi/…`), namespace, name, and version. Name+version collides same-named
+npm and PyPI packages and cannot separate a scoped package from its bare twin.
 
-We do the merge ourselves, in roughly a couple hundred lines, rather than
-shelling out to a generic tool: a generic merge discards which input document a
-component came from — the "used in" attribution we need — and `cyclonedx-cli
-merge` has open dedup defects. Owning it lets us key on purl and accumulate a
-per-target occurrence list.
+CycloneDX is the format because cdxgen and syft emit it natively, carrying
+purls, the licence-claim shapes we need, and the `cdx:*` properties for
+dev/prod and workspace markers. SPDX is equally standard but would add a second
+parse path for no coverage gain.
+
+We do the merge ourselves rather than shelling out to a generic tool: a generic
+merge discards which input document a component came from — the "used in"
+attribution we need — and `cyclonedx-cli merge` has open dedup defects. Owning
+it lets us key on purl and accumulate a per-target occurrence list.
 
 ## Consequences
 

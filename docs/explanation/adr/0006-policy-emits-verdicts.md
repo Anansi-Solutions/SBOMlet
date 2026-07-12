@@ -40,20 +40,20 @@ package the gate fails on need not appear in the rendered notices, or the revers
 ## Decision
 
 The policy engine evaluates once and emits a structured verdict for every
-package-and-occurrence pair; the renderer and the gate both consume that list, and
-neither re-derives anything. `evaluate(model, policy)` is a pure fold — no
-filesystem, no subprocess, no logging — and the same model and policy produce the
-same sorted `Verdict[]`. Each verdict carries a status (`ok`, `warn`, `fail`, or
-`suppressed`), a machine-readable rule id, and a human reason naming the deciding
-input. One `buildOutputs` call evaluates the policy once and hands the same list
-to both sides, so they cannot disagree about a package.
+package-and-occurrence pair; the renderer and the gate both consume that list,
+and neither re-derives anything. `evaluate(model, policy)` is a pure fold — no
+filesystem, no subprocess, no logging — and the same model and policy produce
+the same sorted `Verdict[]`. Each verdict carries a status (`ok`, `warn`,
+`fail`, or `suppressed`), a machine-readable rule id, and a human reason naming
+the deciding input.
+
+A single `buildOutputs` call hands the same list to the renderer and the gate,
+so they cannot disagree about a package.
 
 Option 1 leaves the decision unreachable except by rendering, giving the gate a
-second copy to drift. Option 2 removes the duplicated code but not the duplicated
-invocation — two call sites can still pass different inputs or diverge as
-signatures grow, so agreement is by discipline, not construction. A verdict list
-emitted ahead of both makes the decision a value that exists before either
-consumer runs, and its purity makes the engine table-testable.
+second copy to drift. Option 2 removes the duplicated code but not the
+duplicated invocation: two call sites can still pass different inputs, so
+agreement is by discipline, not construction.
 
 ## Consequences
 

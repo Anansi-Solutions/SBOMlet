@@ -51,11 +51,12 @@ target, its dev/prod flag, its provenance).
 This is the only shape that gives a single row per package *and* keeps dev/prod
 correct per workspace. Option 1 keeps scope correct but multiplies the rows and
 pushes the grouping onto every consumer. Option 2 keeps one row but forces one
-dev/prod answer per package, wrong the moment a package is dev in one workspace
-and prod in another — the case that pushed the model from package-level scope
-(shipped first) to per-occurrence a day later. Provenance was added the same
-way much later, as a field on the occurrence with no reshaping — the additivity
-this design was chosen to allow.
+dev/prod answer per package.
+
+The model first shipped with package-level scope (option 2) and moved to
+per-occurrence once the multi-target merge made the single-answer limit
+concrete. Provenance was later added the same way — a field on the occurrence,
+no reshaping — the additivity this design was chosen to allow.
 
 ## Consequences
 

@@ -38,12 +38,13 @@ official Yarn SBOM plugin is JavaScript, and the SPDX packages we need are on
 npm. Driving and importing these is direct from TypeScript and awkward from
 Python.
 
-The footprint holds — no CLI framework, logger, or HTTP client; `node:util` for
-arguments, the global `fetch`, template literals for rendering. Python on uv was
-viable (`cyclonedx-python-lib` is strong, `license-expression` is the best
-SPDX-expression library in any language), but the tool's work is process
-orchestration, JSON merging, and rendering, where Python gains nothing and loses
-the Yarn-native integration.
+The dependency footprint stays small: the CycloneDX library has no hard runtime
+dependencies, and the tool needs no CLI framework, logger, or HTTP client —
+`node:util` for arguments, the global `fetch`, template literals for rendering.
+
+Python on uv was a viable runner-up, but the tool's work is process
+orchestration, JSON merging, and rendering, where Python gains nothing and
+loses the Yarn-native integration.
 
 ## Consequences
 

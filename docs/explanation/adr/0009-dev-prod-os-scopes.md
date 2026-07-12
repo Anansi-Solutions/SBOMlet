@@ -5,19 +5,20 @@
 
 ## Context and problem
 
-A distribution obligation attaches to what you ship. A copyleft library compiled
-into the client bundle carries one; the same library used only to run the test
-suite does not. The base OS of a container is a third case: glibc, bash,
-coreutils and the rest of a Debian or Alpine image are copyleft, but they are the
-OS the container sits on, not code the project redistributes, and the distro
-handles its own compliance.
+A distribution obligation attaches to what you ship. A copyleft library
+compiled into the client bundle carries one; the same library used only to run
+the test suite does not. The base OS of a container is a third case: glibc,
+bash, coreutils and the rest of a Debian or Alpine image are copyleft, but they
+are the OS the container sits on, not code the project redistributes, and the
+distro handles its own compliance.
 
-The first gate drew none of these lines: a default-FAIL fired on any copyleft (or,
-under a strict unknown policy, any unrecognised licence) regardless of where the
-package was used, failing on build-time-only copyleft and on every standard base
-image — false positives an operator learns to ignore. The direction of the
-mistake is what matters: relaxing the gate for a dev or OS package is fine;
-relaxing it for something that ships is not.
+The first gate drew none of these lines: a default-FAIL fired on any copyleft
+(or, under a strict unknown policy, any unrecognised licence) regardless of
+where the package was used, failing on build-time-only copyleft and on every
+standard base image.
+
+The direction of the mistake is what matters: relaxing the gate for a dev or OS
+package is fine; relaxing it for something that ships is not.
 
 ## Decision drivers
 
@@ -43,22 +44,24 @@ relaxing it for something that ships is not.
 
 ## Decision
 
-We chose option 4. Two downgraders sit where the engine is about to emit a default
-FAIL, each softening — never inventing — a verdict, and only for a package the
-policy marks as not shipping. The dev downgrader keys on the occurrence's dev/prod
-flag; a production occurrence is returned unchanged, the load-bearing safety
-property. The OS downgrader is the same shape one level up, keying on the
-package's `os` scope. Both read a policy knob (`dev_dependencies` /
-`os_dependencies`, each defaulting to `warn`); the OS lane runs first, and the
-deny terminal sits above both so a denied licence still fails regardless of scope.
+We chose option 4. Two downgraders sit where the engine is about to emit a
+default FAIL, each softening — never inventing — a verdict, and only for a
+package the policy marks as not shipping.
 
-Gating everything is safe but unusable; stripping dev/OS packages throws away the
-inventory; a package-level dev flag cannot answer dev-here/prod-there, and its
-wrong guess is toward the unsafe direction. Per-occurrence downgrade with
-production unchanged keeps the inventory, stays tunable, and makes the unsafe
-direction structurally impossible — the downgraders have no branch that touches a
-production occurrence. One copyleft package used dev in workspace A and prod in
-workspace B produces two verdicts, and the gate fails on B.
+The dev downgrader keys on the occurrence's dev/prod flag; a production
+occurrence is returned unchanged, the load-bearing safety property. The OS
+downgrader is the same shape one level up, keying on the package's `os` scope.
+Both read a policy knob (`dev_dependencies` / `os_dependencies`, each
+defaulting to `warn`).
+
+Gating everything is safe but unusable. Stripping dev/OS packages throws away
+the inventory. A package-level dev flag cannot answer dev-here/prod-there, and
+its wrong guess is toward the unsafe direction. Per-occurrence downgrade with
+production unchanged makes the unsafe direction structurally impossible: the
+downgraders have no branch that touches a production occurrence.
+
+The OS lane runs first, then the dev lane on its result; the deny terminal sits
+above both, so a denied licence still fails regardless of scope.
 
 ## Consequences
 

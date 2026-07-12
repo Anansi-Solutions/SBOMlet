@@ -38,24 +38,27 @@ licences have to be fetched somewhere, but not in `check`.
 
 ## Decision
 
-We fetch only in `generate` and persist the results to a cache file committed to
-the repository; `check` reads that cache and never opens a socket. The cache is
-the contract between the online step and the offline gate — the only licence
-`check` knows about an enriched package is the one a human committed. A single
-mode flag threads through the pipeline: on a cache miss, `generate` fetches the
-registry and appends a `registry`-sourced claim, while `check` treats the same
-miss as stale, names the package, prints the `task generate` remedy, and exits 2.
-`generate` writes the cache on every run, even when nothing new resolves, so a
-first-time adopter with an all-resolved tree still has a file to commit.
+We fetch only in `generate` and persist the results to a cache file committed
+to the repository; `check` reads that cache and never opens a socket. The cache
+is the contract between the online step and the offline gate: the only licence
+`check` knows about an enriched package is the one a human committed.
+
+A single mode flag threads through the pipeline. On a cache miss, `generate`
+fetches the registry and appends a `registry`-sourced claim; `check` treats the
+same miss as stale, names the package, prints the `task generate` remedy, and
+exits 2. `generate` writes the cache on every run, even when nothing new
+resolves, so a first-time adopter with an all-resolved tree still has a file to
+commit.
 
 The cache is keyed by the verbatim purl: a given `name@version` has one licence
-upstream, so a hit stays valid with no expiry. It is committed, not gitignored,
-because an offline `check` needs it on a fresh checkout — fetching in `check`
-would break the hermetic requirement, and a gitignored cache would keep `check`
-offline only on a machine that already ran `generate`, hiding the enriched
-licences from review. A clean registry answer that carries no licence is recorded
-as a negative entry so it isn't re-fetched every run; a fetch *failure* is never
-cached, so a transient outage cannot freeze into a false "no licence here".
+upstream, so a hit stays valid with no expiry. A clean registry answer that
+carries no licence is recorded as a negative entry so it is not re-fetched; a
+fetch *failure* is never cached, so a transient outage cannot freeze into a
+false "no licence here".
+
+Fetching in `check` breaks the hermetic requirement. A gitignored cache keeps
+`check` offline only on a machine that already ran `generate`, and hides the
+enriched licences from review.
 
 ## Consequences
 

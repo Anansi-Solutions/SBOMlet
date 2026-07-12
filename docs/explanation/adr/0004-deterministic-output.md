@@ -36,23 +36,24 @@ on, line endings are a second source of false staleness.
 
 ## Decision
 
-We emit nothing that varies between runs, so the committed file is the comparison
-and `check` is a byte-compare with no special cases. Every document is a pure
-function from the canonical model to exact bytes: a stable total order the tool
-computes (packages by name/version/purl, object keys sorted by code unit), `"\n"`
-literals only, and generated files pinned to LF in `.gitattributes`. `check`
-normalizes CRLF to LF on the committed text it reads, absorbing an unpinned
-checkout without weakening the comparison. Nothing carries a timestamp: the
-Markdown header records how to regenerate (`task generate`) instead of a date,
-the CycloneDX export omits the optional serial number and metadata timestamp, and
-the Docker SBOM pins each image by content digest, not scan time.
+We emit nothing that varies between runs, so the committed file is the
+comparison and `check` is a byte-compare with no special cases.
 
-Masking unstable fields at compare time keeps them and moves the complexity into
-the gate — a diff filter to maintain, which also hides any real change that lands
-on a masked line. Fingerprinting is faster but passes whenever the inputs are
-unchanged, including when the rendering code changed and the file was never
-regenerated — it misses stale output, which is what the gate is for. At ~4,300
-packages and milliseconds to render, a full regenerate is cheap.
+Every document is a pure function from the canonical model to exact bytes: a
+stable total order the tool computes (packages by name/version/purl, object
+keys sorted by code unit), `"\n"` literals only, and generated files pinned to
+LF in `.gitattributes`. `check` normalizes CRLF to LF on the committed text it
+reads, absorbing an unpinned checkout without weakening the comparison.
+
+Nothing carries a timestamp: the Markdown header records how to regenerate
+(`task generate`) instead of a date, the CycloneDX export omits the optional
+serial number and metadata timestamp, and the Docker SBOM pins each image by
+content digest, not scan time.
+
+Masking unstable fields is undesirable as it would make the gate more complex.
+Output regeneration is preferred over relying exclusively on fingerprinting the
+inputs, as it always updates the output when the render code changes, and
+overwrites manual edits of the output.
 
 ## Consequences
 

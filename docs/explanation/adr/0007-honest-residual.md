@@ -37,25 +37,28 @@ gate.
 ## Decision
 
 We surface the residual: record what can be determined, flag the rest for a
-human. The principle has three faces. For **licences**, a bare family label
-(`BSD`, `Apache`, `GPL`, `AGPL`, `LGPL`, `EUPL`) is a first-class *imprecise*
-finding: the normalizer intercepts it before `spdx-correct` can add a clause
-count, carries the family forward as `impreciseFamily` with the SPDX expression
-null, and the policy engine warns-and-passes a permissive family while flagging a
-could-be-copyleft one for review. A maintainer pins the real answer with a
-`[[clarify]]` override. For **Docker**, the residual is an unresolvable base
-image — the collector returns `{kind: "unresolved", reason}` and the caller warns
-and skips (mechanics in [ADR-0015](0015-abstain-over-fragile-parsing.md)). For
-**provenance**, the residual is a "why is this here?" the graph cannot prove; the
-lane emits no edges and the column renders "—" rather than a guessed
+human. The principle has three faces.
+
+For **licences**, a bare family label (`BSD`, `Apache`, `GPL`, `AGPL`, `LGPL`,
+`EUPL`) is a first-class *imprecise* finding: the normalizer intercepts it
+before `spdx-correct` can add a clause count and carries the family forward
+with the SPDX expression null. The policy engine warns-and-passes a permissive
+family and flags a could-be-copyleft one for review. A maintainer pins the real
+answer with a `[[clarify]]` override.
+
+For **Docker**, the residual is an unresolvable base image: the collector
+returns `{kind: "unresolved", reason}` and the caller warns and skips
+(mechanics in [ADR-0015](0015-abstain-over-fragile-parsing.md)).
+
+For **provenance**, the residual is a "why is this here?" the graph cannot
+prove: the lane emits no edges and the column renders "—" rather than a guessed
 `direct`/`transitive` label (see [ADR-0014](0014-dependency-provenance.md)).
 
 Guessing fails the first driver: the `BSD → BSD-2-Clause` and `EUPL → UPL-1.0`
 values are what `spdx-correct` produced against the real corpus, one flipping
 copyleft to permissive. Plain unknown is honest but discards what we knew,
-collapsing imprecise-BSD into the same bucket as a licence-less package and losing
-the copyleft review flag. Surfacing the residual keeps what is known at its true
-precision and gives the gate a defined verdict for it.
+collapsing imprecise-BSD into the same bucket as a licence-less package and
+losing the copyleft review flag.
 
 ## Consequences
 
