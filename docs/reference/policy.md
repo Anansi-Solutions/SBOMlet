@@ -14,8 +14,8 @@ every (package × occurrence) gets a verdict of `ok`, `warn`, `fail`, or
 file to either command:
 
 ```sh
-task generate POLICY=.sbomlet.policy.toml
-task check POLICY=.sbomlet.policy.toml
+task sbomlet:generate POLICY=.sbomlet.policy.toml
+task sbomlet:check POLICY=.sbomlet.policy.toml
 ```
 
 A starter file ships as `policy.example.toml`. Copy it to your repo root and

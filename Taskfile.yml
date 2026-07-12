@@ -1,15 +1,19 @@
 # Taskfile for SBOMlet, the third-party license compliance tool — the single
 # interface to the tool for local use, CI, and consumer repositories.
 #
-# A consumer includes it from their root Taskfile.yml. `flatten: true` exposes the
-# tasks unprefixed (`task generate`, `task check`); `dir` is MANDATORY so that
-# `mise x -- bun` resolves THIS directory's pinned bun, not the consumer's root:
+# A consumer includes it from their root Taskfile.yml under the `sbomlet:`
+# namespace — the tasks run as `task sbomlet:generate`, `task sbomlet:check`,
+# and the prefix can never collide with the consumer's own task names. `dir` is
+# MANDATORY so that `mise x -- bun` resolves THIS directory's pinned bun, not
+# the consumer's root:
 #
 #   includes:
 #     sbomlet:
 #       taskfile: ./tools/sbomlet/Taskfile.yml
 #       dir: ./tools/sbomlet
-#       flatten: true
+#
+# (`flatten: true` on the include drops the prefix, for a repository with no
+# clashing task names.)
 #
 # Each task documents its variables in its `summary` — read one with
 # `task <name> --summary`. Maintainer tasks (lint, test, quality, ...) live in

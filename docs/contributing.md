@@ -59,7 +59,9 @@ The Taskfile is split in two. `Taskfile.yml` carries what an adopter runs —
 carries the maintainer tasks below. The dev file is included with
 `optional: true` and its tasks deliberately have no `desc`: `task --list` shows
 only described tasks, so a repository that includes SBOMlet's Taskfile sees the
-adopter surface and nothing else, while the names stay callable here.
+adopter surface — as `sbomlet:generate`, `sbomlet:check`, and so on, under the
+standard namespaced include — and nothing else, while the names stay callable
+here.
 
 ```sh
 task --list        # the adopter surface

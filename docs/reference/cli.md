@@ -234,33 +234,35 @@ includes:
   sbomlet:
     taskfile: ./tools/sbomlet/Taskfile.yml
     dir: ./tools/sbomlet
-    flatten: true
 ```
 
 The `dir` key is required, so the tasks run inside `tools/sbomlet` and pick up that
-directory's pinned runtime. With `flatten: true` SBOMlet's tasks are exposed unprefixed, so you run `task generate`, not `task sbomlet:generate`.
+directory's pinned runtime. The include namespaces the tasks under the `sbomlet:`
+prefix, so you run `task sbomlet:generate`, not a bare `task generate` — the
+prefix can never collide with a task name of your own. (`flatten: true` on the
+include drops the prefix, for a repository with no clashing task names.)
 
 | Task | What it runs | When |
 | --- | --- | --- |
-| `task generate` | `generate` over the repository; writes the committed documents. With `DOCKER=1` it first refreshes the committed docker OS SBOM (build & scan; needs a Docker daemon). | After a dependency changes; commit the result. |
-| `task check` | `check`; the CI gate. | In CI, and locally before you push. |
-| `task verify:cache` | `verify-cache`; the online cache-integrity audit. | Before a release/audit, or when the cache changes; needs the network. |
-| `task docker:list` | `generate-docker-sbom --list-dockerfiles`; prints the discovered Dockerfile paths. | To preview the build set a `DOCKER=1` run would discover. No Docker, no writes. |
+| `task sbomlet:generate` | `generate` over the repository; writes the committed documents. With `DOCKER=1` it first refreshes the committed docker OS SBOM (build & scan; needs a Docker daemon). | After a dependency changes; commit the result. |
+| `task sbomlet:check` | `check`; the CI gate. | In CI, and locally before you push. |
+| `task sbomlet:verify:cache` | `verify-cache`; the online cache-integrity audit. | Before a release/audit, or when the cache changes; needs the network. |
+| `task sbomlet:docker:list` | `generate-docker-sbom --list-dockerfiles`; prints the discovered Dockerfile paths. | To preview the build set a `DOCKER=1` run would discover. No Docker, no writes. |
 
 Every task installs the tool's dependencies first through a shared `install`
 dependency, so there is no separate install step. Tasks for changing the tool
 itself (lint, test, quality, ...) live in `Taskfile.dev.yml`, included optionally
 and kept out of `task --list` on purpose; see
 [contributing](../contributing.md#the-task-surface). Each task documents its
-variables — read them with `task <name> --summary`.
+variables — read them with `--summary`, as in `task sbomlet:generate --summary`.
 
 Each task reads variables you can override on the command line. Set a variable by
 appending `NAME=value`:
 
 ```
-task generate POLICY=.sbomlet.policy.toml
-task check REPO_ROOT=/path/to/some/other/repo
-task generate DOCKER=1 IMAGES="app:latest worker:latest"
+task sbomlet:generate POLICY=.sbomlet.policy.toml
+task sbomlet:check REPO_ROOT=/path/to/some/other/repo
+task sbomlet:generate DOCKER=1 IMAGES="app:latest worker:latest"
 ```
 
 | Var | Used by | Meaning | Default |

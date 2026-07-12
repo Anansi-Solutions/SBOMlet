@@ -19,7 +19,7 @@ before a release, and the Docker scan.
 CI-vendor features. Wherever your pipeline runs its checks, add one step:
 
 ```sh
-task check POLICY=.sbomlet.policy.toml
+task sbomlet:check POLICY=.sbomlet.policy.toml
 ```
 
 That is the entire integration. It works the same on GitHub Actions, GitLab CI,
@@ -30,14 +30,14 @@ Some concrete shapes, so you can paste the right one:
 
 ```yaml
 # GitHub Actions — a step inside a job that has mise and Task available
-- run: task check POLICY=.sbomlet.policy.toml
+- run: task sbomlet:check POLICY=.sbomlet.policy.toml
 ```
 
 ```yaml
 # GitLab CI — a job
 licenses:
   script:
-    - task check POLICY=.sbomlet.policy.toml
+    - task sbomlet:check POLICY=.sbomlet.policy.toml
 ```
 
 The runner needs [mise](https://mise.jdx.dev) and [Task](https://taskfile.dev)
@@ -50,7 +50,7 @@ CycloneDX export, pass the same flags you pass to `generate` so the gate
 compares the same files. The variables are caller-overridable:
 
 ```sh
-task check POLICY=.sbomlet.policy.toml CYCLONEDX=sbom.cdx.json
+task sbomlet:check POLICY=.sbomlet.policy.toml CYCLONEDX=sbom.cdx.json
 ```
 
 ## Or: the GitHub Action
@@ -104,7 +104,7 @@ your first run.
 When a dependency changes, regenerate and commit:
 
 ```sh
-task generate POLICY=.sbomlet.policy.toml
+task sbomlet:generate POLICY=.sbomlet.policy.toml
 git add THIRD_PARTY_LICENSES.md THIRD_PARTY_NOTICES.md .sbomlet.cache/licenses.cache.json
 git commit -m "chore: refresh third-party license inventory"
 ```
@@ -125,12 +125,12 @@ every run. Commit all three:
 A run with `--dump-model` also writes a sorted-key JSON dump of the model. That
 is a debugging aid for golden-file tests, not something you commit.
 
-So an adopter running plain `task generate` always gets three files:
+So an adopter running a plain `task sbomlet:generate` always gets three files:
 the inventory, the companion, and the cache.
 
 A plain `generate` never writes `.sbomlet.cache/docker-os.sbom.json` — it only
 reads the committed copy. The file comes from the docker lane of the same task:
-`task generate DOCKER=1` first rebuilds and rescans the repository's images to
+`task sbomlet:generate DOCKER=1` first rebuilds and rescans the repository's images to
 refresh it, then regenerates the full inventory (described at the end of this
 page). Commit it like any other input the gate reads.
 
@@ -221,7 +221,7 @@ tampering or a genuine upstream license change; either way it wants a person's
 eyes before you ship.
 
 ```sh
-task verify:cache
+task sbomlet:verify:cache
 ```
 
 Unlike `check`, this command needs the network — it is the one place the tool
@@ -258,7 +258,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: jdx/mise-action@v2
-      - run: task verify:cache
+      - run: task sbomlet:verify:cache
         env:
           # Lifts the GitHub License API rate limit for Terraform entries; the
           # audit works unauthenticated too, only slower.
@@ -288,7 +288,7 @@ the [CLI reference](../reference/cli.md#generate) for the flag and a worked
 `[[clarify]]` resolution.
 
 ```sh
-task generate INTENSIVE=1
+task sbomlet:generate INTENSIVE=1
 ```
 
 This is occasional/scheduled CI, not every build. ScanCode needs its own install
@@ -354,7 +354,7 @@ and `check` read it as a merge input the same way they read a lockfile. This
 keeps a Docker daemon off the gate path: a CI `check` never needs Docker, even
 for a repository that ships container images.
 
-The Taskfile entry point for all of it is `task generate DOCKER=1`: refresh the
+The Taskfile entry point for all of it is `task sbomlet:generate DOCKER=1`: refresh the
 committed docker OS SBOM, then regenerate the inventory that merges it in, in
 one run. There are three lanes, all reaching the same result: syft scans a real
 image's full contents — OS packages and application packages alike. You pick a
@@ -370,26 +370,26 @@ with the policy's `[docker]` ignore globs (see below), so it never reaches
 
 ```sh
 # Discover, build & scan every Dockerfile under the repo root, then regenerate
-task generate DOCKER=1
+task sbomlet:generate DOCKER=1
 ```
 
 You run this when a Dockerfile or a base image changes, not on every CI run.
 
-`task docker:list` prints the exact set the discovery lane would build, with no
+`task sbomlet:docker:list` prints the exact set the discovery lane would build, with no
 daemon and no writes — useful to preview it or drive a build from a shell:
 
 ```sh
-task docker:list
+task sbomlet:docker:list
 ```
 
 ### Or name the Dockerfiles or images yourself
 
 ```sh
 # Build named Dockerfiles and scan the images they produce
-task generate DOCKER=1 DOCKERFILES="backend/Dockerfile frontend/Dockerfile"
+task sbomlet:generate DOCKER=1 DOCKERFILES="backend/Dockerfile frontend/Dockerfile"
 
 # Or scan images you already have or can pull
-task generate DOCKER=1 IMAGES="postgres:18 redis:7"
+task sbomlet:generate DOCKER=1 IMAGES="postgres:18 redis:7"
 ```
 
 `DOCKERFILES` (the subcommand's `--dockerfile` flag) builds each named

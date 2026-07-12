@@ -15,7 +15,7 @@ them byte-for-byte against the committed files. `generate` writes them:
 | a [CycloneDX](../glossary.md#cyclonedx) export | only with `--cyclonedx` | `--cyclonedx <path>` (no default) |
 | a model dump | only with `--dump-model` | `--dump-model <path>` (no default) |
 
-An adopter running only `task generate` gets all three files on every run: the
+An adopter running only `task sbomlet:generate` gets all three files on every run: the
 two Markdown documents and the enrichment cache, even when nothing needed
 enriching (an empty cache is still a cache). The cache's bytes change only when a
 fetch resolves something new; a warm run rewrites identical bytes. The
@@ -36,11 +36,12 @@ never tell a real change from the clock ticking, so each document records how to
 regenerate it instead.
 
 ```sh
-# Regenerate every committed artifact (the command in every auto-generated header)
-task generate
+# Regenerate every committed artifact (the auto-generated headers name the
+# task by its in-repo name, `task generate`)
+task sbomlet:generate
 
 # Regenerate including the CycloneDX export
-task generate POLICY=.sbomlet.policy.toml CYCLONEDX=bom.cdx.json
+task sbomlet:generate POLICY=.sbomlet.policy.toml CYCLONEDX=bom.cdx.json
 ```
 
 ## THIRD_PARTY_LICENSES.md
@@ -330,7 +331,7 @@ CycloneDX-shaped document holding `bomFormat`, `specVersion`, `components`, and 
 `dockerImages` array pinning each scanned image to its content digest (empty for a
 locally built, never-pushed image, which has none), and nothing else. It is **not**
 written by `generate`. It is produced by the docker scan
-(`task generate DOCKER=1`, driving the `generate-docker-sbom` subcommand, the
+(`task sbomlet:generate DOCKER=1`, driving the `generate-docker-sbom` subcommand, the
 only path in the tool that touches Docker or syft) — by hand over named
 Dockerfiles or images, or by CI discovering and building each of the repository's
 Dockerfiles — and committed separately from `generate`'s own outputs. `generate`
@@ -340,7 +341,7 @@ by content, which is stable.
 
 ```sh
 # Maintainer-only: scan named images, write the OS sidecar, and regenerate
-task generate DOCKER=1 IMAGES="postgres:18 nginx:stable-alpine"
+task sbomlet:generate DOCKER=1 IMAGES="postgres:18 nginx:stable-alpine"
 ```
 
 ## Related

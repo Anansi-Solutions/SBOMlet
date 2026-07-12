@@ -28,7 +28,7 @@ and you get exit 2.
 To fix it, regenerate, look at the diff, and commit it:
 
 ```sh
-task generate POLICY=.sbomlet.policy.toml
+task sbomlet:generate POLICY=.sbomlet.policy.toml
 git diff THIRD_PARTY_LICENSES.md THIRD_PARTY_NOTICES.md
 git add THIRD_PARTY_LICENSES.md THIRD_PARTY_NOTICES.md .sbomlet.cache/licenses.cache.json
 git commit -m "chore: regenerate license inventory"
@@ -70,7 +70,7 @@ the run is slow. This is expected once. Run `generate`, commit the cache, and
 the next run reads from it instead of the network:
 
 ```sh
-task generate POLICY=.sbomlet.policy.toml
+task sbomlet:generate POLICY=.sbomlet.policy.toml
 git add .sbomlet.cache/licenses.cache.json
 git commit -m "chore: commit enrichment cache"
 ```
@@ -118,7 +118,7 @@ To fix it, run `generate` (which is allowed to fetch and write) and commit the
 refreshed cache:
 
 ```sh
-task generate POLICY=.sbomlet.policy.toml
+task sbomlet:generate POLICY=.sbomlet.policy.toml
 git add .sbomlet.cache/licenses.cache.json THIRD_PARTY_LICENSES.md THIRD_PARTY_NOTICES.md
 git commit -m "chore: refresh enrichment cache"
 ```
