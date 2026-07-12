@@ -128,9 +128,11 @@ is a debugging aid for golden-file tests, not something you commit.
 So an adopter running plain `task generate` always gets three files:
 the inventory, the companion, and the cache.
 
-`generate` does not write `.sbomlet.cache/docker-os.sbom.json`. That file is produced ahead of time by
-the docker scan — `task generate DOCKER=1`, described at the end of this page —
-and is committed like any other input the gate reads.
+A plain `generate` never writes `.sbomlet.cache/docker-os.sbom.json` — it only
+reads the committed copy. The file comes from the docker lane of the same task:
+`task generate DOCKER=1` first rebuilds and rescans the repository's images to
+refresh it, then regenerates the full inventory (described at the end of this
+page). Commit it like any other input the gate reads.
 
 The way `check` works is what makes this workflow safe. It runs the same
 discover, collect, merge, enrich, normalize, evaluate, render pipeline as

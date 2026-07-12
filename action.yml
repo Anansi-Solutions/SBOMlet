@@ -21,10 +21,14 @@ inputs:
 runs:
   using: composite
   steps:
-    # Installs mise itself; the `mise install` below then provisions the
-    # toolchain SBOMlet pins in its own mise.toml (the runtime + syft + Task).
+    # Installs mise and provisions the toolchain SBOMlet pins in its own
+    # mise.toml (the runtime + syft + Task): working_directory points the
+    # install at the action's directory, not the consumer's repository, and
+    # the action caches the tools keyed off that mise.toml.
     - name: Set up the SBOMlet toolchain
       uses: jdx/mise-action@v4
+      with:
+        working_directory: ${{ github.action_path }}
 
     # The Taskfile is the single interface to the tool, so the action drives it
     # through `task <mode>` rather than the CLI directly; the task's own install
@@ -42,7 +46,6 @@ runs:
         SBOMLET_DOCKER: ${{ inputs.docker }}
         SBOMLET_WS: ${{ github.workspace }}
       run: |
-        mise install
         vars=("REPO_ROOT=$SBOMLET_WS")
         if [ -n "$SBOMLET_POLICY" ] && [ -f "$SBOMLET_WS/$SBOMLET_POLICY" ]; then
           vars+=("POLICY=$SBOMLET_WS/$SBOMLET_POLICY")
