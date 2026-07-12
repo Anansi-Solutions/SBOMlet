@@ -246,6 +246,29 @@ describe("workflow authoring invariants (.github/workflows/*.yml)", () => {
     expect(offenders, offenders.join("; ")).toEqual([]);
   });
 
+  test("run bodies invoke only live task names — retired tasks and explicit installs are locked out", () => {
+    // 'task install' is redundant (every task deps on install); the rest are
+    // the pre-split task names, retired by the public/dev Taskfile split.
+    const retired = [
+      "task install",
+      "task docker-scan",
+      "task generate-docker-sbom",
+      "task list-dockerfiles",
+      "task verify-cache",
+      "task format",
+    ];
+    const offenders: string[] = [];
+    for (const { file, text } of workflows) {
+      for (const block of extractRunBlocks(file, text)) {
+        const hits = retired.filter((name) => block.body.includes(name));
+        offenders.push(
+          ...hits.map((name) => `${file}:${block.line} (${name})`),
+        );
+      }
+    }
+    expect(offenders, offenders.join(", ")).toEqual([]);
+  });
+
   test("timeout-minutes present on every job", () => {
     const offenders: string[] = [];
     for (const { file, doc } of workflows) {

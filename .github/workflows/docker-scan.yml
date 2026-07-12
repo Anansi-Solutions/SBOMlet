@@ -50,13 +50,10 @@ jobs:
       - name: Set up the SBOMlet toolchain
         uses: jdx/mise-action@v4
 
-      - name: Install dependencies
-        run: mise x -- task install
-
       - name: Build and scan the Dockerfiles
         env:
           DOCKERFILES: ${{ inputs.dockerfiles }}
-        run: mise x -- task docker-scan DOCKERFILES="$DOCKERFILES"
+        run: mise x -- task generate DOCKER=1 DOCKERFILES="$DOCKERFILES"
 
       - name: Commit regenerated scan artifacts
         if: github.event_name != 'pull_request'

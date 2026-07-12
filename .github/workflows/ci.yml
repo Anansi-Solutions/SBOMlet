@@ -17,14 +17,12 @@ jobs:
           fetch-depth: 0
 
       # Installs the tools pinned in mise.toml: the runtime, syft, and Task. `task` is
-      # then the single interface for every step below.
+      # then the single interface for every step below; each task installs the
+      # tool's own dependencies through its install dep.
       - name: Set up mise toolchain
         uses: jdx/mise-action@v4
 
-      - name: Install dependencies
-        run: task install
-
-      - name: Quality gate (lint, format, typecheck)
+      - name: Quality gate (lint, typecheck)
         run: task quality
 
       - name: Test
