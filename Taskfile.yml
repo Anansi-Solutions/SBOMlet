@@ -77,16 +77,10 @@ tasks:
       - task: generate
 
   quality:
-    desc: Quality gate — lint + format-check + typecheck
+    desc: Quality gate — lint (includes formatting) + typecheck
     cmds:
       - mise x -- bun run lint
-      - mise x -- bun run format:check
       - mise x -- bun run typecheck
-
-  format:
-    desc: Rewrite source formatting with Prettier (the fix when format-check fails)
-    cmds:
-      - mise x -- bun run format
 
   adr:new:
     desc: 'Scaffold an architecture decision record from the MADR template (TITLE="Short decision title")'

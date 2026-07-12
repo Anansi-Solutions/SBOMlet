@@ -6,12 +6,12 @@ Copyleft notice rules are configured in .sbomlet.policy.toml.
 
 **Package counts:**
 
-- Total packages: 168
+- Total packages: 173
 - apk: 17
-- npm: 150
+- npm: 155
 - pypi: 1
 - Production packages: 15
-- Development-only packages: 134
+- Development-only packages: 139
 - Docker image packages: 19
 - Unknown license: 0
 
@@ -81,6 +81,7 @@ The packages listed below carry copyleft or special license obligations in at le
 | @humanwhocodes/retry                        | npm       | 0.4.3   | Apache-2.0         | .       |
 | @napi-rs/wasm-runtime                       | npm       | 1.1.5   | MIT                | .       |
 | @package-json/types                         | npm       | 0.0.12  | MIT                | .       |
+| @pkgr/core                                  | npm       | 0.3.6   | MIT                | .       |
 | @tybys/wasm-util                            | npm       | 0.10.2  | MIT                | .       |
 | @types/bun                                  | npm       | 1.3.14  | MIT                | .       |
 | @types/esrecurse                            | npm       | 4.3.1   | MIT                | .       |
@@ -137,6 +138,7 @@ The packages listed below carry copyleft or special license obligations in at le
 | eslint-config-prettier                      | npm       | 10.1.8  | MIT                | .       |
 | eslint-import-context                       | npm       | 0.1.9   | MIT                | .       |
 | eslint-plugin-import-x                      | npm       | 4.16.2  | MIT                | .       |
+| eslint-plugin-prettier                      | npm       | 5.5.6   | MIT                | .       |
 | eslint-scope                                | npm       | 9.1.2   | BSD-2-Clause       | .       |
 | eslint-visitor-keys                         | npm       | 3.4.3   | Apache-2.0         | .       |
 | eslint-visitor-keys                         | npm       | 5.0.1   | Apache-2.0         | .       |
@@ -146,6 +148,7 @@ The packages listed below carry copyleft or special license obligations in at le
 | estraverse                                  | npm       | 5.3.0   | BSD-2-Clause       | .       |
 | esutils                                     | npm       | 2.0.3   | BSD-2-Clause       | .       |
 | fast-deep-equal                             | npm       | 3.1.3   | MIT                | .       |
+| fast-diff                                   | npm       | 1.3.0   | Apache-2.0         | .       |
 | fast-json-stable-stringify                  | npm       | 2.1.0   | MIT                | .       |
 | fast-levenshtein                            | npm       | 2.0.6   | MIT                | .       |
 | fdir                                        | npm       | 6.5.0   | MIT                | .       |
@@ -179,12 +182,14 @@ The packages listed below carry copyleft or special license obligations in at le
 | picomatch                                   | npm       | 4.0.4   | MIT                | .       |
 | prelude-ls                                  | npm       | 1.2.1   | MIT                | .       |
 | prettier                                    | npm       | 3.8.4   | MIT                | .       |
+| prettier-linter-helpers                     | npm       | 1.0.1   | MIT                | .       |
 | punycode                                    | npm       | 2.3.1   | MIT                | .       |
 | resolve-pkg-maps                            | npm       | 1.0.0   | MIT                | .       |
 | semver                                      | npm       | 7.8.4   | ISC                | .       |
 | shebang-command                             | npm       | 2.0.0   | MIT                | .       |
 | shebang-regex                               | npm       | 3.0.0   | MIT                | .       |
 | stable-hash-x                               | npm       | 0.2.0   | MIT                | .       |
+| synckit                                     | npm       | 0.11.13 | MIT                | .       |
 | tinyglobby                                  | npm       | 0.2.17  | MIT                | .       |
 | ts-api-utils                                | npm       | 2.5.0   | MIT                | .       |
 | tslib                                       | npm       | 2.8.1   | 0BSD               | .       |

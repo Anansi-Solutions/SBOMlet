@@ -1,7 +1,7 @@
 import js from "@eslint/js";
 import tseslint from "typescript-eslint";
 import importX from "eslint-plugin-import-x";
-import eslintConfigPrettier from "eslint-config-prettier/flat";
+import eslintPluginPrettierRecommended from "eslint-plugin-prettier/recommended";
 
 export default tseslint.config(
   {
@@ -57,5 +57,8 @@ export default tseslint.config(
       "@typescript-eslint/no-require-imports": "off",
     },
   },
-  eslintConfigPrettier, // last — disables formatting rules
+  // Last — disables ESLint's own formatting rules (eslint-config-prettier) and
+  // reports Prettier differences as `prettier/prettier` errors, so `lint` is the
+  // single formatting gate and `lint:fix` rewrites.
+  eslintPluginPrettierRecommended,
 );

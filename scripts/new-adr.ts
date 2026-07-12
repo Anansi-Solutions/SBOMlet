@@ -15,7 +15,9 @@ const TEMPLATE = join(ADR_DIR, "0000-template.md");
 
 const title = (process.argv[2] ?? "").trim();
 if (title === "") {
-  console.error('A title is required: task adr:new TITLE="Short decision title"');
+  console.error(
+    'A title is required: task adr:new TITLE="Short decision title"',
+  );
   process.exit(2);
 }
 
@@ -40,4 +42,6 @@ const body = readFileSync(TEMPLATE, "utf8")
 
 writeFileSync(filePath, body);
 console.log(`Wrote ${filePath}`);
-console.log(`Next: write it, set Status to Accepted, and add a row to the index.`);
+console.log(
+  `Next: write it, set Status to Accepted, and add a row to the index.`,
+);

@@ -120,6 +120,12 @@
       "resolvable": true,
       "via": "version-license"
     },
+    "pkg:npm/%40pkgr/core@0.3.6": {
+      "fetchedFrom": "npm",
+      "license": "MIT",
+      "resolvable": true,
+      "via": "version-license"
+    },
     "pkg:npm/%40tybys/wasm-util@0.10.2": {
       "fetchedFrom": "npm",
       "license": "MIT",
@@ -468,6 +474,12 @@
       "resolvable": true,
       "via": "version-license"
     },
+    "pkg:npm/eslint-plugin-prettier@5.5.6": {
+      "fetchedFrom": "npm",
+      "license": "MIT",
+      "resolvable": true,
+      "via": "version-license"
+    },
     "pkg:npm/eslint-scope@9.1.2": {
       "fetchedFrom": "npm",
       "license": "BSD-2-Clause",
@@ -525,6 +537,12 @@
     "pkg:npm/fast-deep-equal@3.1.3": {
       "fetchedFrom": "npm",
       "license": "MIT",
+      "resolvable": true,
+      "via": "version-license"
+    },
+    "pkg:npm/fast-diff@1.3.0": {
+      "fetchedFrom": "npm",
+      "license": "Apache-2.0",
       "resolvable": true,
       "via": "version-license"
     },
@@ -720,6 +738,12 @@
       "resolvable": true,
       "via": "version-license"
     },
+    "pkg:npm/prettier-linter-helpers@1.0.1": {
+      "fetchedFrom": "npm",
+      "license": "MIT",
+      "resolvable": true,
+      "via": "version-license"
+    },
     "pkg:npm/prettier@3.8.4": {
       "fetchedFrom": "npm",
       "license": "MIT",
@@ -817,6 +841,12 @@
       "via": "version-license"
     },
     "pkg:npm/stable-hash-x@0.2.0": {
+      "fetchedFrom": "npm",
+      "license": "MIT",
+      "resolvable": true,
+      "via": "version-license"
+    },
+    "pkg:npm/synckit@0.11.13": {
       "fetchedFrom": "npm",
       "license": "MIT",
       "resolvable": true,
