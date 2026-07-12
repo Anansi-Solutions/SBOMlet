@@ -57,14 +57,14 @@ The inventory looks like this:
 copy so it can't drift, and evaluates your `.sbomlet.policy.toml`. A clean run:
 
 ```console
-$ task sbomlet:check
+$ task check
 policy: 0 fail, 0 warn, 0 suppressed, 1284 ok (1284 verdicts)
 ```
 
 A dependency the policy forbids fails the run, which exits non-zero so CI stops:
 
 ```console
-$ task sbomlet:check
+$ task check
 policy: 1 fail, 0 warn, 0 suppressed, 1283 ok (1284 verdicts)
 policy fail: pkg:npm/some-agpl-tool@2.1.0 in services/api — deny: AGPL-3.0 is denied outside a copyleft-distributed workspace
 ```
@@ -96,17 +96,18 @@ includes:
   sbomlet:
     taskfile: ./tools/sbomlet/Taskfile.yml
     dir: ./tools/sbomlet
+    flatten: true
 ```
 
 Copy [`policy.example.toml`](policy.example.toml) to `.sbomlet.policy.toml`, then:
 
 ```sh
-task sbomlet:generate POLICY=.sbomlet.policy.toml   # write the inventory
-task sbomlet:check    POLICY=.sbomlet.policy.toml   # run the gate
+task generate POLICY=.sbomlet.policy.toml   # write the inventory
+task check    POLICY=.sbomlet.policy.toml   # run the gate
 ```
 
 Commit the generated `THIRD_PARTY_*.md` and `.sbomlet.cache/licenses.cache.json`, then run
-`task sbomlet:check` in CI. The full walkthrough — install, first run, reading the
+`task check` in CI. The full walkthrough — install, first run, reading the
 output, wiring CI — is in [getting-started](docs/getting-started.md). For a real
 configured example, see
 [`examples/crt25-collimator-policy.toml`](examples/crt25-collimator-policy.toml).
@@ -167,7 +168,7 @@ way it is.
 ## Good to know
 
 - **Docker image packages** aren't discovered from lockfiles. Run the docker
-  scan — `task sbomlet:generate DOCKER=1`, discovering and building the
+  scan — `task generate DOCKER=1`, discovering and building the
   repository's Dockerfiles by default, or over named Dockerfiles or images — to
   produce a committed `.sbomlet.cache/docker-os.sbom.json`, and `generate`/`check`
   merge it in. It drives `generate-docker-sbom`, the only subcommand that talks
@@ -176,7 +177,7 @@ way it is.
   answer — a registry lookup for an otherwise-unknown licence. Once
   `.sbomlet.cache/licenses.cache.json` is committed it serves every claim, and `check` never
   goes online. To re-validate the warm cache against upstream before a release,
-  run `task sbomlet:verify:cache`.
+  run `task verify:cache`.
 - **Line endings.** SBOMlet writes LF-only bytes so `check` can byte-compare. On
   Windows, pin the committed outputs to LF in your `.gitattributes`, or `check`
   reads them as permanently stale:

@@ -290,18 +290,18 @@ handling = "warn"
 # exactly one; all three require a docker daemon:
 #
 #   1. Build named Dockerfiles:
-#        task generate-docker-sbom DOCKERFILES="backend/Dockerfile app/Dockerfile"
+#        task generate DOCKER=1 DOCKERFILES="backend/Dockerfile app/Dockerfile"
 #      Builds each Dockerfile to a deterministic local tag and scans the image it
 #      produces -- its base, the packages its own RUN apt/apk steps add, and the
 #      application layered on top.
 #
 #   2. Discover and build the repo's Dockerfiles:
-#        task generate-docker-sbom DISCOVER_ROOT=.
+#        task generate DOCKER=1
 #      Walks the repo, builds each Dockerfile it finds (skipping any [docker]
 #      ignore match), and scans the results -- what the Docker-scan workflow drives.
 #
 #   3. Scan pre-existing images:
-#        task generate-docker-sbom IMAGES="postgres:18 nginx:stable-alpine"
+#        task generate DOCKER=1 IMAGES="postgres:18 nginx:stable-alpine"
 #      Scans each image ref with the pinned syft, pulling any that is absent
 #      locally and digest-pinning each.
 #
