@@ -11,29 +11,23 @@
 #       dir: ./tools/sbomlet
 #       flatten: true
 #
-# Overridable variables (e.g. `task generate REPO_ROOT=/path/to/repo`):
-#   REPO_ROOT       repository to scan              (default: this Taskfile's dir)
-#   OUTPUT          THIRD_PARTY_LICENSES.md path    (default: beside REPO_ROOT)
-#   NOTICES         THIRD_PARTY_NOTICES.md path     (default: beside REPO_ROOT)
-#   POLICY          policy file; --policy is added only when set
-#                   (default unset: the tool auto-discovers .sbomlet.policy.toml)
-#   CYCLONEDX       CycloneDX export path; --cyclonedx is added only when set
-#   IMAGES          space-separated image refs to live-scan (generate-docker-sbom)
-#   DISCOVER_ROOT   repo root to discover, build & scan Dockerfiles in (generate-docker-sbom)
-#   DOCKERFILES     space-separated Dockerfile paths to build & scan (generate-docker-sbom)
-#   DOCKER_OS_SBOM  override the committed SBOM path (default: in the cache dir)
-#   INTENSIVE       set (e.g. INTENSIVE=1) to add --intensive to generate: scan
-#                   still-unresolved packages' local sources with ScanCode
-#                   after registry enrichment (occasional-run cost posture)
-#   TITLE           decision title for adr:new
+# Each task documents its variables in its `summary` — read one with
+# `task <name> --summary`. Maintainer tasks (lint, test, quality, ...) live in
+# Taskfile.dev.yml: they never appear in `task --list` (only described tasks
+# do), and the include is optional, so a vendored copy may drop the file.
 #
-# Task runs every command through its own embedded POSIX shell (mvdan/sh), so they
-# behave identically on Windows, macOS, and Linux — never PowerShell or cmd. Every
-# interpolated variable is piped through `| q` (Task's shellQuote): a value
-# containing a space, `$(...)`, or a backtick is quoted into ONE inert argument and
-# can never break out into the shell. `task test -- <args>` forwards args verbatim
-# to the test runner (a file path, a --test-name-pattern, …).
+# Task runs every command through its own embedded POSIX shell (mvdan/sh), so
+# commands behave identically on Windows, macOS, and Linux — never PowerShell or
+# cmd. Every interpolated variable is piped through `| q` (Task's shellQuote): a
+# value containing a space, `$(...)`, or a backtick is quoted into ONE inert
+# argument and can never break out into the shell.
 version: '3'
+
+includes:
+  dev:
+    taskfile: Taskfile.dev.yml
+    flatten: true
+    optional: true
 
 vars:
   REPO_ROOT: '{{.REPO_ROOT | default .ROOT_DIR}}'
@@ -42,57 +36,97 @@ vars:
 
 tasks:
   generate:
-    desc: Generate THIRD_PARTY_LICENSES.md and THIRD_PARTY_NOTICES.md (plus an optional CycloneDX export); commit the outputs
+    desc: Generate THIRD_PARTY_LICENSES.md and THIRD_PARTY_NOTICES.md; commit the outputs (DOCKER=1 also refreshes the docker OS SBOM)
+    summary: |
+      Scan the repository for every dependency lockfile, resolve each
+      third-party package's license, and write the inventory documents the
+      check gate compares against. Commit what it writes.
+
+      Variables (append NAME=value to the command):
+        REPO_ROOT    repository to scan               (default: this Taskfile's directory)
+        OUTPUT       THIRD_PARTY_LICENSES.md path     (default: beside REPO_ROOT)
+        NOTICES      THIRD_PARTY_NOTICES.md path      (default: beside REPO_ROOT)
+        POLICY       policy file; --policy is passed only when set
+                     (default unset: the tool auto-discovers .sbomlet.policy.toml)
+        CYCLONEDX    CycloneDX export path; --cyclonedx is passed only when set
+        INTENSIVE    set (INTENSIVE=1) to also scan still-unresolved packages'
+                     local sources with ScanCode — slow, occasional-run cost
+        DOCKER       set (DOCKER=1) to build and scan the repository's
+                     Dockerfiles and refresh the committed docker OS SBOM before
+                     generating; needs a Docker daemon
+        DOCKERFILES  with DOCKER=1 — space-separated Dockerfile paths to build
+                     and scan instead of discovering the repository's own
+        IMAGES       with DOCKER=1 — space-separated pre-existing image refs to
+                     scan instead of building anything
+    deps: [install]
     cmds:
+      - task: '{{if .DOCKER}}generate:docker{{end}}'
       - mise x -- bun src/cli.ts generate --base-dir {{.USER_WORKING_DIR | q}} --repo-root {{.REPO_ROOT | q}} --output {{.OUTPUT | q}} --notices {{.NOTICES | q}}{{if .POLICY}} --policy {{.POLICY | q}}{{end}}{{if .CYCLONEDX}} --cyclonedx {{.CYCLONEDX | q}}{{end}}{{if .INTENSIVE}} --intensive{{end}}
 
   check:
     desc: 'CI gate — exit 0 clean, 1 policy violation (beats stale), 2 stale/missing output, 3+ tool error'
+    summary: |
+      Regenerate the inventory in memory and byte-compare it against the
+      committed documents. Writes nothing and never touches the network; every
+      license it needs comes from the committed cache. Never fingerprinted:
+      the gate runs on every invocation.
+
+      Variables: REPO_ROOT, OUTPUT, NOTICES, POLICY, CYCLONEDX — as on generate.
+    deps: [install]
     cmds:
       - mise x -- bun src/cli.ts check --base-dir {{.USER_WORKING_DIR | q}} --repo-root {{.REPO_ROOT | q}} --output {{.OUTPUT | q}} --notices {{.NOTICES | q}}{{if .POLICY}} --policy {{.POLICY | q}}{{end}}{{if .CYCLONEDX}} --cyclonedx {{.CYCLONEDX | q}}{{end}}
 
-  verify-cache:
-    desc: 'ONLINE cache-integrity audit — re-resolve every committed cache entry against its registry and report divergence from the stored license; run before a release/audit or when the cache changes (needs network). Exit 0 all match, 1 mismatch, 3 tool/network error'
+  verify:cache:
+    desc: 'ONLINE cache audit — re-resolve every committed cache entry against its registry and report divergence. Exit 0 all match, 1 mismatch, 3 tool/network error'
+    summary: |
+      Audit the committed enrichment cache against the live package registries:
+      re-resolve every entry and report any license that no longer matches the
+      stored one. Run it before a release or audit, or when the cache changes.
+      Needs the network.
+
+      Variables:
+        REPO_ROOT  repository whose cache to audit  (default: this Taskfile's directory)
+    deps: [install]
     cmds:
       - mise x -- bun src/cli.ts verify-cache --base-dir {{.USER_WORKING_DIR | q}} --repo-root {{.REPO_ROOT | q}}
 
-  generate-docker-sbom:
-    desc: 'MAINTAINER + DOCKER ONLY — produce the committed docker-os.sbom.json. Three lanes: IMAGES="a:1 b:2" scans pre-existing image refs; DOCKERFILES="a/Dockerfile b/Dockerfile" builds & scans an explicit Dockerfile list; DISCOVER_ROOT=. discovers, builds & scans the repo Dockerfiles. NOT part of check (check reads the committed bytes offline).'
-    cmds:
-      - mise x -- bun src/cli.ts generate-docker-sbom --base-dir {{.USER_WORKING_DIR | q}}{{if .DOCKER_OS_SBOM}} --docker-os-sbom {{.DOCKER_OS_SBOM | q}}{{end}}{{if .DISCOVER_ROOT}} --repo-root {{.DISCOVER_ROOT | q}}{{end}}{{range .DOCKERFILES | default "" | splitList " "}}{{if .}} --dockerfile {{. | q}}{{end}}{{end}}{{range .IMAGES | default "" | splitList " "}}{{if .}} --image {{. | q}}{{end}}{{end}}
+  docker:list:
+    desc: "Print the repository's discovered Dockerfile paths (policy-aware), one per line — no Docker daemon, nothing written"
+    summary: |
+      Preview which Dockerfiles a DOCKER=1 generate would build and scan: the
+      same discovery walk, printed one repository-relative path per line, with
+      the policy's [docker] ignore globs applied. No Docker daemon needed.
 
-  list-dockerfiles:
-    desc: "Print the repository's discovered Dockerfile paths (policy-aware), one per line — the Docker-scan workflow's build set"
+      Variables:
+        REPO_ROOT  repository to walk                        (default: this Taskfile's directory)
+        POLICY     policy file whose [docker] globs prune the list; only when set
+    deps: [install]
     silent: true
     cmds:
-      - mise x -- bun src/cli.ts generate-docker-sbom --list-dockerfiles --base-dir {{.USER_WORKING_DIR | q}} --repo-root {{.DISCOVER_ROOT | default .ROOT_DIR | q}}{{if .POLICY}} --policy {{.POLICY | q}}{{end}}
+      - mise x -- bun src/cli.ts generate-docker-sbom --list-dockerfiles --base-dir {{.USER_WORKING_DIR | q}} --repo-root {{.REPO_ROOT | q}}{{if .POLICY}} --policy {{.POLICY | q}}{{end}}
 
-  docker-scan:
-    desc: 'Discover, build, and scan the repository''s Dockerfiles, then regenerate the inventory — the local equivalent of the docker-scan workflow. DOCKERFILES="a/Dockerfile b/Dockerfile" targets an explicit list instead of discovering. Needs a Docker daemon.'
+  generate:docker:
+    # The DOCKER=1 lane of generate: refresh the committed docker OS SBOM by
+    # building and scanning the repository's Dockerfiles (default), an explicit
+    # DOCKERFILES list, or pre-existing IMAGES refs. Internal: it exists to be
+    # composed by generate, never invoked on its own. NOT part of check —
+    # check reads the committed SBOM bytes offline.
+    internal: true
     cmds:
-      - task: generate-docker-sbom
-        vars:
-          DOCKERFILES: '{{.DOCKERFILES}}'
-          DISCOVER_ROOT: '{{if .DOCKERFILES}}{{else}}{{.ROOT_DIR}}{{end}}'
-      - task: generate
-
-  quality:
-    desc: Quality gate — lint (includes formatting) + typecheck
-    cmds:
-      - mise x -- bun run lint
-      - mise x -- bun run typecheck
-
-  adr:new:
-    desc: 'Scaffold an architecture decision record from the MADR template (TITLE="Short decision title")'
-    cmds:
-      - mise x -- bun scripts/new-adr.ts {{.TITLE | default "" | q}}
+      - mise x -- bun src/cli.ts generate-docker-sbom --base-dir {{.USER_WORKING_DIR | q}}{{if .DOCKER_OS_SBOM}} --docker-os-sbom {{.DOCKER_OS_SBOM | q}}{{end}}{{if .POLICY}} --policy {{.POLICY | q}}{{end}}{{if or .DOCKERFILES .IMAGES}}{{else}} --repo-root {{.REPO_ROOT | q}}{{end}}{{range .DOCKERFILES | default "" | splitList " "}}{{if .}} --dockerfile {{. | q}}{{end}}{{end}}{{range .IMAGES | default "" | splitList " "}}{{if .}} --image {{. | q}}{{end}}{{end}}
 
   install:
-    desc: Install dependencies from the committed lockfile (CI-safe)
+    # Hidden from `task --list` (no desc) but callable; every other task deps
+    # on it, so nothing needs a separate install step. Fingerprinted: a no-op
+    # while package.json and bun.lock are unchanged and node_modules exists.
+    # bun's own stdout is routed to stderr so dependents' stdout stays clean.
+    summary: |
+      Install the tool's dependencies from the committed lockfile (CI-safe,
+      exact versions). Runs automatically as a dependency of every task.
+    sources:
+      - package.json
+      - bun.lock
+    generates:
+      - node_modules/.bin/*
     cmds:
-      - mise x -- bun install --frozen-lockfile
-
-  test:
-    desc: 'Run the test suite (`task test -- <file | --test-name-pattern ...>` forwards args)'
-    cmds:
-      - mise x -- bun test {{.CLI_ARGS}}
+      - mise x -- bun install --frozen-lockfile 1>&2

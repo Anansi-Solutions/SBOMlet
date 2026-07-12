@@ -2224,8 +2224,36 @@ describe("optionsFrom --intensive threading (10-05, D-07 absent-not-false)", () 
   });
 });
 
-describe("Taskfile.yml --intensive plumbing (10-05, static/string-locked, no YAML parser)", () => {
-  test("generate task composes --intensive from the INTENSIVE var (bare boolean idiom)", () => {
+describe("Taskfile split invariants (static, YAML-parsed — locks the public/dev surface)", () => {
+  interface TaskfileTask {
+    desc?: string;
+    summary?: string;
+    deps?: string[];
+    cmds?: unknown[];
+    internal?: boolean;
+    sources?: string[];
+    generates?: string[];
+    status?: string[];
+  }
+
+  interface TaskfileInclude {
+    taskfile?: string;
+    optional?: boolean;
+    flatten?: boolean;
+  }
+
+  interface TaskfileDoc {
+    includes?: Record<string, TaskfileInclude>;
+    tasks?: Record<string, TaskfileTask>;
+  }
+
+  function loadTaskfile(name: string): TaskfileDoc {
+    return Bun.YAML.parse(
+      readFileSync(join(import.meta.dir, "..", name), "utf8"),
+    ) as TaskfileDoc;
+  }
+
+  test("generate composes --intensive from the INTENSIVE var (bare boolean idiom, 10-05)", () => {
     const taskfile = readFileSync(
       join(import.meta.dir, "..", "Taskfile.yml"),
       "utf8",
@@ -2233,11 +2261,86 @@ describe("Taskfile.yml --intensive plumbing (10-05, static/string-locked, no YAM
     expect(taskfile).toContain("{{if .INTENSIVE}} --intensive{{end}}");
   });
 
-  test("INTENSIVE is documented in the header overridable-variables list", () => {
-    const taskfile = readFileSync(
-      join(import.meta.dir, "..", "Taskfile.yml"),
-      "utf8",
+  test("the public surface is exactly check, docker:list, generate, verify:cache — the desc-bearing tasks a consumer sees in `task --list`", () => {
+    const tasks = loadTaskfile("Taskfile.yml").tasks ?? {};
+    const described = Object.keys(tasks)
+      .filter((name) => tasks[name]?.desc !== undefined)
+      .sort();
+    expect(described).toEqual([
+      "check",
+      "docker:list",
+      "generate",
+      "verify:cache",
+    ]);
+  });
+
+  test("the dev include is optional and flattened, so a vendored copy may drop Taskfile.dev.yml entirely", () => {
+    const dev = loadTaskfile("Taskfile.yml").includes?.dev;
+    expect(dev?.taskfile).toBe("Taskfile.dev.yml");
+    expect(dev?.optional).toBe(true);
+    expect(dev?.flatten).toBe(true);
+  });
+
+  test("every dev task is desc-less with a summary — `task --list` only shows described tasks, so this keeps maintainer tasks out of a consumer's list while staying callable", () => {
+    const devTasks = loadTaskfile("Taskfile.dev.yml").tasks ?? {};
+    expect(Object.keys(devTasks).length).toBeGreaterThan(0);
+    for (const [name, task] of Object.entries(devTasks)) {
+      expect(task.desc, name).toBeUndefined();
+      expect(task.summary, name).toBeDefined();
+    }
+  });
+
+  test("the dev surface carries the maintainer tasks", () => {
+    const names = Object.keys(loadTaskfile("Taskfile.dev.yml").tasks ?? {});
+    for (const expected of [
+      "lint",
+      "lint:fix",
+      "typecheck",
+      "quality",
+      "test",
+      "test:watch",
+      "adr:new",
+    ]) {
+      expect(names, expected).toContain(expected);
+    }
+  });
+
+  test("check is never fingerprinted — no sources/generates/status, the gate must always run", () => {
+    const check = loadTaskfile("Taskfile.yml").tasks?.check;
+    expect(check).toBeDefined();
+    expect(check?.sources).toBeUndefined();
+    expect(check?.generates).toBeUndefined();
+    expect(check?.status).toBeUndefined();
+  });
+
+  test("generate and check dep on install, and generate's summary documents INTENSIVE", () => {
+    const tasks = loadTaskfile("Taskfile.yml").tasks ?? {};
+    expect(tasks.generate?.deps).toContain("install");
+    expect(tasks.check?.deps).toContain("install");
+    expect(tasks.generate?.summary).toContain("INTENSIVE");
+  });
+
+  test("generate composes the docker refresh under DOCKER=1 through the internal generate:docker helper", () => {
+    const tasks = loadTaskfile("Taskfile.yml").tasks ?? {};
+    expect(JSON.stringify(tasks.generate?.cmds)).toContain(
+      "{{if .DOCKER}}generate:docker{{end}}",
     );
-    expect(taskfile).toContain("INTENSIVE");
+    expect(tasks["generate:docker"]?.internal).toBe(true);
+  });
+
+  test("retired and relocated task names are gone from the public file", () => {
+    const tasks = loadTaskfile("Taskfile.yml").tasks ?? {};
+    for (const retired of [
+      "docker-scan",
+      "generate-docker-sbom",
+      "list-dockerfiles",
+      "verify-cache",
+      "format",
+      "quality",
+      "test",
+      "adr:new",
+    ]) {
+      expect(tasks[retired], retired).toBeUndefined();
+    }
   });
 });

@@ -1,0 +1,108 @@
+# Maintainer tasks for SBOMlet — everything you need when changing the tool
+# itself, split out so consumers who include Taskfile.yml aren't encumbered by
+# them. Deliberately desc-less: `task --list` shows only described tasks, so
+# these stay out of a consumer's list while remaining callable here by name
+# (`task lint`, `task quality`, ...). Discover them with `task --list-all`;
+# read a task's documentation with `task <name> --summary`.
+#
+# Most tasks are fingerprinted (`sources`): a re-run with unchanged inputs is a
+# no-op. The state lives in .task/ (gitignored); delete it to force a run.
+version: '3'
+
+tasks:
+  lint:
+    summary: |
+      Check the source with ESLint. Formatting runs as a lint rule
+      (prettier/prettier), so this is also the format check; `task lint:fix`
+      rewrites what is auto-fixable. Fingerprinted: skipped while no lint
+      input changed since the last clean pass.
+    deps: [install]
+    sources:
+      - 'src/**/*.ts'
+      - 'test/**/*.ts'
+      - 'scripts/**/*.ts'
+      - '.github/scripts/**/*.cjs'
+      - eslint.config.mjs
+      - .prettierrc
+      - .prettierignore
+      - package.json
+      - bun.lock
+    cmds:
+      - mise x -- bun run lint
+
+  lint:fix:
+    summary: |
+      Rewrite whatever `task lint` reports that is auto-fixable, formatting
+      included. Never fingerprinted, so it always runs when invoked.
+    deps: [install]
+    cmds:
+      - mise x -- bun run lint:fix
+
+  typecheck:
+    summary: |
+      Type-check the tree with tsc --noEmit (strict mode). Fingerprinted:
+      skipped while no TypeScript input changed since the last clean pass.
+    deps: [install]
+    sources:
+      - 'src/**/*.ts'
+      - 'test/**/*.ts'
+      - 'scripts/**/*.ts'
+      - tsconfig.json
+      - package.json
+      - bun.lock
+    cmds:
+      - mise x -- bun run typecheck
+
+  quality:
+    summary: |
+      The quality gate — lint (formatting included) then typecheck. Each half
+      is fingerprinted, so a clean re-run is a no-op. Run it, with the test
+      suite, before every commit.
+    cmds:
+      - task: lint
+      - task: typecheck
+
+  test:
+    # The label keys the fingerprint per CLI_ARGS value, so a filtered run
+    # (`task test -- render.test.ts`) can never stamp the FULL suite as fresh.
+    label: 'test{{if .CLI_ARGS}} ({{.CLI_ARGS}}){{end}}'
+    summary: |
+      Run the test suite. `task test -- <args>` forwards args verbatim to the
+      runner (a file path, a --test-name-pattern, ...). Fingerprinted per
+      argument set: a re-run with unchanged inputs is a no-op; a filtered run
+      never counts as a full-suite pass.
+    deps: [install]
+    sources:
+      - 'src/**'
+      - 'test/**'
+      - 'scripts/**'
+      - '.github/**'
+      - Taskfile.yml
+      - Taskfile.dev.yml
+      - policy.example.toml
+      - mise.toml
+      - tsconfig.json
+      - eslint.config.mjs
+      - package.json
+      - bun.lock
+    cmds:
+      - mise x -- bun test {{.CLI_ARGS}}
+
+  test:watch:
+    summary: |
+      Re-run tests on file change. `task test:watch -- <args>` forwards args
+      like test does.
+    interactive: true
+    deps: [install]
+    cmds:
+      - mise x -- bun test --watch {{.CLI_ARGS}}
+
+  adr:new:
+    summary: |
+      Scaffold an architecture decision record from the MADR template into
+      docs/explanation/adr/ with the next free number.
+
+      Variables:
+        TITLE  the decision title (required): task adr:new TITLE="Short decision title"
+    cmds:
+      - mise x -- bun scripts/new-adr.ts {{.TITLE | default "" | q}}
