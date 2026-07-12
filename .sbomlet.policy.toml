@@ -24,6 +24,67 @@ handling = "warn"
 # abort the run. Excluded from the Docker-scan workflow's build set.
 ignore = ["src/collectors/dockerfile.ts", "test/dockerfile.test.ts"]
 
+# The dogfood image (examples/docker-scan) is Alpine-based; its OS layer ships
+# unmodified distro packages whose copyleft obligations are met by the distro
+# itself (source via Alpine aports; the image aggregates, never derives).
+# Reviewed and accepted per package -- version-independent judgments, so the
+# rules are unpinned and survive base-image bumps.
+
+[[compatible]]
+match = "package"
+name = "busybox"
+reason = "GPL-2.0-only Alpine base package, shipped unmodified in the image's OS layer; aggregation, source available from Alpine aports."
+
+[[compatible]]
+match = "package"
+name = "busybox-binsh"
+reason = "GPL-2.0-only busybox /bin/sh applet package, same unmodified-Alpine-base reasoning as busybox."
+
+[[compatible]]
+match = "package"
+name = "ssl_client"
+reason = "GPL-2.0-only busybox TLS applet package, same unmodified-Alpine-base reasoning as busybox."
+
+[[compatible]]
+match = "package"
+name = "apk-tools"
+reason = "GPL-2.0-only Alpine package manager, shipped unmodified in the image's OS layer; aggregation, source available from Alpine aports."
+
+[[compatible]]
+match = "package"
+name = "libapk2"
+reason = "GPL-2.0-only apk-tools library package, same unmodified-Alpine-base reasoning as apk-tools."
+
+[[compatible]]
+match = "package"
+name = "alpine-baselayout"
+reason = "GPL-2.0-only Alpine filesystem baselayout, shipped unmodified in the image's OS layer; aggregation, source available from Alpine aports."
+
+[[compatible]]
+match = "package"
+name = "alpine-baselayout-data"
+reason = "GPL-2.0-only baselayout data files, same unmodified-Alpine-base reasoning as alpine-baselayout."
+
+[[compatible]]
+match = "package"
+name = "scanelf"
+reason = "GPL-2.0-only pax-utils ELF scanner, shipped unmodified in the image's OS layer; aggregation, source available from Alpine aports."
+
+[[compatible]]
+match = "package"
+name = "ca-certificates"
+reason = "MPL-2.0 AND MIT; MPL-2.0 is file-level copyleft satisfied by shipping the files unmodified in the OS layer."
+
+[[compatible]]
+match = "package"
+name = "ca-certificates-bundle"
+reason = "MPL-2.0 AND MIT certificate bundle, same file-level-copyleft reasoning as ca-certificates."
+
+[[compatible]]
+match = "package"
+name = "musl-utils"
+reason = "MIT AND BSD-2-Clause AND GPL-2.0-or-later; the GPL part covers unmodified musl utility binaries in the OS layer, aggregation with source available from Alpine aports."
+
 # Two source-vs-registry assessment conflicts, resolved by hand.
 
 [[clarify]]

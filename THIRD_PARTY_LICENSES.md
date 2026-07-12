@@ -19,25 +19,9 @@ Copyleft notice rules are configured in .sbomlet.policy.toml.
 
 ✅ No blocking policy violations.
 
-_Non-blocking: 11 copyleft warning(s) (dev/os-downgraded or suppressed). See the sections below._
-
 ## Copyleft and special notices
 
-The packages listed below carry copyleft or special license obligations in at least one non-suppressed workspace.
-
-| Name                   | Ecosystem | Version     | License                                   | Used in            | Why |
-| ---------------------- | --------- | ----------- | ----------------------------------------- | ------------------ | --- |
-| alpine-baselayout      | apk       | 3.7.0-r0    | GPL-2.0-only                              | docker:os-packages | —   |
-| alpine-baselayout-data | apk       | 3.7.0-r0    | GPL-2.0-only                              | docker:os-packages | —   |
-| apk-tools              | apk       | 2.14.10-r0  | GPL-2.0-only                              | docker:os-packages | —   |
-| busybox                | apk       | 1.37.0-r20  | GPL-2.0-only                              | docker:os-packages | —   |
-| busybox-binsh          | apk       | 1.37.0-r20  | GPL-2.0-only                              | docker:os-packages | —   |
-| ca-certificates        | apk       | 20260611-r0 | MPL-2.0 AND MIT                           | docker:os-packages | —   |
-| ca-certificates-bundle | apk       | 20260611-r0 | MPL-2.0 AND MIT                           | docker:os-packages | —   |
-| libapk2                | apk       | 2.14.10-r0  | GPL-2.0-only                              | docker:os-packages | —   |
-| musl-utils             | apk       | 1.2.5-r12   | MIT AND BSD-2-Clause AND GPL-2.0-or-later | docker:os-packages | —   |
-| scanelf                | apk       | 1.3.8-r1    | GPL-2.0-only                              | docker:os-packages | —   |
-| ssl_client             | apk       | 1.37.0-r20  | GPL-2.0-only                              | docker:os-packages | —   |
+✅ No package carries copyleft or special license obligations.
 
 ## Production dependencies
 
