@@ -70,6 +70,11 @@ It runs `check` by default (the exit codes below apply); pass `mode: generate` t
 write the inventory instead. It is exactly the mise + Task pipeline above, wrapped
 — use it on GitHub Actions and the Taskfile step everywhere else.
 
+For a pull-request pattern built on the action — run the gate, and when it fails
+because the inventory is out of date, regenerate and open a refresh PR against the
+contributor's branch — see the shipped
+[`examples/licenses-refresh.yml`](../../examples/licenses-refresh.yml).
+
 ## What the exit code means
 
 The step passes or fails on the process exit code, and the code tells you which
