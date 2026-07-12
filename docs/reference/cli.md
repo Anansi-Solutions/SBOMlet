@@ -242,13 +242,17 @@ directory's pinned runtime. With `flatten: true` SBOMlet's tasks are exposed unp
 
 | Task | What it runs | When |
 | --- | --- | --- |
-| `task generate` | `generate` over the repository; writes the committed documents. | After a dependency changes; commit the result. |
+| `task generate` | `generate` over the repository; writes the committed documents. With `DOCKER=1` it first refreshes the committed docker OS SBOM (build & scan; needs a Docker daemon). | After a dependency changes; commit the result. |
 | `task check` | `check`; the CI gate. | In CI, and locally before you push. |
-| `task verify-cache` | `verify-cache`; the online cache-integrity audit. | Before a release/audit, or when the cache changes; needs the network. |
-| `task generate-docker-sbom` | `generate-docker-sbom`; scans the image set and writes `.sbomlet.cache/docker-os.sbom.json`. | Maintainer-only, needs Docker; not part of `check`. |
-| `task list-dockerfiles` | `generate-docker-sbom --list-dockerfiles`; prints the discovered Dockerfile paths. | To find the build set a CI workflow should use. No Docker, no writes. |
-| `task docker-scan` | Discovers (or takes `DOCKERFILES=...`) the repository's Dockerfiles, builds each to a local tag, scans the built images, and regenerates the inventory. | The local equivalent of the `docker-scan.yml` workflow. Needs Docker. |
-| `task quality` | Lint, format check, and typecheck for the tool itself. | When changing the tool. |
+| `task verify:cache` | `verify-cache`; the online cache-integrity audit. | Before a release/audit, or when the cache changes; needs the network. |
+| `task docker:list` | `generate-docker-sbom --list-dockerfiles`; prints the discovered Dockerfile paths. | To preview the build set a `DOCKER=1` run would discover. No Docker, no writes. |
+
+Every task installs the tool's dependencies first through a shared `install`
+dependency, so there is no separate install step. Tasks for changing the tool
+itself (lint, test, quality, ...) live in `Taskfile.dev.yml`, included optionally
+and kept out of `task --list` on purpose; see
+[contributing](../contributing.md#the-task-surface). Each task documents its
+variables — read them with `task <name> --summary`.
 
 Each task reads variables you can override on the command line. Set a variable by
 appending `NAME=value`:
@@ -256,20 +260,21 @@ appending `NAME=value`:
 ```
 task generate POLICY=.sbomlet.policy.toml
 task check REPO_ROOT=/path/to/some/other/repo
-task generate-docker-sbom IMAGES="app:latest worker:latest"
+task generate DOCKER=1 IMAGES="app:latest worker:latest"
 ```
 
 | Var | Used by | Meaning | Default |
 | --- | --- | --- | --- |
-| `REPO_ROOT` | `generate`, `check` | Repository root to scan. | the root Taskfile's directory |
+| `REPO_ROOT` | `generate`, `check`, `verify:cache`, `docker:list` | Repository root to scan; also the walk root for Dockerfile discovery. | the root Taskfile's directory |
 | `OUTPUT` | `generate`, `check` | `THIRD_PARTY_LICENSES.md` path. | `THIRD_PARTY_LICENSES.md` beside `REPO_ROOT` |
 | `NOTICES` | `generate`, `check` | `THIRD_PARTY_NOTICES.md` path. | `THIRD_PARTY_NOTICES.md` beside `REPO_ROOT` |
-| `POLICY` | `generate`, `check`, `list-dockerfiles` | Policy file; the `--policy` flag is added only when set. | unset (no policy) |
+| `POLICY` | `generate`, `check`, `docker:list` | Policy file; the `--policy` flag is added only when set. | unset (no policy) |
 | `CYCLONEDX` | `generate`, `check` | CycloneDX export path; the `--cyclonedx` flag is added only when set. | unset (no export) |
-| `IMAGES` | `generate-docker-sbom` | Space-separated pre-existing image refs to scan (the image lane). | unset |
-| `DISCOVER_ROOT` | `generate-docker-sbom`, `list-dockerfiles` | Repository root whose Dockerfiles to discover, build & scan (the discovery lane; the walk root for `list-dockerfiles`). | this Taskfile's directory for `list-dockerfiles`, unset otherwise |
-| `DOCKERFILES` | `generate-docker-sbom` | Space-separated Dockerfile paths to build & scan (the targeted lane). | unset |
-| `DOCKER_OS_SBOM` | `generate-docker-sbom` | `.sbomlet.cache/docker-os.sbom.json` output path. | `.sbomlet.cache/docker-os.sbom.json` beside `REPO_ROOT` |
+| `INTENSIVE` | `generate` | Set (`INTENSIVE=1`) to add `--intensive`: scan still-unresolved packages' local sources with ScanCode after registry enrichment. | unset |
+| `DOCKER` | `generate` | Set (`DOCKER=1`) to build & scan the repository's Dockerfiles and refresh the committed docker OS SBOM before generating. Needs a Docker daemon. | unset |
+| `DOCKERFILES` | `generate` with `DOCKER=1` | Space-separated Dockerfile paths to build & scan instead of discovering (the targeted lane). | unset (discover) |
+| `IMAGES` | `generate` with `DOCKER=1` | Space-separated pre-existing image refs to scan instead of building (the image lane). | unset (discover) |
+| `DOCKER_OS_SBOM` | `generate` with `DOCKER=1` | `.sbomlet.cache/docker-os.sbom.json` output path. | `.sbomlet.cache/docker-os.sbom.json` beside `REPO_ROOT` |
 
 Relative paths you pass are anchored to the directory you ran `task` from, not to
 `tools/sbomlet`, because each task forwards `--base-dir` set to your invocation

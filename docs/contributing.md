@@ -18,37 +18,68 @@ Every command below runs from the repository root.
 The tool needs few host tools, because a tool that audits dependencies should
 not add a build chain of its own. There is no Node build step, no transpile, no
 `dist/`. The CLI runs from TypeScript source with no build step. TypeScript,
-ESLint, and Prettier are dev dependencies you install below, not host tools.
+ESLint, and Prettier are dev dependencies the tasks install themselves, not
+host tools.
 
 | Tool | Version | Pinned in | Needed for |
 | ---- | ------- | --------- | ---------- |
 | [mise](https://mise.jdx.dev) | any recent | — | resolving the pinned `bun` |
 | [bun](https://bun.sh) | `1.3.14` | `mise.toml` | the runtime and the test runner |
-| [Task](https://taskfile.dev) | v3 | the consumer repo | running `task generate`, `task check` |
-| [syft](https://github.com/anchore/syft) | `1.45.1` | `mise.toml` | `generate-docker-sbom` only |
+| [Task](https://taskfile.dev) | `3.51.1` | `mise.toml` | running every task below |
+| [syft](https://github.com/anchore/syft) | `1.45.1` | `mise.toml` | the docker scan (`task generate DOCKER=1`) only |
+| [scancode-toolkit](https://github.com/aboutcode-org/scancode-toolkit) | `32.5.0` | `mise.toml` | the intensive scan (`task generate INTENSIVE=1`) only |
 
-`mise.toml` in this directory pins exactly two versions: `bun = "1.3.14"` and
-`aqua:anchore/syft = "1.45.1"`. syft is needed only on the
-`generate-docker-sbom` path, which is maintainer-only; `generate`, `check`, the
-tests, and the quality gates never touch it. The syft pin must stay equal to the
-version the Docker OS collector reads, and the comment in `mise.toml` records
-that invariant.
+`mise.toml` in this directory pins the whole toolchain: bun (the runtime), Task,
+syft, and scancode-toolkit. syft runs only on the docker scan lane and
+scancode-toolkit only on the intensive scan; `generate`, `check`, the tests, and
+the quality gates never touch either. The syft and scancode pins must stay equal
+to the versions the tool's collectors read, and the comments in `mise.toml`
+record that invariant.
 
-Source: `collectors/dockerOs.ts` (`SYFT_TOOL.version`), `mise.toml`.
+Source: `collectors/dockerOs.ts` (`SYFT_TOOL.version`), `enrich/scancode.ts`
+(`SCANCODE_TOOL.version`), `mise.toml`.
 
 ## Install
 
-```sh
-task install
-```
-
-This reads the committed `bun.lock` and `package.json` under the pinned bun. The
+Nothing to run by hand: every task installs the dependencies first through its
+`install` dependency, reading the committed `bun.lock` and `package.json` under
+the pinned bun, and skips the step while they are unchanged. (`task install` on
+its own works too, to prefetch.) The
 runtime dependencies stay few on purpose: `arktype` (input-boundary validation),
 `smol-toml` (policy parsing), and the SPDX toolkit (`spdx-correct`,
 `spdx-expression-parse`, `spdx-satisfies`, `spdx-license-list`). The standard
 SBOM [generators](./glossary.md#generator) (cdxgen, the Yarn CycloneDX plugin,
 syft, tofu) are orchestrated rather than vendored, so they are not npm
 dependencies; the collectors fetch them on demand.
+
+## The task surface
+
+The Taskfile is split in two. `Taskfile.yml` carries what an adopter runs —
+`generate`, `check`, `verify:cache`, `docker:list` — and `Taskfile.dev.yml`
+carries the maintainer tasks below. The dev file is included with
+`optional: true` and its tasks deliberately have no `desc`: `task --list` shows
+only described tasks, so a repository that includes SBOMlet's Taskfile sees the
+adopter surface and nothing else, while the names stay callable here.
+
+```sh
+task --list        # the adopter surface
+task --list-all    # everything, dev tasks included
+task test --summary  # any task's documentation and variables
+```
+
+| Task | What it does |
+| ---- | ------------ |
+| `task quality` | Lint (formatting included) then typecheck. |
+| `task lint` / `task lint:fix` | ESLint; `lint:fix` rewrites what is auto-fixable. |
+| `task typecheck` | `tsc --noEmit`. |
+| `task test` / `task test:watch` | The test suite; `--` forwards args (see below). |
+| `task adr:new` | Scaffold a decision record (see below). |
+
+Most tasks declare `sources`, so a re-run with unchanged inputs is a no-op
+("Task X is up to date"). The state lives in `.task/` (gitignored); delete it to
+force a run. Two deliberate exceptions: `check` is never fingerprinted (the gate
+always runs), and a filtered `task test -- <file>` is fingerprinted separately
+from the bare run, so it never counts as a full-suite pass.
 
 ## The `src/` layout
 
@@ -107,20 +138,21 @@ Without `RUN_E2E=1` those tests are skipped.
 
 ## Quality gates
 
-Three checks gate every change: lint, format, and typecheck. Run them together:
+Two checks gate every change: lint and typecheck. Run them together:
 
 ```sh
 task quality
 ```
 
-That runs ESLint, a Prettier format-check, and `tsc --noEmit` in sequence. To fix
-formatting instead of only checking it, run `task format`.
+Prettier runs as an ESLint rule (`eslint-plugin-prettier`'s recommended config,
+last in the flat config), so a formatting difference is a `prettier/prettier`
+lint error and there is no separate format command. `task lint:fix` rewrites
+whatever is auto-fixable, formatting included.
 
 The gates enforce TypeScript strict mode with no emit; the recommended ESLint and
 typescript-eslint rule sets plus project rules (an explicit return type and no
 `any` are errors, and `max-depth` and `complexity` caps favour small,
 guard-claused functions); and Prettier with double quotes and trailing commas.
-`eslint-config-prettier` runs last, so formatting is owned by Prettier alone.
 Goldens and fixtures are excluded from both.
 
 Run `task test` and `task quality` before you commit.

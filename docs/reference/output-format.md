@@ -329,8 +329,9 @@ component the image carries, application packages included. It is a minimal
 CycloneDX-shaped document holding `bomFormat`, `specVersion`, `components`, and a
 `dockerImages` array pinning each scanned image to its content digest (empty for a
 locally built, never-pushed image, which has none), and nothing else. It is **not**
-written by `generate`. It is produced by the `generate-docker-sbom` subcommand, the
-only path in the tool that touches Docker or syft — run by hand over named
+written by `generate`. It is produced by the docker scan
+(`task generate DOCKER=1`, driving the `generate-docker-sbom` subcommand, the
+only path in the tool that touches Docker or syft) — by hand over named
 Dockerfiles or images, or by CI discovering and building each of the repository's
 Dockerfiles — and committed separately from `generate`'s own outputs. `generate`
 and `check` never run Docker; they read these committed bytes as one more merge
@@ -338,8 +339,8 @@ input. The digest pin is why a pulled image carries no timestamp: it is identifi
 by content, which is stable.
 
 ```sh
-# Maintainer-only: scan the configured images and write the OS sidecar
-task generate-docker-sbom IMAGES="postgres:18 nginx:stable-alpine"
+# Maintainer-only: scan named images, write the OS sidecar, and regenerate
+task generate DOCKER=1 IMAGES="postgres:18 nginx:stable-alpine"
 ```
 
 ## Related

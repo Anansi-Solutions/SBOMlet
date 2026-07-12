@@ -166,17 +166,17 @@ way it is.
 
 ## Good to know
 
-- **Docker image packages** aren't discovered from lockfiles. Run
-  `generate-docker-sbom` — by hand over named Dockerfiles or images, or wired into
-  CI to discover and build the repository's Dockerfiles — to produce a committed
-  `.sbomlet.cache/docker-os.sbom.json`, and `generate`/`check` merge it in. It's
-  the only subcommand that talks to a Docker daemon or registry; `generate` and
-  `check` never do.
+- **Docker image packages** aren't discovered from lockfiles. Run the docker
+  scan — `task sbomlet:generate DOCKER=1`, discovering and building the
+  repository's Dockerfiles by default, or over named Dockerfiles or images — to
+  produce a committed `.sbomlet.cache/docker-os.sbom.json`, and `generate`/`check`
+  merge it in. It drives `generate-docker-sbom`, the only subcommand that talks
+  to a Docker daemon or registry; `generate` and `check` never do.
 - **The network.** `generate` reaches out only to fill a gap a cold cache can't
   answer — a registry lookup for an otherwise-unknown licence. Once
   `.sbomlet.cache/licenses.cache.json` is committed it serves every claim, and `check` never
   goes online. To re-validate the warm cache against upstream before a release,
-  run `task sbomlet:verify-cache`.
+  run `task sbomlet:verify:cache`.
 - **Line endings.** SBOMlet writes LF-only bytes so `check` can byte-compare. On
   Windows, pin the committed outputs to LF in your `.gitattributes`, or `check`
   reads them as permanently stale:

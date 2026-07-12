@@ -128,9 +128,9 @@ is a debugging aid for golden-file tests, not something you commit.
 So an adopter running plain `task generate` always gets three files:
 the inventory, the companion, and the cache.
 
-`generate` does not write `.sbomlet.cache/docker-os.sbom.json`. That file is produced by the
-separate `generate-docker-sbom` command, described at the end of this page, and
-is committed like any other input the gate reads.
+`generate` does not write `.sbomlet.cache/docker-os.sbom.json`. That file is produced ahead of time by
+the docker scan — `task generate DOCKER=1`, described at the end of this page —
+and is committed like any other input the gate reads.
 
 The way `check` works is what makes this workflow safe. It runs the same
 discover, collect, merge, enrich, normalize, evaluate, render pipeline as
@@ -219,7 +219,7 @@ tampering or a genuine upstream license change; either way it wants a person's
 eyes before you ship.
 
 ```sh
-task verify-cache
+task verify:cache
 ```
 
 Unlike `check`, this command needs the network — it is the one place the tool
@@ -256,7 +256,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: jdx/mise-action@v2
-      - run: task verify-cache
+      - run: task verify:cache
         env:
           # Lifts the GitHub License API rate limit for Terraform entries; the
           # audit works unauthenticated too, only slower.
@@ -344,69 +344,69 @@ the gate never scans anything.
 ## The Docker scan is a separate step from the gate
 
 Docker packages, the [os-scope](../glossary.md#scope-app-and-os) half of the
-inventory, are not discovered or scanned by `generate` or `check`. Neither
-command runs Docker or [syft](../glossary.md#generator). Instead, a
-`.sbomlet.cache/docker-os.sbom.json` is produced ahead of time by the separate
+inventory, are not discovered or scanned by a plain `generate` or by `check`.
+Neither runs Docker or [syft](../glossary.md#generator). Instead, a
+`.sbomlet.cache/docker-os.sbom.json` is produced ahead of time by the
 `generate-docker-sbom` subcommand and committed, and from then on `generate`
 and `check` read it as a merge input the same way they read a lockfile. This
 keeps a Docker daemon off the gate path: a CI `check` never needs Docker, even
 for a repository that ships container images.
 
-There are three lanes, all reaching the same result: syft scans a real image's
-full contents — OS packages and application packages alike. You pick a lane by the
-flag you pass, and use exactly one at a time.
-
-### By hand: build a Dockerfile or scan an image
-
-You run this when a Dockerfile or a base image changes, not on every CI run:
-
-```sh
-# Build named Dockerfiles and scan the images they produce
-task generate-docker-sbom DOCKERFILES="backend/Dockerfile frontend/Dockerfile"
-
-# Or scan images you already have or can pull
-task generate-docker-sbom IMAGES="postgres:18 redis:7"
-```
-
-`--dockerfile` (the `DOCKERFILES` var) builds each named Dockerfile to a local tag
-and scans the image it produces, so the inventory covers what the Dockerfile
-actually ships: its base, the packages its own `RUN apt install`/`apk add` steps
-add, and the application layered on top. It needs a Docker daemon.
-
-`--image` (the `IMAGES` var) scans image references directly with the pinned syft
-and pins each by content digest, so the committed file is stable across machines.
-An image absent locally is pulled first; one already present is scanned as-is.
+The Taskfile entry point for all of it is `task generate DOCKER=1`: refresh the
+committed docker OS SBOM, then regenerate the inventory that merges it in, in
+one run. There are three lanes, all reaching the same result: syft scans a real
+image's full contents — OS packages and application packages alike. You pick a
+lane by the variable you pass, and use exactly one at a time.
 
 ### Discover and build every Dockerfile in the repository
 
-`--repo-root` walks the repository, builds each Dockerfile it finds, and scans the
-image. A Dockerfile you don't want built — a fixture, or a template that is not a
-real build — is kept out with the policy's `[docker]` ignore globs (see below), so
-it never reaches `docker build`.
+The default lane, with no extra variable, walks the repository (`REPO_ROOT`),
+builds each Dockerfile it finds, and scans the image. A Dockerfile you don't
+want built — a fixture, or a template that is not a real build — is kept out
+with the policy's `[docker]` ignore globs (see below), so it never reaches
+`docker build`.
 
 ```sh
-# Discover, build & scan every Dockerfile under the repo root
-task generate-docker-sbom DISCOVER_ROOT=.
+# Discover, build & scan every Dockerfile under the repo root, then regenerate
+task generate DOCKER=1
 ```
+
+You run this when a Dockerfile or a base image changes, not on every CI run.
+
+`task docker:list` prints the exact set the discovery lane would build, with no
+daemon and no writes — useful to preview it or drive a build from a shell:
+
+```sh
+task docker:list
+```
+
+### Or name the Dockerfiles or images yourself
+
+```sh
+# Build named Dockerfiles and scan the images they produce
+task generate DOCKER=1 DOCKERFILES="backend/Dockerfile frontend/Dockerfile"
+
+# Or scan images you already have or can pull
+task generate DOCKER=1 IMAGES="postgres:18 redis:7"
+```
+
+`DOCKERFILES` (the subcommand's `--dockerfile` flag) builds each named
+Dockerfile to a local tag and scans the image it produces, so the inventory
+covers what the Dockerfile actually ships: its base, the packages its own
+`RUN apt install`/`apk add` steps add, and the application layered on top. It
+needs a Docker daemon.
+
+`IMAGES` (the `--image` flag) scans image references directly with the pinned
+syft and pins each by content digest, so the committed file is stable across
+machines. An image absent locally is pulled first; one already present is
+scanned as-is.
 
 ### In CI: the Docker-scan workflow
 
 This repository's own `.github/workflows/docker-scan.yml` runs the discovery lane
 on a path-filtered push or pull request: it discovers the repository's Dockerfiles,
 builds each to a local, never-pushed tag, scans those tags, and regenerates the
-inventory. `task docker-scan` runs that same discover-build-scan-generate sequence
-locally (needs a Docker daemon):
-
-```sh
-task docker-scan
-```
-
-`--list-dockerfiles` prints the exact set the discovery lane would build, with no
-daemon and no writes — useful to preview it or drive a build from a shell:
-
-```sh
-task list-dockerfiles
-```
+inventory — the same `task generate DOCKER=1` a maintainer runs locally.
 
 A locally built, never-pushed tag has no registry digest, so the sidecar records
 an empty one for it — that is expected, not a gap. A rebuild that changes the
