@@ -51,20 +51,22 @@ syft's lockfile parsing gives poorer Python data, and cyclonedx-py needs an
 installed environment the tool may not create.
 
 Under `--no-install-deps` — the flag that keeps the scan side-effect-free —
-cdxgen emits no `cdx:pyproject:group` property, so the merge's marker never
+cdxgen emits no `cdx:pyproject:group` property, so the merge's dev marker never
 fires and every poetry dependency reads as production. That group information
-is in the lockfile: `poetry.lock` records a `groups` array per package. A
-small pure function parses the lockfile and returns the purl set of every
-package whose `groups` include `main`, feeding the same production-set
-mechanism the yarn dual-run path already uses. Trusting cdxgen's markers fails
-outright (there are none under the flag); synthesizing one adds a
-poetry-specific post-process and a second dev/prod path. Reading the lockfile
-gives the authoritative scope and inherits the yarn path's prod-wins rule: a
-package in both `main` and a dev group stays production.
+is in the lockfile: `poetry.lock` records a `groups` array per package. A small
+pure function returns the purl set of every package whose `groups` include
+`main`, feeding the same production-set mechanism the yarn dual-run path
+already uses.
+
+Trusting cdxgen's markers fails outright: there are none under the flag.
+Synthesizing one adds a poetry-specific post-process and a second dev/prod
+path. Reading the lockfile gives the authoritative scope and inherits the yarn
+path's prod-wins rule: a package in both `main` and a dev group stays
+production.
 
 Names are matched after PEP 503 normalization (lowercase, `-_.` collapsed to a
-hyphen) — the transform cdxgen applies before emitting a `pkg:pypi/<name>`
-purl; against the dogfood all 114 lockfile names map one-to-one. An absent or
+hyphen), the transform cdxgen applies before emitting a `pkg:pypi/<name>` purl;
+against the dogfood all 114 lockfile names map one-to-one. An absent or
 malformed `groups` value defaults to `["main"]`, honouring the
 conservative-on-uncertainty driver.
 

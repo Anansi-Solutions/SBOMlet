@@ -94,10 +94,12 @@ a licence that is not a shipped default.
 ## Consequences
 
 - **Good:** a source-available licence fails the moment the tool is adopted,
-  no policy required, and auditably, however it reached the finding and in
-  every scope. The combiner stays general with no knowledge of deny; no new
-  dependency or parser. A legitimate exception is expressible with a mandatory
-  reason and passes CI, surfaced as a warn, never silently `ok`.
+  no policy required, and auditably — however it reached the finding and in
+  every scope.
+- **Good:** the combiner stays a general normalization step with no knowledge
+  of deny; no new dependency or parser.
+- **Good:** a legitimate exception is expressible with a mandatory reason and
+  passes CI, surfaced as a warn, never silently `ok`.
 - **Bad / cost:** the name-mode riders (`redis`, Commons-Clause) cannot ship
   as defaults, so a consumer sets them to the actual names in its inventory or
   the rider goes uncaught. The finding also carries an extra

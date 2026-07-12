@@ -41,21 +41,24 @@ fill rate against the real repo, not component counts.
 ## Decision
 
 We route each lockfile to the generator a head-to-head spike showed fills its
-licences, and wrote one parser of our own only where the spike found a real gap.
+licences, and wrote one parser of our own only where the spike found a real
+gap.
+
 Yarn 4 targets go to `@cyclonedx/yarn-plugin-cyclonedx` (via `yarn dlx`), which
-reads each licence from inside Yarn's own resolution: on the real repo it filled
-99.6–99.8% of licences offline where cdxgen filled 0.0%. Everything cdxgen
-handles well goes to cdxgen — Yarn 3 (the plugin hard-fails below Yarn 4), npm,
-pnpm, and Python; npm is the happy case, with licences in the lockfile since npm
-7. The routing key is the lockfile's own content, never the `packageManager`
-field in `package.json`, so a mislabelled or absent pin cannot misroute the scan.
+reads each licence from inside Yarn's own resolution: on the real repo it
+filled 99.6–99.8% of licences offline where cdxgen filled 0.0%.
+
+Everything cdxgen handles well goes to cdxgen: Yarn 3 (the plugin hard-fails
+below Yarn 4), npm, pnpm, and Python. The routing key is the lockfile's own
+content, never the `packageManager` field in `package.json`, so a mislabelled
+or absent pin cannot misroute the scan.
 
 bun needed code: a separate spike found no off-the-shelf generator reads
-`bun.lock` correctly — cdxgen and syft both emitted zero components, and the one
-tool that produced output corrupted 14% of package identities. With nothing to
-orchestrate, we wrote a small in-process parser, the deliberate exception to
-"orchestrate, don't parse" (ADR-0002) — `bun.lock` is JSONC, a tractable grammar
-that just strips trailing commas before `JSON.parse`.
+`bun.lock` correctly — cdxgen and syft both emitted zero components, and the
+one tool that produced output corrupted 14% of package identities. With nothing
+to orchestrate, we wrote a small in-process parser, the deliberate exception to
+"orchestrate, don't parse" (ADR-0002); `bun.lock` is JSONC, a tractable grammar
+that strips trailing commas before `JSON.parse`.
 
 One generator for all of JS fails on fill (cdxgen's empty Yarn 4 output is
 disqualifying); yarn-plugin everywhere fails on the Yarn 3 and bun targets it

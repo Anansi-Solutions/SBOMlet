@@ -52,11 +52,13 @@ reachable from a declared root. A direct package carries no introducer and no
 chain; a transitive package carries the parents that introduced it —
 intersected with the purls reachable from the roots — and one representative
 shortest chain. A package the graph contains but cannot connect to a root has
-no derivable introducer, so its cell is `—`. The invariant lives in one shared
-derivation both lanes call: the reachable set is computed once per graph by a
-breadth-first walk from the roots, every node's parent set is intersected with
-it, and the representative chain is gated on the same reachability, so the
-introducer set and the chain never disagree.
+no derivable introducer, so its cell is `—`.
+
+The invariant lives in one shared derivation both lanes call: the reachable
+set is computed once per graph by a breadth-first walk from the roots, every
+node's parent set is intersected with it, and the representative chain is
+gated on the same reachability, so the introducer set and the chain never
+disagree.
 
 Skipping provenance leaves the reviewer's question unanswered when the answer
 is in the BOM and the lockfile. Answering everywhere means fabricating an

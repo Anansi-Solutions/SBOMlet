@@ -61,21 +61,24 @@ registry would invert that, coupling every consumer to a version we cut.
 
 **The compiled binary is declined, not deferred.** We built it — a
 `bun build --compile` binary per platform with a tag-triggered release
-workflow, cdxgen switched from `bun x` to a mise-pinned standalone binary —
-and two findings settled it: the binary is ~100 MB because `bun build
---compile` embeds the entire Bun runtime (our code is a few hundred KB), and
-that runtime is redundant since cdxgen is a JS tool and a JS runtime is
-already in the toolchain; and mise's github backend cannot pin cdxgen's
-standalone binary — cdxgen's release ships ~24 assets across platforms, and
-mise resolves the sibling `aibom` tool instead, ignoring `matching`/`bin`. So
-distribution stays git + a Taskfile include + a single mise-pinned **bun**
-that both runs the tool from source and runs `bun x @cyclonedx/cdxgen`, with
+workflow, and cdxgen switched from `bun x` to a mise-pinned standalone
+binary — and two findings settled it:
+
+- The binary is ~100 MB because `bun build --compile` embeds the entire Bun
+  runtime; our code is a few hundred KB. The embedded runtime is redundant:
+  cdxgen is a JS tool, so a JS runtime is already in the toolchain.
+- mise's github backend cannot pin cdxgen's standalone binary: cdxgen's
+  release ships ~24 assets across platforms, and mise resolves the sibling
+  `aibom` tool instead, ignoring `matching`/`bin`.
+
+So distribution stays git + a Taskfile include + a single mise-pinned **bun**
+that both runs the tool from source and runs `bun x @cyclonedx/cdxgen` with
 the version pinned in the argv; syft stays an aqua-pinned binary on the
-maintainer-only Docker path. `bunli` was rejected as wrapping the same
-compile with a validation library and a pre-1.0 single-publisher profile
-added. A Go/Rust rewrite is the only path to a genuinely small binary, but
-does not remove the JS runtime (cdxgen is still shelled out to), so it is
-gated on a coverage measurement, not adopted now.
+maintainer-only Docker path. `bunli` was rejected — it wraps the same compile
+and adds a validation library and a pre-1.0 single-publisher profile. A
+Go/Rust rewrite is the only path to a genuinely small binary, but it does not
+remove the JS runtime (cdxgen is still shelled out to), so it is gated on a
+coverage measurement, not adopted now.
 
 **A composite GitHub Action gives one-line CI adoption.** A composite
 `action.yml` at the repo root is three steps — `jdx/mise-action` for the

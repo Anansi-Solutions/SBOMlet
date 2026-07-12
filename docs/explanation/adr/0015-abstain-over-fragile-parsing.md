@@ -61,9 +61,9 @@ providers-only run leaves `.terraform/providers/` and no
 `modules.json` the instant it does so. So `modules.json` absence means "no
 module calls" whenever init has run, and init having run is a directory
 check. No source is read, so the mis-tokenization class is gone by
-construction — about 650 lines of scanner went with it. A later pass
-tightened the providers-only branch to fire only on the exact artifact shape
-a real providers-only init leaves, and fail loud on every incoherent shape.
+construction. A later pass tightened the providers-only branch to fire only
+on the exact artifact shape a real providers-only init leaves, and fail loud
+on every incoherent shape.
 
 **Dockerfile detects the hard constructs' presence and abstains.**
 `deriveBaseImage` returns a base only for a file whose `FROM` structure
@@ -74,16 +74,17 @@ deleted and replaced by a check that abstains whenever any heredoc opener
 appears, so a `FROM` inside a heredoc body can never be read as a stage; a
 leading `# escape=` abstains rather than re-implementing the remap; a
 structural check abstains when comment and continuation processing changed
-the `FROM` count or stranded an `AS` alias. Removing the body machinery cut
-~70 lines.
+the `FROM` count or stranded an `AS` alias.
 
 Hardening the scanner keeps the bug class alive — four rounds in, the next
 valid shape was always out there. A real parser would lex correctly but adds
 a substantial dependency to answer a single-token question the structure
-answers for free. Two narrow cases resolve rather than abstain, being
-unambiguous: a `FROM <N>` whose reference is a bare integer is a hop to the
-build stage at that index (like `COPY --from=0`); and the Terraform
-providers-only branch is a precise artifact-shape match, not a guess.
+answers for free.
+
+Two narrow cases resolve rather than abstain, being unambiguous: a `FROM <N>`
+whose reference is a bare integer is a hop to the build stage at that index
+(like `COPY --from=0`); and the Terraform providers-only branch is a precise
+artifact-shape match, not a guess.
 
 ## Consequences
 
