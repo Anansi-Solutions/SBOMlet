@@ -1517,3 +1517,51 @@ describe("collectTargets — yarn workspace expansion (fixture-mirror document)"
     expect(stderr).toContain('copyleft license "LGPL-3.0-or-later"');
   });
 });
+
+describe("collectTargets — nuget packages.lock.json coverage integration (NET-01)", () => {
+  test("an empty-sections packages.lock.json logs the warn+skip line and collects nothing", async () => {
+    const root = mkdtempSync(join(tmpdir(), "licenses-nuget-cov-"));
+    writeFileSync(
+      join(root, "packages.lock.json"),
+      '{"version":2,"dependencies":{"net9.0":{}}}\n',
+    );
+
+    const log: string[] = [];
+    const result = await collectTargets(baseOpts(root), (line) => {
+      log.push(line);
+    });
+
+    expect(log).toContain(
+      "warning: skipping . — packages.lock.json has no third-party entries (only Project entries, or empty dependency sections)",
+    );
+    expect(result.inputs).toEqual([]);
+  });
+
+  test("a real lock collects via the in-process collector (the collecting stderr shape)", async () => {
+    const root = mkdtempSync(join(tmpdir(), "licenses-nuget-cov-"));
+    writeFileSync(
+      join(root, "packages.lock.json"),
+      JSON.stringify({
+        version: 2,
+        dependencies: {
+          "net9.0": {
+            "Newtonsoft.Json": {
+              type: "Direct",
+              requested: "[13.0.4, )",
+              resolved: "13.0.4",
+            },
+          },
+        },
+      }) + "\n",
+    );
+
+    const log: string[] = [];
+    const result = await collectTargets(baseOpts(root), (line) => {
+      log.push(line);
+    });
+
+    expect(log).toContain("collecting . via nuget-lock-collector@1");
+    expect(result.inputs.map((input) => input.targetIdentity)).toEqual(["."]);
+    expect(result.targetDirs).toEqual([root]);
+  });
+});

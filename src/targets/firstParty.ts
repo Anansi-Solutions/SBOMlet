@@ -15,8 +15,9 @@
  * This module also hosts the lockfile entry counters the coverage policy
  * consumes: thirdPartyEntryCount (yarn), pythonThirdPartyEntryCount
  * (poetry/uv), npmThirdPartyEntryCount / npmFirstPartyNames
- * (package-lock.json v2/v3, plain JSON), and pnpmThirdPartyEntryCount /
- * pnpmImporterNames (pnpm-lock.yaml v6/v9, stateful line scan). It also hosts
+ * (package-lock.json v2/v3, plain JSON), pnpmThirdPartyEntryCount /
+ * pnpmImporterNames (pnpm-lock.yaml v6/v9, stateful line scan), and
+ * nugetThirdPartyEntryCount (packages.lock.json, plain JSON). It also hosts
  * yarnWorkspaceMembers, the root-lockfile workspace enumeration primitive
  * (resolution-body-line scan, lockfile-authoritative). All keep the same
  * contract: pure text in, data out, never throw on garbage.
@@ -25,6 +26,7 @@
 import { type } from "arktype";
 
 import { NpmLockDocument } from "../validate/npmLock";
+import { NugetLockDocument } from "../validate/nugetLock";
 import { recordOf } from "../validate/record";
 
 /**
@@ -312,6 +314,59 @@ export function npmFirstPartyNames(lockfileText: string): ReadonlySet<string> {
     }
   }
   return names;
+}
+
+/**
+ * Count the third-party entries of a packages.lock.json — the nuget
+ * counterpart of npmThirdPartyEntryCount.
+ *
+ * packages.lock.json is plain strict JSON; the document narrow is
+ * single-sourced with the collector (src/validate/nugetLock.ts) so the
+ * counter and the collector can never disagree on the same lock. Entries
+ * with `type === "Project"` (first-party project references) are excluded —
+ * the collector's ONE exclusion, mirrored exactly; every other entry counts,
+ * including unknown future types and malformed entries (counting them errs
+ * toward the scan, where a zero-component result hard-fails loudly — a
+ * crafted lock can never flip the warn+skip branch to hide dependencies).
+ * Entries are counted across ALL dependency sections (one per target
+ * framework, plus `<tfm>/<rid>` pairs), without dedup — only the strict
+ * `=== 0` comparison downstream consumes the value.
+ *
+ * Returns `undefined` (unknown count) — not 0 — for non-JSON text, a failed
+ * document narrow, or a missing dependencies map: a garbage file proves
+ * nothing. Unknown routes the target to the scan, so the collector's loud
+ * throw or the zero-component hard-fail fires; only a positively-determined
+ * zero (every section empty or Project-only) takes the warn+skip branch.
+ * Never throws.
+ */
+export function nugetThirdPartyEntryCount(
+  lockfileText: string,
+): number | undefined {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(lockfileText);
+  } catch {
+    return undefined;
+  }
+  // A failed document narrow is the unknown path — same as no dependencies
+  // map (the npmThirdPartyEntryCount posture).
+  const doc = NugetLockDocument(parsed);
+  const dependencies =
+    doc instanceof type.errors ? undefined : doc.dependencies;
+  if (dependencies === undefined) {
+    return undefined;
+  }
+  let count = 0;
+  for (const rawSection of Object.values(dependencies)) {
+    const section = recordOf(rawSection);
+    if (section === undefined) continue; // non-record section — nothing to count
+    for (const rawEntry of Object.values(section)) {
+      // Exclusion by type === "Project" ONLY; a malformed (non-record) entry
+      // counts too — erring toward the scan, never toward a silent skip.
+      if (recordOf(rawEntry)?.["type"] !== "Project") count += 1;
+    }
+  }
+  return count;
 }
 
 /**

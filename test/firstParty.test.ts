@@ -7,6 +7,7 @@ import {
   firstPartyNames,
   npmFirstPartyNames,
   npmThirdPartyEntryCount,
+  nugetThirdPartyEntryCount,
   pnpmImporterNames,
   pnpmThirdPartyEntryCount,
   pythonThirdPartyEntryCount,
@@ -266,6 +267,89 @@ describe("npmThirdPartyEntryCount — node_modules entries with link !== true", 
     // packages key present but not an object → still unknown.
     expect(npmThirdPartyEntryCount('{"packages": 42}')).toBeUndefined();
     expect(npmThirdPartyEntryCount('"just a string"')).toBeUndefined();
+  });
+});
+
+// nuget fixtures — the 15-01 collector-fixture shapes (v1 net9.0 section with
+// Direct + Transitive entries; v2 CPM section with a type=Project reference).
+const NUGET_V1_LOCK = JSON.stringify({
+  version: 1,
+  dependencies: {
+    "net9.0": {
+      "Newtonsoft.Json": {
+        type: "Direct",
+        requested: "[13.0.4, )",
+        resolved: "13.0.4",
+      },
+      Serilog: { type: "Direct", requested: "[4.3.1, )", resolved: "4.3.1" },
+      "Microsoft.NETCore.Platforms": { type: "Transitive", resolved: "1.1.0" },
+      "runtime.native.System": { type: "Transitive", resolved: "4.3.0" },
+    },
+  },
+});
+
+const NUGET_CPM_LOCK = JSON.stringify({
+  version: 2,
+  dependencies: {
+    "net9.0": {
+      "Microsoft.Extensions.Logging": { type: "Direct", resolved: "9.0.9" },
+      "Some.Transitive": { type: "CentralTransitive", resolved: "9.0.9" },
+      "fixture.lib": { type: "Project" },
+    },
+  },
+});
+
+describe("nugetThirdPartyEntryCount — entries with type !== 'Project' across all sections", () => {
+  test("the v1 fixture counts its non-Project entries", () => {
+    expect(nugetThirdPartyEntryCount(NUGET_V1_LOCK)).toBe(4);
+  });
+
+  test("a type=Project entry is excluded — one less than the section total", () => {
+    // 3 entries, 1 of which is the first-party project reference.
+    expect(nugetThirdPartyEntryCount(NUGET_CPM_LOCK)).toBe(2);
+  });
+
+  test("an unknown-type entry COUNTS (exclusion by Project only — the collector's one exclusion, mirrored)", () => {
+    const lock = JSON.stringify({
+      version: 2,
+      dependencies: {
+        "net9.0": {
+          "Weird.Package": { type: "SomeNewType", resolved: "1.0.0" },
+        },
+      },
+    });
+    expect(nugetThirdPartyEntryCount(lock)).toBe(1);
+  });
+
+  test("entries count across ALL dependency sections (multi-TFM)", () => {
+    const lock = JSON.stringify({
+      version: 2,
+      dependencies: {
+        "net8.0": { "Pkg.A": { type: "Direct", resolved: "1.0.0" } },
+        "net9.0": { "Pkg.B": { type: "Direct", resolved: "2.0.0" } },
+      },
+    });
+    expect(nugetThirdPartyEntryCount(lock)).toBe(2);
+  });
+
+  test("empty dependency sections are a positively-determined ZERO (warn+skip branch)", () => {
+    expect(
+      nugetThirdPartyEntryCount('{"version":2,"dependencies":{"net9.0":{}}}'),
+    ).toBe(0);
+  });
+
+  test("garbage text → undefined, NOT 0 (unknown routes to the scan), never throws", () => {
+    expect(nugetThirdPartyEntryCount("not json at all }{")).toBeUndefined();
+    expect(nugetThirdPartyEntryCount("")).toBeUndefined();
+    expect(nugetThirdPartyEntryCount('"just a string"')).toBeUndefined();
+  });
+
+  test("no dependencies map → undefined (a lock that proves nothing is unknown, not zero)", () => {
+    expect(nugetThirdPartyEntryCount("{}")).toBeUndefined();
+    // dependencies present but not an object → failed narrow → unknown.
+    expect(
+      nugetThirdPartyEntryCount('{"version":2,"dependencies":42}'),
+    ).toBeUndefined();
   });
 });
 

@@ -252,3 +252,74 @@ describe("classifyCoverage — terraform filesystem-signal loud-fail routing", (
     ).toBe("skip");
   });
 });
+
+// nuget arm (NET-01): a genuinely dependency-free packages.lock.json warns and
+// skips; an unreadable one routes to the scan where the collector's loud throw
+// / zero-component hard-fail fires — the strict === 0 undefined-falls-through
+// pattern shared with the npm/bun arms.
+const NUGET_EMPTY_SECTIONS_LOCK = '{"version":2,"dependencies":{"net9.0":{}}}';
+
+const NUGET_PROJECT_ONLY_LOCK = JSON.stringify({
+  version: 2,
+  dependencies: { "net9.0": { "fixture.lib": { type: "Project" } } },
+});
+
+const NUGET_REAL_LOCK = JSON.stringify({
+  version: 2,
+  dependencies: {
+    "net9.0": { "Newtonsoft.Json": { type: "Direct", resolved: "13.0.4" } },
+  },
+});
+
+describe("coverageSkipReason — packages.lock.json arm (strict === 0)", () => {
+  test("empty dependency sections are a positively-determined zero → skip with the house reason", () => {
+    expect(
+      coverageSkipReason("packages.lock.json", NUGET_EMPTY_SECTIONS_LOCK),
+    ).toBe(
+      "packages.lock.json has no third-party entries (only Project entries, or empty dependency sections)",
+    );
+  });
+
+  test("a Project-only lock skip-classifies (first-party references are not inventory)", () => {
+    expect(
+      coverageSkipReason("packages.lock.json", NUGET_PROJECT_ONLY_LOCK),
+    ).toContain("no third-party entries");
+  });
+
+  test("garbage text routes to the scan (undefined — the collector's loud throw fires there)", () => {
+    expect(
+      coverageSkipReason("packages.lock.json", "not json at all }{"),
+    ).toBeUndefined();
+  });
+
+  test("a non-zero count falls through to the scan", () => {
+    expect(
+      coverageSkipReason("packages.lock.json", NUGET_REAL_LOCK),
+    ).toBeUndefined();
+  });
+});
+
+describe("classifyCoverage — packages.lock.json warn+skip vs hard-fail split", () => {
+  test("a zero-entry lock with zero components is skipped (never a hard fail)", () => {
+    expect(
+      classifyCoverage(
+        "app",
+        "packages.lock.json",
+        NUGET_EMPTY_SECTIONS_LOCK,
+        0,
+      ),
+    ).toBe("skip");
+  });
+
+  test("a garbage lock that scans to zero components HARD-FAILS (unknown is never a silent skip)", () => {
+    expect(() =>
+      classifyCoverage("app", "packages.lock.json", "not json at all }{", 0),
+    ).toThrow(/zero components|coverage assertion/);
+  });
+
+  test("a real lock with a positive component count is included", () => {
+    expect(
+      classifyCoverage("app", "packages.lock.json", NUGET_REAL_LOCK, 1),
+    ).toBe("include");
+  });
+});

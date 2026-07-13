@@ -19,6 +19,7 @@ import {
 } from "../collectors/terraform";
 import {
   npmThirdPartyEntryCount,
+  nugetThirdPartyEntryCount,
   pnpmThirdPartyEntryCount,
   pythonThirdPartyEntryCount,
   thirdPartyEntryCount,
@@ -110,7 +111,13 @@ function terraformSkipReason(
  *   whose packages are all @workspace: members. The npm and bun counters
  *   return undefined for v1/garbage text (unknown count) — the strict `=== 0`
  *   comparison below lets undefined fall through, so unknown routes to the
- *   scan and a zero-component result hard-fails loudly, never a silent skip.
+ *   scan and a zero-component result hard-fails loudly, never a silent skip;
+ * - nuget: a packages.lock.json whose every dependency section is empty or
+ *   holds only type=Project entries (first-party project references) counts a
+ *   positively-determined zero → warn+skip. The counter returns undefined for
+ *   garbage/failed-narrow/no-dependencies-map text — the same strict `=== 0`
+ *   fall-through, so an unreadable lock routes to the scan where the
+ *   collector's loud parse throw or the zero-component hard-fail fires.
  *
  * - terraform: a `.terraform.lock.hcl` whose sibling
  *   `.terraform/modules/modules.json` is ABSENT AND whose `<dir>/.terraform/`
@@ -139,40 +146,70 @@ export function coverageSkipReason(
   if (lockfileName === ".terraform.lock.hcl") {
     return terraformSkipReason(lockfileName, lockfileText, lockfileDir);
   }
-  if (
-    lockfileName === "yarn.lock" &&
-    thirdPartyEntryCount(lockfileText) === 0
-  ) {
-    return `${lockfileName} has no third-party entries (only workspace/portal members)`;
-  }
-  if (
-    (lockfileName === "poetry.lock" || lockfileName === "uv.lock") &&
-    pythonThirdPartyEntryCount(lockfileText) === 0
-  ) {
-    return `${lockfileName} has no third-party entries (no [[package]] tables, or only the project's own local entries)`;
-  }
   // Strict === 0 on a number|undefined counter: undefined (v1/garbage —
-  // unknown count) falls through to the scan.
-  if (
-    lockfileName === "package-lock.json" &&
-    npmThirdPartyEntryCount(lockfileText) === 0
-  ) {
-    return `${lockfileName} has no third-party entries (only the project root / workspace links)`;
-  }
-  if (
-    lockfileName === "pnpm-lock.yaml" &&
-    pnpmThirdPartyEntryCount(lockfileText) === 0
-  ) {
-    return `${lockfileName} has no third-party entries (importers only — no packages section)`;
-  }
-  if (
-    lockfileName === "bun.lock" &&
-    bunThirdPartyEntryCount(lockfileText) === 0
-  ) {
-    return `${lockfileName} has no third-party entries (only @workspace: members)`;
+  // unknown count) falls through to the scan, where the collector's loud
+  // throw or the zero-component hard-fail fires.
+  const arm = ZERO_THIRD_PARTY_ARMS.get(lockfileName);
+  if (arm !== undefined && arm.count(lockfileText) === 0) {
+    return `${lockfileName} has no third-party entries (${arm.reason})`;
   }
   return undefined;
 }
+
+/**
+ * The text-only zero-third-party arms of {@link coverageSkipReason}: one
+ * counter and one positively-determined-zero reason per lockfile kind. The
+ * counters that return number|undefined (npm/bun/nuget) keep the strict
+ * `=== 0` fall-through above — undefined (unknown) is never a skip.
+ */
+const ZERO_THIRD_PARTY_ARMS = new Map<
+  string,
+  { count: (lockfileText: string) => number | undefined; reason: string }
+>([
+  [
+    "yarn.lock",
+    { count: thirdPartyEntryCount, reason: "only workspace/portal members" },
+  ],
+  [
+    "poetry.lock",
+    {
+      count: pythonThirdPartyEntryCount,
+      reason: "no [[package]] tables, or only the project's own local entries",
+    },
+  ],
+  [
+    "uv.lock",
+    {
+      count: pythonThirdPartyEntryCount,
+      reason: "no [[package]] tables, or only the project's own local entries",
+    },
+  ],
+  [
+    "package-lock.json",
+    {
+      count: npmThirdPartyEntryCount,
+      reason: "only the project root / workspace links",
+    },
+  ],
+  [
+    "pnpm-lock.yaml",
+    {
+      count: pnpmThirdPartyEntryCount,
+      reason: "importers only — no packages section",
+    },
+  ],
+  [
+    "bun.lock",
+    { count: bunThirdPartyEntryCount, reason: "only @workspace: members" },
+  ],
+  [
+    "packages.lock.json",
+    {
+      count: nugetThirdPartyEntryCount,
+      reason: "only Project entries, or empty dependency sections",
+    },
+  ],
+]);
 
 /**
  * The coverage policy, pure and unit-testable:
