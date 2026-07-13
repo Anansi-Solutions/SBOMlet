@@ -200,7 +200,8 @@ export interface BuiltOutputs {
 /**
  * The one-line stderr hint printed when the committed sidecar reads as the
  * aggregate (old or malformed shape) while the policy scopes a compatible rule
- * under docker:os-packages. The scoped rule can never match the aggregate
+ * strictly under docker:os-packages (a bare-prefix scope still matches the
+ * aggregate target and needs no hint). The scoped rule can never match the aggregate
  * target (the fail-safe matcher direction), which is safe but confusing right
  * after the user wrote the rule — name the actual cause and the fix.
  */
@@ -299,18 +300,21 @@ function narrowAttributedSidecar(
 }
 
 /**
- * True when any compatible rule's `where` scopes under the docker namespace —
- * exactly the rules an aggregate-shape sidecar can never satisfy.
+ * True when some compatible rule is docker-scoped in a way an aggregate-shape
+ * sidecar can never satisfy: at least one `where` entry sits STRICTLY under
+ * docker:os-packages while no entry equals the bare aggregate identity. A
+ * bare-prefix scope covers the aggregate target itself (the locked matcher
+ * direction), so such a rule still matches and needs no hint.
  */
-function hasDockerScopedCompatible(policy: Policy | undefined): boolean {
+function hasAggregateBlockedCompatible(policy: Policy | undefined): boolean {
   if (policy === undefined) return false;
-  return policy.compatible.some((rule) =>
-    (rule.where ?? []).some(
-      (path) =>
-        path === DOCKER_OS_IDENTITY ||
-        path.startsWith(`${DOCKER_OS_IDENTITY}/`),
-    ),
-  );
+  return policy.compatible.some((rule) => {
+    const where = rule.where ?? [];
+    return (
+      where.some((path) => path.startsWith(`${DOCKER_OS_IDENTITY}/`)) &&
+      !where.includes(DOCKER_OS_IDENTITY)
+    );
+  });
 }
 
 /**
@@ -337,7 +341,8 @@ function hasDockerScopedCompatible(policy: Policy | undefined): boolean {
  * whole-sidecar, and no component is ever dropped. The fan-out iterates the
  * sidecar's stored order (the emitter sorts dockerImages by image), so
  * repeated reads are byte-identical. When the aggregate path is taken while
- * the policy docker-scopes a compatible rule, ONE stderr hint line names the
+ * the policy carries a compatible rule the aggregate target cannot satisfy
+ * (scoped strictly under docker:os-packages), ONE stderr hint line names the
  * cause; the reader stays a pure read — stderr only, no writes, no exit-code
  * change, no new pipeline state.
  */
@@ -359,7 +364,7 @@ function readCommittedDockerOsSbom(
   const parsed: unknown = JSON.parse(readFileSync(osSbomPath, "utf8"));
   const attributed = narrowAttributedSidecar(parsed);
   if (attributed === undefined) {
-    if (hasDockerScopedCompatible(policy)) {
+    if (hasAggregateBlockedCompatible(policy)) {
       process.stderr.write(`${SIDECAR_REGENERATE_HINT}\n`);
     }
     return [

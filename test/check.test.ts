@@ -1119,6 +1119,28 @@ describe("SCP-02 sidecar v2 fan-out, aggregate compat, and the regeneration hint
     expect(stderr.includes(HINT_LINE)).toBe(false);
   });
 
+  test("a rule scoped to the BARE aggregate identity matches an old-shape sidecar — no hint, not unused", async () => {
+    const { root } = makeScannableTree();
+    writeSidecar(root, DOCKER_OS_SBOM_V1);
+    const policyPath = writePolicy(
+      root,
+      SCOPED_DOCKER_POLICY.replace(
+        'where = ["docker:os-packages/postgres:18"]',
+        'where = ["docker:os-packages"]',
+      ),
+    );
+
+    const { stderr } = await buildAgainst(root, policyPath);
+
+    // The bare-prefix scope COVERS the aggregate target itself (the matcher
+    // direction locked in policy.test.ts), so the rule matched — a hint
+    // claiming scoped rules cannot match would be false.
+    expect(stderr.includes("policy warning: unused entry compatible[0]")).toBe(
+      false,
+    );
+    expect(stderr.includes(HINT_LINE)).toBe(false);
+  });
+
   test("the hint changes no exit code: the hinted warn-only run still exits 0", async () => {
     const { root } = makeScannableTree();
     writeSidecar(root, DOCKER_OS_SBOM_V1);
