@@ -121,4 +121,11 @@ describe("ecosystemFor / manifestFilesFor", () => {
     expect(ecosystemFor("bun")).toBe("js");
     expect(manifestFilesFor("bun")).toEqual(["bun.lock", "package.json"]);
   });
+
+  test("nuget has no cdxgen ecosystem (in-process collection) and hashes ONLY the lock", () => {
+    expect(() => ecosystemFor("nuget")).toThrow(
+      "nuget targets are collected in-process and have no cdxgen ecosystem",
+    );
+    expect(manifestFilesFor("nuget")).toEqual(["packages.lock.json"]);
+  });
 });

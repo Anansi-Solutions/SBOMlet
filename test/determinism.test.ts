@@ -17,6 +17,7 @@ import { afterAll, describe, expect, test } from "bun:test";
 
 import { mergeSboms } from "../src/merge/merge";
 import { collectWithBunLock } from "../src/collectors/bunLock";
+import { collectWithNugetLock } from "../src/collectors/nugetLock";
 import {
   toSortedDependenciesJson,
   type EvaluatedDependencies,
@@ -370,5 +371,120 @@ describe("determinism — bun collector double-run byte-identity (INV-03, 04.5-0
     expect(
       first.dump.includes("pkg:npm/%40next/swc-win32-x64-msvc@16.0.10"),
     ).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Collector-path determinism (INV-03 extended to the nuget collector)
+// ---------------------------------------------------------------------------
+
+/**
+ * Temp nuget fixture project for the collector double-run: a first-party
+ * `"type": "Project"` entry (never emitted — the exclusion itself must be
+ * deterministic), a CentralTransitive entry (the v2 CPM shape), and one
+ * (id, resolved) pair repeated across two TFM sections so the cross-section
+ * dedup is part of the double-run surface.
+ */
+const NUGET_DET_LOCK = `{
+  "version": 2,
+  "dependencies": {
+    "net8.0": {
+      "Newtonsoft.Json": {
+        "type": "Direct",
+        "requested": "[13.0.4, )",
+        "resolved": "13.0.4",
+        "contentHash": "sha512-aaa"
+      },
+      "Microsoft.Extensions.Logging": {
+        "type": "CentralTransitive",
+        "requested": "[9.0.9, )",
+        "resolved": "9.0.9",
+        "contentHash": "sha512-bbb"
+      },
+      "det.lib": {
+        "type": "Project"
+      }
+    },
+    "net9.0": {
+      "Newtonsoft.Json": {
+        "type": "Direct",
+        "requested": "[13.0.4, )",
+        "resolved": "13.0.4",
+        "contentHash": "sha512-aaa"
+      },
+      "Serilog": {
+        "type": "Transitive",
+        "resolved": "4.3.1",
+        "contentHash": "sha512-ccc"
+      }
+    }
+  }
+}
+`;
+
+const NUGET_TARGET_IDENTITY = "fixtures/nuget-det";
+
+/** Writes the fixture lockfile into a fresh temp project dir. */
+function makeNugetFixtureTarget(): Target {
+  const dir = mkdtempSync(join(tmpdir(), "licenses-det-nuget-"));
+  collectorTempDirs.push(dir);
+  writeFileSync(join(dir, "packages.lock.json"), NUGET_DET_LOCK);
+  return { dir, identity: NUGET_TARGET_IDENTITY };
+}
+
+/** One collector run into its own fresh temp dir; returns the raw bom bytes. */
+async function collectNugetBomText(target: Target): Promise<string> {
+  const tempDir = mkdtempSync(join(tmpdir(), "licenses-det-out-"));
+  collectorTempDirs.push(tempDir);
+  const result = await collectWithNugetLock(target, { tempDir });
+  return readFileSync(result.sbomPath, "utf-8");
+}
+
+describe("determinism — nuget collector double-run byte-identity (INV-03)", () => {
+  test("two collector runs over the same lockfile write byte-identical bom.json", async () => {
+    const target = makeNugetFixtureTarget();
+    const first = await collectNugetBomText(target);
+    const second = await collectNugetBomText(target);
+    expect(first).toBe(second);
+
+    // Volatile-field absence contract on the collector's raw output bytes:
+    // the fields are never WRITTEN, so they can never leak.
+    expect(first.includes("serialNumber")).toBe(false);
+    expect(first.includes("timestamp")).toBe(false);
+
+    // The Project-entry exclusion is itself deterministic and total: the
+    // first-party reference never appears in either run.
+    expect(first.includes("det.lib")).toBe(false);
+  });
+
+  test("double-build double-render of the collector bom is byte-identical", async () => {
+    const bomText = await collectNugetBomText(makeNugetFixtureTarget());
+    const build = (): { md: string; dump: string } => {
+      const model = mergeSboms([
+        { sbom: JSON.parse(bomText), targetIdentity: NUGET_TARGET_IDENTITY },
+      ]);
+      return {
+        md: renderMarkdown(model),
+        dump: toSortedDependenciesJson(model),
+      };
+    };
+    const first = build();
+    const second = build();
+    expect(first.md).toBe(second.md);
+    expect(first.dump).toBe(second.dump);
+
+    // Not vacuously equal: the CentralTransitive entry reaches the model,
+    // the cross-section duplicate folds to one row, and the first-party
+    // Project entry never renders.
+    expect(
+      first.dump.includes("pkg:nuget/Microsoft.Extensions.Logging@9.0.9"),
+    ).toBe(true);
+    expect(first.dump.includes("pkg:nuget/Newtonsoft.Json@13.0.4")).toBe(true);
+    expect(first.md.includes("det.lib")).toBe(false);
+
+    // LF contract holds on the collector-fed render path too.
+    expect(first.md.includes("\r")).toBe(false);
+    expect(first.md.endsWith("\n")).toBe(true);
+    expect(first.md.endsWith("\n\n")).toBe(false);
   });
 });
