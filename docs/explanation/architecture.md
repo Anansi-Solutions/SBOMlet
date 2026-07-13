@@ -15,10 +15,10 @@ in [data-flow](data-flow.md), and the reasoning behind the design in
 ## What the tool does
 
 It produces a complete, legally compliant license inventory for any repository,
-across JS/TS, Python, Terraform/OpenTofu, and the packages inside a project's
-Docker images — their full contents, the OS layer and the application packages
-layered on top — and it fails CI when a dependency violates a
-[policy](../glossary.md#policy-lanes).
+across JS/TS, Python, .NET, Terraform/OpenTofu, and the packages inside a
+project's Docker images — their full contents, the OS layer and the
+application packages layered on top — and it fails CI when a dependency
+violates a [policy](../glossary.md#policy-lanes).
 
 It does not detect licenses itself. That work is left to standard
 [generators](../glossary.md#generator): cdxgen, the Yarn-4 CycloneDX plugin,
@@ -70,11 +70,11 @@ The stages run in a fixed order:
 ```mermaid
 flowchart TD
     A["Discover targets<br/>(walk --repo-root for lockfiles,<br/>or single --target)"] --> B
-    B["Collect per target<br/>(Collector registry: cdxgen / yarn-plugin /<br/>bunLock / poetryLock / terraform)"] --> C
+    B["Collect per target<br/>(Collector registry: cdxgen / yarn-plugin /<br/>bunLock / poetryLock / nugetLock / terraform)"] --> C
     OS["Committed .sbomlet.cache/docker-os.sbom.json<br/>(scope: os merge input, when present)"] --> D
     B --> C["Each collector emits a CollectedSbom<br/>(per-target CycloneDX doc + scope)"]
     C --> D["Merge (purl-keyed)<br/>mergeSboms → CanonicalDependencies"]
-    D --> E["Enrich unknowns<br/>(PyPI / npm / GitHub via committed cache)"]
+    D --> E["Enrich unknowns<br/>(PyPI / npm / NuGet / GitHub via committed cache)"]
     E --> F["Normalize + annotate findings<br/>(raw claims → SPDX LicenseFinding)"]
     F --> G{"Policy loaded<br/>(--policy)?"}
     G -->|yes| H["Evaluate policy<br/>→ Verdict[] + stderr summary"]
@@ -109,7 +109,7 @@ and byte-compares instead.
 ```mermaid
 flowchart TD
     subgraph GEN["generate (runGenerate)"]
-        G1["buildOutputs(mode: generate)"] --> G2["ENRICH may fetch PyPI/npm/GitHub<br/>on a cache miss + write .sbomlet.cache/licenses.cache.json"]
+        G1["buildOutputs(mode: generate)"] --> G2["ENRICH may fetch PyPI/npm/NuGet/GitHub<br/>on a cache miss + write .sbomlet.cache/licenses.cache.json"]
         G2 --> G3["writeFileSync: LICENSES.md, NOTICES.md,<br/>CycloneDX (--cyclonedx), dump-model (--dump-model)"]
         G3 --> G4["exit 0<br/>(document always written,<br/>even with failing verdicts)"]
     end
@@ -157,19 +157,22 @@ Source: `src/gate/check.ts`, `src/cli.ts`.
 
 Discovery walks `--repo-root` with a hand-rolled `node:fs` traversal, adding no
 new dependency, looking for the lockfiles it knows: `yarn.lock`,
-`package-lock.json`, `pnpm-lock.yaml`, `bun.lock`, `poetry.lock`, `uv.lock`, and
-`.terraform.lock.hcl`. It skips `node_modules`, `.git`, every leading-dot
-directory (which covers `.terraform`, `.yarn`, `.cache`), and the tool's own
-directory. Symlinks report as non-directories on the way in, so they are never
-followed.
+`package-lock.json`, `pnpm-lock.yaml`, `bun.lock`, `poetry.lock`, `uv.lock`,
+`packages.lock.json`, and `.terraform.lock.hcl`. It skips `node_modules`,
+`.git`, every leading-dot directory (which covers `.terraform`, `.yarn`,
+`.cache`), and the tool's own directory. Symlinks report as
+non-directories on the way in, so they are never followed.
 
 A [target](../glossary.md#target)'s identity is its forward-slash, repo-relative
 directory path, and results sort by `(identity, lockfile)` using the single
-tool-wide string comparator. Two pure post-steps run over the sorted output. When
-several JS lockfiles share a directory, they collapse to one target by the
+tool-wide string comparator. Three pure post-steps run over the sorted output.
+When several JS lockfiles share a directory, they collapse to one target by the
 precedence `bun > pnpm > yarn > npm`, with a warning. A leftover binary
-`bun.lockb` with no surviving `bun.lock` warns you to migrate. Discovery itself
-writes no stderr; the warnings come back as data, and the pipeline prints them.
+`bun.lockb` with no surviving `bun.lock` warns you to migrate. A directory with
+a `.csproj` but no committed `packages.lock.json` is not a target; one
+aggregated warning names every such directory and the lockfile opt-in recipe
+(`--verbose` expands it per directory). Discovery itself writes no stderr;
+the warnings come back as data, and the pipeline prints them.
 
 A Yarn-4 target whose lockfile declares workspace members expands into one scan
 unit per workspace inside the collect loop, after discovery: the workspace paths
@@ -200,6 +203,7 @@ per-target loop owns that line.
 | `bun` | `bunCollector` | in-process `bun.lock` parser |
 | `poetry` | `poetryCollector` | cdxgen `-t python`, plus `poetry.lock` for scope |
 | `uv` | `cdxgenCollector("uv")` | cdxgen `-t python` |
+| `nuget` | `nugetCollector` | in-process `packages.lock.json` parser ([ADR-0022](adr/0022-dotnet-lockfile-in-process.md)) |
 | `terraform` | `terraformCollector` | in-process lock + `modules.json` parser |
 
 A few collectors have behaviour worth knowing before you change them.
@@ -227,17 +231,18 @@ directory and never travels past it. The poetry lane departs from this:
 lock's own `groups` arrays into the production purl set, threaded in the same way
 as the Yarn dual-run path.
 
-bun and Terraform take no subprocess at all. No upstream tool preserves
-`bun.lock` identity or resolves Terraform licenses, so both are in-process
-parsers, and both ignore the timeout budget. The Terraform collector has its own
-section below.
+bun, NuGet, and Terraform take no subprocess at all. No upstream tool preserves
+`bun.lock` identity, reads `packages.lock.json` without side effects or data
+loss ([ADR-0022](adr/0022-dotnet-lockfile-in-process.md)), or resolves
+Terraform licenses, so all three are in-process parsers, and all ignore the
+timeout budget. The Terraform collector has its own section below.
 
 [Dependency provenance](../glossary.md#dependency-provenance), the "Why" a
 package is present, is collected here for the lanes that can supply it. The
 Yarn-4 plugin lane derives it from the BOM's root-anchored dependency graph; the
 poetry lane derives it from `poetry.lock` and `pyproject.toml`. The npm, pnpm,
-bun, uv, and Terraform lanes leave provenance absent, and the render layer shows
-an honest `—`.
+bun, uv, NuGet, and Terraform lanes leave provenance absent, and the render
+layer shows an honest `—`.
 
 Each collector returns a `CollectedSbom`: the parsed CycloneDX document (treated
 as an untrusted shape), the target identity, and optionally a production purl
@@ -315,11 +320,14 @@ merge and annotation. It finds every package whose claims resolve to unknown and
 tries to fill the gap. Only one of the two modes reaches the network.
 
 In `generate` mode it fetches each unknown from its registry: PyPI's JSON for
-`pkg:pypi`, the npm packument for `pkg:npm`, and the GitHub License API for
-`pkg:terraform` version-ref candidates. It appends a `registry` claim and records
-the result in the committed cache, a positive entry, or a negative entry only on
-a clean, empty 200 answer. A fetch failure propagates loudly and writes nothing,
-so a transient outage cannot be frozen into the cache as a false negative.
+`pkg:pypi`, the npm packument for `pkg:npm`, the NuGet registration API for
+`pkg:nuget` (a leaf-then-catalog two-step against a fixed host; a package a
+private feed supplied is a clean not-found and stays honestly unknown), and
+the GitHub License API for `pkg:terraform` version-ref candidates. It appends
+a `registry` claim and records the result in the committed cache, a positive
+entry, or a negative entry only on a clean, empty 200 answer. A fetch failure
+propagates loudly and writes nothing, so a transient outage cannot be frozen
+into the cache as a false negative.
 
 In `check` mode it never fetches and never writes. A cache miss for a package
 that still needs enrichment is a stale condition: the purl is reported as a stale
@@ -563,7 +571,7 @@ treats each one in full.
    plugin, syft, and tofu are pinned CLIs driven through argv arrays; the CLI uses
    `node:util`'s `parseArgs`; discovery is a hand-rolled `node:fs` walk; and the
    only in-process parsers exist where no upstream tool does the job: bun,
-   Terraform, and Dockerfile base derivation.
+   NuGet, Terraform, and Dockerfile base derivation.
 3. **Honest residual.** When something cannot be computed precisely, render `—` or
    fail loud rather than fabricate. Imprecise license families are surfaced
    rather than guessed, the Terraform gate keys on the filesystem instead of

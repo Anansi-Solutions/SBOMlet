@@ -100,6 +100,33 @@ loudly rather than skipping the scan silently:
 scancode binary not found on PATH — run mise install
 ```
 
+### .NET targets
+
+.NET targets are discovered from committed `packages.lock.json` files, one
+target per project — NuGet writes one lockfile per project directory, and the
+lockfile is opt-in
+([getting started](../getting-started.md#if-your-repository-is-net) has the
+setup). The collector parses the lockfile in process: no generator
+subprocess, and no .NET toolchain needed on the scanning machine
+([ADR-0022](../explanation/adr/0022-dotnet-lockfile-in-process.md)). Lock
+format versions 1 and 2 are both read, so central package management
+(`Directory.Packages.props`, including its `CentralTransitive` entries) works
+with no extra configuration.
+
+The lane's limits, stated plainly:
+
+- The lockfile carries no dev/prod marker, so every NuGet package gates as
+  **production** — the safe direction; nothing can hide in a dev scope.
+- [Dependency provenance](../glossary.md#dependency-provenance) is not
+  available; the "Why" column shows `—`.
+- A package that is not on nuget.org — a private-feed package — resolves as
+  license **unknown**, recorded as a negative cache entry; it never fails the
+  run.
+- A package whose license ships only as a file embedded in the package (no
+  SPDX expression in its registry metadata) also resolves as **unknown**
+  rather than a guess.
+- paket lockfiles are not supported; only `packages.lock.json` is read.
+
 ## check
 
 The CI gate. It runs the same scan as `generate` entirely in memory, then reads
@@ -145,8 +172,9 @@ policy fail verdict exits 1 and takes priority over staleness. See the
 The cache-integrity audit, and the only subcommand that re-reads the registries
 on purpose. It loads the committed
 [enrichment cache](../glossary.md#enrichment-and-the-enrichment-cache),
-re-resolves every entry against the registry that produced it — npm, PyPI, or the
-GitHub License API for `pkg:terraform` providers — and compares each fresh answer
+re-resolves every entry against the registry that produced it — npm, PyPI, the
+NuGet registration API, or the GitHub License API for `pkg:terraform`
+providers — and compares each fresh answer
 to the stored licence. A single equality on the raw licence string catches every
 way the cache can go wrong: a value that changed upstream or was edited, an entry
 for a package the registry no longer resolves, and a no-licence entry the registry

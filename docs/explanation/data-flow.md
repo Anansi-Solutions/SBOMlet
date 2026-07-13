@@ -83,11 +83,11 @@ lists the stages; the sections after it walk each row.
 The default mode walks the repository root and emits one
 [`DiscoveredTarget`](../glossary.md#target) per recognized lockfile. The
 recognized set is a closed list — `yarn.lock`, `package-lock.json`,
-`pnpm-lock.yaml`, `bun.lock`, `poetry.lock`, `uv.lock`, `.terraform.lock.hcl` —
-each mapped to one ecosystem. When several JS lockfiles sit in the same
-directory, a fixed precedence (`bun > pnpm > yarn > npm`) picks one. Single-target
-mode (`--target`) wraps one resolved directory as a yarn target so it flows
-through the identical loop.
+`pnpm-lock.yaml`, `bun.lock`, `poetry.lock`, `uv.lock`, `packages.lock.json`,
+`.terraform.lock.hcl` — each mapped to one ecosystem. When several JS
+lockfiles sit in the same directory, a fixed precedence
+(`bun > pnpm > yarn > npm`) picks one. Single-target mode (`--target`) wraps
+one resolved directory as a yarn target so it flows through the identical loop.
 
 Targets are scanned sequentially in sorted identity order. This is the first
 thing the determinism contract depends on: the order in which targets feed the
@@ -113,6 +113,7 @@ The registry holds the per-ecosystem choices:
 | npm, pnpm, uv | cdxgen. |
 | bun | An in-process `bun.lock` parser — no upstream generator preserves `bun.lock` identity. |
 | poetry | cdxgen for the inventory, with dev/prod scope derived from the `poetry.lock` group arrays because cdxgen emits no poetry group markers. |
+| nuget | An in-process `packages.lock.json` parser ([ADR-0022](adr/0022-dotnet-lockfile-in-process.md)) — every side-effect-free candidate reads the same lockfile and adds nothing to it. |
 | terraform | An in-process collector reading `.terraform/modules/modules.json`. |
 
 Before dispatch, a Yarn target whose lockfile declares workspace members expands
@@ -212,7 +213,7 @@ by what the cache says and which mode is running:
 | --- | --- |
 | Cache hit, positive | Append a `source: "registry"` claim carrying the cached license. No network, either mode. |
 | Cache hit, negative | The package stays unknown. No fetch. |
-| Cache miss, `generate` | Fetch from PyPI, the npm packument, or the GitHub License API for terraform providers; append the resolved claim and record it. The updated cache is written once at the end — the only enrichment write, gated on generate mode. |
+| Cache miss, `generate` | Fetch from PyPI, the npm packument, the NuGet registration API, or the GitHub License API for terraform providers; append the resolved claim and record it. The updated cache is written once at the end — the only enrichment write, gated on generate mode. |
 | Cache miss, `check` | Never fetch, never write. The purl is returned as a stale unknown and the gate maps it to exit 2. |
 
 A fetch failure in generate mode propagates loudly and records nothing, so a

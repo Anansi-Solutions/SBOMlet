@@ -219,11 +219,11 @@ edit that flips a copyleft license to a permissive one, an entry for a package
 that doesn't exist, or a real license quietly recorded as no-license — would pass
 the gate unnoticed. `verify-cache` is the audit that closes that gap.
 
-It re-resolves every committed cache entry against its registry — npm, PyPI, or
-the GitHub License API for Terraform providers — with the same logic `generate`
-uses, and compares each answer to the stored license. A divergence is either
-tampering or a genuine upstream license change; either way it wants a person's
-eyes before you ship.
+It re-resolves every committed cache entry against its registry — npm, PyPI,
+the NuGet registration API, or the GitHub License API for Terraform
+providers — with the same logic `generate` uses, and compares each answer to
+the stored license. A divergence is either tampering or a genuine upstream
+license change; either way it wants a person's eyes before you ship.
 
 ```sh
 task sbomlet:verify:cache

@@ -51,6 +51,34 @@ with. You don't need to understand every lane yet. The example denies the
 later, after you've seen what your repository contains. Every override you add
 requires a written reason, because the policy file doubles as your audit trail.
 
+## If your repository is .NET
+
+.NET is the one ecosystem that needs a one-time setup in your repository
+before the first scan. NuGet has no always-on lockfile: the tool reads
+committed `packages.lock.json` files, and a project only gets one after
+opting in. Set the property in each project file — or once, repo-wide, in a
+`Directory.Build.props` at your repository root:
+
+```xml
+<PropertyGroup>
+  <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+</PropertyGroup>
+```
+
+Then run `dotnet restore` and commit the `packages.lock.json` it writes next
+to each project file.
+
+In your own CI, restore with `dotnet restore --locked-mode`. That makes a
+lockfile that no longer matches its project a build error on your side, so a
+stale lock is caught by your build rather than carried silently into the
+inventory.
+
+A .NET project without a committed lockfile is not scanned, and the tool says
+so: one aggregated warning names every directory that has a `.csproj` but no
+`packages.lock.json`, along with this same recipe (`--verbose` lists every
+directory). Everything else in this guide works the same for .NET; the
+per-ecosystem limits are in the [CLI reference](./reference/cli.md#net-targets).
+
 ## Route A — use the GitHub Action
 
 On this route your repository carries the policy file from step 1, a workflow,
