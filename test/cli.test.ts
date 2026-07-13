@@ -1008,6 +1008,42 @@ describe("runGenerate --policy", () => {
     );
   });
 
+  test("Test 3b: a where-scoped rule matching no occurrence gates nothing and is reported unused (SCP-01)", async () => {
+    const { root } = makeScannableTree();
+    // The pattern matches copyleft-lib's AGPL, but the scope names an
+    // occurrence identity that does not exist in this tree — the rule must
+    // decide NOTHING: copyleft-lib still fails at proj, and the dead entry
+    // surfaces through the existing unused-entry warning.
+    const policyPath = writePolicy(
+      root,
+      [
+        "[[compatible]]",
+        'match = "license"',
+        'pattern = "AGPL-3.0-only"',
+        'reason = "scoped-dead-rule-marker"',
+        'where = ["docker:os-packages/nonexistent/Dockerfile"]',
+        "",
+      ].join("\n"),
+    );
+
+    const stderr = await withCapturedStderr(async () => {
+      await runGenerate({
+        repoRoot: root,
+        outputPath: join(root, "out.md"),
+        noticesPath: join(root, "notices.md"),
+        policyPath,
+        verbose: false,
+      });
+    });
+
+    expect(stderr).toContain(
+      "policy fail: pkg:npm/copyleft-lib@1.0.0 in proj — default:copyleft:",
+    );
+    expect(stderr).toContain(
+      "policy warning: unused entry compatible[0] — scoped-dead-rule-marker",
+    );
+  });
+
   test("Test 4: invalid policy fails fast — before any scan (exit-3 path)", async () => {
     const { root } = makeScannableTree();
 

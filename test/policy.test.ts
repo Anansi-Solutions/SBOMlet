@@ -1769,6 +1769,188 @@ describe("unusedRuleIds — stale-policy hygiene", () => {
   });
 });
 
+// ===========================================================================
+// SCP-01 Task 3: per-occurrence compatible matching. A `where`-scoped rule
+// decides at each occurrence via the SAME segment-aware prefix comparison
+// suppression paths use; an unscoped rule keeps pre-scoping behavior
+// byte-identically. Targets here are synthetic — per-image docker identities
+// do not exist yet; the engine must not care.
+// ===========================================================================
+
+const TARGET_A = "docker:os-packages/a/Dockerfile";
+const TARGET_B = "docker:os-packages/b/Dockerfile";
+const TARGET_A_EXTRA = "docker:os-packages/a/Dockerfile-extra";
+const TARGET_AGGREGATE = "docker:os-packages";
+
+/** Package-form busybox acceptance scoped to the given identity prefixes. */
+const scopedBusyboxPolicy = (where: ReadonlyArray<string>): string =>
+  [
+    "[[compatible]]",
+    'match = "package"',
+    'name = "busybox"',
+    'reason = "accepted in the reviewed image"',
+    `where = ${JSON.stringify(where)}`,
+  ].join("\n");
+
+/** License-form GPL acceptance scoped to the given identity prefixes. */
+const scopedGplPolicy = (where: ReadonlyArray<string>): string =>
+  [
+    "[[compatible]]",
+    'match = "license"',
+    'pattern = "GPL-2.0-only"',
+    'reason = "accepted in the reviewed image"',
+    `where = ${JSON.stringify(where)}`,
+  ].join("\n");
+
+/** An os-scope GPL busybox occurring at the given targets. */
+const busyboxAt = (targets: ReadonlyArray<string>): PackageSpec =>
+  osPkgSpec(
+    "pkg:apk/alpine/busybox@1.37.0",
+    "busybox",
+    "GPL-2.0-only",
+    targets,
+    "1.37.0",
+  );
+
+describe("evaluate — where-scoped compatible matching (SCP-01)", () => {
+  test("package form: scoped rule cited ONLY at its target; segment-aware; other occurrences fall to default:copyleft", () => {
+    const { verdicts } = runEngine(
+      [busyboxAt([TARGET_A, TARGET_B, TARGET_A_EXTRA])],
+      scopedBusyboxPolicy([TARGET_A]),
+    );
+    // compareCodeUnits order: .../a/Dockerfile, .../a/Dockerfile-extra,
+    // .../b/Dockerfile. Out-of-scope occurrences fall to default:copyleft,
+    // os-downgraded to warn ([os_dependencies] defaults to "warn").
+    expect(verdicts.map((v) => [v.occurrenceTarget, v.status, v.rule])).toEqual(
+      [
+        [TARGET_A, "ok", "compatible[0]"],
+        [TARGET_A_EXTRA, "warn", "default:copyleft"],
+        [TARGET_B, "warn", "default:copyleft"],
+      ],
+    );
+  });
+
+  test("license form: same matrix", () => {
+    const { verdicts } = runEngine(
+      [busyboxAt([TARGET_A, TARGET_B, TARGET_A_EXTRA])],
+      scopedGplPolicy([TARGET_A]),
+    );
+    expect(verdicts.map((v) => [v.occurrenceTarget, v.status, v.rule])).toEqual(
+      [
+        [TARGET_A, "ok", "compatible[0]"],
+        [TARGET_A_EXTRA, "warn", "default:copyleft"],
+        [TARGET_B, "warn", "default:copyleft"],
+      ],
+    );
+  });
+
+  test("bare-prefix scope matches EVERY per-image target under it and the aggregate itself (both forms)", () => {
+    for (const policyText of [
+      scopedBusyboxPolicy([TARGET_AGGREGATE]),
+      scopedGplPolicy([TARGET_AGGREGATE]),
+    ]) {
+      const { verdicts } = runEngine(
+        [busyboxAt([TARGET_A, TARGET_B, TARGET_AGGREGATE])],
+        policyText,
+      );
+      expect(verdicts.map((v) => [v.status, v.rule])).toEqual([
+        ["ok", "compatible[0]"],
+        ["ok", "compatible[0]"],
+        ["ok", "compatible[0]"],
+      ]);
+    }
+  });
+
+  test("FAIL-SAFE direction: a scope under the aggregate never matches the shorter aggregate target (both forms)", () => {
+    // The other matcher direction (research Pitfall 2): scope
+    // docker:os-packages/x is LONGER than the aggregate target — an old-shape
+    // aggregate occurrence must never satisfy a per-image scope.
+    for (const policyText of [
+      scopedBusyboxPolicy([TARGET_A]),
+      scopedGplPolicy([TARGET_A]),
+    ]) {
+      const { verdicts, usedClarifyIndices, policy } = runEngine(
+        [busyboxAt([TARGET_AGGREGATE])],
+        policyText,
+      );
+      expect(verdicts.map((v) => [v.status, v.rule])).toEqual([
+        ["warn", "default:copyleft"],
+      ]);
+      // ...and the rule that decided nothing surfaces as unused.
+      expect(unusedRuleIds(policy, verdicts, usedClarifyIndices)).toEqual([
+        "compatible[0]",
+      ]);
+    }
+  });
+
+  test("first-match order per occurrence: scoped rule[0] wins at its target, unscoped rule[1] elsewhere", () => {
+    const policyText = [
+      scopedBusyboxPolicy([TARGET_A]),
+      "",
+      "[[compatible]]",
+      'match = "package"',
+      'name = "busybox"',
+      'reason = "accepted everywhere else"',
+    ].join("\n");
+    const { verdicts } = runEngine(
+      [busyboxAt([TARGET_A, TARGET_B])],
+      policyText,
+    );
+    expect(verdicts.map((v) => [v.occurrenceTarget, v.status, v.rule])).toEqual(
+      [
+        [TARGET_A, "ok", "compatible[0]"],
+        [TARGET_B, "ok", "compatible[1]"],
+      ],
+    );
+  });
+
+  test("byte-identity: an unscoped policy over a multi-occurrence model is unchanged — rule ids and statuses per occurrence", () => {
+    // The pre-scoping contract (roadmap criterion 2): without `where`, a
+    // compatible rule accepts the package at EVERY occurrence, package form
+    // beating license form, first match in TOML order.
+    const policyText = [
+      "[[compatible]]",
+      'match = "package"',
+      'name = "mpl-pkg"',
+      'reason = "package-level acceptance"',
+      "",
+      "[[compatible]]",
+      'match = "license"',
+      'pattern = "MPL-2.0"',
+      'reason = "license-level acceptance"',
+      "",
+      SUPPRESS_SCRATCH,
+    ].join("\n");
+    const { verdicts } = runEngine(
+      [
+        pkgSpec("mpl-pkg", "MPL-2.0", ["apps/scratch", "backend", "proj"]),
+        pkgSpec("other-mpl", "MPL-2.0", ["backend", "proj"]),
+      ],
+      policyText,
+    );
+    expect(verdicts.map((v) => [v.occurrenceTarget, v.status, v.rule])).toEqual(
+      [
+        ["apps/scratch", "ok", "compatible[0]"],
+        ["backend", "ok", "compatible[0]"],
+        ["proj", "ok", "compatible[0]"],
+        ["backend", "ok", "compatible[1]"],
+        ["proj", "ok", "compatible[1]"],
+      ],
+    );
+  });
+
+  test("dead scoped rule: a where that matches no occurrence lands in unusedRuleIds", () => {
+    const { verdicts, usedClarifyIndices, policy } = runEngine(
+      [busyboxAt([TARGET_A])],
+      scopedBusyboxPolicy([TARGET_B]),
+    );
+    expect(verdicts.map((v) => v.rule)).toEqual(["default:copyleft"]);
+    expect(unusedRuleIds(policy, verdicts, usedClarifyIndices)).toEqual([
+      "compatible[0]",
+    ]);
+  });
+});
+
 describe("evaluate — purity and determinism", () => {
   test("identical inputs evaluate to deeply equal arrays; occurrence input order is irrelevant", () => {
     const forward = pkgSpec("agpl-pkg", "AGPL-3.0-only", [

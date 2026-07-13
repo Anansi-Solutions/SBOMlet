@@ -83,6 +83,7 @@ import { denyRuleFor, type IndexedDenyRule } from "./denylist";
 import type {
   CompatibleLicenseRule,
   CompatiblePackageRule,
+  CompatibleRule,
   Policy,
   SuppressedWorkspace,
 } from "./schema";
@@ -149,16 +150,46 @@ interface IndexedRule<T> {
   rule: T;
 }
 
-/** First compatible package rule matching exact name (+ version when pinned). */
+/**
+ * Segment-aware identity-prefix match: a target matches a path only when it IS
+ * the path or sits under it as a whole segment — "apps/scratch-helper" never
+ * matches "apps/scratch". This is the only prefix comparison in the engine —
+ * suppression paths and compatible `where` scopes both delegate here; license
+ * values are never substring-matched anywhere. Both directions matter: the
+ * scope "docker:os-packages" covers every target under it, while the scope
+ * "docker:os-packages/x" never covers the SHORTER aggregate target
+ * "docker:os-packages" (the fail-safe direction).
+ */
+function matchesIdentityPrefix(target: string, path: string): boolean {
+  return target === path || target.startsWith(path + "/");
+}
+
+/**
+ * A compatible rule applies at a target iff it is unscoped or some `where`
+ * entry covers the target as an identity prefix.
+ */
+function appliesAt(rule: CompatibleRule, target: string): boolean {
+  return (
+    rule.where === undefined ||
+    rule.where.some((path) => matchesIdentityPrefix(target, path))
+  );
+}
+
+/**
+ * First compatible package rule matching exact name (+ version when pinned)
+ * whose `where` scope, when present, covers the occurrence target.
+ */
 function packageRuleFor(
   entry: PackageEntry,
+  target: string,
   policy: Policy,
 ): IndexedRule<CompatiblePackageRule> | undefined {
   for (const [index, rule] of policy.compatible.entries()) {
     if (
       rule.match === "package" &&
       rule.name === entry.name &&
-      (rule.version === undefined || rule.version === entry.version)
+      (rule.version === undefined || rule.version === entry.version) &&
+      appliesAt(rule, target)
     ) {
       return { index, rule };
     }
@@ -168,16 +199,18 @@ function packageRuleFor(
 
 /**
  * First compatible license rule whose pre-decomposed allowlist satisfies the
- * finding's expression. The allowlist was validated and decomposed by the
+ * finding's expression and whose `where` scope, when present, covers the
+ * occurrence target. The allowlist was validated and decomposed by the
  * schema — the pattern is never re-parsed here; the catch is purely defensive
  * (never-throws posture).
  */
 function licenseRuleFor(
   expression: string,
+  target: string,
   policy: Policy,
 ): IndexedRule<CompatibleLicenseRule> | undefined {
   for (const [index, rule] of policy.compatible.entries()) {
-    if (rule.match !== "license") continue;
+    if (rule.match !== "license" || !appliesAt(rule, target)) continue;
     let matched: boolean;
     try {
       matched = satisfies(expression, [...rule.allowlist]);
@@ -190,17 +223,15 @@ function licenseRuleFor(
 }
 
 /**
- * Segment-aware suppression match: a target matches a suppressed path only when
- * it is the path or sits under it as a whole segment — "apps/scratch-helper"
- * never matches "apps/scratch". This is the only prefix comparison in the
- * engine; license values are never substring-matched anywhere.
+ * Segment-aware suppression match (delegates to matchesIdentityPrefix — the
+ * same comparison compatible `where` scopes use).
  */
 function suppressionFor(
   target: string,
   policy: Policy,
 ): IndexedRule<SuppressedWorkspace> | undefined {
   for (const [index, rule] of policy.suppressedWorkspaces.entries()) {
-    if (target === rule.path || target.startsWith(rule.path + "/")) {
+    if (matchesIdentityPrefix(target, rule.path)) {
       return { index, rule };
     }
   }
@@ -807,13 +838,6 @@ export function evaluate(
   const verdicts: Verdict[] = [];
   for (const entry of model.packages) {
     const assessment = assessPackage(entry);
-    // Per-package matches computed once; they apply to every occurrence
-    // (a compatible rule accepts the package everywhere).
-    const packageRule = packageRuleFor(entry, policy);
-    const licenseRule =
-      packageRule === undefined && assessment.expression !== null
-        ? licenseRuleFor(assessment.expression, policy)
-        : undefined;
     // Terminal-0 deny match computed once per package: license-mode reads the
     // assessment expression (OR-election), name-mode the package name (works
     // even when the expression is null — the use-restriction rider case).
@@ -837,6 +861,15 @@ export function evaluate(
     // is inert per observed expression — it already matched via entry.name above.
     const denyRule = firstDeny(policy, entry, assessment.expression);
     for (const occurrence of entry.occurrences) {
+      // Compatible matches are PER OCCURRENCE (SCP-01): an unscoped rule
+      // accepts the package at every occurrence; a `where`-scoped rule only
+      // at the occurrences its identity prefixes cover. First match in TOML
+      // order wins per occurrence, package form before license form.
+      const packageRule = packageRuleFor(entry, occurrence.target, policy);
+      const licenseRule =
+        packageRule === undefined && assessment.expression !== null
+          ? licenseRuleFor(assessment.expression, occurrence.target, policy)
+          : undefined;
       verdicts.push(
         verdictFor(
           entry,
