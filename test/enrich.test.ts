@@ -10,9 +10,16 @@ import {
 } from "../src/enrich/trove";
 import {
   narrowNpmPackument,
+  narrowNugetCatalogEntry,
+  narrowNugetLeaf,
   narrowPypiResponse,
 } from "../src/validate/registry";
-import { fetchJson, mapLimit } from "../src/enrich/fetch";
+import { fetchJson, fetchJsonOr404, mapLimit } from "../src/enrich/fetch";
+import {
+  catalogEntryUrlOf,
+  nugetRegistrationLeafUrl,
+  resolveNugetCatalogLicense,
+} from "../src/enrich/nuget";
 import { resolvePypiLicense } from "../src/enrich/pypi";
 import { resolveNpmLicense } from "../src/enrich/npm";
 import {
@@ -1636,5 +1643,271 @@ describe("enrichUnknowns terraform/github (version-tag, transient-vs-definitive,
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
+  });
+});
+
+describe("fetchJsonOr404 (fetchJson posture, 404 as a value)", () => {
+  type FetchImpl = (url: string, init?: RequestInit) => Promise<Response>;
+  function withFetch<T>(impl: FetchImpl, run: () => Promise<T>): Promise<T> {
+    const orig = globalThis.fetch;
+    globalThis.fetch = impl as unknown as typeof fetch;
+    return run().finally(() => {
+      globalThis.fetch = orig;
+    });
+  }
+
+  function jsonResponse(body: unknown, status = 200): Response {
+    return new Response(JSON.stringify(body), { status });
+  }
+
+  // Tiny backoff keeps retry tests fast; production uses the 500ms default.
+  const fastBackoff = { backoffBaseMs: 1 };
+
+  test("200 → { status: 200, body } with the parsed JSON", async () => {
+    const result = await withFetch(
+      async () => jsonResponse({ ok: true }),
+      () => fetchJsonOr404("https://api.nuget.org/v3/x"),
+    );
+    expect(result).toEqual({ status: 200, body: { ok: true } });
+  });
+
+  test("404 → { status: 404 } as a VALUE, never a throw", async () => {
+    const result = await withFetch(
+      async () => jsonResponse({}, 404),
+      () => fetchJsonOr404("https://api.nuget.org/v3/missing"),
+    );
+    expect(result).toEqual({ status: 404 });
+  });
+
+  test("retries a 429 with backoff, then resolves on a later 200", async () => {
+    let calls = 0;
+    const result = await withFetch(
+      async () => {
+        calls += 1;
+        return calls < 3 ? jsonResponse({}, 429) : jsonResponse({ ok: true });
+      },
+      () => fetchJsonOr404("https://api.nuget.org/v3/retry", fastBackoff),
+    );
+    expect(calls).toBe(3);
+    expect(result).toEqual({ status: 200, body: { ok: true } });
+  });
+
+  test("persistent 5xx throws the loud registry error (fetchJson parity)", async () => {
+    let calls = 0;
+    await expect(
+      withFetch(
+        async () => {
+          calls += 1;
+          return jsonResponse({}, 503);
+        },
+        () => fetchJsonOr404("https://api.nuget.org/v3/boom", fastBackoff),
+      ),
+    ).rejects.toThrow(/registry 503 for https:\/\/api\.nuget\.org\/v3\/boom/);
+    expect(calls).toBeGreaterThan(1); // retried before giving up
+  });
+
+  test("a network error after retries throws loudly", async () => {
+    await expect(
+      withFetch(
+        async () => {
+          throw new Error("NETWORK DOWN");
+        },
+        () => fetchJsonOr404("https://api.nuget.org/v3/down", fastBackoff),
+      ),
+    ).rejects.toThrow(/registry fetch failed/);
+  });
+
+  test("sends the User-Agent and NO custom Accept (the fetchJson contract)", async () => {
+    let seen: HeadersInit | undefined;
+    await withFetch(
+      async (_url: string, init?: RequestInit) => {
+        seen = init?.headers;
+        return jsonResponse({ ok: true });
+      },
+      () => fetchJsonOr404("https://api.nuget.org/v3/headers"),
+    );
+    const headers = new Headers(seen);
+    expect(headers.has("accept")).toBe(false);
+    expect(headers.get("user-agent")).toContain("sbom-license-tool");
+  });
+});
+
+describe("nuget registration URL builder + catalogEntry host pin", () => {
+  test("lowercases BOTH the id and the version in the leaf URL (the casing 404 differential)", () => {
+    expect(nugetRegistrationLeafUrl("EntityFramework", "7.0.0-Beta1")).toBe(
+      "https://api.nuget.org/v3/registration5-gz-semver2/entityframework/7.0.0-beta1.json",
+    );
+  });
+
+  test("URL-decodes the purl parts, then re-encodes each path segment (%2B round-trip)", () => {
+    expect(nugetRegistrationLeafUrl("Meta.Package", "1.0.0%2Bbuild.5")).toBe(
+      "https://api.nuget.org/v3/registration5-gz-semver2/meta.package/1.0.0%2Bbuild.5.json",
+    );
+  });
+
+  test("catalogEntryUrlOf returns an api.nuget.org catalogEntry URL (the leaf fixture)", () => {
+    expect(catalogEntryUrlOf(registryFixture("nuget-leaf.json"))).toBe(
+      "https://api.nuget.org/v3/catalog0/data/2024.03.27.08.21.03/newtonsoft.json.13.0.4.json",
+    );
+  });
+
+  test("an attacker leaf pointing at a foreign host yields undefined (SSRF pin)", () => {
+    expect(
+      catalogEntryUrlOf({ catalogEntry: "https://evil.example/steal" }),
+    ).toBeUndefined();
+  });
+
+  test("a lookalike host (api.nuget.org.evil.example) fails the trailing-slash prefix", () => {
+    expect(
+      catalogEntryUrlOf({
+        catalogEntry: "https://api.nuget.org.evil.example/catalog.json",
+      }),
+    ).toBeUndefined();
+  });
+
+  test("a missing/non-string/malformed catalogEntry yields undefined, never throws", () => {
+    expect(catalogEntryUrlOf({})).toBeUndefined();
+    expect(catalogEntryUrlOf({ catalogEntry: 42 })).toBeUndefined();
+    expect(catalogEntryUrlOf(null)).toBeUndefined();
+    expect(catalogEntryUrlOf("nope")).toBeUndefined();
+  });
+});
+
+describe("nuget catalogEntry resolver (four-class ladder)", () => {
+  test("class 1: licenseExpression wins verbatim, via license-expression HIGH", () => {
+    expect(
+      resolveNugetCatalogLicense(registryFixture("nuget-expression.json")),
+    ).toEqual({ raw: "MIT", via: "license-expression", confidence: "high" });
+  });
+
+  test("class 2: an embedded licenseFile is an honest unknown (null) — the aka.ms sentinel never reads as a URL", () => {
+    expect(
+      resolveNugetCatalogLicense(registryFixture("nuget-licensefile.json")),
+    ).toBeNull();
+  });
+
+  test("class 2 ladder order: licenseFile is checked BEFORE a decodable licenses.nuget.org URL", () => {
+    // If the URL arm ran first this would (wrongly) resolve MIT — the embedded
+    // file must win and stay an honest unknown.
+    expect(
+      resolveNugetCatalogLicense({
+        licenseFile: "LICENSE.txt",
+        licenseUrl: "https://licenses.nuget.org/MIT",
+      }),
+    ).toBeNull();
+  });
+
+  test("class 3: a licenses.nuget.org licenseUrl decodes its URL path to the SPDX expression", () => {
+    expect(
+      resolveNugetCatalogLicense({
+        licenseUrl: "https://licenses.nuget.org/Apache-2.0",
+      }),
+    ).toEqual({
+      raw: "Apache-2.0",
+      via: "license-url-spdx",
+      confidence: "high",
+    });
+  });
+
+  test("class 3: an encoded compound expression decodes (normalizeRaw downstream stays the SPDX authority)", () => {
+    expect(
+      resolveNugetCatalogLicense({
+        licenseUrl: "https://licenses.nuget.org/MIT%20OR%20Apache-2.0",
+      }),
+    ).toEqual({
+      raw: "MIT OR Apache-2.0",
+      via: "license-url-spdx",
+      confidence: "high",
+    });
+  });
+
+  test("class 3: an EMPTY decoded remainder → null (never an empty raw)", () => {
+    expect(
+      resolveNugetCatalogLicense({
+        licenseUrl: "https://licenses.nuget.org/",
+      }),
+    ).toBeNull();
+  });
+
+  test("class 3: a malformed percent-escape in the path → null, never a throw", () => {
+    expect(
+      resolveNugetCatalogLicense({
+        licenseUrl: "https://licenses.nuget.org/%E0%A4%A",
+      }),
+    ).toBeNull();
+  });
+
+  test("class 4: a pre-2019 url-only entry (github blob) is an honest unknown", () => {
+    expect(
+      resolveNugetCatalogLicense(registryFixture("nuget-urlonly.json")),
+    ).toBeNull();
+  });
+
+  test("class 4: no license fields at all (the none fixture) → null", () => {
+    expect(
+      resolveNugetCatalogLicense(registryFixture("nuget-none.json")),
+    ).toBeNull();
+  });
+
+  test("an empty licenseExpression falls through (never an empty raw)", () => {
+    expect(
+      resolveNugetCatalogLicense({
+        licenseExpression: "  ",
+        licenseUrl: "https://licenses.nuget.org/MIT",
+      }),
+    ).toEqual({ raw: "MIT", via: "license-url-spdx", confidence: "high" });
+  });
+
+  test("a malformed/garbage document narrows to null, never throws", () => {
+    expect(resolveNugetCatalogLicense(null)).toBeNull();
+    expect(resolveNugetCatalogLicense("nope")).toBeNull();
+    expect(resolveNugetCatalogLicense([])).toBeNull();
+    expect(resolveNugetCatalogLicense(42)).toBeNull();
+  });
+});
+
+describe("nuget narrows (tolerant)", () => {
+  test("narrowNugetLeaf reads catalogEntry; wrong-typed/absent → undefined field", () => {
+    expect(
+      narrowNugetLeaf({ catalogEntry: "https://api.nuget.org/x" }),
+    ).toEqual({ catalogEntry: "https://api.nuget.org/x" });
+    expect(narrowNugetLeaf({ catalogEntry: 42 })?.catalogEntry).toBeUndefined();
+    expect(narrowNugetLeaf({})?.catalogEntry).toBeUndefined();
+  });
+
+  test("narrowNugetLeaf: a non-object top-level value → undefined, never throws", () => {
+    expect(narrowNugetLeaf(null)).toBeUndefined();
+    expect(narrowNugetLeaf([])).toBeUndefined();
+    expect(narrowNugetLeaf("nope")).toBeUndefined();
+  });
+
+  test("narrowNugetCatalogEntry reads the three license fields, all optional", () => {
+    const entry = narrowNugetCatalogEntry({
+      licenseExpression: "MIT",
+      licenseFile: "LICENSE.txt",
+      licenseUrl: "https://licenses.nuget.org/MIT",
+    });
+    expect(entry).toEqual({
+      licenseExpression: "MIT",
+      licenseFile: "LICENSE.txt",
+      licenseUrl: "https://licenses.nuget.org/MIT",
+    });
+  });
+
+  test("narrowNugetCatalogEntry: wrong-typed fields coerce to undefined (skip-don't-throw)", () => {
+    const entry = narrowNugetCatalogEntry({
+      licenseExpression: 5,
+      licenseFile: { nested: true },
+      licenseUrl: ["array"],
+    });
+    expect(entry?.licenseExpression).toBeUndefined();
+    expect(entry?.licenseFile).toBeUndefined();
+    expect(entry?.licenseUrl).toBeUndefined();
+  });
+
+  test("narrowNugetCatalogEntry: a non-object top-level value → undefined", () => {
+    expect(narrowNugetCatalogEntry(null)).toBeUndefined();
+    expect(narrowNugetCatalogEntry([])).toBeUndefined();
+    expect(narrowNugetCatalogEntry(7)).toBeUndefined();
   });
 });

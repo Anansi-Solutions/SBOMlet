@@ -1,0 +1,10 @@
+{
+  "@type": "PackageDetails",
+  "authors": "Oracle",
+  "id": "Oracle.ManagedDataAccess",
+  "licenseFile": "LICENSE.txt",
+  "licenseUrl": "https://aka.ms/deprecateLicenseUrl",
+  "listed": true,
+  "requireLicenseAcceptance": true,
+  "version": "23.9.1"
+}

@@ -123,6 +123,62 @@ export function narrowGithubLicense(value: unknown): GithubLicense | undefined {
   };
 }
 
+/** Tolerant NuGet registration-leaf projection: the only field the two-step hop reads. */
+export interface NugetLeaf {
+  /** catalogEntry — the catalog document URL (string or absent); host-pinned by the caller. */
+  catalogEntry?: string;
+}
+
+const NugetLeafDocument = type({ "catalogEntry?": "unknown" });
+
+/**
+ * Narrow a raw NuGet registration leaf to {@link NugetLeaf}. A non-object
+ * top-level value yields undefined; a missing or wrong-typed `catalogEntry`
+ * coerces to absent (skip-don't-throw, ASVS V5). The host pin on the URL
+ * itself lives in the enrichment module — this narrow only shapes.
+ */
+export function narrowNugetLeaf(value: unknown): NugetLeaf | undefined {
+  if (recordOf(value) === undefined) return undefined;
+  const parsed = NugetLeafDocument(value);
+  if (parsed instanceof type.errors) return undefined;
+  return { catalogEntry: stringOf(parsed.catalogEntry) };
+}
+
+/** Tolerant NuGet catalogEntry projection: the three license-metadata fields. */
+export interface NugetCatalogEntry {
+  /** licenseExpression — the SPDX-ish expression (modern packages). */
+  licenseExpression?: string;
+  /** licenseFile — a filename INSIDE the nupkg (embedded-file class), not a URL. */
+  licenseFile?: string;
+  /** licenseUrl — deprecated 2019; licenses.nuget.org URLs carry the expression in the path. */
+  licenseUrl?: string;
+}
+
+const NugetCatalogDocument = type({
+  "licenseExpression?": "unknown",
+  "licenseFile?": "unknown",
+  "licenseUrl?": "unknown",
+});
+
+/**
+ * Narrow a raw NuGet catalogEntry document to {@link NugetCatalogEntry}. A
+ * non-object top-level value yields undefined; every field is optional and a
+ * wrong-typed value coerces to undefined — the resolver simply sees absent
+ * fields and falls through its ladder (skip-don't-throw, ASVS V5).
+ */
+export function narrowNugetCatalogEntry(
+  value: unknown,
+): NugetCatalogEntry | undefined {
+  if (recordOf(value) === undefined) return undefined;
+  const parsed = NugetCatalogDocument(value);
+  if (parsed instanceof type.errors) return undefined;
+  return {
+    licenseExpression: stringOf(parsed.licenseExpression),
+    licenseFile: stringOf(parsed.licenseFile),
+    licenseUrl: stringOf(parsed.licenseUrl),
+  };
+}
+
 /** A string[] field: non-array → undefined, non-string entries dropped. */
 function stringArrayOf(value: unknown): string[] | undefined {
   if (!Array.isArray(value)) return undefined;

@@ -180,3 +180,51 @@ export async function fetchGithubLicense(
   // 403 rate-limit, persistent 5xx, or any other non-ok → transient/unreachable.
   throw new GithubTransientError(`github ${response.status} for ${url}`);
 }
+
+/** The result of a JSON fetch that treats 404 as a value: the parsed body, or a definitive not-found. */
+export type JsonOr404 = { status: 200; body: unknown } | { status: 404 };
+
+/**
+ * GET `url` and parse the JSON body with {@link fetchJson}'s EXACT posture —
+ * same timeout bound, same 429/5xx/network retry-with-backoff, same
+ * User-Agent, no custom Accept, no auth header, and the same loud terminal
+ * `registry <status> for <url>` error — with ONE divergence: a 404 returns
+ * `{ status: 404 }` as a VALUE instead of a throw (the
+ * {@link fetchGithubLicense} shape). The NuGet registration API 404s the leaf
+ * for any package not on nuget.org — a common legitimate reality for
+ * private-feed packages — so the caller classifies a clean 404 as a
+ * definitive negative rather than a run-failing error. Every transient
+ * failure still retries and then throws loudly, never a silent skip.
+ */
+export async function fetchJsonOr404(
+  url: string,
+  opts: FetchOptions = {},
+  attempt = 0,
+): Promise<JsonOr404> {
+  const backoffBase = opts.backoffBaseMs ?? BACKOFF_BASE_MS;
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      headers: { "User-Agent": USER_AGENT }, // NO custom Accept (fetchJson contract)
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+    });
+  } catch (error) {
+    if (attempt < MAX_RETRIES) {
+      await sleep(backoffBase * 2 ** attempt);
+      return fetchJsonOr404(url, opts, attempt + 1);
+    }
+    throw new Error(`registry fetch failed for ${url}`, { cause: error });
+  }
+
+  if (response.status === 404) {
+    return { status: 404 }; // definitive not-on-registry — the caller records the negative
+  }
+  if (isTransientStatus(response.status) && attempt < MAX_RETRIES) {
+    await sleep(backoffBase * 2 ** attempt);
+    return fetchJsonOr404(url, opts, attempt + 1);
+  }
+  if (!response.ok) {
+    throw new Error(`registry ${response.status} for ${url}`); // loud terminal failure
+  }
+  return { status: 200, body: await response.json() };
+}

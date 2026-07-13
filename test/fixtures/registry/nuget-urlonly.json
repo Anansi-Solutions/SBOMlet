@@ -1,0 +1,13 @@
+{
+  "@type": "PackageDetails",
+  "authors": "Microsoft",
+  "deprecation": {
+    "message": "This library has been replaced by newer client libraries.",
+    "reasons": ["Legacy"]
+  },
+  "id": "WindowsAzure.Storage",
+  "licenseUrl": "https://github.com/Azure/azure-storage-net/blob/master/LICENSE.txt",
+  "listed": true,
+  "requireLicenseAcceptance": true,
+  "version": "9.3.3"
+}

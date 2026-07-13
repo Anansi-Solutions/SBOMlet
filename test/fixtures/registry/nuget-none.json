@@ -1,0 +1,8 @@
+{
+  "@type": "PackageDetails",
+  "authors": "SQLite Development Team",
+  "id": "SQLite",
+  "listed": true,
+  "published": "2016-08-08T09:29:41.813+00:00",
+  "version": "3.13.0"
+}
