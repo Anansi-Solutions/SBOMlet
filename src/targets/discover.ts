@@ -12,7 +12,7 @@
  * target.ts's idiom; results sort deterministically by (identity, lockfile
  * kind) using compareCodeUnits, the only comparator allowed tool-wide.
  *
- * Two pure post-steps over the sorted walk output:
+ * Three pure post-steps over the sorted walk output:
  * - Same-dir JS lockfile collisions collapse to one target by precedence
  *   bun > pnpm > yarn > npm with a warning naming the chosen and every ignored
  *   lockfile; cross-ecosystem pairs (a JS lockfile plus poetry/uv in one
@@ -21,6 +21,11 @@
  *   bun.lockb without a surviving bun.lock target warns naming `bun install
  *   --save-text-lockfile`; beside a bun.lock it is silent (the text lockfile is
  *   authoritative).
+ * - `*.csproj` files are likewise observed during the walk but never become
+ *   targets: a directory with a csproj sighting and no surviving nuget target
+ *   feeds one AGGREGATED warning naming the RestorePackagesWithLockFile=true +
+ *   `dotnet restore` migration (per-directory detail under the verbose
+ *   option) — a .NET repo never scans to zero targets silently.
  *
  * This module is pure walk + classify: it never exits, never writes to stderr,
  * and returns an empty array for a lockfile-less root — the CLI owns the
@@ -53,6 +58,13 @@ export interface DiscoverOptions {
   toolDir?: string;
   /** Repeatable --exclude glob patterns, matched against the identity. */
   excludes?: readonly string[];
+  /**
+   * Per-directory warning detail (the CLI's --verbose): when true, the
+   * csproj-no-lock near-miss emits one warning per directory instead of the
+   * aggregated summary line. Affects warning FORMAT only — never the target
+   * set.
+   */
+  verbose?: boolean;
 }
 
 const LOCKFILES = new Map<string, LockfileKind>([
@@ -248,6 +260,76 @@ export function isExcluded(
   return matchers.some((re) => re.test(identity));
 }
 
+/**
+ * How many lockless-csproj directories the aggregated warning names verbatim;
+ * past this the list truncates to "e.g." plus the --verbose hint. Real .NET
+ * monorepos can hold ~100 lockless project directories — a per-directory
+ * warning wall is unusable, so the default is one summary line.
+ */
+const CSPROJ_EXAMPLE_LIMIT = 3;
+
+/**
+ * The csproj-sighted-but-no-lock warning strings: a .NET project without a
+ * committed packages.lock.json must be TOLD the migration recipe
+ * (RestorePackagesWithLockFile=true + `dotnet restore`), never silently
+ * inventoried as zero. One aggregated summary line by default; one line per
+ * directory when `verbose` (the CLI's --verbose) is set. `lockless` arrives
+ * compareCodeUnits-sorted, so both shapes are deterministic.
+ */
+function csprojNoLockWarnings(
+  lockless: readonly string[],
+  verbose: boolean,
+): string[] {
+  if (lockless.length === 0) return [];
+  if (verbose) {
+    return lockless.map(
+      (identity) =>
+        `target "${identity}" has a .csproj but no packages.lock.json, ` +
+        "which is required for .NET scanning — set " +
+        "RestorePackagesWithLockFile=true in the project and run " +
+        "`dotnet restore`, commit the lockfile, then re-scan",
+    );
+  }
+  const count = lockless.length;
+  const truncated = count > CSPROJ_EXAMPLE_LIMIT;
+  const examples = lockless
+    .slice(0, CSPROJ_EXAMPLE_LIMIT)
+    .map((identity) => `"${identity}"`)
+    .join(", ");
+  const countPhrase =
+    count === 1 ? "1 directory contains" : `${count} directories contain`;
+  return [
+    `${countPhrase} a .csproj but no packages.lock.json, which is required ` +
+      `for .NET scanning (${truncated ? "e.g. " : ""}${examples}) — set ` +
+      "RestorePackagesWithLockFile=true in each project, run " +
+      "`dotnet restore`, and commit the resulting lockfiles, then re-scan" +
+      (truncated ? "; re-run with --verbose to list every directory" : ""),
+  ];
+}
+
+/**
+ * Post-step 3's warning computation: every recorded csproj identity with NO
+ * surviving nuget target at that identity (the same-directory suppression —
+ * a committed packages.lock.json is authoritative), compareCodeUnits-sorted,
+ * rendered by {@link csprojNoLockWarnings}.
+ */
+function locklessCsprojWarnings(
+  csprojIdentities: ReadonlySet<string>,
+  targets: readonly DiscoveredTarget[],
+  opts?: DiscoverOptions,
+): string[] {
+  const lockless = [...csprojIdentities]
+    .filter(
+      (identity) =>
+        !targets.some(
+          (target) =>
+            target.identity === identity && target.lockfile === "nuget",
+        ),
+    )
+    .sort(compareCodeUnits);
+  return csprojNoLockWarnings(lockless, opts?.verbose ?? false);
+}
+
 /** Discovery output: collision-resolved targets plus warning data. */
 export interface DiscoveryResult {
   targets: DiscoveredTarget[];
@@ -283,6 +365,7 @@ export function discoverTargetsWithWarnings(
   const matchers = (opts?.excludes ?? []).map(globToRegExp);
   const found: DiscoveredTarget[] = [];
   const bunLockbIdentities = new Set<string>();
+  const csprojIdentities = new Set<string>();
 
   const identityOf = (dir: string): string =>
     relative(repoRoot, dir).split(sep).join("/") || ".";
@@ -314,6 +397,20 @@ export function discoverTargetsWithWarnings(
     bunLockbIdentities.add(identity);
   };
 
+  const recordCsproj = (dir: string): void => {
+    // Observed, never a target (the bun.lockb idiom for .NET): *.csproj is a
+    // name PATTERN, so it cannot live in the exact-name LOCKFILES map; the
+    // post-step below decides whether the sighting warrants the no-lock
+    // migration warning. Directory.Packages.props is deliberately NOT a
+    // trigger: it is not a project marker — a CPM repo with locks properly
+    // committed would otherwise get a spurious root-level warning (the props
+    // file's directory typically holds no lock), while a CPM repo WITHOUT
+    // locks already warns once per project via its csproj dirs.
+    const identity = identityOf(dir);
+    if (isExcluded(identity, matchers)) return;
+    csprojIdentities.add(identity);
+  };
+
   const walk = (dir: string): void => {
     // Symlinks report isDirectory() === false on Dirent entries, so they are
     // never followed — no cycle traversal, no escape from repoRoot. Do not add
@@ -326,6 +423,8 @@ export function discoverTargetsWithWarnings(
         recordLockfile(dir, entry.name);
       } else if (entry.isFile() && entry.name === "bun.lockb") {
         recordBunLockb(dir);
+      } else if (entry.isFile() && entry.name.endsWith(".csproj")) {
+        recordCsproj(dir);
       }
     }
   };
@@ -393,6 +492,12 @@ export function discoverTargetsWithWarnings(
       );
     }
   }
+
+  // Post-step 3: csproj sightings (the bun.lockb idiom for .NET). Silent when
+  // a nuget target survived in the same directory (the committed lock is
+  // authoritative); otherwise the directory joins the no-lock warning —
+  // aggregated by default, per-directory under the verbose option.
+  warnings.push(...locklessCsprojWarnings(csprojIdentities, targets, opts));
 
   warnings.sort(compareCodeUnits);
   return { targets, warnings };

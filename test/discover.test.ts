@@ -72,6 +72,23 @@ function writeBunLockb(dir: string): void {
   writeFileSync(join(dir, "bun.lockb"), Buffer.from([0x00, 0x01, 0x02, 0x03]));
 }
 
+function writeCsproj(dir: string, name = "App"): void {
+  mkdirSync(dir, { recursive: true });
+  // Content is never read — only the *.csproj name PATTERN matters.
+  writeFileSync(
+    join(dir, `${name}.csproj`),
+    '<Project Sdk="Microsoft.NET.Sdk" />\n',
+  );
+}
+
+function makeNugetProject(dir: string): void {
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(
+    join(dir, "packages.lock.json"),
+    '{ "version": 2, "dependencies": {} }\n',
+  );
+}
+
 afterEach(() => {
   for (const root of tempRoots.splice(0)) {
     rmSync(root, { recursive: true, force: true });
@@ -453,6 +470,163 @@ describe("discoverTargetsWithWarnings — binary bun.lockb handling", () => {
   });
 });
 
+describe("discoverTargetsWithWarnings — csproj sighted without packages.lock.json (NET-01 near-miss)", () => {
+  test("a lockless csproj dir yields zero targets and ONE aggregated warning naming the property, the command, and the directory", () => {
+    const root = makeTempRoot();
+    writeCsproj(join(root, "App"));
+
+    const { targets, warnings } = discoverTargetsWithWarnings(root);
+
+    expect(targets).toEqual([]);
+    expect(warnings).toEqual([
+      "1 directory contains a .csproj but no packages.lock.json, which is " +
+        'required for .NET scanning ("App") — set ' +
+        "RestorePackagesWithLockFile=true in each project, run " +
+        "`dotnet restore`, and commit the resulting lockfiles, then re-scan",
+    ]);
+    // The two migration ingredients the loud-no-lock contract requires (A-02).
+    expect(warnings[0]).toContain("RestorePackagesWithLockFile");
+    expect(warnings[0]).toContain("dotnet restore");
+  });
+
+  test("two lockless dirs AGGREGATE into one summary warning naming both, sorted (never a per-directory wall)", () => {
+    const root = makeTempRoot();
+    writeCsproj(join(root, "b-lib"), "BLib");
+    writeCsproj(join(root, "a-lib"), "ALib");
+
+    const { targets, warnings } = discoverTargetsWithWarnings(root);
+
+    expect(targets).toEqual([]);
+    expect(warnings).toEqual([
+      "2 directories contain a .csproj but no packages.lock.json, which is " +
+        'required for .NET scanning ("a-lib", "b-lib") — set ' +
+        "RestorePackagesWithLockFile=true in each project, run " +
+        "`dotnet restore`, and commit the resulting lockfiles, then re-scan",
+    ]);
+  });
+
+  test("past the example limit the aggregate truncates to e.g. plus the --verbose hint", () => {
+    const root = makeTempRoot();
+    for (const name of ["p1", "p2", "p3", "p4", "p5"]) {
+      writeCsproj(join(root, name), "Proj");
+    }
+
+    const { warnings } = discoverTargetsWithWarnings(root);
+
+    expect(warnings).toEqual([
+      "5 directories contain a .csproj but no packages.lock.json, which is " +
+        'required for .NET scanning (e.g. "p1", "p2", "p3") — set ' +
+        "RestorePackagesWithLockFile=true in each project, run " +
+        "`dotnet restore`, and commit the resulting lockfiles, then re-scan; " +
+        "re-run with --verbose to list every directory",
+    ]);
+  });
+
+  test("verbose emits one warning per directory instead of the aggregate, sorted deterministically", () => {
+    const root = makeTempRoot();
+    writeCsproj(join(root, "b-lib"), "BLib");
+    writeCsproj(join(root, "a-lib"), "ALib");
+
+    const { warnings } = discoverTargetsWithWarnings(root, { verbose: true });
+
+    expect(warnings).toEqual([
+      'target "a-lib" has a .csproj but no packages.lock.json, which is ' +
+        "required for .NET scanning — set RestorePackagesWithLockFile=true " +
+        "in the project and run `dotnet restore`, commit the lockfile, " +
+        "then re-scan",
+      'target "b-lib" has a .csproj but no packages.lock.json, which is ' +
+        "required for .NET scanning — set RestorePackagesWithLockFile=true " +
+        "in the project and run `dotnet restore`, commit the lockfile, " +
+        "then re-scan",
+    ]);
+  });
+
+  test("csproj beside packages.lock.json proceeds silently with one nuget target (same-directory suppression)", () => {
+    const root = makeTempRoot();
+    const dir = join(root, "locked");
+    writeCsproj(dir);
+    makeNugetProject(dir);
+
+    const { targets, warnings } = discoverTargetsWithWarnings(root);
+
+    expect(targets.map((t) => t.identity)).toEqual(["locked"]);
+    expect(targets.map((t) => t.lockfile)).toEqual(["nuget"]);
+    expect(warnings).toEqual([]);
+  });
+
+  test("suppression is per-directory: a lockless sibling still counts while the locked dir stays silent", () => {
+    const root = makeTempRoot();
+    writeCsproj(join(root, "locked"));
+    makeNugetProject(join(root, "locked"));
+    writeCsproj(join(root, "lockless"), "Lib");
+
+    const { targets, warnings } = discoverTargetsWithWarnings(root);
+
+    expect(targets.map((t) => t.identity)).toEqual(["locked"]);
+    expect(warnings).toEqual([
+      "1 directory contains a .csproj but no packages.lock.json, which is " +
+        'required for .NET scanning ("lockless") — set ' +
+        "RestorePackagesWithLockFile=true in each project, run " +
+        "`dotnet restore`, and commit the resulting lockfiles, then re-scan",
+    ]);
+  });
+
+  test("multiple csproj files in ONE directory count that directory once", () => {
+    const root = makeTempRoot();
+    const dir = join(root, "multi");
+    writeCsproj(dir, "App");
+    writeCsproj(dir, "App.Tests");
+
+    const { warnings } = discoverTargetsWithWarnings(root);
+
+    expect(warnings.length).toBe(1);
+    expect(warnings[0]).toMatch(/^1 directory contains/);
+  });
+
+  test("an excluded identity produces neither targets nor csproj warnings (bun.lockb parity)", () => {
+    const root = makeTempRoot();
+    writeCsproj(join(root, "skipme"));
+
+    const { targets, warnings } = discoverTargetsWithWarnings(root, {
+      excludes: ["skipme"],
+    });
+
+    expect(targets).toEqual([]);
+    expect(warnings).toEqual([]);
+  });
+
+  test("a Directory.Packages.props-only directory is NOT a trigger (no warning, no target)", () => {
+    // CPM's props file is not a project marker: a CPM repo with locks
+    // committed would otherwise get a spurious root-level warning (the props
+    // file's directory typically holds no lock), and a CPM repo WITHOUT locks
+    // already warns via its csproj dirs.
+    const root = makeTempRoot();
+    const dir = join(root, "cpm");
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, "Directory.Packages.props"), "<Project />\n");
+
+    const { targets, warnings } = discoverTargetsWithWarnings(root);
+
+    expect(targets).toEqual([]);
+    expect(warnings).toEqual([]);
+  });
+
+  test("same-dir package-lock.json + packages.lock.json yield TWO targets (cross-ecosystem coexistence, 15-01 precedence decision)", () => {
+    const root = makeTempRoot();
+    const dir = join(root, "x");
+    makeNpmProject(dir);
+    makeNugetProject(dir);
+
+    const { targets, warnings } = discoverTargetsWithWarnings(root);
+
+    expect(targets.map((t) => t.identity)).toEqual(["x", "x"]);
+    // "npm" < "nuget" by codepoint ("p" < "u") — kind tiebreak preserved;
+    // JS_PRECEDENCE never sees nuget, so no collision warning.
+    expect(targets.map((t) => t.lockfile)).toEqual(["npm", "nuget"]);
+    expect(warnings).toEqual([]);
+  });
+});
+
 describe("lockfileNameFor", () => {
   test("maps each lockfile kind back to its file name", () => {
     expect(lockfileNameFor("yarn")).toBe("yarn.lock");
@@ -461,5 +635,6 @@ describe("lockfileNameFor", () => {
     expect(lockfileNameFor("npm")).toBe("package-lock.json");
     expect(lockfileNameFor("pnpm")).toBe("pnpm-lock.yaml");
     expect(lockfileNameFor("bun")).toBe("bun.lock");
+    expect(lockfileNameFor("nuget")).toBe("packages.lock.json");
   });
 });
