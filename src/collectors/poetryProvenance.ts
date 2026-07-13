@@ -14,10 +14,10 @@
  * introducer SET, and a representative shortest path tie-broken by the smallest
  * child purl at each BFS level (NOT a whole-path lexicographic minimum).
  *
- * 07-19 DESCOPE — optionality is OUT OF SCOPE. Deriving optionality from poetry
+ * Optionality is deliberately OUT OF SCOPE. Deriving optionality from poetry
  * markers (`optional = true`, PEP 508 marker variables, extras, multi-variant
- * spec arrays) was a recurring mislabeling bug class (a critical/warning in 3 of
- * 4 adversarial-review rounds: node-keyed optional, `.some`-not-`.every` over
+ * spec arrays) was a recurring mislabeling bug class (flagged in three of
+ * four review rounds: node-keyed optional, `.some`-not-`.every` over
  * variants, `/\bextra\b/` matching `extra` as a marker VALUE). Rather than keep
  * patching marker semantics, the `optional` distinction is removed entirely.
  * Every `[package.dependencies]` entry is now just an edge; there is no

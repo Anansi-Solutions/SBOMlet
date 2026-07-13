@@ -10,13 +10,13 @@
  * missing finding is treated as unknown — defensive, never throws.
  *
  * Precedence per (package × occurrence), highest → lowest:
- *   0. DENY (POL-09) — denyRuleFor matches the finding's expression (license
+ *   0. DENY — denyRuleFor matches the finding's expression (license
  *      mode, OR-election over the UNION of all license deny allowlists so an OR
- *      across SEPARATE deny entries is denied — C#6; an OR finding with a branch
+ *      across SEPARATE deny entries is denied; an OR finding with a branch
  *      electable out of the union is NOT denied) or the package name (name mode,
  *      for non-SPDX use-restriction riders like Commons-Clause) → fail,
  *      denied[i], TERMINAL. Deny ALSO consults the PRE-OVERRIDE observed
- *      expression (finding.observedExpression — C#1): if EITHER the observed or
+ *      expression (finding.observedExpression): if EITHER the observed or
  *      the possibly-overridden finding expression is denied, deny fires, so a
  *      denied OBSERVED license can never be licensed back in by an override that
  *      rewrites it. Deny sits above EVERY accept lever AND above the
@@ -99,7 +99,7 @@ interface Assessment {
   /** isCopyleft on the elected node — the elected branch decides. */
   copyleft: boolean;
   /**
-   * The imprecise family token (INV-04) when the finding is imprecise, else
+   * The imprecise family token when the finding is imprecise, else
    * undefined. An imprecise finding has expression null so it never reaches
    * satisfies(); this field routes it to the present-but-needs-clarify lane.
    */
@@ -317,7 +317,7 @@ function clarifyIndexFor(entry: PackageEntry, policy: Policy): number {
 }
 
 /**
- * Verdict for an imprecise finding (INV-04). It never reached satisfies() (null
+ * Verdict for an imprecise finding. It never reached satisfies() (null
  * expression) and is never default:copyleft (no parseable leaf). Routing is by
  * the LITERAL COULD_BE_COPYLEFT_FAMILIES token set — NOT a COPYLEFT_FAMILY
  * lookup, which is keyed by exact SPDX ids and returns undefined for a bare
@@ -352,7 +352,7 @@ function impreciseVerdict(
 }
 
 /**
- * A STALE override (POL-07) FAILS the gate loudly before any other lane: the
+ * A STALE override FAILS the gate loudly before any other lane: the
  * override's `expects` precondition no longer matches the package's observed
  * signal, so an old assertion could be masking a relicense. The reason names
  * the package, the expected value, and the now-observed value; the rule id is
@@ -381,10 +381,10 @@ function staleVerdict(
 }
 
 /**
- * An unresolved ScanCode-vs-quick-check disagreement (SCAN-05 / D-03) FAILS the
+ * An unresolved ScanCode-vs-quick-check disagreement FAILS the
  * gate. The in-depth assessment and the declared/registry answer disagree, and
- * D-03 makes human involvement NECESSARY: a warn is ignorable, which recreates
- * the silent-absorption failure mode the decision forbids — so this is a fail,
+ * human involvement is NECESSARY: a warn is ignorable, which recreates
+ * the silent-absorption failure mode this verdict exists to prevent — a fail,
  * not a warn. It sits below deny (terminal) and stale (a stale override is
  * strictly more urgent) and ABOVE compatible (a compatible rule must never
  * auto-absorb a disputed answer). The reason names the package, the in-depth
@@ -415,7 +415,7 @@ function conflictVerdict(
 }
 
 /**
- * Citation for an override that fell through to the default:ok lane (POL-07).
+ * Citation for an override that fell through to the default:ok lane.
  * A project clarify (clarifyIndexFor !== -1) keeps its "clarify[i]" citation; a
  * tool-level builtin (no clarify entry) cites the distinct "override:builtin[i]"
  * rule id it carries — never plain default:ok, so a shipped disambiguation
@@ -455,13 +455,13 @@ function overrideCitation(
 }
 
 /**
- * Per-occurrence dev-scope downgrade (POL-08), applied ONLY to a verdict that
+ * Per-occurrence dev-scope downgrade, applied ONLY to a verdict that
  * would otherwise be a default FAIL (default:copyleft, or default:unknown when
  * unknownHandling="fail"). Keyed STRICTLY on occurrence.isDevDependency:
  *   - a PRODUCTION occurrence → the fail is returned UNCHANGED (the load-bearing
  *     safety property — a shipped copyleft/unknown can never be dev-downgraded).
  *   - a DEV occurrence branches on policy.devDependencies:
- *       "fail"   → no downgrade (gate dev exactly like prod, pre-POL-08).
+ *       "fail"   → no downgrade (gate dev exactly like prod).
  *       "warn"   → status "warn", reason appends the auditable dev-only cause,
  *                  rule id PRESERVED so the origin stays traceable.
  *       "ignore" → status "ok", reason names the explicit dev-only opt-out.
@@ -491,7 +491,7 @@ function applyDevScope(
 }
 
 /**
- * Package-level os-scope downgrade (COLL-04), applied ONLY to a verdict that
+ * Package-level os-scope downgrade, applied ONLY to a verdict that
  * would otherwise be a default FAIL (default:copyleft, or default:unknown when
  * unknownHandling="fail"). Keyed STRICTLY on the PACKAGE-level entry.scope ===
  * "os" (distinct from applyDevScope's occurrence-level isDevDependency):
@@ -550,13 +550,13 @@ function applyScopeDowngrades(
 }
 
 /**
- * Terminal-0 deny resolution (POL-09 + C#1 + #1/#5/#11). Returns the first
+ * Terminal-0 deny resolution. Returns the first
  * matching deny rule, checking, in order:
  *   1. the COMBINED assessment expression (name-mode also matches entry.name) —
  *      OR-election over the union of license deny allowlists;
- *   2. the PRE-OVERRIDE observedExpression (C#1) — a denied observed license an
+ *   2. the PRE-OVERRIDE observedExpression — a denied observed license an
  *      override rewrote can never be licensed back in;
- *   3. EVERY observed per-claim precise expression (#1/#5/#11) — a denied member
+ *   3. EVERY observed per-claim precise expression — a denied member
  *      combineKnown dropped via imprecise-family election / unknown collapse is
  *      still seen, in every scope.
  * Checks 2–3 pass null as the name so they consult the LICENSE allowlist only
@@ -584,7 +584,7 @@ function firstDeny(
 }
 
 /**
- * Terminal-0 deny verdict (POL-09). A matched deny rule force-fails the package
+ * Terminal-0 deny verdict. A matched deny rule force-fails the package
  * with the `denied[i]` rule id and a reason naming the matched license/pattern
  * and the source-available rationale. It is a `fail` → mapped to a violation
  * (exit 1) by the existing violations → exitCodeFor mapping. This sits ABOVE
@@ -697,7 +697,7 @@ function unknownVerdict(
 /**
  * Copyleft lane: a copyleft elected branch is SUPPRESSED when its occurrence
  * sits in a family-justified suppressed workspace, otherwise it is a would-be
- * default:copyleft FAIL routed through the scope downgraders (POL-08/COLL-04).
+ * default:copyleft FAIL routed through the scope downgraders.
  * Split out of verdictFor to keep the precedence walk within the complexity
  * budget; the behavior is unchanged — it runs only when assessment.copyleft is
  * true, below compatible and above the imprecise/unknown lanes.
@@ -768,7 +768,8 @@ function verdictFor(
   if (stale !== undefined) return staleVerdict(base, entry, stale);
 
   // conflict:scancode sits directly below stale and ABOVE compatible — a fail,
-  // not a warn, because D-03 makes human involvement NECESSARY and a warn is
+  // not a warn, because human involvement is NECESSARY and a warn is
+
   // ignorable (rationale on conflictVerdict). A stale override is strictly more
   // urgent so it fires first; no compatible rule may auto-absorb a disputed
   // answer, so this precedes the compatible lanes.
@@ -842,14 +843,14 @@ export function evaluate(
     // assessment expression (OR-election), name-mode the package name (works
     // even when the expression is null — the use-restriction rider case).
     //
-    // C#1 — deny terminal OVER overrides: an override may have rewritten a
+    // Deny is terminal OVER overrides: an override may have rewritten a
     // denied OBSERVED license (e.g. BUSL-1.1 → MIT) into the assessment
     // expression. Deny must ALSO consult the PRE-OVERRIDE observed expression;
     // if EITHER the observed or the (possibly-overridden) finding expression is
     // denied, deny fires. A denied observed license can never be licensed back
     // in by any override (deny is terminal over overrides).
     //
-    // #1/#5/#11 — deny sees EVERY observed claim: combineKnown elects an
+    // Deny sees EVERY observed claim: combineKnown elects an
     // imprecise family / collapses to unknown BEFORE a precise non-copyleft
     // DENIED member (BUSL-1.1, Elastic-2.0 — source-available) when an imprecise
     // family token or an unknown token co-exists, so the combined expression is
@@ -861,7 +862,7 @@ export function evaluate(
     // is inert per observed expression — it already matched via entry.name above.
     const denyRule = firstDeny(policy, entry, assessment.expression);
     for (const occurrence of entry.occurrences) {
-      // Compatible matches are PER OCCURRENCE (SCP-01): an unscoped rule
+      // Compatible matches are PER OCCURRENCE: an unscoped rule
       // accepts the package at every occurrence; a `where`-scoped rule only
       // at the occurrences its identity prefixes cover. First match in TOML
       // order wins per occurrence, package form before license form.

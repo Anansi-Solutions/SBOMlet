@@ -150,7 +150,7 @@ function makeFailingPullExec(): ExecFn {
 /**
  * A per-image recorder: writes a distinct one-component doc keyed by the scanned
  * image ref (the last argv operand), so a shared purl across two images can carry
- * DIFFERENT license claims per image — the adversarial-review Lens 2 probe. Every
+ * DIFFERENT license claims per image — a review probe for silent cross-image claim mixing. Every
  * docker call resolves with "[]" (present, digest "").
  */
 function makePerImageExecTool(
@@ -386,7 +386,7 @@ describe("collectDockerOsSbom one posture (full contents, generalized digest, pr
   });
 
   // The daemon-free end-to-end write test relocated from the removed
-  // pre-made-SBOM ingest suite (D-09 ADAPT): the outputPath-write contract now
+  // pre-made-SBOM ingest suite, adapted: the outputPath-write contract now
   // rides the --image lane through the orchestrator.
   test("runGenerateDockerSbom writes the committed doc via the --image lane, digest-pinned, LF-only", async () => {
     const digestRef = "docker.io/library/scan-a@sha256:" + "c".repeat(64);
@@ -583,7 +583,7 @@ describe("collectDockerOsSbom one posture (full contents, generalized digest, pr
     expect(a.includes("\r")).toBe(false);
   });
 
-  // The two-Dockerfile scenario, collector half (SCP-02): two Dockerfiles
+  // The two-Dockerfile scenario, collector half: two Dockerfiles
   // build two images that SHARE busybox while musl/zlib are image-unique. The
   // sidecar must say which image(s) each package is in, and each image's
   // source must be its discovery identity — the substrate that makes "where"

@@ -5,7 +5,7 @@
  *
  * Collectors NEVER write to stderr. The loop owns the
  * "collecting <id> via <name>@<version>" line (asking the registration for
- * its tool identity first), so the locked stderr shapes are emitted from
+ * its tool identity first), so the fixed stderr shapes are emitted from
  * exactly one place; ctx.log is the loop-provided sink should a collector
  * ever need to surface a line through the CLI.
  */

@@ -265,7 +265,7 @@ describe("renderMarkdown — table content", () => {
   });
 
   test("rows are ordered by (name, version, purl) codepoint ascending within each section", () => {
-    // POL-08: the summary table split into prod + dev-only sections. Each
+    // The summary table split into prod + dev-only sections. Each
     // section is independently comparePackages-sorted. dup-pkg has a production
     // twin in the fixture, so the prod-wins merge places it in the production
     // section (between apache-name-pkg and empty-group-pkg) and the
@@ -463,8 +463,8 @@ const basicView: PolicyView = {
   ],
 };
 
-describe("renderMarkdown — full OUT-01 document (04-02)", () => {
-  test("Test 1: policy render emits the locked section order with no date", () => {
+describe("renderMarkdown — the full document", () => {
+  test("Test 1: policy render emits the fixed section order with no date", () => {
     const output = renderMarkdown(policyModel, basicView);
     const lines = output.split("\n");
     expect(lines[0]).toBe("# Third-Party Licenses");
@@ -476,7 +476,7 @@ describe("renderMarkdown — full OUT-01 document (04-02)", () => {
       "Copyleft notice rules are configured in policy.toml.",
       "**Package counts:**",
       "## Copyleft and special notices",
-      // POL-08: the single summary table split into prod + dev-only sections,
+      // The single summary table split into prod + dev-only sections,
       // production first for determinism.
       "## Production dependencies",
       "## Development-only dependencies",
@@ -497,7 +497,7 @@ describe("renderMarkdown — full OUT-01 document (04-02)", () => {
     // ...but the header, counts block, and summary are all present.
     expect(output.includes("task generate")).toBe(true);
     expect(output.includes("**Package counts:**")).toBe(true);
-    // POL-08: both summary sections render even without a policy view.
+    // Both summary sections render even without a policy view.
     expect(output.includes("## Production dependencies")).toBe(true);
     expect(output.includes("## Development-only dependencies")).toBe(true);
   });
@@ -878,7 +878,7 @@ describe("renderMarkdown — full OUT-01 document (04-02)", () => {
   });
 });
 
-describe("renderMarkdown — POL-08 prod/dev document split", () => {
+describe("renderMarkdown — prod/dev document split", () => {
   /** A package with the given per-occurrence dev flags. */
   const pkgWith = (
     name: string,
@@ -949,7 +949,7 @@ describe("renderMarkdown — POL-08 prod/dev document split", () => {
   });
 });
 
-describe("renderMarkdown — COLL-04 Docker image packages section", () => {
+describe("renderMarkdown — Docker image packages section", () => {
   const appProd = entry({
     purl: "pkg:npm/app-prod@1.0.0",
     name: "app-prod",
@@ -1102,12 +1102,12 @@ describe("renderMarkdown — COLL-04 Docker image packages section", () => {
 });
 
 // ===========================================================================
-// 07-06: os-scope partial-license rendering. A finding carrying
+// Os-scope partial-license rendering. A finding carrying
 // `unrecognizedTokens` renders the expression PLUS the surfaced remainder in a
 // locked, deterministic, escapeCell-safe format. App-scope rows (never carry
 // unrecognizedTokens) render identically to before.
 // ===========================================================================
-describe("renderMarkdown — os-scope partial-license cell (07-06)", () => {
+describe("renderMarkdown — os-scope partial-license cell", () => {
   const osPartial = entry({
     purl: "pkg:deb/debian/os-partial@1.0",
     name: "os-partial",
@@ -1252,12 +1252,12 @@ describe("renderMarkdown — os-scope partial-license cell (07-06)", () => {
 });
 
 // ===========================================================================
-// COMMIT 1 (07-09): the Ecosystem column — the raw purl type segment rendered
+// The Ecosystem column — the raw purl type segment rendered
 // immediately after Name in EVERY table, routed through escapeCell. A mixed-
 // ecosystem model locks the per-row type across npm + pypi + deb + apk +
 // terraform, so the column reflects each package's own purl, not a single one.
 // ===========================================================================
-describe("renderMarkdown — Ecosystem column (07-09 COMMIT 1)", () => {
+describe("renderMarkdown — Ecosystem column", () => {
   const mixed: CanonicalDependencies = {
     packages: [
       entry({
@@ -1388,12 +1388,12 @@ describe("renderMarkdown — Ecosystem column (07-09 COMMIT 1)", () => {
 });
 
 // ===========================================================================
-// COMMIT 2 (07-09): the [document] title + preamble. The title replaces the H1
+// The [document] title + preamble. The title replaces the H1
 // (default "Third-Party Licenses"); the preamble renders verbatim as a markdown
 // block AFTER the auto-generated comment and BEFORE the policy pointer / counts.
 // Neither is escapeCell'd — both are author prose at the policy trust boundary.
 // ===========================================================================
-describe("renderMarkdown — [document] title + preamble (07-09 COMMIT 2)", () => {
+describe("renderMarkdown — [document] title + preamble", () => {
   const model: CanonicalDependencies = {
     packages: [
       entry({
@@ -1502,12 +1502,12 @@ describe("renderMarkdown — [document] title + preamble (07-09 COMMIT 2)", () =
 });
 
 // ===========================================================================
-// COMMIT 3 (07-09): the "## Problematic licenses" roll-up — rendered after the
+// The "## Problematic licenses" roll-up — rendered after the
 // counts block, before the copyleft section, ONLY on a policy run. A BLOCKING
 // table of every fail verdict (grouped by purl+rule+reason), plus a one-line
 // non-blocking warn roll-up. Empty state renders the ✅ line.
 // ===========================================================================
-describe("renderMarkdown — Problematic licenses summary (07-09 COMMIT 3)", () => {
+describe("renderMarkdown — Problematic licenses summary", () => {
   const denied = entry({
     purl: "pkg:npm/denied-pkg@1.0.0",
     name: "denied-pkg",
@@ -1610,7 +1610,7 @@ describe("renderMarkdown — Problematic licenses summary (07-09 COMMIT 3)", () 
     const output = renderMarkdown(model, view);
     const section = slice(output);
     expect(section.includes(HEADING)).toBe(true);
-    // The blocking table head with the locked column order — now carries the
+    // The blocking table head with the fixed column order — now carries the
     // Why column (07-13) between Used-in and Reason.
     expect(
       section.includes(

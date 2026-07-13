@@ -98,7 +98,7 @@ describe("mergeSboms — purl-keyed dedup and root exclusion", () => {
     );
 
     expect(dups.length).toBe(1);
-    // Prod-wins dev fold (POL-08 safety): one contribution is dev-marked, the
+    // Prod-wins dev fold (gate safety): one contribution is dev-marked, the
     // other (production) carries no marker — the production contribution forces
     // the merged occurrence to production. A shipped occurrence is never masked
     // to dev.
@@ -533,7 +533,7 @@ describe("mergeSboms — occurrence-level dev/prod scope", () => {
     // one target with DIVERGENT dev markers — here one component is dev-marked
     // and its twin is not (production). The fold is prod-wins: the production
     // twin forces the single occurrence to production, so a shipped copyleft can
-    // never be masked to dev (POL-08 safety). The plugin dual-run path never
+    // never be masked to dev (gate safety). The plugin dual-run path never
     // diverges — its duplicates share dev = !prodPurlSet.has(purl) — so this
     // fold direction is observable only on the property-marker collectors.
     const doc = {
@@ -573,8 +573,8 @@ describe("mergeSboms — occurrence-level dev/prod scope", () => {
   });
 });
 
-describe("mergeSboms — CollectedSbom.scope threading (COLL-04)", () => {
-  // A minimal Docker OS-SBOM (07-01 emitter shape): one deb + one apk component.
+describe("mergeSboms — CollectedSbom.scope threading", () => {
+  // A minimal docker SBOM (the emitter shape): one deb + one apk component.
   const osDoc = {
     bomFormat: "CycloneDX",
     specVersion: "1.6",

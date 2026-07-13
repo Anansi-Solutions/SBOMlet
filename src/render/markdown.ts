@@ -44,7 +44,7 @@ export interface PolicyView {
   suppressedWorkspaces: ReadonlyArray<SuppressedWorkspace>;
   verdicts: ReadonlyArray<Verdict>;
   /**
-   * Author-supplied document presentation (07-09, from the policy [document]
+   * Author-supplied document presentation (from the policy [document]
    * table). `title` replaces the default H1; `preamble` renders verbatim as a
    * markdown block below the auto-generated header. Both are author prose at the
    * policy trust boundary — rendered WITHOUT escapeCell (a title is a heading,
@@ -83,9 +83,9 @@ function isImprecise(pkg: PackageEntry): boolean {
 
 /**
  * License cell rule: the full normalized expression when a finding exists; an
- * imprecise finding renders "<family> (imprecise)" (INV-04 — the family,
+ * imprecise finding renders "<family> (imprecise)" (the family,
  * faithfully, never a fabricated precise id); an os-scope PARTIAL finding
- * (07-06) renders the expression PLUS the surfaced remainder
+ * renders the expression PLUS the surfaced remainder
  * ("<expression> (+ tok, tok)") so the known obligation AND the unrecognized
  * tokens are both visible; "unknown" when the expression is null and not
  * imprecise. Packages without a finding (pre-annotation tolerance) fall back to
@@ -93,13 +93,13 @@ function isImprecise(pkg: PackageEntry): boolean {
  */
 function licenseCellOf(pkg: PackageEntry): string {
   if (pkg.finding !== undefined) {
-    // os-scope partial (07-06): surface the unrecognized remainder alongside the
+    // os-scope partial: surface the unrecognized remainder alongside the
     // known signal. The tokens arrive deduped + sorted from normalize; the
-    // "(+ ...)" suffix is the locked, deterministic format. (Each token is
+    // "(+ ...)" suffix is the fixed, deterministic format. (Each token is
     // escapeCell-escaped by the caller, which runs escapeCell over the whole
     // cell string — the parens/plus/commas added here are not metacharacters.)
-    // #8: the suffix applies to BOTH the precise-expression and the imprecise
-    // branches — an imprecise os-partial (#2: imprecise family + unknown token)
+    // The suffix applies to BOTH the precise-expression and the imprecise
+    // branches — an imprecise os-partial (imprecise family + unknown token)
     // must show the remainder too, not drop it.
     const tokens = pkg.finding.unrecognizedTokens;
     const suffix =
@@ -122,7 +122,7 @@ function licenseCellOf(pkg: PackageEntry): string {
 }
 
 /**
- * Cap on the introducer path/set length rendered in a "why" cell (07-13). A very
+ * Cap on the introducer path/set length rendered in a "why" cell. A very
  * deep path or wide multi-parent set is truncated with a stable "(+N more)" so
  * the tables stay legible and deterministic. The cap counts EMITTED purls; the
  * truncation note is appended after them.
@@ -142,13 +142,13 @@ function boundedJoin(items: readonly string[], separator: string): string {
 }
 
 /**
- * Per-ROW provenance aggregation rule (07-13, target-scoped 07-17). A row
+ * Per-ROW provenance aggregation rule. A row
  * aggregates a package's occurrences, but introduction is PER-OCCURRENCE, so the
  * cell collapses them deterministically — and ONLY over the occurrences whose
  * target is in `shownTargets`, the SAME set the row's "Used in" cell names.
  *
- * SCOPING (07-17, #2/#3/#5): the Why cell and the Used-in cell MUST be computed
- * from the same occurrence subset. Folding over EVERY occurrence (the 07-13 bug)
+ * SCOPING: the Why cell and the Used-in cell MUST be computed
+ * from the same occurrence subset. Folding over EVERY occurrence (a past bug)
  * lets a row whose Used-in names only the flagged (transitive) workspace borrow
  * "direct" / a concrete path / an introducer from a DIFFERENT, unflagged
  * occurrence — a mislabel (no-mislabeling) or a fabricated chain that does not
@@ -156,7 +156,7 @@ function boundedJoin(items: readonly string[], separator: string): string {
  * `occurrences.filter(o => shownTargets.has(o.target))`; out-of-scope
  * occurrences never contribute direct/path/introducer evidence.
  *
- * Collapse rule (over the SCOPED subset, 07-19 optionality descoped):
+ * Collapse rule (over the SCOPED subset; optionality is descoped):
  * - if NO in-scope occurrence carries an introduction → "—" (the honest
  *   residual for terraform / Docker OS / bun / graph-less npm, and for a flagged
  *   occurrence with no introduction — never a fabricated or borrowed value);
@@ -168,7 +168,7 @@ function boundedJoin(items: readonly string[], separator: string): string {
  *   union was empty → "—", HIDING the real direct. With genuine (non-orphan)
  *   introductions:
  *     - if the package is DIRECT in EVERY genuine in-scope occurrence → "direct"
- *       (07-18: bare "direct" ONLY when nothing transitive is being hidden — a
+ *       (bare "direct" ONLY when nothing transitive is being hidden — a
  *       package direct in one flagged occurrence AND transitive in another must
  *       surface the transitive introducer);
  *     - else (transitive in ≥1 genuine in-scope occurrence) → the introducer:
@@ -179,14 +179,14 @@ function boundedJoin(items: readonly string[], separator: string): string {
  *   evidence anywhere) → the honest "—" residual.
  *
  * Paths/sets are bounded by boundedJoin. The returned string is escapeCell'd by
- * the caller. 07-19: optionality is descoped — no ", optional" suffix is ever
+ * the caller. Optionality is descoped — no ", optional" suffix is ever
  * rendered, and there is no hard-required/optional tier preference.
  */
 function whyCellOf(
   pkg: PackageEntry,
   shownTargets: ReadonlySet<string>,
 ): string {
-  // 07-17: fold ONLY over the occurrences the row actually shows. The Why cell
+  // Fold ONLY over the occurrences the row actually shows. The Why cell
   // and the Used-in cell must describe the SAME workspaces.
   const scoped = pkg.occurrences.filter((o) => shownTargets.has(o.target));
 
@@ -217,7 +217,7 @@ function whyCellOf(
   // evidence anywhere: the honest "—" residual (no-fabrication).
   if (genuine.length === 0) return "—";
 
-  // 07-18: bare "direct" ONLY when EVERY genuine in-scope occurrence is direct.
+  // Bare "direct" ONLY when EVERY genuine in-scope occurrence is direct.
   // If the package is direct in one flagged occurrence but transitive in
   // another, fall through to the path logic so the transitive introducer is
   // surfaced rather than hidden behind "direct".
@@ -258,7 +258,7 @@ function ecosystemOf(purl: string): string {
 /**
  * Unknown-license predicate for the counts block: a finding with a null
  * expression, or — pre-annotation — no finding and zero claims. An imprecise
- * finding (confidence "imprecise") is PRESENT, not unknown (INV-04), so it is
+ * finding (confidence "imprecise") is PRESENT, not unknown, so it is
  * excluded — the counts stay honest (imprecise is its own thing, surfaced in the
  * dedicated review section).
  */
@@ -272,8 +272,8 @@ function isUnknownLicense(pkg: PackageEntry): boolean {
 }
 
 /**
- * Package-level dev/prod classification by distribution reality (POL-08,
- * D-POL-08): a package is DEVELOPMENT-ONLY iff it has at least one occurrence
+ * Package-level dev/prod classification by distribution reality:
+ * a package is DEVELOPMENT-ONLY iff it has at least one occurrence
  * AND every occurrence is a dev dependency. A package with ANY production
  * (non-dev) occurrence is PRODUCTION — the conservative side, since a single
  * shipped occurrence carries the distribution obligation. A package with zero
@@ -288,7 +288,7 @@ function isDevelopmentOnly(pkg: PackageEntry): boolean {
 }
 
 /**
- * Package-level Docker image-package classification (COLL-04): an OS package is
+ * Package-level Docker image-package classification: an OS package is
  * one whose scope is "os" (a row threaded in from the committed docker.sbom.json,
  * now covering full generated-image contents, not only base-image OS packages).
  * OS packages render in their OWN section and are excluded from the prod/dev app
@@ -328,7 +328,7 @@ function tableRow(pkg: PackageEntry, usedIn: string): string {
 }
 
 /**
- * The copyleft-table head (07-13): the summary columns plus a trailing "Why"
+ * The copyleft-table head: the summary columns plus a trailing "Why"
  * column carrying per-row dependency provenance. Distinct from TABLE_HEAD so the
  * summary sections (Production/Development/Docker OS) stay byte-identical at five
  * columns; provenance surfaces only where it answers a compliance question.
@@ -341,7 +341,7 @@ const COPYLEFT_HEAD = [
 /**
  * One copyleft-table row: tableRow plus the escapeCell'd "Why" provenance. The
  * Why cell folds over the SAME flagged target set the Used-in cell names
- * (07-17) — never over the package's out-of-scope occurrences. `shownTargets` is
+ * — never over the package's out-of-scope occurrences. `shownTargets` is
  * the deduped+sorted flagged-target list whose join is the Used-in cell.
  */
 function copyleftRow(
@@ -354,7 +354,7 @@ function copyleftRow(
 }
 
 /**
- * The dedicated imprecise-licenses review section (INV-04): every imprecise
+ * The dedicated imprecise-licenses review section: every imprecise
  * package, so a maintainer sees exactly what to disambiguate via a `[[clarify]]`
  * override. Empty (omitted) when no package is imprecise. Input is already
  * comparePackages-sorted; every cell routes through escapeCell via tableRow.
@@ -377,7 +377,7 @@ function impreciseSectionLines(sorted: readonly PackageEntry[]): string[] {
 }
 
 /**
- * The dedicated assessment-conflicts review section (SCAN-05): every package
+ * The dedicated assessment-conflicts review section: every package
  * whose in-depth ScanCode assessment disagrees with the declared/registry quick
  * check carries a conflict marker (set by applyScancodeAssessment), and each is
  * a gate failure until a `[[clarify]]` override records the human's decision.
@@ -386,7 +386,7 @@ function impreciseSectionLines(sorted: readonly PackageEntry[]): string[] {
  * the imprecise-section precedent. Empty (omitted) when no package carries a
  * conflict marker (absent-not-empty for golden stability). Input is already
  * comparePackages-sorted; every cell routes through escapeCell so a hostile
- * expression string cannot break the table (T-12-04).
+ * expression string cannot break the table.
  */
 function conflictSectionLines(sorted: readonly PackageEntry[]): string[] {
   const rows: string[] = [];
@@ -455,8 +455,8 @@ function packageCountsLines(sorted: readonly PackageEntry[]): string[] {
 const DEFAULT_TITLE = "Third-Party Licenses";
 
 /**
- * Document H1 (07-09): the author-supplied [document].title when present, else
- * the locked default. A title is a HEADING, not a table cell — it is NOT
+ * Document H1: the author-supplied [document].title when present, else
+ * the fixed default. A title is a HEADING, not a table cell — it is NOT
  * escapeCell'd (author prose may legitimately carry markdown); any CR/LF is
  * collapsed to a single space and the result trimmed so the heading stays on one
  * line and the output carries no CR (determinism).
@@ -468,7 +468,7 @@ function documentTitle(policyView?: PolicyView): string {
 }
 
 /**
- * The blocking-table head for the "## Problematic licenses" roll-up (07-09).
+ * The blocking-table head for the "## Problematic licenses" roll-up.
  * Distinct from TABLE_HEAD: it carries Severity + Rule + Reason around the
  * package columns so the section is a self-contained gate report.
  */
@@ -486,7 +486,7 @@ interface BlockingGroup {
 }
 
 /**
- * Coarse warn category derived from a verdict rule (07-09 non-blocking roll-up):
+ * Coarse warn category derived from a verdict rule (non-blocking roll-up):
  * copyleft (default:copyleft / default:imprecise-copyleft), unknown
  * (default:unknown / default:imprecise), deny (rule starts with "deny"), else
  * other. Deterministic and total over the rule string.
@@ -509,7 +509,7 @@ function warnCategory(rule: string): "copyleft" | "unknown" | "deny" | "other" {
  * deduped, compareCodeUnits-sorted targets joined ", ".
  */
 function problematicRow(group: BlockingGroup, pkg: PackageEntry): string {
-  // 07-17: the Why cell folds over the SAME flagged target set the Used-in cell
+  // The Why cell folds over the SAME flagged target set the Used-in cell
   // names — never over the package's out-of-scope occurrences.
   const shownTargets = new Set(group.targets);
   const targets = [...shownTargets].sort(compareCodeUnits).join(", ");
@@ -517,7 +517,7 @@ function problematicRow(group: BlockingGroup, pkg: PackageEntry): string {
 }
 
 /**
- * The "## Problematic licenses" roll-up section (07-09) — rendered AFTER the
+ * The "## Problematic licenses" roll-up section — rendered AFTER the
  * counts block and BEFORE the copyleft section, on a policy run only. The
  * BLOCKING table is every fail verdict, grouped by (purl, rule, reason) into one
  * row with deduped+sorted targets; rows are sorted by rule, then package
@@ -625,7 +625,7 @@ export function renderMarkdown(
     "",
   ];
 
-  // Author preamble (07-09): verbatim markdown block after the auto-generated
+  // Author preamble: verbatim markdown block after the auto-generated
   // header comment and BEFORE the policy pointer / counts. CRLF/CR normalized to
   // "\n" (determinism); rendered as-is — NOT escapeCell'd: it is intentional
   // author markdown at the same trust boundary as the policy file. A trailing
@@ -646,7 +646,7 @@ export function renderMarkdown(
 
   lines.push(...packageCountsLines(sorted));
 
-  // Problematic licenses roll-up (07-09) — policy runs only. Rendered AFTER the
+  // Problematic licenses roll-up — policy runs only. Rendered AFTER the
   // counts block and BEFORE the copyleft section so the gate-blocking findings
   // sit at the top of the document.
   if (policyView !== undefined) {
@@ -669,7 +669,7 @@ export function renderMarkdown(
     // whose rule is exactly "default:copyleft" (the engine's only copyleft-
     // flagging rule). The Used-in cell lists only the flagged occurrence targets
     // — how the elected branch surfaces: the non-suppressed leaking workspaces
-    // are named. The Why column (07-13) carries the per-row provenance.
+    // are named. The Why column carries the per-row provenance.
     const copyleftRows: string[] = [];
     for (const pkg of sorted) {
       const flagged = (verdictsByPurl.get(pkg.purl) ?? []).filter(
@@ -726,13 +726,14 @@ export function renderMarkdown(
   // a policy view).
   lines.push(...impreciseSectionLines(sorted));
 
-  // Assessment-conflicts review section (SCAN-05) — finding-level, mirrors
+  // Assessment-conflicts review section — finding-level, mirrors
   // the imprecise section: absent when no package carries a conflict marker so
-  // zero-conflict documents stay byte-identical (D-06).
+  // zero-conflict documents stay byte-identical.
   lines.push(...conflictSectionLines(sorted));
 
-  // Summary tables, split by package-level dev/prod classification (POL-08) for
-  // APP-scope packages, then a dedicated Docker image packages section (COLL-04).
+  // Summary tables, split by package-level dev/prod classification for
+  // APP-scope packages, then a dedicated Docker image packages section.
+
   // Fixed order — production, development-only, then Docker image packages — for
   // determinism; each section always renders its heading (a ✅ line replaces the
   // table when empty). The Used-in cell stays the full occurrence-target list; the split is

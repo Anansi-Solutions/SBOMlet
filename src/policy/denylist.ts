@@ -56,9 +56,9 @@
  *   - "GPL-3.0 OR BUSL-1.1"  → denied ONLY when the deny set covers BOTH
  *                              branches, i.e. no branch is electable out.
  * This keeps deny exactly consistent with the compatible OR-election path while
- * preventing over-denial of a finding that has an acceptable branch (T-06-16).
+ * preventing over-denial of a finding that has an acceptable branch.
  *
- * UNION-ELECTION ACROSS SEPARATE LICENSE RULES (C#6 — load-bearing):
+ * UNION-ELECTION ACROSS SEPARATE LICENSE RULES (load-bearing):
  * The election above must run against the UNION of EVERY match="license" deny
  * allowlist, not each rule's allowlist in isolation. The shipped defaults provide
  * BUSL-1.1, SSPL-1.0, Elastic-2.0 as SEPARATE match="license" rules, so an

@@ -610,8 +610,8 @@ describe("offline check contract — enrichment staleness (INTG-03, GATE-02)", (
 });
 
 // ===========================================================================
-// COLL-04: the committed docker.sbom.json is threaded into the merge as a
-// scope:"os" INPUT (07-01's emitter output), repo-root-resolved. A MISSING file
+// The committed docker.sbom.json is threaded into the merge as a
+// scope:"os" INPUT (the emitter's output), repo-root-resolved. A MISSING file
 // is the enrichment-cache-miss equivalent: NO os entries, NO scan, NO docker.
 // buildOutputs is write-free so these run directly against a temp base dir.
 // ===========================================================================
@@ -657,7 +657,7 @@ const EMPTY_FETCH = (async (): Promise<Response> =>
     headers: { "content-type": "application/json" },
   })) as unknown as typeof fetch;
 
-describe("COLL-04 committed docker.sbom.json as a scope:os merge input", () => {
+describe("the committed docker.sbom.json as a scope:os merge input", () => {
   beforeAll(() => {
     mock.module("../src/collectors/cdxgen", () => ({
       ...REAL_CDXGEN,
@@ -1129,7 +1129,7 @@ describe("sidecar fan-out and the malformed-sidecar failure", () => {
 });
 
 // ===========================================================================
-// THE DESIGN TEST (SCP-01+02, roadmap criterion 1 verbatim): two Dockerfiles,
+// THE DESIGN TEST: two Dockerfiles,
 // busybox accepted via `where` in image A only — image B's busybox occurrence
 // warns per [os_dependencies] handling (fails under handling="fail"), VISIBLY
 // in the rendered output and in a stderr policy line naming the B target; the
@@ -1209,7 +1209,7 @@ function scenarioPolicy(osHandling: string, scoped: boolean): string {
   ].join("\n");
 }
 
-describe("the two-Dockerfile scenario end-to-end (roadmap criterion 1)", () => {
+describe("the two-Dockerfile scenario end-to-end", () => {
   beforeAll(() => {
     mock.module("../src/collectors/cdxgen", () => ({
       ...REAL_CDXGEN,

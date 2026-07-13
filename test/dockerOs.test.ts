@@ -8,7 +8,7 @@
  *
  * No live syft spawn happens here — the two fixtures are trimmed real-syft
  * captures (postgres:18 dpkg + nginx:stable-alpine apk). The live scan is the
- * gated dogfood's job (07-03).
+ * gated dogfood's job.
  */
 
 import {
@@ -113,7 +113,7 @@ describe("dockerPullArgs (argv lock, implicit probe-first pull)", () => {
 
 describe("filterOsComponents (image-contents purl filter, all ecosystems)", () => {
   test("keeps every component carrying a non-empty name+version+purl, across ecosystems", () => {
-    // The single predicate is ecosystem-agnostic (D-03): deb, apk, and npm all
+    // The single predicate is ecosystem-agnostic: deb, apk, and npm all
     // survive as long as they carry name+version+purl. purl-less file /
     // operating-system noise and empty-field entries are still dropped.
     const mixed = {

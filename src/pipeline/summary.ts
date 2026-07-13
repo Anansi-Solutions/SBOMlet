@@ -1,7 +1,7 @@
 /**
  * The stderr policy summary and the log sanitizer it depends on: every
  * untrusted string printed to stderr passes through sanitizeForLog here, so
- * the locked summary line shapes cannot be forged or erased.
+ * the fixed summary line shapes cannot be forged or erased.
  */
 
 import { type Verdict } from "../model/dependencies";
@@ -42,7 +42,7 @@ const MAX_LOG_FIELD = 500;
  * ANSI-aware terminals (ESC[2K / ESC[1A). Every C0 control character (incl.
  * \n, \r, \t, and ESC 0x1B), DEL (0x7F), and the C1 range (0x80-0x9F) is
  * replaced with a space, then the field is length-capped. Plain printable text
- * passes through unchanged, so the locked summary shapes below are unaffected.
+ * passes through unchanged, so the fixed summary shapes below are unaffected.
  * Exported for direct unit testing.
  */
 export function sanitizeForLog(value: string): string {
@@ -82,14 +82,14 @@ export function writePolicySummary(
       `${counts.suppressed} suppressed, ${counts.ok} ok ` +
       `(${verdicts.length} verdicts)\n`,
   );
-  // INV-04: surface the imprecise count on its OWN line (the locked counts-line
-  // shape above is unchanged). Imprecise verdicts are a subset of the warn count
+  // Surface the imprecise count on its OWN line (the counts-line shape above
+  // is unchanged). Imprecise verdicts are a subset of the warn count
   // — they need clarify-disambiguation, not a gate failure. Printed only when
   // any exist, so policies with no imprecise findings keep byte-identical output.
   //
-  // I1: this count is PER-OCCURRENCE (one per package×target verdict), matching
+  // This count is PER-OCCURRENCE (one per package×target verdict), matching
   // the `(M verdicts)` denominator above — NOT the per-package markdown review
-  // section. The "(N verdicts)" suffix mirrors the locked counts-line so the
+  // section. The "(N verdicts)" suffix mirrors the counts-line above so the
   // denominator is unambiguous and never read as a package count.
   const impreciseCount = verdicts.filter((v) =>
     v.rule.startsWith("default:imprecise"),
@@ -100,8 +100,8 @@ export function writePolicySummary(
         `[[clarify]]) (${impreciseCount} verdicts)\n`,
     );
   }
-  // SCAN-05: surface the assessment-conflict count on its OWN line (the locked
-  // counts-line shape above is unchanged). A conflict:scancode verdict is a FAIL
+  // Surface the assessment-conflict count on its OWN line (the counts-line
+  // shape above is unchanged). A conflict:scancode verdict is a FAIL
   // (a subset of the fail count) — the in-depth scan disagrees with the quick
   // check and a human must resolve it via [[clarify]]. Printed only when any
   // exist, so policies with no conflicts keep byte-identical output.
@@ -114,8 +114,8 @@ export function writePolicySummary(
         `[[clarify]] (${conflictCount} verdicts)\n`,
     );
   }
-  // POL-08: surface how many would-be fails were dev-downgraded to warn on
-  // their own line (the locked counts-line shape above is unchanged). These are
+  // Surface how many would-be fails were dev-downgraded to warn on their own
+  // line (the counts-line shape above is unchanged). These are
   // a subset of the warn count — a build-time-only copyleft/unknown that carries
   // no distribution obligation. Printed only when any exist, so policies with no
   // dev downgrades keep byte-identical output. Matched on the auditable

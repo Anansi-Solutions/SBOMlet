@@ -5,7 +5,7 @@
  * wall-clock bound + a loud, actionable error naming the operand on a
  * non-success), adapted from subprocess to `globalThis.fetch` — no
  * child_process here. Generate may fetch; a persistent failure is LOUD, never a
- * silent skip and never a negative-cache write (the locked reliability
+ * silent skip and never a negative-cache write (a deliberate reliability
  * decision).
  *
  * The wrapper does NOT construct URLs. Callers (the PyPI/npm resolvers) pass an

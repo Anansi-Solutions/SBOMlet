@@ -4,12 +4,12 @@
  * deterministic CycloneDX re-emit + size gate). It is GENERATE-ONLY and is NOT
  * a registry Collector: `gate/check.ts` runs collectTargets on the check path,
  * so a registered collector would force a docker daemon onto every CI check.
- * Its committed OS-SBOM is consumed as a merge INPUT by the pipeline (07-02),
- * never discovered per-run.
+ * Its committed SBOM is consumed as a merge INPUT by the pipeline, never
+ * discovered per-run.
  *
- * Why syft: the 07 spike proved syft fills 96.7% dpkg + 100% apk licenses where
- * cdxgen `-t docker` fills 0% dpkg — it solves COLL-04's hard part (OS-package +
- * license extraction across BOTH dpkg and apk).
+ * Why syft: a comparison spike measured syft filling 96.7% dpkg + 100% apk
+ * licenses where cdxgen `-t docker` fills 0% dpkg — and OS-package + license
+ * extraction across BOTH dpkg and apk is the hard part of this collector.
  *
  * Flow per image (ONE posture — every scan reads the image's FULL contents):
  *  1. Probe local presence with `docker inspect`; if the image is absent
@@ -18,15 +18,15 @@
  *     refreshed and the network is never raced into the determinism contract.
  *  2. `syft <image> -o cyclonedx-json=<tmp>` via execTool (argv array ONLY —
  *     the image ref is an operand, never a shell string: command injection is
- *     impossible by construction, ASVS V12 / T-07-01).
- *  3. assertSyftSbomSize stat-gates the output before any read (DoS bound,
- *     T-07-02), then parse and assert specVersion === "1.6" (pin verification).
+ *     impossible by construction).
+ *  3. assertSyftSbomSize stat-gates the output before any read (DoS bound),
+ *     then parse and assert specVersion === "1.6" (pin verification).
  *  4. filterOsComponents keeps EVERY component carrying name+version+purl,
  *     across ecosystems (deb/apk/npm/pypi/...) — syft's purl-less
  *     file/operating-system/generic entries are dropped.
  *  5. `docker inspect --format '{{json .RepoDigests}}' <image>` records the
  *     PLATFORM RepoDigest actually scanned (NOT `buildx imagetools inspect`,
- *     which returns the manifest-LIST digest — T-07-03); an image with no
+ *     which returns the manifest-LIST digest); an image with no
  *     RepoDigests (a local-only / never-pushed build) records digest "".
  *
  * Emit: a minimal deterministic `{ bomFormat, specVersion:"1.6", components,
@@ -59,7 +59,7 @@ export const SYFT_TOOL = { name: "syft", version: "1.45.1" } as const;
 /**
  * DoS bound: real syft CycloneDX output is sub-MiB (postgres:18 ≈ 543 KB);
  * 64 MiB is generous headroom. The stat gate fires before any read/parse so a
- * hostile/huge SBOM can never balloon memory (T-07-02, ASVS V12).
+ * hostile/huge SBOM can never balloon memory.
  */
 export const MAX_SYFT_SBOM_BYTES = 64 * 1024 * 1024;
 
@@ -281,7 +281,7 @@ function isPurlComponent(raw: RawComponent): raw is {
  *
  * ONE posture: keep EVERY component carrying a non-empty string
  * name+version+purl, across all ecosystems (deb/apk/npm/pypi/...) — the full
- * image contents (D-03). syft's purl-less file/operating-system/generic noise
+ * image contents. syft's purl-less file/operating-system/generic noise
  * and empty-name/version/purl entries are dropped.
  */
 export function filterOsComponents(sbom: unknown): OsComponent[] {
@@ -409,7 +409,7 @@ async function scanImage(
       `syft produced no output file at ${outFile}\ninvocation: ${invocation}`,
     );
   }
-  // Size gate BEFORE read (DoS bound, T-07-02).
+  // Size gate BEFORE read (DoS bound).
   assertSyftSbomSize(outFile);
 
   // Read outside the parse try: an I/O failure must surface as itself, not as a
@@ -450,9 +450,9 @@ function parseSyftOutput(
  * `docker inspect --format '{{json .RepoDigests}}'`. Selects ONE digest
  * DETERMINISTICALLY from the daemon-returned set via {@link selectDigest}
  * (repo-match, else compareCodeUnits-smallest) so the committed
- * docker.sbom.json is byte-stable across machines (finding #2) — NOT the
+ * docker.sbom.json is byte-stable across machines — NOT the
  * daemon-order-dependent `digests[0]`, and NOT the manifest-list digest a
- * `buildx imagetools inspect` would return (T-07-03). Returns "" when the image
+ * `buildx imagetools inspect` would return. Returns "" when the image
  * has no RepoDigests (a local-only / never-pushed build — e.g. a just-built
  * tag), which is the generalized digest-less identity.
  */
@@ -472,13 +472,13 @@ async function resolveDigest(
   // Absent RepoDigests → the generalized digest-less identity (a local-only,
   // never-pushed image, e.g. a just-built tag). Never a throw: resolveDigest
   // runs only AFTER a successful scan, so "" can never mask a typo'd ref — an
-  // absent ref fails earlier at the pull/scan step (T-13-05).
+  // absent ref fails earlier at the pull/scan step.
   return selectDigest(image, digests) ?? "";
 }
 
 /**
- * Deterministically select ONE RepoDigest from the daemon-returned set (finding
- * #2, 07-31). `docker inspect --format '{{json .RepoDigests}}'` returns a
+ * Deterministically select ONE RepoDigest from the daemon-returned set.
+ * `docker inspect --format '{{json .RepoDigests}}'` returns a
  * daemon-ORDER-dependent array: an image pulled from / pushed to multiple
  * registries carries multiple RepoDigests whose array order varies by machine.
  * Selecting `digests[0]` therefore makes the committed docker.sbom.json
@@ -561,11 +561,10 @@ export function parseRepoDigests(stdout: string, invocation: string): string[] {
  * when two images share a purl with DIFFERENT claims, whichever image is
  * scanned first decides the committed license — an unsorted walk makes that
  * choice a function of argv order, breaking the byte-determinism contract
- * (D-14) for `--image b a` vs `--image a b` over the identical image SET.
+ * for `--image b a` vs `--image a b` over the identical image SET.
  * Sorting here matches the existing resolveDiscoveredImages /
  * resolveTargetedDockerfiles convention (both already compareCodeUnits-sort
- * before scanning); this closes the one caller path (--image) that did not
- * (adversarial review, 09-07, Lens 2).
+ * before scanning); this closes the one caller path (--image) that did not.
  */
 /**
  * Scan + filter + identify ONE image with the single posture: probe local
@@ -590,7 +589,7 @@ async function collectOneImage(
   // Probe-first implicit pull: a locally-present ref is scanned as-is (never
   // re-pulled, so a stale tag is never silently refreshed); only an absent ref
   // is pulled, and if the pull fails the error surfaces BEFORE any scan or
-  // digest resolution (T-13-05 — "" can never mask a typo'd ref).
+  // digest resolution ("" can never mask a typo'd ref).
   if (!(await imageIsPresentLocally(image, opts.dockerBin, opts.spawnOpts))) {
     await execTool(opts.dockerBin, dockerPullArgs(image), opts.spawnOpts);
   }

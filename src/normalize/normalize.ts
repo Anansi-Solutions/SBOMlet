@@ -757,7 +757,7 @@ function quickCheckClaims(claims: ReadonlyArray<LicenseClaim>): LicenseClaim[] {
  * True when one quick-check claim AGREES with the precise in-depth
  * expression. A precise member P agrees iff P === S (normalized exact
  * equality, cheap first check) or satisfies(P, [S]) holds — satisfies is
- * defensive per the locked spdx-satisfies allowlist edge (a compound S
+ * wrapped defensively for the spdx-satisfies allowlist edge (a compound S
  * throws for AND and OR alike): ANY throw = disagree, fail closed, so a
  * compound assessment can only agree via exact equality. An imprecise
  * family agrees iff every leaf of S is in the family. A genuinely-unknown

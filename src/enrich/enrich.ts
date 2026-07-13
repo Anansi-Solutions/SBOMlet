@@ -161,7 +161,7 @@ export function resolveFromDocument(
 /**
  * Append a cache-sourced claim to a package via spread (input never mutated).
  * `source` flows from the caller — a registry resolution appends "registry",
- * a cache hit appends whatever provenance the entry carries (D-04: replay is
+ * a cache hit appends whatever provenance the entry carries (replay is
  * exact in every mode, never hardcoded).
  */
 export function withCacheClaim(
@@ -279,7 +279,7 @@ export async function enrichUnknowns(
   return { model: { packages }, staleUnknowns };
 }
 
-/** The GitHub License API base — a FIXED host (the SSRF control, T-06-04). */
+/** The GitHub License API base — a FIXED host (the SSRF control). */
 const GITHUB_API_HOST = "https://api.github.com";
 
 /** Build the GitHub License API URL for a repo at an optional ref (URL-encoded). */

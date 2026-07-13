@@ -428,7 +428,7 @@ describe("writePolicySummary — imprecise count line (INV-04)", () => {
     reason: "imprecise family",
   });
 
-  test("an imprecise count line is added without reshaping the locked counts line", async () => {
+  test("an imprecise count line is added without reshaping the fixed counts line", async () => {
     const verdicts: Verdict[] = [
       impreciseVerdict("default:imprecise"),
       impreciseVerdict("default:imprecise-copyleft"),
@@ -478,7 +478,7 @@ describe("writePolicySummary — assessment conflict count line (SCAN-05)", () =
     reason: "assessment conflict — resolve via [[clarify]]",
   });
 
-  test("an assessment-conflict count line is added without reshaping the locked counts line", async () => {
+  test("an assessment-conflict count line is added without reshaping the fixed counts line", async () => {
     const verdicts: Verdict[] = [
       conflictVerdict("pkg:npm/a@1.0.0"),
       conflictVerdict("pkg:npm/b@1.0.0"),
@@ -667,7 +667,7 @@ describe("runGenerate discovery warnings (collision, bun.lockb)", () => {
       });
     });
 
-    // Exactly ONE collision warning, with the locked prefix and content.
+    // Exactly ONE collision warning, with the exact prefix and content.
     const collisionLines = stderr
       .split("\n")
       .filter((line) => line.includes("has multiple JS lockfiles"));
@@ -1008,7 +1008,7 @@ describe("runGenerate --policy", () => {
     );
   });
 
-  test("Test 3b: a where-scoped rule matching no occurrence gates nothing and is reported unused (SCP-01)", async () => {
+  test("Test 3b: a where-scoped rule matching no occurrence gates nothing and is reported unused", async () => {
     const { root } = makeScannableTree();
     // The pattern matches copyleft-lib's AGPL, but the scope names an
     // occurrence identity that does not exist in this tree — the rule must
@@ -1520,15 +1520,15 @@ describe("buildOutputs and the generate output set (04-05)", () => {
 });
 
 // ---------------------------------------------------------------------------
-// POL-07 Task 3: end-to-end stale-override exit-lane regression through the
+// End-to-end stale-override exit-lane regression through the
 // real generate → check → exitCodeFor path. The shared FIXTURE_SBOM's mit-lib
 // (a precise MIT package) is the seam: a [[clarify]] expecting "BSD" on it is
 // STALE (observed MIT, not BSD) → a fail verdict → exit 1 via the EXISTING
-// violations→exitCodeFor mapping, with no reshaping of the locked summary
+// violations→exitCodeFor mapping, with no reshaping of the fixed summary
 // shapes. Re-uses the runGenerate --policy stub installed below.
 // ---------------------------------------------------------------------------
 
-describe("check — stale-override exit lane (POL-07)", () => {
+describe("check — stale-override exit lane", () => {
   beforeAll(() => {
     mock.module("../src/collectors/cdxgen", () => ({
       ...REAL_CDXGEN,
@@ -1615,14 +1615,14 @@ describe("check — stale-override exit lane (POL-07)", () => {
 });
 
 // ---------------------------------------------------------------------------
-// POL-08 Task 3: end-to-end dev/prod gate exit-lane regression through the real
+// End-to-end dev/prod gate exit-lane regression through the real
 // generate → check → exitCodeFor path. A copyleft (AGPL) package marked dev-only
 // via the cdxgen development property is dev-downgraded to warn — a warn never
 // counts as a violation, so a repo whose ONLY copyleft is dev-only exits 0 under
 // the default dev_dependencies=warn. The SAME package with a production
 // occurrence drives exit 1. dev_dependencies="fail" gates the dev-only model to
 // exit 1; "ignore" exits 0 (dev occurrences ok). All through the EXISTING
-// violations→exitCodeFor mapping with the locked summary shapes intact.
+// violations→exitCodeFor mapping with the fixed summary shapes intact.
 // ---------------------------------------------------------------------------
 
 const DEV_PROP = { name: "cdx:npm:package:development", value: "true" };
@@ -1668,7 +1668,7 @@ const PROD_COPYLEFT_SBOM = {
   ],
 };
 
-describe("check — dev/prod gate exit lane (POL-08)", () => {
+describe("check — dev/prod gate exit lane", () => {
   function stubScan(sbom: unknown): void {
     mock.module("../src/collectors/cdxgen", () => ({
       ...REAL_CDXGEN,
@@ -2134,7 +2134,7 @@ describe("generate-docker-sbom three-lane contract", () => {
     return mkdtempSync(join(tmpdir(), "licenses-cli-docker-"));
   }
 
-  // The three lanes are PAIRWISE mutually exclusive (D-01). The old union
+  // The three lanes are PAIRWISE mutually exclusive. The old union
   // allowances (--dockerfile+--repo-root, --dockerfile+--image) are consciously
   // INVERTED to conflicts here.
   test("--dockerfile and --repo-root conflict, naming both flags", () => {
@@ -2232,7 +2232,7 @@ describe("generate-docker-sbom three-lane contract", () => {
     expect(message).toContain("--image");
   });
 });
-describe("optionsFrom --intensive threading (10-05, D-07 absent-not-false)", () => {
+describe("optionsFrom --intensive threading (absent-not-false)", () => {
   test("intensive absent from CliValues leaves options.intensive ABSENT (own-property, not false)", () => {
     const options = optionsFrom({});
     expect(Object.prototype.hasOwnProperty.call(options, "intensive")).toBe(

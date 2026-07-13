@@ -155,7 +155,9 @@ The gates enforce TypeScript strict mode with no emit; the recommended ESLint an
 typescript-eslint rule sets plus project rules (an explicit return type and no
 `any` are errors, and `max-depth` and `complexity` caps favour small,
 guard-claused functions); and Prettier with double quotes and trailing commas.
-Goldens and fixtures are excluded from both.
+A custom rule also errors on process shorthand in `src/` comments — comments
+are written in plain words a reader of the code understands. Goldens and
+fixtures are excluded from both.
 
 Run `task test` and `task quality` before you commit.
 

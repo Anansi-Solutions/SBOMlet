@@ -63,7 +63,7 @@ export interface CollectedSbom {
   /**
    * Package-level scope taxonomy for every component this input contributes.
    * Absent defaults to "app" (the JS/Python/Terraform targets). The Docker
-   * OS-package merge input (COLL-04) sets "os" so its pkg:deb/pkg:apk rows are
+   * OS-package merge input sets "os" so its pkg:deb/pkg:apk rows are
    * routed through the [os_dependencies] policy lane and rendered in the
    * dedicated Docker base-image section.
    */
@@ -455,7 +455,7 @@ function mergeInto(existing: PackageEntry, incoming: PackageEntry): void {
       existing.licenseClaims.push(claim);
     }
   }
-  // #4: reconcile scope on a purl collision — the GATING "app" scope WINS over
+  // Reconcile scope on a purl collision — the GATING "app" scope WINS over
   // the non-gating "os" scope. Without this, a purl shared between an app input
   // and an os input is silently demoted to "os" purely by merge order (the os
   // input arriving first), moving a real dependency OUT of the policy gate.
@@ -615,7 +615,7 @@ function packageEntryOf(
     version,
     occurrences: [occurrence],
     licenseClaims: licenseClaimsOf(component),
-    scope: input.scope ?? "app", // per-input scope; Docker OS sets "os" (COLL-04)
+    scope: input.scope ?? "app", // per-input scope; the docker sidecar inputs set "os"
   };
   const rawScope = component.scope;
   if (rawScope !== undefined) entry.rawScope = rawScope;

@@ -3,6 +3,58 @@ import tseslint from "typescript-eslint";
 import importX from "eslint-plugin-import-x";
 import eslintPluginPrettierRecommended from "eslint-plugin-prettier/recommended";
 
+/**
+ * Vocabulary banned from src/ comments: process/workflow shorthand that means
+ * nothing to a developer reading the code. Each pattern is a form with no
+ * legitimate reading in a comment here; anything it flags gets rewritten in
+ * plain words (docs/contributing.md, quality gates).
+ */
+const bannedCommentTokens = [
+  { pattern: /\brelock/i, label: '"relock"' },
+  { pattern: /\bred-first\b/i, label: '"red-first"' },
+  { pattern: /\bwave \d/i, label: '"wave N"' },
+  { pattern: /\bD-\d\d\b/, label: '"D-##"' },
+  { pattern: /\bT-\d\d\b/, label: '"T-##"' },
+  { pattern: /\bSC-\d\b/, label: '"SC-#"' },
+  { pattern: /\badversarial\b/i, label: '"adversarial"' },
+  { pattern: /\bplan-checker\b/i, label: '"plan-checker"' },
+  { pattern: /\bthe locked\b/i, label: '"the locked"' },
+  { pattern: /\bgsd\b/i, label: '"gsd"' },
+];
+
+/** Error on banned vocabulary anywhere in a comment (line, block, or jsdoc). */
+const noCommentJargon = {
+  meta: {
+    type: "problem",
+    docs: {
+      description: "ban process shorthand from comments",
+    },
+    schema: [],
+    messages: {
+      jargon:
+        "comment contains process shorthand {{label}} — rewrite it in plain " +
+        "words a reader of this codebase knows",
+    },
+  },
+  create(context) {
+    return {
+      Program() {
+        for (const comment of context.sourceCode.getAllComments()) {
+          for (const { pattern, label } of bannedCommentTokens) {
+            if (pattern.test(comment.value)) {
+              context.report({
+                loc: comment.loc,
+                messageId: "jargon",
+                data: { label },
+              });
+            }
+          }
+        }
+      },
+    };
+  },
+};
+
 export default tseslint.config(
   {
     // Goldens and fixtures are contract bytes — lint must never see them.
@@ -43,6 +95,13 @@ export default tseslint.config(
       "max-depth": ["error", 3],
       complexity: ["error", 15],
     },
+  },
+  {
+    // Shipped-source comments carry the strictest vocabulary bar; tests and
+    // config narrate their own mechanics and are not checked.
+    files: ["src/**/*.ts"],
+    plugins: { sbomlet: { rules: { "no-comment-jargon": noCommentJargon } } },
+    rules: { "sbomlet/no-comment-jargon": "error" },
   },
   {
     // github-script step bodies: plain CommonJS Node, not part of the bundled

@@ -17,19 +17,18 @@
  *     second. Everything else, or any structural mismatch, returns [] — an
  *     honest skip, never a fabricated guess. A `..`-shaped or
  *     absolute-path-shaped decoded name (or top_level.txt line) can never
- *     escape the target's containment root (resolve + strict prefix-check,
- *     T-10-06).
+ *     escape the target's containment root (resolve + strict prefix-check).
  *
  *  2. `scanPackageSources` — orchestrates the pinned `scancode-toolkit` CLI
  *     through `execTool` (the tool's only child_process seam; dockerOs.ts
  *     idiom): spawn → exists-check → size-gate BEFORE read → parse → runtime
  *     version-assert against {@link SCANCODE_TOOL} from the output's own
- *     headers (T-10-08, a substituted/drifted binary is caught). Expression
- *     election follows research Pattern 2 — ScanCode's own root-level
+ *     headers (a substituted/drifted binary is caught). Expression
+ *     election is two-lane — ScanCode's own root-level
  *     legal-file detection wins, the package manifest is the fallback,
  *     anything else (or an unparseable multi-file AND-combine) is an honest
  *     no-answer; any expression containing a `LicenseRef-scancode-` id is
- *     rejected outright (T-10-09, ADR-0007 no-fabrication) because it cannot
+ *     rejected outright (ADR-0007 no-fabrication) because it cannot
  *     resolve to an SPDX id downstream and would only add cache noise.
  *
  * This module NEVER performs SPDX correction or interpretation — the raw
@@ -60,8 +59,8 @@ import { parsePurl } from "./enrich";
  * mise.toml (`"pipx:scancode-toolkit[full]" = "32.5.0"`) like every other
  * tool this project depends on, and is asserted at runtime from the scan
  * output's own `headers[0].tool_version` (the SYFT_TOOL comment voice,
- * dockerOs.ts:41-48) so a version bump — or a substituted binary — must be
- * conscious, never silent (T-10-08).
+ * dockerOs.ts) so a version bump — or a substituted binary — must be
+ * conscious, never silent.
  */
 export const SCANCODE_TOOL = {
   name: "scancode-toolkit",
@@ -71,13 +70,13 @@ export const SCANCODE_TOOL = {
 /**
  * DoS bound: real scancode `--json-pp` output for a single npm package tree is
  * well under a MiB even for large packages; 64 MiB is generous headroom,
- * matching MAX_SYFT_SBOM_BYTES's stat-gate-before-read posture (T-10-07,
- * ASVS V12). The gate fires before any read/parse.
+ * matching MAX_SYFT_SBOM_BYTES's stat-gate-before-read posture. The gate
+ * fires before any read/parse.
  */
 export const MAX_SCANCODE_OUTPUT_BYTES = 64 * 1024 * 1024;
 
 /**
- * Wall-clock timeout per package scan (D-03 planner discretion). ScanCode's
+ * Wall-clock timeout per package scan. ScanCode's
  * OWN per-file `--timeout` stays at its 120s default — deliberately not
  * passed here, since it bounds a single file's matching, not the whole run.
  * 10 minutes is generous headroom for even a large vendored bundle.
@@ -87,7 +86,7 @@ export const DEFAULT_SCAN_TIMEOUT_MS = 10 * 60 * 1000;
 /**
  * The verified scancode-toolkit 32.5.0 argv. Options first, then a `--`
  * END-OF-OPTIONS separator, then the scanned directory OPERAND last — the
- * dockerOs.ts syftArgs idiom (T-09-06): the source dir is always an argv
+ * dockerOs.ts syftArgs idiom: the source dir is always an argv
  * operand, never a shell string, so command injection is impossible by
  * construction, and the `--` is defense-in-depth against a dash-prefixed
  * path being parsed as a flag. `--license --copyright` requests both
@@ -123,12 +122,12 @@ function safeDecode(encoded: string): string | undefined {
 /**
  * Decode + validate an npm purl's encoded name against a candidate
  * `node_modules` root, requiring the installed package.json `version` field
- * to equal the purl version (Pitfall 8, mandatory — never optional). Returns
+ * to equal the purl version (mandatory — never optional). Returns
  * the resolved source dir, or undefined on ANY structural mismatch: dir
  * absent, package.json absent/unparseable (a garbage node_modules must never
  * throw and kill the run — honest skip), version mismatch, or a decoded name
- * that would escape the node_modules root (T-10-06 — resolve + strict
- * prefix-check, test-locked, not best-effort).
+ * that would escape the node_modules root (resolve + strict prefix-check,
+ * never best-effort).
  */
 function npmSourceDir(
   purl: EcosystemPurl,
@@ -389,7 +388,7 @@ interface RawScancodeOutput {
   files?: unknown;
 }
 
-/** Stat-gate a scancode output path BEFORE any read or parse (T-10-07). */
+/** Stat-gate a scancode output path BEFORE any read or parse (DoS bound). */
 export function assertScancodeOutputSize(path: string): void {
   const size = statSync(path).size;
   if (size > MAX_SCANCODE_OUTPUT_BYTES) {
@@ -452,7 +451,7 @@ function isRawScancodeFile(raw: unknown): raw is RawScancodeFile {
  * emits them; fail closed rather than trust an unexpected separator as
  * root-level).
  *
- * 10-07 adversarial-review finding (Lens 5): election previously matched on
+ * A review found election previously matched on
  * `basename(path)` alone with no depth check, so a deeply-nested
  * vendored/bundled dependency's LICENSE — carrying a DIFFERENT, potentially
  * copyleft license — could silently outrank the scanned package's own root
@@ -491,9 +490,9 @@ function electFromPattern(
  * file (basename matches {@link LEGAL_FILE_PATTERN}) with a non-null,
  * non-noise expression wins; else the first package-manifest entry
  * ({@link MANIFEST_FILE_PATTERN}) with a non-null, non-noise expression;
- * else undefined (Pattern 2 — never an AND-combine across files). An
+ * else undefined (never an AND-combine across files). An
  * elected expression containing `LicenseRef-scancode-` is rejected within
- * each lane (treated as no answer there, T-10-09/ADR-0007) rather than
+ * each lane (treated as no answer there, ADR-0007) rather than
  * accepted as noise — the caller falls through to the next lane, or to a
  * clean no-answer if both lanes reject.
  */
@@ -592,7 +591,7 @@ async function runScancode(
       `scancode produced no output file at ${outFile}\ninvocation: ${invocation}`,
     );
   }
-  // Size gate BEFORE read (DoS bound, T-10-07).
+  // Size gate BEFORE read (DoS bound).
   assertScancodeOutputSize(outFile);
 
   // Read outside the parse try: an I/O failure must surface as itself, not
@@ -607,7 +606,8 @@ async function runScancode(
  * dockerOs.ts's scanImage/parseSyftOutput skeleton: spawn via execTool (the
  * tool's only child_process seam) -> exists-check -> size-gate BEFORE
  * read -> read -> parse + version-assert -> election. A spawn ENOENT
- * (missing tool) is mapped to the D-01 loud install-command error; any other
+ * (missing tool) is mapped to the loud install-command error; any other
+
  * rejection (non-zero exit, timeout) propagates as-is.
  *
  * Output-file hygiene: any stale out file is removed BEFORE the spawn, so

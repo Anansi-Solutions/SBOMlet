@@ -1,13 +1,13 @@
 /**
  * Committed purl-keyed ScanCode analysis memo: deterministic read/write.
  *
- * A DEDICATED committed cache (D-04, SCAN-06), separate from the registry
+ * A DEDICATED committed cache, separate from the registry
  * enrichment cache and carrying its OWN schema version — the intensive ScanCode
  * lane's results live here, not in licenses.cache.json, so the two caches keep
  * independent lifecycles. Like the enrichment cache the file is committed (NOT
  * gitignored) so `check` replays it fully offline; a MISSING file reads as an
  * EMPTY memo (no error, no file created) — repositories without ScanCode
- * results are untouched (D-06).
+ * results are untouched.
  *
  * Each entry means: "this purl@version was analyzed by this ScanCode tool
  * version." The key is the VERBATIM purl (URL-encoding intact, e.g.
@@ -15,15 +15,15 @@
  * or joined into a filesystem path (the scanned source dirs come from
  * sourceDirsFor with its own traversal guards, unchanged). name@version is
  * immutable upstream, so an already-analyzed package version is never
- * re-analyzed (D-11).
+ * re-analyzed.
  *
  * `license` is the RAW elected SPDX expression string (normalizeRaw stays the
  * downstream authority), or `null` for a NO-RESULT entry: analyzed with no
- * license evidence found (D-11). `license: null` ALONE encodes that — there is
+ * license evidence found. `license: null` ALONE encodes that — there is
  * no `resolvable` twin (the registry cache's is historical redundancy) and no
  * `source`/`fetchedFrom` field (this file IS the provenance). A no-result is a
  * scan-SKIP marker, NOT an absence marker and NOT a disagreement with a
- * positive registry answer; the 12-04 replay stage enforces that meaning, and
+ * positive registry answer; the replay stage enforces that meaning, and
  * enforces that a sources-absent package never gains an entry at all.
  *
  * `via` is the tool@version/election-lane provenance
@@ -33,14 +33,14 @@
  *
  * `scannedAt` is an OPTIONAL ISO timestamp stamped (via an injectable clock)
  * ONLY on a NEW entry, NEVER rewritten on a hit, and NEVER rendered into any
- * output — it lives ONLY here (the fetchedAt/T-06-14 determinism control), so a
+ * output — it lives ONLY here (the fetchedAt determinism precedent), so a
  * warm double-generate is byte-identical.
  *
  * Serialization reuses the one tool-wide sorter ({@link toSortedJson}): sorted
  * keys, indent 2, LF-only, trailing newline, no timestamp — the memo diffs
  * cleanly and the byte-exact gate stays honest. The loud-on-malformed envelope
  * read is the enrichment cache's ({@link readEnvelope}) with an added schema-
- * version check (T-12-07), so a poisoned/garbage/wrong-version memo is a config
+ * version check, so a poisoned/garbage/wrong-version memo is a config
  * error, never a silent empty.
  */
 import { toSortedJson } from "../model/dependencies";
@@ -51,8 +51,8 @@ const MEMO_VERSION = 1;
 
 /**
  * One memoized ScanCode analysis, keyed by verbatim purl. `license` is the raw
- * elected expression, or null for an analyzed-no-license-evidence result (D-11,
- * NOT an absence marker). `via` is the tool@version/election-lane provenance.
+ * elected expression, or null for an analyzed-no-license-evidence result
+ * (NOT an absence marker). `via` is the tool@version/election-lane provenance.
  * `copyrights` is the optional collector list (absent = zero churn). `scannedAt`
  * is the optional creation stamp — set once, never rewritten, never rendered.
  */
@@ -74,7 +74,8 @@ interface ScancodeMemoFile {
  * empty Map (never an error — the scan stage populates it). A malformed
  * envelope (bad JSON, missing/ill-typed `entries`) OR a wrong schema version
  * throws loudly with the path — same posture as the registry cache read, plus
- * the version guard (T-12-07): a poisoned or future-version memo is a config
+ * the version guard: a poisoned or future-version memo is a config
+
  * error, never a silent empty.
  */
 export function readScancodeMemo(path: string): Map<string, ScancodeMemoEntry> {

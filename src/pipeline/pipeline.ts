@@ -50,7 +50,7 @@ export const ENRICHMENT_CACHE_FILE = "licenses.cache.json";
 
 /**
  * The dedicated ScanCode analysis memo filename inside the resolved cache dir
- * (D-04, SCAN-06): a COMMITTED cache with a lifecycle separate from the registry
+ *: a COMMITTED cache with a lifecycle separate from the registry
  * enrichment cache — the intensive ScanCode lane results live here, not in
  * {@link ENRICHMENT_CACHE_FILE}, so the two caches version and invalidate
  * independently. Resolved via the same {@link cacheDir}, so a policy `[cache]
@@ -147,7 +147,7 @@ export interface GenerateOptions {
    * Optional override for the committed Docker OS SBOM path (--docker-sbom).
    * When unset it defaults to {@link DOCKER_SBOM_FILE} inside the resolved cache
    * dir. When the file exists it is size-gated, parsed, and threaded into the merge
-   * as a scope:"os" input (COLL-04); when absent there are no os entries (the
+   * as a scope:"os" input; when absent there are no os entries (the
    * offline cache-miss equivalent, never a live docker/syft scan).
    */
   dockerSbomPath?: string;
@@ -449,8 +449,8 @@ export function scancodeCachePath(opts: GenerateOptions, dir: string): string {
 
 /**
  * Construct {@link IntensiveOptions} for the enrichUnknowns call — ONLY when
- * mode is "generate" AND opts.intensive is true (D-07's opt-in boundary,
- * SCAN-03): check never reaches this function with mode "generate" (runCheck
+ * mode is "generate" AND opts.intensive is true — an opt-in boundary:
+ * check never reaches this function with mode "generate" (runCheck
  * forces "check"), and a default generate call has opts.intensive absent, so
  * the common case returns undefined and the intensive lane is never even
  * constructed, let alone invoked. targetDirs comes from the SAME collect loop
@@ -469,7 +469,7 @@ function intensiveOptionsFor(
 /**
  * Project the PolicyView the document renderer consumes. The policy pointer path
  * is repo-root-relative (policyPointerPath) so the committed bytes stay stable
- * across platforms. 07-09: the author-supplied [document] title + preamble flow
+ * across platforms. The author-supplied [document] title + preamble flow
  * into the licenses-document renderer only (never the notices companion), via
  * conditional spread so "absent" stays observable.
  */
@@ -576,7 +576,7 @@ export async function buildOutputs(
   // list when no policy is loaded, so the License column shows normalized
   // expressions and the notices appendix can decompose them without --policy.
   // The no-policy dump equals the annotated model. The shipped tool-level
-  // BUILTIN_OVERRIDES set is always threaded in (POL-07): it is imported config
+  // BUILTIN_OVERRIDES set is always threaded in: it is imported config
   // (pure — no I/O in the engine), staleness-guarded, and project [[clarify]]
   // wins over it on conflict.
   const { model: annotated, usedClarifyIndices } = annotateFindings(

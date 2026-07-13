@@ -384,7 +384,8 @@ function absorbUnitInputs(
  * The per-target collect loop: resolve targets, dispatch each through the
  * collector registry, and apply the coverage policy. The loop owns the
  * "collecting"/"skipping" stderr lines, routed through the caller-provided log
- * sink, so the locked line shapes are emitted from one place.
+ * sink, so the fixed line shapes are emitted from one place.
+
  *
  * A yarn-plugin-routed target whose lock declares workspace members expands
  * into one scan unit per member: the non-expanded path below is the exact
