@@ -4,7 +4,8 @@
  * Finds every package whose current claims resolve to unknown (mirroring
  * findingFromClaims' emptiness/any-unresolvable test) and, in GENERATE mode,
  * fetches each from its ecosystem registry (PyPI JSON for `pkg:pypi`, the npm
- * packument for `pkg:npm`), resolves a RAW license string via the Plan 02
+ * packument for `pkg:npm`, the NuGet registration leaf → catalogEntry pair for
+ * `pkg:nuget`), resolves a RAW license string via the per-ecosystem
  * resolvers, appends a `source:"registry"` LicenseClaim, and records the result
  * in the committed cache — a positive entry with the raw, OR a negative entry
  * ONLY on a clean 200-empty answer (the resolver returned null on a successful
@@ -38,13 +39,23 @@ import {
   serializeCache,
   type CacheEntry,
 } from "./cache";
-import { fetchGithubLicense, fetchJson, mapLimit } from "./fetch";
+import {
+  fetchGithubLicense,
+  fetchJson,
+  fetchJsonOr404,
+  mapLimit,
+} from "./fetch";
 import {
   githubLicenseRefsFor,
   githubRepoFor,
   resolveGithubLicense,
 } from "./github";
 import { resolveNpmLicense } from "./npm";
+import {
+  catalogEntryUrlOf,
+  nugetRegistrationLeafUrl,
+  resolveNugetCatalogLicense,
+} from "./nuget";
 import { resolvePypiLicense } from "./pypi";
 
 /** Cap on copyright lines attached from a scancode replay (matches the extractor/merge cap). */
@@ -234,7 +245,8 @@ export async function enrichUnknowns(
     if (
       parsed.type !== "pypi" &&
       parsed.type !== "npm" &&
-      parsed.type !== "terraform"
+      parsed.type !== "terraform" &&
+      parsed.type !== "nuget"
     ) {
       return;
     }
@@ -298,6 +310,8 @@ export function githubLicenseUrl(
  * registry URL (a fetchJson failure propagates LOUDLY and writes NO entry —
  * unchanged). terraform misses take the version-ref GitHub path with the
  * revision-E transient-hard-fail-vs-definitive-negative classification.
+ * nuget misses take the two-step registration path with the 404-as-definitive
+ * private-feed classification.
  */
 async function fetchMisses(
   misses: Unknown[],
@@ -310,12 +324,16 @@ async function fetchMisses(
       ? {}
       : { backoffBaseMs: opts.backoffBaseMs };
 
-  const registryMisses = misses.filter((m) => m.parsed.type !== "terraform");
+  const registryMisses = misses.filter(
+    (m) => m.parsed.type === "pypi" || m.parsed.type === "npm",
+  );
   const terraformMisses = misses.filter((m) => m.parsed.type === "terraform");
+  const nugetMisses = misses.filter((m) => m.parsed.type === "nuget");
 
   await Promise.all([
     fetchRegistryMisses(registryMisses, packages, cache, fetchOpts),
     fetchTerraformMisses(terraformMisses, packages, cache, fetchOpts, opts),
+    fetchNugetMisses(nugetMisses, packages, cache, fetchOpts),
   ]);
 }
 
@@ -408,6 +426,60 @@ async function fetchTerraformMisses(
     // A clean 404 across ALL candidate refs (or NOASSERTION everywhere) → a
     // DEFINITIVE no-license answer → a governed negative entry.
     recordNegative(miss, cache, "github");
+  });
+}
+
+/**
+ * The nuget registration path: TWO sequential fetches per miss (leaf →
+ * host-pinned catalogEntry) inside one bounded worker — modest concurrency
+ * plus the existing backoff, no new throttling machinery. The
+ * transient-vs-definitive line: ONLY fetchJsonOr404's 404 VALUE (not on
+ * nuget.org — the common, legitimate private-feed reality), a malformed or
+ * foreign-host catalogEntry (no request is ever made to it), and the
+ * resolver's clean null record governed NEGATIVE entries; every throw
+ * (429/5xx/network/timeout) propagates loudly out of mapLimit and writes
+ * NOTHING — negative-poison impossible. The cache key stays the VERBATIM
+ * purl; only the URLs are lowercased (the builder owns that). Nuget entries
+ * never carry fetchedAt: registration/catalog blobs are stable versioned CDN
+ * content, the pypi/npm no-timestamp rule.
+ */
+async function fetchNugetMisses(
+  misses: Unknown[],
+  packages: PackageEntry[],
+  cache: Map<string, CacheEntry>,
+  fetchOpts: { backoffBaseMs?: number },
+): Promise<void> {
+  await mapLimit(misses, FETCH_CONCURRENCY, async (miss): Promise<void> => {
+    const leaf = await fetchJsonOr404(
+      nugetRegistrationLeafUrl(miss.parsed.encodedName, miss.parsed.version),
+      fetchOpts,
+    );
+    if (leaf.status === 404) {
+      recordNegative(miss, cache, "nuget"); // not on nuget.org — definitive
+      return;
+    }
+    const catalogUrl = catalogEntryUrlOf(leaf.body);
+    if (catalogUrl === undefined) {
+      recordNegative(miss, cache, "nuget"); // malformed/foreign host — clean no-answer, NO fetch
+      return;
+    }
+    const catalog = await fetchJsonOr404(catalogUrl, fetchOpts);
+    if (catalog.status === 404) {
+      recordNegative(miss, cache, "nuget"); // definitive, same as the leaf
+      return;
+    }
+    const resolved = resolveNugetCatalogLicense(catalog.body);
+    if (resolved === null) {
+      recordNegative(miss, cache, "nuget"); // embedded-file / url-only / none — honest unknown
+      return;
+    }
+    packages[miss.index] = withCacheClaim(miss.entry, resolved.raw, "registry");
+    putEntry(cache, miss.entry.purl, {
+      license: resolved.raw,
+      fetchedFrom: "nuget",
+      via: resolved.via,
+      resolvable: true,
+    });
   });
 }
 

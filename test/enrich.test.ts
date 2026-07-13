@@ -1911,3 +1911,412 @@ describe("nuget narrows (tolerant)", () => {
     expect(narrowNugetCatalogEntry(7)).toBeUndefined();
   });
 });
+
+describe("enrichUnknowns nuget (two-step fetch, negative discipline, offline check)", () => {
+  // Tiny backoff so the transient retry loop doesn't take seconds.
+  const fastBackoff = 1;
+
+  function model(...packages: PackageEntry[]): CanonicalDependencies {
+    return { packages };
+  }
+
+  function tempCachePath(): { dir: string; path: string } {
+    const dir = mkdtempSync(join(tmpdir(), "enrich-nuget-"));
+    return { dir, path: join(dir, "enrichment-cache.json") };
+  }
+
+  /** A pkg:nuget unknown with a MIXED-CASE purl — the verbatim cache key. */
+  function unknownNuget(): PackageEntry {
+    return {
+      purl: "pkg:nuget/Newtonsoft.Json@13.0.4",
+      name: "Newtonsoft.Json",
+      version: "13.0.4",
+      occurrences: [{ target: "Fixture.App", isDevDependency: false }],
+      licenseClaims: [],
+      scope: "app",
+    };
+  }
+
+  // The stubbed URLs are LOWERCASE while the purl above is mixed-case — the
+  // casing differential the URL builder owns.
+  const LEAF_URL =
+    "https://api.nuget.org/v3/registration5-gz-semver2/newtonsoft.json/13.0.4.json";
+  const CATALOG_URL =
+    "https://api.nuget.org/v3/catalog0/data/2024.03.27.08.21.03/newtonsoft.json.13.0.4.json";
+
+  function registryClaim(
+    entry: PackageEntry | undefined,
+  ): LicenseClaim | undefined {
+    return entry?.licenseClaims.find((c) => c.source === "registry");
+  }
+
+  /** A fetch stub mapping a full URL → a Response (status + body). */
+  function fetchByUrl(responder: (url: string) => Response): {
+    fetch: typeof fetch;
+    calls: string[];
+  } {
+    const calls: string[] = [];
+    const impl = (async (input: string | URL | Request): Promise<Response> => {
+      const url = typeof input === "string" ? input : input.toString();
+      calls.push(url);
+      return responder(url);
+    }) as typeof fetch;
+    return { fetch: impl, calls };
+  }
+
+  function jsonResponse(body: unknown, status = 200): Response {
+    return new Response(JSON.stringify(body), {
+      status,
+      headers: { "content-type": "application/json" },
+    });
+  }
+
+  async function withFetch<T>(
+    impl: typeof fetch,
+    fn: () => Promise<T>,
+  ): Promise<T> {
+    const original = globalThis.fetch;
+    globalThis.fetch = impl;
+    try {
+      return await fn();
+    } finally {
+      globalThis.fetch = original;
+    }
+  }
+
+  test("positive path: leaf → catalogEntry (expression class) → registry claim + positive entry keyed by the VERBATIM purl, NO fetchedAt", async () => {
+    const { dir, path } = tempCachePath();
+    try {
+      const { fetch, calls } = fetchByUrl((url) => {
+        if (url === LEAF_URL)
+          return jsonResponse({ catalogEntry: CATALOG_URL });
+        if (url === CATALOG_URL) {
+          return jsonResponse({
+            licenseExpression: "MIT",
+            licenseUrl: "https://licenses.nuget.org/MIT",
+          });
+        }
+        throw new Error(`unexpected url ${url}`);
+      });
+      const result = await withFetch(fetch, () =>
+        enrichUnknowns(model(unknownNuget()), {
+          mode: "generate",
+          cachePath: path,
+          verbose: false,
+          backoffBaseMs: fastBackoff,
+        }),
+      );
+      // Both fetches hit the LOWERCASED api.nuget.org URLs, in two-step order.
+      expect(calls).toEqual([LEAF_URL, CATALOG_URL]);
+      expect(registryClaim(result.model.packages[0])).toEqual({
+        raw: "MIT",
+        kind: "expression",
+        source: "registry",
+      });
+      // Cache keyed by the VERBATIM mixed-case purl (never the lowercase URL id).
+      const recorded = getEntry(
+        readCache(path),
+        "pkg:nuget/Newtonsoft.Json@13.0.4",
+      );
+      expect(recorded).toEqual({
+        license: "MIT",
+        fetchedFrom: "nuget",
+        via: "license-expression",
+        resolvable: true,
+      });
+      expect(recorded?.fetchedAt).toBeUndefined();
+      // No timestamp anywhere in the committed bytes (zero warm-generate churn).
+      expect(readFileSync(path, "utf8")).not.toContain("fetchedAt");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("private-feed path: leaf 404 → a governed NEGATIVE entry, package stays unknown, generate does NOT throw", async () => {
+    const { dir, path } = tempCachePath();
+    try {
+      const { fetch, calls } = fetchByUrl(() => jsonResponse({}, 404));
+      const result = await withFetch(fetch, () =>
+        enrichUnknowns(model(unknownNuget()), {
+          mode: "generate",
+          cachePath: path,
+          verbose: false,
+          backoffBaseMs: fastBackoff,
+        }),
+      );
+      expect(calls).toEqual([LEAF_URL]); // the leaf 404 is terminal — no second hop
+      expect(registryClaim(result.model.packages[0])).toBeUndefined();
+      const recorded = getEntry(
+        readCache(path),
+        "pkg:nuget/Newtonsoft.Json@13.0.4",
+      );
+      expect(recorded).toEqual({
+        license: null,
+        fetchedFrom: "nuget",
+        via: "unresolved",
+        resolvable: false,
+      });
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("catalogEntry 404 → NEGATIVE (definitive, same as the leaf)", async () => {
+    const { dir, path } = tempCachePath();
+    try {
+      const { fetch, calls } = fetchByUrl((url) =>
+        url === LEAF_URL
+          ? jsonResponse({ catalogEntry: CATALOG_URL })
+          : jsonResponse({}, 404),
+      );
+      const result = await withFetch(fetch, () =>
+        enrichUnknowns(model(unknownNuget()), {
+          mode: "generate",
+          cachePath: path,
+          verbose: false,
+          backoffBaseMs: fastBackoff,
+        }),
+      );
+      expect(calls).toEqual([LEAF_URL, CATALOG_URL]);
+      expect(registryClaim(result.model.packages[0])).toBeUndefined();
+      const recorded = getEntry(
+        readCache(path),
+        "pkg:nuget/Newtonsoft.Json@13.0.4",
+      );
+      expect(recorded?.resolvable).toBe(false);
+      expect(recorded?.license).toBeNull();
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("clean-empty: a none-class catalogEntry (no license fields) → NEGATIVE", async () => {
+    const { dir, path } = tempCachePath();
+    try {
+      const { fetch } = fetchByUrl((url) =>
+        url === LEAF_URL
+          ? jsonResponse({ catalogEntry: CATALOG_URL })
+          : jsonResponse({ id: "Newtonsoft.Json", version: "13.0.4" }),
+      );
+      const result = await withFetch(fetch, () =>
+        enrichUnknowns(model(unknownNuget()), {
+          mode: "generate",
+          cachePath: path,
+          verbose: false,
+          backoffBaseMs: fastBackoff,
+        }),
+      );
+      expect(registryClaim(result.model.packages[0])).toBeUndefined();
+      const recorded = getEntry(
+        readCache(path),
+        "pkg:nuget/Newtonsoft.Json@13.0.4",
+      );
+      expect(recorded?.resolvable).toBe(false);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("a leaf with a MISSING catalogEntry → NEGATIVE after ONE fetch (malformed = clean no-answer)", async () => {
+    const { dir, path } = tempCachePath();
+    try {
+      const { fetch, calls } = fetchByUrl(() => jsonResponse({ listed: true }));
+      const result = await withFetch(fetch, () =>
+        enrichUnknowns(model(unknownNuget()), {
+          mode: "generate",
+          cachePath: path,
+          verbose: false,
+          backoffBaseMs: fastBackoff,
+        }),
+      );
+      expect(calls).toEqual([LEAF_URL]); // never a second hop without a pinned URL
+      expect(registryClaim(result.model.packages[0])).toBeUndefined();
+      expect(
+        getEntry(readCache(path), "pkg:nuget/Newtonsoft.Json@13.0.4")
+          ?.resolvable,
+      ).toBe(false);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("a leaf whose catalogEntry points at a FOREIGN host → NEGATIVE, and the stub saw NO request to the evil host (SSRF pin)", async () => {
+    const { dir, path } = tempCachePath();
+    try {
+      const evil = "https://evil.example/catalog.json";
+      const { fetch, calls } = fetchByUrl((url) => {
+        if (url === LEAF_URL) return jsonResponse({ catalogEntry: evil });
+        throw new Error(`unexpected url ${url}`);
+      });
+      const result = await withFetch(fetch, () =>
+        enrichUnknowns(model(unknownNuget()), {
+          mode: "generate",
+          cachePath: path,
+          verbose: false,
+          backoffBaseMs: fastBackoff,
+        }),
+      );
+      expect(calls).toEqual([LEAF_URL]);
+      expect(calls.some((u) => u.includes("evil.example"))).toBe(false);
+      expect(registryClaim(result.model.packages[0])).toBeUndefined();
+      expect(
+        getEntry(readCache(path), "pkg:nuget/Newtonsoft.Json@13.0.4")
+          ?.resolvable,
+      ).toBe(false);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("TRANSIENT: a persistent 500 on the leaf THROWS loudly and writes NO entry (negative-poison impossible)", async () => {
+    const { dir, path } = tempCachePath();
+    try {
+      const { fetch } = fetchByUrl(() => jsonResponse({}, 500));
+      await expect(
+        withFetch(fetch, () =>
+          enrichUnknowns(model(unknownNuget()), {
+            mode: "generate",
+            cachePath: path,
+            verbose: false,
+            backoffBaseMs: fastBackoff,
+          }),
+        ),
+      ).rejects.toThrow(/registry 500/);
+      expect(readCache(path).size).toBe(0);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("a pre-seeded POSITIVE nuget entry resolves with ZERO fetches", async () => {
+    const { dir, path } = tempCachePath();
+    try {
+      const cache = new Map<string, CacheEntry>();
+      putEntry(cache, "pkg:nuget/Newtonsoft.Json@13.0.4", {
+        license: "MIT",
+        fetchedFrom: "nuget",
+        via: "license-expression",
+        resolvable: true,
+      });
+      writeFileSync(path, serializeCache(cache));
+
+      const { fetch, calls } = fetchByUrl(() => jsonResponse({}));
+      const result = await withFetch(fetch, () =>
+        enrichUnknowns(model(unknownNuget()), {
+          mode: "generate",
+          cachePath: path,
+          verbose: false,
+        }),
+      );
+      expect(calls).toEqual([]);
+      expect(registryClaim(result.model.packages[0])?.raw).toBe("MIT");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("a pre-seeded NEGATIVE nuget entry stays unknown with ZERO fetches", async () => {
+    const { dir, path } = tempCachePath();
+    try {
+      const cache = new Map<string, CacheEntry>();
+      putEntry(cache, "pkg:nuget/Newtonsoft.Json@13.0.4", {
+        license: null,
+        fetchedFrom: "nuget",
+        via: "unresolved",
+        resolvable: false,
+      });
+      writeFileSync(path, serializeCache(cache));
+
+      const { fetch, calls } = fetchByUrl(() => jsonResponse({}));
+      const result = await withFetch(fetch, () =>
+        enrichUnknowns(model(unknownNuget()), {
+          mode: "generate",
+          cachePath: path,
+          verbose: false,
+        }),
+      );
+      expect(calls).toEqual([]);
+      expect(registryClaim(result.model.packages[0])).toBeUndefined();
+      expect(result.staleUnknowns).toEqual([]);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("check mode: a nuget unknown with NO cache entry is a stale unknown — NO network, NO cache write (offline check)", async () => {
+    const { dir, path } = tempCachePath();
+    try {
+      const throwingFetch = (async (): Promise<Response> => {
+        throw new Error("check must never fetch");
+      }) as unknown as typeof fetch;
+      const result = await withFetch(throwingFetch, () =>
+        enrichUnknowns(model(unknownNuget()), {
+          mode: "check",
+          cachePath: path,
+          verbose: false,
+        }),
+      );
+      expect(result.staleUnknowns).toEqual([
+        "pkg:nuget/Newtonsoft.Json@13.0.4",
+      ]);
+      expect(registryClaim(result.model.packages[0])).toBeUndefined();
+      expect(readCache(path).size).toBe(0); // no file was ever written
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("mixed misses: pypi + npm + nuget unknowns all resolve through their own arms in one run", async () => {
+    const { dir, path } = tempCachePath();
+    try {
+      const pypiUnknown: PackageEntry = {
+        purl: "pkg:pypi/anyio@4.12.1",
+        name: "anyio",
+        version: "4.12.1",
+        occurrences: [{ target: "apps/jupyter", isDevDependency: false }],
+        licenseClaims: [],
+        scope: "app",
+      };
+      const npmUnknown: PackageEntry = {
+        purl: "pkg:npm/no-claims@2.0.0",
+        name: "no-claims",
+        version: "2.0.0",
+        occurrences: [{ target: "proj", isDevDependency: false }],
+        licenseClaims: [],
+        scope: "app",
+      };
+      const { fetch, calls } = fetchByUrl((url) => {
+        if (url === "https://pypi.org/pypi/anyio/4.12.1/json") {
+          return jsonResponse({ info: { license_expression: "MIT" } });
+        }
+        if (url === "https://registry.npmjs.org/no-claims") {
+          return jsonResponse({ versions: { "2.0.0": { license: "ISC" } } });
+        }
+        if (url === LEAF_URL)
+          return jsonResponse({ catalogEntry: CATALOG_URL });
+        if (url === CATALOG_URL) {
+          return jsonResponse({ licenseExpression: "Apache-2.0" });
+        }
+        throw new Error(`unexpected url ${url}`);
+      });
+      const result = await withFetch(fetch, () =>
+        enrichUnknowns(model(pypiUnknown, npmUnknown, unknownNuget()), {
+          mode: "generate",
+          cachePath: path,
+          verbose: false,
+          backoffBaseMs: fastBackoff,
+        }),
+      );
+      expect(calls).toHaveLength(4);
+      const claims = result.model.packages.map((p) => registryClaim(p)?.raw);
+      expect(claims).toEqual(["MIT", "ISC", "Apache-2.0"]);
+      const loaded = readCache(path);
+      expect(getEntry(loaded, "pkg:nuget/Newtonsoft.Json@13.0.4")?.via).toBe(
+        "license-expression",
+      );
+      expect(loaded.size).toBe(3);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
