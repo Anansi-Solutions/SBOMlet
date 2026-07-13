@@ -1837,6 +1837,45 @@ describe("nuget catalogEntry resolver (four-class ladder)", () => {
     ).toBeNull();
   });
 
+  test("class 3: a WHITESPACE-ONLY decoded remainder → null, never a blank raw license", () => {
+    // licenseUrl is package-author-controlled: %20 decodes to " ", which the
+    // empty-string check alone would pass through as a HIGH-confidence raw.
+    expect(
+      resolveNugetCatalogLicense({
+        licenseUrl: "https://licenses.nuget.org/%20",
+      }),
+    ).toBeNull();
+    expect(
+      resolveNugetCatalogLicense({
+        licenseUrl: "https://licenses.nuget.org/%20%09%20",
+      }),
+    ).toBeNull();
+  });
+
+  test("class 3: CONTROL CHARACTERS in the decoded remainder → null, never an injectable raw", () => {
+    // An SPDX expression is plain printable text; a decoded remainder
+    // carrying \r\n (or any C0/C1 control) is a log/document injection
+    // vector, never a license — honest unknown.
+    expect(
+      resolveNugetCatalogLicense({
+        licenseUrl: "https://licenses.nuget.org/MIT%0D%0AEvil",
+      }),
+    ).toBeNull();
+    expect(
+      resolveNugetCatalogLicense({
+        licenseUrl: "https://licenses.nuget.org/MIT%1B%5B2K",
+      }),
+    ).toBeNull();
+  });
+
+  test("class 3: surrounding whitespace around a real expression trims to the expression", () => {
+    expect(
+      resolveNugetCatalogLicense({
+        licenseUrl: "https://licenses.nuget.org/%20MIT%20",
+      }),
+    ).toEqual({ raw: "MIT", via: "license-url-spdx", confidence: "high" });
+  });
+
   test("class 4: a pre-2019 url-only entry (github blob) is an honest unknown", () => {
     expect(
       resolveNugetCatalogLicense(registryFixture("nuget-urlonly.json")),

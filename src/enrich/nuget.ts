@@ -74,8 +74,10 @@ export interface NugetResolution {
  *      sentinel that accompanies embedded files can never be misread as a
  *      real URL.
  *   3. `licenseUrl` beginning `https://licenses.nuget.org/` → the URL PATH
- *      IS the SPDX expression, URL-encoded: strip the prefix and decode,
- *      HIGH. An empty or undecodable remainder → null.
+ *      IS the SPDX expression, URL-encoded: strip the prefix, decode, and
+ *      trim, HIGH. A blank, undecodable, or control-character remainder →
+ *      null (licenseUrl is package-author-controlled; an SPDX expression is
+ *      plain printable text, so anything else is never a license).
  *   4. Any other `licenseUrl` (the pre-2019 url-only class) or no license
  *      fields at all → NULL — honest unknown.
  */
@@ -103,11 +105,23 @@ export function resolveNugetCatalogLicense(
   return null; // url-only (pre-2019) or nothing — honest unknown, never a guess
 }
 
-/** decodeURIComponent that yields undefined on a malformed escape (never throws). */
+/**
+ * decodeURIComponent for the licenses.nuget.org URL path: yields undefined on
+ * a malformed escape or ANY control character (never throws), and trims
+ * surrounding whitespace so a blank remainder falls through to the honest
+ * unknown. The field is package-author-controlled and the decoded string
+ * becomes a raw license claim — an SPDX expression is plain printable text,
+ * so a C0/C1 control (newline forgery, ANSI erase) is a log/document
+ * injection vector, never a license.
+ */
 function decodeSpdxPath(path: string): string | undefined {
+  let decoded: string;
   try {
-    return decodeURIComponent(path);
+    decoded = decodeURIComponent(path);
   } catch {
     return undefined;
   }
+  // eslint-disable-next-line no-control-regex -- deliberate control-character class: reject, never resolve
+  if (/[\u0000-\u001f\u007f-\u009f]/u.test(decoded)) return undefined;
+  return decoded.trim();
 }
