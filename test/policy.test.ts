@@ -167,7 +167,7 @@ describe("parsePolicy — compatible pattern decomposition", () => {
 // rule by construction).
 // ===========================================================================
 
-const DOCKER_ID = "docker:os-packages/examples/docker-scan/Dockerfile";
+const DOCKER_ID = "docker:examples/docker-scan/Dockerfile";
 
 /** License-form compatible rule with a raw TOML `where` clause. */
 const scopedLicenseFixture = (whereToml: string): string =>
@@ -213,7 +213,7 @@ describe("parsePolicy — compatible `where` scope (SCP-01)", () => {
         'name = "busybox"',
         'version = "1.37.0"',
         'reason = "test reason"',
-        `where = ${JSON.stringify([DOCKER_ID, "docker:os-packages/other/Dockerfile"])}`,
+        `where = ${JSON.stringify([DOCKER_ID, "docker:other/Dockerfile"])}`,
       ].join("\n"),
     );
     expect(policy.compatible).toEqual([
@@ -222,7 +222,7 @@ describe("parsePolicy — compatible `where` scope (SCP-01)", () => {
         name: "busybox",
         version: "1.37.0",
         reason: "test reason",
-        where: [DOCKER_ID, "docker:os-packages/other/Dockerfile"],
+        where: [DOCKER_ID, "docker:other/Dockerfile"],
       },
     ]);
   });
@@ -235,16 +235,16 @@ describe("parsePolicy — compatible `where` scope (SCP-01)", () => {
 
   test("colons in entries pass validation (image refs are legal identities)", () => {
     const policy = parsePolicy(
-      scopedPackageFixture('["docker:os-packages/node:24-alpine"]'),
+      scopedPackageFixture('["docker:node:24-alpine"]'),
     );
     expect(policy.compatible[0]).toMatchObject({
-      where: ["docker:os-packages/node:24-alpine"],
+      where: ["docker:node:24-alpine"],
     });
   });
 
   test("a backslash entry rejects naming compatible[0].where", () => {
     const error = expectPolicyError(
-      scopedLicenseFixture(JSON.stringify(["docker:os-packages\\bad"])),
+      scopedLicenseFixture(JSON.stringify(["docker:img\\bad"])),
     );
     expect(error.message).toContain("compatible[0].where[0]");
     expect(error.message).toContain("forward slashes");
@@ -252,14 +252,14 @@ describe("parsePolicy — compatible `where` scope (SCP-01)", () => {
 
   test('a ".." segment rejects naming compatible[0].where', () => {
     const error = expectPolicyError(
-      scopedPackageFixture('["docker:os-packages/../etc"]'),
+      scopedPackageFixture('["docker:img/../etc"]'),
     );
     expect(error.message).toContain("compatible[0].where[0]");
     expect(error.message).toContain('".." segments');
   });
 
   test("leading and trailing slashes reject naming compatible[0].where", () => {
-    for (const bad of ["/docker:os-packages", "docker:os-packages/"]) {
+    for (const bad of ["/docker:img", "docker:img/"]) {
       const error = expectPolicyError(
         scopedLicenseFixture(JSON.stringify([bad])),
       );
@@ -269,16 +269,14 @@ describe("parsePolicy — compatible `where` scope (SCP-01)", () => {
   });
 
   test("an empty segment rejects naming compatible[0].where", () => {
-    const error = expectPolicyError(
-      scopedPackageFixture('["docker:os-packages//x"]'),
-    );
+    const error = expectPolicyError(scopedPackageFixture('["docker:img//x"]'));
     expect(error.message).toContain("compatible[0].where[0]");
     expect(error.message).toContain("could never match");
   });
 
   test("a non-array where rejects naming compatible[0] (both forms)", () => {
     for (const fixture of [scopedLicenseFixture, scopedPackageFixture]) {
-      const error = expectPolicyError(fixture('"docker:os-packages"'));
+      const error = expectPolicyError(fixture('"docker:img"'));
       expect(error.message).toContain("compatible[0]");
       expect(error.message).toContain('"where"');
     }
@@ -1777,10 +1775,10 @@ describe("unusedRuleIds — stale-policy hygiene", () => {
 // do not exist yet; the engine must not care.
 // ===========================================================================
 
-const TARGET_A = "docker:os-packages/a/Dockerfile";
-const TARGET_B = "docker:os-packages/b/Dockerfile";
-const TARGET_A_EXTRA = "docker:os-packages/a/Dockerfile-extra";
-const TARGET_AGGREGATE = "docker:os-packages";
+const TARGET_A = "docker:a/Dockerfile";
+const TARGET_B = "docker:b/Dockerfile";
+const TARGET_A_EXTRA = "docker:a/Dockerfile-extra";
+const TARGET_A_PREFIX = "docker:a";
 
 /** Package-form busybox acceptance scoped to the given identity prefixes. */
 const scopedBusyboxPolicy = (where: ReadonlyArray<string>): string =>
@@ -1844,13 +1842,13 @@ describe("evaluate — where-scoped compatible matching (SCP-01)", () => {
     );
   });
 
-  test("bare-prefix scope matches EVERY per-image target under it and the aggregate itself (both forms)", () => {
+  test("a prefix scope matches every target under it as a whole segment and the prefix itself (both forms)", () => {
     for (const policyText of [
-      scopedBusyboxPolicy([TARGET_AGGREGATE]),
-      scopedGplPolicy([TARGET_AGGREGATE]),
+      scopedBusyboxPolicy([TARGET_A_PREFIX]),
+      scopedGplPolicy([TARGET_A_PREFIX]),
     ]) {
       const { verdicts } = runEngine(
-        [busyboxAt([TARGET_A, TARGET_B, TARGET_AGGREGATE])],
+        [busyboxAt([TARGET_A, TARGET_A_EXTRA, TARGET_A_PREFIX])],
         policyText,
       );
       expect(verdicts.map((v) => [v.status, v.rule])).toEqual([
@@ -1861,16 +1859,16 @@ describe("evaluate — where-scoped compatible matching (SCP-01)", () => {
     }
   });
 
-  test("FAIL-SAFE direction: a scope under the aggregate never matches the shorter aggregate target (both forms)", () => {
-    // The other matcher direction (research Pitfall 2): scope
-    // docker:os-packages/x is LONGER than the aggregate target — an old-shape
-    // aggregate occurrence must never satisfy a per-image scope.
+  test("FAIL-SAFE direction: a scope never matches a SHORTER target above it (both forms)", () => {
+    // The reverse comparison: the scope docker:a/Dockerfile is LONGER than the
+    // target docker:a — a broader occurrence must never satisfy a narrower
+    // scope, or an acceptance reviewed for one image would leak upward.
     for (const policyText of [
       scopedBusyboxPolicy([TARGET_A]),
       scopedGplPolicy([TARGET_A]),
     ]) {
       const { verdicts, usedClarifyIndices, policy } = runEngine(
-        [busyboxAt([TARGET_AGGREGATE])],
+        [busyboxAt([TARGET_A_PREFIX])],
         policyText,
       );
       expect(verdicts.map((v) => [v.status, v.rule])).toEqual([
@@ -3064,12 +3062,12 @@ const OS_COPYLEFT = osPkgSpec(
   "pkg:deb/debian/libc6@2.36-9",
   "libc6",
   "LGPL-2.1-or-later",
-  ["docker:os-packages"],
+  ["docker:img/Dockerfile"],
 );
 
 /** An OS-scope UNKNOWN-license package (zero claims). */
 const OS_UNKNOWN = osPkgSpec("pkg:apk/alpine/mystery@1.0.0", "mystery", null, [
-  "docker:os-packages",
+  "docker:img/Dockerfile",
 ]);
 
 describe("os_dependencies knob — parsing (mirrors dev_dependencies EXACTLY)", () => {
@@ -3193,7 +3191,7 @@ describe("evaluate — COLL-04 deny STAYS TERMINAL over the os knob", () => {
       const { verdicts } = runEngine(
         [
           osPkgSpec("pkg:deb/debian/evil-os@1.0.0", "evil-os", "BUSL-1.1", [
-            "docker:os-packages",
+            "docker:img/Dockerfile",
           ]),
         ],
         policyText,
@@ -3208,7 +3206,7 @@ describe("evaluate — COLL-04 deny STAYS TERMINAL over the os knob", () => {
     const { verdicts } = runEngine(
       [
         osPkgSpec("pkg:deb/debian/rider-os@1.0.0", "rider-os", null, [
-          "docker:os-packages",
+          "docker:img/Dockerfile",
         ]),
       ],
       denyNameFixture("rider-os"),
@@ -3253,7 +3251,7 @@ describe("evaluate — COLL-04 W1: os-scope and dev-scope downgraders compose wi
     const { verdicts } = runEngine(
       [
         osPkgSpec("pkg:deb/debian/libc6@2.36-9", "libc6", "LGPL-2.1-or-later", [
-          { target: "docker:os-packages", dev: true },
+          { target: "docker:img/Dockerfile", dev: true },
         ]),
       ],
       policyText,
@@ -3294,7 +3292,7 @@ describe("evaluate — COLL-04 W1: os-scope and dev-scope downgraders compose wi
 const osMultiSpec = (
   name: string,
   claims: ReadonlyArray<string>,
-  occurrences: ReadonlyArray<OccurrenceSpec> = ["docker:os-packages"],
+  occurrences: ReadonlyArray<OccurrenceSpec> = ["docker:img/Dockerfile"],
 ): PackageSpec => ({
   purl: `pkg:deb/debian/${name}@1.0.0`,
   name,

@@ -596,7 +596,7 @@ describe("mergeSboms — CollectedSbom.scope threading (COLL-04)", () => {
 
   test('an input with scope:"os" tags every produced PackageEntry scope "os"', () => {
     const model = mergeSboms([
-      { sbom: osDoc, targetIdentity: "docker:os-packages", scope: "os" },
+      { sbom: osDoc, targetIdentity: "docker:img/Dockerfile", scope: "os" },
     ]);
     expect(model.packages.length).toBe(2);
     expect(model.packages.every((p) => p.scope === "os")).toBe(true);
@@ -611,7 +611,7 @@ describe("mergeSboms — CollectedSbom.scope threading (COLL-04)", () => {
   test("scope is per-input: app-scope and os-scope inputs coexist in one model", () => {
     const model = mergeSboms([
       { sbom: trimmedDoc, targetIdentity: TARGET },
-      { sbom: osDoc, targetIdentity: "docker:os-packages", scope: "os" },
+      { sbom: osDoc, targetIdentity: "docker:img/Dockerfile", scope: "os" },
     ]);
     const os = model.packages.filter((p) => p.scope === "os");
     const app = model.packages.filter((p) => p.scope === "app");
@@ -639,7 +639,7 @@ describe("mergeSboms — CollectedSbom.scope threading (COLL-04)", () => {
 
     test("os-input FIRST, app-input second → shared purl resolves to app", () => {
       const model = mergeSboms([
-        { sbom: osDoc, targetIdentity: "docker:os-packages", scope: "os" },
+        { sbom: osDoc, targetIdentity: "docker:img/Dockerfile", scope: "os" },
         { sbom: appDoc, targetIdentity: "backend" },
       ]);
       const shared = model.packages.find((p) => p.purl === SHARED);
@@ -649,7 +649,7 @@ describe("mergeSboms — CollectedSbom.scope threading (COLL-04)", () => {
     test("app-input FIRST, os-input second → shared purl still resolves to app (order-independent)", () => {
       const model = mergeSboms([
         { sbom: appDoc, targetIdentity: "backend" },
-        { sbom: osDoc, targetIdentity: "docker:os-packages", scope: "os" },
+        { sbom: osDoc, targetIdentity: "docker:img/Dockerfile", scope: "os" },
       ]);
       const shared = model.packages.find((p) => p.purl === SHARED);
       expect(shared?.scope).toBe("app");
@@ -657,7 +657,7 @@ describe("mergeSboms — CollectedSbom.scope threading (COLL-04)", () => {
 
     test("a purl present ONLY in os input keeps os scope (no spurious promotion)", () => {
       const model = mergeSboms([
-        { sbom: osDoc, targetIdentity: "docker:os-packages", scope: "os" },
+        { sbom: osDoc, targetIdentity: "docker:img/Dockerfile", scope: "os" },
       ]);
       const musl = model.packages.find(
         (p) => p.purl === "pkg:apk/alpine/musl@1.2.4-r2",
@@ -707,7 +707,7 @@ describe("mergeSboms — full-image scope collision (app wins, image occurrence 
 
   test("an npm purl shared between an app input and the image input folds to one app-scope row with the docker occurrence in Used-in — os-first order", () => {
     const model = mergeSboms([
-      { sbom: imageDoc, targetIdentity: "docker:os-packages", scope: "os" },
+      { sbom: imageDoc, targetIdentity: "docker:img/Dockerfile", scope: "os" },
       { sbom: appDoc, targetIdentity: "backend" },
     ]);
     const shared = model.packages.filter((p) => p.purl === SHARED_NPM);
@@ -717,14 +717,14 @@ describe("mergeSboms — full-image scope collision (app wins, image occurrence 
     expect(shared[0]?.scope).toBe("app");
     expect(shared[0]?.occurrences).toEqual([
       { target: "backend", isDevDependency: false },
-      { target: "docker:os-packages", isDevDependency: false },
+      { target: "docker:img/Dockerfile", isDevDependency: false },
     ]);
   });
 
   test("an npm purl shared between an app input and the image input folds to one app-scope row with the docker occurrence in Used-in — app-first order (#4 makes order irrelevant)", () => {
     const model = mergeSboms([
       { sbom: appDoc, targetIdentity: "backend" },
-      { sbom: imageDoc, targetIdentity: "docker:os-packages", scope: "os" },
+      { sbom: imageDoc, targetIdentity: "docker:img/Dockerfile", scope: "os" },
     ]);
     const shared = model.packages.filter((p) => p.purl === SHARED_NPM);
 
@@ -732,7 +732,7 @@ describe("mergeSboms — full-image scope collision (app wins, image occurrence 
     expect(shared[0]?.scope).toBe("app");
     expect(shared[0]?.occurrences).toEqual([
       { target: "backend", isDevDependency: false },
-      { target: "docker:os-packages", isDevDependency: false },
+      { target: "docker:img/Dockerfile", isDevDependency: false },
     ]);
   });
 
@@ -762,7 +762,7 @@ describe("mergeSboms — full-image scope collision (app wins, image occurrence 
     };
     const model = mergeSboms([
       { sbom: devAppDoc, targetIdentity: "backend" },
-      { sbom: imageDoc, targetIdentity: "docker:os-packages", scope: "os" },
+      { sbom: imageDoc, targetIdentity: "docker:img/Dockerfile", scope: "os" },
     ]);
     const shared = model.packages.find((p) => p.purl === SHARED_NPM);
 
@@ -771,7 +771,7 @@ describe("mergeSboms — full-image scope collision (app wins, image occurrence 
     // occurrence dev; here one is not, so the package is production).
     expect(shared?.occurrences).toEqual([
       { target: "backend", isDevDependency: true },
-      { target: "docker:os-packages", isDevDependency: false },
+      { target: "docker:img/Dockerfile", isDevDependency: false },
     ]);
     expect(shared?.occurrences.every((o) => o.isDevDependency)).toBe(false);
   });
@@ -790,7 +790,7 @@ describe("mergeSboms — full-image scope collision (app wins, image occurrence 
       ],
     };
     const model = mergeSboms([
-      { sbom: osOnlyDoc, targetIdentity: "docker:os-packages", scope: "os" },
+      { sbom: osOnlyDoc, targetIdentity: "docker:img/Dockerfile", scope: "os" },
     ]);
     const os = model.packages.find(
       (p) => p.purl === "pkg:deb/debian/libc6@2.36-9",
@@ -822,7 +822,7 @@ describe("mergeSboms — full-image scope collision (app wins, image occurrence 
     const model = mergeSboms([
       {
         sbom: selfInImageDoc,
-        targetIdentity: "docker:os-packages",
+        targetIdentity: "docker:img/Dockerfile",
         scope: "os",
       },
     ]);
@@ -1963,14 +1963,14 @@ describe("mergeSboms — dependency provenance threading (07-13)", () => {
 });
 
 // ===========================================================================
-// Reserved Docker OS namespace: only scope:"os" inputs may mint identities
-// equal to or under "docker:os-packages". On a POSIX filesystem a directory
-// can be literally named "docker:os-packages", so a crafted workspace could
-// otherwise impersonate a docker image occurrence and inherit `where`-scoped
-// acceptances reviewed for the image layer.
+// Reserved "docker:" namespace: only scope:"os" inputs may mint identities
+// starting with "docker:". On a POSIX filesystem a directory can be literally
+// named "docker:whatever", so a crafted workspace could otherwise impersonate
+// a docker image occurrence and inherit `where`-scoped acceptances reviewed
+// for the image layer.
 // ===========================================================================
 
-describe("mergeSboms — reserved Docker OS occurrence namespace", () => {
+describe("mergeSboms — reserved docker: occurrence namespace", () => {
   const appDoc = {
     bomFormat: "CycloneDX",
     specVersion: "1.6",
@@ -1990,16 +1990,10 @@ describe("mergeSboms — reserved Docker OS occurrence namespace", () => {
       mergeSboms([
         {
           sbom: appDoc,
-          targetIdentity: "docker:os-packages/examples/docker-scan/Dockerfile",
+          targetIdentity: "docker:examples/docker-scan/Dockerfile",
         },
       ]),
-    ).toThrow(/reserved Docker OS occurrence namespace/);
-  });
-
-  test("an app input equal to the bare aggregate identity is refused too", () => {
-    expect(() =>
-      mergeSboms([{ sbom: appDoc, targetIdentity: "docker:os-packages" }]),
-    ).toThrow(/reserved Docker OS occurrence namespace/);
+    ).toThrow(/reserved docker occurrence namespace/);
   });
 
   test('an explicit scope:"app" input inside the namespace is refused', () => {
@@ -2007,33 +2001,41 @@ describe("mergeSboms — reserved Docker OS occurrence namespace", () => {
       mergeSboms([
         {
           sbom: appDoc,
-          targetIdentity: "docker:os-packages/evil",
+          targetIdentity: "docker:evil",
           scope: "app",
         },
       ]),
-    ).toThrow(/reserved Docker OS occurrence namespace/);
+    ).toThrow(/reserved docker occurrence namespace/);
   });
 
-  test("segment-awareness: a sibling identity sharing the prefix as a substring passes", () => {
+  test("the WHOLE prefix is reserved: any non-docker identity starting with docker: is refused", () => {
+    for (const identity of ["docker:", "docker:x", "docker:os-packagesx"]) {
+      expect(() =>
+        mergeSboms([{ sbom: appDoc, targetIdentity: identity }]),
+      ).toThrow(/reserved docker occurrence namespace/);
+    }
+  });
+
+  test('an identity merely CONTAINING "docker:" elsewhere passes', () => {
     const model = mergeSboms([
-      { sbom: appDoc, targetIdentity: "docker:os-packagesx" },
+      { sbom: appDoc, targetIdentity: "apps/docker:tools" },
     ]);
     expect(model.packages.length).toBe(1);
   });
 
-  test('scope:"os" inputs own the namespace: aggregate and per-image identities both pass', () => {
+  test('scope:"os" inputs own the namespace: Dockerfile and image-ref identities both pass', () => {
     const model = mergeSboms([
-      { sbom: appDoc, targetIdentity: "docker:os-packages", scope: "os" },
+      { sbom: appDoc, targetIdentity: "docker:postgres:18", scope: "os" },
       {
         sbom: appDoc,
-        targetIdentity: "docker:os-packages/a/Dockerfile",
+        targetIdentity: "docker:a/Dockerfile",
         scope: "os",
       },
     ]);
     expect(model.packages.length).toBe(1);
     expect(model.packages[0]?.occurrences.map((o) => o.target)).toEqual([
-      "docker:os-packages",
-      "docker:os-packages/a/Dockerfile",
+      "docker:a/Dockerfile",
+      "docker:postgres:18",
     ]);
   });
 });

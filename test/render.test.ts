@@ -967,7 +967,7 @@ describe("renderMarkdown — COLL-04 Docker image packages section", () => {
     purl: "pkg:deb/debian/libc6@2.36-9",
     name: "libc6",
     version: "2.36-9",
-    occurrences: [{ target: "docker:os-packages", isDevDependency: false }],
+    occurrences: [{ target: "docker:img/Dockerfile", isDevDependency: false }],
     licenseClaims: [
       { raw: "LGPL-2.1-or-later", kind: "spdx-id", source: "generator" },
     ],
@@ -977,7 +977,7 @@ describe("renderMarkdown — COLL-04 Docker image packages section", () => {
     purl: "pkg:apk/alpine/musl@1.2.4-r2",
     name: "musl",
     version: "1.2.4-r2",
-    occurrences: [{ target: "docker:os-packages", isDevDependency: false }],
+    occurrences: [{ target: "docker:img/Dockerfile", isDevDependency: false }],
     licenseClaims: [{ raw: "MIT", kind: "spdx-id", source: "generator" }],
     scope: "os",
   });
@@ -1050,7 +1050,9 @@ describe("renderMarkdown — COLL-04 Docker image packages section", () => {
       purl: "pkg:deb/debian/evil@1.0.0",
       name: "evil|pkg`x",
       version: "1.0.0",
-      occurrences: [{ target: "docker:os-packages", isDevDependency: false }],
+      occurrences: [
+        { target: "docker:img/Dockerfile", isDevDependency: false },
+      ],
       licenseClaims: [{ raw: "MIT", kind: "spdx-id", source: "generator" }],
       scope: "os",
     });
@@ -1076,11 +1078,11 @@ describe("renderMarkdown — COLL-04 Docker image packages section", () => {
       version: "1.37.0-r19",
       occurrences: [
         {
-          target: "docker:os-packages/a/Dockerfile",
+          target: "docker:a/Dockerfile",
           isDevDependency: false,
         },
         {
-          target: "docker:os-packages/b/Dockerfile",
+          target: "docker:b/Dockerfile",
           isDevDependency: false,
         },
       ],
@@ -1093,7 +1095,7 @@ describe("renderMarkdown — COLL-04 Docker image packages section", () => {
     const osSection = output.slice(output.indexOf(HEADING));
     expect(
       osSection.includes(
-        "| busybox | apk | 1.37.0-r19 | GPL-2.0-only | docker:os-packages/a/Dockerfile, docker:os-packages/b/Dockerfile |",
+        "| busybox | apk | 1.37.0-r19 | GPL-2.0-only | docker:a/Dockerfile, docker:b/Dockerfile |",
       ),
     ).toBe(true);
   });
@@ -1110,7 +1112,7 @@ describe("renderMarkdown — os-scope partial-license cell (07-06)", () => {
     purl: "pkg:deb/debian/os-partial@1.0",
     name: "os-partial",
     version: "1.0",
-    occurrences: [{ target: "docker:os-packages", isDevDependency: false }],
+    occurrences: [{ target: "docker:img/Dockerfile", isDevDependency: false }],
     licenseClaims: [
       { raw: "GPL-2.0-only", kind: "spdx-id", source: "generator" },
       { raw: "BSD-3-Clause", kind: "spdx-id", source: "generator" },
@@ -1143,7 +1145,9 @@ describe("renderMarkdown — os-scope partial-license cell (07-06)", () => {
       purl: "pkg:deb/debian/os-multi@1.0",
       name: "os-multi",
       version: "1.0",
-      occurrences: [{ target: "docker:os-packages", isDevDependency: false }],
+      occurrences: [
+        { target: "docker:img/Dockerfile", isDevDependency: false },
+      ],
       licenseClaims: [],
       scope: "os",
       finding: {
@@ -1163,7 +1167,9 @@ describe("renderMarkdown — os-scope partial-license cell (07-06)", () => {
       purl: "pkg:deb/debian/os-evil@1.0",
       name: "os-evil",
       version: "1.0",
-      occurrences: [{ target: "docker:os-packages", isDevDependency: false }],
+      occurrences: [
+        { target: "docker:img/Dockerfile", isDevDependency: false },
+      ],
       licenseClaims: [],
       scope: "os",
       finding: {
@@ -1187,7 +1193,9 @@ describe("renderMarkdown — os-scope partial-license cell (07-06)", () => {
       purl: "pkg:deb/debian/os-imprecise-partial@1.0",
       name: "os-imprecise-partial",
       version: "1.0",
-      occurrences: [{ target: "docker:os-packages", isDevDependency: false }],
+      occurrences: [
+        { target: "docker:img/Dockerfile", isDevDependency: false },
+      ],
       licenseClaims: [],
       scope: "os",
       finding: {
@@ -1289,7 +1297,9 @@ describe("renderMarkdown — Ecosystem column (07-09 COMMIT 1)", () => {
         purl: "pkg:deb/debian/deb-pkg@4.0",
         name: "deb-pkg",
         version: "4.0",
-        occurrences: [{ target: "docker:os-packages", isDevDependency: false }],
+        occurrences: [
+          { target: "docker:img/Dockerfile", isDevDependency: false },
+        ],
         licenseClaims: [
           { raw: "GPL-2.0-only", kind: "spdx-id", source: "generator" },
         ],
@@ -1305,7 +1315,9 @@ describe("renderMarkdown — Ecosystem column (07-09 COMMIT 1)", () => {
         purl: "pkg:apk/alpine/apk-pkg@5.0",
         name: "apk-pkg",
         version: "5.0",
-        occurrences: [{ target: "docker:os-packages", isDevDependency: false }],
+        occurrences: [
+          { target: "docker:img/Dockerfile", isDevDependency: false },
+        ],
         licenseClaims: [{ raw: "MIT", kind: "spdx-id", source: "generator" }],
         scope: "os",
         finding: {

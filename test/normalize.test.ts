@@ -252,7 +252,7 @@ const osPkg = (
   purl: `pkg:deb/debian/${name}@${version}`,
   name,
   version,
-  occurrences: [{ target: "docker:os-packages", isDevDependency: false }],
+  occurrences: [{ target: "docker:img/Dockerfile", isDevDependency: false }],
   licenseClaims: claims,
   scope: "os",
 });

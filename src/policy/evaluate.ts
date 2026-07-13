@@ -156,9 +156,9 @@ interface IndexedRule<T> {
  * matches "apps/scratch". This is the only prefix comparison in the engine —
  * suppression paths and compatible `where` scopes both delegate here; license
  * values are never substring-matched anywhere. Both directions matter: the
- * scope "docker:os-packages" covers every target under it, while the scope
- * "docker:os-packages/x" never covers the SHORTER aggregate target
- * "docker:os-packages" (the fail-safe direction).
+ * scope "docker:a" covers every target under it ("docker:a/Dockerfile"), while
+ * the scope "docker:a/Dockerfile" never covers the SHORTER target "docker:a"
+ * (the fail-safe direction).
  */
 function matchesIdentityPrefix(target: string, path: string): boolean {
   return target === path || target.startsWith(path + "/");

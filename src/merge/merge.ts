@@ -479,15 +479,13 @@ function mergeInto(existing: PackageEntry, incoming: PackageEntry): void {
 }
 
 /**
- * The Docker OS occurrence namespace: the aggregate identity of a
- * pre-attribution sidecar and the prefix of every per-image identity
- * ("docker:os-packages/<source>"). RESERVED for scope:"os" inputs — on a
- * POSIX filesystem a directory can be literally named "docker:os-packages",
- * so without the guard below a crafted workspace path could impersonate a
- * docker image occurrence and inherit `where`-scoped acceptances reviewed
- * for the image layer.
+ * The prefix of every docker image occurrence identity ("docker:<source>").
+ * RESERVED for scope:"os" inputs — on a POSIX filesystem a directory can be
+ * literally named "docker:whatever", so without the guard below a crafted
+ * workspace path could impersonate a docker image occurrence and inherit
+ * `where`-scoped acceptances reviewed for the image layer.
  */
-export const DOCKER_OS_IDENTITY = "docker:os-packages";
+export const DOCKER_IDENTITY_PREFIX = "docker:";
 
 /**
  * Throw when a non-os input mints an identity in the reserved namespace.
@@ -498,9 +496,9 @@ export const DOCKER_OS_IDENTITY = "docker:os-packages";
 function assertNotReservedIdentity(input: CollectedSbom): void {
   if ((input.scope ?? "app") === "os") return;
   const id = input.targetIdentity;
-  if (id === DOCKER_OS_IDENTITY || id.startsWith(`${DOCKER_OS_IDENTITY}/`)) {
+  if (id.startsWith(DOCKER_IDENTITY_PREFIX)) {
     throw new Error(
-      `target "${id}" collides with the reserved Docker OS occurrence namespace "${DOCKER_OS_IDENTITY}" — rename or exclude the directory; a workspace can never impersonate a docker image occurrence`,
+      `target "${id}" collides with the reserved docker occurrence namespace "${DOCKER_IDENTITY_PREFIX}*" — rename or exclude the directory; a workspace can never impersonate a docker image occurrence`,
     );
   }
 }

@@ -1021,7 +1021,7 @@ describe("runGenerate --policy", () => {
         'match = "license"',
         'pattern = "AGPL-3.0-only"',
         'reason = "scoped-dead-rule-marker"',
-        'where = ["docker:os-packages/nonexistent/Dockerfile"]',
+        'where = ["docker:nonexistent/Dockerfile"]',
         "",
       ].join("\n"),
     );
