@@ -79,7 +79,7 @@ describe("trove classifier -> SPDX map", () => {
     );
   });
 
-  test("the bare 'ISC license' label maps to ISC (INV-04 suffix fix — pexpect false-negative)", () => {
+  test("the bare 'ISC license' label maps to ISC (suffix handling — pexpect false-negative)", () => {
     // pexpect's PyPI license field is the bare label "ISC license", which
     // spdx-correct returns null for; the trove map carries it so normalizeRaw
     // resolves it to ISC instead of dropping the package to unknown.
@@ -1113,11 +1113,11 @@ describe("enrichUnknowns orchestrator (cache-first, generate-fetch, check-stale)
     }
   });
 
-  // INV-04 conscious-change proof: the committed cache stores the RAW registry
-  // string ("BSD License") — UNCHANGED this plan. The INTERPRETATION changed:
-  // a cached BSD-label entry now resolves to imprecise-BSD, never BSD-2-Clause.
-  // The 23 Jupyter BSD rows ride this path; 05-06's tool-level override will
-  // later disambiguate them to BSD-3-Clause. No override is authored here.
+  // The committed cache stores the RAW registry string ("BSD License")
+  // unchanged; only the INTERPRETATION differs: a cached BSD-label entry
+  // resolves to imprecise-BSD, never BSD-2-Clause. The 23 Jupyter BSD rows ride
+  // this path; the tool-level override is what later disambiguates them to
+  // BSD-3-Clause. No override is authored here.
   test("a cached BSD-label entry resolves to imprecise-BSD (never BSD-2-Clause) end-to-end", async () => {
     const { dir, path } = tempCachePath();
     try {
@@ -1150,7 +1150,7 @@ describe("enrichUnknowns orchestrator (cache-first, generate-fetch, check-stale)
       expect(calls).toEqual([]);
       expect(registryClaim(result.model.packages[0])?.raw).toBe("BSD License");
 
-      // The finding INTERPRETS that raw as imprecise-BSD (INV-04).
+      // The finding INTERPRETS that raw as imprecise-BSD.
       const { model: annotated } = annotateFindings(result.model, []);
       const finding = annotated.packages[0]!.finding!;
       expect(finding.confidence).toBe("imprecise");
@@ -1470,7 +1470,7 @@ describe("enrichUnknowns terraform/github (version-tag, transient-vs-definitive,
     }
   });
 
-  test("a clean 404 across ALL candidate refs writes a NEGATIVE entry → unknown (POL-04)", async () => {
+  test("a clean 404 across ALL candidate refs writes a NEGATIVE entry → unknown", async () => {
     const { dir, path } = tempCachePath();
     try {
       const { fetch, calls } = fetchByUrl(() => jsonResponse({}, 404));
@@ -2251,7 +2251,7 @@ describe("enrichUnknowns nuget (two-step fetch, negative discipline, offline che
   });
 
   test("a transient failure MID-BATCH flushes NOTHING — not even the misses that already resolved (no partial artifact)", async () => {
-    // Review-pass lock (15-05): the failed purl must write nothing, and the
+    // The failed purl must write nothing, and the
     // artifact write is all-or-nothing — a completed sibling worker's entry
     // never lands on disk out of a failed generate.
     const { dir, path } = tempCachePath();

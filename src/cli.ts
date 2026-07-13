@@ -75,8 +75,8 @@ const USAGE =
   "  generate-docker-sbom (--dockerfile <path>... | " +
   "--repo-root <dir> [--policy <file>] [--exclude <glob>]... | " +
   "--image <ref>... | --list-dockerfiles --repo-root <dir>) " +
-  "[--docker-os-sbom <path>] [--base-dir <path>] [--verbose]\n" +
-  "           Writes the committed docker-os.sbom.json. MAINTAINER-ONLY, " +
+  "[--docker-sbom <path>] [--base-dir <path>] [--verbose]\n" +
+  "           Writes the committed docker.sbom.json. MAINTAINER-ONLY, " +
   "REQUIRES A DOCKER DAEMON. THREE mutually exclusive lanes:\n" +
   "           --dockerfile <path>...: build each explicitly named Dockerfile " +
   "to a deterministic tag, then scan the built image (full contents).\n" +
@@ -154,7 +154,7 @@ interface CliValues {
    */
   dockerfile?: string[];
   /** generate-docker-sbom output path; base-dir-resolved like every artifact. */
-  "docker-os-sbom"?: string;
+  "docker-sbom"?: string;
   /**
    * generate-docker-sbom --list-dockerfiles: print the tool policy-aware
    * discovered Dockerfile identities to stdout, one per line, and exit --
@@ -213,7 +213,7 @@ export function optionsFrom(values: CliValues): GenerateOptions {
     enrichmentCachePath: values["enrichment-cache"],
     scancodeCachePath: values["scancode-cache"],
     verbose: values.verbose ?? false,
-    // Absent-not-false (D-07): own-property spread so a default generate
+    // Absent-not-false: own-property spread so a default generate
     // never sets this key at all, and check's runCheck rejection reads
     // opts.intensive === true, never a coerced false.
     ...(values.intensive === true ? { intensive: true } : {}),
@@ -223,7 +223,7 @@ export function optionsFrom(values: CliValues): GenerateOptions {
 /**
  * Compute the first generate-docker-sbom mode-conflict message, or undefined
  * when the requested lane combination is valid. THE THREE LANES ARE PAIRWISE
- * MUTUALLY EXCLUSIVE (D-01): exactly one of --dockerfile (build named
+ * MUTUALLY EXCLUSIVE: exactly one of --dockerfile (build named
  * Dockerfiles) / --repo-root (discover + build) / --image (scan pre-existing
  * images). --list-dockerfiles is discovery-listing support: it never combines
  * with a build/scan lane and REQUIRES --repo-root (the walk root the listing
@@ -253,7 +253,7 @@ export function dockerSbomModeConflict(values: CliValues): string | undefined {
       hasDockerfile,
       "--list-dockerfiles and --dockerfile are mutually exclusive",
     ],
-    // The three lanes are pairwise mutually exclusive (D-01) — choose one way in.
+    // The three lanes are pairwise mutually exclusive — choose one way in.
     [
       hasDockerfile,
       hasRepoRoot,
@@ -324,10 +324,11 @@ export function dockerSbomOptionsFrom(
     ...(values.exclude !== undefined ? { excludes: values.exclude } : {}),
     ...(policyPath !== undefined ? { policyPath } : {}),
     // The tool's OWN directory, so Dockerfile discovery prunes it from the walk
-    // exactly as lockfile discovery does (targets.ts:53). cli.ts lives in src/,
+    // exactly as lockfile discovery does (targets.ts). cli.ts lives in src/,
+
     // so one level up is the tool root. Computed with zero hardcoded paths.
     toolDir: join(import.meta.dir, ".."),
-    dockerOsSbomPath: values["docker-os-sbom"],
+    dockerSbomPath: values["docker-sbom"],
     baseDir: values["base-dir"],
     verbose: values.verbose ?? false,
   };
@@ -413,7 +414,7 @@ async function main(argv: string[]): Promise<void> {
         verbose: { type: "boolean", default: false },
         image: { type: "string", multiple: true },
         dockerfile: { type: "string", multiple: true },
-        "docker-os-sbom": { type: "string" },
+        "docker-sbom": { type: "string" },
         "list-dockerfiles": { type: "boolean", default: false },
         intensive: { type: "boolean" },
       },

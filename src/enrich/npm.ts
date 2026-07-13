@@ -64,7 +64,7 @@ function joinLicensesArray(
 }
 
 /**
- * Resolve one license block (version or top level) in the locked order:
+ * Resolve one license block (version or top level) in this fixed order:
  * string → legacy `{ type }` object → legacy `licenses` array. `vias` carries
  * the level-specific `via` tags so the audit trail names where the value won.
  */

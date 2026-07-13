@@ -610,19 +610,19 @@ describe("offline check contract — enrichment staleness (INTG-03, GATE-02)", (
 });
 
 // ===========================================================================
-// COLL-04: the committed docker-os.sbom.json is threaded into the merge as a
-// scope:"os" INPUT (07-01's emitter output), repo-root-resolved. A MISSING file
+// The committed docker.sbom.json is threaded into the merge as a
+// scope:"os" INPUT (the emitter's output), repo-root-resolved. A MISSING file
 // is the enrichment-cache-miss equivalent: NO os entries, NO scan, NO docker.
 // buildOutputs is write-free so these run directly against a temp base dir.
 // ===========================================================================
 
 /**
- * A committed Docker OS-SBOM (the attributed v2 emitter shape): one deb + one
- * apk, each attributed to the single scanned image. The image-lane source is
- * the ref verbatim (source === image), so the occurrence identity becomes
- * "docker:os-packages/postgres:18" — colons are inert in identities.
+ * A committed docker SBOM (the emitter shape): one deb + one apk, each
+ * attributed to the single scanned image. The image-lane source is the ref
+ * verbatim (source === image), so the occurrence identity becomes
+ * "docker:postgres:18" — colons are inert in identities.
  */
-const DOCKER_OS_SBOM = {
+const DOCKER_SBOM = {
   bomFormat: "CycloneDX",
   specVersion: "1.6",
   components: [
@@ -650,31 +650,6 @@ const DOCKER_OS_SBOM = {
   ],
 };
 
-/**
- * The OLD sidecar shape (pre-attribution: no components[].images, no
- * dockerImages[].source) — the compat lock: it must keep reading as today's
- * single "docker:os-packages" aggregate merge input.
- */
-const DOCKER_OS_SBOM_V1 = {
-  bomFormat: "CycloneDX",
-  specVersion: "1.6",
-  components: [
-    {
-      type: "library",
-      name: "libc6",
-      version: "2.36-9",
-      purl: "pkg:deb/debian/libc6@2.36-9",
-    },
-    {
-      type: "library",
-      name: "musl",
-      version: "1.2.4-r2",
-      purl: "pkg:apk/alpine/musl@1.2.4-r2",
-    },
-  ],
-  dockerImages: [{ image: "postgres:18", digest: "postgres@sha256:deadbeef" }],
-};
-
 /** A clean 200-empty registry response so os-package unknowns stay offline. */
 const EMPTY_FETCH = (async (): Promise<Response> =>
   new Response(JSON.stringify({}), {
@@ -682,7 +657,7 @@ const EMPTY_FETCH = (async (): Promise<Response> =>
     headers: { "content-type": "application/json" },
   })) as unknown as typeof fetch;
 
-describe("COLL-04 committed docker-os.sbom.json as a scope:os merge input", () => {
+describe("the committed docker.sbom.json as a scope:os merge input", () => {
   beforeAll(() => {
     mock.module("../src/collectors/cdxgen", () => ({
       ...REAL_CDXGEN,
@@ -693,12 +668,12 @@ describe("COLL-04 committed docker-os.sbom.json as a scope:os merge input", () =
     mock.module("../src/collectors/cdxgen", () => REAL_CDXGEN);
   });
 
-  test("a committed docker-os.sbom.json at the repo root threads os-scope deb/apk entries into the merged model", async () => {
+  test("a committed docker.sbom.json at the repo root threads os-scope deb/apk entries into the merged model", async () => {
     const { root } = makeScannableTree();
     mkdirSync(join(root, ".sbomlet.cache"), { recursive: true });
     writeFileSync(
-      join(root, ".sbomlet.cache", "docker-os.sbom.json"),
-      JSON.stringify(DOCKER_OS_SBOM),
+      join(root, ".sbomlet.cache", "docker.sbom.json"),
+      JSON.stringify(DOCKER_SBOM),
     );
     const paths = pathsFor(root, false);
 
@@ -721,11 +696,11 @@ describe("COLL-04 committed docker-os.sbom.json as a scope:os merge input", () =
     const osSection = squish(md.slice(md.indexOf("## Docker image packages")));
     expect(osSection.includes("| libc6 | deb | 2.36-9 |")).toBe(true);
     expect(osSection.includes("| musl | apk | 1.2.4-r2 |")).toBe(true);
-    // v2 sidecar: the occurrence identity is per-image (image lane → the ref).
-    expect(osSection.includes("docker:os-packages/postgres:18")).toBe(true);
+    // The occurrence identity is per-image (image lane → the ref).
+    expect(osSection.includes("docker:postgres:18")).toBe(true);
   });
 
-  test("the committed docker-os.sbom.json is read from the REPO ROOT, not the base dir (the Action's divergent-dir case)", async () => {
+  test("the committed docker.sbom.json is read from the REPO ROOT, not the base dir (the Action's divergent-dir case)", async () => {
     const { root } = makeScannableTree();
     // The Action shape: `task` runs from the action's own directory, so
     // base-dir is NOT the scanned repo; the consumer commits the SBOM at
@@ -733,8 +708,8 @@ describe("COLL-04 committed docker-os.sbom.json as a scope:os merge input", () =
     const baseDir = mkdtempSync(join(tmpdir(), "licenses-check-basedir-"));
     mkdirSync(join(root, ".sbomlet.cache"), { recursive: true });
     writeFileSync(
-      join(root, ".sbomlet.cache", "docker-os.sbom.json"),
-      JSON.stringify(DOCKER_OS_SBOM),
+      join(root, ".sbomlet.cache", "docker.sbom.json"),
+      JSON.stringify(DOCKER_SBOM),
     );
     const paths = pathsFor(root, false);
 
@@ -758,15 +733,15 @@ describe("COLL-04 committed docker-os.sbom.json as a scope:os merge input", () =
     expect(osSection.includes("| musl | apk | 1.2.4-r2 |")).toBe(true);
   });
 
-  test("a docker-os.sbom.json beside the base dir is IGNORED when the base dir differs from the repo root (no base-dir leakage)", async () => {
+  test("a docker.sbom.json beside the base dir is IGNORED when the base dir differs from the repo root (no base-dir leakage)", async () => {
     const { root } = makeScannableTree();
     const baseDir = mkdtempSync(join(tmpdir(), "licenses-check-basedir-"));
     // A cache dir in the invocation dir (e.g. the action's own checkout) must
     // NOT leak into a scan of a different repo root.
     mkdirSync(join(baseDir, ".sbomlet.cache"), { recursive: true });
     writeFileSync(
-      join(baseDir, ".sbomlet.cache", "docker-os.sbom.json"),
-      JSON.stringify(DOCKER_OS_SBOM),
+      join(baseDir, ".sbomlet.cache", "docker.sbom.json"),
+      JSON.stringify(DOCKER_SBOM),
     );
     const paths = pathsFor(root, false);
 
@@ -793,7 +768,7 @@ describe("COLL-04 committed docker-os.sbom.json as a scope:os merge input", () =
 
   test("NO committed file → NO os entries and NO docker/syft scan (offline, the cache-miss equivalent)", async () => {
     const { root } = makeScannableTree();
-    // No docker-os.sbom.json written.
+    // No docker.sbom.json written.
     const paths = pathsFor(root, false);
 
     let outputs: Awaited<ReturnType<typeof buildOutputs>> | undefined;
@@ -818,31 +793,121 @@ describe("COLL-04 committed docker-os.sbom.json as a scope:os merge input", () =
     // No docker base-image packages counted.
     expect(md.includes("- Docker image packages: 0")).toBe(true);
   });
+
+  test("a LEGACY docker-os.sbom.json without the current file fails LOUDLY naming the remedy", async () => {
+    const { root } = makeScannableTree();
+    mkdirSync(join(root, ".sbomlet.cache"), { recursive: true });
+    // A repo generated before the rename: only the old filename exists.
+    writeFileSync(
+      join(root, ".sbomlet.cache", "docker-os.sbom.json"),
+      JSON.stringify(DOCKER_SBOM),
+    );
+    const paths = pathsFor(root, false);
+
+    await expect(
+      withFetch(EMPTY_FETCH, () =>
+        withCapturedStderr(async () => {
+          await buildOutputs({
+            repoRoot: root,
+            baseDir: root,
+            ...paths,
+            verbose: false,
+          });
+        }),
+      ),
+    ).rejects.toThrow(/re-run the docker scan \(task generate DOCKER=1\)/);
+  });
+
+  test("a lingering legacy file beside the current docker.sbom.json is ignored — its content is never read", async () => {
+    const { root } = makeScannableTree();
+    mkdirSync(join(root, ".sbomlet.cache"), { recursive: true });
+    writeFileSync(
+      join(root, ".sbomlet.cache", "docker.sbom.json"),
+      JSON.stringify(DOCKER_SBOM),
+    );
+    // Deliberately unparseable: reading it would throw, proving it is not read.
+    writeFileSync(
+      join(root, ".sbomlet.cache", "docker-os.sbom.json"),
+      "not json",
+    );
+    const paths = pathsFor(root, false);
+
+    let outputs: Awaited<ReturnType<typeof buildOutputs>> | undefined;
+    await withFetch(EMPTY_FETCH, () =>
+      withCapturedStderr(async () => {
+        outputs = await buildOutputs({
+          repoRoot: root,
+          baseDir: root,
+          ...paths,
+          verbose: false,
+        });
+      }),
+    );
+
+    const osSection = squish(
+      outputs!.licensesMd.slice(
+        outputs!.licensesMd.indexOf("## Docker image packages"),
+      ),
+    );
+    expect(osSection.includes("| libc6 | deb | 2.36-9 |")).toBe(true);
+  });
+
+  test("an explicit --docker-sbom override reads that file only — no legacy-file guard", async () => {
+    const { root } = makeScannableTree();
+    mkdirSync(join(root, ".sbomlet.cache"), { recursive: true });
+    // Legacy file present at the default location, but the caller names an
+    // explicit path: the override wins and the guard stays silent.
+    writeFileSync(
+      join(root, ".sbomlet.cache", "docker-os.sbom.json"),
+      "not json",
+    );
+    const override = join(root, "custom.sbom.json");
+    writeFileSync(override, JSON.stringify(DOCKER_SBOM));
+    const paths = pathsFor(root, false);
+
+    let outputs: Awaited<ReturnType<typeof buildOutputs>> | undefined;
+    await withFetch(EMPTY_FETCH, () =>
+      withCapturedStderr(async () => {
+        outputs = await buildOutputs({
+          repoRoot: root,
+          baseDir: root,
+          ...paths,
+          dockerSbomPath: override,
+          verbose: false,
+        });
+      }),
+    );
+
+    const osSection = squish(
+      outputs!.licensesMd.slice(
+        outputs!.licensesMd.indexOf("## Docker image packages"),
+      ),
+    );
+    expect(osSection.includes("| libc6 | deb | 2.36-9 |")).toBe(true);
+  });
 });
 
 // ===========================================================================
-// SCP-02 fan-out: a v2 sidecar (per-component images[], per-image source)
-// becomes one merge input PER IMAGE with hierarchical occurrence identities
-// docker:os-packages/<source>, so a purl shared across images gets one
+// Sidecar fan-out: the committed docker SBOM (per-component images[],
+// per-image source) becomes one merge input PER IMAGE with occurrence
+// identities docker:<source>, so a purl shared across images gets one
 // occurrence per image through the untouched mergeSboms — exactly like a
-// package in two workspaces. The old shape keeps today's single aggregate
-// input; ANY malformed v2 shape degrades the WHOLE sidecar to the aggregate
-// path (all-or-nothing detection — a component is never dropped); an
-// old-shape sidecar plus a docker-scoped compatible rule earns one stderr
-// regeneration hint line (no exit-code change).
+// package in two workspaces. A sidecar without full attribution is malformed
+// and fails LOUDLY — never a partial per-image model, never silently dropped
+// inventory.
 // ===========================================================================
 
-/** Write `doc` as the committed docker-os.sbom.json inside root's cache dir. */
+/** Write `doc` as the committed docker.sbom.json inside root's cache dir. */
 function writeSidecar(root: string, doc: unknown): void {
   mkdirSync(join(root, ".sbomlet.cache"), { recursive: true });
   writeFileSync(
-    join(root, ".sbomlet.cache", "docker-os.sbom.json"),
+    join(root, ".sbomlet.cache", "docker.sbom.json"),
     JSON.stringify(doc),
   );
 }
 
-/** One v2 sidecar component; `images` is omitted entirely when undefined. */
-function v2Component(
+/** One sidecar component; `images` is omitted entirely when undefined. */
+function sidecarComponent(
   name: string,
   images?: readonly string[],
 ): Record<string, unknown> {
@@ -857,7 +922,7 @@ function v2Component(
 }
 
 /** Assemble a sidecar document from component and image entries. */
-function v2Sidecar(
+function sidecarDoc(
   components: ReadonlyArray<Record<string, unknown>>,
   dockerImages: ReadonlyArray<Record<string, unknown>>,
 ): Record<string, unknown> {
@@ -872,21 +937,13 @@ function v2Sidecar(
 const IMG_A = { image: "img-a", digest: "", source: "a/Dockerfile" };
 const IMG_B = { image: "img-b", digest: "", source: "b/Dockerfile" };
 const ATTRIBUTED_COMPONENTS = [
-  v2Component("only-a", ["img-a"]),
-  v2Component("only-b", ["img-b"]),
-  v2Component("shared-pkg", ["img-a", "img-b"]),
+  sidecarComponent("only-a", ["img-a"]),
+  sidecarComponent("only-b", ["img-b"]),
+  sidecarComponent("shared-pkg", ["img-a", "img-b"]),
 ];
 
-/** A well-formed v2 sidecar over two images: one shared + one unique each. */
-const V2_TWO_IMAGES = v2Sidecar(ATTRIBUTED_COMPONENTS, [IMG_A, IMG_B]);
-
-/**
- * The exact stderr regeneration hint (one line): printed only when the
- * committed sidecar reads as the aggregate (old or malformed shape) AND the
- * policy carries a compatible rule scoped under docker:os-packages.
- */
-const HINT_LINE =
-  "docker-os.sbom.json predates per-image attribution — scoped compatible rules cannot match docker occurrences; regenerate via generate-docker-sbom";
+/** A sidecar over two images: one shared + one unique each. */
+const TWO_IMAGE_SIDECAR = sidecarDoc(ATTRIBUTED_COMPONENTS, [IMG_A, IMG_B]);
 
 /** A policy whose FIRST compatible rule is docker-scoped (musl, warn-only). */
 const SCOPED_DOCKER_POLICY = [
@@ -900,7 +957,7 @@ const SCOPED_DOCKER_POLICY = [
   'match = "package"',
   'name = "musl"',
   'reason = "scoped to the postgres image occurrence"',
-  'where = ["docker:os-packages/postgres:18"]',
+  'where = ["docker:postgres:18"]',
   "",
   "[[compatible]]",
   'match = "license"',
@@ -908,12 +965,6 @@ const SCOPED_DOCKER_POLICY = [
   'reason = "app fixture acceptance"',
   "",
 ].join("\n");
-
-/** SCOPED_DOCKER_POLICY without the `where` narrowing (unscoped control). */
-const UNSCOPED_DOCKER_POLICY = SCOPED_DOCKER_POLICY.replace(
-  'where = ["docker:os-packages/postgres:18"]\n',
-  "",
-);
 
 /** buildOutputs over root with a stubbed registry and captured stderr. */
 async function buildAgainst(
@@ -939,7 +990,7 @@ async function buildAgainst(
   return { outputs: outputs!, stderr };
 }
 
-describe("SCP-02 sidecar v2 fan-out, aggregate compat, and the regeneration hint", () => {
+describe("sidecar fan-out and the malformed-sidecar failure", () => {
   beforeAll(() => {
     mock.module("../src/collectors/cdxgen", () => ({
       ...REAL_CDXGEN,
@@ -950,9 +1001,9 @@ describe("SCP-02 sidecar v2 fan-out, aggregate compat, and the regeneration hint
     mock.module("../src/collectors/cdxgen", () => REAL_CDXGEN);
   });
 
-  test("a v2 sidecar fans out per image: a shared purl carries BOTH per-image identities, unique purls one each", async () => {
+  test("the sidecar fans out per image: a shared purl carries BOTH per-image identities, unique purls one each", async () => {
     const { root } = makeScannableTree();
-    writeSidecar(root, V2_TWO_IMAGES);
+    writeSidecar(root, TWO_IMAGE_SIDECAR);
 
     const { outputs } = await buildAgainst(root);
 
@@ -962,95 +1013,78 @@ describe("SCP-02 sidecar v2 fan-out, aggregate compat, and the regeneration hint
     // targets are the sorted per-image identities.
     expect(
       osSection.includes(
-        "| shared-pkg | apk | 1.0.0 | MIT | docker:os-packages/a/Dockerfile, docker:os-packages/b/Dockerfile |",
+        "| shared-pkg | apk | 1.0.0 | MIT | docker:a/Dockerfile, docker:b/Dockerfile |",
       ),
     ).toBe(true);
     expect(
       osSection.includes(
-        "| only-a | apk | 1.0.0 | MIT | docker:os-packages/a/Dockerfile |",
+        "| only-a | apk | 1.0.0 | MIT | docker:a/Dockerfile |",
       ),
     ).toBe(true);
     expect(
       osSection.includes(
-        "| only-b | apk | 1.0.0 | MIT | docker:os-packages/b/Dockerfile |",
+        "| only-b | apk | 1.0.0 | MIT | docker:b/Dockerfile |",
       ),
     ).toBe(true);
     // Still one ROW per purl (the fan-out multiplies occurrences, not rows).
     expect(md.includes("- Docker image packages: 3")).toBe(true);
-    // The bare aggregate identity appears in no Used-in cell.
-    expect(osSection.includes("docker:os-packages |")).toBe(false);
   });
 
-  test("an old-shape sidecar reads as today's single docker:os-packages aggregate input (compat)", async () => {
-    const { root } = makeScannableTree();
-    writeSidecar(root, DOCKER_OS_SBOM_V1);
-
-    const { outputs } = await buildAgainst(root);
-
-    const md = outputs.licensesMd;
-    const osSection = squish(md.slice(md.indexOf("## Docker image packages")));
-    expect(osSection.includes("| libc6 | deb | 2.36-9 |")).toBe(true);
-    expect(osSection.includes("| musl | apk | 1.2.4-r2 |")).toBe(true);
-    // Aggregate identity, never a per-image one.
-    expect(osSection.includes("| docker:os-packages |")).toBe(true);
-    expect(osSection.includes("docker:os-packages/")).toBe(false);
-  });
-
-  const DEGRADE_VARIANTS: ReadonlyArray<{ label: string; doc: unknown }> = [
+  const MALFORMED_VARIANTS: ReadonlyArray<{ label: string; doc: unknown }> = [
     {
       label: "a component lacking images[]",
-      doc: v2Sidecar(
+      doc: sidecarDoc(
         [
-          v2Component("only-a"),
-          v2Component("only-b", ["img-b"]),
-          v2Component("shared-pkg", ["img-a", "img-b"]),
+          sidecarComponent("only-a"),
+          sidecarComponent("only-b", ["img-b"]),
+          sidecarComponent("shared-pkg", ["img-a", "img-b"]),
         ],
         [IMG_A, IMG_B],
       ),
     },
     {
       label: "a non-string entry inside images[]",
-      doc: v2Sidecar(
+      doc: sidecarDoc(
         [
-          { ...v2Component("only-a"), images: ["img-a", 7] },
-          v2Component("only-b", ["img-b"]),
-          v2Component("shared-pkg", ["img-a", "img-b"]),
+          { ...sidecarComponent("only-a"), images: ["img-a", 7] },
+          sidecarComponent("only-b", ["img-b"]),
+          sidecarComponent("shared-pkg", ["img-a", "img-b"]),
         ],
         [IMG_A, IMG_B],
       ),
     },
     {
       label: "an EMPTY images[] membership",
-      doc: v2Sidecar(
+      doc: sidecarDoc(
         [
-          { ...v2Component("only-a"), images: [] },
-          v2Component("only-b", ["img-b"]),
-          v2Component("shared-pkg", ["img-a", "img-b"]),
+          { ...sidecarComponent("only-a"), images: [] },
+          sidecarComponent("only-b", ["img-b"]),
+          sidecarComponent("shared-pkg", ["img-a", "img-b"]),
         ],
         [IMG_A, IMG_B],
       ),
     },
     {
       label: "a dockerImages entry lacking source",
-      doc: v2Sidecar(ATTRIBUTED_COMPONENTS, [
+      doc: sidecarDoc(ATTRIBUTED_COMPONENTS, [
         { image: "img-a", digest: "" },
         IMG_B,
       ]),
     },
     {
       label: "a membership naming an image absent from dockerImages",
-      doc: v2Sidecar(
+      doc: sidecarDoc(
         [
-          v2Component("only-a", ["img-a"]),
-          v2Component("only-b", ["img-b"]),
-          v2Component("shared-pkg", ["img-a", "img-ghost"]),
+          sidecarComponent("only-a", ["img-a"]),
+          sidecarComponent("only-b", ["img-b"]),
+          sidecarComponent("shared-pkg", ["img-a", "img-ghost"]),
         ],
         [IMG_A, IMG_B],
       ),
     },
     {
       label: "duplicate image names in dockerImages",
-      doc: v2Sidecar(ATTRIBUTED_COMPONENTS, [
+      doc: sidecarDoc(ATTRIBUTED_COMPONENTS, [
         IMG_A,
         { image: "img-a", digest: "", source: "other/Dockerfile" },
         IMG_B,
@@ -1058,124 +1092,33 @@ describe("SCP-02 sidecar v2 fan-out, aggregate compat, and the regeneration hint
     },
   ];
 
-  for (const { label, doc } of DEGRADE_VARIANTS) {
-    test(`malformed v2 (${label}) degrades the WHOLE sidecar to the aggregate path — no component is lost`, async () => {
+  for (const { label, doc } of MALFORMED_VARIANTS) {
+    test(`a malformed sidecar (${label}) fails LOUDLY — never a partial model, never dropped inventory`, async () => {
       const { root } = makeScannableTree();
       writeSidecar(root, doc);
 
-      const { outputs } = await buildAgainst(root);
-
-      const md = outputs.licensesMd;
-      const osSection = squish(
-        md.slice(md.indexOf("## Docker image packages")),
+      await expect(buildAgainst(root)).rejects.toThrow(
+        /re-run the docker scan/,
       );
-      // Never lose a component relative to the aggregate read...
-      expect(osSection.includes("| only-a |")).toBe(true);
-      expect(osSection.includes("| only-b |")).toBe(true);
-      expect(osSection.includes("| shared-pkg |")).toBe(true);
-      expect(md.includes("- Docker image packages: 3")).toBe(true);
-      // ...and never a PARTIAL per-image model: the aggregate identity only.
-      expect(osSection.includes("docker:os-packages/")).toBe(false);
-      expect(osSection.includes("| docker:os-packages |")).toBe(true);
     });
   }
 
-  test("old-shape sidecar + a docker-scoped compatible rule prints EXACTLY ONE stderr regeneration hint", async () => {
+  test("a compatible rule scoped to a per-image occurrence matches — not unused", async () => {
     const { root } = makeScannableTree();
-    writeSidecar(root, DOCKER_OS_SBOM_V1);
+    writeSidecar(root, DOCKER_SBOM);
     const policyPath = writePolicy(root, SCOPED_DOCKER_POLICY);
 
     const { stderr } = await buildAgainst(root, policyPath);
 
-    expect(stderr.split(HINT_LINE).length - 1).toBe(1);
-    // The dead scoped rule ALSO surfaces through the unused-entry warning —
-    // the hint names the cause, the warning names the rule.
-    expect(stderr.includes("policy warning: unused entry compatible[0]")).toBe(
-      true,
-    );
-  });
-
-  test("a v2 sidecar with the same scoped rule prints NO hint (and the rule matches)", async () => {
-    const { root } = makeScannableTree();
-    writeSidecar(root, DOCKER_OS_SBOM);
-    const policyPath = writePolicy(root, SCOPED_DOCKER_POLICY);
-
-    const { stderr } = await buildAgainst(root, policyPath);
-
-    expect(stderr.includes(HINT_LINE)).toBe(false);
-    // The scoped rule matched at docker:os-packages/postgres:18 — not unused.
+    // The scoped rule matched at docker:postgres:18 — not unused.
     expect(stderr.includes("policy warning: unused entry compatible[0]")).toBe(
       false,
     );
   });
 
-  test("an old-shape sidecar with an UNSCOPED policy prints no hint", async () => {
+  test("double-read determinism: two builds over one sidecar are byte-identical", async () => {
     const { root } = makeScannableTree();
-    writeSidecar(root, DOCKER_OS_SBOM_V1);
-    const policyPath = writePolicy(root, UNSCOPED_DOCKER_POLICY);
-
-    const { stderr } = await buildAgainst(root, policyPath);
-
-    expect(stderr.includes(HINT_LINE)).toBe(false);
-  });
-
-  test("a rule scoped to the BARE aggregate identity matches an old-shape sidecar — no hint, not unused", async () => {
-    const { root } = makeScannableTree();
-    writeSidecar(root, DOCKER_OS_SBOM_V1);
-    const policyPath = writePolicy(
-      root,
-      SCOPED_DOCKER_POLICY.replace(
-        'where = ["docker:os-packages/postgres:18"]',
-        'where = ["docker:os-packages"]',
-      ),
-    );
-
-    const { stderr } = await buildAgainst(root, policyPath);
-
-    // The bare-prefix scope COVERS the aggregate target itself (the matcher
-    // direction locked in policy.test.ts), so the rule matched — a hint
-    // claiming scoped rules cannot match would be false.
-    expect(stderr.includes("policy warning: unused entry compatible[0]")).toBe(
-      false,
-    );
-    expect(stderr.includes(HINT_LINE)).toBe(false);
-  });
-
-  test("the hint changes no exit code: the hinted warn-only run still exits 0", async () => {
-    const { root } = makeScannableTree();
-    writeSidecar(root, DOCKER_OS_SBOM_V1);
-    const policyPath = writePolicy(root, SCOPED_DOCKER_POLICY);
-    const paths = pathsFor(root, false);
-    await withFetch(EMPTY_FETCH, () =>
-      withCapturedStderr(async () => {
-        await runGenerate({
-          repoRoot: root,
-          ...paths,
-          policyPath,
-          verbose: false,
-        });
-      }),
-    );
-
-    let result: Awaited<ReturnType<typeof runCheck>> | undefined;
-    const stderr = await withFetch(EMPTY_FETCH, () =>
-      withCapturedStderr(async () => {
-        result = await runCheck({
-          repoRoot: root,
-          ...paths,
-          policyPath,
-          verbose: false,
-        });
-      }),
-    );
-
-    expect(stderr.split(HINT_LINE).length - 1).toBe(1);
-    expect(exitCodeFor(result!)).toBe(0);
-  });
-
-  test("double-read determinism: two builds over one v2 sidecar are byte-identical", async () => {
-    const { root } = makeScannableTree();
-    writeSidecar(root, V2_TWO_IMAGES);
+    writeSidecar(root, TWO_IMAGE_SIDECAR);
 
     const first = await buildAgainst(root);
     const second = await buildAgainst(root);
@@ -1186,7 +1129,7 @@ describe("SCP-02 sidecar v2 fan-out, aggregate compat, and the regeneration hint
 });
 
 // ===========================================================================
-// THE DESIGN TEST (SCP-01+02, roadmap criterion 1 verbatim): two Dockerfiles,
+// THE DESIGN TEST: two Dockerfiles,
 // busybox accepted via `where` in image A only — image B's busybox occurrence
 // warns per [os_dependencies] handling (fails under handling="fail"), VISIBLY
 // in the rendered output and in a stderr policy line naming the B target; the
@@ -1256,7 +1199,7 @@ function scenarioPolicy(osHandling: string, scoped: boolean): string {
     'match = "package"',
     'name = "busybox"',
     'reason = "reviewed in the image-A OS layer"',
-    ...(scoped ? ['where = ["docker:os-packages/a/Dockerfile"]'] : []),
+    ...(scoped ? ['where = ["docker:a/Dockerfile"]'] : []),
     "",
     "[[compatible]]",
     'match = "license"',
@@ -1266,7 +1209,7 @@ function scenarioPolicy(osHandling: string, scoped: boolean): string {
   ].join("\n");
 }
 
-describe("the two-Dockerfile scenario end-to-end (roadmap criterion 1)", () => {
+describe("the two-Dockerfile scenario end-to-end", () => {
   beforeAll(() => {
     mock.module("../src/collectors/cdxgen", () => ({
       ...REAL_CDXGEN,
@@ -1288,13 +1231,11 @@ describe("the two-Dockerfile scenario end-to-end (roadmap criterion 1)", () => {
     const verdicts = outputs.verdicts!;
     const atA = verdicts.find(
       (v) =>
-        v.purl === BUSYBOX_PURL &&
-        v.occurrenceTarget === "docker:os-packages/a/Dockerfile",
+        v.purl === BUSYBOX_PURL && v.occurrenceTarget === "docker:a/Dockerfile",
     )!;
     const atB = verdicts.find(
       (v) =>
-        v.purl === BUSYBOX_PURL &&
-        v.occurrenceTarget === "docker:os-packages/b/Dockerfile",
+        v.purl === BUSYBOX_PURL && v.occurrenceTarget === "docker:b/Dockerfile",
     )!;
     expect(atA.status).toBe("ok");
     expect(atA.rule).toBe("compatible[0]");
@@ -1304,13 +1245,11 @@ describe("the two-Dockerfile scenario end-to-end (roadmap criterion 1)", () => {
     // stderr: the warn line names the B target; nothing flags the A target;
     // the scoped rule matched at A, so no unused-entry warning for it.
     expect(
-      stderr.includes(
-        `policy warn: ${BUSYBOX_PURL} in docker:os-packages/b/Dockerfile`,
-      ),
+      stderr.includes(`policy warn: ${BUSYBOX_PURL} in docker:b/Dockerfile`),
     ).toBe(true);
-    expect(
-      stderr.includes(`${BUSYBOX_PURL} in docker:os-packages/a/Dockerfile`),
-    ).toBe(false);
+    expect(stderr.includes(`${BUSYBOX_PURL} in docker:a/Dockerfile`)).toBe(
+      false,
+    );
     expect(stderr.includes("policy warning: unused entry compatible[0]")).toBe(
       false,
     );
@@ -1325,8 +1264,8 @@ describe("the two-Dockerfile scenario end-to-end (roadmap criterion 1)", () => {
       ),
     );
     expect(copyleft.includes("| busybox |")).toBe(true);
-    expect(copyleft.includes("docker:os-packages/b/Dockerfile")).toBe(true);
-    expect(copyleft.includes("docker:os-packages/a/Dockerfile")).toBe(false);
+    expect(copyleft.includes("docker:b/Dockerfile")).toBe(true);
+    expect(copyleft.includes("docker:a/Dockerfile")).toBe(false);
     expect(md.includes("1 copyleft warning(s)")).toBe(true);
 
     // The Docker section's Used-in still names BOTH occurrences (the flow
@@ -1334,7 +1273,7 @@ describe("the two-Dockerfile scenario end-to-end (roadmap criterion 1)", () => {
     const osSection = squish(md.slice(md.indexOf("## Docker image packages")));
     expect(
       osSection.includes(
-        "| busybox | apk | 1.37.0-r19 | GPL-2.0-only | docker:os-packages/a/Dockerfile, docker:os-packages/b/Dockerfile |",
+        "| busybox | apk | 1.37.0-r19 | GPL-2.0-only | docker:a/Dockerfile, docker:b/Dockerfile |",
       ),
     ).toBe(true);
   });
@@ -1368,9 +1307,7 @@ describe("the two-Dockerfile scenario end-to-end (roadmap criterion 1)", () => {
     );
 
     expect(
-      stderr.includes(
-        `policy fail: ${BUSYBOX_PURL} in docker:os-packages/b/Dockerfile`,
-      ),
+      stderr.includes(`policy fail: ${BUSYBOX_PURL} in docker:b/Dockerfile`),
     ).toBe(true);
     expect(exitCodeFor(result!)).toBe(1);
 
@@ -1385,8 +1322,8 @@ describe("the two-Dockerfile scenario end-to-end (roadmap criterion 1)", () => {
     expect(problematic.includes("| fail | default:copyleft | busybox |")).toBe(
       true,
     );
-    expect(problematic.includes("docker:os-packages/b/Dockerfile")).toBe(true);
-    expect(problematic.includes("docker:os-packages/a/Dockerfile")).toBe(false);
+    expect(problematic.includes("docker:b/Dockerfile")).toBe(true);
+    expect(problematic.includes("docker:a/Dockerfile")).toBe(false);
   });
 
   test("UNSCOPED variant: dropping where accepts busybox at BOTH occurrences (narrowing is opt-in)", async () => {
@@ -1400,8 +1337,8 @@ describe("the two-Dockerfile scenario end-to-end (roadmap criterion 1)", () => {
       .verdicts!.filter((v) => v.purl === BUSYBOX_PURL)
       .map((v) => [v.occurrenceTarget, v.status, v.rule]);
     expect(busybox).toEqual([
-      ["docker:os-packages/a/Dockerfile", "ok", "compatible[0]"],
-      ["docker:os-packages/b/Dockerfile", "ok", "compatible[0]"],
+      ["docker:a/Dockerfile", "ok", "compatible[0]"],
+      ["docker:b/Dockerfile", "ok", "compatible[0]"],
     ]);
     expect(stderr.includes(`policy warn: ${BUSYBOX_PURL}`)).toBe(false);
   });

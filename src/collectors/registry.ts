@@ -5,7 +5,7 @@
  *
  * Collectors NEVER write to stderr. The loop owns the
  * "collecting <id> via <name>@<version>" line (asking the registration for
- * its tool identity first), so the locked stderr shapes are emitted from
+ * its tool identity first), so the fixed stderr shapes are emitted from
  * exactly one place; ctx.log is the loop-provided sink should a collector
  * ever need to surface a line through the CLI.
  */
@@ -90,7 +90,7 @@ function readSbom(path: string): unknown {
 }
 
 /**
- * Read a target's pyproject.toml text for python provenance roots (07-13).
+ * Read a target's pyproject.toml text for python provenance roots.
  * Tolerant: a missing or unreadable file yields an empty string — provenance
  * then derives no declared-direct roots (every package classifies transitive),
  * which is honest, never a scan failure.
@@ -159,7 +159,7 @@ const yarnCollector: Collector = {
       verbose: ctx.verbose,
     });
     // Read the full SBOM once and derive provenance from its complete
-    // root-anchored dependency graph (07-13). npmIntroductions returns an empty
+    // root-anchored dependency graph. npmIntroductions returns an empty
     // map for a graph-less BOM, so a cdxgen-style fallback would simply carry no
     // provenance (the honest residual).
     const sbom = readSbom(result.sbomPath);
@@ -217,7 +217,7 @@ const poetryCollector: Collector = {
       sbom: readSbom(result.sbomPath),
       targetIdentity: target.identity,
       prodPurlSet: poetryProdPurlSet(lockfileText),
-      // Provenance (07-13) derived from poetry.lock dep tables + pyproject roots —
+      // Provenance derived from poetry.lock dep tables + pyproject roots —
       // NOT cdxgen, which emits no usable poetry graph. Keyed by the same
       // pkg:pypi/<pep503>@<version> purls cdxgen emits, so the map joins onto the
       // cdxgen components by purl.
@@ -272,8 +272,7 @@ const nugetCollector: Collector = {
 };
 
 /**
- * The dispatch table, exhaustive over LockfileKind (locked by
- * test/registry.test.ts). npm members are emitted by cdxgen at their REAL
+ * The dispatch table, exhaustive over LockfileKind. npm members are emitted by cdxgen at their REAL
  * versions with cdx:npm:isWorkspace=true — the merge pairs that marker with
  * the npm lockfile-derived name set. The pnpm importer-name set is
  * defensive only: cdxgen omits pnpm workspace members from components

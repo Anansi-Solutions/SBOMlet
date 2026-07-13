@@ -150,7 +150,7 @@ function makeFailingPullExec(): ExecFn {
 /**
  * A per-image recorder: writes a distinct one-component doc keyed by the scanned
  * image ref (the last argv operand), so a shared purl across two images can carry
- * DIFFERENT license claims per image — the adversarial-review Lens 2 probe. Every
+ * DIFFERENT license claims per image — a review probe for silent cross-image claim mixing. Every
  * docker call resolves with "[]" (present, digest "").
  */
 function makePerImageExecTool(
@@ -386,7 +386,7 @@ describe("collectDockerOsSbom one posture (full contents, generalized digest, pr
   });
 
   // The daemon-free end-to-end write test relocated from the removed
-  // pre-made-SBOM ingest suite (D-09 ADAPT): the outputPath-write contract now
+  // pre-made-SBOM ingest suite, adapted: the outputPath-write contract now
   // rides the --image lane through the orchestrator.
   test("runGenerateDockerSbom writes the committed doc via the --image lane, digest-pinned, LF-only", async () => {
     const digestRef = "docker.io/library/scan-a@sha256:" + "c".repeat(64);
@@ -395,10 +395,10 @@ describe("collectDockerOsSbom one posture (full contents, generalized digest, pr
     try {
       await runGenerateDockerSbom({
         images: ["docker.io/library/scan-a"],
-        dockerOsSbomPath: "docker-os.sbom.json",
+        dockerSbomPath: "docker.sbom.json",
         baseDir: outDir,
       });
-      const written = readFileSync(join(outDir, "docker-os.sbom.json"), "utf8");
+      const written = readFileSync(join(outDir, "docker.sbom.json"), "utf8");
       const parsed = JSON.parse(written) as {
         components: { purl: string }[];
         dockerImages: { image: string; digest: string; source: string }[];
@@ -424,12 +424,12 @@ describe("collectDockerOsSbom one posture (full contents, generalized digest, pr
     tempDir = mkdtempSync(join(tmpdir(), "licenses-docker-dockerfile-"));
     writeFileSync(join(tempDir, "a.Dockerfile"), "FROM alpine:3.20\n");
     writeFileSync(join(tempDir, "b.Dockerfile"), "FROM node:22-slim\n");
-    const out = join(tempDir, "docker-os.sbom.json");
+    const out = join(tempDir, "docker.sbom.json");
 
     await runGenerateDockerSbom({
       dockerfilePaths: ["a.Dockerfile", "b.Dockerfile"],
       baseDir: tempDir,
-      dockerOsSbomPath: out,
+      dockerSbomPath: out,
     });
 
     const argv = argvStrings();
@@ -467,13 +467,13 @@ describe("collectDockerOsSbom one posture (full contents, generalized digest, pr
   test("--dockerfile lane throws naming a missing path BEFORE any build argv is recorded", async () => {
     tempDir = mkdtempSync(join(tmpdir(), "licenses-docker-dockerfile-"));
     writeFileSync(join(tempDir, "real.Dockerfile"), "FROM alpine:3.20\n");
-    const out = join(tempDir, "docker-os.sbom.json");
+    const out = join(tempDir, "docker.sbom.json");
 
     await expect(
       runGenerateDockerSbom({
         dockerfilePaths: ["real.Dockerfile", "missing.Dockerfile"],
         baseDir: tempDir,
-        dockerOsSbomPath: out,
+        dockerSbomPath: out,
       }),
     ).rejects.toThrow("missing.Dockerfile");
     // Fail-fast: no build ran.
@@ -484,12 +484,12 @@ describe("collectDockerOsSbom one posture (full contents, generalized digest, pr
     tempDir = mkdtempSync(join(tmpdir(), "licenses-docker-discovery-"));
     mkdirSync(join(tempDir, "svc"), { recursive: true });
     writeFileSync(join(tempDir, "svc", "Dockerfile"), "FROM alpine:3.20\n");
-    const out = join(tempDir, "docker-os.sbom.json");
+    const out = join(tempDir, "docker.sbom.json");
 
     await runGenerateDockerSbom({
       repoRoot: tempDir,
       baseDir: tempDir,
-      dockerOsSbomPath: out,
+      dockerSbomPath: out,
     });
 
     // The build -f operand is the discovery identity string (forward-slash).
@@ -522,13 +522,13 @@ describe("collectDockerOsSbom one posture (full contents, generalized digest, pr
       join(tempDir, "policy.toml"),
       '[docker]\nignore = ["skip/**"]\n',
     );
-    const out = join(tempDir, "docker-os.sbom.json");
+    const out = join(tempDir, "docker.sbom.json");
 
     await runGenerateDockerSbom({
       repoRoot: tempDir,
       baseDir: tempDir,
       policyPath: "policy.toml",
-      dockerOsSbomPath: out,
+      dockerSbomPath: out,
     });
 
     const argv = argvStrings();
@@ -546,14 +546,14 @@ describe("collectDockerOsSbom one posture (full contents, generalized digest, pr
     mkdirSync(join(tempDir, "svc"), { recursive: true });
     writeFileSync(join(tempDir, "svc", "Dockerfile"), "FROM alpine:3.20\n");
     writeFileSync(join(tempDir, "policy.toml"), '[docker]\nignore = ["**"]\n');
-    const out = join(tempDir, "docker-os.sbom.json");
+    const out = join(tempDir, "docker.sbom.json");
 
     await expect(
       runGenerateDockerSbom({
         repoRoot: tempDir,
         baseDir: tempDir,
         policyPath: "policy.toml",
-        dockerOsSbomPath: out,
+        dockerSbomPath: out,
       }),
     ).rejects.toThrow(/ignored/);
     expect(argvStrings().some((s) => s.includes("buildx"))).toBe(false);
@@ -569,12 +569,12 @@ describe("collectDockerOsSbom one posture (full contents, generalized digest, pr
     await runGenerateDockerSbom({
       repoRoot: tempDir,
       baseDir: tempDir,
-      dockerOsSbomPath: out1,
+      dockerSbomPath: out1,
     });
     await runGenerateDockerSbom({
       repoRoot: tempDir,
       baseDir: tempDir,
-      dockerOsSbomPath: out2,
+      dockerSbomPath: out2,
     });
 
     const a = readFileSync(out1, "utf8");
@@ -583,7 +583,7 @@ describe("collectDockerOsSbom one posture (full contents, generalized digest, pr
     expect(a.includes("\r")).toBe(false);
   });
 
-  // The two-Dockerfile scenario, collector half (SCP-02): two Dockerfiles
+  // The two-Dockerfile scenario, collector half: two Dockerfiles
   // build two images that SHARE busybox while musl/zlib are image-unique. The
   // sidecar must say which image(s) each package is in, and each image's
   // source must be its discovery identity — the substrate that makes "where"
@@ -601,12 +601,12 @@ describe("collectDockerOsSbom one posture (full contents, generalized digest, pr
       [tagA]: FIXTURE_A,
       [tagB]: FIXTURE_B,
     });
-    const out = join(tempDir, "docker-os.sbom.json");
+    const out = join(tempDir, "docker.sbom.json");
 
     await runGenerateDockerSbom({
       repoRoot: tempDir,
       baseDir: tempDir,
-      dockerOsSbomPath: out,
+      dockerSbomPath: out,
     });
 
     const doc = JSON.parse(readFileSync(out, "utf8")) as {

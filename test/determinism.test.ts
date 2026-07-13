@@ -91,7 +91,7 @@ describe("determinism — double-render byte-identity", () => {
     // The verdict path is actually exercised (not vacuously equal).
     expect(a).toContain(`licenses-tool:verdict:${TARGET}`);
 
-    // INV-03 regression for the new output surface: no CR, exactly one
+    // Determinism regression for the new output surface: no CR, exactly one
     // trailing LF, and the fixture's volatile fields never reach it.
     expect(a.includes("\r")).toBe(false);
     expect(a.endsWith("\n")).toBe(true);
@@ -101,7 +101,7 @@ describe("determinism — double-render byte-identity", () => {
   });
 });
 
-describe("determinism — multi-target merge (INV-01, INV-03)", () => {
+describe("determinism — multi-target merge", () => {
   // Two targets sharing the volatile fixture; target "a" carries an EMPTY
   // dual-run prod purl set (every occurrence dev=true via the plugin diff
   // path), target "b" uses the property-marker path — so the same package
@@ -146,7 +146,7 @@ describe("determinism — multi-target merge (INV-01, INV-03)", () => {
   });
 });
 
-describe("determinism — policy-annotated dump (INV-02, INV-03 regression, 03-04)", () => {
+describe("determinism — policy-annotated dump", () => {
   // Suppression + compatible rule present so findings AND verdicts populate
   // the new dump surface; the ISC rule matches a real fixture claim, so a
   // compatible-cited verdict exists alongside ok/warn defaults.
@@ -233,7 +233,7 @@ describe("determinism — LF and no-date contract", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Collector-path determinism (INV-03 extended to the bun collector, 04.5-05)
+// Collector-path determinism, extended to the bun collector
 // ---------------------------------------------------------------------------
 
 /**
@@ -300,7 +300,7 @@ async function collectBomText(target: Target): Promise<string> {
   return readFileSync(result.sbomPath, "utf-8");
 }
 
-describe("determinism — bun collector double-run byte-identity (INV-03, 04.5-05)", () => {
+describe("determinism — bun collector double-run byte-identity", () => {
   test("two collector runs over the same lockfile write byte-identical bom.json", async () => {
     const target = makeBunFixtureTarget();
     const first = await collectBomText(target);
@@ -345,7 +345,7 @@ describe("determinism — bun collector double-run byte-identity (INV-03, 04.5-0
     expect(first.md.endsWith("\n\n")).toBe(false);
   });
 
-  test("mixed bun + cdxgen-shaped npm fixture double-render is byte-identical (multi-PM INV-03)", async () => {
+  test("mixed bun + cdxgen-shaped npm fixture double-render is byte-identical (multi-PM)", async () => {
     const bomText = await collectBomText(makeBunFixtureTarget());
     const npmRaw = readFileSync(
       join(import.meta.dir, "fixtures", "npm-scope-properties.json"),
@@ -375,7 +375,7 @@ describe("determinism — bun collector double-run byte-identity (INV-03, 04.5-0
 });
 
 // ---------------------------------------------------------------------------
-// Collector-path determinism (INV-03 extended to the nuget collector)
+// Collector-path determinism, extended to the nuget collector
 // ---------------------------------------------------------------------------
 
 /**
@@ -440,7 +440,7 @@ async function collectNugetBomText(target: Target): Promise<string> {
   return readFileSync(result.sbomPath, "utf-8");
 }
 
-describe("determinism — nuget collector double-run byte-identity (INV-03)", () => {
+describe("determinism — nuget collector double-run byte-identity", () => {
   test("two collector runs over the same lockfile write byte-identical bom.json", async () => {
     const target = makeNugetFixtureTarget();
     const first = await collectNugetBomText(target);

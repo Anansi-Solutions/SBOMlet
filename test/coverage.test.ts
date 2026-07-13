@@ -1,9 +1,9 @@
 /**
- * Unit suite for the coverage policy's terraform arm (COLL-03).
+ * Unit suite for the coverage policy's terraform arm.
  *
  * The pre-existing kinds (yarn/npm/pnpm/bun/python) are exercised through the
  * e2e suite; this file locks the one genuinely new seam — the terraform
- * skip/scan/loud-fail routing, which is a pure FILESYSTEM fact (07-14): the
+ * skip/scan/loud-fail routing, which is a pure FILESYSTEM fact: the
  * init-has-run gate is modules.json presence + the `<dir>/.terraform/`
  * directory's existence, with no HCL parsing. The load-bearing invariant: an
  * ABSENT modules.json WITH NO `.terraform/` dir (init never ran) is NEVER
@@ -169,7 +169,7 @@ describe("coverageSkipReason — terraform arm (filesystem-signal gate)", () => 
     expect(reason).toContain("no providers and no external modules");
   });
 
-  // Fix 3 (review #5): a directory-named modules.json is a non-regular-file
+  // A directory-named modules.json is a non-regular-file
   // PRESENCE — coverage must treat it as ABSENT and route to the filesystem
   // gate (which sees `.terraform/modules/` exists with no modules.json file →
   // loud throw), NOT a raw uncaught EISDIR at the coverage read.
@@ -190,7 +190,7 @@ describe("coverageSkipReason — terraform arm (filesystem-signal gate)", () => 
     ).toBeUndefined();
   });
 
-  // Fix 4 (review #6): the size gate must fire BEFORE the coverage read of
+  // The size gate must fire BEFORE the coverage read of
   // modules.json, mirroring the collector and the bun.lock precedent.
   test("an oversized modules.json is rejected by the size gate at the coverage read (before any parse)", () => {
     const dir = mkdtempSync(join(tmpdir(), "licenses-cov-"));
@@ -253,7 +253,7 @@ describe("classifyCoverage — terraform filesystem-signal loud-fail routing", (
   });
 });
 
-// nuget arm (NET-01): a genuinely dependency-free packages.lock.json warns and
+// nuget arm: a genuinely dependency-free packages.lock.json warns and
 // skips; an unreadable one routes to the scan where the collector's loud throw
 // / zero-component hard-fail fires — the strict === 0 undefined-falls-through
 // pattern shared with the npm/bun arms.

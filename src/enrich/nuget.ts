@@ -27,7 +27,7 @@ const LICENSES_NUGET_ORG_PREFIX = "https://licenses.nuget.org/";
  * are decoded from their purl encoding, LOWERCASED (the registry 404s a
  * mixed-case path — verified differential), and re-encoded per segment. The
  * host is a literal; an attacker-controlled host is impossible by
- * construction (T-15-10).
+ * construction.
  */
 export function nugetRegistrationLeafUrl(
   encodedName: string,
@@ -44,7 +44,7 @@ export function nugetRegistrationLeafUrl(
  * INCLUDED, so `api.nuget.org.evil.example` can never pass) is returned. A
  * missing field, a non-string, or ANY other host yields undefined — the
  * caller treats that as malformed (a clean negative, no request ever made to
- * a foreign host), closing the response-derived SSRF hole (T-15-09).
+ * a foreign host), closing the response-derived SSRF hole.
  */
 export function catalogEntryUrlOf(leaf: unknown): string | undefined {
   const url = narrowNugetLeaf(leaf)?.catalogEntry;
@@ -75,7 +75,9 @@ export interface NugetResolution {
  *      real URL.
  *   3. `licenseUrl` beginning `https://licenses.nuget.org/` → the URL PATH
  *      IS the SPDX expression, URL-encoded: strip the prefix, decode, and
- *      trim, HIGH. A blank, undecodable, or control-character remainder →
+ *      trim, HIGH (`https://licenses.nuget.org/MIT%20OR%20Apache-2.0` →
+ *      `MIT OR Apache-2.0`). A blank, undecodable, or control-character
+ *      remainder →
  *      null (licenseUrl is package-author-controlled; an SPDX expression is
  *      plain printable text, so anything else is never a license).
  *   4. Any other `licenseUrl` (the pre-2019 url-only class) or no license

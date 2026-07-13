@@ -333,7 +333,7 @@ export function readExternalModules(
  * present-path, intentionally left untouched).
  *
  * §Why a filesystem signal, not an HCL lexer. The gate's REAL question is "did
- * `tofu init` run?". Four consecutive adversarial reviews each found another
+ * `tofu init` run?". Four consecutive reviews each found another
  * valid-HCL shape (a nested `source` decoy, `${...}` interpolation with nested
  * quotes, CR-only line endings, a comment between the `module` keyword and its
  * name) that the previous hand-rolled HCL lexer mis-tokenized → silent module

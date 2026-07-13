@@ -252,7 +252,7 @@ const osPkg = (
   purl: `pkg:deb/debian/${name}@${version}`,
   name,
   version,
-  occurrences: [{ target: "docker:os-packages", isDevDependency: false }],
+  occurrences: [{ target: "docker:img/Dockerfile", isDevDependency: false }],
   licenseClaims: claims,
   scope: "os",
 });
@@ -750,10 +750,10 @@ describe("annotateFindings — clarify overrides", () => {
 });
 
 // ===========================================================================
-// POL-07 Task 2: staleness-guarded two-level override chain in annotateFindings.
+// Staleness-guarded two-level override chain in annotateFindings.
 // ===========================================================================
 
-describe("annotateFindings — staleness-guarded clarify (POL-07)", () => {
+describe("annotateFindings — staleness-guarded clarify", () => {
   test("expects matching the imprecise-BSD signal APPLIES the disambiguation", () => {
     const entry = pkg("jupyter-thing", "1.0.0", [claim("BSD", "name")]);
     const clarify: ClarifyInput[] = [
@@ -824,7 +824,7 @@ describe("annotateFindings — staleness-guarded clarify (POL-07)", () => {
   });
 });
 
-describe("annotateFindings — tool-level BUILTIN overrides (POL-07)", () => {
+describe("annotateFindings — tool-level BUILTIN overrides", () => {
   const jupyterBuiltin: BuiltinOverrideInput[] = [
     { name: "ipython", expects: "BSD", expression: "BSD-3-Clause" },
   ];
@@ -956,7 +956,7 @@ describe("annotateFindings — staleness fails CLOSED on a contradicting co-clai
 });
 
 // ===========================================================================
-// GAP FIX (POL-07 refinement): when the registry UPGRADES the imprecise label
+// GAP FIX: when the registry UPGRADES the imprecise label
 // to the EXACT precise license the override asserts, the override is REDUNDANT
 // — NOT stale. expects "BSD" is no longer present in the signal (the dep now
 // reports precise "BSD-3-Clause"), but the observed precise finding already
@@ -965,7 +965,7 @@ describe("annotateFindings — staleness fails CLOSED on a contradicting co-clai
 // does NOT satisfy the assertion still fails closed.
 // ===========================================================================
 
-describe("annotateFindings — redundant override when metadata catches up (POL-07 gap fix)", () => {
+describe("annotateFindings — redundant override when metadata catches up (gap fix)", () => {
   test("REDUNDANT: precise BSD-3-Clause observed, expects BSD asserts BSD-3-Clause → finding stays, NOT stale (live ipython false-positive)", () => {
     // The exact live case: modern PyPI reports ipython with the PRECISE
     // license_expression "BSD-3-Clause" — no bare "BSD" classifier — so the
@@ -1074,7 +1074,7 @@ describe("annotateFindings — redundant override when metadata catches up (POL-
 });
 
 // ---------------------------------------------------------------------------
-// 07-05: Debian/DEP-5 copyright short-name → canonical SPDX normalization.
+// Debian/DEP-5 copyright short-name → canonical SPDX normalization.
 //
 // syft fills ~98% of OS-package licenses, but Debian's machine-readable copyright
 // (DEP-5) uses copyright shorthands ("Expat", "GPL-2+", "BSD-3-clause") that are
@@ -1109,11 +1109,11 @@ const DEBIAN_SHORTHAND_CASES: ReadonlyArray<
   ["LGPL-3+", "LGPL-3.0-or-later", "corrected"],
   ["BSD-2-clause", "BSD-2-Clause", "corrected"],
   ["BSD-3-clause", "BSD-3-Clause", "corrected"],
-  // Observed in the committed docker-os.sbom.json: ncurses' "MIT/X11" Debian-ism.
+  // Observed in the committed docker.sbom.json: ncurses' "MIT/X11" Debian-ism.
   ["MIT/X11", "MIT", "corrected"],
 ];
 
-describe("normalizeRaw — Debian/DEP-5 shorthand map (07-05)", () => {
+describe("normalizeRaw — Debian/DEP-5 shorthand map", () => {
   for (const [shorthand, expected, source] of DEBIAN_SHORTHAND_CASES) {
     test(`"${shorthand}" → "${expected}"`, () => {
       const result = normalizeRaw(shorthand);
@@ -1206,9 +1206,9 @@ describe("normalizeRaw — Debian/DEP-5 shorthand map (07-05)", () => {
   });
 });
 
-describe("annotateFindings — OS packages render real licenses for mapped shorthands (07-05)", () => {
+describe("annotateFindings — OS packages render real licenses for mapped shorthands", () => {
   test("an Expat-sole OS package lifts from unknown to MIT", () => {
-    // Mirrors apt / libz3-4 in the committed docker-os.sbom.json.
+    // Mirrors apt / libz3-4 in the committed docker.sbom.json.
     const entry = pkg("apt", "2.6.1", [claim("Expat", "name")]);
     const { model } = annotateFindings(modelOf(entry), []);
     const finding = model.packages[0]!.finding!;
@@ -1268,13 +1268,13 @@ describe("annotateFindings — OS packages render real licenses for mapped short
 });
 
 // ===========================================================================
-// 07-06 (POL-?? OS-partial): for the NON-GATING os scope ONLY, a claim set that
+// The os-partial finding: for the NON-GATING os scope ONLY, a claim set that
 // mixes normalizable SPDX members with genuinely-unknown (none) tokens renders
 // the KNOWN licenses AND surfaces the unrecognized remainder, instead of the
 // all-or-nothing unknown. App-scope (gating) keeps the strict invariant: a
 // genuinely-unknown sibling forces the whole row unknown.
 //
-// SAFETY (adversarially reviewed):
+// SAFETY:
 //  - partial finding applies ONLY to scope === "os".
 //  - app/dev/prod (gating) scopes are COMPLETELY UNCHANGED.
 //  - an imprecise sibling (not a "none" token) is NOT an unrecognized token —
@@ -1283,7 +1283,7 @@ describe("annotateFindings — OS packages render real licenses for mapped short
 //    license (no gate weakening).
 // ===========================================================================
 
-describe("findingFromClaims — os-scope partial finding (07-06)", () => {
+describe("findingFromClaims — os-scope partial finding", () => {
   test("HEADLINE: os [GPL-2.0-only, BSD-3-Clause, public-domain] → expression of the known two + unrecognizedTokens", () => {
     const entry = osPkg("os-partial", "1.0", [
       claim("GPL-2.0-only", "spdx-id"),
@@ -1464,8 +1464,8 @@ describe("findingFromClaims — os-scope partial finding (07-06)", () => {
 });
 
 // ---------------------------------------------------------------------------
-// ScanCode senior assessment (12-01, SCAN-04/SCAN-05). applyScancodeAssessment
-// replaces the 10-04 family-consistency refinement gate at the same seam: the
+// ScanCode senior assessment. applyScancodeAssessment
+// replaces the earlier family-consistency refinement gate at the same seam: the
 // in-depth scancode answer OUTRANKS the quick check (declared metadata and
 // registry answers) when they agree — the finding becomes the assessed
 // expression, source "scancode", confidence "exact" — and ANY disagreement
@@ -1473,8 +1473,8 @@ describe("findingFromClaims — os-scope partial finding (07-06)", () => {
 // absorbed in either direction (the marked finding flows to the policy
 // engine; surfacing is its concern). Overrides (clarify/builtin) still decide
 // last; an APPLIED override never carries the marker. An imprecise scancode
-// answer never upgrades anything (INV-04). Every changed expectation below is
-// a conscious relock of a 10-04 fill-matrix row to the new semantics.
+// answer never upgrades anything. Every changed expectation below is
+// a conscious re-pin of an earlier fill-matrix row to the new semantics.
 // ---------------------------------------------------------------------------
 
 /** A claim with an explicit source — the scancode-assessment fixture idiom. */
@@ -1488,7 +1488,7 @@ const sourcedClaim = (
 const scancodeClaim = (raw: string): LicenseClaim =>
   sourcedClaim(raw, "scancode", "expression");
 
-describe("annotateFindings — scancode senior assessment (12-01 relock of the 10-04 fill matrix)", () => {
+describe("annotateFindings — scancode senior assessment (the re-pinned fill matrix)", () => {
   test("row 1 (vacuous agreement): zero-claim package + a precise scancode claim — the assessment IS the finding, source scancode", () => {
     const entry = pkg("zero-claim-pkg", "1.0.0", [scancodeClaim("MIT")]);
     const { model } = annotateFindings(modelOf(entry), []);
@@ -1499,7 +1499,7 @@ describe("annotateFindings — scancode senior assessment (12-01 relock of the 1
     expect(finding.conflict).toBeUndefined();
   });
 
-  test("row 2 (relocked): garbage-claim package + precise scancode claim — the unknown base STANDS and carries a conflict marker, never silently decided either way", () => {
+  test("row 2 (re-pinned): garbage-claim package + precise scancode claim — the unknown base STANDS and carries a conflict marker, never silently decided either way", () => {
     const entry = pkg("garbage-claim-pkg", "1.0.0", [
       claim("total garbage xyz", "name"),
       scancodeClaim("MIT"),
@@ -1528,7 +1528,7 @@ describe("annotateFindings — scancode senior assessment (12-01 relock of the 1
     expect(finding.conflict).toBeUndefined();
   });
 
-  test("row 4 (relocked, the flagship conflict): imprecise GPL family + scancode MIT — the copyleft signal STANDS and the disagreement is surfaced as a conflict", () => {
+  test("row 4 (re-pinned, the flagship conflict): imprecise GPL family + scancode MIT — the copyleft signal STANDS and the disagreement is surfaced as a conflict", () => {
     const entry = pkg("imprecise-gpl-pkg", "1.0.0", [
       claim("GPL", "name"),
       scancodeClaim("MIT"),
@@ -1569,7 +1569,7 @@ describe("annotateFindings — scancode senior assessment (12-01 relock of the 1
     expect(finding.conflict).toBeUndefined();
   });
 
-  test('family edge (relocked): imprecise BSD family + scancode 0BSD — prefix discipline (0BSD does not start with "BSD-") makes it a conflict, the imprecise base stands', () => {
+  test('family edge (re-pinned): imprecise BSD family + scancode 0BSD — prefix discipline (0BSD does not start with "BSD-") makes it a conflict, the imprecise base stands', () => {
     const entry = pkg("imprecise-bsd-0bsd-pkg", "1.0.0", [
       claim("BSD", "name"),
       scancodeClaim("0BSD"),
@@ -1585,7 +1585,7 @@ describe("annotateFindings — scancode senior assessment (12-01 relock of the 1
     });
   });
 
-  test("family edge (relocked, copyleft prefix guard): imprecise GPL family + scancode LGPL-2.1-only — C2 copyleft dominance still elects the precise LGPL base, AND the out-of-family disagreement is surfaced (LGPL vs GPL is a human question)", () => {
+  test("family edge (re-pinned, copyleft prefix guard): imprecise GPL family + scancode LGPL-2.1-only — C2 copyleft dominance still elects the precise LGPL base, AND the out-of-family disagreement is surfaced (LGPL vs GPL is a human question)", () => {
     const entry = pkg("imprecise-gpl-lgpl-pkg", "1.0.0", [
       claim("GPL", "name"),
       scancodeClaim("LGPL-2.1-only"),
@@ -1605,7 +1605,7 @@ describe("annotateFindings — scancode senior assessment (12-01 relock of the 1
     });
   });
 
-  test("fail-closed (relocked): a compound scancode expression mixing an in-family leaf with an out-of-family leaf conflicts with the imprecise family, no throw", () => {
+  test("fail-closed (re-pinned): a compound scancode expression mixing an in-family leaf with an out-of-family leaf conflicts with the imprecise family, no throw", () => {
     const entry = pkg("imprecise-mixed-compound-pkg", "1.0.0", [
       claim("BSD", "name"),
       scancodeClaim("BSD-3-Clause AND MIT"),
@@ -1622,7 +1622,7 @@ describe("annotateFindings — scancode senior assessment (12-01 relock of the 1
     });
   });
 
-  test("precedence: a clarify override on the same package still decides the final finding over the assessment (D-02, clarify on top)", () => {
+  test("precedence: a clarify override on the same package still decides the final finding over the assessment (clarify on top)", () => {
     const entry = pkg("imprecise-clarified-pkg", "1.0.0", [
       claim("BSD", "name"),
       scancodeClaim("BSD-3-Clause"),
@@ -1636,7 +1636,7 @@ describe("annotateFindings — scancode senior assessment (12-01 relock of the 1
     expect(finding.expression).toBe("MIT");
   });
 
-  test("seniority (relocked from never-override): a PRECISE declared claim agreeing with the assessment yields the scancode-sourced finding — the in-depth assessment outranks the quick check", () => {
+  test("seniority (formerly never-override): a PRECISE declared claim agreeing with the assessment yields the scancode-sourced finding — the in-depth assessment outranks the quick check", () => {
     const entry = pkg("agreeing-precise-pkg", "1.0.0", [
       claim("MIT"),
       scancodeClaim("MIT"),
@@ -1649,7 +1649,7 @@ describe("annotateFindings — scancode senior assessment (12-01 relock of the 1
     expect(finding.conflict).toBeUndefined();
   });
 
-  test("seniority (relocked from never-override): a PRECISE declared claim contradicted by the assessment STANDS in full and carries a conflict marker — never silently overridden in either direction", () => {
+  test("seniority (formerly never-override): a PRECISE declared claim contradicted by the assessment STANDS in full and carries a conflict marker — never silently overridden in either direction", () => {
     const entry = pkg("disagreeing-precise-pkg", "1.0.0", [
       claim("Apache-2.0"),
       scancodeClaim("MIT"),

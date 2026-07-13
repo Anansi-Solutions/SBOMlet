@@ -40,7 +40,7 @@ vars:
 
 tasks:
   generate:
-    desc: Generate THIRD_PARTY_LICENSES.md and THIRD_PARTY_NOTICES.md; commit the outputs (DOCKER=1 also refreshes the docker OS SBOM)
+    desc: Generate THIRD_PARTY_LICENSES.md and THIRD_PARTY_NOTICES.md; commit the outputs (DOCKER=1 also refreshes the docker SBOM)
     summary: |
       Scan the repository for every dependency lockfile, resolve each
       third-party package's license, and write the inventory documents the
@@ -56,7 +56,7 @@ tasks:
         INTENSIVE    set (INTENSIVE=1) to also scan still-unresolved packages'
                      local sources with ScanCode — slow, occasional-run cost
         DOCKER       set (DOCKER=1) to build and scan the repository's
-                     Dockerfiles and refresh the committed docker OS SBOM before
+                     Dockerfiles and refresh the committed docker SBOM before
                      generating; needs a Docker daemon
         DOCKERFILES  with DOCKER=1 — space-separated Dockerfile paths to build
                      and scan instead of discovering the repository's own
@@ -110,14 +110,14 @@ tasks:
       - mise x -- bun src/cli.ts generate-docker-sbom --list-dockerfiles --base-dir {{.USER_WORKING_DIR | q}} --repo-root {{.REPO_ROOT | q}}{{if .POLICY}} --policy {{.POLICY | q}}{{end}}
 
   generate:docker:
-    # The DOCKER=1 lane of generate: refresh the committed docker OS SBOM by
+    # The DOCKER=1 lane of generate: refresh the committed docker SBOM by
     # building and scanning the repository's Dockerfiles (default), an explicit
     # DOCKERFILES list, or pre-existing IMAGES refs. Internal: it exists to be
     # composed by generate, never invoked on its own. NOT part of check —
     # check reads the committed SBOM bytes offline.
     internal: true
     cmds:
-      - mise x -- bun src/cli.ts generate-docker-sbom --base-dir {{.USER_WORKING_DIR | q}}{{if .DOCKER_OS_SBOM}} --docker-os-sbom {{.DOCKER_OS_SBOM | q}}{{end}}{{if .POLICY}} --policy {{.POLICY | q}}{{end}}{{if or .DOCKERFILES .IMAGES}}{{else}} --repo-root {{.REPO_ROOT | q}}{{end}}{{range .DOCKERFILES | default "" | splitList " "}}{{if .}} --dockerfile {{. | q}}{{end}}{{end}}{{range .IMAGES | default "" | splitList " "}}{{if .}} --image {{. | q}}{{end}}{{end}}
+      - mise x -- bun src/cli.ts generate-docker-sbom --base-dir {{.USER_WORKING_DIR | q}}{{if .DOCKER_SBOM}} --docker-sbom {{.DOCKER_SBOM | q}}{{end}}{{if .POLICY}} --policy {{.POLICY | q}}{{end}}{{if or .DOCKERFILES .IMAGES}}{{else}} --repo-root {{.REPO_ROOT | q}}{{end}}{{range .DOCKERFILES | default "" | splitList " "}}{{if .}} --dockerfile {{. | q}}{{end}}{{end}}{{range .IMAGES | default "" | splitList " "}}{{if .}} --image {{. | q}}{{end}}{{end}}
 
   install:
     # Hidden from `task --list` (no desc) but callable; every other task deps

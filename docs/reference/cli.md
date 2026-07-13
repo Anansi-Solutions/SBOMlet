@@ -13,7 +13,7 @@ The tool has four subcommands:
   [enrichment cache](../glossary.md#enrichment-and-the-enrichment-cache) entry
   against its registry and report any divergence from the stored licence.
 - `generate-docker-sbom` — maintainer-only; produce the committed
-  `.sbomlet.cache/docker-os.sbom.json` that `generate` and `check` read as an
+  `.sbomlet.cache/docker.sbom.json` that `generate` and `check` read as an
   [OS-scope](../glossary.md#scope-app-and-os) input.
 
 You run the tool through the Taskfile; the [Taskfile entry points](#taskfile-entry-points)
@@ -25,7 +25,7 @@ forwards to the CLI.
 Scans the repository and writes `THIRD_PARTY_LICENSES.md`,
 `THIRD_PARTY_NOTICES.md`, and the [enrichment cache](../glossary.md#enrichment-and-the-enrichment-cache),
 plus a [CycloneDX](../glossary.md#cyclonedx) export when you ask for one. It does
-not write `.sbomlet.cache/docker-os.sbom.json` — that is the maintainer-only
+not write `.sbomlet.cache/docker.sbom.json` — that is the maintainer-only
 [`generate-docker-sbom`](#generate-docker-sbom) subcommand.
 
 `generate` always writes the documents whatever the policy verdicts say. The policy
@@ -200,7 +200,7 @@ Terraform entries; the audit works without it, just slower.
 ## generate-docker-sbom
 
 Maintainer-only. This is the only subcommand that touches Docker. It produces the
-`.sbomlet.cache/docker-os.sbom.json` that you commit to the repository, and that `generate` and
+`.sbomlet.cache/docker.sbom.json` that you commit to the repository, and that `generate` and
 `check` later read as an OS-scope merge input. Neither of those subcommands runs
 this one or touches Docker; they read the bytes this subcommand writes.
 
@@ -242,7 +242,7 @@ would discover itself. It requires `--repo-root`, the root it walks.
 | `--list-dockerfiles` | Print discovered Dockerfile paths and exit. Requires `--repo-root`. No Docker. | off |
 | `--exclude <glob>` | Drop Dockerfiles whose identity matches the glob. Repeatable. | none |
 | `--policy <path>` | TOML policy; its `[docker]` ignore globs prune Dockerfiles in the discovery lane. | none |
-| `--docker-os-sbom <path>` | Where to write the committed `.sbomlet.cache/docker-os.sbom.json`. | tool default |
+| `--docker-sbom <path>` | Where to write the committed `.sbomlet.cache/docker.sbom.json`. | tool default |
 | `--base-dir <path>` | Anchor every relative path flag to this directory. | working directory |
 | `--verbose` | Print per-stage progress to stderr. | off |
 
@@ -304,7 +304,7 @@ task sbomlet:generate DOCKER=1 IMAGES="app:latest worker:latest"
 | `DOCKER` | `generate` | Set (`DOCKER=1`) to build & scan the repository's Dockerfiles and refresh the committed docker OS SBOM before generating. Needs a Docker daemon. | unset |
 | `DOCKERFILES` | `generate` with `DOCKER=1` | Space-separated Dockerfile paths to build & scan instead of discovering (the targeted lane). | unset (discover) |
 | `IMAGES` | `generate` with `DOCKER=1` | Space-separated pre-existing image refs to scan instead of building (the image lane). | unset (discover) |
-| `DOCKER_OS_SBOM` | `generate` with `DOCKER=1` | `.sbomlet.cache/docker-os.sbom.json` output path. | `.sbomlet.cache/docker-os.sbom.json` beside `REPO_ROOT` |
+| `DOCKER_SBOM` | `generate` with `DOCKER=1` | `.sbomlet.cache/docker.sbom.json` output path. | `.sbomlet.cache/docker.sbom.json` beside `REPO_ROOT` |
 
 Relative paths you pass are anchored to the directory you ran `task` from, not to
 `tools/sbomlet`, because each task forwards `--base-dir` set to your invocation

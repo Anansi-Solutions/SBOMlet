@@ -140,7 +140,7 @@ the same mise + Task pipeline as the Taskfile path — pick whichever fits your 
 | Python | `poetry.lock`, `uv.lock` |
 | .NET | `packages.lock.json` — opt-in; see the [adoption prerequisite](docs/getting-started.md#if-your-repository-is-net) |
 | Terraform / OpenTofu | `.terraform.lock.hcl` |
-| Docker images (full contents — OS and application packages) | a committed `.sbomlet.cache/docker-os.sbom.json` (see below) |
+| Docker images (full contents — OS and application packages) | a committed `.sbomlet.cache/docker.sbom.json` (see below) |
 
 Discovery walks the repository and hands each [target](docs/glossary.md#target) to
 its [collector](docs/glossary.md#collector). The per-ecosystem detail — which
@@ -170,7 +170,7 @@ way it is.
 - **Docker image packages** aren't discovered from lockfiles. Run the docker
   scan — `task sbomlet:generate DOCKER=1`, discovering and building the
   repository's Dockerfiles by default, or over named Dockerfiles or images — to
-  produce a committed `.sbomlet.cache/docker-os.sbom.json`, and `generate`/`check`
+  produce a committed `.sbomlet.cache/docker.sbom.json`, and `generate`/`check`
   merge it in. It drives `generate-docker-sbom`, the only subcommand that talks
   to a Docker daemon or registry; `generate` and `check` never do.
 - **The network.** `generate` reaches out only to fill a gap a cold cache can't
@@ -186,7 +186,7 @@ way it is.
 THIRD_PARTY_LICENSES.md text eol=lf
 THIRD_PARTY_NOTICES.md  text eol=lf
 .sbomlet.cache/licenses.cache.json   text eol=lf
-.sbomlet.cache/docker-os.sbom.json     text eol=lf
+.sbomlet.cache/docker.sbom.json     text eol=lf
 ```
 
 ---

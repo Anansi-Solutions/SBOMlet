@@ -202,9 +202,9 @@ been reviewed rather than a whole licence.
 
 `where` limits either form to the occurrences whose target matches one of its
 entries: the target is the entry itself, or sits under it as a whole segment.
-`docker:os-packages` covers `docker:os-packages/a/Dockerfile`; `apps/scratch`
+`docker:a` covers `docker:a/Dockerfile`; `apps/scratch`
 never covers `apps/scratch-helper`. Docker targets are
-`docker:os-packages/<source>` — the Dockerfile's repo-relative path for a built
+`docker:<source>` — the Dockerfile's repo-relative path for a built
 image, the image reference verbatim for an `--image` scan; app targets are
 workspace paths. Entries are validated like suppression paths (forward slashes
 only, no `..` segment, no leading or trailing slash); an empty array is
@@ -274,7 +274,7 @@ deny still wins above this lane.
 
 A table governing what a would-be-fail does on an
 [OS-scope](../glossary.md#scope-app-and-os) package: a row from the committed
-`.sbomlet.cache/docker-os.sbom.json` that isn't also seen at the application level —
+`.sbomlet.cache/docker.sbom.json` that isn't also seen at the application level —
 usually `pkg:deb`/`pkg:apk` from the base layer, or any ecosystem the image scan
 found that the project doesn't also declare directly. Absent table: defaults to `warn`.
 
@@ -294,7 +294,7 @@ vendor or rebuild your base, or you want every image-sourced copyleft reviewed.
 As with `[dev_dependencies]`, deny still wins, so a source-available licence in
 an OS-scope package fails regardless of this knob.
 
-The `.sbomlet.cache/docker-os.sbom.json` this lane reads is produced separately by the
+The `.sbomlet.cache/docker.sbom.json` this lane reads is produced separately by the
 `generate-docker-sbom` subcommand — run by hand over named Dockerfiles or images,
 or by CI discovering and building the repository's Dockerfiles — and committed;
 `generate` and `check` only read it as a `scope:os` merge input. They never
@@ -338,7 +338,7 @@ outside the repo.
 
 An optional table choosing where the tool writes its generated committed
 artifacts: the registry-resolved license cache (`licenses.cache.json`) and the
-Docker image package SBOM (`docker-os.sbom.json`). Absent table: they live in
+Docker image package SBOM (`docker.sbom.json`). Absent table: they live in
 `.sbomlet.cache/` at the repo root. Set `dir` to relocate the directory and keep
 your root clean (a .NET shop's `eng/`, a `.cache/` convention, and so on).
 

@@ -270,7 +270,7 @@ describe("npmThirdPartyEntryCount — node_modules entries with link !== true", 
   });
 });
 
-// nuget fixtures — the 15-01 collector-fixture shapes (v1 net9.0 section with
+// nuget fixtures — the collector-fixture shapes (v1 net9.0 section with
 // Direct + Transitive entries; v2 CPM section with a type=Project reference).
 const NUGET_V1_LOCK = JSON.stringify({
   version: 1,

@@ -12,7 +12,7 @@ import { assessPackages } from "../enrich/assess";
 import { enrichUnknowns } from "../enrich/enrich";
 import { type IntensiveOptions } from "../enrich/scancode";
 import {
-  DOCKER_OS_IDENTITY,
+  DOCKER_IDENTITY_PREFIX,
   mergeSboms,
   type CollectedSbom,
 } from "../merge/merge";
@@ -50,7 +50,7 @@ export const ENRICHMENT_CACHE_FILE = "licenses.cache.json";
 
 /**
  * The dedicated ScanCode analysis memo filename inside the resolved cache dir
- * (D-04, SCAN-06): a COMMITTED cache with a lifecycle separate from the registry
+ *: a COMMITTED cache with a lifecycle separate from the registry
  * enrichment cache — the intensive ScanCode lane results live here, not in
  * {@link ENRICHMENT_CACHE_FILE}, so the two caches version and invalidate
  * independently. Resolved via the same {@link cacheDir}, so a policy `[cache]
@@ -59,15 +59,22 @@ export const ENRICHMENT_CACHE_FILE = "licenses.cache.json";
 export const SCANCODE_CACHE_FILE = "scancode.cache.json";
 
 /**
- * The committed Docker image SBOM filename inside the cache dir (COLL-04): a
- * deterministic emitter's output, committed and consumed as a scope:"os" MERGE
- * INPUT, never scanned per-run. A MISSING file is the enrichment-cache-miss
- * equivalent (NO os entries, NO docker, NO syft, fully offline). What POPULATES it
- * is the dedicated generate-docker-sbom subcommand, which builds or pulls a real
- * image and scans its full contents; generate and check read the same committed
- * bytes, so determinism is trivial.
+ * The committed docker image SBOM filename inside the cache dir: a
+ * deterministic emitter's output, committed and consumed as a scope:"os" merge
+ * input, never scanned per-run. A missing file means no os entries — no
+ * docker, no syft, fully offline. The generate-docker-sbom subcommand
+ * populates it by building or pulling a real image and scanning its full
+ * contents; generate and check read the same committed bytes.
  */
-export const DOCKER_OS_SBOM_FILE = "docker-os.sbom.json";
+export const DOCKER_SBOM_FILE = "docker.sbom.json";
+
+/**
+ * The filename this tool wrote before the docker.sbom.json rename. Never read
+ * as an input: its presence without the current file means the repo predates
+ * the rename, and proceeding would silently drop the docker inventory it
+ * holds, so the reader fails loudly and names the remedy instead.
+ */
+export const LEGACY_DOCKER_SBOM_FILE = "docker-os.sbom.json";
 
 export interface GenerateOptions {
   /** Single-target debug mode; mutually exclusive with repoRoot. */
@@ -137,13 +144,13 @@ export interface GenerateOptions {
    */
   scancodeCachePath?: string;
   /**
-   * Optional override for the committed Docker OS SBOM path (--docker-os-sbom).
-   * When unset it defaults to {@link DOCKER_OS_SBOM_FILE} inside the resolved cache
+   * Optional override for the committed Docker OS SBOM path (--docker-sbom).
+   * When unset it defaults to {@link DOCKER_SBOM_FILE} inside the resolved cache
    * dir. When the file exists it is size-gated, parsed, and threaded into the merge
-   * as a scope:"os" input (COLL-04); when absent there are no os entries (the
+   * as a scope:"os" input; when absent there are no os entries (the
    * offline cache-miss equivalent, never a live docker/syft scan).
    */
-  dockerOsSbomPath?: string;
+  dockerSbomPath?: string;
   /**
    * generate may fetch+write the enrichment cache; check NEVER fetches or
    * writes — a miss-needing-enrichment is a stale condition (exit 2), never a
@@ -188,32 +195,12 @@ export interface BuiltOutputs {
   staleUnknowns: string[];
 }
 
-/**
- * The write-free pipeline core shared by generate and check: validate policy
- * (when given) -> resolve/discover targets -> per-target dispatch+scan -> one
- * merged model -> unconditional annotation -> evaluate + stderr summary (when
- * a policy is loaded) -> render every configured output in memory. This
- * function never calls writeFileSync — generate writes the returned strings,
- * check byte-compares them against the committed files, so check can never
- * overwrite the files it is gating on.
- */
-/**
- * The one-line stderr hint printed when the committed sidecar reads as the
- * aggregate (old or malformed shape) while the policy scopes a compatible rule
- * strictly under docker:os-packages (a bare-prefix scope still matches the
- * aggregate target and needs no hint). The scoped rule can never match the aggregate
- * target (the fail-safe matcher direction), which is safe but confusing right
- * after the user wrote the rule — name the actual cause and the fix.
- */
-const SIDECAR_REGENERATE_HINT =
-  "docker-os.sbom.json predates per-image attribution — scoped compatible rules cannot match docker occurrences; regenerate via generate-docker-sbom";
-
 /** A sidecar component narrowed to its attribution: non-empty string images. */
 interface AttributedSidecarComponent extends Record<string, unknown> {
   images: string[];
 }
 
-/** A narrowed v2 sidecar: the parsed doc plus typed components and images. */
+/** A narrowed sidecar: the parsed doc plus typed components and images. */
 interface AttributedSidecar {
   doc: Record<string, unknown>;
   components: AttributedSidecarComponent[];
@@ -277,12 +264,9 @@ function narrowSidecarComponents(
 }
 
 /**
- * All-or-nothing v2 detection (skip-not-throw): the typed sidecar when EVERY
- * component and EVERY dockerImages entry narrows cleanly, undefined otherwise
- * — the caller then takes the aggregate compat path for the WHOLE sidecar,
- * never a partial per-image model. Detection is structural (field presence),
- * not versioned: a component without `images` or an image entry without
- * `source` is the old shape by definition.
+ * All-or-nothing narrowing: the typed sidecar when EVERY component and EVERY
+ * dockerImages entry narrows cleanly, undefined otherwise — the caller then
+ * fails the whole run, never building a partial per-image model.
  */
 function narrowAttributedSidecar(
   parsed: unknown,
@@ -300,80 +284,59 @@ function narrowAttributedSidecar(
 }
 
 /**
- * True when some compatible rule is docker-scoped in a way an aggregate-shape
- * sidecar can never satisfy: at least one `where` entry sits STRICTLY under
- * docker:os-packages while no entry equals the bare aggregate identity. A
- * bare-prefix scope covers the aggregate target itself (the locked matcher
- * direction), so such a rule still matches and needs no hint.
- */
-function hasAggregateBlockedCompatible(policy: Policy | undefined): boolean {
-  if (policy === undefined) return false;
-  return policy.compatible.some((rule) => {
-    const where = rule.where ?? [];
-    return (
-      where.some((path) => path.startsWith(`${DOCKER_OS_IDENTITY}/`)) &&
-      !where.includes(DOCKER_OS_IDENTITY)
-    );
-  });
-}
-
-/**
- * Read the committed Docker OS-package SBOM as scope:"os" merge inputs, or
- * undefined when it does not exist (the offline cache-miss equivalent — no os
- * entries, never a live scan). The default path is {@link DOCKER_OS_SBOM_FILE}
- * inside the resolved cache `dir` (repo-root-anchored), so the Action — running
- * from its own directory — reads the consumer repo's committed SBOM, not a stray
- * file beside the action; an explicit --docker-os-sbom overrides it. The file is
- * size-gated BEFORE any read (DoS
- * bound, T-07-04, reusing the collector's assertSyftSbomSize), then parsed. The
- * parse is tolerant: a malformed committed file yields no os entries rather than
- * aborting the whole pipeline (mergeSboms's arktype narrow already skips
- * malformed components; a non-JSON file would throw on JSON.parse, which is the
- * correct loud failure for a tampered committed artifact).
+ * Read the committed docker SBOM as scope:"os" merge inputs, or undefined when
+ * it does not exist (the offline cache-miss equivalent — no os entries, never
+ * a live scan). The default path is {@link DOCKER_SBOM_FILE} inside the
+ * resolved cache `dir` (repo-root-anchored), so the Action — running from its
+ * own directory — reads the consumer repo's committed SBOM, not a stray file
+ * beside the action; an explicit CLI path overrides it. The file is size-gated
+ * before any read (a committed artifact must never balloon a run), then
+ * parsed; a non-JSON file throws on JSON.parse — the correct loud failure for
+ * a tampered committed artifact.
  *
- * A fully well-formed ATTRIBUTED sidecar (v2: every component carries a
- * non-empty `images` membership naming listed images, every dockerImages entry
- * carries a source) FANS OUT to one input per image with targetIdentity
- * "docker:os-packages/" + source, so a purl shared across images gets one
- * occurrence per image through the untouched mergeSboms — exactly like a
- * package shared across two workspaces. Anything less reads as today's single
- * aggregate input: identities derive ONLY from listed sources, degradation is
- * whole-sidecar, and no component is ever dropped. The fan-out iterates the
- * sidecar's stored order (the emitter sorts dockerImages by image), so
- * repeated reads are byte-identical. When the aggregate path is taken while
- * the policy carries a compatible rule the aggregate target cannot satisfy
- * (scoped strictly under docker:os-packages), ONE stderr hint line names the
- * cause; the reader stays a pure read — stderr only, no writes, no exit-code
- * change, no new pipeline state.
+ * The sidecar FANS OUT to one input per image with targetIdentity
+ * "docker:" + source, so a purl shared across images gets one occurrence per
+ * image through the untouched mergeSboms — exactly like a package shared
+ * across two workspaces. A sidecar missing any attribution (a component
+ * without `images`, an image entry without `source`) is malformed and fails
+ * the run loudly: silently dropping docker inventory is the one failure this
+ * reader must never allow. The fan-out iterates the sidecar's stored order
+ * (the emitter sorts dockerImages by image), so repeated reads are
+ * byte-identical.
  */
-function readCommittedDockerOsSbom(
+function readCommittedDockerSbom(
   opts: GenerateOptions,
   dir: string,
-  policy: Policy | undefined,
 ): CollectedSbom[] | undefined {
   const osSbomPath =
-    opts.dockerOsSbomPath !== undefined
-      ? resolveFrom(
-          resolvedRepoRoot(opts) ?? opts.baseDir,
-          opts.dockerOsSbomPath,
-        )
-      : resolveFrom(dir, DOCKER_OS_SBOM_FILE);
-  if (!existsSync(osSbomPath)) return undefined;
-  // Size gate BEFORE read (DoS bound, T-07-04).
+    opts.dockerSbomPath !== undefined
+      ? resolveFrom(resolvedRepoRoot(opts) ?? opts.baseDir, opts.dockerSbomPath)
+      : resolveFrom(dir, DOCKER_SBOM_FILE);
+  if (!existsSync(osSbomPath)) {
+    // Not a compatibility read — the legacy file's CONTENT is never used. Its
+    // presence without the current file means the repo predates the rename,
+    // and returning undefined here would silently drop the docker inventory.
+    if (
+      opts.dockerSbomPath === undefined &&
+      existsSync(resolveFrom(dir, LEGACY_DOCKER_SBOM_FILE))
+    ) {
+      throw new Error(
+        `legacy ${LEGACY_DOCKER_SBOM_FILE} found — re-run the docker scan ` +
+          `(task generate DOCKER=1) to write ${DOCKER_SBOM_FILE}, then delete ` +
+          `the legacy file`,
+      );
+    }
+    return undefined;
+  }
+  // Size gate BEFORE read: a committed artifact must never balloon a run.
   assertSyftSbomSize(osSbomPath);
   const parsed: unknown = JSON.parse(readFileSync(osSbomPath, "utf8"));
   const attributed = narrowAttributedSidecar(parsed);
   if (attributed === undefined) {
-    if (hasAggregateBlockedCompatible(policy)) {
-      process.stderr.write(`${SIDECAR_REGENERATE_HINT}\n`);
-    }
-    return [
-      {
-        sbom: parsed,
-        targetIdentity: DOCKER_OS_IDENTITY,
-        scope: "os",
-      },
-    ];
+    throw new Error(
+      `${osSbomPath} is not a per-image attributed docker SBOM — ` +
+        `re-run the docker scan (task generate DOCKER=1) to regenerate it`,
+    );
   }
   return attributed.images.map(({ image, source }) => ({
     sbom: {
@@ -382,7 +345,7 @@ function readCommittedDockerOsSbom(
         component.images.includes(image),
       ),
     },
-    targetIdentity: `${DOCKER_OS_IDENTITY}/${source}`,
+    targetIdentity: `${DOCKER_IDENTITY_PREFIX}${source}`,
     scope: "os",
   }));
 }
@@ -486,8 +449,8 @@ export function scancodeCachePath(opts: GenerateOptions, dir: string): string {
 
 /**
  * Construct {@link IntensiveOptions} for the enrichUnknowns call — ONLY when
- * mode is "generate" AND opts.intensive is true (D-07's opt-in boundary,
- * SCAN-03): check never reaches this function with mode "generate" (runCheck
+ * mode is "generate" AND opts.intensive is true — an opt-in boundary:
+ * check never reaches this function with mode "generate" (runCheck
  * forces "check"), and a default generate call has opts.intensive absent, so
  * the common case returns undefined and the intensive lane is never even
  * constructed, let alone invoked. targetDirs comes from the SAME collect loop
@@ -506,7 +469,7 @@ function intensiveOptionsFor(
 /**
  * Project the PolicyView the document renderer consumes. The policy pointer path
  * is repo-root-relative (policyPointerPath) so the committed bytes stay stable
- * across platforms. 07-09: the author-supplied [document] title + preamble flow
+ * across platforms. The author-supplied [document] title + preamble flow
  * into the licenses-document renderer only (never the notices companion), via
  * conditional spread so "absent" stays observable.
  */
@@ -523,6 +486,15 @@ function projectPolicyView(
   };
 }
 
+/**
+ * The write-free pipeline core shared by generate and check: validate policy
+ * (when given) -> resolve/discover targets -> per-target dispatch+scan -> one
+ * merged model -> unconditional annotation -> evaluate + stderr summary (when
+ * a policy is loaded) -> render every configured output in memory. This
+ * function never calls writeFileSync — generate writes the returned strings,
+ * check byte-compares them against the committed files, so check can never
+ * overwrite the files it is gating on.
+ */
 export async function buildOutputs(
   opts: GenerateOptions,
 ): Promise<BuiltOutputs> {
@@ -560,11 +532,10 @@ export async function buildOutputs(
     process.stderr.write(`${line}\n`);
   });
 
-  // COLL-04/SCP-02: thread the committed Docker OS-package SBOM into the merge
-  // when it exists — one scope:"os" input per attributed image (v2 fan-out) or
-  // the single aggregate input (old/malformed shape). A missing file is the
-  // offline cache-miss equivalent — no os entries, no docker, no syft.
-  const osInputs = readCommittedDockerOsSbom(opts, dir, policy);
+  // Thread the committed docker SBOM into the merge when it exists — one
+  // scope:"os" input per attributed image. A missing file is the offline
+  // cache-miss equivalent — no os entries, no docker, no syft.
+  const osInputs = readCommittedDockerSbom(opts, dir);
   if (osInputs !== undefined) inputs.push(...osInputs);
 
   // One merged model from all targets: shared packages appear once with every
@@ -605,7 +576,7 @@ export async function buildOutputs(
   // list when no policy is loaded, so the License column shows normalized
   // expressions and the notices appendix can decompose them without --policy.
   // The no-policy dump equals the annotated model. The shipped tool-level
-  // BUILTIN_OVERRIDES set is always threaded in (POL-07): it is imported config
+  // BUILTIN_OVERRIDES set is always threaded in: it is imported config
   // (pure — no I/O in the engine), staleness-guarded, and project [[clarify]]
   // wins over it on conflict.
   const { model: annotated, usedClarifyIndices } = annotateFindings(

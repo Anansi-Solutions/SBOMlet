@@ -129,8 +129,8 @@ describe("discoverTargets", () => {
     expect(targets.map((t) => t.identity)).toEqual(["app"]);
   });
 
-  test("#2 (07-28 revert): build/out/target/vendor are GENERIC source names — lockfiles under them ARE discovered; only dist stays pruned", () => {
-    // The 07-26 prune of {build,out,target,vendor} was over-broad: those are
+  test("build/out/target/vendor are GENERIC source names — lockfiles under them ARE discovered; only dist stays pruned", () => {
+    // Pruning {build,out,target,vendor} proved over-broad: those are
     // routinely legitimate SOURCE/service dir names (a service named `target`, a
     // Go `vendor/` whose contents ship), so pruning them dropped real targets
     // (under-coverage). Reverted: only `dist` (the documented, low-ambiguity
@@ -167,7 +167,7 @@ describe("discoverTargets", () => {
     expect(targets.map((t) => t.identity)).toEqual(["app"]);
   });
 
-  test("finding #2: a git-SUBMODULE root (.git is a FILE / gitlink) is NOT descended in the lockfile lane", () => {
+  test("a git-SUBMODULE root (.git is a FILE / gitlink) is NOT descended in the lockfile lane", () => {
     // A submodule is vendored third-party code; its lockfiles are not our
     // distribution's. The submodule root is an ordinary-named dir whose `.git`
     // is a FILE (gitlink), so the `.git` name exclusion never fires. The shared
@@ -207,7 +207,7 @@ describe("discoverTargets", () => {
     expect(targets.map((t) => t.identity)).toEqual(["app"]);
   });
 
-  test("#3 (07-28): --exclude globs match case-INSENSITIVELY (Windows on-disk identity parity)", () => {
+  test("--exclude globs match case-INSENSITIVELY (Windows on-disk identity parity)", () => {
     const root = makeTempRoot();
     makeYarnProject(join(root, "app"));
     // A real source dir whose on-disk name differs in case from the glob.
@@ -294,7 +294,7 @@ describe("discoverTargets", () => {
   });
 });
 
-describe("discoverTargets — npm/pnpm/bun lockfile kinds (COLL-06)", () => {
+describe("discoverTargets — npm/pnpm/bun lockfile kinds", () => {
   test("package-lock.json / pnpm-lock.yaml / bun.lock each alone yield one target of the right kind", () => {
     const root = makeTempRoot();
     makeNpmProject(join(root, "npm-app"));
@@ -312,7 +312,7 @@ describe("discoverTargets — npm/pnpm/bun lockfile kinds (COLL-06)", () => {
   });
 });
 
-describe("discoverTargets — terraform lockfile kind (COLL-03)", () => {
+describe("discoverTargets — terraform lockfile kind", () => {
   test(".terraform.lock.hcl is discovered (hidden FILE, not a hidden dir)", () => {
     const root = makeTempRoot();
     makeTerraformProject(join(root, "infra"));
@@ -471,7 +471,7 @@ describe("discoverTargetsWithWarnings — binary bun.lockb handling", () => {
   });
 });
 
-describe("discoverTargetsWithWarnings — csproj sighted without packages.lock.json (NET-01 near-miss)", () => {
+describe("discoverTargetsWithWarnings — csproj sighted without packages.lock.json", () => {
   test("a lockless csproj dir yields zero targets and ONE aggregated warning naming the property, the command, and the directory", () => {
     const root = makeTempRoot();
     writeCsproj(join(root, "App"));
@@ -612,7 +612,7 @@ describe("discoverTargetsWithWarnings — csproj sighted without packages.lock.j
     expect(warnings).toEqual([]);
   });
 
-  test("same-dir package-lock.json + packages.lock.json yield TWO targets (cross-ecosystem coexistence, 15-01 precedence decision)", () => {
+  test("same-dir package-lock.json + packages.lock.json yield TWO targets (cross-ecosystem coexistence)", () => {
     const root = makeTempRoot();
     const dir = join(root, "x");
     makeNpmProject(dir);

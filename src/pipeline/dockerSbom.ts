@@ -3,10 +3,10 @@
  * that touches the docker daemon / syft / buildx. It resolves ONE of three
  * mutually exclusive lanes, builds when the lane calls for it, scans each
  * resulting image with the single-posture collector (collectDockerOsSbom), and
- * writes the deterministic committed `docker-os.sbom.json` at the base-dir-
+ * writes the deterministic committed `docker.sbom.json` at the base-dir-
  * resolved output path.
  *
- * THE THREE LANES (D-01 — pairwise mutually exclusive):
+ * THE THREE LANES (pairwise mutually exclusive):
  *   1. --dockerfile <path>...  build each explicitly named Dockerfile to a
  *      deterministic tag, then scan the built image;
  *   2. --repo-root <dir>       discover the repo's Dockerfiles, build each,
@@ -14,16 +14,16 @@
  *   3. --image <ref>...        scan pre-existing image refs (pull when absent).
  * There is NO default image set: a bare invocation is a usage error (the CLI
  * names the lanes). Dockerfiles are BUILD INPUTS, never objects of analysis —
- * their contents are never read here (D-02).
+ * their contents are never read here.
  *
- * DECISION (Open Question 1, LOCKED): this is a SEPARATE subcommand, not a
+ * This is deliberately a SEPARATE subcommand, not a
  * `--scan-docker` flag on `generate` — the everyday generate/check stay
  * daemon-free and fully offline, reading the committed bytes this command
- * produces as a scope:"os" merge input (07-02). The blast radius of the
+ * produces as a scope:"os" merge input. The blast radius of the
  * docker/network side-effect is confined to this one path.
  *
  * The single writeFileSync lives here (mirroring runGenerate's writer-owns-bytes
- * posture at pipeline.ts:328-329) so the collector stays write-free and a
+ * posture) so the collector stays write-free and a
  * double-run from the same inputs is byte-identical by construction (toSortedJson
  * via emitDockerOsDoc).
  */
@@ -37,11 +37,11 @@ import { execTool } from "../collectors/exec";
 import { compareCodeUnits } from "../model/dependencies";
 import { parsePolicy } from "../policy/schema";
 import { resolveFrom, writeArtifact } from "./paths";
-import { DOCKER_OS_SBOM_FILE, resolveCacheDir } from "./pipeline";
+import { DOCKER_SBOM_FILE, resolveCacheDir } from "./pipeline";
 import { sanitizeForLog } from "./summary";
 
 /**
- * Defense-in-depth ref guard (#8): an image operand forwarded to syft must never
+ * Defense-in-depth ref guard: an image operand forwarded to syft must never
  * be empty/whitespace-only (a no-op operand) nor dash-prefixed (a token syft
  * could parse as a flag). Guards the --image lane, whose refs
  * are passed straight through to syft/docker as operands.
@@ -297,10 +297,10 @@ export interface GenerateDockerSbomOptions {
   policyPath?: string;
   /**
    * Optional override for the committed OS-SBOM output path. When unset it
-   * defaults to DOCKER_OS_SBOM_FILE inside the resolved cache dir (the policy
+   * defaults to DOCKER_SBOM_FILE inside the resolved cache dir (the policy
    * `[cache] dir`, or DEFAULT_CACHE_DIR), the same file generate and check read.
    */
-  dockerOsSbomPath?: string;
+  dockerSbomPath?: string;
   /**
    * Base directory for resolving relative paths — same anchoring as runGenerate.
    * The default output lands in the resolved cache dir (repo-root-anchored)
@@ -309,7 +309,7 @@ export interface GenerateDockerSbomOptions {
   baseDir?: string;
   /**
    * This tool's OWN directory, excluded from the discovery walk (discovery lane
-   * only). Wired exactly as the lockfile discovery path does (targets.ts:53
+   * only). Wired exactly as the lockfile discovery path does (targets.ts
    * computes `join(import.meta.dir, "..", "..")`): cli.ts populates it so the
    * tool's own dockerfile.ts/.test.ts are pruned by shouldDescendDir rather than
    * relying on a name blocklist.
@@ -458,7 +458,7 @@ async function runDiscoveryBuildLane(
 
 /**
  * IMAGE LANE (--image): scan pre-existing image refs. The refs are guarded
- * through safeLiveScanImages (#5/#8) before reaching syft/docker as operands;
+ * through safeLiveScanImages before reaching syft/docker as operands;
  * the whole set being unsafe is a loud throw, never a silent empty scan. The
  * collector probes local presence and pulls only when a ref is absent (a
  * locally-present built tag is scanned as-is). The summary prints to stderr
@@ -526,21 +526,21 @@ export async function runGenerateDockerSbom(
     return;
   }
 
-  // Default output: DOCKER_OS_SBOM_FILE inside the resolved cache dir (the policy
+  // Default output: DOCKER_SBOM_FILE inside the resolved cache dir (the policy
   // `[cache] dir`, or the default, anchored to the scanned repo), so the file this
-  // command WRITES is exactly the one generate and check READ; --docker-os-sbom
+  // command WRITES is exactly the one generate and check READ; --docker-sbom
   // overrides it. resolveCacheDir already handles repoRoot: undefined (the
   // --dockerfile / --image lanes have no repo root).
   const outputPath =
-    opts.dockerOsSbomPath !== undefined
-      ? resolveFrom(opts.baseDir, opts.dockerOsSbomPath)
+    opts.dockerSbomPath !== undefined
+      ? resolveFrom(opts.baseDir, opts.dockerSbomPath)
       : resolveFrom(
           resolveCacheDir({
             baseDir: opts.baseDir,
             repoRoot: opts.repoRoot,
             policyPath: opts.policyPath,
           }),
-          DOCKER_OS_SBOM_FILE,
+          DOCKER_SBOM_FILE,
         );
 
   // LANE 1 — targeted build (--dockerfile).

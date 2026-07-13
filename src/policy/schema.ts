@@ -62,7 +62,7 @@ export interface CompatibleLicenseRule {
   allowlist: ReadonlyArray<string>;
   reason: string;
   /**
-   * Optional occurrence scope (SCP-01): identity prefixes the rule is limited
+   * Optional occurrence scope: identity prefixes the rule is limited
    * to, matched with the same segment-aware prefix comparison as suppression
    * paths. Materialized present-only — an absent key means the rule applies
    * at every occurrence (the pre-scoping behavior).
@@ -85,7 +85,7 @@ export interface ClarifyRule {
   name: string;
   version?: string;
   /**
-   * Optional staleness precondition (POL-07): the pre-override observed license
+   * Optional staleness precondition: the pre-override observed license
    * value this clarify disambiguates FROM. When present, the engine applies the
    * `expression` ONLY if the dependency's currently-observed signal still
    * matches `expects` — a mismatch is a STALE override that fails the gate
@@ -113,7 +113,7 @@ export interface ClarifyRule {
 export type DevDependencyHandling = "warn" | "fail" | "ignore";
 
 /**
- * The [os_dependencies] knob (COLL-04), mirroring DevDependencyHandling. It
+ * The [os_dependencies] knob, mirroring DevDependencyHandling. It
  * governs a would-be-FAIL on a PACKAGE-level os-scope dependency (a pkg:deb /
  * pkg:apk row from the Docker base image):
  *   "warn"   — an os would-be-fail downgrades to warn (the default): expected
@@ -127,7 +127,7 @@ export type DevDependencyHandling = "warn" | "fail" | "ignore";
 export type OsDependencyHandling = "warn" | "fail" | "ignore";
 
 /**
- * The optional [document] table (07-09): author-supplied presentation prose for
+ * The optional [document] table: author-supplied presentation prose for
  * the LICENSES document only (never the notices companion). Both keys are
  * OPTIONAL; when present each must be a non-empty string. The render layer
  * treats `title` as a heading and `preamble` as verbatim author markdown — both
@@ -187,7 +187,7 @@ export interface Policy {
   unknownHandling: "warn" | "fail";
   /** Default "warn" when the [dev_dependencies] table is absent (POL-08). */
   devDependencies: DevDependencyHandling;
-  /** Default "warn" when the [os_dependencies] table is absent (COLL-04). */
+  /** Default "warn" when the [os_dependencies] table is absent. */
   osDependencies: OsDependencyHandling;
   suppressedWorkspaces: ReadonlyArray<SuppressedWorkspace>;
   compatible: ReadonlyArray<CompatibleRule>;
@@ -206,7 +206,7 @@ export interface Policy {
    */
   allowSourceAvailable: ReadonlyArray<AllowSourceAvailable>;
   /**
-   * Author-supplied document presentation (07-09). Absent [document] table
+   * Author-supplied document presentation. Absent [document] table
    * yields undefined; an empty [document] yields {} (both keys optional).
    */
   document?: DocumentConfig;
@@ -274,7 +274,7 @@ function requireText(
 }
 
 /**
- * OPTIONAL non-empty string field (07-09 [document]). Absent → undefined, no
+ * OPTIONAL non-empty string field of [document]. Absent → undefined, no
  * problem. Present but non-string or empty/whitespace-only → undefined + a
  * problem (mirroring requireText's posture for the present-and-invalid case).
  */
@@ -298,7 +298,7 @@ function optionalText(
 }
 
 /**
- * Parse the optional [document] table (07-09): an absent table yields undefined;
+ * Parse the optional [document] table: an absent table yields undefined;
  * a non-table value rejects; an empty table yields {}; title/preamble are each
  * OPTIONAL but, when present, must be a non-empty string (optionalText). Unknown
  * keys reject via checkKeys. Only present-and-valid keys are materialized so the
@@ -930,7 +930,7 @@ function validateDevDependencies(
 }
 
 /**
- * Parse the [os_dependencies] knob (COLL-04), an EXACT mirror of
+ * Parse the [os_dependencies] knob, an EXACT mirror of
  * validateDevDependencies: an absent table defaults to "warn"; a non-table,
  * missing handling, unknown key, or invalid handling value each push the
  * aggregated PolicyError message naming the os_dependencies table path. The

@@ -430,8 +430,8 @@ describe("collectWithNugetLock — identity and emission", () => {
     });
   });
 
-  // The four locks below are review-pass properties (15-05 adversarial gate):
-  // refuted hunches retained because no earlier test pinned them.
+  // The four tests below pin behaviors a review pass questioned; nothing
+  // earlier covered them.
 
   test("a RID-ONLY section (no plain TFM twin) still emits its entries — completeness never keys on section names", async () => {
     const lock = JSON.stringify({

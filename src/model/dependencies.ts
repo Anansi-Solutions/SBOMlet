@@ -219,7 +219,7 @@ export type ScopeTaxonomy = "app" | "os";
  * optional/peer information); the python lane formerly derived it from poetry
  * markers (`optional = true`, PEP 508 marker variables, extras, multi-variant
  * spec arrays), but that marker parsing was a recurring mislabeling bug class
- * (a critical/warning in 3 of 4 adversarial-review rounds) and was removed.
+ * (flagged in three of four review rounds) and was removed.
  * Markers and extras are NOT parsed; every dependency edge is a plain edge.
  */
 export interface DependencyIntroduction {

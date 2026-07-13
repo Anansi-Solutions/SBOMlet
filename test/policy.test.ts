@@ -161,13 +161,13 @@ describe("parsePolicy — compatible pattern decomposition", () => {
 });
 
 // ===========================================================================
-// SCP-01 Task 2: the optional `where` scope on BOTH [[compatible]] forms — an
+// The optional `where` scope on BOTH [[compatible]] forms — an
 // array of occurrence-identity prefixes, each validated like a suppression
 // path. Empty arrays reject (a rule that can never match anywhere is a dead
 // rule by construction).
 // ===========================================================================
 
-const DOCKER_ID = "docker:os-packages/examples/docker-scan/Dockerfile";
+const DOCKER_ID = "docker:examples/docker-scan/Dockerfile";
 
 /** License-form compatible rule with a raw TOML `where` clause. */
 const scopedLicenseFixture = (whereToml: string): string =>
@@ -189,7 +189,7 @@ const scopedPackageFixture = (whereToml: string): string =>
     `where = ${whereToml}`,
   ].join("\n");
 
-describe("parsePolicy — compatible `where` scope (SCP-01)", () => {
+describe("parsePolicy — compatible `where` scope", () => {
   test("license form parses with where; the rule carries the array", () => {
     const policy = parsePolicy(
       scopedLicenseFixture(JSON.stringify([DOCKER_ID])),
@@ -213,7 +213,7 @@ describe("parsePolicy — compatible `where` scope (SCP-01)", () => {
         'name = "busybox"',
         'version = "1.37.0"',
         'reason = "test reason"',
-        `where = ${JSON.stringify([DOCKER_ID, "docker:os-packages/other/Dockerfile"])}`,
+        `where = ${JSON.stringify([DOCKER_ID, "docker:other/Dockerfile"])}`,
       ].join("\n"),
     );
     expect(policy.compatible).toEqual([
@@ -222,7 +222,7 @@ describe("parsePolicy — compatible `where` scope (SCP-01)", () => {
         name: "busybox",
         version: "1.37.0",
         reason: "test reason",
-        where: [DOCKER_ID, "docker:os-packages/other/Dockerfile"],
+        where: [DOCKER_ID, "docker:other/Dockerfile"],
       },
     ]);
   });
@@ -235,16 +235,16 @@ describe("parsePolicy — compatible `where` scope (SCP-01)", () => {
 
   test("colons in entries pass validation (image refs are legal identities)", () => {
     const policy = parsePolicy(
-      scopedPackageFixture('["docker:os-packages/node:24-alpine"]'),
+      scopedPackageFixture('["docker:node:24-alpine"]'),
     );
     expect(policy.compatible[0]).toMatchObject({
-      where: ["docker:os-packages/node:24-alpine"],
+      where: ["docker:node:24-alpine"],
     });
   });
 
   test("a backslash entry rejects naming compatible[0].where", () => {
     const error = expectPolicyError(
-      scopedLicenseFixture(JSON.stringify(["docker:os-packages\\bad"])),
+      scopedLicenseFixture(JSON.stringify(["docker:img\\bad"])),
     );
     expect(error.message).toContain("compatible[0].where[0]");
     expect(error.message).toContain("forward slashes");
@@ -252,14 +252,14 @@ describe("parsePolicy — compatible `where` scope (SCP-01)", () => {
 
   test('a ".." segment rejects naming compatible[0].where', () => {
     const error = expectPolicyError(
-      scopedPackageFixture('["docker:os-packages/../etc"]'),
+      scopedPackageFixture('["docker:img/../etc"]'),
     );
     expect(error.message).toContain("compatible[0].where[0]");
     expect(error.message).toContain('".." segments');
   });
 
   test("leading and trailing slashes reject naming compatible[0].where", () => {
-    for (const bad of ["/docker:os-packages", "docker:os-packages/"]) {
+    for (const bad of ["/docker:img", "docker:img/"]) {
       const error = expectPolicyError(
         scopedLicenseFixture(JSON.stringify([bad])),
       );
@@ -269,16 +269,14 @@ describe("parsePolicy — compatible `where` scope (SCP-01)", () => {
   });
 
   test("an empty segment rejects naming compatible[0].where", () => {
-    const error = expectPolicyError(
-      scopedPackageFixture('["docker:os-packages//x"]'),
-    );
+    const error = expectPolicyError(scopedPackageFixture('["docker:img//x"]'));
     expect(error.message).toContain("compatible[0].where[0]");
     expect(error.message).toContain("could never match");
   });
 
   test("a non-array where rejects naming compatible[0] (both forms)", () => {
     for (const fixture of [scopedLicenseFixture, scopedPackageFixture]) {
-      const error = expectPolicyError(fixture('"docker:os-packages"'));
+      const error = expectPolicyError(fixture('"docker:img"'));
       expect(error.message).toContain("compatible[0]");
       expect(error.message).toContain('"where"');
     }
@@ -308,7 +306,7 @@ describe("parsePolicy — compatible `where` scope (SCP-01)", () => {
 });
 
 // ===========================================================================
-// POL-07 Task 1: the optional `expects` precondition on [[clarify]] + the
+// The optional `expects` precondition on [[clarify]] + the
 // shipped tool-level BUILTIN_OVERRIDES set.
 // ===========================================================================
 
@@ -322,7 +320,7 @@ const clarifyWithExpects = (expects: string): string =>
     'reason = "disambiguate the imprecise BSD label to BSD-3-Clause"',
   ].join("\n");
 
-describe("parsePolicy — clarify `expects` precondition (POL-07)", () => {
+describe("parsePolicy — clarify `expects` precondition", () => {
   test("a [[clarify]] WITH expects parses and the ClarifyRule carries it", () => {
     const policy = parsePolicy(clarifyWithExpects("BSD"));
     expect(policy.clarify).toEqual([
@@ -385,7 +383,7 @@ describe("parsePolicy — clarify `expects` precondition (POL-07)", () => {
   });
 });
 
-describe("BUILTIN_OVERRIDES — shipped tool-level set (POL-07)", () => {
+describe("BUILTIN_OVERRIDES — the shipped tool-level set", () => {
   test("is a non-empty literal array; every entry has name, expects, expression, reason", () => {
     expect(BUILTIN_OVERRIDES.length).toBeGreaterThan(0);
     for (const o of BUILTIN_OVERRIDES) {
@@ -557,7 +555,7 @@ describe("parsePolicy — suppression path validation", () => {
   });
 });
 
-describe("parsePolicy — [unknown] handling knob (POL-04)", () => {
+describe("parsePolicy — [unknown] handling knob", () => {
   test('handling = "ignore" is rejected naming unknown.handling', () => {
     const error = expectPolicyError('[unknown]\nhandling = "ignore"');
     expect(error.message).toContain("unknown.handling");
@@ -605,7 +603,7 @@ describe("policy.example.toml — the shipped starter contract", () => {
     // of the starter contract, not just the default).
     expect(text).toContain("[unknown]");
     expect(policy.unknownHandling).toBe("warn");
-    // POL-08: the example must carry an EXPLICIT [dev_dependencies] table too.
+    // The example must carry an EXPLICIT [dev_dependencies] table too.
     expect(text).toContain("[dev_dependencies]");
     expect(policy.devDependencies).toBe("warn");
   });
@@ -637,11 +635,11 @@ describe("parsePolicy — mandatory documentation text", () => {
 });
 
 // ===========================================================================
-// 07-09 COMMIT 2: the optional [document] table — author-supplied title +
+// The optional [document] table — author-supplied title +
 // preamble for the LICENSES document only. Both keys are OPTIONAL; when present
 // each must be a non-empty string. Unknown keys under [document] reject.
 // ===========================================================================
-describe("parsePolicy — [document] title + preamble (07-09)", () => {
+describe("parsePolicy — [document] title + preamble", () => {
   test("title + preamble both parse into policy.document", () => {
     const policy = parsePolicy(
       [
@@ -730,7 +728,7 @@ interface PackageSpec {
   /** Raw license claim strings; [] = the zero-claim (unknown) population. */
   claims: ReadonlyArray<string>;
   occurrences: ReadonlyArray<OccurrenceSpec>;
-  /** Package-level taxonomy; defaults to "app" (COLL-04: "os" routes applyOsScope). */
+  /** Package-level taxonomy; defaults to "app" ("os" routes applyOsScope). */
   scope?: "app" | "os";
   /**
    * A ScanCode-sourced claim raw (12-02): appended as a { source: "scancode" }
@@ -777,7 +775,7 @@ function makeModel(specs: ReadonlyArray<PackageSpec>): CanonicalDependencies {
   };
 }
 
-/** Shorthand for an OS-scope package (pkg:deb/pkg:apk in COLL-04 reality). */
+/** Shorthand for an OS-scope package (pkg:deb/pkg:apk). */
 function osPkgSpec(
   purl: string,
   name: string,
@@ -1380,7 +1378,7 @@ describe("evaluate — imprecise findings route to a safe lane (INV-04)", () => 
   });
 });
 
-describe("evaluate — unknown handling knob (POL-04)", () => {
+describe("evaluate — unknown handling knob", () => {
   test('zero-claim package warns under handling "warn" (the absent-table default)', () => {
     const { verdicts } = runEngine(
       [pkgSpec("no-claims", null, ["backend"])],
@@ -1444,7 +1442,7 @@ describe("evaluate — clarify usage visibility", () => {
   });
 });
 
-describe("evaluate — staleness-guarded overrides (POL-07)", () => {
+describe("evaluate — staleness-guarded overrides", () => {
   test("a tool-level override that decides a verdict cites override:builtin[i], not default:ok", () => {
     const builtins: BuiltinOverrideInput[] = [
       { name: "ipython", expects: "BSD", expression: "BSD-3-Clause" },
@@ -1559,7 +1557,7 @@ describe("evaluate — staleness-guarded overrides (POL-07)", () => {
 // SCAN-05 (12-02): the conflict:scancode fail verdict. A ScanCode-vs-quick-check
 // disagreement (marker set by applyScancodeAssessment in 12-01) becomes a
 // distinct fail in verdictFor, slotted directly below stale and ABOVE
-// compatible. Fail-not-warn (D-03: human involvement is NECESSARY; a warn is
+// compatible. Fail-not-warn (human involvement is NECESSARY; a warn is
 // ignorable). Exit 1 is automatic — a "fail" verdict is a violation in
 // exitCodeFor's mapping (check.ts), no new machinery.
 // ===========================================================================
@@ -1770,17 +1768,17 @@ describe("unusedRuleIds — stale-policy hygiene", () => {
 });
 
 // ===========================================================================
-// SCP-01 Task 3: per-occurrence compatible matching. A `where`-scoped rule
+// Per-occurrence compatible matching. A `where`-scoped rule
 // decides at each occurrence via the SAME segment-aware prefix comparison
 // suppression paths use; an unscoped rule keeps pre-scoping behavior
 // byte-identically. Targets here are synthetic — per-image docker identities
 // do not exist yet; the engine must not care.
 // ===========================================================================
 
-const TARGET_A = "docker:os-packages/a/Dockerfile";
-const TARGET_B = "docker:os-packages/b/Dockerfile";
-const TARGET_A_EXTRA = "docker:os-packages/a/Dockerfile-extra";
-const TARGET_AGGREGATE = "docker:os-packages";
+const TARGET_A = "docker:a/Dockerfile";
+const TARGET_B = "docker:b/Dockerfile";
+const TARGET_A_EXTRA = "docker:a/Dockerfile-extra";
+const TARGET_A_PREFIX = "docker:a";
 
 /** Package-form busybox acceptance scoped to the given identity prefixes. */
 const scopedBusyboxPolicy = (where: ReadonlyArray<string>): string =>
@@ -1812,7 +1810,7 @@ const busyboxAt = (targets: ReadonlyArray<string>): PackageSpec =>
     "1.37.0",
   );
 
-describe("evaluate — where-scoped compatible matching (SCP-01)", () => {
+describe("evaluate — where-scoped compatible matching", () => {
   test("package form: scoped rule cited ONLY at its target; segment-aware; other occurrences fall to default:copyleft", () => {
     const { verdicts } = runEngine(
       [busyboxAt([TARGET_A, TARGET_B, TARGET_A_EXTRA])],
@@ -1844,13 +1842,13 @@ describe("evaluate — where-scoped compatible matching (SCP-01)", () => {
     );
   });
 
-  test("bare-prefix scope matches EVERY per-image target under it and the aggregate itself (both forms)", () => {
+  test("a prefix scope matches every target under it as a whole segment and the prefix itself (both forms)", () => {
     for (const policyText of [
-      scopedBusyboxPolicy([TARGET_AGGREGATE]),
-      scopedGplPolicy([TARGET_AGGREGATE]),
+      scopedBusyboxPolicy([TARGET_A_PREFIX]),
+      scopedGplPolicy([TARGET_A_PREFIX]),
     ]) {
       const { verdicts } = runEngine(
-        [busyboxAt([TARGET_A, TARGET_B, TARGET_AGGREGATE])],
+        [busyboxAt([TARGET_A, TARGET_A_EXTRA, TARGET_A_PREFIX])],
         policyText,
       );
       expect(verdicts.map((v) => [v.status, v.rule])).toEqual([
@@ -1861,16 +1859,16 @@ describe("evaluate — where-scoped compatible matching (SCP-01)", () => {
     }
   });
 
-  test("FAIL-SAFE direction: a scope under the aggregate never matches the shorter aggregate target (both forms)", () => {
-    // The other matcher direction (research Pitfall 2): scope
-    // docker:os-packages/x is LONGER than the aggregate target — an old-shape
-    // aggregate occurrence must never satisfy a per-image scope.
+  test("FAIL-SAFE direction: a scope never matches a SHORTER target above it (both forms)", () => {
+    // The reverse comparison: the scope docker:a/Dockerfile is LONGER than the
+    // target docker:a — a broader occurrence must never satisfy a narrower
+    // scope, or an acceptance reviewed for one image would leak upward.
     for (const policyText of [
       scopedBusyboxPolicy([TARGET_A]),
       scopedGplPolicy([TARGET_A]),
     ]) {
       const { verdicts, usedClarifyIndices, policy } = runEngine(
-        [busyboxAt([TARGET_AGGREGATE])],
+        [busyboxAt([TARGET_A_PREFIX])],
         policyText,
       );
       expect(verdicts.map((v) => [v.status, v.rule])).toEqual([
@@ -1905,7 +1903,7 @@ describe("evaluate — where-scoped compatible matching (SCP-01)", () => {
   });
 
   test("byte-identity: an unscoped policy over a multi-occurrence model is unchanged — rule ids and statuses per occurrence", () => {
-    // The pre-scoping contract (roadmap criterion 2): without `where`, a
+    // The pre-scoping contract: without `where`, a
     // compatible rule accepts the package at EVERY occurrence, package form
     // beating license form, first match in TOML order.
     const policyText = [
@@ -1972,7 +1970,7 @@ describe("evaluate — purity and determinism", () => {
 // ===========================================================================
 // AGPL acceptance corpus — every fixture mirrors a real row of the live
 // discovery run (3616 packages). These are real purls, names, versions,
-// expressions, and occurrence shapes — not inventions — so future relocks can
+// expressions, and occurrence shapes — not inventions — so future updates can
 // re-verify them against the live model.
 // ===========================================================================
 
@@ -2012,7 +2010,7 @@ describe("AGPL acceptance corpus", () => {
   });
 
   // Corpus row: same purl with a hypothetical added backend occurrence — THE
-  // roadmap success criterion 3: fail "naming the non-suppressed workspace".
+  // The failure must name the non-suppressed workspace.
   test("scratch-vm shape + backend occurrence: fail verdict names backend", () => {
     const { verdicts } = runEngine(
       [
@@ -2036,7 +2034,7 @@ describe("AGPL acceptance corpus", () => {
 
   // Corpus row: @img/sharp-libvips-* (10 platform pkgs @1.2.4) —
   // LGPL-3.0-or-later, occurrences apps/scratch (prod) AND frontend (prod).
-  // This is the REAL live-data leakage shape (POL-03).
+  // This is the REAL live-data leakage shape.
   test("sharp-libvips shape: LGPL leaking into frontend fails naming frontend", () => {
     const { verdicts } = runEngine(
       [
@@ -2116,10 +2114,10 @@ describe("AGPL acceptance corpus", () => {
 
   // Corpus row: jsonify @0.0.1 — garbage claim "Public Domain" (frontend dev
   // dep), the live corpus's only non-normalizable value. Normalizes to
-  // unknown; the [unknown].handling knob governs it (POL-04). POL-08 NOTE: this
+  // unknown; the [unknown].handling knob governs it . NOTE: this
   // occurrence is dev-only, so under [unknown] handling="fail" the would-be FAIL
   // is dev-downgraded to warn by default (dev_dependencies=warn). A PROD
-  // occurrence of the same would still fail — covered by the POL-08 suite above.
+  // occurrence of the same would still fail — covered by the dev-scope suite above.
   test("jsonify shape: garbage claim is governed by the unknown knob (dev-downgraded under fail)", () => {
     const spec: PackageSpec = {
       purl: "pkg:npm/jsonify@0.0.1",
@@ -2136,13 +2134,13 @@ describe("AGPL acceptance corpus", () => {
       'handling = "warn"',
       'handling = "fail"',
     );
-    // POL-08: a dev-only unknown-fail downgrades to warn by default.
+    // A dev-only unknown-fail downgrades to warn by default.
     const failed = runEngine([spec], failPolicy).verdicts;
     expect(failed[0].status).toBe("warn");
     expect(failed[0].rule).toBe("default:unknown");
     expect(failed[0].reason).toContain("dev-only occurrence");
 
-    // Strict projects can restore the pre-POL-08 fail with dev_dependencies=fail.
+    // Strict projects can restore the fail with dev_dependencies=fail.
     const strictPolicy = `${failPolicy}\n\n[dev_dependencies]\nhandling = "fail"`;
     const strict = runEngine([spec], strictPolicy).verdicts;
     expect(strict[0].status).toBe("fail");
@@ -2151,7 +2149,7 @@ describe("AGPL acceptance corpus", () => {
 });
 
 // ===========================================================================
-// POL-08: dev/prod gate downgrade — the `dev_dependencies` knob + the
+// Dev/prod gate downgrade — the `dev_dependencies` knob + the
 // per-occurrence dev-scope downgrade at the would-be default-FAIL terminals.
 // ===========================================================================
 
@@ -2229,7 +2227,7 @@ describe("dev_dependencies knob — parsing (mirrors unknown.handling)", () => {
   });
 });
 
-describe("evaluate — POL-08 dev-scope downgrade (default warn)", () => {
+describe("evaluate — dev-scope downgrade (default warn)", () => {
   test("HEADLINE: one copyleft package, dev occurrence WARNS + prod occurrence FAILS", () => {
     const { verdicts } = runEngine([DEV_PROD_COPYLEFT], "");
     expect(verdicts).toHaveLength(2);
@@ -2278,7 +2276,7 @@ describe("evaluate — POL-08 dev-scope downgrade (default warn)", () => {
   });
 });
 
-describe("evaluate — POL-08 workspace-shape production occurrences", () => {
+describe("evaluate — workspace-shape production occurrences", () => {
   // Pins the applyDevScope production terminal (evaluate.ts ~411:
   // "if (!occurrence.isDevDependency) return failVerdict;") on the EXACT
   // per-workspace repo shape the collect-loop expansion now produces —
@@ -2341,7 +2339,7 @@ describe("evaluate — POL-08 workspace-shape production occurrences", () => {
   });
 });
 
-describe('evaluate — POL-08 dev_dependencies = "fail" (pre-POL-08 behavior)', () => {
+describe('evaluate — dev_dependencies = "fail" (the pre-knob behavior)', () => {
   test("BOTH copyleft occurrences fail (no downgrade)", () => {
     const { verdicts } = runEngine(
       [DEV_PROD_COPYLEFT],
@@ -2361,7 +2359,7 @@ describe('evaluate — POL-08 dev_dependencies = "fail" (pre-POL-08 behavior)', 
   });
 });
 
-describe('evaluate — POL-08 dev_dependencies = "ignore"', () => {
+describe('evaluate — dev_dependencies = "ignore"', () => {
   test("dev copyleft occurrence is ok; prod copyleft occurrence still FAILS", () => {
     const { verdicts } = runEngine(
       [DEV_PROD_COPYLEFT],
@@ -2387,7 +2385,7 @@ describe('evaluate — POL-08 dev_dependencies = "ignore"', () => {
   });
 });
 
-describe("evaluate — POL-08 precedence is preserved (downgrade is last)", () => {
+describe("evaluate — precedence is preserved (downgrade is last)", () => {
   test("a suppressed dev copyleft occurrence stays suppressed (not warn)", () => {
     // apps/scratch is family-suppressed AND the occurrence is dev: suppression
     // wins, the dev-scope downgrade never touches it.
@@ -2434,7 +2432,7 @@ describe("evaluate — POL-08 precedence is preserved (downgrade is last)", () =
 });
 
 // ===========================================================================
-// POL-09: terminal deny-list (highest precedence). denyRuleFor is the pure
+// Terminal deny-list (highest precedence). denyRuleFor is the pure
 // matcher (Task 1); the verdictFor terminal-0 wiring + the "deny beats X"
 // precedence proofs live in the dedicated describe blocks (Task 2).
 // ===========================================================================
@@ -2989,7 +2987,7 @@ describe("evaluate — deny sees EVERY observed claim (#1/#5/#11: lossy combine 
   });
 });
 
-describe("policy.example.toml — the shipped [[deny]] block (POL-09)", () => {
+describe("policy.example.toml — the shipped [[deny]] block", () => {
   const exampleText = readFileSync(
     join(import.meta.dir, "..", "policy.example.toml"),
     "utf8",
@@ -3053,8 +3051,8 @@ describe("policy.example.toml — the shipped [[deny]] block (POL-09)", () => {
 });
 
 // ===========================================================================
-// COLL-04: the `[os_dependencies]` knob + the package-level os-scope downgrade
-// at the would-be default-FAIL terminals. Mirrors the POL-08 dev_dependencies
+// The `[os_dependencies]` knob + the package-level os-scope downgrade
+// at the would-be default-FAIL terminals. Mirrors the dev_dependencies
 // suite EXACTLY, but routes on entry.scope === "os" (package-level), not the
 // occurrence-level dev marker. Deny stays terminal-0 above the os downgrade.
 // ===========================================================================
@@ -3064,12 +3062,12 @@ const OS_COPYLEFT = osPkgSpec(
   "pkg:deb/debian/libc6@2.36-9",
   "libc6",
   "LGPL-2.1-or-later",
-  ["docker:os-packages"],
+  ["docker:img/Dockerfile"],
 );
 
 /** An OS-scope UNKNOWN-license package (zero claims). */
 const OS_UNKNOWN = osPkgSpec("pkg:apk/alpine/mystery@1.0.0", "mystery", null, [
-  "docker:os-packages",
+  "docker:img/Dockerfile",
 ]);
 
 describe("os_dependencies knob — parsing (mirrors dev_dependencies EXACTLY)", () => {
@@ -3128,7 +3126,7 @@ describe("os_dependencies knob — parsing (mirrors dev_dependencies EXACTLY)", 
   });
 });
 
-describe("evaluate — COLL-04 os-scope downgrade (default warn)", () => {
+describe("evaluate — os-scope downgrade (default warn)", () => {
   test("HEADLINE: an os-scope copyleft WARNS under default os_dependencies=warn", () => {
     const { verdicts } = runEngine([OS_COPYLEFT], "");
     expect(verdicts).toHaveLength(1);
@@ -3179,7 +3177,7 @@ describe("evaluate — COLL-04 os-scope downgrade (default warn)", () => {
   });
 });
 
-describe("evaluate — COLL-04 deny STAYS TERMINAL over the os knob", () => {
+describe("evaluate — deny STAYS TERMINAL over the os knob", () => {
   test("an os-scope package matching a [[deny]] license still FAILS regardless of os_dependencies", () => {
     // A source-available license in an OS package is denied: the os knob never
     // licenses it back in (denyVerdict returns first in verdictFor).
@@ -3193,7 +3191,7 @@ describe("evaluate — COLL-04 deny STAYS TERMINAL over the os knob", () => {
       const { verdicts } = runEngine(
         [
           osPkgSpec("pkg:deb/debian/evil-os@1.0.0", "evil-os", "BUSL-1.1", [
-            "docker:os-packages",
+            "docker:img/Dockerfile",
           ]),
         ],
         policyText,
@@ -3208,7 +3206,7 @@ describe("evaluate — COLL-04 deny STAYS TERMINAL over the os knob", () => {
     const { verdicts } = runEngine(
       [
         osPkgSpec("pkg:deb/debian/rider-os@1.0.0", "rider-os", null, [
-          "docker:os-packages",
+          "docker:img/Dockerfile",
         ]),
       ],
       denyNameFixture("rider-os"),
@@ -3218,7 +3216,7 @@ describe("evaluate — COLL-04 deny STAYS TERMINAL over the os knob", () => {
   });
 });
 
-describe("evaluate — COLL-04 W1: os-scope and dev-scope downgraders compose without interaction", () => {
+describe("evaluate — os-scope and dev-scope downgraders compose without interaction", () => {
   test("an os-scope copyleft WARNS under dev_dependencies=fail AND os_dependencies=warn (dev lane never clobbers it)", () => {
     // The package is os-scope with a NON-dev (prod) occurrence: it is not a dev
     // occurrence, so the dev lane (set to fail) must not touch it. The os lane
@@ -3253,7 +3251,7 @@ describe("evaluate — COLL-04 W1: os-scope and dev-scope downgraders compose wi
     const { verdicts } = runEngine(
       [
         osPkgSpec("pkg:deb/debian/libc6@2.36-9", "libc6", "LGPL-2.1-or-later", [
-          { target: "docker:os-packages", dev: true },
+          { target: "docker:img/Dockerfile", dev: true },
         ]),
       ],
       policyText,
@@ -3283,7 +3281,7 @@ describe("evaluate — COLL-04 W1: os-scope and dev-scope downgraders compose wi
 });
 
 // ===========================================================================
-// 07-06: the os-scope PARTIAL finding evaluates on its KNOWN-member expression.
+// The os-scope PARTIAL finding evaluates on its KNOWN-member expression.
 // A known copyleft member → applyOsScope → warn (non-gating); a known denied
 // member STAYS terminal (deny is checked before applyOsScope). The
 // unrecognizedTokens themselves never gate (os non-gating). No change to
@@ -3294,7 +3292,7 @@ describe("evaluate — COLL-04 W1: os-scope and dev-scope downgraders compose wi
 const osMultiSpec = (
   name: string,
   claims: ReadonlyArray<string>,
-  occurrences: ReadonlyArray<OccurrenceSpec> = ["docker:os-packages"],
+  occurrences: ReadonlyArray<OccurrenceSpec> = ["docker:img/Dockerfile"],
 ): PackageSpec => ({
   purl: `pkg:deb/debian/${name}@1.0.0`,
   name,
@@ -3304,7 +3302,7 @@ const osMultiSpec = (
   scope: "os",
 });
 
-describe("evaluate — 07-06 os-scope partial finding", () => {
+describe("evaluate — os-scope partial finding", () => {
   test("os [GPL-2.0-only, BSD-3-Clause, public-domain] → known copyleft WARNS (os non-gating)", () => {
     const { verdicts } = runEngine(
       [

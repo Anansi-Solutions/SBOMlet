@@ -44,7 +44,7 @@ const CACHE_VERSION = 1;
  * nuget entries (registration/catalog blobs are stable versioned CDN content
  * like the pypi/npm documents — zero churn on warm generates), and NEVER
  * rewritten on a cache hit, so a warm double-generate is byte-identical. It
- * lives ONLY here — never in any output (the determinism control, T-06-14).
+ * lives ONLY here — never in any output (the determinism control).
  */
 export interface CacheEntry {
   license: string | null;
@@ -77,7 +77,7 @@ export function readCache(path: string): Map<string, CacheEntry> {
  * `entries`) throws loudly, naming the path and the given `label` so the
  * enrichment cache and the ScanCode memo each name themselves in the error. An
  * optional `expectedVersion`, when given, rejects any OTHER schema version
- * loudly — the ScanCode memo opts into that strictness (T-12-07); the registry
+ * loudly — the ScanCode memo opts into that strictness; the registry
  * cache passes none, preserving its historical version-agnostic read. This is
  * the single envelope reader — the memo reuses it rather than hand-rolling a
  * second loud-on-malformed parser.

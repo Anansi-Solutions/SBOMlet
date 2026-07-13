@@ -86,8 +86,8 @@ function resolveTargets(opts: GenerateOptions): DiscoveredTarget[] {
 /**
  * The per-target collect result: the merge inputs plus every target directory
  * that actually contributed one (compareCodeUnits-sorted, deduped) — the same
- * dirs the collectors ran in. {@link IntensiveOptions.targetDirs} (10-05,
- * generate --intensive) is built from this so the residual ScanCode lane
+ * dirs the collectors ran in. {@link IntensiveOptions.targetDirs} (generate
+ * --intensive) is built from this so the residual ScanCode lane
  * probes exactly the source trees this run already walked, never a
  * freshly-discovered set that could drift from what was actually collected.
  */
@@ -388,7 +388,8 @@ function absorbUnitInputs(
  * The per-target collect loop: resolve targets, dispatch each through the
  * collector registry, and apply the coverage policy. The loop owns the
  * "collecting"/"skipping" stderr lines, routed through the caller-provided log
- * sink, so the locked line shapes are emitted from one place.
+ * sink, so the fixed line shapes are emitted from one place.
+
  *
  * A yarn-plugin-routed target whose lock declares workspace members expands
  * into one scan unit per member: the non-expanded path below is the exact

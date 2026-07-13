@@ -5,7 +5,7 @@
  * wall-clock bound + a loud, actionable error naming the operand on a
  * non-success), adapted from subprocess to `globalThis.fetch` — no
  * child_process here. Generate may fetch; a persistent failure is LOUD, never a
- * silent skip and never a negative-cache write (the locked reliability
+ * silent skip and never a negative-cache write (a deliberate reliability
  * decision).
  *
  * The wrapper does NOT construct URLs. Callers (the PyPI/npm resolvers) pass an
@@ -104,7 +104,7 @@ export async function fetchJson(
 }
 
 /**
- * A TRANSIENT/unreachable GitHub License failure (revision E): a 403 rate-limit,
+ * A TRANSIENT/unreachable GitHub License failure: a 403 rate-limit,
  * a 5xx, a timeout, or a network error after retries. The enrich orchestrator
  * recognizes this type and HARD-FAILS the generate run loudly — it is NOT a
  * definitive no-license answer and must never become a (false) negative cache

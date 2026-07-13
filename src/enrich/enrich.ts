@@ -73,8 +73,8 @@ export interface EnrichOptions {
   /** Backoff base in ms forwarded to fetchJson (tests pass a small value). */
   backoffBaseMs?: number;
   /**
-   * Injectable now-source for the `fetchedAt` stamp on NEW github cache entries
-   * (revision D). Defaults to the real clock; tests pass a fixed source so the
+   * Injectable now-source for the `fetchedAt` stamp on NEW github cache entries.
+   * Defaults to the real clock; tests pass a fixed source so the
    * stamped value is deterministic. Mirrors fetchJson's `backoffBaseMs` idiom
    * (default-to-production, override-in-tests) — NEVER a bare inline `new Date()`.
    */
@@ -172,7 +172,7 @@ export function resolveFromDocument(
 /**
  * Append a cache-sourced claim to a package via spread (input never mutated).
  * `source` flows from the caller — a registry resolution appends "registry",
- * a cache hit appends whatever provenance the entry carries (D-04: replay is
+ * a cache hit appends whatever provenance the entry carries (replay is
  * exact in every mode, never hardcoded).
  */
 export function withCacheClaim(
@@ -291,7 +291,7 @@ export async function enrichUnknowns(
   return { model: { packages }, staleUnknowns };
 }
 
-/** The GitHub License API base — a FIXED host (the SSRF control, T-06-04). */
+/** The GitHub License API base — a FIXED host (the SSRF control). */
 const GITHUB_API_HOST = "https://api.github.com";
 
 /** Build the GitHub License API URL for a repo at an optional ref (URL-encoded). */
@@ -372,7 +372,7 @@ async function fetchRegistryMisses(
 }
 
 /**
- * The terraform/github version-ref path (revision C + E). For each miss, derive
+ * The terraform/github version-ref path. For each miss, derive
  * the source repo from the registry naming convention and try the ordered
  * candidate refs (v<version> → <version> → default branch). The FIRST ref that
  * returns a clean 200 with a resolvable license wins; a 404 advances to the next
@@ -380,7 +380,7 @@ async function fetchRegistryMisses(
  * GithubTransientError (403 rate-limit / 5xx / network / timeout) propagates
  * LOUDLY (hard-fail, no entry). A non-conventional/non-github source, or a clean
  * answer with no license across all refs, is a DEFINITIVE no-license → a
- * negative entry → the package stays unknown (POL-04).
+ * negative entry → the package stays unknown.
  */
 async function fetchTerraformMisses(
   misses: Unknown[],
@@ -483,7 +483,7 @@ async function fetchNugetMisses(
   });
 }
 
-/** The production now-source for the injectable fetchedAt clock (revision D). */
+/** The production now-source for the injectable fetchedAt clock. */
 function defaultNow(): Date {
   return new Date();
 }

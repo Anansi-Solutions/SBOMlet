@@ -1518,7 +1518,7 @@ describe("collectTargets — yarn workspace expansion (fixture-mirror document)"
   });
 });
 
-describe("collectTargets — nuget packages.lock.json coverage integration (NET-01)", () => {
+describe("collectTargets — nuget packages.lock.json coverage integration", () => {
   test("an empty-sections packages.lock.json logs the warn+skip line and collects nothing", async () => {
     const root = mkdtempSync(join(tmpdir(), "licenses-nuget-cov-"));
     writeFileSync(

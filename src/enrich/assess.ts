@@ -263,7 +263,7 @@ function scanOptionsFrom(intensive: IntensiveOptions): ScancodeScanOptions {
   };
 }
 
-/** The locked house-style stderr partition line for an intensive run. */
+/** The house-style stderr partition line for an intensive run. */
 function reportCounts(counts: ScanCounts): void {
   process.stderr.write(
     `intensive: scanned ${counts.scanned}, memoized ${counts.hits} (hits), ` +

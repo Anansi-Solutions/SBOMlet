@@ -151,7 +151,7 @@ describe("runGenerateDockerSbom (--list-dockerfiles API invariant)", () => {
       runGenerateDockerSbom({
         listDockerfiles: true,
         baseDir: root,
-        dockerOsSbomPath: join(root, "docker-os.sbom.json"),
+        dockerSbomPath: join(root, "docker.sbom.json"),
       }),
     ).rejects.toThrow("--list-dockerfiles requires a repo root");
   });

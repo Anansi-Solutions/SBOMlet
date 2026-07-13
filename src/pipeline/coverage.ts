@@ -27,13 +27,13 @@ import {
 import { SbomDocument } from "../validate/sbom";
 
 /**
- * Terraform skip arm. The init-has-run gate is a FILESYSTEM signal (07-14,
- * strengthened 07-15): modules.json presence-as-a-regular-file + the strengthened
+ * Terraform skip arm. The init-has-run gate is a FILESYSTEM signal:
+ * modules.json presence-as-a-regular-file + the
  * `.terraform/providers/`+`.terraform/modules/` artifact shape decide, with no
  * HCL parsing. It mirrors the collector EXACTLY via the shared
  * {@link absentModulesJsonShouldFail} / {@link modulesJsonIsPresentFile} verbs so
  * the two cannot diverge.
- * - modules.json ABSENT (or directory-named, Fix 3) and the shape is not the
+ * - modules.json ABSENT (or directory-named) and the shape is not the
  *   exact providers-only artifact set → undefined: route to the collect path so
  *   the collector's loud "run tofu init/tofu get first" throw fires. NEVER a
  *   skip-to-zero — a silent incomplete inventory is exactly the failure this tool
@@ -43,7 +43,7 @@ import { SbomDocument } from "../validate/sbom";
  *   Mirror the collector: route to scan; if the lock yields zero providers too,
  *   skip with a reason (a providers-empty dir is a legitimate no-op, not a loud
  *   failure).
- * - PRESENT (regular file): the size gate fires BEFORE the read (Fix 4). Then
+ * - PRESENT (regular file): the size gate fires BEFORE the read. Then
  *   terraformComponentCount === 0 (zero-provider lock with a local-only
  *   modules.json) → skip with a reason; a positive count → undefined: scan.
  */
@@ -59,13 +59,13 @@ function terraformSkipReason(
     "modules",
     "modules.json",
   );
-  // The PRESENCE check requires a REGULAR FILE (Fix 3, review #5): a
+  // The PRESENCE check requires a REGULAR FILE: a
   // directory-named modules.json is treated as ABSENT, routing to the
   // filesystem-signal gate (which fails loud) instead of a raw EISDIR read.
   // Mirrors the collector via the shared {@link modulesJsonIsPresentFile} verb.
   if (!modulesJsonIsPresentFile(modulesJsonPath)) {
     // Mirror the collector's filesystem-signal gate. No real init artifact →
-    // route to the loud-fail collect path. The strengthened gate (Fix 1) returns
+    // route to the loud-fail collect path. The gate returns
     // false only for the providers-only shape (`.terraform/providers/` present,
     // `.terraform/modules/` absent): scan it. A providers-empty such dir scans
     // to zero — skip-classify it rather than hard-fail, the same as the
@@ -76,7 +76,7 @@ function terraformSkipReason(
     }
     return undefined;
   }
-  // Size gate FIRST — before the read (Fix 4, review #6), mirroring the
+  // Size gate FIRST — before the read, mirroring the
   // collector at terraform.ts and the bun.lock precedent so the "size gate fires
   // before any read, both files, every entry point" invariant is exact.
   assertTerraformLockSize(modulesJsonPath);

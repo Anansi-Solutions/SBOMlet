@@ -116,17 +116,17 @@ const REGEX_SPECIALS = new Set("\\^$.|?+()[]{}");
  * Exported so the reuse is by reference, not by re-hardcoding.
  */
 export const EXCLUDED_DIR_NAMES: ReadonlySet<string> = new Set([
-  // Dependency trees (findings shared with Dockerfile discovery).
+  // Dependency trees (shared with Dockerfile discovery).
   "node_modules",
   ".git",
-  // Documented BUILD-OUTPUT dir (finding #2): a generated artifact tree (this
+  // Documented BUILD-OUTPUT dir: a generated artifact tree (this
   // repo's documented `dist/`) must never be descended — a Dockerfile or
   // lockfile copied into it is a build product, not a source target. Members are
-  // compared CASE-INSENSITIVELY (finding #3) so Windows `Dist`/`NODE_MODULES`
+  // compared CASE-INSENSITIVELY so Windows `Dist`/`NODE_MODULES`
   // (the same on-disk tree) are pruned identically.
   //
-  // 07-28 REVERT: the 07-26 addition of {build, out, target, vendor} was
-  // over-broad. Those are GENERIC names that are routinely legitimate SOURCE /
+  // REVERTED over-pruning: {build, out, target, vendor} were once excluded
+  // here too — over-broad. Those are GENERIC names that are routinely legitimate SOURCE /
   // service dirs (a service literally named `target`, a Go `vendor/` whose
   // contents ship in the image), so pruning them silently DROPPED real app
   // Dockerfiles / lockfiles — under-coverage, the inverse of a leak. Only
@@ -135,7 +135,7 @@ export const EXCLUDED_DIR_NAMES: ReadonlySet<string> = new Set([
 ]);
 
 /**
- * Dot-directories the DOCKERFILE lane is allowed to descend (finding #4): the
+ * Dot-directories the DOCKERFILE lane is allowed to descend: the
  * conventional homes of real Dockerfiles. The leading-"." prune is right for the
  * lockfile lane (it keeps .terraform/.yarn/.cache out) but wrongly drops these
  * two; the Dockerfile lane opts into them via {@link shouldDescendDir}'s
@@ -150,20 +150,20 @@ export const DOCKERFILE_DOT_DIR_ALLOWLIST: ReadonlySet<string> = new Set([
 /**
  * The universal walk descent predicate, shared by lockfile and Dockerfile
  * discovery: skip the {@link EXCLUDED_DIR_NAMES} (node_modules/.git/build-output
- * dirs, matched case-insensitively — findings #2/#3), every hidden (leading-".")
+ * dirs, matched case-insensitively), every hidden (leading-".")
  * directory (which covers .terraform, .yarn, .cache, …), and the tool's own
  * directory. `sub` is the child path; `name` its basename; `toolDir` (if given)
  * the tool directory in any form — BOTH `sub` and `toolDir` are resolve()'d here
  * before comparison so a caller passing a forward-slash or relative toolDir on
  * Windows still matches (the comparison is canonical, not string-literal).
  *
- * `dotDirAllowlist` (finding #4) decouples the lanes for dot-dirs: when given, a
+ * `dotDirAllowlist` decouples the lanes for dot-dirs: when given, a
  * dot-dir whose lower-cased name is in the allowlist (.docker/.devcontainer) is
  * descended even though it starts with "." — the Dockerfile lane passes it; the
  * lockfile lane omits it and keeps pruning ALL dot-dirs unchanged. `.git` is
  * never allowlistable: it is excluded by EXCLUDED_DIR_NAMES BEFORE the dot rule.
  *
- * GIT-SUBMODULE PRUNE (finding #2): a git-submodule root is an ORDINARY-named
+ * GIT-SUBMODULE PRUNE: a git-submodule root is an ORDINARY-named
  * directory (its name is not in EXCLUDED_DIR_NAMES and does not start with ".")
  * whose `.git` entry is a FILE (a `gitdir: …` gitlink), not a directory — so none
  * of the rules above fire and the walk would descend into VENDORED third-party
@@ -192,7 +192,7 @@ export function shouldDescendDir(
     }
   }
   if (toolDir !== undefined && resolve(sub) === resolve(toolDir)) return false;
-  // Git-submodule prune (finding #2): a `.git` FILE (gitlink) marks a submodule
+  // Git-submodule prune: a `.git` FILE (gitlink) marks a submodule
   // root — vendored third-party code that is not our distribution. Skip descent.
   if (isGitSubmoduleRoot(sub)) return false;
   return true;
@@ -229,9 +229,9 @@ function isGitSubmoduleRoot(dir: string): boolean {
  * Dockerfile discovery applies byte-identical glob semantics to --exclude and
  * [docker] ignore globs.
  *
- * The regex is CASE-INSENSITIVE (the `i` flag, finding #3): the platform is
+ * The regex is CASE-INSENSITIVE (the `i` flag): the platform is
  * Windows (a case-insensitive filesystem) and the literal dir-name exclusion was
- * already made case-insensitive (07-26). A mis-cased `--exclude` / `[docker]
+ * already made case-insensitive. A mis-cased `--exclude` / `[docker]
  * ignore` glob (`Dist/**`, `NODE_MODULES/**`) must still match the on-disk
  * identity for consistency across both the lockfile and Dockerfile lanes.
  */
