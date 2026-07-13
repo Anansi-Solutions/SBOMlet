@@ -1068,6 +1068,35 @@ describe("renderMarkdown — COLL-04 Docker image packages section", () => {
     // Total still counts every package across scopes.
     expect(output.includes("- Total packages: 3")).toBe(true);
   });
+
+  test("a shared OS package's Used-in cell joins its per-image identities, sorted", () => {
+    const osShared = entry({
+      purl: "pkg:apk/alpine/busybox@1.37.0-r19",
+      name: "busybox",
+      version: "1.37.0-r19",
+      occurrences: [
+        {
+          target: "docker:os-packages/a/Dockerfile",
+          isDevDependency: false,
+        },
+        {
+          target: "docker:os-packages/b/Dockerfile",
+          isDevDependency: false,
+        },
+      ],
+      licenseClaims: [
+        { raw: "GPL-2.0-only", kind: "spdx-id", source: "generator" },
+      ],
+      scope: "os",
+    });
+    const output = renderMarkdown({ packages: [osShared] });
+    const osSection = output.slice(output.indexOf(HEADING));
+    expect(
+      osSection.includes(
+        "| busybox | apk | 1.37.0-r19 | GPL-2.0-only | docker:os-packages/a/Dockerfile, docker:os-packages/b/Dockerfile |",
+      ),
+    ).toBe(true);
+  });
 });
 
 // ===========================================================================

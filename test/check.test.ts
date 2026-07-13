@@ -24,6 +24,7 @@ import { join, relative } from "node:path";
 import { afterAll, beforeAll, describe, expect, mock, test } from "bun:test";
 
 import * as cdxgenModule from "../src/collectors/cdxgen";
+import { imageTag } from "../src/collectors/dockerBuild";
 import { exitCodeFor, runCheck } from "../src/gate/check";
 import { buildOutputs, runGenerate } from "../src/pipeline/pipeline";
 
@@ -914,6 +915,30 @@ const UNSCOPED_DOCKER_POLICY = SCOPED_DOCKER_POLICY.replace(
   "",
 );
 
+/** buildOutputs over root with a stubbed registry and captured stderr. */
+async function buildAgainst(
+  root: string,
+  policyPath?: string,
+): Promise<{
+  outputs: Awaited<ReturnType<typeof buildOutputs>>;
+  stderr: string;
+}> {
+  const paths = pathsFor(root, false);
+  let outputs: Awaited<ReturnType<typeof buildOutputs>> | undefined;
+  const stderr = await withFetch(EMPTY_FETCH, () =>
+    withCapturedStderr(async () => {
+      outputs = await buildOutputs({
+        repoRoot: root,
+        baseDir: root,
+        ...paths,
+        ...(policyPath !== undefined ? { policyPath } : {}),
+        verbose: false,
+      });
+    }),
+  );
+  return { outputs: outputs!, stderr };
+}
+
 describe("SCP-02 sidecar v2 fan-out, aggregate compat, and the regeneration hint", () => {
   beforeAll(() => {
     mock.module("../src/collectors/cdxgen", () => ({
@@ -924,30 +949,6 @@ describe("SCP-02 sidecar v2 fan-out, aggregate compat, and the regeneration hint
   afterAll(() => {
     mock.module("../src/collectors/cdxgen", () => REAL_CDXGEN);
   });
-
-  /** buildOutputs over root with a stubbed registry and captured stderr. */
-  async function buildAgainst(
-    root: string,
-    policyPath?: string,
-  ): Promise<{
-    outputs: Awaited<ReturnType<typeof buildOutputs>>;
-    stderr: string;
-  }> {
-    const paths = pathsFor(root, false);
-    let outputs: Awaited<ReturnType<typeof buildOutputs>> | undefined;
-    const stderr = await withFetch(EMPTY_FETCH, () =>
-      withCapturedStderr(async () => {
-        outputs = await buildOutputs({
-          repoRoot: root,
-          baseDir: root,
-          ...paths,
-          ...(policyPath !== undefined ? { policyPath } : {}),
-          verbose: false,
-        });
-      }),
-    );
-    return { outputs: outputs!, stderr };
-  }
 
   test("a v2 sidecar fans out per image: a shared purl carries BOTH per-image identities, unique purls one each", async () => {
     const { root } = makeScannableTree();
@@ -1159,5 +1160,227 @@ describe("SCP-02 sidecar v2 fan-out, aggregate compat, and the regeneration hint
 
     expect(second.outputs.licensesMd).toBe(first.outputs.licensesMd);
     expect(second.outputs.noticesMd).toBe(first.outputs.noticesMd);
+  });
+});
+
+// ===========================================================================
+// THE DESIGN TEST (SCP-01+02, roadmap criterion 1 verbatim): two Dockerfiles,
+// busybox accepted via `where` in image A only — image B's busybox occurrence
+// warns per [os_dependencies] handling (fails under handling="fail"), VISIBLY
+// in the rendered output and in a stderr policy line naming the B target; the
+// unscoped variant accepts busybox at BOTH occurrences (narrowing is opt-in).
+// The sidecar is synthetic but shaped exactly like the emitter's output —
+// field names and sort orders, image tags derived via imageTag() from the
+// same Dockerfile identities the built lanes record as sources.
+// ===========================================================================
+
+const TAG_A = imageTag("a/Dockerfile");
+const TAG_B = imageTag("b/Dockerfile");
+
+const BUSYBOX_PURL =
+  "pkg:apk/alpine/busybox@1.37.0-r19?arch=x86_64&distro=alpine-3.23.4";
+
+/** The two-Dockerfile scenario sidecar: busybox in A+B, musl in A, zlib in B. */
+const SCENARIO_SIDECAR = {
+  bomFormat: "CycloneDX",
+  specVersion: "1.6",
+  components: [
+    {
+      type: "library",
+      name: "busybox",
+      version: "1.37.0-r19",
+      purl: BUSYBOX_PURL,
+      licenses: [{ license: { id: "GPL-2.0-only" } }],
+      images: [TAG_A, TAG_B],
+    },
+    {
+      type: "library",
+      name: "musl",
+      version: "1.2.5-r10",
+      purl: "pkg:apk/alpine/musl@1.2.5-r10",
+      licenses: [{ expression: "MIT" }],
+      images: [TAG_A],
+    },
+    {
+      type: "library",
+      name: "zlib",
+      version: "1.3.1-r2",
+      purl: "pkg:apk/alpine/zlib@1.3.1-r2",
+      licenses: [{ license: { id: "Zlib" } }],
+      images: [TAG_B],
+    },
+  ],
+  dockerImages: [
+    { image: TAG_A, digest: "", source: "a/Dockerfile" },
+    { image: TAG_B, digest: "", source: "b/Dockerfile" },
+  ],
+};
+
+/**
+ * The scenario policy: busybox accepted by compatible[0] (scoped to image A's
+ * Dockerfile identity when `scoped`), [os_dependencies] handling variable, and
+ * the app-fixture AGPL package accepted by compatible[1] so only the docker
+ * side decides the verdict stream's fails/warns.
+ */
+function scenarioPolicy(osHandling: string, scoped: boolean): string {
+  return [
+    "[unknown]",
+    'handling = "warn"',
+    "",
+    "[os_dependencies]",
+    `handling = "${osHandling}"`,
+    "",
+    "[[compatible]]",
+    'match = "package"',
+    'name = "busybox"',
+    'reason = "reviewed in the image-A OS layer"',
+    ...(scoped ? ['where = ["docker:os-packages/a/Dockerfile"]'] : []),
+    "",
+    "[[compatible]]",
+    'match = "license"',
+    'pattern = "AGPL-3.0-only"',
+    'reason = "app fixture acceptance"',
+    "",
+  ].join("\n");
+}
+
+describe("the two-Dockerfile scenario end-to-end (roadmap criterion 1)", () => {
+  beforeAll(() => {
+    mock.module("../src/collectors/cdxgen", () => ({
+      ...REAL_CDXGEN,
+      collectWithCdxgen: fakeScanWithCdxgen,
+    }));
+  });
+  afterAll(() => {
+    mock.module("../src/collectors/cdxgen", () => REAL_CDXGEN);
+  });
+
+  test("scoped acceptance: busybox ok via compatible[0] at image A ONLY; the B occurrence WARNS visibly in render and stderr", async () => {
+    const { root } = makeScannableTree();
+    writeSidecar(root, SCENARIO_SIDECAR);
+    const policyPath = writePolicy(root, scenarioPolicy("warn", true));
+
+    const { outputs, stderr } = await buildAgainst(root, policyPath);
+
+    // Verdict stream: ok citing the scoped rule at A; os-downgraded warn at B.
+    const verdicts = outputs.verdicts!;
+    const atA = verdicts.find(
+      (v) =>
+        v.purl === BUSYBOX_PURL &&
+        v.occurrenceTarget === "docker:os-packages/a/Dockerfile",
+    )!;
+    const atB = verdicts.find(
+      (v) =>
+        v.purl === BUSYBOX_PURL &&
+        v.occurrenceTarget === "docker:os-packages/b/Dockerfile",
+    )!;
+    expect(atA.status).toBe("ok");
+    expect(atA.rule).toBe("compatible[0]");
+    expect(atB.status).toBe("warn");
+    expect(atB.rule).toBe("default:copyleft");
+
+    // stderr: the warn line names the B target; nothing flags the A target;
+    // the scoped rule matched at A, so no unused-entry warning for it.
+    expect(
+      stderr.includes(
+        `policy warn: ${BUSYBOX_PURL} in docker:os-packages/b/Dockerfile`,
+      ),
+    ).toBe(true);
+    expect(
+      stderr.includes(`${BUSYBOX_PURL} in docker:os-packages/a/Dockerfile`),
+    ).toBe(false);
+    expect(stderr.includes("policy warning: unused entry compatible[0]")).toBe(
+      false,
+    );
+
+    // Rendered warn surface: the copyleft section flags ONLY the B occurrence,
+    // and the non-blocking roll-up names the copyleft warning.
+    const md = outputs.licensesMd;
+    const copyleft = squish(
+      md.slice(
+        md.indexOf("## Copyleft and special notices"),
+        md.indexOf("## Production dependencies"),
+      ),
+    );
+    expect(copyleft.includes("| busybox |")).toBe(true);
+    expect(copyleft.includes("docker:os-packages/b/Dockerfile")).toBe(true);
+    expect(copyleft.includes("docker:os-packages/a/Dockerfile")).toBe(false);
+    expect(md.includes("1 copyleft warning(s)")).toBe(true);
+
+    // The Docker section's Used-in still names BOTH occurrences (the flow
+    // sidecar → merge → Used-in is per-image; only the FLAGGED surface narrows).
+    const osSection = squish(md.slice(md.indexOf("## Docker image packages")));
+    expect(
+      osSection.includes(
+        "| busybox | apk | 1.37.0-r19 | GPL-2.0-only | docker:os-packages/a/Dockerfile, docker:os-packages/b/Dockerfile |",
+      ),
+    ).toBe(true);
+  });
+
+  test('with [os_dependencies] handling="fail" the B occurrence FAILS — exit 1, blocking table names the B target', async () => {
+    const { root } = makeScannableTree();
+    writeSidecar(root, SCENARIO_SIDECAR);
+    const policyPath = writePolicy(root, scenarioPolicy("fail", true));
+    const paths = pathsFor(root, false);
+    await withFetch(EMPTY_FETCH, () =>
+      withCapturedStderr(async () => {
+        await runGenerate({
+          repoRoot: root,
+          ...paths,
+          policyPath,
+          verbose: false,
+        });
+      }),
+    );
+
+    let result: Awaited<ReturnType<typeof runCheck>> | undefined;
+    const stderr = await withFetch(EMPTY_FETCH, () =>
+      withCapturedStderr(async () => {
+        result = await runCheck({
+          repoRoot: root,
+          ...paths,
+          policyPath,
+          verbose: false,
+        });
+      }),
+    );
+
+    expect(
+      stderr.includes(
+        `policy fail: ${BUSYBOX_PURL} in docker:os-packages/b/Dockerfile`,
+      ),
+    ).toBe(true);
+    expect(exitCodeFor(result!)).toBe(1);
+
+    // The committed document's BLOCKING table carries the B-target row.
+    const md = readFileSync(paths.outputPath, "utf8");
+    const problematic = squish(
+      md.slice(
+        md.indexOf("## Problematic licenses"),
+        md.indexOf("## Copyleft and special notices"),
+      ),
+    );
+    expect(problematic.includes("| fail | default:copyleft | busybox |")).toBe(
+      true,
+    );
+    expect(problematic.includes("docker:os-packages/b/Dockerfile")).toBe(true);
+    expect(problematic.includes("docker:os-packages/a/Dockerfile")).toBe(false);
+  });
+
+  test("UNSCOPED variant: dropping where accepts busybox at BOTH occurrences (narrowing is opt-in)", async () => {
+    const { root } = makeScannableTree();
+    writeSidecar(root, SCENARIO_SIDECAR);
+    const policyPath = writePolicy(root, scenarioPolicy("warn", false));
+
+    const { outputs, stderr } = await buildAgainst(root, policyPath);
+
+    const busybox = outputs
+      .verdicts!.filter((v) => v.purl === BUSYBOX_PURL)
+      .map((v) => [v.occurrenceTarget, v.status, v.rule]);
+    expect(busybox).toEqual([
+      ["docker:os-packages/a/Dockerfile", "ok", "compatible[0]"],
+      ["docker:os-packages/b/Dockerfile", "ok", "compatible[0]"],
+    ]);
+    expect(stderr.includes(`policy warn: ${BUSYBOX_PURL}`)).toBe(false);
   });
 });
