@@ -23,6 +23,7 @@ import { BUN_COLLECTOR_TOOL, collectWithBunLock } from "./bunLock";
 import { CDXGEN_TOOL, collectWithCdxgen } from "./cdxgen";
 import { ecosystemFor, manifestFilesFor, selectJsGenerator } from "./dispatch";
 import { npmIntroductions } from "./npmProvenance";
+import { NUGET_COLLECTOR_TOOL, collectWithNugetLock } from "./nugetLock";
 import { poetryProdPurlSet } from "./poetryLock";
 import { poetryIntroductions } from "./poetryProvenance";
 import { collectWithTerraform, TERRAFORM_COLLECTOR_TOOL } from "./terraform";
@@ -250,6 +251,27 @@ const terraformCollector: Collector = {
 };
 
 /**
+ * nuget targets use the in-process packages.lock.json collector (no
+ * upstream generator earns the subprocess — see nugetLock.ts). No
+ * subprocess, so timeoutMs is ignored; the lockfile size gate fires inside
+ * collectWithNugetLock as well as in the CLI loop. NO firstPartyNames: the
+ * collector excludes `type === "Project"` entries by type itself, so a
+ * name collision can never drop a third-party package. NO prodPurlSet: the
+ * lock carries no dev marker — every occurrence classifies prod (the safe,
+ * always-gating default).
+ */
+const nugetCollector: Collector = {
+  tool: (): ToolIdentity => NUGET_COLLECTOR_TOOL,
+  async collect(target): Promise<CollectedSbom> {
+    const result = await collectWithNugetLock(target, {});
+    return {
+      sbom: readSbom(result.sbomPath),
+      targetIdentity: target.identity,
+    };
+  },
+};
+
+/**
  * The dispatch table, exhaustive over LockfileKind (locked by
  * test/registry.test.ts). npm members are emitted by cdxgen at their REAL
  * versions with cdx:npm:isWorkspace=true — the merge pairs that marker with
@@ -268,4 +290,5 @@ export const collectors: ReadonlyMap<LockfileKind, Collector> = new Map<
   ["poetry", poetryCollector],
   ["uv", cdxgenCollector("uv")],
   ["terraform", terraformCollector],
+  ["nuget", nugetCollector],
 ]);

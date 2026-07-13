@@ -9,6 +9,7 @@ import { join, relative, resolve, sep } from "node:path";
 
 import { assertBunLockSize } from "../collectors/bunLock";
 import { manifestFilesFor, selectJsGenerator } from "../collectors/dispatch";
+import { assertNugetLockSize } from "../collectors/nugetLock";
 import { collectors } from "../collectors/registry";
 import { compareCodeUnits } from "../model/dependencies";
 import { type CollectedSbom } from "../merge/merge";
@@ -405,12 +406,15 @@ export async function collectTargets(
   for (const target of targets) {
     const lockfileName = lockfileNameFor(target.lockfile);
     const lockfilePath = join(target.dir, lockfileName);
-    // The bun.lock DoS bound must hold at every entry point that reads the
-    // file: this loop reads the full text for the coverage counter before the
-    // bun collector's own in-module gate could ever fire, so the shared stat
-    // gate runs here first — before any read or parse.
+    // The lockfile DoS bounds must hold at every entry point that reads the
+    // file: this loop reads the full text for the coverage counter before an
+    // in-process collector's own in-module gate could ever fire, so the
+    // shared stat gates run here first — before any read or parse.
     if (target.lockfile === "bun") {
       assertBunLockSize(lockfilePath);
+    }
+    if (target.lockfile === "nuget") {
+      assertNugetLockSize(lockfilePath);
     }
     // Read once; reused for the empty-check, generator dispatch, expansion,
     // and the first-party member set.

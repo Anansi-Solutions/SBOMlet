@@ -16,6 +16,7 @@ import { describe, expect, test } from "bun:test";
 
 import { BUN_COLLECTOR_TOOL } from "../src/collectors/bunLock";
 import { CDXGEN_TOOL } from "../src/collectors/cdxgen";
+import { NUGET_COLLECTOR_TOOL } from "../src/collectors/nugetLock";
 import { collectors } from "../src/collectors/registry";
 import { TERRAFORM_COLLECTOR_TOOL } from "../src/collectors/terraform";
 import { YARN_PLUGIN_TOOL } from "../src/collectors/yarnPlugin";
@@ -34,6 +35,7 @@ const ALL_KINDS: readonly LockfileKind[] = [
   "poetry",
   "uv",
   "terraform",
+  "nuget",
 ];
 
 /** Minimal Yarn 4+ lockfile head: `__metadata.version: 8` → plugin. */
@@ -74,6 +76,10 @@ describe("collector registry", () => {
     expect(collectors.get("terraform")?.tool("")).toEqual(
       TERRAFORM_COLLECTOR_TOOL,
     );
+  });
+
+  test("nuget reports the in-process packages.lock.json collector identity", () => {
+    expect(collectors.get("nuget")?.tool("")).toEqual(NUGET_COLLECTOR_TOOL);
   });
 
   test("yarn routes a Yarn 4+ lockfile to the plugin tool identity", () => {

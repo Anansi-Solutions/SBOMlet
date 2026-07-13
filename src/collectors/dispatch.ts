@@ -95,6 +95,13 @@ export function ecosystemFor(kind: LockfileKind): "js" | "python" {
       throw new Error(
         "terraform targets are collected in-process and have no cdxgen ecosystem",
       );
+    case "nuget":
+      // nuget targets are likewise collected in-process (the terraform/bun
+      // precedent): the custom collector computes its own cache key and
+      // spawns nothing. Reaching here is a wiring bug, not a normal path.
+      throw new Error(
+        "nuget targets are collected in-process and have no cdxgen ecosystem",
+      );
   }
 }
 
@@ -128,5 +135,13 @@ export function manifestFilesFor(kind: LockfileKind): readonly string[] {
       // cache input); a re-init that changes resolved module versions also
       // rewrites the lock, so the lock byte-hash is a sufficient cache framing.
       return [".terraform.lock.hcl"];
+    case "nuget":
+      // Only the lock is hashed into the cache key. *.csproj is a name
+      // PATTERN, not a fixed name (computeCacheKey takes fixed names and
+      // throws on missing files), and Directory.Packages.props is optional
+      // (the pnpm-workspace.yaml precedent). Any project or central-package
+      // edit that changes resolution rewrites the lock on the next restore,
+      // so the lock byte-hash is a sufficient cache framing.
+      return ["packages.lock.json"];
   }
 }
