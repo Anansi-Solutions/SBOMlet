@@ -1,6 +1,7 @@
 import js from "@eslint/js";
 import tseslint from "typescript-eslint";
 import importX from "eslint-plugin-import-x";
+import tsdoc from "eslint-plugin-tsdoc";
 import eslintPluginPrettierRecommended from "eslint-plugin-prettier/recommended";
 
 /**
@@ -20,6 +21,8 @@ const bannedCommentTokens = [
   { pattern: /\bplan-checker\b/i, label: '"plan-checker"' },
   { pattern: /\bthe locked\b/i, label: '"the locked"' },
   { pattern: /\bgsd\b/i, label: '"gsd"' },
+  { pattern: /\bhonest caveat\b/i, label: '"honest caveat"' },
+  { pattern: /\breview rounds?\b/i, label: '"review round"' },
 ];
 
 /** Error on banned vocabulary anywhere in a comment (line, block, or jsdoc). */
@@ -100,8 +103,14 @@ export default tseslint.config(
     // Shipped-source comments carry the strictest vocabulary bar; tests and
     // config narrate their own mechanics and are not checked.
     files: ["src/**/*.ts"],
-    plugins: { sbomlet: { rules: { "no-comment-jargon": noCommentJargon } } },
-    rules: { "sbomlet/no-comment-jargon": "error" },
+    plugins: {
+      sbomlet: { rules: { "no-comment-jargon": noCommentJargon } },
+      tsdoc,
+    },
+    rules: {
+      "sbomlet/no-comment-jargon": "error",
+      "tsdoc/syntax": "warn",
+    },
   },
   {
     // github-script step bodies: plain CommonJS Node, not part of the bundled

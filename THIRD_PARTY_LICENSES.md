@@ -6,12 +6,12 @@ Copyleft notice rules are configured in .sbomlet.policy.toml.
 
 **Package counts:**
 
-- Total packages: 173
+- Total packages: 195
 - apk: 17
-- npm: 155
+- npm: 177
 - pypi: 1
 - Production packages: 15
-- Development-only packages: 139
+- Development-only packages: 161
 - Docker image packages: 19
 - Unknown license: 0
 
@@ -63,6 +63,8 @@ Copyleft notice rules are configured in .sbomlet.policy.toml.
 | @humanfs/types                              | npm       | 0.15.0  | Apache-2.0         | .       |
 | @humanwhocodes/module-importer              | npm       | 1.0.1   | Apache-2.0         | .       |
 | @humanwhocodes/retry                        | npm       | 0.4.3   | Apache-2.0         | .       |
+| @microsoft/tsdoc                            | npm       | 0.16.0  | MIT                | .       |
+| @microsoft/tsdoc-config                     | npm       | 0.18.1  | MIT                | .       |
 | @napi-rs/wasm-runtime                       | npm       | 1.1.5   | MIT                | .       |
 | @package-json/types                         | npm       | 0.0.12  | MIT                | .       |
 | @pkgr/core                                  | npm       | 0.3.6   | MIT                | .       |
@@ -77,13 +79,20 @@ Copyleft notice rules are configured in .sbomlet.policy.toml.
 | @types/spdx-satisfies                       | npm       | 6.0.0   | MIT                | .       |
 | @typescript-eslint/eslint-plugin            | npm       | 8.61.0  | MIT                | .       |
 | @typescript-eslint/parser                   | npm       | 8.61.0  | MIT                | .       |
+| @typescript-eslint/project-service          | npm       | 8.56.1  | MIT                | .       |
 | @typescript-eslint/project-service          | npm       | 8.61.0  | MIT                | .       |
+| @typescript-eslint/scope-manager            | npm       | 8.56.1  | MIT                | .       |
 | @typescript-eslint/scope-manager            | npm       | 8.61.0  | MIT                | .       |
+| @typescript-eslint/tsconfig-utils           | npm       | 8.56.1  | MIT                | .       |
 | @typescript-eslint/tsconfig-utils           | npm       | 8.61.0  | MIT                | .       |
 | @typescript-eslint/type-utils               | npm       | 8.61.0  | MIT                | .       |
+| @typescript-eslint/types                    | npm       | 8.56.1  | MIT                | .       |
 | @typescript-eslint/types                    | npm       | 8.61.0  | MIT                | .       |
+| @typescript-eslint/typescript-estree        | npm       | 8.56.1  | MIT                | .       |
 | @typescript-eslint/typescript-estree        | npm       | 8.61.0  | MIT                | .       |
+| @typescript-eslint/utils                    | npm       | 8.56.1  | MIT                | .       |
 | @typescript-eslint/utils                    | npm       | 8.61.0  | MIT                | .       |
+| @typescript-eslint/visitor-keys             | npm       | 8.56.1  | MIT                | .       |
 | @typescript-eslint/visitor-keys             | npm       | 8.61.0  | MIT                | .       |
 | @unrs/resolver-binding-android-arm-eabi     | npm       | 1.12.2  | MIT                | .       |
 | @unrs/resolver-binding-android-arm64        | npm       | 1.12.2  | MIT                | .       |
@@ -110,6 +119,7 @@ Copyleft notice rules are configured in .sbomlet.policy.toml.
 | acorn                                       | npm       | 8.17.0  | MIT                | .       |
 | acorn-jsx                                   | npm       | 5.3.2   | MIT                | .       |
 | ajv                                         | npm       | 6.15.0  | MIT                | .       |
+| ajv                                         | npm       | 8.18.0  | MIT                | .       |
 | balanced-match                              | npm       | 4.0.4   | MIT                | .       |
 | brace-expansion                             | npm       | 5.0.6   | MIT                | .       |
 | bun-types                                   | npm       | 1.3.14  | MIT                | .       |
@@ -117,12 +127,14 @@ Copyleft notice rules are configured in .sbomlet.policy.toml.
 | cross-spawn                                 | npm       | 7.0.6   | MIT                | .       |
 | debug                                       | npm       | 4.4.3   | MIT                | .       |
 | deep-is                                     | npm       | 0.1.4   | MIT                | .       |
+| es-errors                                   | npm       | 1.3.0   | MIT                | .       |
 | escape-string-regexp                        | npm       | 4.0.0   | MIT                | .       |
 | eslint                                      | npm       | 10.4.1  | MIT                | .       |
 | eslint-config-prettier                      | npm       | 10.1.8  | MIT                | .       |
 | eslint-import-context                       | npm       | 0.1.9   | MIT                | .       |
 | eslint-plugin-import-x                      | npm       | 4.16.2  | MIT                | .       |
 | eslint-plugin-prettier                      | npm       | 5.5.6   | MIT                | .       |
+| eslint-plugin-tsdoc                         | npm       | 0.5.2   | MIT                | .       |
 | eslint-scope                                | npm       | 9.1.2   | BSD-2-Clause       | .       |
 | eslint-visitor-keys                         | npm       | 3.4.3   | Apache-2.0         | .       |
 | eslint-visitor-keys                         | npm       | 5.0.1   | Apache-2.0         | .       |
@@ -135,21 +147,27 @@ Copyleft notice rules are configured in .sbomlet.policy.toml.
 | fast-diff                                   | npm       | 1.3.0   | Apache-2.0         | .       |
 | fast-json-stable-stringify                  | npm       | 2.1.0   | MIT                | .       |
 | fast-levenshtein                            | npm       | 2.0.6   | MIT                | .       |
+| fast-uri                                    | npm       | 3.1.3   | BSD-3-Clause       | .       |
 | fdir                                        | npm       | 6.5.0   | MIT                | .       |
 | file-entry-cache                            | npm       | 8.0.0   | MIT                | .       |
 | find-up                                     | npm       | 5.0.0   | MIT                | .       |
 | flat-cache                                  | npm       | 4.0.1   | MIT                | .       |
 | flatted                                     | npm       | 3.4.2   | ISC                | .       |
+| function-bind                               | npm       | 1.1.2   | MIT                | .       |
 | get-tsconfig                                | npm       | 4.14.0  | MIT                | .       |
 | glob-parent                                 | npm       | 6.0.2   | ISC                | .       |
+| hasown                                      | npm       | 2.0.4   | MIT                | .       |
 | ignore                                      | npm       | 5.3.2   | MIT                | .       |
 | ignore                                      | npm       | 7.0.5   | MIT                | .       |
 | imurmurhash                                 | npm       | 0.1.4   | MIT                | .       |
+| is-core-module                              | npm       | 2.16.2  | MIT                | .       |
 | is-extglob                                  | npm       | 2.1.1   | MIT                | .       |
 | is-glob                                     | npm       | 4.0.3   | MIT                | .       |
 | isexe                                       | npm       | 2.0.0   | ISC                | .       |
+| jju                                         | npm       | 1.4.0   | MIT                | .       |
 | json-buffer                                 | npm       | 3.0.1   | MIT                | .       |
 | json-schema-traverse                        | npm       | 0.4.1   | MIT                | .       |
+| json-schema-traverse                        | npm       | 1.0.0   | MIT                | .       |
 | json-stable-stringify-without-jsonify       | npm       | 1.0.1   | MIT                | .       |
 | keyv                                        | npm       | 4.5.4   | MIT                | .       |
 | levn                                        | npm       | 0.4.1   | MIT                | .       |
@@ -163,16 +181,20 @@ Copyleft notice rules are configured in .sbomlet.policy.toml.
 | p-locate                                    | npm       | 5.0.0   | MIT                | .       |
 | path-exists                                 | npm       | 4.0.0   | MIT                | .       |
 | path-key                                    | npm       | 3.1.1   | MIT                | .       |
+| path-parse                                  | npm       | 1.0.7   | MIT                | .       |
 | picomatch                                   | npm       | 4.0.4   | MIT                | .       |
 | prelude-ls                                  | npm       | 1.2.1   | MIT                | .       |
 | prettier                                    | npm       | 3.8.4   | MIT                | .       |
 | prettier-linter-helpers                     | npm       | 1.0.1   | MIT                | .       |
 | punycode                                    | npm       | 2.3.1   | MIT                | .       |
+| require-from-string                         | npm       | 2.0.2   | MIT                | .       |
+| resolve                                     | npm       | 1.22.12 | MIT                | .       |
 | resolve-pkg-maps                            | npm       | 1.0.0   | MIT                | .       |
 | semver                                      | npm       | 7.8.4   | ISC                | .       |
 | shebang-command                             | npm       | 2.0.0   | MIT                | .       |
 | shebang-regex                               | npm       | 3.0.0   | MIT                | .       |
 | stable-hash-x                               | npm       | 0.2.0   | MIT                | .       |
+| supports-preserve-symlinks-flag             | npm       | 1.0.0   | MIT                | .       |
 | synckit                                     | npm       | 0.11.13 | MIT                | .       |
 | tinyglobby                                  | npm       | 0.2.17  | MIT                | .       |
 | ts-api-utils                                | npm       | 2.5.0   | MIT                | .       |

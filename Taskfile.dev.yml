@@ -55,12 +55,14 @@ tasks:
 
   quality:
     summary: |
-      The quality gate — lint (formatting included) then typecheck. Each half
-      is fingerprinted, so a clean re-run is a no-op. Run it, with the test
-      suite, before every commit.
+      The quality gate — lint (formatting included), typecheck, then the
+      comment-density budget. Lint and typecheck are fingerprinted, so a
+      clean re-run is a no-op. Run it, with the test suite, before every
+      commit.
     cmds:
       - task: lint
       - task: typecheck
+      - mise x -- bun scripts/comment-metrics.ts --check
 
   test:
     # The label keys the fingerprint per CLI_ARGS value, so a filtered run
@@ -96,6 +98,15 @@ tasks:
     deps: [install]
     cmds:
       - mise x -- bun test --watch {{.CLI_ARGS}}
+
+  metrics:comments:
+    summary: |
+      Report comment density over src/ — comment lines vs non-blank lines,
+      comment words vs word tokens, per file and total. The budget itself
+      is enforced by `task quality` and test/comment-metrics.test.ts.
+    deps: [install]
+    cmds:
+      - mise x -- bun scripts/comment-metrics.ts
 
   adr:new:
     summary: |

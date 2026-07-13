@@ -1,34 +1,11 @@
 /**
  * Python dependency provenance from poetry.lock + pyproject.toml.
  *
- * The research verdict: cdxgen --no-install-deps yields no usable graph, so the
- * AUTHORITATIVE source is the lockfile itself. Each poetry.lock `[[package]]`
- * carries a `[package.dependencies]` table (the introducer edges); pyproject
- * gives the declared-direct roots: `[project].dependencies` (PEP 621
- * `"name (constraint)"`) when present is authoritative, else the legacy
- * `[tool.poetry.dependencies]` table; PLUS every
- * `[tool.poetry.group.<name>.dependencies]` table, always.
- *
- * DERIVED per package purl (`pkg:pypi/<pep503-name>@<version>`, matching
- * poetryProdPurlSet and cdxgen's purls): direct-vs-transitive, the sorted-unique
- * introducer SET, and a representative shortest path tie-broken by the smallest
- * child purl at each BFS level (NOT a whole-path lexicographic minimum).
- *
- * Optionality is deliberately OUT OF SCOPE. Deriving optionality from poetry
- * markers (`optional = true`, PEP 508 marker variables, extras, multi-variant
- * spec arrays) was a recurring mislabeling bug class (node-keyed optional,
- * `.some`-not-`.every` over variants, `/\bextra\b/` matching `extra` as a marker VALUE). Rather than keep
- * patching marker semantics, the `optional` distinction is removed entirely.
- * Every `[package.dependencies]` entry is now just an edge; there is no
- * required-vs-optional partition, no required-reachability — only plain
- * reachability from a declared root via the introducer graph.
- *
- * HONEST CAVEAT: a multi-parent package has several real introducers —
- * `introducedBy` is the complete set, `path` is ONE representative chosen by the
- * deterministic BFS tie-break.
- *
- * Pure + tolerant: no I/O (the caller reads the files); malformed/garbage input
- * yields an empty map, never throws.
+ * @privateRemarks
+ * The lockfile's `[package.dependencies]` tables are the edges;
+ * pyproject declares the roots. Optionality is out of scope by
+ * decision — poetry marker semantics were a recurring mislabeling
+ * bug source (see docs/explanation/adr/0014-dependency-provenance.md).
  */
 
 import { parse as parseToml } from "smol-toml";

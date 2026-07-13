@@ -232,16 +232,13 @@ export interface DependencyIntroduction {
    */
   introducedBy: readonly string[];
   /**
-   * Deterministic representative root→component purl chain (one shortest path).
-   * Omitted for a direct dependency (the chain would be just the package
-   * itself). The tie-break is the smallest child purl at each BFS level (the
-   * smallest-introducer-at-each-level order), NOT a whole-path lexicographic
-   * minimum. The npm lane computes this chain on the REAL bom-ref graph so it is
-   * always a single concrete dependency chain (never a fabricated hop between
-   * dup-purl variants); the python lane computes it on the lockfile purl graph.
-   * HONEST CAVEAT: a multi-parent transitive package has several real introducer
-   * chains — `introducedBy` is the complete set, `path` is one representative
-   * chosen by the deterministic BFS tie-break.
+   * One representative shortest root-to-package purl chain; omitted for
+   * a direct dependency.
+   *
+   * @privateRemarks
+   * BFS with ties broken on the smallest child purl at each level, not
+   * whole-path order. A multi-parent package has several real chains:
+   * `introducedBy` is complete, `path` is one representative.
    */
   path?: readonly string[];
 }
