@@ -29,18 +29,28 @@ import {
   type ParsedPurl,
 } from "./enrich";
 import { readCache, type CacheEntry } from "./cache";
-import { fetchGithubLicense, fetchJson, mapLimit } from "./fetch";
+import {
+  fetchGithubLicense,
+  fetchJson,
+  fetchJsonOr404,
+  mapLimit,
+} from "./fetch";
 import {
   githubLicenseRefsFor,
   githubRepoFor,
   resolveGithubLicense,
 } from "./github";
+import {
+  catalogEntryUrlOf,
+  nugetRegistrationLeafUrl,
+  resolveNugetCatalogLicense,
+} from "./nuget";
 
 /** Bounded concurrency over the audit fetch set (mirrors enrich's FETCH_CONCURRENCY). */
 const VERIFY_CONCURRENCY = 8;
 
 /** The purl types the cache can hold and this audit can re-resolve. */
-const VERIFIABLE_TYPES = new Set(["pypi", "npm", "terraform"]);
+const VERIFIABLE_TYPES = new Set(["pypi", "npm", "terraform", "nuget"]);
 
 export interface VerifyOptions {
   /** Committed cache path (base-dir-resolved by the caller). */
@@ -91,6 +101,7 @@ async function currentRegistryLicense(
     const resolved = resolveFromDocument(parsed, await fetchDoc(url));
     return resolved === null ? null : resolved.raw;
   }
+  if (parsed.type === "nuget") return currentNugetLicense(parsed, fetchOpts);
   // terraform → GitHub License API at the version tag (same ordered-ref walk as
   // generate: v<version> then <version>; first resolvable wins, 404 advances).
   const repo = githubRepoFor(parsed);
@@ -106,6 +117,32 @@ async function currentRegistryLicense(
     return resolved.raw;
   }
   return null;
+}
+
+/**
+ * The nuget re-resolution: registration leaf → host-pinned catalogEntry →
+ * {@link resolveNugetCatalogLicense} — the SAME resolver, host pin, and
+ * 404→null classification `generate` uses (enrich.ts). The two-step goes
+ * DIRECT rather than through the memoized fetchDoc: that memo is single-URL
+ * and the cache holds one entry per purl, so memoization buys nothing here.
+ * A clean 404 (either hop) and a malformed/foreign-host catalogEntry map to
+ * null — the definitive no-answer — while a transient failure throws (loud).
+ */
+async function currentNugetLicense(
+  parsed: ParsedPurl,
+  fetchOpts: { backoffBaseMs?: number },
+): Promise<string | null> {
+  const leaf = await fetchJsonOr404(
+    nugetRegistrationLeafUrl(parsed.encodedName, parsed.version),
+    fetchOpts,
+  );
+  if (leaf.status === 404) return null;
+  const catalogUrl = catalogEntryUrlOf(leaf.body);
+  if (catalogUrl === undefined) return null;
+  const catalog = await fetchJsonOr404(catalogUrl, fetchOpts);
+  if (catalog.status === 404) return null;
+  const resolved = resolveNugetCatalogLicense(catalog.body);
+  return resolved === null ? null : resolved.raw;
 }
 
 /** Describe a divergence between the committed value and the registry's answer. */

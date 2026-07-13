@@ -344,3 +344,100 @@ describe("verifyCache", () => {
     expect(calls).toEqual([]);
   });
 });
+
+describe("verifyCache nuget (two-step re-resolution, the same resolver generate uses)", () => {
+  const NUGET_PURL = "pkg:nuget/Newtonsoft.Json@13.0.4";
+  const LEAF_URL =
+    "https://api.nuget.org/v3/registration5-gz-semver2/newtonsoft.json/13.0.4.json";
+  const CATALOG_URL =
+    "https://api.nuget.org/v3/catalog0/data/2024.03.27.08.21.03/newtonsoft.json.13.0.4.json";
+
+  /** Route the two-step: leaf → host-pinned catalogEntry with the given body. */
+  function nugetRoute(
+    catalogBody: unknown,
+  ): (url: string) => { status: number; body?: unknown } {
+    return (url) => {
+      if (url === LEAF_URL) {
+        return { status: 200, body: { catalogEntry: CATALOG_URL } };
+      }
+      if (url === CATALOG_URL) return { status: 200, body: catalogBody };
+      return { status: 500 };
+    };
+  }
+
+  test("a committed positive entry matching the registry → audited, no mismatch", async () => {
+    const path = tempCachePath();
+    writeCache(path, { [NUGET_PURL]: positive("MIT", "nuget") });
+    const { fetch, calls } = fetchMock(
+      nugetRoute({ licenseExpression: "MIT" }),
+    );
+    const result = await withFetch(fetch, () =>
+      verifyCache({ cachePath: path, verbose: false }),
+    );
+    expect(result.audited).toBe(1);
+    expect(result.mismatches).toEqual([]);
+    // The two-step went to the LOWERCASED leaf URL, then the pinned catalogEntry.
+    expect(calls).toEqual([LEAF_URL, CATALOG_URL]);
+  });
+
+  test("a flipped license (cache says MIT, registry says Apache-2.0) → mismatch with the changed reason", async () => {
+    const path = tempCachePath();
+    writeCache(path, { [NUGET_PURL]: positive("MIT", "nuget") });
+    const { fetch } = fetchMock(
+      nugetRoute({ licenseExpression: "Apache-2.0" }),
+    );
+    const result = await withFetch(fetch, () =>
+      verifyCache({ cachePath: path, verbose: false }),
+    );
+    expect(result.mismatches).toHaveLength(1);
+    expect(result.mismatches[0]).toMatchObject({
+      purl: NUGET_PURL,
+      cached: "MIT",
+      current: "Apache-2.0",
+    });
+    expect(result.mismatches[0]?.reason).toContain("changed");
+  });
+
+  test("a fabricated entry the registry 404s → mismatch (cached string vs current null), never a crash", async () => {
+    const path = tempCachePath();
+    writeCache(path, { [NUGET_PURL]: positive("MIT", "nuget") });
+    const { fetch } = fetchMock(() => ({ status: 404 }));
+    const result = await withFetch(fetch, () =>
+      verifyCache({ cachePath: path, verbose: false }),
+    );
+    expect(result.mismatches).toHaveLength(1);
+    expect(result.mismatches[0]).toMatchObject({
+      cached: "MIT",
+      current: null,
+    });
+    expect(result.mismatches[0]?.reason).toContain("none");
+  });
+
+  test("a NEGATIVE entry the registry now resolves → mismatch (hidden obligation)", async () => {
+    const path = tempCachePath();
+    writeCache(path, { [NUGET_PURL]: negative("nuget") });
+    const { fetch } = fetchMock(
+      nugetRoute({ licenseExpression: "AGPL-3.0-only" }),
+    );
+    const result = await withFetch(fetch, () =>
+      verifyCache({ cachePath: path, verbose: false }),
+    );
+    expect(result.mismatches).toHaveLength(1);
+    expect(result.mismatches[0]).toMatchObject({
+      cached: null,
+      current: "AGPL-3.0-only",
+    });
+    expect(result.mismatches[0]?.reason).toContain("hidden obligation");
+  });
+
+  test("a transient failure during a nuget verify propagates loudly (exit-3 posture), never silent agreement", async () => {
+    const path = tempCachePath();
+    writeCache(path, { [NUGET_PURL]: positive("MIT", "nuget") });
+    const { fetch } = fetchMock(() => ({ status: 503 }));
+    await expect(
+      withFetch(fetch, () =>
+        verifyCache({ cachePath: path, verbose: false, backoffBaseMs: 1 }),
+      ),
+    ).rejects.toThrow(/registry 503/);
+  });
+});
