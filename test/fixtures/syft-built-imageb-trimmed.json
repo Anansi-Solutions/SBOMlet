@@ -1,0 +1,43 @@
+{
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.6",
+  "serialNumber": "urn:uuid:9e4f2c7b-3a80-4d55-b1e6-0c2d7f4a8b13",
+  "metadata": {
+    "timestamp": "2026-07-03T09:13:12+02:00",
+    "component": {
+      "type": "container",
+      "name": "local/scan-imageb:built",
+      "version": "sha256:3333333333333333333333333333333333333333333333333333333333333333"
+    }
+  },
+  "components": [
+    {
+      "type": "library",
+      "name": "busybox",
+      "version": "1.37.0-r19",
+      "licenses": [
+        {
+          "license": {
+            "id": "GPL-2.0-only"
+          }
+        }
+      ],
+      "purl": "pkg:apk/alpine/busybox@1.37.0-r19?arch=x86_64&distro=alpine-3.23.4",
+      "bom-ref": "pkg:apk/alpine/busybox@1.37.0-r19?package-id=apk2"
+    },
+    {
+      "type": "library",
+      "name": "zlib",
+      "version": "1.3.1-r2",
+      "licenses": [
+        {
+          "license": {
+            "id": "Zlib"
+          }
+        }
+      ],
+      "purl": "pkg:apk/alpine/zlib@1.3.1-r2?arch=x86_64&distro=alpine-3.23.4",
+      "bom-ref": "pkg:apk/alpine/zlib@1.3.1-r2?package-id=apk3"
+    }
+  ]
+}

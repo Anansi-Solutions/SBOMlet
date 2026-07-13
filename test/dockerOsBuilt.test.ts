@@ -42,6 +42,10 @@ const REAL_EXEC = { ...execModule };
 /** The trimmed real-syft capture the scan reads back (apk + npm + pypi). */
 const FIXTURE = join(__dirname, "fixtures", "syft-built-trimmed.json");
 
+/** Two-Dockerfile scenario captures: busybox SHARED, musl/zlib image-unique. */
+const FIXTURE_A = join(__dirname, "fixtures", "syft-built-imagea-trimmed.json");
+const FIXTURE_B = join(__dirname, "fixtures", "syft-built-imageb-trimmed.json");
+
 type ExecResult = { stdout: string; stderr: string };
 type ExecFn = (cmd: string, args: string[]) => Promise<ExecResult>;
 
@@ -171,6 +175,35 @@ function makePerImageExecTool(
         ],
       };
       writeFileSync(outFile, JSON.stringify(doc));
+      return Promise.resolve({ stdout: "", stderr: "" });
+    }
+    return Promise.resolve({ stdout: "[]", stderr: "" });
+  };
+}
+
+/**
+ * A per-image FIXTURE recorder for the two-Dockerfile scenario: serves a
+ * distinct trimmed syft capture keyed by the scanned image operand (the last
+ * argv element), so two built images can carry overlapping-but-different
+ * package sets. docker buildx build argvs resolve with empty stdout/stderr;
+ * inspects return "[]" (a built image carries no RepoDigests).
+ */
+function makeFixtureByImageExec(
+  fixtureByImage: Readonly<Record<string, string>>,
+): ExecFn {
+  return (cmd, args) => {
+    invocations.push([cmd, ...args]);
+    const outFile = syftOutFile(args);
+    if (outFile !== undefined) {
+      const image = args[args.length - 1] as string;
+      const fixture = fixtureByImage[image];
+      if (fixture === undefined) {
+        return Promise.reject(new Error(`unexpected syft operand: ${image}`));
+      }
+      copyFileSync(fixture, outFile);
+      return Promise.resolve({ stdout: "", stderr: "" });
+    }
+    if (args[0] === "buildx") {
       return Promise.resolve({ stdout: "", stderr: "" });
     }
     return Promise.resolve({ stdout: "[]", stderr: "" });
@@ -416,9 +449,18 @@ describe("collectDockerOsSbom one posture (full contents, generalized digest, pr
     const doc = JSON.parse(readFileSync(out, "utf8")) as {
       dockerImages: { image: string; digest: string; source: string }[];
     };
-    const expected = [imageTag("a.Dockerfile"), imageTag("b.Dockerfile")]
-      .sort(compareCodeUnits)
-      .map((image) => ({ image, digest: "", source: image }));
+    // Built posture: each entry's source is the Dockerfile identity the tag
+    // was built from — the caller-supplied path string, never the tag itself.
+    const expected = [
+      { identity: "a.Dockerfile", tag: imageTag("a.Dockerfile") },
+      { identity: "b.Dockerfile", tag: imageTag("b.Dockerfile") },
+    ]
+      .sort((x, y) => compareCodeUnits(x.tag, y.tag))
+      .map(({ identity, tag }) => ({
+        image: tag,
+        digest: "",
+        source: identity,
+      }));
     expect(doc.dockerImages).toEqual(expected);
   });
 
@@ -463,7 +505,11 @@ describe("collectDockerOsSbom one posture (full contents, generalized digest, pr
     const doc = JSON.parse(readFileSync(out, "utf8")) as {
       dockerImages: { image: string; digest: string; source: string }[];
     };
-    expect(doc.dockerImages).toEqual([{ image: tag, digest: "", source: tag }]);
+    // Discovery posture: the source is the repo-relative discovery identity —
+    // the exact string --list-dockerfiles prints.
+    expect(doc.dockerImages).toEqual([
+      { image: tag, digest: "", source: "svc/Dockerfile" },
+    ]);
   });
 
   test("--repo-root lane: a [docker]-ignored Dockerfile NEVER receives a build argv (Q4-new 5)", async () => {
@@ -535,5 +581,85 @@ describe("collectDockerOsSbom one posture (full contents, generalized digest, pr
     const b = readFileSync(out2, "utf8");
     expect(a).toBe(b);
     expect(a.includes("\r")).toBe(false);
+  });
+
+  // The two-Dockerfile scenario, collector half (SCP-02): two Dockerfiles
+  // build two images that SHARE busybox while musl/zlib are image-unique. The
+  // sidecar must say which image(s) each package is in, and each image's
+  // source must be its discovery identity — the substrate that makes "where"
+  // expressible for images at all.
+  test("two discovered Dockerfiles: shared purls union membership; sources are the discovery identities", async () => {
+    tempDir = mkdtempSync(join(tmpdir(), "licenses-docker-two-dockerfiles-"));
+    mkdirSync(join(tempDir, "a"), { recursive: true });
+    mkdirSync(join(tempDir, "b"), { recursive: true });
+    // Runtime-only build inputs — contents irrelevant (the build is faked).
+    writeFileSync(join(tempDir, "a", "Dockerfile"), "FROM alpine:3.23\n");
+    writeFileSync(join(tempDir, "b", "Dockerfile"), "FROM alpine:3.23\n");
+    const tagA = imageTag("a/Dockerfile");
+    const tagB = imageTag("b/Dockerfile");
+    currentExec = makeFixtureByImageExec({
+      [tagA]: FIXTURE_A,
+      [tagB]: FIXTURE_B,
+    });
+    const out = join(tempDir, "docker-os.sbom.json");
+
+    await runGenerateDockerSbom({
+      repoRoot: tempDir,
+      baseDir: tempDir,
+      dockerOsSbomPath: out,
+    });
+
+    const doc = JSON.parse(readFileSync(out, "utf8")) as {
+      components: { name: string; images: string[] }[];
+      dockerImages: { image: string; digest: string; source: string }[];
+    };
+    const membership = (name: string): string[] | undefined =>
+      doc.components.find((c) => c.name === name)?.images;
+    // busybox is in BOTH images: one row, membership unioned and sorted...
+    expect(membership("busybox")).toEqual([tagA, tagB].sort(compareCodeUnits));
+    expect(doc.components.filter((c) => c.name === "busybox")).toHaveLength(1);
+    // ...while musl/zlib are honestly image-unique.
+    expect(membership("musl")).toEqual([tagA]);
+    expect(membership("zlib")).toEqual([tagB]);
+    // Each built image records its Dockerfile identity as the source (built
+    // posture: digest ""), sorted by image.
+    const expected = [
+      { identity: "a/Dockerfile", tag: tagA },
+      { identity: "b/Dockerfile", tag: tagB },
+    ]
+      .sort((x, y) => compareCodeUnits(x.tag, y.tag))
+      .map(({ identity, tag }) => ({
+        image: tag,
+        digest: "",
+        source: identity,
+      }));
+    expect(doc.dockerImages).toEqual(expected);
+  });
+
+  test("pair input order never changes the emitted bytes (sorted-scan determinism with sources)", async () => {
+    const imageA = "local/scan-imagea";
+    const imageB = "local/scan-imageb";
+    currentExec = makeFixtureByImageExec({
+      [imageA]: FIXTURE_A,
+      [imageB]: FIXTURE_B,
+    });
+    const pairs = [
+      { image: imageA, source: "a/Dockerfile" },
+      { image: imageB, source: "b/Dockerfile" },
+    ];
+
+    const dirAB = mkdtempSync(join(tmpdir(), "licenses-docker-posture-"));
+    const { doc: docAB } = await collectDockerOsSbom(pairs, {
+      tempDir: dirAB,
+    });
+    rmSync(dirAB, { recursive: true, force: true });
+
+    const dirBA = mkdtempSync(join(tmpdir(), "licenses-docker-posture-"));
+    const { doc: docBA } = await collectDockerOsSbom([...pairs].reverse(), {
+      tempDir: dirBA,
+    });
+    rmSync(dirBA, { recursive: true, force: true });
+
+    expect(docAB).toBe(docBA);
   });
 });

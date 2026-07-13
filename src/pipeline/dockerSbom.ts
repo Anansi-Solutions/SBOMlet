@@ -31,7 +31,7 @@
 import { readFileSync, statSync } from "node:fs";
 
 import { buildImage, imageTag, type ExecFn } from "../collectors/dockerBuild";
-import { collectDockerOsSbom } from "../collectors/dockerOs";
+import { collectDockerOsSbom, type ScanImage } from "../collectors/dockerOs";
 import { discoverDockerfiles } from "../collectors/dockerfile";
 import { execTool } from "../collectors/exec";
 import { compareCodeUnits } from "../model/dependencies";
@@ -358,19 +358,16 @@ export async function buildImages(
  * Scan an already-resolved image set with the single-posture collector, write
  * the committed doc, and narrate to stderr. Shared by all three lanes so the
  * output-path resolution and byte-identity contract are identical whatever the
- * lane.
+ * lane. Each entry pairs the image ref with its SOURCE identity — the
+ * Dockerfile identity for the build lanes, the requested ref verbatim for the
+ * image lane — so the emitted sidecar records where every image came from.
  */
 async function scanAndWrite(
-  images: string[],
+  images: ScanImage[],
   outputPath: string,
   verbose: boolean,
 ): Promise<void> {
-  // The collector takes {image, source} pairs; at this boundary the scanned
-  // ref is the only identity available, so it doubles as the source.
-  const { doc } = await collectDockerOsSbom(
-    images.map((image) => ({ image, source: image })),
-    { verbose },
-  );
+  const { doc } = await collectDockerOsSbom(images, { verbose });
   writeArtifact(outputPath, doc);
   process.stderr.write(
     `wrote ${sanitizeForLog(outputPath)} (${images.length} image(s) scanned)\n`,
@@ -396,11 +393,17 @@ async function runTargetedBuildLane(
   process.stderr.write(`${summary}\n`);
   // No cwd: an explicit --dockerfile path is relative to the caller's own cwd,
   // so the build must resolve it against process.cwd(), not any repo anchor.
-  const tags = await buildImages(
+  await buildImages(
     build.map((b) => b.identity),
     opts.verbose ?? false,
   );
-  await scanAndWrite(tags, outputPath, opts.verbose ?? false);
+  // Each built tag is scanned with its Dockerfile identity as the source —
+  // the DockerfileBuild records already hold the identity→tag mapping.
+  await scanAndWrite(
+    build.map((b) => ({ image: b.tag, source: b.identity })),
+    outputPath,
+    opts.verbose ?? false,
+  );
 }
 
 /**
@@ -439,12 +442,18 @@ async function runDiscoveryBuildLane(
   // against repoRoot regardless of the tool's process cwd. Without this a
   // consumer invoking from a subdir (e.g. tools/sbomlet) hits
   // "unable to prepare context: path not found".
-  const tags = await buildImages(
+  await buildImages(
     build.map((b) => b.identity),
     opts.verbose ?? false,
     repoRoot,
   );
-  await scanAndWrite(tags, outputPath, opts.verbose ?? false);
+  // Each built tag is scanned with its repo-relative discovery identity as
+  // the source — the exact string --list-dockerfiles prints.
+  await scanAndWrite(
+    build.map((b) => ({ image: b.tag, source: b.identity })),
+    outputPath,
+    opts.verbose ?? false,
+  );
 }
 
 /**
@@ -470,7 +479,14 @@ async function runImageLane(
   process.stderr.write(
     `scanning ${requested.length} image(s): ${requested.map(sanitizeForLog).join(", ")}\n`,
   );
-  await scanAndWrite(requested, outputPath, opts.verbose ?? false);
+  // Image lane: the source identity is the requested ref VERBATIM (source ===
+  // image) — the pinned digest stays in dockerImages[].digest, never in a
+  // source, so a re-pin can never churn an identity.
+  await scanAndWrite(
+    requested.map((ref) => ({ image: ref, source: ref })),
+    outputPath,
+    opts.verbose ?? false,
+  );
 }
 
 /**
