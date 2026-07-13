@@ -48,3 +48,4 @@ something we no longer do but haven't replaced.
 | [0019](0019-scancode-senior-assessment.md) | ScanCode as the senior licence assessment: outranks the registry, conflicts fail the gate, its own memo | Accepted |
 | [0020](0020-yarn-workspace-scan-units.md) | Yarn workspace scan units from lockfile resolutions | Accepted |
 | [0021](0021-per-image-occurrence-identity.md) | Per-image occurrence identities — `docker:os-packages/<source>` | Accepted |
+| [0022](0022-dotnet-lockfile-in-process.md) | Parse packages.lock.json in-process for .NET | Accepted |
