@@ -43,7 +43,7 @@ import {
 const NEVER_CORRECT = [/^UNLICENSED$/i, /^SEE LICEN[CS]E IN /i];
 
 /**
- * Ambiguous license FAMILY labels (INV-04): a bare family with no clause count
+ * Ambiguous license FAMILY labels: a bare family with no clause count
  * or version that spdx-correct would otherwise GUESS to a precise variant
  * (correct("BSD")/correct("BSD License") → BSD-2-Clause; correct("Apache
  * Software License")/correct("Apache") → Apache-2.0). We intercept these BEFORE
@@ -64,7 +64,7 @@ const AMBIGUOUS_FAMILY: ReadonlyMap<string, string> = new Map([
   // (correct("GPL") → GPL-3.0-or-later) — a confident-but-wrong copyleft id.
   // Represented faithfully as the imprecise family so the policy engine routes
   // them to the could-be-copyleft review lane (COULD_BE_COPYLEFT_FAMILIES)
-  // rather than a fabricated copyleft fail (INV-04).
+  // rather than a fabricated copyleft fail.
   ["gpl", "GPL"],
   ["gpl license", "GPL"],
   ["agpl", "AGPL"],
@@ -86,7 +86,7 @@ const AMBIGUOUS_FAMILY: ReadonlyMap<string, string> = new Map([
 /**
  * Precise label fixups spdx-correct MISSES (correct() returns null) that ARE
  * unambiguously resolvable to a single SPDX id — the "ISC license"/"ISC License"
- * suffix false-negative that dropped pexpect to unknown (INV-04; bare "ISC"
+ * suffix false-negative that dropped pexpect to unknown (bare "ISC"
  * already parses). Keyed by case-folded trimmed raw. Kept tiny and reviewable;
  * adding a family-ambiguous label here would re-introduce a false guess, so only
  * unambiguous single-id labels belong.
@@ -96,7 +96,7 @@ const PRECISE_LABEL_FIXUP: ReadonlyMap<string, string> = new Map([
 ]);
 
 /**
- * Debian/DEP-5 copyright SHORT-NAME → canonical SPDX id (COLL-04, 07-05).
+ * Debian/DEP-5 copyright SHORT-NAME → canonical SPDX id.
  *
  * syft fills ~98% of OS-package licenses, but Debian's machine-readable
  * copyright (DEP-5) declares licenses with copyright SHORTHANDS — "Expat" for
@@ -120,7 +120,7 @@ const PRECISE_LABEL_FIXUP: ReadonlyMap<string, string> = new Map([
  * "LGPL-2.1+-with-link-exception" must NOT match — it stays on the correct()
  * path / unknown). The keys are deliberately VERSIONED ("gpl-2", "gpl-3"): bare
  * "GPL"/"LGPL"/"AGPL" are ABSENT so they still route to the could-be-copyleft
- * imprecise family lane (AMBIGUOUS_FAMILY, INV-04) — a bare "GPL" could be any
+ * imprecise family lane (AMBIGUOUS_FAMILY) — a bare "GPL" could be any
  * GPL variant and must never be guessed to a precise id here.
  *
  * Genuinely-unknown Debian tokens (custom / public-domain with no SPDX id /
@@ -188,7 +188,7 @@ function isCommaLicenseList(value: string): boolean {
 
 /**
  * Result of normalizing one raw license string. An imprecise result carries
- * `imprecise: true` + `impreciseFamily` with `expression` null (INV-04): an
+ * `imprecise: true` + `impreciseFamily` with `expression` null: an
  * ambiguous family label is present-but-imprecise, never a guessed precise id
  * and never silently unknown.
  */
@@ -201,7 +201,7 @@ export interface NormalizeResult {
 
 /**
  * Normalize one raw license string: exact parse first, an imprecise-family
- * intercept (INV-04), a precise-label fixup for the cases correct() misses, then
+ * intercept, a precise-label fixup for the cases correct() misses, then
  * a guarded spdx-correct fixup, else unknown. Comma lists are never correctable;
  * `[[clarify]]` is the escape hatch.
  */
@@ -217,7 +217,7 @@ export function normalizeRaw(raw: string): NormalizeResult {
     /* fall through */
   }
   const folded = trimmed.toLowerCase();
-  // INV-04: intercept an ambiguous family label BEFORE correct() can fabricate
+  // Intercept an ambiguous family label BEFORE correct() can fabricate
   // a clause count. Present-but-imprecise — never the guess, never unknown.
   const family = AMBIGUOUS_FAMILY.get(folded);
   if (family !== undefined) {
@@ -233,7 +233,7 @@ export function normalizeRaw(raw: string): NormalizeResult {
   if (fixup !== undefined) {
     return { expression: fixup, source: "corrected" };
   }
-  // Debian/DEP-5 copyright shorthands → canonical SPDX (07-05). MUST run BEFORE
+  // Debian/DEP-5 copyright shorthands → canonical SPDX. MUST run BEFORE
   // correct(): correct() either drops these to unknown or mis-guesses them
   // (e.g. "GPL-2+" → "GPL-2.0-only", dropping the or-later). Exact-token only,
   // case-folded; bare GPL/LGPL/AGPL already returned above via AMBIGUOUS_FAMILY.
@@ -271,7 +271,7 @@ const UNKNOWN_FINDING: LicenseFinding = {
  * non-normalizable claim makes the whole finding unknown — partial knowledge
  * must not hide an obligation.
  *
- * SCOPE-AWARE EXCEPTION (07-06): for the NON-GATING `os` scope ONLY, a claim set
+ * SCOPE-AWARE EXCEPTION: for the NON-GATING `os` scope ONLY, a claim set
  * that mixes ≥1 normalizable SPDX member with ≥1 genuinely-unknown ("none")
  * token is NOT forced to unknown. Instead the finding is built from the
  * normalizable members and the unparseable tokens are surfaced on
@@ -443,7 +443,7 @@ function combinePrecise(
  * Inline structural type for project clarify rules — no import from policy/
  * (the validated policy is structurally compatible). `expression` must be a
  * valid SPDX expression: policy schema validation parses it eagerly before
- * evaluation. `expects` is the OPTIONAL staleness precondition (POL-07): when
+ * evaluation. `expects` is the OPTIONAL staleness precondition: when
  * present, the override applies only while the package's pre-override observed
  * signal still matches it; absent = blind apply (backward-compat).
  */
@@ -455,7 +455,7 @@ export interface ClarifyInput {
 }
 
 /**
- * Inline structural type for the shipped TOOL-LEVEL override set (POL-07),
+ * Inline structural type for the shipped TOOL-LEVEL override set,
  * structurally compatible with BUILTIN_OVERRIDES. `expects` is always present
  * (every shipped default is a preconditioned assertion); version-agnostic.
  */
@@ -472,9 +472,9 @@ export interface AnnotatedFindings {
 }
 
 /**
- * The package's PRE-OVERRIDE observed signal (POL-07): the set of normalized
+ * The package's PRE-OVERRIDE observed signal: the set of normalized
  * raw claim strings (each claim's trimmed raw value) UNION the un-overridden
- * finding's 05-05 impreciseFamily token. An override's `expects` is compared
+ * finding's impreciseFamily token. An override's `expects` is compared
  * (case-insensitive, trimmed equality) against the members of this set.
  */
 function observedSignal(
@@ -522,12 +522,12 @@ function signalMatches(
 }
 
 /**
- * Fail-closed staleness guard (C1): an override may apply ONLY when no
+ * Fail-closed staleness guard: an override may apply ONLY when no
  * non-`expects` member of the observed signal carries a PRECISE license that
  * the asserted `expression` does not account for. The any-member `expects`
  * match alone is fail-OPEN — a lingering obsolete label (`BSD`) would license
  * out a co-present new precise copyleft claim (`GPL-3.0-only`) during a
- * relicense, the exact masking POL-07 exists to prevent.
+ * relicense — the exact masking the staleness guard exists to prevent.
  *
  * For each signal member that is NOT `expects`, we re-derive a precise
  * expression via the normalizer. A member that normalizes to a precise id which
@@ -559,8 +559,8 @@ function signalContradicts(
 
 /**
  * True when the un-overridden finding ALREADY carries a precise expression that
- * SATISFIES the asserted override expression (the gap-fix redundancy path,
- * POL-07 refinement). When the registry upgrades an imprecise label to the exact
+ * SATISFIES the asserted override expression (the redundancy
+ * path). When the registry upgrades an imprecise label to the exact
  * precise license the override asserts (PyPI now reports ipython/ipykernel/
  * jupyter-core as the precise "BSD-3-Clause" the "expects: BSD" override
  * disambiguates TO), the override has nothing to do: the observed precise
@@ -597,7 +597,7 @@ function overrideFinding(
   };
 }
 
-/** Attach a stale-override marker to the un-overridden finding (POL-07). */
+/** Attach a stale-override marker to the un-overridden finding. */
 function withStaleOverride(
   base: LicenseFinding,
   stale: StaleOverride,
@@ -720,7 +720,8 @@ function everyLeafInFamily(node: ExpressionNode, family: string): boolean {
  * True when a PRECISE SPDX expression's every leaf id is consistent with an
  * imprecise family ({@link everyLeafInFamily}). Parsing an already-normalized
  * expression should never throw, but the walk is wrapped defensively anyway —
- * the POL-07 fail-closed idiom (baseSatisfiesAssertion, signalContradicts):
+ * the stale-override fail-closed idiom (baseSatisfiesAssertion,
+ * signalContradicts):
  * ANY throw is treated as inconsistent, never as a crash, never a silent
  * pass.
  */
@@ -763,7 +764,7 @@ function quickCheckClaims(claims: ReadonlyArray<LicenseClaim>): LicenseClaim[] {
  * family agrees iff every leaf of S is in the family. A genuinely-unknown
  * claim with a non-empty raw DISAGREES: a garbage/proprietary declaration
  * contradicted by a precise assessment must become a visible conflict,
- * never be silently decided in either direction (SCAN-05).
+ * never be silently decided in either direction.
  */
 function claimAgreesWithAssessment(
   claim: LicenseClaim,
@@ -829,7 +830,7 @@ function assessPrecise(
 
 /**
  * The in-depth answer is IMPRECISE (a bare family): it never upgrades
- * anything (INV-04). A precise base whose leaves are out-of-family is a
+ * anything. A precise base whose leaves are out-of-family is a
  * conflict (fail closed — a disagreement in any direction is surfaced);
  * everything else stands unchanged, including an out-of-family imprecise
  * base (nothing precise on either side to weigh).
@@ -848,8 +849,8 @@ function assessImprecise(family: string, base: LicenseFinding): LicenseFinding {
 }
 
 /**
- * Apply the ScanCode SENIOR ASSESSMENT to a package's base finding (SCAN-04/
- * SCAN-05). The model: the in-depth result outranks the quick check
+ * Apply the ScanCode SENIOR ASSESSMENT to a package's base finding. The
+ * model: the in-depth result outranks the quick check
  * (declared metadata, registry answers) where they agree — the finding
  * becomes the assessed expression — and a disagreement is surfaced as a
  * first-class conflict marker on the UNCHANGED base finding, never absorbed
@@ -891,7 +892,7 @@ export function applyScancodeAssessment(
  * Attach a LicenseFinding to every package (including the zero-claim
  * population — expression null). The two-level, staleness-guarded override
  * chain runs in precedence order: project clarify FIRST (project-wins), then
- * the shipped tool-level builtins (POL-07). A preconditioned override (`expects`
+ * the shipped tool-level builtins. A preconditioned override (`expects`
  * present) applies ONLY when the package's pre-override observed signal still
  * matches `expects`; a MISMATCH does NOT apply the assertion and instead marks
  * the finding stale so the engine fails the gate loudly. A no-`expects`
@@ -909,7 +910,7 @@ export function annotateFindings(
   const usedClarifyIndices = new Set<number>();
   const packages = model.packages.map((entry: PackageEntry): PackageEntry => {
     const unrefinedBase = findingFromClaims(entry.licenseClaims, entry.scope);
-    // 12-01: the scancode SENIOR ASSESSMENT runs BEFORE overrides see the
+    // The scancode SENIOR ASSESSMENT runs BEFORE overrides see the
     // finding (clarify/builtin still decide last). An APPLIED override's
     // finding never carries the conflict marker: the marker lives on this
     // base only, and overrideFinding builds a fresh object.

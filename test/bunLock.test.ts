@@ -93,7 +93,7 @@ const WORKSPACE_LOCK_PLAIN = JSON.stringify(
 );
 
 /**
- * Scoped name + nested version-conflict key (04.5-RESEARCH Pitfall 4):
+ * Scoped name + nested version-conflict key:
  * "spdx-compare/spdx-expression-parse" is a NESTED key whose value[0]
  * carries the correct "spdx-expression-parse@3.0.1" identity. Plain JSON
  * on purpose (a strict-JSON bun.lock must parse identically to JSONC).
@@ -672,7 +672,7 @@ const SCOPE_BOUNDARY_LOCK = `{
 `;
 
 /**
- * POL-08 prod-fail-masking regression. A transitive ("twin") reached at the
+ * Prod-fail-masking regression. A transitive ("twin") reached at the
  * SAME version via BOTH a production parent and a dev-only parent, while the
  * top-level slot is held by a different version (twin@2.0.0 as a direct prod
  * dep) — so twin@1.0.0 cannot hoist and appears as two nested conflict keys
@@ -680,7 +680,7 @@ const SCOPE_BOUNDARY_LOCK = `{
  * collector emits TWO components for pkg:npm/twin@1.0.0 with divergent dev
  * markers; the merge MUST fold them prod-wins so the shipped (production)
  * occurrence is never masked to dev. This is the exact reachable shape behind
- * the load-bearing POL-08 safety property.
+ * the load-bearing prod-wins safety property.
  */
 const SAME_VERSION_TWIN_LOCK = `{
   "lockfileVersion": 1,
@@ -726,7 +726,7 @@ describe("collectWithBunLock — transitive dev/prod scope BFS (research A4)", (
     ).toBe(false);
   });
 
-  test("same-version twin via a prod AND a dev parent emits divergent same-purl components that merge prod-wins (POL-08 safety)", async () => {
+  test("same-version twin via a prod AND a dev parent emits divergent same-purl components that merge prod-wins (prod-wins safety)", async () => {
     const { components, doc } = await scanLock(SAME_VERSION_TWIN_LOCK);
 
     // Collector origin: twin@1.0.0 surfaces as TWO components (the two nested

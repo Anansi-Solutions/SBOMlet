@@ -1,9 +1,10 @@
 /**
- * ScanCode analysis memo (12-03, SCAN-06 / D-04 / D-11): the dedicated
+ * ScanCode analysis memo: the dedicated
  * committed cache's read/write contract, its deterministic serialization, and
  * its loud-on-malformed + version-guarded envelope read. No behavior is wired
- * to the memo yet (that lands in 12-04); these lock the exported module
- * contract 12-04 builds on. (The path/CLI plumbing is locked below in Task 2.)
+ * to the memo yet (the assessment stage does that); these lock the exported
+ * module contract the assessment stage builds on. (The path/CLI plumbing is
+ * locked below.)
  */
 import {
   existsSync,
@@ -49,7 +50,7 @@ const positive: ScancodeMemoEntry = {
   scannedAt: "2026-08-01T04:17:23.000Z",
 };
 
-/** A no-result entry: analyzed, no license evidence (D-11) — license null alone. */
+/** A no-result entry: analyzed, no license evidence — license null alone. */
 const noResult: ScancodeMemoEntry = {
   license: null,
   via: "scancode-toolkit@32.5.0/no-answer",
@@ -60,7 +61,7 @@ function tempDir(): string {
   return mkdtempSync(join(tmpdir(), "scancode-memo-"));
 }
 
-describe("scancode memo — envelope, entry shape, deterministic read/write (SCAN-06 / D-04 / D-11)", () => {
+describe("scancode memo — envelope, entry shape, deterministic read/write", () => {
   test("a round-trip through serialize → readScancodeMemo is lossless for positive and no-result entries", () => {
     const dir = tempDir();
     try {
@@ -103,7 +104,7 @@ describe("scancode memo — envelope, entry shape, deterministic read/write (SCA
     expect(serializeScancodeMemo(memo)).toBe(bytes);
   });
 
-  test("readScancodeMemo on a missing file yields an empty memo, never throws, never creates the file (D-06)", () => {
+  test("readScancodeMemo on a missing file yields an empty memo, never throws, never creates the file", () => {
     const dir = tempDir();
     try {
       const path = join(dir, MEMO_FILE);
@@ -126,7 +127,7 @@ describe("scancode memo — envelope, entry shape, deterministic read/write (SCA
     }
   });
 
-  test("a malformed envelope throws loudly — truncated JSON, missing entries, non-object entries, and a WRONG schema version each abort (T-12-07), never a silent empty", () => {
+  test("a malformed envelope throws loudly — truncated JSON, missing entries, non-object entries, and a WRONG schema version each abort, never a silent empty", () => {
     const dir = tempDir();
     try {
       const path = join(dir, MEMO_FILE);
@@ -193,7 +194,7 @@ describe("scancode memo — envelope, entry shape, deterministic read/write (SCA
     expect(serializeScancodeMemo(memo)).toBe(bytes);
   });
 
-  test("a no-result entry (license null) is stamped like any new entry and carries no resolvable/source/fetchedFrom twin — license:null alone encodes analyzed-no-evidence (D-11)", () => {
+  test("a no-result entry (license null) is stamped like any new entry and carries no resolvable/source/fetchedFrom twin — license:null alone encodes analyzed-no-evidence", () => {
     const memo = new Map<string, ScancodeMemoEntry>();
     putMemoEntry(
       memo,
@@ -211,7 +212,7 @@ describe("scancode memo — envelope, entry shape, deterministic read/write (SCA
     expect(bytes).not.toContain('"source"');
   });
 
-  test("a verbatim URL-encoded purl key (%40scope) round-trips exactly — keys are opaque, never decoded or split (T-12-08)", () => {
+  test("a verbatim URL-encoded purl key (%40scope) round-trips exactly — keys are opaque, never decoded or split", () => {
     const dir = tempDir();
     try {
       const path = join(dir, MEMO_FILE);
@@ -240,7 +241,7 @@ describe("scancode memo — envelope, entry shape, deterministic read/write (SCA
   });
 });
 
-describe("scancode memo path resolution + --scancode-cache flag (SCAN-06 / D-04)", () => {
+describe("scancode memo path resolution + --scancode-cache flag", () => {
   test("SCANCODE_CACHE_FILE is scancode.cache.json — a distinct sibling of the enrichment cache filename", () => {
     expect(SCANCODE_CACHE_FILE).toBe("scancode.cache.json");
     expect(SCANCODE_CACHE_FILE).not.toBe(ENRICHMENT_CACHE_FILE);

@@ -5,7 +5,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 
 import { resolveTarget } from "../src/targets/target";
 
-// Self-contained temp trees only — no reference to any host-project path (INTG-02).
+// Self-contained temp trees only — no reference to any host-project path.
 const tempRoots: string[] = [];
 
 function makeTempRoot(): string {

@@ -7,7 +7,7 @@
  * vendored static map. It only covers the cases `spdx-correct` MISSES: the
  * "Python Software Foundation License" label, the "ISC License (ISCL)" label,
  * and the bare "ISC license"/"ISC License" label (correct() returns null for
- * all three; the last is the INV-04 suffix false-negative that dropped pexpect
+ * all three; the last is the suffix false-negative that dropped pexpect
  * to unknown). A handful of precise classifiers (MIT/ISC/MPL) are included for
  * exact resolution where the `license` field is empty.
  *
@@ -20,7 +20,7 @@
  * NOT carry a precise SPDX id ("BSD License" could be 2- or 3-Clause). They are
  * deliberately absent from the map and reported by {@link isAmbiguousTroveClassifier}
  * so a resolver tags them LOW confidence for optional `[[clarify]]` pinning,
- * never a silent HIGH verdict (Pitfall 3).
+ * never a silent HIGH verdict.
  *
  * Every SPDX value here is validated against spdx-license-ids in the tests, so a
  * typo cannot silently create a resolution gap (mirrors copyleft.ts's contract).
@@ -37,7 +37,7 @@ export const TROVE_TO_SPDX: ReadonlyArray<
   ],
   ["License :: OSI Approved :: ISC License (ISCL)", "ISC"],
   // The bare "ISC license"/"ISC License" label: spdx-correct returns null for
-  // it (the suffix false-negative that dropped pexpect to unknown — INV-04),
+  // it (the suffix false-negative that dropped pexpect to unknown),
   // while bare "ISC" parses. Carry both casings so a registry-supplied label
   // resolves to the precise ISC id.
   ["ISC license", "ISC"],

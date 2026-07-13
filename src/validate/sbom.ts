@@ -17,7 +17,7 @@ import { type } from "arktype";
  */
 export const SbomDocument = type({
   "components?": "unknown[]",
-  // The CycloneDX dependency graph (07-13 provenance). Tolerant: a non-array
+  // The CycloneDX dependency graph (provenance input). Tolerant: a non-array
   // (or a present-but-malformed) value is simply absent — never a document
   // drop. Per-edge narrowing happens entry-by-entry via SbomDependencyEdge.
   "dependencies?": "unknown[]",
@@ -73,7 +73,7 @@ const EvidenceOrAbsent = type("unknown").pipe(
 );
 
 /**
- * One CycloneDX dependency-graph edge (07-13 provenance): a `ref` bom-ref and
+ * One CycloneDX dependency-graph edge (provenance input): a `ref` bom-ref and
  * its `dependsOn` bom-ref list. Both optional + tolerant, mirroring the
  * component posture: a missing/mistyped `ref` or `dependsOn` coerces to
  * undefined so the edge is skipped, never thrown on. `dependsOn` items stay
@@ -97,7 +97,7 @@ export const SbomComponent = type({
   "purl?": "string",
   "name?": "string",
   "version?": "string",
-  // CycloneDX bom-ref (07-13 provenance): the graph edges key on bom-ref, so the
+  // CycloneDX bom-ref (provenance input): the graph edges key on bom-ref, so the
   // collector builds a bomRef→purl join from this. Tolerant — a mistyped/absent
   // bom-ref is simply absent, never a package drop.
   "bom-ref?": StringOrAbsent,

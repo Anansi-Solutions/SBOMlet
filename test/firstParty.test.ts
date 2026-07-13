@@ -250,7 +250,7 @@ describe("npmThirdPartyEntryCount — node_modules entries with link !== true", 
     expect(npmThirdPartyEntryCount(lockfile)).toBe(0);
   });
 
-  test("v1 lockfile (no packages key) → undefined, NOT 0 (Pitfall 6: route to scan)", () => {
+  test("v1 lockfile (no packages key) → undefined, NOT 0 (route to scan)", () => {
     const v1 = JSON.stringify({
       name: "fixture",
       lockfileVersion: 1,
@@ -413,7 +413,7 @@ describe("npmFirstPartyNames — link:true and local-path lockfile entries", () 
 
 // pnpm v9 fixture — key shapes cited from 04.5-RESEARCH Pattern 3 (generated
 // with pnpm 10.18.3 in the spike): v9 keys "  smol-toml@1.6.1:"; v6 keys
-// carry a leading slash "  /smol-toml@1.6.1:" (Pitfall 5); keys may be quoted.
+// carry a leading slash "  /smol-toml@1.6.1:"; keys may be quoted.
 const PNPM_V9_LOCKFILE = [
   "lockfileVersion: '9.0'",
   "",

@@ -1,13 +1,12 @@
 /**
  * ScanCode-toolkit collector — the syft-parity composite (07/dockerOs.ts) for
  * deep source-level license + copyright detection, orchestrated behind the
- * `--intensive` lane (SCAN-01). Two responsibilities live in this module:
+ * `--intensive` lane. Two responsibilities live in this module:
  *
  *  1. `sourceDirsFor` — a purl → ordered locally-present scan-candidate
- *     mapper (no registry/collector analog exists for this; see PATTERNS "No
- *     Analog Found"). npm: the decoded package name under
+ *     mapper (no registry/collector analog exists for this). npm: the decoded package name under
  *     `<targetDir>/node_modules`, with the installed `package.json` version
- *     MANDATORILY equal to the purl's version (Pitfall 8 — a stale
+ *     MANDATORILY equal to the purl's version (a stale
  *     node_modules must never poison the cache with the wrong version's
  *     license). pypi: an in-project `.venv`'s site-packages, keyed by the
  *     PEP-503 structural fold of the dist-info dir name (ADR-0015: the dir
@@ -325,7 +324,7 @@ export function sourceDirsFor(purl: string, targetDirs: string[]): string[] {
 // --- Invocation lane -------------------------------------------------------
 
 /**
- * Options threading the `--intensive` lane through enrichUnknowns (10-04).
+ * Options threading the `--intensive` lane through enrichUnknowns.
  * Present ONLY on `generate --intensive`: check never receives it, and a
  * default generate call never constructs it (the intensive lane is
  * additionally gated on this field's mere presence — enrich.ts). Mirrors the
@@ -444,7 +443,7 @@ function isRawScancodeFile(raw: unknown): raw is RawScancodeFile {
  * True iff a scancode `files[].path` sits directly inside the scanned
  * tree's own root — never a nested/vendored/bundled subdirectory. ScanCode's
  * `--json-pp` paths are forward-slash-separated and always prefixed with
- * the scanned directory's OWN basename (verified live, Plan 02's capture:
+ * the scanned directory's OWN basename (verified live:
  * `ajv/LICENSE`, `ajv/dist/ajv.bundle.js`), so a root-level file has
  * EXACTLY two `/`-segments: `<scanRootBasename>/<filename>`.
  * Backslash-separated paths are defensively rejected too (scancode never

@@ -43,7 +43,7 @@ export interface LicenseClaim {
  *   impreciseFamily absent).
  * - "imprecise": an ambiguous license FAMILY label was observed ("BSD", "BSD
  *   License", "Apache Software License") that carries no clause/version, so it
- *   is NOT guessed to a precise SPDX id (INV-04). It is present-but-needs-clarify:
+ *   is NOT guessed to a precise SPDX id. It is present-but-needs-clarify:
  *   `expression` stays null because a bare family is not a valid SPDX expression,
  *   and the faithful family string is carried on {@link LicenseFinding.impreciseFamily}.
  *   Distinct from "none" — an imprecise finding IS a license, just an
@@ -71,12 +71,12 @@ export interface LicenseFinding {
    * The faithful ambiguous family label (e.g. "BSD", "Apache") — present ONLY
    * when confidence is "imprecise". It is what the render layer surfaces and
    * what the policy could-be-copyleft check matches against the literal
-   * COULD_BE_COPYLEFT_FAMILIES token set (INV-04).
+   * COULD_BE_COPYLEFT_FAMILIES token set.
    */
   impreciseFamily?: string;
   /**
    * Distinct audit citation for a TOOL-LEVEL builtin override that decided this
-   * finding (POL-07). Present ONLY when a shipped BUILTIN_OVERRIDES entry (not a
+   * finding. Present ONLY when a shipped BUILTIN_OVERRIDES entry (not a
    * project [[clarify]]) replaced the finding — e.g. "override:builtin[3]". A
    * project clarify keeps its existing "clarify[i]" citation via the policy
    * engine's clarifyIndexFor lookup, so this field is absent for those. The
@@ -85,7 +85,7 @@ export interface LicenseFinding {
    */
   overrideRule?: string;
   /**
-   * A STALE override (POL-07): an override (project clarify or tool-level
+   * A STALE override: an override (project clarify or tool-level
    * builtin) carried an `expects` precondition that NO LONGER matches the
    * package's pre-override observed signal. The asserted expression is NOT
    * applied (this finding keeps its un-overridden value); instead the engine
@@ -94,7 +94,7 @@ export interface LicenseFinding {
    */
   staleOverride?: StaleOverride;
   /**
-   * A senior-assessment disagreement (SCAN-05): the in-depth ScanCode answer
+   * A senior-assessment disagreement: the in-depth ScanCode answer
    * conflicts with at least one quick-check claim (declared metadata or a
    * registry answer). Set by applyScancodeAssessment on the UN-OVERRIDDEN
    * base finding — the base stands in full and the disagreement is surfaced,
@@ -139,7 +139,7 @@ export interface LicenseFinding {
   observedExpressions?: readonly string[];
   /**
    * Surfaced non-normalizable raw claim tokens for a NON-GATING `os`-scope
-   * PARTIAL finding (07-06). Set ONLY when an os-scope package's claim set mixes
+   * PARTIAL finding. Set ONLY when an os-scope package's claim set mixes
    * ≥1 normalizable SPDX member with ≥1 genuinely-unknown ("none") token: the
    * finding is built from the normalizable members (so the KNOWN GPL/BSD
    * obligations are not hidden by the all-or-nothing → unknown rule) AND the
@@ -156,7 +156,7 @@ export interface LicenseFinding {
   unrecognizedTokens?: readonly string[];
 }
 
-/** A stale-override condition surfaced to the policy engine (POL-07). */
+/** A stale-override condition surfaced to the policy engine. */
 export interface StaleOverride {
   /** "clarify" (project) or "builtin" (shipped tool-level) — for the message. */
   level: "clarify" | "builtin";
@@ -166,7 +166,7 @@ export interface StaleOverride {
   observed: ReadonlyArray<string>;
 }
 
-/** A senior-assessment disagreement surfaced to the policy engine (SCAN-05). */
+/** A senior-assessment disagreement surfaced to the policy engine. */
 export interface AssessmentConflict {
   /**
    * The in-depth assessed value: the ScanCode-elected normalized SPDX
@@ -198,7 +198,7 @@ export type ScopeTaxonomy = "app" | "os";
 
 /**
  * Dependency provenance — "why is this dependency here?" — derived per-target
- * at collect time from the lockfile/BOM dependency graph (07-13). Introduction
+ * at collect time from the lockfile/BOM dependency graph. Introduction
  * is PER-TARGET (per BOM): the same purl can be a direct dependency in one
  * workspace and a transitive one in another, so this rides on the Occurrence,
  * not the package.
@@ -214,12 +214,12 @@ export type ScopeTaxonomy = "app" | "os";
  * graph) leaves `introduction` ABSENT — the render layer shows an honest "—"
  * rather than a fabricated value.
  *
- * 07-19 DESCOPE — OPTIONALITY IS OUT OF SCOPE. There is intentionally no
+ * OPTIONALITY IS OUT OF SCOPE. There is intentionally no
  * `optional` field. The npm lane never carried optional (the BOM has no
  * optional/peer information); the python lane formerly derived it from poetry
  * markers (`optional = true`, PEP 508 marker variables, extras, multi-variant
  * spec arrays), but that marker parsing was a recurring mislabeling bug class
- * (flagged in three of four review rounds) and was removed.
+ * and was removed.
  * Markers and extras are NOT parsed; every dependency edge is a plain edge.
  */
 export interface DependencyIntroduction {
@@ -258,7 +258,7 @@ export interface Occurrence {
   /** Scope of this package in this target (dev in docs, prod in frontend is legal). */
   isDevDependency: boolean;
   /**
-   * Dependency provenance for this target (07-13) — direct-vs-transitive plus
+   * Dependency provenance for this target — direct-vs-transitive plus
    * the introducer path. Absent when the source carries no usable dependency
    * graph (terraform / Docker OS / bun / graph-less npm), so goldens that
    * predate provenance stay byte-identical where it is absent.

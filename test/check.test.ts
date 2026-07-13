@@ -154,7 +154,7 @@ function pathsFor(
 }
 
 /**
- * Warn-only policy (Pitfall 2 fixture): the AGPL package is ACCEPTED by a
+ * Warn-only policy fixture: the AGPL package is ACCEPTED by a
  * compatible license rule, the claim-less package warns via [unknown]
  * handling, and a second compatible rule matches nothing -> the
  * unused-entry warning path prints without gating.
@@ -177,7 +177,7 @@ const WARN_ONLY_POLICY = [
 
 const squish = (s: string): string => s.replace(/ {2,}/g, " ");
 
-describe("runCheck + exitCodeFor — the CI gate (GATE-01, GATE-02)", () => {
+describe("runCheck + exitCodeFor — the CI gate", () => {
   // These pre-enrichment tests must stay offline now that generate runs the
   // ENRICH stage: stub globalThis.fetch to a clean 200-empty registry response
   // so the fixture's no-claims package stays unknown (the resolver returns
@@ -220,7 +220,7 @@ describe("runCheck + exitCodeFor — the CI gate (GATE-01, GATE-02)", () => {
     expect(stderr).toContain("check: ok (2 outputs verified)");
   });
 
-  test("Test 2: a byte-edited committed file is stale — for each configured output (GATE-02)", async () => {
+  test("Test 2: a byte-edited committed file is stale — for each configured output", async () => {
     // One fresh tree per edited file so each mismatch is isolated.
     for (const editTarget of [
       "outputPath",
@@ -425,7 +425,7 @@ describe("runCheck + exitCodeFor — the CI gate (GATE-01, GATE-02)", () => {
     expect(snapshotTree(root)).toEqual(before);
   });
 
-  test("Test 8b: --intensive is a config error on check (Pitfall 4, T-10-14) — the shared option table cannot leak the flag into the offline gate", async () => {
+  test("Test 8b: --intensive is a config error on check — the shared option table cannot leak the flag into the offline gate", async () => {
     const { root } = makeScannableTree();
     const paths = pathsFor(root, true);
     const policyPath = writePolicy(root, '[unknown]\nhandling = "warn"\n');
@@ -469,7 +469,7 @@ describe("runCheck + exitCodeFor — the CI gate (GATE-01, GATE-02)", () => {
 
     // A thrown error (invalid policy) PROPAGATES out of runCheck — it can
     // never be conflated into 0/1/2; only main's catch -> fail() -> 3 sees
-    // it (Pitfall 6).
+    // it.
     const { root } = makeScannableTree();
     const paths = pathsFor(root, false);
     const brokenPolicy = writePolicy(root, "[unknown\nhandling =\n");
@@ -487,7 +487,7 @@ describe("runCheck + exitCodeFor — the CI gate (GATE-01, GATE-02)", () => {
 });
 
 // ---------------------------------------------------------------------------
-// The offline check contract (INTG-03 + GATE-02 zero-network clause): a
+// The offline check contract (the zero-network clause): a
 // miss-needing-enrichment with no committed cache entry is exit-2 stale (never
 // a fetch), and a populated committed cache makes a fetch-stubbed-to-throw
 // check pass clean and write-free. Same scanner stub as above; per-test fetch
@@ -520,7 +520,7 @@ const THROWING_FETCH = (async (): Promise<Response> => {
   throw new Error("NETWORK DISABLED");
 }) as unknown as typeof fetch;
 
-describe("offline check contract — enrichment staleness (INTG-03, GATE-02)", () => {
+describe("offline check contract — enrichment staleness", () => {
   beforeAll(() => {
     mock.module("../src/collectors/cdxgen", () => ({
       ...REAL_CDXGEN,

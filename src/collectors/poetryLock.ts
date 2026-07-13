@@ -1,6 +1,6 @@
 /**
  * Poetry prod-purl-set derivation — the python counterpart of the yarn
- * dual-run prod diff (POL-08).
+ * dual-run prod diff.
  *
  * cdxgen invoked with --no-install-deps emits NO group marker on poetry
  * components (no cdx:pyproject:group property), so merge.ts's property-based

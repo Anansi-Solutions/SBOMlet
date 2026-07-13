@@ -1,7 +1,7 @@
 /**
  * Contract tests for the CycloneDX 1.6 emitter.
  *
- * Models are HAND-BUILT (the 02-01 contract-lock idiom): the emitter is
+ * Models are HAND-BUILT: the emitter is
  * tested against the CanonicalDependencies/Verdict contract directly, independent
  * of mergeSboms/normalize. Validation is structural per the CONTEXT
  * decision — the schema facts asserted here (required = bomFormat +
@@ -343,7 +343,7 @@ describe("renderCyclonedx — byte determinism", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Golden byte-lock (04-03 Task 2): one model exercising EVERY dispatch
+// Golden byte-lock: one model exercising EVERY dispatch
 // branch — expression tuple (expr-pkg), named raw with dedup (jsonify),
 // omitted licenses key (no-license-pkg), multi-occurrence used-in/scope
 // properties and verdict/rule properties (sharp). Verdicts include a
@@ -354,7 +354,7 @@ const goldenModel: CanonicalDependencies = {
   packages: [exprEntry, namedEntry, bareEntry, sharpEntry],
 };
 
-describe("renderCyclonedx — golden byte equality (INV-03)", () => {
+describe("renderCyclonedx — golden byte equality", () => {
   test("the all-branch golden model matches test/golden/cyclonedx.json byte-for-byte", () => {
     expect(renderCyclonedx(goldenModel, sharpVerdicts)).toBe(
       golden("cyclonedx.json"),

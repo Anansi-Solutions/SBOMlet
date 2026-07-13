@@ -1,5 +1,5 @@
 /**
- * Poetry prod-purl-set derivation (POL-08 python dev/prod fix).
+ * Poetry prod-purl-set derivation (the python dev/prod split).
  *
  * cdxgen run with --no-install-deps emits NO poetry group marker on poetry
  * components — every poetry dep is otherwise classified prod. The fix mirrors

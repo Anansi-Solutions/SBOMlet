@@ -1,5 +1,5 @@
 /**
- * Unit suite for the custom Terraform collector (COLL-03 collection half).
+ * Unit suite for the custom Terraform collector.
  *
  * Provider fixtures are inline string constants copied VERBATIM from the four
  * live OpenTofu locks committed under infrastructure/ at authoring time — never
@@ -20,7 +20,7 @@
  * shape `{"Modules":[{Key,Source,Version,Dir}]}`. The whole `.terraform/` dir is
  * gitignored and absent until `tofu init`/`tofu get` runs.
  *
- * The absent-modules.json gate is a pure FILESYSTEM signal (07-14 redesign): the
+ * The absent-modules.json gate is a pure FILESYSTEM signal: the
  * question "should this dir fail loud?" reduces to "did `tofu init` run?", which
  * is answerable from the `.terraform/` directory's existence — no HCL parsing.
  *   - modules.json PRESENT → read external modules (authoritative present-path).
@@ -106,8 +106,7 @@ provider "registry.opentofu.org/integrations/github" {
 
 /**
  * infrastructure/modules/cloudfront/.terraform.lock.hcl — copied verbatim.
- * The archive block has NO constraints line (Pitfall 2 / A4 no-constraints
- * edge): `version` is followed directly by `hashes`.
+ * The archive block has NO constraints line (the no-constraints edge): `version` is followed directly by `hashes`.
  */
 const CLOUDFRONT_LOCK = `# This file is maintained automatically by "tofu init".
 # Manual edits may be lost in future updates.
@@ -242,7 +241,7 @@ const ZERO_PROVIDER_LOCK = `# This file is maintained automatically by "tofu ini
  * (Version-less local), and the `terraform-aws-modules/vpc/aws` @ 6.6.1 pin.
  * OpenTofu rewrites the Source host to registry.opentofu.org for BOTH providers
  * and modules — so host can no longer distinguish them; the path-segment COUNT
- * does (06-04 fix).
+ * does.
  */
 const MODULES_JSON = JSON.stringify({
   Modules: [
@@ -343,10 +342,10 @@ afterEach(() => {
  *   - "file": a `.terraform` FILE (not a dir) exists — a defensive edge that must
  *     be treated as NOT init'd → loud throw expected.
  *   - "empty": a `.terraform/` dir EXISTS but lacks `providers/` — an
- *     empty/fabricated init dir → loud throw expected (Fix 1, review #2/#4);
+ *     empty/fabricated init dir → loud throw expected;
  *   - "stale-modules": `.terraform/providers/` AND `.terraform/modules/` both
  *     exist but NO modules.json — a stale/partial module install → loud throw
- *     expected (Fix 1, review #2/#4).
+ *     expected.
  */
 type TerraformDirState =
   | "none"
@@ -362,7 +361,7 @@ interface TerraformTargetOptions {
   terraformDir?: TerraformDirState;
   /**
    * When set, `.terraform/modules/modules.json` is created as a DIRECTORY (not a
-   * regular file) — the non-regular-file PRESENCE edge (Fix 3, review #5).
+   * regular file) — the non-regular-file PRESENCE edge.
    */
   modulesJsonAsDir?: boolean;
 }
@@ -388,7 +387,7 @@ function makeTerraformTarget(
   writeFileSync(join(dir, ".terraform.lock.hcl"), lockText);
   if (modulesJsonAsDir) {
     // The PRESENCE check sees `modules.json`, but it is a DIRECTORY, not a
-    // regular file (Fix 3) — must route to the gate, not raw EISDIR.
+    // regular file — must route to the gate, not raw EISDIR.
     mkdirSync(join(dir, ".terraform", "modules", "modules.json"), {
       recursive: true,
     });
@@ -736,7 +735,7 @@ describe("readExternalModules", () => {
     expect(readExternalModules(json)).toEqual([]);
   });
 
-  // Fix 2 (review #3): distinguish LEGIT-EMPTY (valid JSON `{}`, no Modules key,
+  // Distinguish LEGIT-EMPTY (valid JSON `{}`, no Modules key,
   // or `Modules: []`) → return [] (zero modules), from STRUCTURALLY-INVALID
   // (JSON.parse throws, or Modules present but not an array) → throw loud.
   test("legit-empty modules.json (`{}`, no Modules, or `Modules: []`) returns [] (zero modules)", () => {
@@ -768,7 +767,7 @@ describe("readExternalModules", () => {
     ).toThrow(/modules\.json/);
   });
 
-  // Fix 2 (review #3): tolerant skipping of individual malformed ENTRIES is
+  // Tolerant skipping of individual malformed ENTRIES is
   // PRESERVED — an array with one bad row and one good row keeps the good row.
   test("an array with one malformed entry and one good entry keeps the good entry (no throw)", () => {
     const json = JSON.stringify({
@@ -899,7 +898,7 @@ describe("collectWithTerraform — emission", () => {
     expect(new Set(allPurls).size).toBe(allPurls.length);
   });
 
-  test("every emitted component purl ends in @<exact-version> (Plan 03 contract)", async () => {
+  test("every emitted component purl ends in @<exact-version> (the enrich-stage contract)", async () => {
     const { components } = await scanTarget(ROOT_LOCK, MODULES_JSON);
     // A provider purl tail and a module purl tail are both exact pins.
     expect(
@@ -917,7 +916,7 @@ describe("collectWithTerraform — emission", () => {
     }
   });
 
-  test("no component carries a licenses[] array (enrich fills it in Plan 03)", async () => {
+  test("no component carries a licenses[] array (enrich fills it later)", async () => {
     const { components } = await scanTarget(ROOT_LOCK, MODULES_JSON);
     for (const component of components) {
       expect(component["licenses"]).toBeUndefined();
@@ -981,9 +980,9 @@ describe("collectWithTerraform — determinism and contract", () => {
 });
 
 // ---------------------------------------------------------------------------
-// The absent-modules.json gate — a pure FILESYSTEM signal (07-14 redesign).
+// The absent-modules.json gate — a pure FILESYSTEM signal.
 //
-// Four consecutive adversarial reviews each found another valid-HCL shape (a
+// Successive review passes each found another valid-HCL shape (a
 // nested `source` decoy, `${...}` interpolation with nested quotes, CR-only line
 // endings, a comment between the `module` keyword and its name) that a
 // hand-rolled HCL lexer mis-tokenized → silent module drop. Hand-lexing HCL is
@@ -1029,7 +1028,7 @@ describe("absentModulesJsonShouldFail — the filesystem-signal gate", () => {
     expect(absentModulesJsonShouldFail(target.dir)).toBe(true);
   });
 
-  // Fix 1 (review #2/#4): an empty/fabricated `.terraform/` lacking `providers/`
+  // An empty/fabricated `.terraform/` lacking `providers/`
   // is NOT a real init artifact. A real providers-only `tofu init` writes
   // `.terraform/providers/`; its absence means the dir was not init'd → fail loud.
   test("a `.terraform/` dir with NO `providers/` subdir → true (empty/fabricated, fail loud)", () => {
@@ -1039,7 +1038,7 @@ describe("absentModulesJsonShouldFail — the filesystem-signal gate", () => {
     expect(absentModulesJsonShouldFail(target.dir)).toBe(true);
   });
 
-  // Fix 1 (review #2/#4): `.terraform/providers/` AND `.terraform/modules/`
+  // `.terraform/providers/` AND `.terraform/modules/`
   // present but NO modules.json is a stale/partial module install — tofu writes
   // modules.json the instant it processes module blocks, so a modules/ dir
   // without it is incoherent → fail loud rather than collect providers-only.
@@ -1050,7 +1049,7 @@ describe("absentModulesJsonShouldFail — the filesystem-signal gate", () => {
     expect(absentModulesJsonShouldFail(target.dir)).toBe(true);
   });
 
-  // Fix 1 (review #2/#4): the github-actions-deployment shape — `.terraform/
+  // The github-actions-deployment shape — `.terraform/
   // providers/` present, NO `.terraform/modules/`, no modules.json — STILL
   // collects (the strengthened signal's only false/collect case is unchanged).
   test("`.terraform/providers/` present + no `.terraform/modules/` + no modules.json → false (github-actions shape, collect)", () => {
@@ -1110,7 +1109,7 @@ describe("collectWithTerraform — absent modules.json + no `.terraform/` (loud 
     ).rejects.toThrow(/tofu init|tofu get/);
   });
 
-  // Fix 1 (review #2/#4): an empty `.terraform/` lacking `providers/` → throw.
+  // An empty `.terraform/` lacking `providers/` → throw.
   test("an empty `.terraform/` dir (no `providers/`) + absent modules.json throws", async () => {
     const target = makeTerraformTarget(PROVIDERS_ONLY_LOCK, {
       terraformDir: "empty",
@@ -1120,7 +1119,7 @@ describe("collectWithTerraform — absent modules.json + no `.terraform/` (loud 
     ).rejects.toThrow(/tofu init|tofu get/);
   });
 
-  // Fix 1 (review #2/#4): `.terraform/modules/` without modules.json → throw.
+  // `.terraform/modules/` without modules.json → throw.
   test("`.terraform/providers/` + `.terraform/modules/` but no modules.json (stale/partial) throws", async () => {
     const target = makeTerraformTarget(PROVIDERS_ONLY_LOCK, {
       terraformDir: "stale-modules",
@@ -1130,7 +1129,7 @@ describe("collectWithTerraform — absent modules.json + no `.terraform/` (loud 
     ).rejects.toThrow(/tofu init|tofu get/);
   });
 
-  // Fix 3 (review #5): a directory-named modules.json is a non-regular-file
+  // A directory-named modules.json is a non-regular-file
   // PRESENCE — it must route to the gate (which, seeing `.terraform/modules/`
   // exists with no modules.json file, throws loudly), NOT raw uncaught EISDIR.
   test("a directory-named modules.json routes to the gate → loud throw, not raw EISDIR", async () => {

@@ -5,7 +5,7 @@
  *
  * The fixture deliberately RETAINS all four volatile cdxgen fields
  * (serialNumber, metadata.timestamp, annotations[].timestamp, and the prose
- * date inside annotations[].text — research Pitfall 2). The assertions read
+ * date inside annotations[].text). The assertions read
  * those literal values out of the parsed fixture and prove they never reach
  * the rendered Markdown or the dump-model JSON.
  */

@@ -248,7 +248,7 @@ function suppressionFor(
  * Minimal sound rule, two branches:
  *   (a) the elected expression satisfies the workspace license itself
  *       (spdx-satisfies against the single-ID allowlist [rule.license]);
- *   (b) ABSORB-ALL (revision F): every copyleft leaf of the elected expression
+ *   (b) ABSORB-ALL: every copyleft leaf of the elected expression
  *       is in a finding-family the workspace's license family ABSORBS, per the
  *       literal WORKSPACE_ABSORBS relation (COPYLEFT_FAMILY exact-ID lookups,
  *       never substring). A workspace re-released under strong copyleft absorbs

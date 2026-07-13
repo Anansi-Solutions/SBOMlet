@@ -36,7 +36,7 @@ const p = (expr: string): ExpressionNode => parse(expr) as ExpressionNode;
 describe("COPYLEFT_IDS membership", () => {
   test("contains current, deprecated, and family ids", () => {
     expect(COPYLEFT_IDS.has("AGPL-3.0-only")).toBe(true);
-    expect(COPYLEFT_IDS.has("AGPL-3.0")).toBe(true); // deprecated form (Pitfall 5)
+    expect(COPYLEFT_IDS.has("AGPL-3.0")).toBe(true); // deprecated form
     expect(COPYLEFT_IDS.has("GPL-2.0")).toBe(true); // deprecated form
     expect(COPYLEFT_IDS.has("MPL-2.0")).toBe(true);
     expect(COPYLEFT_IDS.has("SSPL-1.0")).toBe(true);
@@ -93,7 +93,7 @@ describe("COPYLEFT_IDS membership", () => {
     expect(typos).toEqual([]);
   });
 
-  test("GPL-2.0+ leaf is copyleft via base-id membership (Pitfall 5)", () => {
+  test("GPL-2.0+ leaf is copyleft via base-id membership", () => {
     expect(isCopyleft({ license: "GPL-2.0", plus: true })).toBe(true);
   });
 });
@@ -263,7 +263,7 @@ const modelOf = (...entries: PackageEntry[]): CanonicalDependencies => ({
 
 type CorpusClass = "exact" | "corrected" | "none" | "imprecise";
 
-// The full 33-row live corpus from 03-RESEARCH (3616 packages, 2026-06-11):
+// The full 33-row live corpus (3616 packages, captured 2026-06-11):
 // every distinct (kind, raw) value the real repo produces, with the expected
 // Normalized column. [raw, kind, expectedExpression, class]
 const CORPUS: ReadonlyArray<
@@ -286,10 +286,10 @@ const CORPUS: ReadonlyArray<
   ["AGPL-3.0-only", "spdx-id", "AGPL-3.0-only", "exact"],
   ["(MIT OR CC0-1.0)", "expression", "(MIT OR CC0-1.0)", "exact"],
   ["CC-BY-4.0", "spdx-id", "CC-BY-4.0", "exact"],
-  // INV-04 (05-05): the bare family label "BSD" is no longer guessed to
+  // The bare family label "BSD" is no longer guessed to
   // BSD-2-Clause (the conscious change documented in the plan). It is
   // present-but-imprecise: expression null, confidence "imprecise". The 23
-  // Jupyter BSD rows ride this change; 05-06's tool-level override will later
+  // Jupyter BSD rows ride this change; the tool-level override will later
   // disambiguate them to BSD-3-Clause.
   ["BSD", "name", null, "imprecise"],
   ["CC0-1.0", "spdx-id", "CC0-1.0", "exact"],
@@ -404,12 +404,12 @@ describe("normalizeRaw — guards", () => {
 });
 
 // ---------------------------------------------------------------------------
-// INV-04: imprecise family labels (05-05). An ambiguous family label is
+// Imprecise family labels. An ambiguous family label is
 // represented faithfully as the imprecise family — never guessed to a precise
 // SPDX id and never silently dropped to unknown.
 // ---------------------------------------------------------------------------
 
-describe("normalizeRaw — imprecise family labels (INV-04)", () => {
+describe("normalizeRaw — imprecise family labels", () => {
   test('"BSD" is imprecise family "BSD" — never the BSD-2-Clause guess', () => {
     const result = normalizeRaw("BSD");
     expect(result.expression).toBeNull();
@@ -496,7 +496,7 @@ describe("normalizeRaw — imprecise family labels (INV-04)", () => {
   });
 });
 
-describe("normalizeRaw — ISC-license suffix fix (INV-04)", () => {
+describe("normalizeRaw — ISC-license suffix fix", () => {
   test('"ISC license" resolves to ISC (the suffix false-negative)', () => {
     expect(normalizeRaw("ISC license").expression).toBe("ISC");
   });
@@ -510,7 +510,7 @@ describe("normalizeRaw — ISC-license suffix fix (INV-04)", () => {
   });
 });
 
-describe("annotateFindings — imprecise findings (INV-04)", () => {
+describe("annotateFindings — imprecise findings", () => {
   test("a single imprecise claim yields confidence imprecise + impreciseFamily, expression null", () => {
     const entry = pkg("jinja2-ish", "1.0.0", [claim("BSD License", "name")]);
     const { model } = annotateFindings(modelOf(entry), []);
@@ -563,14 +563,14 @@ describe("annotateFindings — imprecise findings (INV-04)", () => {
 });
 
 describe("annotateFindings — claim combination (Pitfalls 7-8)", () => {
-  test("duplicate identical claims collapse — never MIT AND MIT (Pitfall 7)", () => {
+  test("duplicate identical claims collapse — never MIT AND MIT", () => {
     // buffer-crc32@0.2.13 live shape: two identical claims in one component.
     const entry = pkg("buffer-crc32", "0.2.13", [claim("MIT"), claim("MIT")]);
     const { model } = annotateFindings(modelOf(entry), []);
     expect(model.packages[0]!.finding!.expression).toBe("MIT");
   });
 
-  test("distinct claims AND-combine conservatively and re-parse (Pitfall 8/A1)", () => {
+  test("distinct claims AND-combine conservatively and re-parse", () => {
     const entry = pkg("two-claims", "1.0.0", [
       claim("MIT"),
       claim("Apache-2.0"),
@@ -1165,7 +1165,7 @@ describe("normalizeRaw — Debian/DEP-5 shorthand map", () => {
 
   test("bare GPL/LGPL/AGPL stay IMPRECISE — the shorthand map never collides with the family lane", () => {
     // The shorthand keys are all VERSIONED; bare family labels must still route
-    // to the could-be-copyleft imprecise lane (INV-04), never a guessed id.
+    // to the could-be-copyleft imprecise lane, never a guessed id.
     for (const fam of ["GPL", "LGPL", "AGPL"]) {
       const result = normalizeRaw(fam);
       expect(result.expression).toBeNull();
@@ -1544,7 +1544,7 @@ describe("annotateFindings — scancode senior assessment (the re-pinned fill ma
     });
   });
 
-  test("row 5 (INV-04): a scancode claim that itself normalizes imprecise (bare family raw) leaves the same-family imprecise base unchanged, no conflict", () => {
+  test("row 5: a scancode claim that itself normalizes imprecise (bare family raw) leaves the same-family imprecise base unchanged, no conflict", () => {
     const entry = pkg("imprecise-apache-pkg", "1.0.0", [
       claim("Apache", "name"),
       scancodeClaim("Apache"),
@@ -1557,7 +1557,7 @@ describe("annotateFindings — scancode senior assessment (the re-pinned fill ma
     expect(finding.conflict).toBeUndefined();
   });
 
-  test("an imprecise assessment never conflicts with an imprecise base, even out-of-family — nothing precise on either side to weigh (INV-04)", () => {
+  test("an imprecise assessment never conflicts with an imprecise base, even out-of-family — nothing precise on either side to weigh", () => {
     const entry = pkg("imprecise-both-pkg", "1.0.0", [
       claim("BSD", "name"),
       scancodeClaim("Apache"),

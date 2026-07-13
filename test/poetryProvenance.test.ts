@@ -1,5 +1,5 @@
 /**
- * Python dependency provenance (07-13) from poetry.lock + pyproject.toml.
+ * Python dependency provenance from poetry.lock + pyproject.toml.
  *
  * The lockfile `[package.dependencies]` tables give the introducer edges;
  * pyproject `[project].dependencies` (PEP 621 `"name (constraint)"`) and/or
@@ -8,10 +8,9 @@
  * a representative tie-broken path. PEP-503 name normalization makes every node
  * a `pkg:pypi/<name>@<version>` purl matching the existing prod/dev derivation.
  *
- * 07-19 DESCOPE: optionality (poetry `optional = true`, PEP 508 markers, extras,
+ * DESCOPE: optionality (poetry `optional = true`, PEP 508 markers, extras,
  * multi-variant spec arrays) is OUT OF SCOPE. Deriving it from markers was a
- * recurring mislabeling bug class (a critical/warning in 3 of 4 adversarial
- * rounds). Every `[package.dependencies]` entry is now just an edge; there is no
+ * recurring mislabeling bug class. Every `[package.dependencies]` entry is now just an edge; there is no
  * optional distinction, no `optional` field, and "required-reachability"
  * collapses to plain reachability from a declared root via the introducer graph.
  *
@@ -36,7 +35,7 @@ import { poetryIntroductions } from "../src/collectors/poetryProvenance";
 /**
  * Synthetic poetry.lock: root declares a + b (via pyproject); c is a shared
  * transitive under a AND b (multi-parent); d is under c; e is a dependency of a
- * declared with a marker/optional spec object — 07-19: such an edge is now just
+ * declared with a marker/optional spec object — such an edge is now just
  * a plain edge (optionality descoped), so e is a normal transitive of a.
  */
 const POETRY_LOCK = [
@@ -122,15 +121,15 @@ describe("poetryIntroductions (PEP 621 roots)", () => {
     ]);
   });
 
-  test("a dependency declared with a marker/optional spec object is a plain transitive (07-19: optional descoped)", () => {
+  test("a dependency declared with a marker/optional spec object is a plain transitive (optionality descoped)", () => {
     const e = intro.get("pkg:pypi/e-pkg@5.0.0");
     expect(e!.direct).toBe(false);
     expect(e!.introducedBy).toEqual(["pkg:pypi/a-pkg@1.0.0"]);
-    // 07-19: no `optional` field is ever emitted.
+    // No `optional` field is ever emitted.
     expect("optional" in e!).toBe(false);
   });
 
-  test("no introduction ever carries an `optional` field (07-19 descope)", () => {
+  test("no introduction ever carries an `optional` field", () => {
     for (const i of intro.values()) {
       expect("optional" in i).toBe(false);
     }
@@ -184,9 +183,9 @@ describe("poetryIntroductions — determinism", () => {
   });
 });
 
-describe("poetryIntroductions — optionality descoped (07-19)", () => {
-  // 07-19 DESCOPE: poetry `optional`/marker/extras semantics produced a
-  // recurring mislabeling bug class (3 of 4 adversarial rounds). Rather than
+describe("poetryIntroductions — optionality descoped", () => {
+  // DESCOPE: poetry `optional`/marker/extras semantics produced a
+  // recurring mislabeling bug class. Rather than
   // keep patching PEP 508 marker / extras / multi-variant parsing, optionality
   // is removed entirely. Every `[package.dependencies]` edge — regardless of
   // marker/optional/extras decoration — is now just an edge; reachability from a
@@ -195,7 +194,7 @@ describe("poetryIntroductions — optionality descoped (07-19)", () => {
   test("a multi-variant dep (one python_version variant + one `extra ==` variant) is a plain edge — no optional", () => {
     // A poetry dep value MAY be an ARRAY of conditional spec variants. The pre-
     // fix `edgeIsOptional` used `.some` (any variant optional → optional), which
-    // mislabeled this. 07-19: it is simply an edge; no optional anything.
+    // mislabeled this. Now it is simply an edge; no optional anything.
     const lock = [
       "[[package]]",
       'name = "host-pkg"',
@@ -228,7 +227,7 @@ describe("poetryIntroductions — optionality descoped (07-19)", () => {
   test("a marker using `extra` as a comparison VALUE (not the variable) carries no optional anything", () => {
     // The pre-fix `specIsOptional` used `/\bextra\b/`, which matched `extra` as a
     // marker VALUE (`platform_machine == "extra"`) and mislabeled the edge
-    // optional. 07-19: markers are not parsed at all — plain edge.
+    // optional. Markers are not parsed at all — plain edge.
     const lock = [
       "[[package]]",
       'name = "host-pkg"',
@@ -276,8 +275,8 @@ describe("poetryIntroductions — optionality descoped (07-19)", () => {
   });
 });
 
-describe("poetryIntroductions — honest residual on multi-version names (07-18)", () => {
-  // 07-18 PIVOT: the 07-16 "union the edge to ALL colliding purls" posture
+describe("poetryIntroductions — honest residual on multi-version names", () => {
+  // PIVOT: the earlier "union the edge to ALL colliding purls" posture
   // FABRICATED edges and MISLABELED versions when a PEP-503 normalized name maps
   // to MORE THAN ONE lock purl (routine in poetry: marker-conditioned /
   // multiple-constraint deps, or a genuine name-origin collision). A
@@ -453,7 +452,7 @@ describe("poetryIntroductions — honest residual on multi-version names (07-18)
   });
 });
 
-describe("poetryIntroductions — dependency-group roots (Fix 1, 07-20)", () => {
+describe("poetryIntroductions — dependency-group roots", () => {
   // WARNING (dogfood-exercised): declaredRootNames read roots from
   // [project].dependencies and [tool.poetry.dependencies] but NOT from
   // [tool.poetry.group.<name>.dependencies]. A package declared direct in a
@@ -571,14 +570,14 @@ describe("poetryIntroductions — dependency-group roots (Fix 1, 07-20)", () => 
   });
 });
 
-describe("poetryIntroductions — legacy main-deps precedence (Fix 2, 07-20)", () => {
+describe("poetryIntroductions — legacy main-deps precedence", () => {
   // WARNING: declaredRootNames UNIONed [project].dependencies AND
   // [tool.poetry.dependencies] unconditionally. In PEP 621 mode
   // [project].dependencies is authoritative; the legacy table is
   // constraint/source metadata that may list NON-top-level names → a transitive
   // dep listed there rendered "direct". FIX: read the MAIN
   // [tool.poetry.dependencies] table as roots ONLY when [project].dependencies
-  // is ABSENT. (Groups from Fix 1 are ALWAYS read — separate table.)
+  // is ABSENT. (Groups are ALWAYS read — separate table.)
 
   const PRECEDENCE_LOCK = [
     "[[package]]",
@@ -634,7 +633,7 @@ describe("poetryIntroductions — legacy main-deps precedence (Fix 2, 07-20)", (
     expect(intro.get("pkg:pypi/leftover@1.0.0")!.direct).toBe(true);
   });
 
-  test("groups are read even WITH [project] present (Fix 1 independent of Fix 2 precedence)", () => {
+  test("groups are read even WITH [project] present (independent of main-deps precedence)", () => {
     const lock = [
       "[[package]]",
       'name = "app"',
@@ -665,8 +664,8 @@ describe("poetryIntroductions — legacy main-deps precedence (Fix 2, 07-20)", (
   });
 });
 
-describe("poetryIntroductions — introducedBy ⊆ root-reachable (Fix 1, 07-21)", () => {
-  // CRITICAL (07-21): the SHARED deriveIntroductions set introducedBy directly
+describe("poetryIntroductions — introducedBy ⊆ root-reachable", () => {
+  // CRITICAL: the SHARED deriveIntroductions set introducedBy directly
   // from the purl-space parent SET and only gated `path` on shortestPath. So a
   // transitive whose ONLY parent is itself disconnected from every declared root
   // got {direct:false, introducedBy:[<disconnected-parent>], path:undefined};
@@ -723,7 +722,7 @@ describe("poetryIntroductions — introducedBy ⊆ root-reachable (Fix 1, 07-21)
     expect(intro.get("pkg:pypi/orphanparent@1.0.0")!.introducedBy).toEqual([]);
   });
 
-  test("legacy→PEP-621 migration: a top-level declared only in legacy [tool.poetry] is NOT a root, so its child renders orphan (Fix 2 precedence × reachability)", () => {
+  test("legacy→PEP-621 migration: a top-level declared only in legacy [tool.poetry] is NOT a root, so its child renders orphan (main-deps precedence × reachability)", () => {
     // pyproject has [project].dependencies (partial PEP 621 migration) listing
     // `other`, AND a real top-level `realroot` declared ONLY in the legacy
     // [tool.poetry.dependencies] table. Per Fix-2 precedence, with [project]
@@ -760,7 +759,7 @@ describe("poetryIntroductions — introducedBy ⊆ root-reachable (Fix 1, 07-21)
       "",
     ].join("\n");
     const intro = poetryIntroductions(lock, pyproject);
-    // realroot is NOT a root (Fix 2) → realroot is root-disconnected → dep's
+    // realroot is NOT a root → realroot is root-disconnected → dep's
     // only parent is disconnected → dep is an orphan.
     expect(intro.get("pkg:pypi/realroot@1.0.0")!.direct).toBe(false);
     const dep = intro.get("pkg:pypi/dep@1.0.0");

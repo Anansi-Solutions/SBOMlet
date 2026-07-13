@@ -1,10 +1,9 @@
 /**
- * Shipped TOOL-LEVEL disambiguation override set (POL-07).
+ * Shipped TOOL-LEVEL disambiguation override set.
  *
  * A curated, committed literal data module of REAL disambiguations for
  * commonly-ambiguous well-known projects. Any repo consuming this tool benefits
- * from these defaults WITHOUT re-authoring them — that is POL-07's acceptance
- * criterion. The set is GENERAL (well-known projects), NOT a per-consumer data
+ * from these defaults WITHOUT re-authoring them. The set is GENERAL (well-known projects), NOT a per-consumer data
  * dump: project-specific judgments live in the consuming repo's .sbomlet.policy.toml
  * `[[clarify]]` table, which WINS over this set on conflict (project-wins).
  *
@@ -13,8 +12,8 @@
  * evaluation the engine applies the asserted `expression` ONLY when the
  * dependency's pre-override observed signal still matches `expects` (see
  * normalize.ts / evaluate.ts). A MISMATCH is a STALE override that FAILS the
- * gate loudly rather than silently masking a relicense — the staleness guard is
- * the whole point of POL-07.
+ * gate loudly rather than silently masking a relicense — the staleness guard
+ * is the whole point of the shipped set.
  *
  * The data is a literal, reviewable list — never computed at runtime and never
  * read from disk inside the pure engine (it is imported like other config; no
@@ -41,7 +40,7 @@ export interface BuiltinOverride {
   /**
    * The pre-override observed value this override disambiguates FROM. Matched
    * (case-insensitive, trimmed) against the package's pre-override observed
-   * signal (normalized raw claim strings ∪ the 05-05 impreciseFamily token); on
+   * signal (normalized raw claim strings ∪ the impreciseFamily token); on
    * mismatch the override is STALE and fails the gate.
    */
   expects: string;
@@ -54,7 +53,7 @@ export interface BuiltinOverride {
 /**
  * The well-known Jupyter/IPython projects PyPI reports under the imprecise
  * "BSD"/"BSD License" classifier. The stack is uniformly BSD-3-Clause; the
- * override disambiguates the imprecise BSD signal (05-05's impreciseFamily
+ * override disambiguates the imprecise BSD signal (the impreciseFamily
  * "BSD") to the precise id. Curated to the canonical, broadly-depended-on
  * projects — any repo using Jupyter benefits, and the list stays reviewable.
  */
@@ -77,10 +76,10 @@ const JUPYTER_BSD_PROJECTS: ReadonlyArray<string> = [
 
 const JUPYTER_BSD_REASON =
   "the Jupyter/IPython stack is uniformly BSD-3-Clause; PyPI reports the " +
-  "imprecise 'BSD'/'BSD License' classifier (05-05 imprecise-BSD signal)";
+  "imprecise 'BSD'/'BSD License' classifier (the imprecise-BSD signal)";
 
 /**
- * The shipped tool-level override set. POL-07's NAMED defaults ship here as REAL
+ * The shipped tool-level override set. The NAMED defaults ship here as REAL
  * working entries (not stubs): python-dateutil's dual license and the
  * Jupyter/IPython BSD stack.
  */

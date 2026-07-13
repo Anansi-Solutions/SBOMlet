@@ -453,7 +453,7 @@ describe("BUILTIN_OVERRIDES — the shipped tool-level set", () => {
     for (const name of canonical) {
       const entry = BUILTIN_OVERRIDES.find((o) => o.name === name);
       expect(entry).toBeDefined();
-      // expects the imprecise BSD value the 05-05 normalizer produces.
+      // expects the imprecise BSD value the normalizer produces.
       expect(entry?.expects).toBe("BSD");
       expect(entry?.expression).toBe("BSD-3-Clause");
     }
@@ -731,7 +731,7 @@ interface PackageSpec {
   /** Package-level taxonomy; defaults to "app" ("os" routes applyOsScope). */
   scope?: "app" | "os";
   /**
-   * A ScanCode-sourced claim raw (12-02): appended as a { source: "scancode" }
+   * A ScanCode-sourced claim raw: appended as a { source: "scancode" }
    * claim so annotateFindings runs applyScancodeAssessment and can attach a
    * conflict marker. Absent = the common quick-check-only case.
    */
@@ -811,7 +811,7 @@ function pkgSpec(
 
 /**
  * Shorthand for a package carrying a quick-check claim PLUS a scancode claim —
- * the assessment/conflict trigger (12-02). `claim === null` means the scancode
+ * the assessment/conflict trigger. `claim === null` means the scancode
  * claim is the only license evidence (the vacuous-agreement case).
  */
 function scanPkgSpec(
@@ -1021,7 +1021,7 @@ describe("evaluate — family-aware suppression", () => {
 // regression-guarded here.
 // ===========================================================================
 
-describe("WORKSPACE_ABSORBS — literal absorption relation (revision F)", () => {
+describe("WORKSPACE_ABSORBS — literal absorption relation", () => {
   test("the GNU family absorbs exactly GNU and MPL (the bundled inbound set)", () => {
     const gnu = WORKSPACE_ABSORBS.get("GNU");
     expect(gnu).toBeDefined();
@@ -1039,9 +1039,9 @@ describe("WORKSPACE_ABSORBS — literal absorption relation (revision F)", () =>
   });
 });
 
-describe("evaluate — absorb-all-copyleft suppression (revision F)", () => {
+describe("evaluate — absorb-all-copyleft suppression", () => {
   test("an AGPL workspace now SUPPRESSES an MPL-2.0 finding (was: fell through to fail)", () => {
-    // Before revision F this fell through to default:copyleft (MPL is a
+    // Without absorption this fell through to default:copyleft (MPL is a
     // different family from GNU). apps/scratch re-releases bundled MPL files
     // under AGPL, so it absorbs them.
     const { verdicts } = runEngine(
@@ -1239,10 +1239,10 @@ describe("evaluate — copyleft dominates a permissive sibling end-to-end (C2/W2
 });
 
 // ===========================================================================
-// INV-04: imprecise findings + the could-be-copyleft literal token set (05-05).
+// Imprecise findings + the could-be-copyleft literal token set.
 // ===========================================================================
 
-describe("COULD_BE_COPYLEFT_FAMILIES — literal token set (INV-04)", () => {
+describe("COULD_BE_COPYLEFT_FAMILIES — literal token set", () => {
   test("contains the bare GNU-family copyleft tokens", () => {
     expect(COULD_BE_COPYLEFT_FAMILIES.has("GPL")).toBe(true);
     expect(COULD_BE_COPYLEFT_FAMILIES.has("AGPL")).toBe(true);
@@ -1281,7 +1281,7 @@ describe("COULD_BE_COPYLEFT_FAMILIES — literal token set (INV-04)", () => {
   });
 });
 
-describe("evaluate — imprecise findings route to a safe lane (INV-04)", () => {
+describe("evaluate — imprecise findings route to a safe lane", () => {
   test("a permissive imprecise family (BSD) gets a non-gating default:imprecise status", () => {
     const { verdicts } = runEngine(
       [pkgSpec("jinja2-ish", "BSD License", ["frontend"])],
@@ -1554,15 +1554,15 @@ describe("evaluate — staleness-guarded overrides", () => {
 });
 
 // ===========================================================================
-// SCAN-05 (12-02): the conflict:scancode fail verdict. A ScanCode-vs-quick-check
-// disagreement (marker set by applyScancodeAssessment in 12-01) becomes a
+// The conflict:scancode fail verdict. A ScanCode-vs-quick-check
+// disagreement (marker set by applyScancodeAssessment) becomes a
 // distinct fail in verdictFor, slotted directly below stale and ABOVE
 // compatible. Fail-not-warn (human involvement is NECESSARY; a warn is
 // ignorable). Exit 1 is automatic — a "fail" verdict is a violation in
 // exitCodeFor's mapping (check.ts), no new machinery.
 // ===========================================================================
 
-describe("evaluate — conflict:scancode fail verdict (SCAN-05)", () => {
+describe("evaluate — conflict:scancode fail verdict", () => {
   test("HEADLINE: a scancode assessment disagreeing with a precise declared claim FAILS conflict:scancode, naming both sides and the clarify remedy", () => {
     const { verdicts } = runEngine(
       [scanPkgSpec("disputed-pkg", "Apache-2.0", "MIT", ["backend"])],
@@ -1655,16 +1655,16 @@ describe("evaluate — conflict:scancode fail verdict (SCAN-05)", () => {
 });
 
 // ===========================================================================
-// SCAN-05 (12-02, Task 2): the [[clarify]] resolution path, end to end. The
-// conflict machinery (marker set in 12-01, verdict in Task 1) is cleared by a
-// human decision recorded as a clarify override — the SCAN-05 "documented
-// resolution path" (cited by the 12-06 docs). Worked example from research Q2:
+// The [[clarify]] resolution path, end to end. The
+// conflict machinery (the marker and verdict above) is cleared by a
+// human decision recorded as a clarify override — the "documented
+// resolution path" the docs describe. Worked example:
 // the declared/registry quick check reads MIT; the in-depth ScanCode assessment
 // reads BSD-3-Clause. These are verdict-level proofs; the annotate-level marker
 // semantics are locked in normalize.test.ts.
 // ===========================================================================
 
-describe("evaluate — conflict:scancode resolution via [[clarify]] (SCAN-05)", () => {
+describe("evaluate — conflict:scancode resolution via [[clarify]]", () => {
   // The human's recorded call: "I still expect the quick check to read MIT, and
   // I decide the license IS BSD-3-Clause (the in-depth scan is right)." expects
   // MIT is present in the signal and no non-expects member contradicts
@@ -1689,7 +1689,7 @@ describe("evaluate — conflict:scancode resolution via [[clarify]] (SCAN-05)", 
     expect(verdicts[0].rule).not.toBe("conflict:scancode");
   });
 
-  test("Pitfall 5: an APPLIED override never lets a conflict marker survive into a fail — the resolved package yields no conflict verdict, deterministically across repeated runs (no permanent, un-clearable fail)", () => {
+  test("an APPLIED override never lets a conflict marker survive into a fail — the resolved package yields no conflict verdict, deterministically across repeated runs (no permanent, un-clearable fail)", () => {
     const run = (): Verdict[] =>
       runEngine(
         [scanPkgSpec("disputed-pkg", "MIT", "BSD-3-Clause", ["backend"])],
@@ -3376,7 +3376,7 @@ describe("evaluate — os-scope partial finding", () => {
 });
 
 // ---------------------------------------------------------------------------
-// [docker] ignore — Dockerfile-discovery exclusion globs (07-23).
+// [docker] ignore — Dockerfile-discovery exclusion globs.
 // ---------------------------------------------------------------------------
 
 describe("[docker] ignore parsing", () => {

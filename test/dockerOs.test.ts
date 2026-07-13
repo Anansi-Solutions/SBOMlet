@@ -66,7 +66,7 @@ describe("syftArgs (argv lock)", () => {
   });
 });
 
-describe("dockerInspectArgs (argv lock, finding #5)", () => {
+describe("dockerInspectArgs (argv lock)", () => {
   test("the image operand is placed AFTER a `--` end-of-options separator", () => {
     const args = dockerInspectArgs("postgres:18");
     const sepIndex = args.indexOf("--");
@@ -568,7 +568,7 @@ describe("assertSyftSbomSize (DoS size gate)", () => {
 });
 
 // ---------------------------------------------------------------------------
-// selectDigest (finding #2, 07-31) — deterministic RepoDigest selection. An
+// selectDigest — deterministic RepoDigest selection. An
 // image pulled from / pushed to multiple registries has multiple RepoDigests
 // in a daemon-order-dependent array; selecting digests[0] makes the committed
 // docker.sbom.json vary by machine (byte-determinism break). selectDigest
@@ -577,7 +577,7 @@ describe("assertSyftSbomSize (DoS size gate)", () => {
 // the compareCodeUnits-smallest.
 // ---------------------------------------------------------------------------
 
-describe("selectDigest (deterministic RepoDigest selection, finding #2)", () => {
+describe("selectDigest (deterministic RepoDigest selection)", () => {
   test("a two-element RepoDigests array yields the SAME digest in BOTH daemon orders", () => {
     const a = "registry-a.io/app@sha256:" + "a".repeat(64);
     const b = "registry-b.io/app@sha256:" + "b".repeat(64);

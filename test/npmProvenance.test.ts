@@ -1,5 +1,5 @@
 /**
- * npm/yarn dependency provenance (07-13): bom-ref→purl join, purl-space union of
+ * npm/yarn dependency provenance: bom-ref→purl join, purl-space union of
  * duplicated purls, direct-vs-transitive detection, deterministic tie-broken
  * shortest path, cycle safety, multi-parent introducedBy SET.
  *
@@ -86,7 +86,7 @@ describe("npmIntroductions", () => {
     expect(a!.direct).toBe(true);
     expect(a!.introducedBy).toEqual([]);
     expect(a!.path).toBeUndefined();
-    expect("optional" in a!).toBe(false); // 07-19: no optional field exists
+    expect("optional" in a!).toBe(false); // optionality is descoped: no optional field exists
   });
 
   test("a transitive's introducedBy is the sorted-unique SET of direct parents (multi-parent)", () => {
@@ -276,7 +276,7 @@ describe("npmIntroductions", () => {
     expect(npmIntroductions({ components: SYNTH_BOM.components }).size).toBe(0);
   });
 
-  test("introducedBy is dropped when the parent is itself unreachable from the root (Fix 3, 07-20)", () => {
+  test("introducedBy is dropped when the parent is itself unreachable from the root", () => {
     // INFO (latent): introducedBy was built in purl-space from ALL non-root
     // edges, even when the parent is itself unreachable from the root.
     // realShortestPath correctly drops `path` in that case, but introducedBy
@@ -324,7 +324,7 @@ describe("npmIntroductions", () => {
     expect(intro.get("pkg:npm/reachable@1")!.direct).toBe(true);
   });
 
-  test("a root-reachable parent's introducedBy is RETAINED (Fix 3 does not over-prune)", () => {
+  test("a root-reachable parent's introducedBy is RETAINED (the orphan guard does not over-prune)", () => {
     // Sanity: when the parent IS reachable, introducedBy + path both stand.
     const intro = npmIntroductions(SYNTH_BOM);
     const c = intro.get("pkg:npm/c@3.0.0");
@@ -332,7 +332,7 @@ describe("npmIntroductions", () => {
     expect(c!.path).toEqual(["pkg:npm/a@1.0.0", "pkg:npm/c@3.0.0"]);
   });
 
-  test("introducedBy honors REAL bom-ref root-reachability, not purl-space union (07-22)", () => {
+  test("introducedBy honors REAL bom-ref root-reachability, not purl-space union", () => {
     // 7th-review WARNING (dump-model only, trimmed BOM): introducedBy was filtered
     // against PURL-SPACE root-reachability (deriveIntroductions), while `path` was
     // recomputed on the REAL bom-ref graph (realShortestPath). A dup-purl variant
@@ -412,8 +412,8 @@ describe("npmIntroductions", () => {
     expect(p!.path).toEqual(["pkg:npm/a@1.0.0", "pkg:npm/p@1.0.0"]);
   });
 
-  test("partial reachability: a transitive's introducedBy keeps only its ROOT-REACHABLE parents (Fix 1, 07-21)", () => {
-    // INFO (07-21 dump-model): a node reached via a mix of a reachable parent and
+  test("partial reachability: a transitive's introducedBy keeps only its ROOT-REACHABLE parents", () => {
+    // INFO: a node reached via a mix of a reachable parent and
     // a disconnected one carried BOTH in introducedBy. The shared reachability
     // filter must drop the disconnected parent while keeping the reachable one.
     //
@@ -448,7 +448,7 @@ describe("npmIntroductions", () => {
     expect(intro.get("pkg:npm/b@1")!.direct).toBe(false);
   });
 
-  test("no locatable root bom-ref → ABSTAIN (empty map), never mislabel real directs as transitive (07-24)", () => {
+  test("no locatable root bom-ref → ABSTAIN (empty map), never mislabel real directs as transitive", () => {
     // CONTRACT: provenance must ABSTAIN (empty map → render "—") when the root
     // cannot be located, NEVER fabricate or mislabel. The latent bug: when
     // metadata.component carries a purl but NO bom-ref, rootBomRefOf returns
@@ -487,7 +487,7 @@ describe("npmIntroductions", () => {
     expect(intro.get("pkg:npm/a@1")).toBeUndefined();
   });
 
-  test("root bom-ref present but NO dependencies edge anchors it → ABSTAIN (root not anchored, 07-24)", () => {
+  test("root bom-ref present but NO dependencies edge anchors it → ABSTAIN (root not anchored)", () => {
     // CONTRACT: even with a locatable root bom-ref, if NO `dependencies` edge has
     // ref === rootBomRef, the root is not actually anchored in the graph — its
     // declared-direct set is unknown. Building a graph anyway would again mark
@@ -513,7 +513,7 @@ describe("npmIntroductions", () => {
     expect(intro.get("pkg:npm/a@1")).toBeUndefined();
   });
 
-  test("positive baseline: a well-formed BOM (root bom-ref + root-anchored edge) still populates with correct direct:true (no over-abstention, 07-24)", () => {
+  test("positive baseline: a well-formed BOM (root bom-ref + root-anchored edge) still populates with correct direct:true (no over-abstention)", () => {
     // Guard against over-abstaining: the well-formed common case (root bom-ref
     // present AND a dependencies edge anchored on it) must STILL yield a
     // populated map with the root's children marked direct:true.

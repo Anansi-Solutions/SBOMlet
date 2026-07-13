@@ -10,11 +10,11 @@
  * in the committed cache — a positive entry with the raw, OR a negative entry
  * ONLY on a clean 200-empty answer (the resolver returned null on a successful
  * fetch). A fetch FAILURE propagates loudly and writes NO entry, so a transient
- * outage can never become a false negative (Pitfall 1).
+ * outage can never become a false negative.
  *
  * In CHECK mode it NEVER fetches and NEVER writes: a cache miss for an unknown
  * package needing enrichment is a stale condition — the purl is returned in
- * `staleUnknowns` so the gate can map it to exit 2 (Pitfall 2 / GATE-02). A
+ * `staleUnknowns` so the gate can map it to exit 2. A
  * fetch stubbed to throw proves check is hermetic against the committed cache.
  *
  * The appended claim flows through the SAME normalizeRaw as a generator claim

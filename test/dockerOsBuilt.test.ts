@@ -131,7 +131,7 @@ function makeAbsentThenPresentExec(digestRef: string): ExecFn {
 
 /**
  * A recorder where the ref is absent (inspect fails) AND the implicit pull fails
- * too — nothing can be scanned. Pitfall 6 / T-13-05: the error must surface and
+ * too — nothing can be scanned. The error must surface and
  * digest resolution must never run (no "" masking a typo'd ref).
  */
 function makeFailingPullExec(): ExecFn {
@@ -279,7 +279,7 @@ describe("collectDockerOsSbom one posture (full contents, generalized digest, pr
     );
   });
 
-  test("a locally-present image is probed and scanned as-is, never pulled (T-13-06)", async () => {
+  test("a locally-present image is probed and scanned as-is, never pulled", async () => {
     tempDir = mkdtempSync(join(tmpdir(), "licenses-docker-posture-"));
     await collectDockerOsSbom(refs("local/scan-a"), { tempDir });
     const argv = argvStrings();
@@ -335,7 +335,7 @@ describe("collectDockerOsSbom one posture (full contents, generalized digest, pr
     expect(parsed.dockerImages[0]?.digest).toBe(digestRef);
   });
 
-  test("a ref whose implicit pull fails throws before any scan — digest is never reached (T-13-05)", async () => {
+  test("a ref whose implicit pull fails throws before any scan — digest is never reached", async () => {
     currentExec = makeFailingPullExec();
     tempDir = mkdtempSync(join(tmpdir(), "licenses-docker-posture-"));
     await expect(
@@ -347,7 +347,7 @@ describe("collectDockerOsSbom one posture (full contents, generalized digest, pr
     );
   });
 
-  // Adversarial review (Lens 2): two images sharing a purl with DIFFERENT
+  // Two images sharing a purl with DIFFERENT
   // licenses — the license claim attached to a shared purl must be a pure
   // function of the image SET, never of argument order, for byte-determinism.
   test("a purl shared between two images resolves the SAME license regardless of argument order", async () => {
@@ -418,7 +418,7 @@ describe("collectDockerOsSbom one posture (full contents, generalized digest, pr
     }
   });
 
-  // --- Build lanes (13-03): --dockerfile and --repo-root build then scan ---
+  // --- Build lanes: --dockerfile and --repo-root build then scan ---
 
   test("--dockerfile lane builds each named Dockerfile via buildx and scans the built tags, digest-less and sorted", async () => {
     tempDir = mkdtempSync(join(tmpdir(), "licenses-docker-dockerfile-"));
@@ -500,7 +500,7 @@ describe("collectDockerOsSbom one posture (full contents, generalized digest, pr
       ),
     ).toBe(true);
     // The tag scanned equals imageTag of the DISCOVERY identity — the exact
-    // string that produces today's committed sidecar identity (Pitfall 2).
+    // string that produces today's committed sidecar identity.
     const tag = imageTag("svc/Dockerfile");
     const doc = JSON.parse(readFileSync(out, "utf8")) as {
       dockerImages: { image: string; digest: string; source: string }[];

@@ -1,13 +1,13 @@
 /**
- * Python dependency provenance (07-13) from poetry.lock + pyproject.toml.
+ * Python dependency provenance from poetry.lock + pyproject.toml.
  *
  * The research verdict: cdxgen --no-install-deps yields no usable graph, so the
  * AUTHORITATIVE source is the lockfile itself. Each poetry.lock `[[package]]`
  * carries a `[package.dependencies]` table (the introducer edges); pyproject
  * gives the declared-direct roots: `[project].dependencies` (PEP 621
  * `"name (constraint)"`) when present is authoritative, else the legacy
- * `[tool.poetry.dependencies]` table (07-20 Fix 2 precedence); PLUS every
- * `[tool.poetry.group.<name>.dependencies]` table, always (07-20 Fix 1).
+ * `[tool.poetry.dependencies]` table; PLUS every
+ * `[tool.poetry.group.<name>.dependencies]` table, always.
  *
  * DERIVED per package purl (`pkg:pypi/<pep503-name>@<version>`, matching
  * poetryProdPurlSet and cdxgen's purls): direct-vs-transitive, the sorted-unique
@@ -16,9 +16,8 @@
  *
  * Optionality is deliberately OUT OF SCOPE. Deriving optionality from poetry
  * markers (`optional = true`, PEP 508 marker variables, extras, multi-variant
- * spec arrays) was a recurring mislabeling bug class (flagged in three of
- * four review rounds: node-keyed optional, `.some`-not-`.every` over
- * variants, `/\bextra\b/` matching `extra` as a marker VALUE). Rather than keep
+ * spec arrays) was a recurring mislabeling bug class (node-keyed optional,
+ * `.some`-not-`.every` over variants, `/\bextra\b/` matching `extra` as a marker VALUE). Rather than keep
  * patching marker semantics, the `optional` distinction is removed entirely.
  * Every `[package.dependencies]` entry is now just an edge; there is no
  * required-vs-optional partition, no required-reachability — only plain
@@ -72,14 +71,14 @@ function addTableNames(
 /**
  * Extract the declared-direct ROOT names (PEP-503 normalized) from pyproject.
  *
- * MAIN deps (Fix 2, 07-20): `[project].dependencies` (PEP 621 array of
+ * MAIN deps: `[project].dependencies` (PEP 621 array of
  * `"name (constraint)"` strings) is AUTHORITATIVE when present. The legacy
  * `[tool.poetry.dependencies]` table is constraint/source metadata that may
  * list non-top-level names, so it is read as roots ONLY when
  * `[project].dependencies` is ABSENT (legacy-only poetry). Reading both
  * unconditionally let a transitive listed in the legacy table render "direct".
  *
- * GROUP deps (Fix 1, 07-20): EVERY `[tool.poetry.group.<name>.dependencies]`
+ * GROUP deps: EVERY `[tool.poetry.group.<name>.dependencies]`
  * table contributes roots — a package declared direct in a group (e.g. the
  * conventional dev group) is genuinely direct. Groups are read in BOTH PEP 621
  * and legacy modes (they live under `[tool.poetry.group.*]` regardless of where
@@ -113,14 +112,14 @@ function declaredRootNames(pyprojectText: string): Set<string> {
 
   const poetry = recordOf(recordOf(doc["tool"])?.["poetry"]);
 
-  // Fix 2: the legacy MAIN [tool.poetry.dependencies] table is a root source
+  // The legacy MAIN [tool.poetry.dependencies] table is a root source
   // ONLY when [project].dependencies is ABSENT — when present, PEP 621 is
   // authoritative and the legacy table is mere constraint/source metadata.
   if (!hasPep621Main) {
     addTableNames(roots, recordOf(poetry?.["dependencies"]));
   }
 
-  // Fix 1: EVERY [tool.poetry.group.<name>.dependencies] table is ALWAYS a root
+  // EVERY [tool.poetry.group.<name>.dependencies] table is ALWAYS a root
   // source, independent of the main-deps mode/precedence above.
   const groups = recordOf(poetry?.["group"]);
   if (groups !== undefined) {
@@ -193,10 +192,10 @@ interface EdgeAccumulators {
 /**
  * Fold one lock package's `[package.dependencies]` edges into the accumulators.
  * A dep NAME (PEP-503 normalized) resolves to a purl ONLY when that name maps to
- * EXACTLY ONE lock purl (07-18 honest residual); a dep naming a multi-version
+ * EXACTLY ONE lock purl (the honest residual); a dep naming a multi-version
  * name, or a name absent from the lock, is dropped — no edge fabricated.
  *
- * 07-19: optionality is descoped — the dep VALUE (a spec string, a spec object
+ * Optionality is descoped — the dep VALUE (a spec string, a spec object
  * with markers/optional/extras, or an array of conditional variants) is never
  * inspected. Every resolved dependency is just an edge.
  */
@@ -207,7 +206,7 @@ function ingestPackageEdges(
 ): void {
   for (const depName of Object.keys(pkg.dependencies)) {
     const childPurl = precisePurlByName.get(normalizePep503(depName));
-    // 07-18: a name resolving to no purl (absent) OR to MORE THAN ONE purl
+    // A name resolving to no purl (absent) OR to MORE THAN ONE purl
     // (multi-version / collision) is ambiguous — fabricate no edge.
     if (childPurl === undefined) continue;
     if (childPurl === pkg.purl) continue;
@@ -222,14 +221,14 @@ function ingestPackageEdges(
  * package's purl; a dependency naming a package absent from the lock is dropped
  * (no purl to point at).
  *
- * #1/#2 HONEST RESIDUAL ON VERSION AMBIGUITY (07-18, revises the 07-16 union):
+ * HONEST RESIDUAL ON VERSION AMBIGUITY:
  * version is part of the purl, so a dependency NAME alone cannot identify WHICH
  * version of a multi-version package an edge resolved to without PEP-440
- * constraint matching (deliberately out of scope — no new dependency). The 07-16
- * fix unioned a name→constraint edge to EVERY purl sharing the name; that
+ * constraint matching (deliberately out of scope — no new dependency). An
+ * earlier draft unioned a name→constraint edge to EVERY purl sharing the name; that
  * conflated the npm same-purl peer-resolution case with the poetry
  * different-version case and produced two defects:
- *   - FABRICATION (#2): `black` requires `click >=8`; a lock with click@7.1.2 +
+ *   - FABRICATION: `black` requires `click >=8`; a lock with click@7.1.2 +
  *     click@8.1.7 fabricated `black → click@7.1.2` (a chain in no real relation).
  *   - MISLABEL (#1): a declared-root NAME `foo` with foo@1.0.0 (real direct) +
  *     foo@2.0.0 (transitive via `bar`) marked BOTH versions `direct`.
@@ -242,7 +241,7 @@ function ingestPackageEdges(
  * parent whose own resolution is unambiguous; one with neither a precise
  * introducer nor a precise direct is the honest "—" residual.
  *
- * 07-19: optionality is descoped — there is no required/optional edge partition
+ * Optionality is descoped — there is no required/optional edge partition
  * and no required-reachability. Every resolved dependency is a plain edge.
  */
 function buildPurlGraph(
@@ -268,7 +267,7 @@ function buildPurlGraph(
   };
   const rootChildren = new Set<string>();
   for (const pkg of packages) {
-    // 07-18: a declared-root NAME marks a purl direct ONLY when that name maps
+    // A declared-root NAME marks a purl direct ONLY when that name maps
     // to exactly one lock purl — a multi-version root name cannot identify WHICH
     // version is the real direct without PEP-440, so none is blanket-marked.
     if (

@@ -69,7 +69,7 @@ export interface CollectedSbom {
    */
   scope?: ScopeTaxonomy;
   /**
-   * Per-purl dependency provenance for THIS target (07-13), keyed by purl. When
+   * Per-purl dependency provenance for THIS target, keyed by purl. When
    * present (the npm/yarn and python lanes), each component's occurrence gets the
    * matching introduction; a purl absent from the map gets none (the honest
    * residual). Absent entirely for graph-less sources (terraform / Docker OS /
@@ -363,7 +363,7 @@ function claimKey(claim: LicenseClaim): string {
  *   which side arrived first decides the representative chain.
  * Absent on both sides → absent; present on one → that one (cloned).
  *
- * 07-21 DIRECT-CONSISTENCY (Fix 2): when the reconciled result is `direct:true`,
+ * DIRECT-CONSISTENCY: when the reconciled result is `direct:true`,
  * `introducedBy` is cleared to [] and `path` is dropped. ORing `direct` while
  * UNIONing introducedBy / keeping a path produced the contradictory
  * {direct:true, introducedBy:[mid], path:[mid,leaf]} when a DIRECT intro folded
@@ -372,7 +372,7 @@ function claimKey(claim: LicenseClaim): string {
  * — it has no parent chain — so a direct reconciliation carries no introducer
  * and no path.
  *
- * 07-19: optionality is descoped — there is no `optional` field to reconcile.
+ * Optionality is descoped — there is no `optional` field to reconcile.
  */
 function reconcileIntroductions(
   a: DependencyIntroduction | undefined,
@@ -381,7 +381,7 @@ function reconcileIntroductions(
   if (a === undefined) return b === undefined ? undefined : { ...b };
   if (b === undefined) return { ...a };
 
-  // Fix 2: a direct dep has no introducer chain — clear introducedBy + drop path.
+  // A direct dep has no introducer chain — clear introducedBy + drop path.
   if (a.direct || b.direct) {
     return { direct: true, introducedBy: [] };
   }
@@ -418,7 +418,7 @@ function mergeInto(existing: PackageEntry, incoming: PackageEntry): void {
   // EVERY contributing component for that target is dev; a single production
   // contribution forces the whole occurrence to production. This is the
   // safety-bearing direction — a shipped occurrence carries the distribution
-  // obligation, so it must never be masked to dev (POL-08). It matches the
+  // obligation, so it must never be masked to dev. It matches the
   // package-level rule in render/markdown.ts isDevelopmentOnly. Distinct targets
   // keep their flags independently.
   const byTarget = new Map<string, Occurrence>();
@@ -602,7 +602,7 @@ function packageEntryOf(
         ? !input.prodPurlSet.has(purl)
         : propertyDevMarker(component),
   };
-  // Provenance (07-13): the per-target introduction for this purl, when the
+  // Provenance: the per-target introduction for this purl, when the
   // source supplied a graph. Attached at occurrence creation so it is PER-TARGET
   // and rides through mergeInto unchanged (no cross-purl reconciliation). A purl
   // absent from the map (or no map at all) leaves introduction undefined — the

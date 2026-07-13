@@ -1,5 +1,5 @@
 /**
- * POL-09 terminal deny-list matcher.
+ * Terminal deny-list matcher.
  *
  * A deny entry FORCE-FAILS a matching package at the very top of verdictFor —
  * above stale, compatible, workspace suppression, and the dev-scope downgrade. A
@@ -38,7 +38,7 @@
  *     name can never be denied. The shipped defaults are license-mode only — a
  *     name-mode default would have to guess encumbered package names.
  *
- * OR-FINDING-vs-DENY ELECTION SEMANTICS (plan-check W1 — load-bearing):
+ * OR-FINDING-vs-DENY ELECTION SEMANTICS (load-bearing):
  * spdx-satisfies(finding, allowlist) is the WRONG primitive for deny because it
  * treats the allowlist as "available licenses" and an OR finding as satisfied
  * when ANY branch is available — so satisfies("MIT OR BUSL-1.1", ["BUSL-1.1"])

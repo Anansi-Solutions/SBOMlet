@@ -84,7 +84,7 @@ const goldenPolicyView: PolicyView = {
   ],
 };
 
-describe("renderMarkdown — golden byte equality (INV-03)", () => {
+describe("renderMarkdown — golden byte equality", () => {
   test("license-shapes fixture matches its golden byte-for-byte", () => {
     expect(renderMarkdown(annotatedShapes)).toBe(golden("license-shapes.md"));
   });
@@ -153,7 +153,7 @@ describe("renderMarkdown — cell escaping", () => {
   });
 });
 
-// SCAN-05: a package whose in-depth ScanCode assessment (MIT) disagrees with
+// A package whose in-depth ScanCode assessment (MIT) disagrees with
 // the declared quick check (Apache-2.0). annotateFindings attaches the conflict
 // marker exactly as the live pipeline does.
 function conflictModel(): CanonicalDependencies {
@@ -177,7 +177,7 @@ function conflictModel(): CanonicalDependencies {
   ).model;
 }
 
-describe("renderMarkdown — assessment conflicts section (SCAN-05)", () => {
+describe("renderMarkdown — assessment conflicts section", () => {
   test("a conflicted package renders the dedicated section naming the in-depth value, the quick-check value, and where it is used", () => {
     const out = renderMarkdown(conflictModel());
     expect(
@@ -219,7 +219,7 @@ describe("renderMarkdown — assessment conflicts section (SCAN-05)", () => {
     ).toBe(false);
   });
 
-  test("hostile expression strings in the conflict cells are escaped via escapeCell — pipes and backticks cannot break the table (T-12-04)", () => {
+  test("hostile expression strings in the conflict cells are escaped via escapeCell — pipes and backticks cannot break the table", () => {
     const hostile: CanonicalDependencies = {
       packages: [
         {
@@ -485,7 +485,7 @@ describe("renderMarkdown — the full document", () => {
     for (const position of positions) expect(position).toBeGreaterThan(-1);
     expect(positions).toEqual([...positions].sort((a, b) => a - b));
 
-    // No date string anywhere (INV-03).
+    // No date string anywhere.
     expect(/\b20\d\d-\d\d-\d\d\b/.test(output)).toBe(false);
     expect(/\b20\d\d\b.*generated/i.test(output)).toBe(false);
   });
@@ -761,7 +761,7 @@ describe("renderMarkdown — the full document", () => {
     expect(a.endsWith("\n\n")).toBe(false);
   });
 
-  test("Test 8: imprecise findings — License cell marker, review section, not unknown (INV-04)", () => {
+  test("Test 8: imprecise findings — License cell marker, review section, not unknown", () => {
     const model: CanonicalDependencies = {
       packages: [
         entry({
@@ -869,7 +869,7 @@ describe("renderMarkdown — the full document", () => {
     expect(section.includes("pipe\\|x")).toBe(true);
   });
 
-  test("escapeCell is exported for notices.ts (04-04)", async () => {
+  test("escapeCell is exported for notices.ts", async () => {
     const mod = (await import("../src/render/markdown")) as Record<
       string,
       unknown
@@ -1611,7 +1611,7 @@ describe("renderMarkdown — Problematic licenses summary", () => {
     const section = slice(output);
     expect(section.includes(HEADING)).toBe(true);
     // The blocking table head with the fixed column order — now carries the
-    // Why column (07-13) between Used-in and Reason.
+    // Why column between Used-in and Reason.
     expect(
       section.includes(
         "| Severity | Rule | Name | Ecosystem | Version | License | Used in | Why | Reason |",
@@ -1809,8 +1809,8 @@ describe("renderMarkdown — Problematic licenses summary", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Dependency provenance "Why" column (07-13) — problematic table + copyleft
-// section. The per-row aggregation rule (07-19, optionality descoped): "—" when
+// Dependency provenance "Why" column — problematic table + copyleft
+// section. The per-row aggregation rule (optionality descoped): "—" when
 // no in-scope occurrence carries an introduction OR all in-scope introductions
 // are orphans (direct:false ∧ empty introducedBy ∧ no path); "direct" when ≥1
 // genuine (non-orphan) in-scope occurrence is direct and the rest are orphans;
@@ -1819,7 +1819,7 @@ describe("renderMarkdown — Problematic licenses summary", () => {
 // with "(+N more)". No ", optional" suffix is ever rendered.
 // ---------------------------------------------------------------------------
 
-describe("renderMarkdown — provenance Why column (07-13)", () => {
+describe("renderMarkdown — provenance Why column", () => {
   /** A copyleft-flagging verdict for a given purl + target. */
   const copyleftVerdict = (purl: string, target: string): Verdict => ({
     purl,
@@ -1914,8 +1914,8 @@ describe("renderMarkdown — provenance Why column (07-13)", () => {
     ).toBe(true);
   });
 
-  test("a python transitive renders its path with NO ', optional' suffix (07-19 descope)", () => {
-    // 07-19: optionality is descoped — a python transitive is just a path, never
+  test("a python transitive renders its path with NO ', optional' suffix", () => {
+    // Optionality is descoped — a python transitive is just a path, never
     // suffixed ", optional". (Was: "optional (python) → annotated".)
     const model: CanonicalDependencies = {
       packages: [
@@ -1987,7 +1987,7 @@ describe("renderMarkdown — provenance Why column (07-13)", () => {
     ).toBe(true);
   });
 
-  test("bare 'direct' ONLY when EVERY in-scope occurrence is direct (07-18)", () => {
+  test("bare 'direct' ONLY when EVERY in-scope occurrence is direct", () => {
     // direct in apps/a AND apps/b, both flagged + in-scope → bare "direct".
     const model: CanonicalDependencies = {
       packages: [
@@ -2029,9 +2029,9 @@ describe("renderMarkdown — provenance Why column (07-13)", () => {
     expect(section.includes(" | direct |")).toBe(true);
   });
 
-  test("direct in ONE flagged occurrence + transitive in another → surfaces the TRANSITIVE introducer, not bare 'direct' (07-18 no-hiding)", () => {
+  test("direct in ONE flagged occurrence + transitive in another → surfaces the TRANSITIVE introducer, not bare 'direct' (no-hiding)", () => {
     // mixed-pkg is direct in flagged occ apps/b BUT transitive (via p) in flagged
-    // occ apps/a. The 07-13 `.some(i => i.direct)` short-circuit collapsed to
+    // occ apps/a. The earlier `.some(i => i.direct)` short-circuit collapsed to
     // bare "direct", HIDING the prod-transitive introducer in apps/a. The fix
     // renders "direct" ONLY when EVERY in-scope occurrence is direct; otherwise
     // it falls through to the tier/path logic and surfaces the transitive chain.
@@ -2215,7 +2215,7 @@ describe("renderMarkdown — provenance Why column (07-13)", () => {
     ).toBe(true);
   });
 
-  test("a genuinely-DIRECT occurrence is NOT hidden behind '—' by an orphan co-occurrence (Fix 2, review #3)", () => {
+  test("a genuinely-DIRECT occurrence is NOT hidden behind '—' by an orphan co-occurrence", () => {
     // Two in-scope occurrences of one purl: one genuinely DIRECT (apps/a), one an
     // ORPHAN ({direct:false, introducedBy:[], no path} — a node with no derivable
     // introducer, the honest residual). The pre-fix `every(direct)` was false
@@ -2266,7 +2266,7 @@ describe("renderMarkdown — provenance Why column (07-13)", () => {
     ).toBe(true);
   });
 
-  test("ALL-orphan in-scope occurrences render '—' (Fix 2: only all-orphan/empty is the residual)", () => {
+  test("ALL-orphan in-scope occurrences render '—' (only all-orphan/empty is the residual)", () => {
     // Two in-scope occurrences, BOTH orphans → "—". Excluding orphans from the
     // decision must NOT promote an all-orphan row to "direct"/transitive; with no
     // genuine direct and no introducer evidence anywhere, the honest residual
@@ -2313,7 +2313,7 @@ describe("renderMarkdown — provenance Why column (07-13)", () => {
     ).toBe(true);
   });
 
-  test("a genuine TRANSITIVE occurrence is surfaced even alongside an orphan co-occurrence (Fix 2 keeps 07-18 transitive behavior)", () => {
+  test("a genuine TRANSITIVE occurrence is surfaced even alongside an orphan co-occurrence", () => {
     // One genuine transitive (has an introducer/path) + one orphan → the
     // transitive introducer is surfaced (NOT swallowed to "—" by the orphan, and
     // NOT promoted to "direct").
@@ -2403,7 +2403,7 @@ describe("renderMarkdown — provenance Why column (07-13)", () => {
     ).toBe(true);
   });
 
-  test("a defined-but-EMPTY path renders '—', not an empty Why cell (Fix 4, 07-20)", () => {
+  test("a defined-but-EMPTY path renders '—', not an empty Why cell", () => {
     // INFO (latent): whyCellOf's orphan guard checks `path === undefined`, so a
     // defined-but-EMPTY `path: []` bypasses it; the transitive branch then
     // selected the occurrence on `path !== undefined` and boundedJoin([], …)
@@ -2447,7 +2447,7 @@ describe("renderMarkdown — provenance Why column (07-13)", () => {
     expect(section.includes("| apps/a |  |")).toBe(false);
   });
 
-  test("a defined-but-empty path falls through to the introducedBy union when one exists (Fix 4)", () => {
+  test("a defined-but-empty path falls through to the introducedBy union when one exists", () => {
     // An empty `path` with a NON-empty introducedBy must surface the introducer
     // union (not "" and not "—"): the empty path carries no chain, but the
     // introducer evidence still stands.
@@ -2492,7 +2492,7 @@ describe("renderMarkdown — provenance Why column (07-13)", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Why-cell target scoping (07-17) — the Why cell MUST fold ONLY over the
+// Why-cell target scoping — the Why cell MUST fold ONLY over the
 // occurrences whose target is in the row's shown/flagged set. The Why cell and
 // the Used-in cell are computed from the SAME occurrence subset, so the Why
 // cell never mislabels (a direct-in-an-unflagged-workspace occurrence cannot
@@ -2501,7 +2501,7 @@ describe("renderMarkdown — provenance Why column (07-13)", () => {
 // DIFFERENT, out-of-scope occurrence).
 // ---------------------------------------------------------------------------
 
-describe("renderMarkdown — Why-cell target scoping (07-17)", () => {
+describe("renderMarkdown — Why-cell target scoping", () => {
   /** Slice the problematic section out of a full document render. */
   function problematicSectionOf(
     model: CanonicalDependencies,
@@ -2639,9 +2639,9 @@ describe("renderMarkdown — Why-cell target scoping (07-17)", () => {
     expect(section.includes("pkg:npm/via@2.0.0")).toBe(false);
   });
 
-  test("(B) the smallest-target occurrence carrying a path wins; no ', optional' suffix ever appears (07-19 descope)", () => {
+  test("(B) the smallest-target occurrence carrying a path wins; no ', optional' suffix ever appears", () => {
     // Within the scoped (flagged) subset: occurrence 'a' carries a path via
-    // pathparent; occurrence 'b' carries only an introducer set. 07-19: with
+    // pathparent; occurrence 'b' carries only an introducer set. With
     // optionality descoped there is no tier preference — the representative path
     // of the smallest-target occurrence carrying one is surfaced (deterministic),
     // and no ", optional" suffix is ever rendered.

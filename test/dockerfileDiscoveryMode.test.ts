@@ -43,7 +43,7 @@ describe("resolveDiscoveredImages (discovery build lane, NO docker, NO file read
       dockerIgnore: ["docker/dev/**"],
     });
     // Every discovered (non-ignored) Dockerfile is a build input; the ignored
-    // one contributes no build entry (T-13-10 name-pattern-only contract).
+    // one contributes no build entry (the name-pattern-only contract).
     expect(build.map((b) => b.identity)).toEqual(["backend/Dockerfile"]);
     expect(build.map((b) => b.tag)).toEqual([imageTag("backend/Dockerfile")]);
   });

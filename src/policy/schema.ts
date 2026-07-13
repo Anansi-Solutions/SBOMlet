@@ -101,11 +101,11 @@ export interface ClarifyRule {
 }
 
 /**
- * How a would-be default-FAIL verdict is treated on a DEV-only occurrence
- * (POL-08, D-POL-08). Per-occurrence, never package-level — a package that is
+ * How a would-be default-FAIL verdict is treated on a DEV-only occurrence.
+ * Per-occurrence, never package-level — a package that is
  * dev in one workspace and prod in another still FAILS on the prod occurrence.
  *   "warn"   — a dev would-be-fail downgrades to warn (the default).
- *   "fail"   — NO downgrade; dev gates exactly like prod (pre-POL-08, strict).
+ *   "fail"   — NO downgrade; dev gates exactly like prod (strict).
  *   "ignore" — a dev would-be-fail becomes ok (an EXPLICIT, documented opt-out).
  * A PRODUCTION occurrence ALWAYS fails under "warn"/"ignore" — a shipped
  * copyleft can never be dev-downgraded.
@@ -141,7 +141,7 @@ export interface DocumentConfig {
 }
 
 /**
- * The optional [docker] table (07-23): Dockerfile-discovery exclusion globs.
+ * The optional [docker] table: Dockerfile-discovery exclusion globs.
  * When `generate-docker-sbom --repo-root` discovers Dockerfiles, every
  * Dockerfile whose repo-relative forward-slash identity matches an `ignore`
  * glob is EXCLUDED ENTIRELY — its base image is never derived, never scanned.
@@ -185,7 +185,7 @@ export interface AllowSourceAvailable {
 export interface Policy {
   /** Default "warn" when the [unknown] table is absent. */
   unknownHandling: "warn" | "fail";
-  /** Default "warn" when the [dev_dependencies] table is absent (POL-08). */
+  /** Default "warn" when the [dev_dependencies] table is absent. */
   devDependencies: DevDependencyHandling;
   /** Default "warn" when the [os_dependencies] table is absent. */
   osDependencies: OsDependencyHandling;
@@ -193,7 +193,7 @@ export interface Policy {
   compatible: ReadonlyArray<CompatibleRule>;
   clarify: ReadonlyArray<ClarifyRule>;
   /**
-   * Terminal deny-list (POL-09): the HIGHEST-precedence lane. A matching
+   * Terminal deny-list: the HIGHEST-precedence lane. A matching
    * package FORCE-FAILS regardless of compatible/suppression/dev-scope. Absent
    * [[deny]] table yields [].
    */
@@ -211,7 +211,7 @@ export interface Policy {
    */
   document?: DocumentConfig;
   /**
-   * Dockerfile-discovery exclusion globs (07-23). Absent [docker] table yields
+   * Dockerfile-discovery exclusion globs. Absent [docker] table yields
    * undefined; a present [docker] (with or without `ignore`) yields a
    * DockerConfig whose `ignore` defaults to [].
    */
@@ -324,7 +324,7 @@ function validateDocument(
 }
 
 /**
- * Parse the optional [docker] table (07-23): an absent table yields undefined;
+ * Parse the optional [docker] table: an absent table yields undefined;
  * a non-table value rejects; a present table (with or without `ignore`) yields
  * a DockerConfig whose `ignore` defaults to []. Each ignore entry must be a
  * non-empty string and a repo-relative forward-slash glob — reusing validatePath
@@ -898,7 +898,7 @@ function validateUnknown(
 }
 
 /**
- * Parse the [dev_dependencies] knob (POL-08), mirroring validateUnknown EXACTLY:
+ * Parse the [dev_dependencies] knob, mirroring validateUnknown EXACTLY:
  * an absent table defaults to "warn"; a non-table, missing handling, unknown
  * key, or invalid handling value each push the existing aggregated PolicyError
  * message naming the table path. The three valid values are warn|fail|ignore.

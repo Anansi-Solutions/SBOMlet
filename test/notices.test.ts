@@ -395,7 +395,7 @@ describe("renderNotices — WITH exceptions and unlisted ids (Test 6, A3)", () =
   });
 });
 
-describe("renderNotices — imprecise label honesty (INV-04)", () => {
+describe("renderNotices — imprecise label honesty", () => {
   const impreciseFinding: LicenseFinding = {
     expression: null,
     elected: null,
@@ -430,7 +430,7 @@ describe("renderNotices — imprecise label honesty (INV-04)", () => {
   });
 });
 
-describe("renderNotices — golden byte equality (04-04 Task 2, INV-03)", () => {
+describe("renderNotices — golden byte equality", () => {
   test("evidence-fixture model matches the notices golden byte-for-byte", () => {
     // The evidence fixture, annotated with an empty clarify list so findings
     // exist — the appendix needs normalized expressions.

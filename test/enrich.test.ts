@@ -1246,7 +1246,7 @@ describe("enrichUnknowns terraform/github (version-tag, transient-vs-definitive,
     }
   }
 
-  test("a fresh pkg:terraform unknown with NO cache entry is STALE in check (exit 2) — Pitfall 3 closed", async () => {
+  test("a fresh pkg:terraform unknown with NO cache entry is STALE in check (exit 2)", async () => {
     const { dir, path } = tempCachePath();
     try {
       const { fetch, calls } = fetchByUrl(() => jsonResponse({}));

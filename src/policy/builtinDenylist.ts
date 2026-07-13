@@ -1,5 +1,5 @@
 /**
- * Shipped TOOL-LEVEL source-available deny defaults (POL-09 defaults).
+ * Shipped TOOL-LEVEL source-available deny defaults.
  *
  * A curated, committed list of the well-known SOURCE-AVAILABLE (use-restricted,
  * non-OSI) licenses that legally cannot be redistributed in a client-shipped

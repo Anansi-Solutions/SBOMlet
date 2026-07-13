@@ -99,8 +99,8 @@ export function syftArgs(image: string, outFile: string): string[] {
 
 /**
  * docker inspect argv that prints the image's RepoDigests JSON array to stdout.
- * The image is the OPERAND after a `--` END-OF-OPTIONS separator (finding #5,
- * symmetry with syftArgs): a dash-prefixed operand can never be parsed by
+ * The image is the OPERAND after a `--` END-OF-OPTIONS separator (symmetry
+ * with syftArgs): a dash-prefixed operand can never be parsed by
  * `docker inspect` as a flag. The ref is always an argv operand, never a shell
  * string — command injection is impossible by construction.
  */
@@ -515,7 +515,7 @@ export function selectDigest(
  * The repository portion of an image ref or a RepoDigest — everything before an
  * `@sha256:` digest and before any `:tag`. Returns undefined for an empty input.
  * Used to match a requested image ref against a RepoDigest's repository so the
- * selected digest is the registry the user asked about (finding #2). A port in
+ * selected digest is the registry the user asked about. A port in
  * a registry host (`registry:5000/app`) is preserved: only a `:tag` AFTER the
  * last `/` is stripped.
  */

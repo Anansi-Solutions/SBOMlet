@@ -14,9 +14,9 @@
  * honest.
  *
  * The cache stores only what it is given. It does NOT decide `resolvable:false`
- * on a fetch failure — the clean-200-empty-only policy lives in the orchestrator
- * (Plan 03), so a transient outage can never become a false negative here
- * (Pitfall 1). A malformed envelope throws loudly (a poisoned/garbage cache is a
+ * on a fetch failure — the clean-200-empty-only policy lives in the
+ * orchestrator, so a transient outage can never become a false negative here.
+ * A malformed envelope throws loudly (a poisoned/garbage cache is a
  * config error, distinct from a benign missing file which is empty). The
  * envelope reader is generic ({@link readEnvelope}) so the dedicated ScanCode
  * memo reuses the identical loud-on-malformed posture — one reader, not two.

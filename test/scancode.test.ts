@@ -166,7 +166,7 @@ describe("scanPackageSources (subprocess-free, exec recorder harness)", () => {
     const [cmd, ...args] = invocations[0] as string[];
     expect(cmd).toBe("scancode");
     // The outFile is temp-dir-relative and not asserted verbatim; assert the
-    // fixed argv shape around it (the 01-03 argv-lock discipline).
+    // fixed argv shape around it (the argv-lock discipline).
     expect(args[0]).toBe("--license");
     expect(args[1]).toBe("--copyright");
     expect(args[2]).toBe("--json-pp");
@@ -520,7 +520,7 @@ describe("electExpression / electCopyrights (pure narrow, no exec)", () => {
     expect(elected?.raw).toBe("MIT");
   });
 
-  test("BUG (10-07 adversarial review, Lens 5): a nested vendored/bundled LICENSE must never outrank the scanned tree's own ROOT legal file — election is basename-only today with no depth check, so array order alone can elect a deeply-nested vendor LICENSE over the real root LICENSE", () => {
+  test("KNOWN BUG: a nested vendored/bundled LICENSE must never outrank the scanned tree's own ROOT legal file — election is basename-only today with no depth check, so array order alone can elect a deeply-nested vendor LICENSE over the real root LICENSE", () => {
     const files = [
       // scancode's files[] walk order is not guaranteed root-first; a nested
       // vendored/bundled dependency's LICENSE (a DIFFERENT, even copyleft
@@ -591,7 +591,7 @@ describe("sourceDirsFor — npm mapping", () => {
     expect(result).toEqual([pkgDir]);
   });
 
-  test("package.json version MISMATCH returns undefined (Pitfall 8)", () => {
+  test("package.json version MISMATCH returns undefined", () => {
     targetDir = mkdtempSync(join(tmpdir(), "scancode-npm-mismatch-"));
     writeNpmPackage(targetDir, "left-pad", "1.2.0");
 
@@ -849,7 +849,7 @@ async function withCapturedStderr(fn: () => Promise<void>): Promise<string> {
 }
 
 // ---------------------------------------------------------------------------
-// The ScanCode peer assessment STAGE (12-04): assessPackages replays the
+// The ScanCode peer assessment STAGE: assessPackages replays the
 // committed analysis memo across EVERY package in both modes and, under
 // generate --intensive only, analyzes the FULL package set — memoizing
 // positives and no-results, reporting honest skips, never memoizing an absent
@@ -859,7 +859,7 @@ async function withCapturedStderr(fn: () => Promise<void>): Promise<string> {
 // the memo entry.
 // ---------------------------------------------------------------------------
 
-describe("assessPackages — ScanCode peer assessment stage (12-04)", () => {
+describe("assessPackages — ScanCode peer assessment stage", () => {
   let repoDir: string | undefined;
   let memoDir: string | undefined;
 
@@ -1069,7 +1069,7 @@ describe("assessPackages — ScanCode peer assessment stage (12-04)", () => {
     });
   });
 
-  test("replay: a no-result memo entry (license null) appends NOTHING and never conflicts with a positive registry answer (Pitfall 4)", async () => {
+  test("replay: a no-result memo entry (license null) appends NOTHING and never conflicts with a positive registry answer", async () => {
     const path = seedMemo([
       [
         "pkg:npm/no-evidence@1.0.0",
@@ -1096,7 +1096,7 @@ describe("assessPackages — ScanCode peer assessment stage (12-04)", () => {
     expect(finding.conflict).toBeUndefined();
   });
 
-  test("replay: a MISSING memo file is a no-op — no claim appended, no file created (D-06)", async () => {
+  test("replay: a MISSING memo file is a no-op — no claim appended, no file created", async () => {
     const path = newMemoPath();
     rmSync(path, { force: true }); // ensure absent
     const model: CanonicalDependenciesLike = {
@@ -1118,7 +1118,7 @@ describe("assessPackages — ScanCode peer assessment stage (12-04)", () => {
 
   // --- Scan (generate --intensive only) ------------------------------------
 
-  test("scan (D-09 full set): a package with a PRECISE declared answer and no memo entry IS analyzed — the analysis set is not the residual", async () => {
+  test("scan (full analysis set): a package with a PRECISE declared answer and no memo entry IS analyzed — the analysis set is not the residual", async () => {
     const repo = newRepo();
     writeNpmSource(repo, "left-pad", "1.3.0");
     const path = newMemoPath();
@@ -1140,7 +1140,7 @@ describe("assessPackages — ScanCode peer assessment stage (12-04)", () => {
     ).toBeDefined();
   });
 
-  test("scan: a memo hit — positive OR no-result — is skipped, never re-analyzed (memo presence is the skip test, D-11)", async () => {
+  test("scan: a memo hit — positive OR no-result — is skipped, never re-analyzed (memo presence is the skip test)", async () => {
     const repo = newRepo();
     writeNpmSource(repo, "left-pad", "1.3.0");
     writeNpmSource(repo, "silent", "1.0.0");
@@ -1172,7 +1172,7 @@ describe("assessPackages — ScanCode peer assessment stage (12-04)", () => {
     expect(invocations.length).toBe(0);
   });
 
-  test("scan: a package whose sources are absent is reported but NEVER memoized (Pitfall 3 — a memo entry means the tree was analyzed)", async () => {
+  test("scan: a package whose sources are absent is reported but NEVER memoized (a memo entry means the tree was analyzed)", async () => {
     const repo = newRepo();
     mkdirSync(join(repo, "node_modules"), { recursive: true });
     const path = newMemoPath();
@@ -1193,7 +1193,7 @@ describe("assessPackages — ScanCode peer assessment stage (12-04)", () => {
     ).toBeUndefined();
   });
 
-  test("scan + replay (mechanism proof, D-10): a fresh positive is memoized {license, via, copyrights, scannedAt} and its claim + attribution + PRECISE finding land in the SAME run", async () => {
+  test("scan + replay (mechanism proof): a fresh positive is memoized {license, via, copyrights, scannedAt} and its claim + attribution + PRECISE finding land in the SAME run", async () => {
     const repo = newRepo();
     writeNpmSource(repo, "left-pad", "1.3.0");
     const path = newMemoPath();
@@ -1394,7 +1394,7 @@ describe("assessPackages — ScanCode peer assessment stage (12-04)", () => {
     });
   });
 
-  test("hermetic check (Pitfall 2): an intensive generate that finds a CONFLICT, then an offline check with the scanner stubbed-to-throw, yields a byte-identical annotated model INCLUDING the conflict marker", async () => {
+  test("hermetic check: an intensive generate that finds a CONFLICT, then an offline check with the scanner stubbed-to-throw, yields a byte-identical annotated model INCLUDING the conflict marker", async () => {
     const repo = newRepo();
     writeNpmSource(repo, "left-pad", "1.3.0");
     const path = newMemoPath();
@@ -1512,7 +1512,7 @@ describe("assessPackages — ScanCode peer assessment stage (12-04)", () => {
     expect(readFileSync(enrichPath, "utf8")).toBe(enrichBytes);
   });
 
-  test("isolation (D-07 stage analog): generate WITHOUT intensive analyzes nothing — zero invocations, replay only", async () => {
+  test("isolation: generate WITHOUT intensive analyzes nothing — zero invocations, replay only", async () => {
     const repo = newRepo();
     writeNpmSource(repo, "left-pad", "1.3.0");
     const { model: assessed } = await assessPackages(
@@ -1578,8 +1578,8 @@ type CanonicalDependenciesLike = {
 };
 
 // ---------------------------------------------------------------------------
-// Structural default-path isolation lock (10-05, D-07, T-10-15): the SAME
-// bait shape as the 10-04 mechanism proof above (an unknown-license package
+// Structural default-path isolation lock: the SAME
+// bait shape as the mechanism proof above (an unknown-license package
 // WITH version-matched local sources — scannable if the lane were reachable)
 // driven through the FULL generate pipeline (runGenerate, CLI/pipeline
 // level) WITHOUT --intensive. Both cdxgen (the SBOM generator) and scancode
@@ -1592,7 +1592,7 @@ type CanonicalDependenciesLike = {
 // guard already exists; this is the end-to-end version of it).
 // ---------------------------------------------------------------------------
 
-describe("default generate path isolation lock (10-05, D-07 structural proof)", () => {
+describe("default generate path isolation lock (structural proof)", () => {
   let repoDir: string;
 
   beforeAll(() => {

@@ -35,7 +35,7 @@ export interface CheckResult {
  *
  * runCheck never writes files: --dump-model is rejected as a config error, so
  * the gate cannot overwrite the files it verifies. --intensive is rejected
- * alongside it (10-05, Pitfall 4): the parseArgs option table is SHARED
+ * alongside it: the parseArgs option table is SHARED
  * across subcommands, so without this explicit guard check would silently
  * ACCEPT --intensive and gain a scan path the offline gate must never have.
  */
@@ -52,7 +52,7 @@ export async function runCheck(opts: GenerateOptions): Promise<CheckResult> {
   }
   // Force check mode so the ENRICH stage NEVER fetches or writes: a miss that
   // needs enrichment is a stale condition (exit 2), never a network call. This
-  // is the GATE-02 zero-network clause — buildOutputs stays hermetic against
+  // is the zero-network clause — buildOutputs stays hermetic against
   // the committed cache. (runGenerate forces generate; the shared optionsFrom
   // stays mode-neutral, so the subcommand decides.)
   const outputs = await buildOutputs({ ...opts, mode: "check" });
@@ -94,8 +94,7 @@ export async function runCheck(opts: GenerateOptions): Promise<CheckResult> {
 
   // A miss-needing-enrichment with no committed cache entry is stale by the
   // same logic as a missing output: check cannot fetch it, so the committed
-  // cache is out of date. Name the purl and the regenerate remedy (Pitfall 2 /
-  // GATE-02). These join staleFiles so exitCodeFor maps them to exit 2.
+  // cache is out of date. Name the purl and the regenerate remedy. These join staleFiles so exitCodeFor maps them to exit 2.
   for (const purl of outputs.staleUnknowns) {
     staleFiles.push(purl);
     process.stderr.write(

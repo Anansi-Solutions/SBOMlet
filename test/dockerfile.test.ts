@@ -145,9 +145,9 @@ describe("discoverDockerfiles", () => {
     ]);
   });
 
-  test("#2 (07-28 revert): only dist/ is pruned; build/out/target/vendor Dockerfiles ARE discovered", () => {
-    // build/out/target/vendor are generic source names (07-26 over-broad prune
-    // reverted); only the documented dist/ build-output dir stays excluded.
+  test("only dist/ is pruned; build/out/target/vendor Dockerfiles ARE discovered", () => {
+    // build/out/target/vendor are generic source names (an earlier over-broad
+    // prune was reverted); only the documented dist/ build-output dir stays excluded.
     const root = makeTempRoot();
     writeFile(root, "backend/Dockerfile", "FROM node:22-slim\n");
     writeFile(root, "dist/Dockerfile", "FROM node:22\n");
@@ -206,7 +206,7 @@ describe("discoverDockerfiles", () => {
     ]);
   });
 
-  test("finding #2: a git-SUBMODULE root (.git is a FILE / gitlink) is NOT descended", () => {
+  test("a git-SUBMODULE root (.git is a FILE / gitlink) is NOT descended", () => {
     // A submodule root is an ordinary-named directory whose `.git` is a FILE
     // (`gitdir: …` gitlink), not a directory — so EXCLUDED_DIR_NAMES (which names
     // `.git`) never fires and the walk would descend into vendored third-party

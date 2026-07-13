@@ -84,7 +84,7 @@ function fencedBlock(content: string): string[] {
 /**
  * License label for the section's "License:" line: the full normalized
  * expression when a finding exists; an imprecise finding renders "<family>
- * (imprecise)" (INV-04 — honest family, never a fabricated id); "unknown" on a
+ * (imprecise)" (the honest family, never a fabricated id); "unknown" on a
  * null non-imprecise expression; pre-annotation tolerance falls back to the
  * raw-claims dedup join (the markdown.ts licenseCellOf rule).
  */
@@ -102,7 +102,7 @@ function licenseLabelOf(pkg: PackageEntry): string {
 
 /**
  * Unknown-license predicate — mirrors the markdown.ts counts rule. An imprecise
- * finding is present, not unknown (INV-04), so it is excluded.
+ * finding is present, not unknown, so it is excluded.
  */
 function isUnknownLicense(pkg: PackageEntry): boolean {
   if (pkg.finding !== undefined) {

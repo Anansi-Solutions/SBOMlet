@@ -34,7 +34,7 @@ function shapesByPurl(): Map<string, PackageEntry> {
   return new Map(model.packages.map((p) => [p.purl, p]));
 }
 
-describe("mergeSboms — volatile field immunity (INV-03)", () => {
+describe("mergeSboms — volatile field immunity", () => {
   test("a doc RETAINING serialNumber/timestamp/annotations yields a model containing none of their values", () => {
     const json = toSortedDependenciesJson(
       mergeSboms([{ sbom: volatileDoc, targetIdentity: TARGET }]),
@@ -712,7 +712,7 @@ describe("mergeSboms — full-image scope collision (app wins, image occurrence 
     ]);
     const shared = model.packages.filter((p) => p.purl === SHARED_NPM);
 
-    // ONE row, never two — the D-10 "annotated, never duplicated" posture.
+    // ONE row, never two — the "annotated, never duplicated" posture.
     expect(shared.length).toBe(1);
     expect(shared[0]?.scope).toBe("app");
     expect(shared[0]?.occurrences).toEqual([
@@ -736,7 +736,7 @@ describe("mergeSboms — full-image scope collision (app wins, image occurrence 
     ]);
   });
 
-  // Pitfall 5, Option 1 (annotate): a package the app lockfile marks dev-only
+  // A package the app lockfile marks dev-only
   // still ships in the built image. The image occurrence is never dev (syft
   // carries no dev/prod concept), so mergeInto's prod-wins occurrence fold
   // NEVER collapses the two into one dev-only occurrence — each target keeps
@@ -1640,8 +1640,8 @@ describe("mergeSboms — evidence parsing into attribution", () => {
           name: "crlf-pkg",
           version: "1.0.0",
           purl: "pkg:npm/crlf-pkg@1.0.0",
-          // name-kind claim only → the verbatim text is retained (Pitfall 4
-          // path), so the stored bytes are directly observable.
+          // name-kind claim only → the verbatim text is retained, so the
+          // stored bytes are directly observable.
           licenses: [{ license: { name: "custom crlf license" } }],
           evidence: {
             licenses: [
@@ -1672,7 +1672,7 @@ describe("mergeSboms — evidence parsing into attribution", () => {
     ]);
   });
 
-  test("Test 5 (Pitfall 4): verbatim texts retained ONLY for packages with no spdx-id/expression claim", () => {
+  test("Test 5: verbatim texts retained ONLY for packages with no spdx-id/expression claim", () => {
     const byPurl = evidenceByPurl();
     const named = byPurl.get("pkg:npm/named-claim-pkg@6.0.0");
     const alpha = byPurl.get("pkg:npm/alpha-license-pkg@1.0.0");
@@ -1754,7 +1754,7 @@ describe("purlSetOf — tolerant purl extraction", () => {
   });
 });
 
-describe("mergeSboms — dependency provenance threading (07-13)", () => {
+describe("mergeSboms — dependency provenance threading", () => {
   const PROV_DOC = {
     components: [
       { name: "a", version: "1.0.0", purl: "pkg:npm/a@1.0.0" },
@@ -1853,8 +1853,8 @@ describe("mergeSboms — dependency provenance threading (07-13)", () => {
   test("same-target fold reconciles introduction deterministically, order-independent (#7)", () => {
     // The SAME target identity contributes the SAME purl twice with DIFFERENT
     // introductions. The fold must reconcile (union introducedBy, OR direct,
-    // pick the lexicographically-smallest path) rather than first-wins. 07-19:
-    // optionality is descoped — there is no `optional` field to reconcile.
+    // pick the lexicographically-smallest path) rather than first-wins.
+    // Optionality is descoped — there is no `optional` field to reconcile.
     const introA = new Map([
       [
         "pkg:npm/b@2.0.0",
@@ -1923,8 +1923,8 @@ describe("mergeSboms — dependency provenance threading (07-13)", () => {
     ).toBe(true);
   });
 
-  test("reconciling a DIRECT with a TRANSITIVE clears introducedBy + drops path (direct-consistency, Fix 2, 07-21)", () => {
-    // INFO (07-21): the same-target fold ORs `direct` but UNIONS introducedBy and
+  test("reconciling a DIRECT with a TRANSITIVE clears introducedBy + drops path (direct-consistency)", () => {
+    // INFO: the same-target fold ORs `direct` but UNIONS introducedBy and
     // keeps a path. Reconciling a direct intro with a transitive one yielded the
     // contradictory {direct:true, introducedBy:[mid], path:[mid,leaf]}; whyCellOf
     // then rendered bare "direct" and HID the (now meaningless) introducer — a

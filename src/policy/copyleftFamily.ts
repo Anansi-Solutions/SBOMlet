@@ -1,5 +1,5 @@
 /**
- * The AUTHORITATIVE could-be-copyleft imprecise-family token set (INV-04).
+ * The AUTHORITATIVE could-be-copyleft imprecise-family token set.
  *
  * An imprecise finding carries a bare family TOKEN (the string "GPL", "BSD",
  * "Apache" — see normalize.ts AMBIGUOUS_FAMILY), never a parseable SPDX
@@ -55,7 +55,7 @@ export const COULD_BE_COPYLEFT_FAMILIES: ReadonlySet<string> = new Set([
 ]);
 
 /**
- * The absorb-all-copyleft suppression relation (revision F).
+ * The absorb-all-copyleft suppression relation.
  *
  * A workspace that is ITSELF distributed under a strong-copyleft license can
  * absorb the obligations of inbound copyleft dependencies it bundles, because
@@ -80,7 +80,7 @@ export const COULD_BE_COPYLEFT_FAMILIES: ReadonlySet<string> = new Set([
  * SAFETY FLOOR (the entries deliberately NOT in the GNU set): SSPL (network /
  * use-restricted) and CC-BY-SA (content ShareAlike) are NOT inbound-compatible
  * with an AGPL software re-release and are NEVER absorbed. The source-available
- * [[deny]] terminal (06-02) additionally sits ABOVE suppression, so a denied
+ * [[deny]] terminal additionally sits ABOVE suppression, so a denied
  * license under a suppressed path fails regardless of this map.
  */
 export const WORKSPACE_ABSORBS: ReadonlyMap<

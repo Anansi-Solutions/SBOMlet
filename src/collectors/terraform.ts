@@ -6,7 +6,7 @@
  * module set at its EXACT resolved versions. This collector parses two trusted
  * artifacts the repo already commits/materializes and emits the same minimal
  * deterministic CycloneDX 1.6 document every other collector produces; license
- * resolution is deferred to the enrich-stage GitHub resolver (Plan 03).
+ * resolution is deferred to the enrich-stage GitHub resolver.
  *
  * Two inputs, two authorities:
  * - Providers come from `.terraform.lock.hcl` (always committed): a regex over
@@ -32,7 +32,7 @@
  * When a `.terraform.lock.hcl` target is detected:
  *   - modules.json PRESENT (as a REGULAR FILE) → read external modules (the
  *     authoritative present-path). A directory-named modules.json is treated as
- *     ABSENT (07-15 Fix 3) and routed to the gate below, never a raw EISDIR;
+ *     ABSENT and routed to the gate below, never a raw EISDIR;
  *   - modules.json ABSENT + `.terraform/providers/` is a DIRECTORY AND
  *     `.terraform/modules/` does NOT exist → init ran but processed no module
  *     calls (the providers-only github-actions-deployment shape) → collect
@@ -41,9 +41,8 @@
  *     get first" error: no `.terraform/providers/` dir (empty/fabricated
  *     `.terraform/`), or a `.terraform/modules/` dir without a modules.json
  *     (stale/partial install). Conservative-safe: we collect providers-only only
- *     for the exact artifact shape a real providers-only init leaves (07-15
- *     reviews #2/#4).
- * No HCL is parsed to make this decision (07-14 redesign). Empirically, `tofu
+ *     for the exact artifact shape a real providers-only init leaves.
+ * No HCL is parsed to make this decision. Empirically, `tofu
  * init` writes `.terraform/modules/modules.json` as soon as it PROCESSES module
  * calls (local OR external) — even when the module download later fails, and
  * before the provider phase — so modules.json absence reliably means "no module
@@ -57,8 +56,8 @@
  * (not by host — OpenTofu rewrites BOTH to registry.opentofu.org):
  *   provider: `pkg:terraform/<host>/<ns>/<name>@<v>`           (2 segments)
  *   module:   `pkg:terraform/<host>/<ns>/<name>/<provider>@<v>` (3 segments)
- * load-bearing for Plan 03's version-tag LICENSE fetch and the purl@version
- * cache.
+ * load-bearing for the enrich-stage version-tag LICENSE fetch and the
+ * purl@version cache.
  *
  * Fully in-process — no subprocess, no eval, no cwd change; an
  * assertTerraformLockSize stat gate bounds memory before any read/parse on both
@@ -270,8 +269,8 @@ function parseModuleSource(source: string): ParsedModuleSource | undefined {
  * version yield two entries here that collapse to one component downstream via
  * the shared purl.
  *
- * §Whole-file failure is symmetric with the absent-path's loud-fail (07-15,
- * review #3). The module docstring promises "a whole-file failure throws
+ * §Whole-file failure is symmetric with the absent-path's loud-fail.
+ * The module docstring promises "a whole-file failure throws
  * loudly"; this honours it. The empty-string SENTINEL (the collector/coverage
  * pass it on the providers-only path to mean "no modules.json present") stays a
  * tolerant `[]` — an absent file is never a scan failure; the filesystem gate
@@ -348,7 +347,7 @@ export function readExternalModules(
  * it writes modules.json (≥ the root entry) BEFORE the provider phase. So
  * modules.json absence reliably means "no module calls" WHENEVER init has run.
  *
- * §Strengthened signal (07-15, reviews #2/#4 — cheap no-HCL defense-in-depth).
+ * §Strengthened signal (cheap no-HCL defense-in-depth).
  * Rather than treat ANY `<dir>/.terraform/` directory as proof of init, the gate
  * requires the artifacts a REAL providers-only init leaves and rejects the
  * incoherent shapes:
@@ -367,7 +366,7 @@ export function readExternalModules(
  * observation that the whole `.terraform/` dir is gitignored and absent until
  * init materializes it.
  *
- * §Residual stale-edit limitation (07-15, reviews #1/#4 — documented, delegated).
+ * §Residual stale-edit limitation (documented, accepted).
  * A window remains that this filesystem signal cannot close cheaply: a dir whose
  * providers-only init left `.terraform/providers/` (no `.terraform/modules/`) and
  * whose `.tf` is LATER edited to ADD a module WITHOUT re-init still presents the
@@ -389,7 +388,7 @@ export function readExternalModules(
  */
 export function absentModulesJsonShouldFail(dir: string): boolean {
   try {
-    // §Defense-in-depth signal (07-15, reviews #2/#4): a real providers-only
+    // §Defense-in-depth signal: a real providers-only
     // `tofu init` writes `.terraform/providers/` (after the module phase); a
     // module-bearing init writes `.terraform/modules/modules.json` the instant
     // it processes module blocks. So the ONLY shape that legitimately collects
@@ -417,7 +416,7 @@ export function absentModulesJsonShouldFail(dir: string): boolean {
 }
 
 /**
- * §The modules.json PRESENCE guard (07-15, review #5). The present-path is taken
+ * §The modules.json PRESENCE guard. The present-path is taken
  * ONLY when `modules.json` exists AND is a REGULAR FILE. A directory-named (or
  * other non-regular-file) `modules.json` is treated as ABSENT, routing to the
  * filesystem-signal gate ({@link absentModulesJsonShouldFail}) which — seeing
@@ -525,7 +524,7 @@ export interface TerraformCollectOptions {
  * Failure modes:
  * - missing .terraform.lock.hcl → loud error naming the path;
  * - either file over MAX_TERRAFORM_LOCK_BYTES → loud size error before parse;
- * - ABSENT (or directory-named, Fix 3) .terraform/modules/modules.json whose
+ * - ABSENT (or directory-named) .terraform/modules/modules.json whose
  *   filesystem shape is not the exact providers-only artifact set →
  *   `tofu init`/`tofu get` never ran (or a stale/partial install) → loud "run
  *   tofu init/tofu get first" error (the strengthened filesystem-signal gate,
@@ -533,7 +532,7 @@ export interface TerraformCollectOptions {
  *   and `.terraform/modules/` does not (init ran, providers-only — no module
  *   calls → no modules.json), the committed-lock providers collect normally;
  * - a structurally-invalid present modules.json (not JSON, or `Modules` not an
- *   array) → loud scan failure (Fix 2); a legit-empty one (`{}`/`Modules: []`)
+ *   array) → loud scan failure; a legit-empty one (`{}`/`Modules: []`)
  *   collects zero modules;
  * - malformed individual provider blocks / modules.json entries → skipped.
  *

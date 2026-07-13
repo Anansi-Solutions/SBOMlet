@@ -1,6 +1,5 @@
 /**
- * GitHub-LICENSE raw-license resolver for `pkg:terraform` providers + modules
- * (COLL-03 resolution half).
+ * GitHub-LICENSE raw-license resolver for `pkg:terraform` providers + modules.
  *
  * Terraform/OpenTofu registries expose NO license field (verified — neither the
  * OpenTofu `registry/docs` JSON nor the Terraform `/v1` API returns one), so the
@@ -9,7 +8,7 @@
  *
  * Provider vs module is distinguished by the purl's encodedName SEGMENT COUNT,
  * NOT by host — OpenTofu rewrites BOTH provider and module Sources to
- * registry.opentofu.org, so a host-based branch is invalid (06-04 fix):
+ * registry.opentofu.org, so a host-based branch is invalid:
  *
  *   - provider `<host>/<ns>/<name>` (3 segments)
  *       → `github.com/<ns>/terraform-provider-<name>`
@@ -100,7 +99,7 @@ export function githubRepoFor(
  * no-`?ref` request from the DEFAULT BRANCH (HEAD) — a DIFFERENT version's
  * license than the pin — which would be cached as the component's license,
  * silently wrong. Dropping it makes a missing version tag a DEFINITIVE negative
- * → unknown → POL-04 warn, never a confident wrong-version license. The first
+ * → unknown → an honest warn, never a confident wrong-version license. The first
  * ref returning a resolvable license wins; a missing tag (404) advances to the
  * next, and exhausting both candidates is a clean no-license answer.
  */

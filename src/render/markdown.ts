@@ -160,7 +160,7 @@ function boundedJoin(items: readonly string[], separator: string): string {
  * - if NO in-scope occurrence carries an introduction → "—" (the honest
  *   residual for terraform / Docker OS / bun / graph-less npm, and for a flagged
  *   occurrence with no introduction — never a fabricated or borrowed value);
- * - ORPHAN exclusion (Fix 2, review #3): an "orphan" introduction is one with
+ * - ORPHAN exclusion: an "orphan" introduction is one with
  *   `direct:false` ∧ empty `introducedBy` ∧ no `path` — a node present in the
  *   graph but with NO derivable introducer (the honest residual). Orphans are
  *   EXCLUDED from the direct/transitive decision. Without this, a genuine DIRECT
@@ -195,18 +195,18 @@ function whyCellOf(
     .filter((i): i is DependencyIntroduction => i !== undefined);
   if (introductions.length === 0) return "—";
 
-  // Fix 4 (07-20): a defined-but-EMPTY `path: []` carries NO chain — it must be
+  // A defined-but-EMPTY `path: []` carries NO chain — it must be
   // treated identically to an absent path. boundedJoin([], …) would render ""
   // (an empty Why cell), and the orphan guard's `path === undefined` check would
   // miss it. A "real" chain is a defined AND non-empty path.
   const hasChain = (i: DependencyIntroduction): boolean =>
     i.path !== undefined && i.path.length > 0;
 
-  // Fix 2 (review #3): an ORPHAN introduction — direct:false ∧ empty
+  // An ORPHAN introduction — direct:false ∧ empty
   // introducedBy ∧ no real-chain path — carries no derivable introducer (the
   // honest residual for a node present but unreachable from any root). Orphans
   // must NOT participate in the direct/transitive decision, or a real DIRECT
-  // occurrence co-occurring with an orphan would be hidden behind "—". (Fix 4: a
+  // occurrence co-occurring with an orphan would be hidden behind "—". (A
   // defined-but-empty path is no chain, so it counts as orphan when
   // introducedBy is also empty.)
   const isOrphan = (i: DependencyIntroduction): boolean =>
@@ -225,7 +225,7 @@ function whyCellOf(
 
   // Transitive in at least one genuine in-scope occurrence. Surface the
   // representative path of the smallest-target occurrence carrying a REAL
-  // (defined AND non-empty, Fix 4) chain — deterministic — falling back to the
+  // (defined AND non-empty) chain — deterministic — falling back to the
   // sorted-union of introducer sets. A defined-but-empty path is no chain and is
   // skipped here so it never joins to "".
   const withPath = scoped

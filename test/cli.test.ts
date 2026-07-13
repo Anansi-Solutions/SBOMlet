@@ -419,7 +419,7 @@ describe("sanitizeForLog — stderr injection boundary", () => {
   });
 });
 
-describe("writePolicySummary — imprecise count line (INV-04)", () => {
+describe("writePolicySummary — imprecise count line", () => {
   const impreciseVerdict = (rule: string): Verdict => ({
     purl: "pkg:pypi/imp@1.0.0",
     occurrenceTarget: "apps/jupyter",
@@ -469,7 +469,7 @@ describe("writePolicySummary — imprecise count line (INV-04)", () => {
   });
 });
 
-describe("writePolicySummary — assessment conflict count line (SCAN-05)", () => {
+describe("writePolicySummary — assessment conflict count line", () => {
   const conflictVerdict = (purl: string): Verdict => ({
     purl,
     occurrenceTarget: "apps/synthetic",
@@ -808,8 +808,8 @@ function writePolicy(root: string, text: string): string {
  * stage: stub globalThis.fetch to a clean 200-empty registry response so every
  * unknown fixture package (no-claims) stays unknown — the resolver returns
  * null, the rendered output is byte-identical to the pre-enrichment goldens
- * this plan preserves, and no live registry is ever contacted. (Live cache
- * population is Plan 04.) Each generate call also routes the enrichment cache
+ * preserved here, and no live registry is ever contacted. Each generate call
+ * also routes the enrichment cache
  * into its own temp tree (enrichCache below) so generate's negative-entry write
  * never touches the committed tool-root cache.
  */
@@ -824,7 +824,7 @@ beforeAll(() => {
 afterAll(() => {
   globalThis.fetch = ORIGINAL_FETCH;
   // Safety net: a generate call that did not pass enrichmentCachePath defaults
-  // the cache to <cwd>/enrichment-cache.json. Since Plan 04 the tool-root cache
+  // the cache to <cwd>/enrichment-cache.json. The tool-root cache
   // is TRACKED, so an unpinned offline write (a negative no-claims entry, the
   // tool's own bun deps) modifies a committed file. Restore a tracked cache to
   // its committed bytes (git checkout) and delete an untracked stray — either
@@ -1095,7 +1095,7 @@ describe("runGenerate --policy", () => {
     expect(semanticThrown!.message).toContain('"reason"');
   });
 
-  test("Test 5: annotated dump — findings + verdicts, sorted keys (INV-02)", async () => {
+  test("Test 5: annotated dump — findings + verdicts, sorted keys", async () => {
     const { root } = makeScannableTree();
     const policyPath = writePolicy(root, '[unknown]\nhandling = "warn"\n');
     const dumpPath = join(root, "annotated.model.json");
@@ -1279,7 +1279,7 @@ function listTree(root: string): string[] {
   return out.sort();
 }
 
-describe("buildOutputs and the generate output set (04-05)", () => {
+describe("buildOutputs and the generate output set", () => {
   beforeAll(() => {
     mock.module("../src/collectors/cdxgen", () => ({
       ...REAL_CDXGEN,
@@ -1773,7 +1773,7 @@ describe("check — dev/prod gate exit lane", () => {
  * bun.lock for the in-process pipeline proof: a workspace member
  * ("member", @workspace: protocol), a NESTED version-conflict key
  * ("spdx-compare/spdx-expression-parse") whose purl matches the top-level
- * twin (the fold proof, Pitfall 4), a prod root chain (spdx-compare →
+ * twin (the fold proof), a prod root chain (spdx-compare →
  * spdx-expression-parse), a member-importer prod dep (smol-toml), and a
  * dev root (typescript). Machine-written JSONC trailing commas on purpose
  * — the real collector must strip them (research A3).
@@ -1914,7 +1914,7 @@ function occurrencesByName(
   return new Map(dump.packages.map((p) => [p.name, p.occurrences]));
 }
 
-describe("dispatch wiring: bun branch + per-kind firstPartyNames (04.5-04)", () => {
+describe("dispatch wiring: bun branch + per-kind firstPartyNames", () => {
   beforeAll(() => {
     mock.module("../src/collectors/cdxgen", () => ({
       ...REAL_CDXGEN,
@@ -1960,7 +1960,7 @@ describe("dispatch wiring: bun branch + per-kind firstPartyNames (04.5-04)", () 
     expect(squish(md)).toContain(
       "| typescript | npm | 5.9.3 | unknown | bunproj |",
     );
-    // The nested-conflict purl folded to exactly ONE row (Pitfall 4).
+    // The nested-conflict purl folded to exactly ONE row.
     expect(squish(md)).toContain(
       "| spdx-expression-parse | npm | 3.0.1 | unknown | bunproj |",
     );
@@ -2289,7 +2289,7 @@ describe("Taskfile split invariants (static, YAML-parsed — locks the public/de
     ) as TaskfileDoc;
   }
 
-  test("generate composes --intensive from the INTENSIVE var (bare boolean idiom, 10-05)", () => {
+  test("generate composes --intensive from the INTENSIVE var (bare boolean idiom)", () => {
     const taskfile = readFileSync(
       join(import.meta.dir, "..", "Taskfile.yml"),
       "utf8",

@@ -11,7 +11,7 @@
  *      never an id, so it is rejected and falls through to Layer 3.
  *   3. `info.classifiers` "License :: OSI Approved :: X" — a precise trove
  *      mapping is HIGH; an ambiguous classifier (BSD/Apache) yields the label
- *      text as raw, tagged LOW for optional `[[clarify]]` pinning (Pitfall 3).
+ *      text as raw, tagged LOW for optional `[[clarify]]` pinning.
  *
  * The resolver returns ONLY the raw string — it never calls parse/correct.
  * normalizeRaw downstream is the single SPDX resolution authority (locked

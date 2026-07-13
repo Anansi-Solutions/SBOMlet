@@ -1,6 +1,6 @@
 /**
- * Shared purl-space provenance graph + deterministic introducer derivation
- * (07-13). Both the npm/yarn lane (BOM `dependencies` graph) and the python lane
+ * Shared purl-space provenance graph + deterministic introducer derivation.
+ * Both the npm/yarn lane (BOM `dependencies` graph) and the python lane
  * (poetry.lock `[package.dependencies]` tables) translate their source edges
  * into THIS purl-space adjacency, then call {@link deriveIntroductions} for an
  * identical, deterministic direct/introducedBy/path computation.
@@ -130,7 +130,7 @@ export function shortestPath(
  * terminate and the result is order-independent (derived from the edge SET, not
  * source order). The root itself is not a member; only package purls are.
  *
- * 07-21 (central reachability invariant): `introducedBy` is intersected with
+ * Central reachability invariant: `introducedBy` is intersected with
  * this set in {@link deriveIntroductions}, so a node may name ONLY parents that
  * are themselves root-reachable — making a root-disconnected fabricated
  * introducer unrepresentable for BOTH lanes.
@@ -176,7 +176,7 @@ function reachableFromRoots(graph: PurlGraph): Set<string> {
  * (INTERSECTED with the root-reachable set) and a representative tie-broken
  * shortest path (when reachable).
  *
- * 07-21 CENTRAL REACHABILITY INVARIANT: a node's `introducedBy` may name ONLY
+ * CENTRAL REACHABILITY INVARIANT: a node's `introducedBy` may name ONLY
  * parents that are themselves reachable from a declared root. The reachable set
  * is computed once ({@link reachableFromRoots}) and every node's parent set is
  * intersected with it. Consequences (now guaranteed for BOTH the npm and poetry
@@ -191,7 +191,7 @@ function reachableFromRoots(graph: PurlGraph): Set<string> {
  * This makes the npm lane's local Fix-3 introducedBy=[] guard (npmProvenance)
  * redundant; it is retained as a harmless belt-and-braces.
  *
- * 07-19: optionality is descoped — no `optional` field is ever emitted.
+ * Optionality is descoped — no `optional` field is ever emitted.
  */
 export function deriveIntroductions(
   graph: PurlGraph,

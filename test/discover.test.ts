@@ -10,7 +10,7 @@ import {
   lockfileNameFor,
 } from "../src/targets/discover";
 
-// Self-contained temp trees only — no reference to any host-project path (INTG-02).
+// Self-contained temp trees only — no reference to any host-project path.
 const tempRoots: string[] = [];
 
 function makeTempRoot(): string {
