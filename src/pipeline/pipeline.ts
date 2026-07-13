@@ -194,7 +194,130 @@ export interface BuiltOutputs {
  * overwrite the files it is gating on.
  */
 /**
- * Read the committed Docker OS-package SBOM as a scope:"os" merge input, or
+ * The aggregate Docker OS occurrence identity: the pre-attribution shape's
+ * only target, and the namespace prefix of every per-image identity
+ * ("docker:os-packages/<source>").
+ */
+const DOCKER_OS_IDENTITY = "docker:os-packages";
+
+/**
+ * The one-line stderr hint printed when the committed sidecar reads as the
+ * aggregate (old or malformed shape) while the policy scopes a compatible rule
+ * under docker:os-packages. The scoped rule can never match the aggregate
+ * target (the fail-safe matcher direction), which is safe but confusing right
+ * after the user wrote the rule — name the actual cause and the fix.
+ */
+const SIDECAR_REGENERATE_HINT =
+  "docker-os.sbom.json predates per-image attribution — scoped compatible rules cannot match docker occurrences; regenerate via generate-docker-sbom";
+
+/** A sidecar component narrowed to its attribution: non-empty string images. */
+interface AttributedSidecarComponent extends Record<string, unknown> {
+  images: string[];
+}
+
+/** A narrowed v2 sidecar: the parsed doc plus typed components and images. */
+interface AttributedSidecar {
+  doc: Record<string, unknown>;
+  components: AttributedSidecarComponent[];
+  images: ReadonlyArray<{ image: string; source: string }>;
+}
+
+function isNonEmptyString(value: unknown): value is string {
+  return typeof value === "string" && value.length > 0;
+}
+
+/**
+ * dockerImages → unique {image, source} entries, or undefined on any flaw: a
+ * non-array, a non-object entry, a missing/empty image or source, or a
+ * duplicate image name (which would make a membership's source ambiguous).
+ */
+function narrowSidecarImages(
+  value: unknown,
+): Array<{ image: string; source: string }> | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const entries: Array<{ image: string; source: string }> = [];
+  const seen = new Set<string>();
+  for (const raw of value) {
+    if (typeof raw !== "object" || raw === null) return undefined;
+    const { image, source } = raw as { image?: unknown; source?: unknown };
+    if (!isNonEmptyString(image) || !isNonEmptyString(source)) return undefined;
+    if (seen.has(image)) return undefined;
+    seen.add(image);
+    entries.push({ image, source });
+  }
+  return entries;
+}
+
+/**
+ * components → attributed components, or undefined on any flaw: a non-array, a
+ * non-object entry, a missing/empty/non-string-array `images`, or a membership
+ * naming an image absent from dockerImages. An EMPTY membership is a flaw too —
+ * it would drop the component from every fan-out input, and dropped inventory
+ * is the one failure the degradation path exists to prevent.
+ */
+function narrowSidecarComponents(
+  value: unknown,
+  listed: ReadonlySet<string>,
+): AttributedSidecarComponent[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const components: AttributedSidecarComponent[] = [];
+  for (const raw of value) {
+    if (typeof raw !== "object" || raw === null) return undefined;
+    const images = (raw as { images?: unknown }).images;
+    if (!Array.isArray(images) || images.length === 0) return undefined;
+    const memberships: string[] = [];
+    for (const entry of images) {
+      if (!isNonEmptyString(entry) || !listed.has(entry)) return undefined;
+      memberships.push(entry);
+    }
+    components.push({
+      ...(raw as Record<string, unknown>),
+      images: memberships,
+    });
+  }
+  return components;
+}
+
+/**
+ * All-or-nothing v2 detection (skip-not-throw): the typed sidecar when EVERY
+ * component and EVERY dockerImages entry narrows cleanly, undefined otherwise
+ * — the caller then takes the aggregate compat path for the WHOLE sidecar,
+ * never a partial per-image model. Detection is structural (field presence),
+ * not versioned: a component without `images` or an image entry without
+ * `source` is the old shape by definition.
+ */
+function narrowAttributedSidecar(
+  parsed: unknown,
+): AttributedSidecar | undefined {
+  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+    return undefined;
+  }
+  const doc = parsed as Record<string, unknown>;
+  const images = narrowSidecarImages(doc["dockerImages"]);
+  if (images === undefined) return undefined;
+  const listed = new Set(images.map((entry) => entry.image));
+  const components = narrowSidecarComponents(doc["components"], listed);
+  if (components === undefined) return undefined;
+  return { doc, components, images };
+}
+
+/**
+ * True when any compatible rule's `where` scopes under the docker namespace —
+ * exactly the rules an aggregate-shape sidecar can never satisfy.
+ */
+function hasDockerScopedCompatible(policy: Policy | undefined): boolean {
+  if (policy === undefined) return false;
+  return policy.compatible.some((rule) =>
+    (rule.where ?? []).some(
+      (path) =>
+        path === DOCKER_OS_IDENTITY ||
+        path.startsWith(`${DOCKER_OS_IDENTITY}/`),
+    ),
+  );
+}
+
+/**
+ * Read the committed Docker OS-package SBOM as scope:"os" merge inputs, or
  * undefined when it does not exist (the offline cache-miss equivalent — no os
  * entries, never a live scan). The default path is {@link DOCKER_OS_SBOM_FILE}
  * inside the resolved cache `dir` (repo-root-anchored), so the Action — running
@@ -206,11 +329,26 @@ export interface BuiltOutputs {
  * aborting the whole pipeline (mergeSboms's arktype narrow already skips
  * malformed components; a non-JSON file would throw on JSON.parse, which is the
  * correct loud failure for a tampered committed artifact).
+ *
+ * A fully well-formed ATTRIBUTED sidecar (v2: every component carries a
+ * non-empty `images` membership naming listed images, every dockerImages entry
+ * carries a source) FANS OUT to one input per image with targetIdentity
+ * "docker:os-packages/" + source, so a purl shared across images gets one
+ * occurrence per image through the untouched mergeSboms — exactly like a
+ * package shared across two workspaces. Anything less reads as today's single
+ * aggregate input: identities derive ONLY from listed sources, degradation is
+ * whole-sidecar, and no component is ever dropped. The fan-out iterates the
+ * sidecar's stored order (the emitter sorts dockerImages by image), so
+ * repeated reads are byte-identical. When the aggregate path is taken while
+ * the policy docker-scopes a compatible rule, ONE stderr hint line names the
+ * cause; the reader stays a pure read — stderr only, no writes, no exit-code
+ * change, no new pipeline state.
  */
 function readCommittedDockerOsSbom(
   opts: GenerateOptions,
   dir: string,
-): CollectedSbom | undefined {
+  policy: Policy | undefined,
+): CollectedSbom[] | undefined {
   const osSbomPath =
     opts.dockerOsSbomPath !== undefined
       ? resolveFrom(
@@ -222,11 +360,29 @@ function readCommittedDockerOsSbom(
   // Size gate BEFORE read (DoS bound, T-07-04).
   assertSyftSbomSize(osSbomPath);
   const parsed: unknown = JSON.parse(readFileSync(osSbomPath, "utf8"));
-  return {
-    sbom: parsed,
-    targetIdentity: "docker:os-packages",
+  const attributed = narrowAttributedSidecar(parsed);
+  if (attributed === undefined) {
+    if (hasDockerScopedCompatible(policy)) {
+      process.stderr.write(`${SIDECAR_REGENERATE_HINT}\n`);
+    }
+    return [
+      {
+        sbom: parsed,
+        targetIdentity: DOCKER_OS_IDENTITY,
+        scope: "os",
+      },
+    ];
+  }
+  return attributed.images.map(({ image, source }) => ({
+    sbom: {
+      ...attributed.doc,
+      components: attributed.components.filter((component) =>
+        component.images.includes(image),
+      ),
+    },
+    targetIdentity: `${DOCKER_OS_IDENTITY}/${source}`,
     scope: "os",
-  };
+  }));
 }
 
 /**
@@ -402,11 +558,12 @@ export async function buildOutputs(
     process.stderr.write(`${line}\n`);
   });
 
-  // COLL-04: thread the committed Docker OS-package SBOM (07-01's emitter
-  // output) into the merge as a scope:"os" input when it exists. A missing file
-  // is the offline cache-miss equivalent — no os entries, no docker, no syft.
-  const osInput = readCommittedDockerOsSbom(opts, dir);
-  if (osInput !== undefined) inputs.push(osInput);
+  // COLL-04/SCP-02: thread the committed Docker OS-package SBOM into the merge
+  // when it exists — one scope:"os" input per attributed image (v2 fan-out) or
+  // the single aggregate input (old/malformed shape). A missing file is the
+  // offline cache-miss equivalent — no os entries, no docker, no syft.
+  const osInputs = readCommittedDockerOsSbom(opts, dir, policy);
+  if (osInputs !== undefined) inputs.push(...osInputs);
 
   // One merged model from all targets: shared packages appear once with every
   // consumer in their occurrences.
