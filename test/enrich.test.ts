@@ -1,4 +1,10 @@
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, test } from "bun:test";
@@ -1765,6 +1771,14 @@ describe("nuget registration URL builder + catalogEntry host pin", () => {
     ).toBeUndefined();
   });
 
+  test("a userinfo-@ URL (https://api.nuget.org@evil.example/x) fails the pin — '@' is not '/'", () => {
+    expect(
+      catalogEntryUrlOf({
+        catalogEntry: "https://api.nuget.org@evil.example/x",
+      }),
+    ).toBeUndefined();
+  });
+
   test("a missing/non-string/malformed catalogEntry yields undefined, never throws", () => {
     expect(catalogEntryUrlOf({})).toBeUndefined();
     expect(catalogEntryUrlOf({ catalogEntry: 42 })).toBeUndefined();
@@ -1777,6 +1791,15 @@ describe("nuget catalogEntry resolver (four-class ladder)", () => {
   test("class 1: licenseExpression wins verbatim, via license-expression HIGH", () => {
     expect(
       resolveNugetCatalogLicense(registryFixture("nuget-expression.json")),
+    ).toEqual({ raw: "MIT", via: "license-expression", confidence: "high" });
+  });
+
+  test("class 1 wins over class 2: BOTH licenseExpression and licenseFile present → the expression (declared beats embedded)", () => {
+    expect(
+      resolveNugetCatalogLicense({
+        licenseExpression: "MIT",
+        licenseFile: "LICENSE.txt",
+      }),
     ).toEqual({ raw: "MIT", via: "license-expression", confidence: "high" });
   });
 
@@ -2222,6 +2245,46 @@ describe("enrichUnknowns nuget (two-step fetch, negative discipline, offline che
         ),
       ).rejects.toThrow(/registry 500/);
       expect(readCache(path).size).toBe(0);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("a transient failure MID-BATCH flushes NOTHING — not even the misses that already resolved (no partial artifact)", async () => {
+    // Review-pass lock (15-05): the failed purl must write nothing, and the
+    // artifact write is all-or-nothing — a completed sibling worker's entry
+    // never lands on disk out of a failed generate.
+    const { dir, path } = tempCachePath();
+    const good: PackageEntry = {
+      purl: "pkg:nuget/Good.Package@1.0.0",
+      name: "Good.Package",
+      version: "1.0.0",
+      occurrences: [{ target: "t", isDevDependency: false }],
+      licenseClaims: [],
+      scope: "app",
+    };
+    const GOOD_LEAF =
+      "https://api.nuget.org/v3/registration5-gz-semver2/good.package/1.0.0.json";
+    const GOOD_CATALOG = "https://api.nuget.org/v3/catalog0/good.json";
+    try {
+      const { fetch } = fetchByUrl((url) => {
+        if (url === GOOD_LEAF)
+          return jsonResponse({ catalogEntry: GOOD_CATALOG });
+        if (url === GOOD_CATALOG)
+          return jsonResponse({ licenseExpression: "MIT" });
+        return jsonResponse({}, 503); // the OTHER miss — persistent transient
+      });
+      await expect(
+        withFetch(fetch, () =>
+          enrichUnknowns(model(good, unknownNuget()), {
+            mode: "generate",
+            cachePath: path,
+            verbose: false,
+            backoffBaseMs: fastBackoff,
+          }),
+        ),
+      ).rejects.toThrow(/registry 503/);
+      expect(existsSync(path)).toBe(false);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

@@ -627,6 +627,18 @@ describe("discoverTargetsWithWarnings — csproj sighted without packages.lock.j
     expect(warnings).toEqual([]);
   });
 
+  test("a csproj at the repo ROOT warns with the '.' identity (never an empty or garbled name)", () => {
+    const root = makeTempRoot();
+    writeCsproj(root);
+
+    const { targets, warnings } = discoverTargetsWithWarnings(root);
+
+    expect(targets).toEqual([]);
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toContain("1 directory contains");
+    expect(warnings[0]).toContain('(".")');
+  });
+
   test("HOSTILE directory identities are sanitized in BOTH warning shapes (no stderr line forgery)", () => {
     // Directory names are repo-author-controlled and (on POSIX) can carry
     // control characters; the warning prints them to stderr, so a crafted

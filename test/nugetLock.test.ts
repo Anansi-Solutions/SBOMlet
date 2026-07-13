@@ -429,6 +429,68 @@ describe("collectWithNugetLock — identity and emission", () => {
       purl: "pkg:nuget/Meta.Package@1.0.0%2Bbuild.5",
     });
   });
+
+  // The four locks below are review-pass properties (15-05 adversarial gate):
+  // refuted hunches retained because no earlier test pinned them.
+
+  test("a RID-ONLY section (no plain TFM twin) still emits its entries — completeness never keys on section names", async () => {
+    const lock = JSON.stringify({
+      version: 2,
+      dependencies: {
+        "net9.0/win-x64": {
+          "Rid.Only": { type: "Transitive", resolved: "1.0.0" },
+        },
+      },
+    });
+    const { components } = await scanLock(lock);
+    expect(componentPurls(components)).toEqual(["pkg:nuget/Rid.Only@1.0.0"]);
+  });
+
+  test("a CentralTransitive-ONLY lock emits its full set (no entry type is load-bearing for completeness)", async () => {
+    const lock = JSON.stringify({
+      version: 2,
+      dependencies: {
+        "net9.0": {
+          "Cpm.A": { type: "CentralTransitive", resolved: "1.0.0" },
+          "Cpm.B": { type: "CentralTransitive", resolved: "2.0.0" },
+        },
+      },
+    });
+    const { components } = await scanLock(lock);
+    expect(componentPurls(components)).toEqual([
+      "pkg:nuget/Cpm.A@1.0.0",
+      "pkg:nuget/Cpm.B@2.0.0",
+    ]);
+  });
+
+  test("a Unicode id (illegal per the NuGet grammar — a hostile lock) emits VERBATIM, never crashes and never re-encodes", async () => {
+    const lock = JSON.stringify({
+      version: 2,
+      dependencies: {
+        "net9.0": {
+          "Ünïcode.Päckage": { type: "Direct", resolved: "1.0.0" },
+        },
+      },
+    });
+    const { components } = await scanLock(lock);
+    expect(componentPurls(components)).toEqual([
+      "pkg:nuget/Ünïcode.Päckage@1.0.0",
+    ]);
+  });
+
+  test("a THIRD-PARTY entry sharing a Project entry's id (another section) SURVIVES — exclusion is per-entry by type, never by name", async () => {
+    const lock = JSON.stringify({
+      version: 2,
+      dependencies: {
+        "net8.0": { "Shared.Name": { type: "Project" } },
+        "net9.0": {
+          "Shared.Name": { type: "Direct", resolved: "1.0.0" },
+        },
+      },
+    });
+    const { components } = await scanLock(lock);
+    expect(componentPurls(components)).toEqual(["pkg:nuget/Shared.Name@1.0.0"]);
+  });
 });
 
 // ---------------------------------------------------------------------------
