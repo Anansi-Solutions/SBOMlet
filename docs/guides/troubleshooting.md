@@ -195,7 +195,7 @@ ignore = ["test/fixtures/**/Dockerfile"]
 An ignored Dockerfile never reaches `docker build`, so it cannot abort the run.
 This is the maintainer-only `generate-docker-sbom` subcommand: `generate` and
 `check` never run Docker and never build or scan an image. They only read the
-separately committed `.sbomlet.cache/docker-os.sbom.json` as a
+separately committed `.sbomlet.cache/docker.sbom.json` as a
 [scope (os)](../glossary.md#scope-app-and-os) input, produced ahead of time by a
 maintainer running `generate-docker-sbom` with a Docker daemon. Once the build
 succeeds and you commit the regenerated file, the offline `generate`/`check` flow
@@ -243,7 +243,7 @@ lines to a `.gitattributes` file at your repository root:
 THIRD_PARTY_LICENSES.md text eol=lf
 THIRD_PARTY_NOTICES.md text eol=lf
 .sbomlet.cache/licenses.cache.json text eol=lf
-.sbomlet.cache/docker-os.sbom.json text eol=lf
+.sbomlet.cache/docker.sbom.json text eol=lf
 ```
 
 Then renormalize the files already in the working tree and commit:

@@ -222,7 +222,7 @@ reviewed. Add `where` to limit the rule to what you judged:
 [[compatible]]
 match = "package"
 name = "busybox"
-where = ["docker:os-packages/a/Dockerfile"]
+where = ["docker:a/Dockerfile"]
 reason = "Reviewed in a/Dockerfile's image: shipped unmodified in the OS layer."
 ```
 
@@ -234,22 +234,16 @@ both compatible forms, licence and package.
 Each entry is an occurrence-identity prefix, matched with the same
 segment-aware rule as a suppression `path`: the occurrence's
 [target](../glossary.md#target) must be the entry itself or sit under it as a
-whole segment. Docker targets are `docker:os-packages/<source>` — the
-Dockerfile's repo-relative path for an image the tool builds, or the image
-reference exactly as you passed it (`docker:os-packages/node:24-alpine`) for an
-`--image` scan. App targets are the workspace paths you see in the Used-in
-column.
+whole segment. Docker targets are `docker:<source>` — the Dockerfile's
+repo-relative path for an image the tool builds, or the image reference
+exactly as you passed it (`docker:node:24-alpine`) for an `--image` scan. App
+targets are the workspace paths you see in the Used-in column.
 
-Prefer the narrowest identity you actually reviewed. The bare
-`docker:os-packages` prefix matches every image; it exists so an acceptance
-predating per-image identities can keep its old reach. Scoping to it is a
-deliberate widening, not the default.
+Prefer the narrowest identity you actually reviewed — usually the full
+`docker:<source>` of one image.
 
 A scoped rule that matches nothing is reported as an unused entry — check the
-`where` value. One special case: a committed `docker-os.sbom.json` written
-before per-image attribution reads under the single aggregate identity
-`docker:os-packages`, which no rule scoped below that prefix can match; the
-tool prints a one-line hint telling you to regenerate the sidecar.
+`where` value against the Used-in column of the committed document.
 
 ## Set how unknown, dev, and OS dependencies are handled
 
@@ -304,7 +298,7 @@ for projects that rebuild their base, or that want every image-sourced copyleft
 reviewed, and `ignore` opts out explicitly. A `[[deny]]` licence in an OS-scope
 package still fails regardless, because deny sits above this knob.
 
-These packages reach the merge only if a `.sbomlet.cache/docker-os.sbom.json` is present in your
+These packages reach the merge only if a `.sbomlet.cache/docker.sbom.json` is present in your
 repo, produced separately by the `generate-docker-sbom` subcommand — run by hand
 over named Dockerfiles or images, or by CI discovering and building the
 repository's Dockerfiles. `generate` and `check` never scan images themselves; they only read that

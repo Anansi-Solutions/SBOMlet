@@ -49,7 +49,7 @@ footprint small.
 - **`generate-docker-sbom`** is the only path that touches the Docker daemon or
   syft. It builds and scans a project's Docker images — from named Dockerfiles, a
   discovered directory, or pre-existing image refs — into a committed
-  `.sbomlet.cache/docker-os.sbom.json`, which `generate` and `check` then read as
+  `.sbomlet.cache/docker.sbom.json`, which `generate` and `check` then read as
   an ordinary merge input. `generate` and `check` themselves never produce this
   file.
 
@@ -71,7 +71,7 @@ The stages run in a fixed order:
 flowchart TD
     A["Discover targets<br/>(walk --repo-root for lockfiles,<br/>or single --target)"] --> B
     B["Collect per target<br/>(Collector registry: cdxgen / yarn-plugin /<br/>bunLock / poetryLock / terraform)"] --> C
-    OS["Committed .sbomlet.cache/docker-os.sbom.json<br/>(scope: os merge input, when present)"] --> D
+    OS["Committed .sbomlet.cache/docker.sbom.json<br/>(scope: os merge input, when present)"] --> D
     B --> C["Each collector emits a CollectedSbom<br/>(per-target CycloneDX doc + scope)"]
     C --> D["Merge (purl-keyed)<br/>mergeSboms → CanonicalDependencies"]
     D --> E["Enrich unknowns<br/>(PyPI / npm / GitHub via committed cache)"]
@@ -457,7 +457,7 @@ daemon onto every CI check. Keeping it generate-only and outside the registry
 lets `check` stay offline. Its output is consumed instead as a committed merge
 input.
 
-That committed `.sbomlet.cache/docker-os.sbom.json` is the contract surface between the two
+That committed `.sbomlet.cache/docker.sbom.json` is the contract surface between the two
 worlds. The pipeline reads it as an `os`-scope input when it exists, size-gated
 before any read; a missing file means no OS entries, the offline cache-miss
 equivalent rather than a live scan. `generate` and `check` read the same

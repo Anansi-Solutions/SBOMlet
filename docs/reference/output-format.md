@@ -22,7 +22,7 @@ fetch resolves something new; a warm run rewrites identical bytes. The
 CycloneDX export and the model dump appear only when their flag is passed; the
 dump is a debug artifact and is not committed.
 
-`generate` does **not** write `.sbomlet.cache/docker-os.sbom.json`. That sidecar is produced by
+`generate` does **not** write `.sbomlet.cache/docker.sbom.json`. That sidecar is produced by
 the separate, maintainer-only `generate-docker-sbom` subcommand and committed by
 hand; `generate` and `check` only read it as a [`scope:os`](../glossary.md#scope-app-and-os)
 [merge](../glossary.md#merge) input. See [the committed sidecars](#the-committed-sidecars)
@@ -132,15 +132,14 @@ keeps its application scope and is only cross-referenced there via Used in.
 Lockfile-only scans that were never enriched will show `unknown` in the License
 column; that is correct pre-annotation behavior, not a defect.
 
-A Docker row's targets take the form `docker:os-packages/<source>`: the
-Dockerfile's repo-relative path for an image the tool built
-(`docker:os-packages/examples/docker-scan/Dockerfile`), or the image reference
-verbatim for an `--image` scan (`docker:os-packages/node:24-alpine`). A package
-present in several images lists each image's occurrence. A sidecar written
-before per-image attribution reads under the single aggregate target
-`docker:os-packages`. The namespace is reserved for image occurrences: a
-workspace directory literally named `docker:os-packages` fails the run loudly,
-so an application occurrence can never impersonate an image one.
+A Docker row's targets take the form `docker:<source>`: the Dockerfile's
+repo-relative path for an image the tool built
+(`docker:examples/docker-scan/Dockerfile`), or the image reference verbatim
+for an `--image` scan (`docker:node:24-alpine`). A package present in several
+images lists each image's occurrence. The whole `docker:` prefix is reserved
+for image occurrences: a workspace directory whose identity starts with it
+fails the run loudly, so an application occurrence can never impersonate an
+image one.
 
 ### Problematic licenses
 
@@ -333,17 +332,17 @@ registry answered, and whether the package is resolvable. `generate` writes the
 file on every run, even when nothing needed enriching; the bytes change only
 when a fetch resolves a new licence, so a warm run rewrites identical bytes.
 
-`.sbomlet.cache/docker-os.sbom.json` is the Docker image package inventory, the
-[`scope:os`](../glossary.md#scope-app-and-os) merge input. Despite the filename, it
-holds the full contents of each scanned image, not only the OS layer: every
-component the image carries, application packages included. It is a minimal
+`.sbomlet.cache/docker.sbom.json` is the Docker image package inventory, the
+[`scope:os`](../glossary.md#scope-app-and-os) merge input. It holds the full
+contents of each scanned image: every component the image carries, OS and
+application packages alike. It is a minimal
 CycloneDX-shaped document holding `bomFormat`, `specVersion`, `components`, and a
 `dockerImages` array, and nothing else. Each component carries an `images` list
 naming the scanned image(s) it was found in. Each `dockerImages` entry pins a
 scanned image to its content digest (empty for a locally built, never-pushed
 image, which has none) and records its `source` — the Dockerfile's repo-relative
 path for a built image, the reference as requested for an `--image` scan —
-which is where the Used-in targets `docker:os-packages/<source>` come from. It
+which is where the Used-in targets `docker:<source>` come from. It
 is **not** written by `generate`. It is produced by the docker scan
 (`task sbomlet:generate DOCKER=1`, driving the `generate-docker-sbom` subcommand, the
 only path in the tool that touches Docker or syft) — by hand over named

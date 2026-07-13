@@ -259,7 +259,7 @@ handling = "warn"
 # Docker image-package handling (COLL-04)
 #
 # Governs the packages scanned out of your Docker images -- the full image
-# contents in the committed .sbomlet.cache/docker-os.sbom.json, produced by the
+# contents in the committed .sbomlet.cache/docker.sbom.json, produced by the
 # maintainer-run `generate-docker-sbom` subcommand and threaded into the merge as
 # scope "os".
 # A would-be FAIL on an OS package downgrades to WARN under "warn".
@@ -288,7 +288,7 @@ handling = "warn"
 # table defaults to "warn".
 #
 # ---------------------------------------------------------------------------
-# HOW the .sbomlet.cache/docker-os.sbom.json is produced -- THREE lanes, each a
+# HOW the .sbomlet.cache/docker.sbom.json is produced -- THREE lanes, each a
 # way into the same result (syft over a real image's full contents). A run picks
 # exactly one; all three require a docker daemon:
 #
@@ -308,7 +308,7 @@ handling = "warn"
 #      Scans each image ref with the pinned syft, pulling any that is absent
 #      locally and digest-pinning each.
 #
-# Every lane writes the SAME deterministic committed .sbomlet.cache/docker-os.sbom.json,
+# Every lane writes the SAME deterministic committed .sbomlet.cache/docker.sbom.json,
 # carrying each package's syft-resolved licenses, which generate/check then read
 # OFFLINE (never re-scanning). The three lanes are mutually exclusive -- a run is
 # one way in.

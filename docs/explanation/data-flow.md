@@ -41,7 +41,7 @@ flowchart TD
         direction TB
         S1["1. DISCOVER targets<br/>src/targets/discover.ts → src/pipeline/targets.ts"]
         S2["2. COLLECT per target<br/>collector registry → raw CycloneDX docs<br/>(CollectedSbom[])"]
-        S2b["+ committed .sbomlet.cache/docker-os.sbom.json<br/>read as scope:&quot;os&quot; merge input"]
+        S2b["+ committed .sbomlet.cache/docker.sbom.json<br/>read as scope:&quot;os&quot; merge input"]
         S3["3. MERGE purl-keyed<br/>src/merge/merge.ts → CanonicalDependencies"]
         S4["4. ENRICH unknowns<br/>src/enrich/enrich.ts (cache; fetch only in generate)"]
         S5["5. NORMALIZE + annotate<br/>src/normalize/normalize.ts → finding per package"]
@@ -52,7 +52,7 @@ flowchart TD
 
     GEN -->|mode: generate| CORE
     CHK -->|mode: check| CORE
-    DOCK -.writes.-> OSF[".sbomlet.cache/docker-os.sbom.json<br/>(committed)"]
+    DOCK -.writes.-> OSF[".sbomlet.cache/docker.sbom.json<br/>(committed)"]
     OSF -.read by.-> S2b
 
     CORE -->|generate: writeFileSync| OUT["always: THIRD_PARTY_LICENSES.md + THIRD_PARTY_NOTICES.md<br/>.sbomlet.cache/licenses.cache.json (always)<br/>*.cdx.json (only with --cyclonedx)<br/>dump JSON (only with --dump-model)"]
@@ -147,7 +147,7 @@ nonetheless scans to zero components is the genuinely broken case, and it fails
 loudly with a thrown coverage assertion (exit 3) rather than degrading to a quiet
 skip that would hide an incomplete inventory.
 
-After the collect loop, `buildOutputs` reads the committed `.sbomlet.cache/docker-os.sbom.json`,
+After the collect loop, `buildOutputs` reads the committed `.sbomlet.cache/docker.sbom.json`,
 if present, as a [scope `os`](../glossary.md#scope-app-and-os) merge input. This file
 is never scanned per run. It is produced separately by the maintainer-only
 `generate-docker-sbom` subcommand, the only path in the tool that touches a

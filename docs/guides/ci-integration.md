@@ -133,7 +133,7 @@ is a debugging aid for golden-file tests, not something you commit.
 So an adopter running a plain `task sbomlet:generate` always gets three files:
 the inventory, the companion, and the cache.
 
-A plain `generate` never writes `.sbomlet.cache/docker-os.sbom.json` — it only
+A plain `generate` never writes `.sbomlet.cache/docker.sbom.json` — it only
 reads the committed copy. The file comes from the docker lane of the same task:
 `task sbomlet:generate DOCKER=1` first rebuilds and rescans the repository's images to
 refresh it, then regenerates the full inventory (described at the end of this
@@ -169,11 +169,11 @@ root, so git can't rewrite them on any platform:
 THIRD_PARTY_LICENSES.md text eol=lf
 THIRD_PARTY_NOTICES.md text eol=lf
 .sbomlet.cache/licenses.cache.json text eol=lf
-.sbomlet.cache/docker-os.sbom.json text eol=lf
+.sbomlet.cache/docker.sbom.json text eol=lf
 ```
 
 Keep all four lines even if your repository doesn't ship Docker base images.
-The `.sbomlet.cache/docker-os.sbom.json` line is harmless when the file is absent and saves a
+The `.sbomlet.cache/docker.sbom.json` line is harmless when the file is absent and saves a
 surprise if you add one later.
 
 This matters even when nobody on the team develops on Windows today. The pins
@@ -353,7 +353,7 @@ the gate never scans anything.
 Docker packages, the [os-scope](../glossary.md#scope-app-and-os) half of the
 inventory, are not discovered or scanned by a plain `generate` or by `check`.
 Neither runs Docker or [syft](../glossary.md#generator). Instead, a
-`.sbomlet.cache/docker-os.sbom.json` is produced ahead of time by the
+`.sbomlet.cache/docker.sbom.json` is produced ahead of time by the
 `generate-docker-sbom` subcommand and committed, and from then on `generate`
 and `check` read it as a merge input the same way they read a lockfile. This
 keeps a Docker daemon off the gate path: a CI `check` never needs Docker, even
@@ -426,12 +426,12 @@ two events take different lanes.
 
 ### Whichever lane you use
 
-The result is one committed `.sbomlet.cache/docker-os.sbom.json`. A scan or build
+The result is one committed `.sbomlet.cache/docker.sbom.json`. A scan or build
 failure exits `3`, the same tool-error code as a bad flag — a Dockerfile that fails
 `docker build` stops the run loudly, naming the file. It is never a gate verdict,
 because this command is not the gate. After the file is committed, its packages
 flow into the merged inventory, and `generate` and `check` go on reading the
-committed bytes offline. Remember to add `.sbomlet.cache/docker-os.sbom.json` to
+committed bytes offline. Remember to add `.sbomlet.cache/docker.sbom.json` to
 your `.gitattributes` LF pins so it byte-compares the same way on every checkout.
 
 ## See also

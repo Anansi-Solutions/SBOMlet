@@ -96,7 +96,7 @@ constraint. Detection is orchestrated: per-ecosystem collection delegates to
 pinned external generators. Yarn-4 lockfiles route to the Yarn CycloneDX plugin;
 other npm and pnpm lockfiles and all Python lockfiles route to cdxgen, which is
 where Poetry licences come from. Docker images are scanned by syft, but only in the `generate-docker-sbom`
-subcommand, which writes a committed `.sbomlet.cache/docker-os.sbom.json`;
+subcommand, which writes a committed `.sbomlet.cache/docker.sbom.json`;
 `generate` and `check` never run a docker daemon — they read that file as an
 `os`-scope merge input. The version tag inside each argv is
 the pin, floating tags are forbidden, and each argv is locked byte-for-byte by a
