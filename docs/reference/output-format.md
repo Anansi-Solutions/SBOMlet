@@ -138,7 +138,9 @@ Dockerfile's repo-relative path for an image the tool built
 verbatim for an `--image` scan (`docker:os-packages/node:24-alpine`). A package
 present in several images lists each image's occurrence. A sidecar written
 before per-image attribution reads under the single aggregate target
-`docker:os-packages`.
+`docker:os-packages`. The namespace is reserved for image occurrences: a
+workspace directory literally named `docker:os-packages` fails the run loudly,
+so an application occurrence can never impersonate an image one.
 
 ### Problematic licenses
 

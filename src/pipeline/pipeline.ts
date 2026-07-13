@@ -11,7 +11,11 @@ import { assertSyftSbomSize } from "../collectors/dockerOs";
 import { assessPackages } from "../enrich/assess";
 import { enrichUnknowns } from "../enrich/enrich";
 import { type IntensiveOptions } from "../enrich/scancode";
-import { mergeSboms, type CollectedSbom } from "../merge/merge";
+import {
+  DOCKER_OS_IDENTITY,
+  mergeSboms,
+  type CollectedSbom,
+} from "../merge/merge";
 import {
   toSortedDependenciesJson,
   type EvaluatedDependencies,
@@ -193,13 +197,6 @@ export interface BuiltOutputs {
  * check byte-compares them against the committed files, so check can never
  * overwrite the files it is gating on.
  */
-/**
- * The aggregate Docker OS occurrence identity: the pre-attribution shape's
- * only target, and the namespace prefix of every per-image identity
- * ("docker:os-packages/<source>").
- */
-const DOCKER_OS_IDENTITY = "docker:os-packages";
-
 /**
  * The one-line stderr hint printed when the committed sidecar reads as the
  * aggregate (old or malformed shape) while the policy scopes a compatible rule

@@ -603,9 +603,7 @@ describe("mergeSboms — CollectedSbom.scope threading (COLL-04)", () => {
   });
 
   test('absent scope still defaults to "app" (regression — existing entries unchanged)', () => {
-    const model = mergeSboms([
-      { sbom: osDoc, targetIdentity: "docker:os-packages" },
-    ]);
+    const model = mergeSboms([{ sbom: osDoc, targetIdentity: "backend" }]);
     expect(model.packages.length).toBe(2);
     expect(model.packages.every((p) => p.scope === "app")).toBe(true);
   });
@@ -1961,5 +1959,81 @@ describe("mergeSboms — dependency provenance threading (07-13)", () => {
     expect(fold(introDirect, introTransitive)).toEqual(expected);
     // Order-independent.
     expect(fold(introTransitive, introDirect)).toEqual(expected);
+  });
+});
+
+// ===========================================================================
+// Reserved Docker OS namespace: only scope:"os" inputs may mint identities
+// equal to or under "docker:os-packages". On a POSIX filesystem a directory
+// can be literally named "docker:os-packages", so a crafted workspace could
+// otherwise impersonate a docker image occurrence and inherit `where`-scoped
+// acceptances reviewed for the image layer.
+// ===========================================================================
+
+describe("mergeSboms — reserved Docker OS occurrence namespace", () => {
+  const appDoc = {
+    bomFormat: "CycloneDX",
+    specVersion: "1.6",
+    components: [
+      {
+        type: "library",
+        name: "busybox",
+        version: "9.9.9",
+        purl: "pkg:npm/busybox@9.9.9",
+        licenses: [{ license: { id: "GPL-2.0-only" } }],
+      },
+    ],
+  };
+
+  test("an app input (absent scope) inside the namespace is refused loudly", () => {
+    expect(() =>
+      mergeSboms([
+        {
+          sbom: appDoc,
+          targetIdentity: "docker:os-packages/examples/docker-scan/Dockerfile",
+        },
+      ]),
+    ).toThrow(/reserved Docker OS occurrence namespace/);
+  });
+
+  test("an app input equal to the bare aggregate identity is refused too", () => {
+    expect(() =>
+      mergeSboms([{ sbom: appDoc, targetIdentity: "docker:os-packages" }]),
+    ).toThrow(/reserved Docker OS occurrence namespace/);
+  });
+
+  test('an explicit scope:"app" input inside the namespace is refused', () => {
+    expect(() =>
+      mergeSboms([
+        {
+          sbom: appDoc,
+          targetIdentity: "docker:os-packages/evil",
+          scope: "app",
+        },
+      ]),
+    ).toThrow(/reserved Docker OS occurrence namespace/);
+  });
+
+  test("segment-awareness: a sibling identity sharing the prefix as a substring passes", () => {
+    const model = mergeSboms([
+      { sbom: appDoc, targetIdentity: "docker:os-packagesx" },
+    ]);
+    expect(model.packages.length).toBe(1);
+  });
+
+  test('scope:"os" inputs own the namespace: aggregate and per-image identities both pass', () => {
+    const model = mergeSboms([
+      { sbom: appDoc, targetIdentity: "docker:os-packages", scope: "os" },
+      {
+        sbom: appDoc,
+        targetIdentity: "docker:os-packages/a/Dockerfile",
+        scope: "os",
+      },
+    ]);
+    expect(model.packages.length).toBe(1);
+    expect(model.packages[0]?.occurrences.map((o) => o.target)).toEqual([
+      "docker:os-packages",
+      "docker:os-packages/a/Dockerfile",
+    ]);
   });
 });

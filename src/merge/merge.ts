@@ -479,6 +479,33 @@ function mergeInto(existing: PackageEntry, incoming: PackageEntry): void {
 }
 
 /**
+ * The Docker OS occurrence namespace: the aggregate identity of a
+ * pre-attribution sidecar and the prefix of every per-image identity
+ * ("docker:os-packages/<source>"). RESERVED for scope:"os" inputs — on a
+ * POSIX filesystem a directory can be literally named "docker:os-packages",
+ * so without the guard below a crafted workspace path could impersonate a
+ * docker image occurrence and inherit `where`-scoped acceptances reviewed
+ * for the image layer.
+ */
+export const DOCKER_OS_IDENTITY = "docker:os-packages";
+
+/**
+ * Throw when a non-os input mints an identity in the reserved namespace.
+ * Identity strings are tool-minted (repo-relative discovery paths), not
+ * document content, so a collision is a crafted layout — refused loudly,
+ * never a tolerant skip.
+ */
+function assertNotReservedIdentity(input: CollectedSbom): void {
+  if ((input.scope ?? "app") === "os") return;
+  const id = input.targetIdentity;
+  if (id === DOCKER_OS_IDENTITY || id.startsWith(`${DOCKER_OS_IDENTITY}/`)) {
+    throw new Error(
+      `target "${id}" collides with the reserved Docker OS occurrence namespace "${DOCKER_OS_IDENTITY}" — rename or exclude the directory; a workspace can never impersonate a docker image occurrence`,
+    );
+  }
+}
+
+/**
  * Build the canonical model from one or more CycloneDX documents.
  *
  * Multi-input signature so multi-target merge and per-workspace provenance are
@@ -489,6 +516,10 @@ export function mergeSboms(
   inputs: ReadonlyArray<CollectedSbom>,
 ): CanonicalDependencies {
   const byPurl = new Map<string, PackageEntry>();
+
+  // Reserved-namespace integrity before any component walks (see
+  // assertNotReservedIdentity — a loud throw, never a skip).
+  for (const input of inputs) assertNotReservedIdentity(input);
 
   for (const input of inputs) {
     // A malformed document is skipped, never thrown on.
