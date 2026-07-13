@@ -30,9 +30,12 @@ import {
   dockerInspectArgs,
   dockerPullArgs,
   filterOsComponents,
+  unionOsComponents,
   emitDockerOsDoc,
   parseRepoDigests,
   selectDigest,
+  type AttributedOsComponent,
+  type OsComponent,
 } from "../src/collectors/dockerOs";
 
 import postgresFixture from "./fixtures/syft-postgres-trimmed.json";
@@ -320,8 +323,19 @@ describe("filterOsComponents (full image contents by default)", () => {
   });
 
   test("double-emit of the full-contents doc is byte-identical, with no volatile fields", () => {
-    const full = filterOsComponents(builtFixture);
-    const digests = [{ image: "local/scan-image:built", digest: "" }];
+    const full = unionOsComponents([
+      {
+        image: "local/scan-image:built",
+        components: filterOsComponents(builtFixture),
+      },
+    ]);
+    const digests = [
+      {
+        image: "local/scan-image:built",
+        digest: "",
+        source: "local/scan-image:built",
+      },
+    ];
     const first = emitDockerOsDoc(full, digests);
     const second = emitDockerOsDoc(full, digests);
     expect(first).toBe(second);
@@ -330,11 +344,112 @@ describe("filterOsComponents (full image contents by default)", () => {
   });
 });
 
-describe("emitDockerOsDoc (deterministic emit)", () => {
-  const DIGESTS = [{ image: "postgres:18", digest: "sha256:abc" }];
+// ---------------------------------------------------------------------------
+// unionOsComponents (sidecar v2 membership union) — the cross-image dedup no
+// longer DISCARDS membership: a purl shared between images stays ONE row, but
+// that row now lists every containing image. The retained name/version/licenses
+// are still the first-seen values (callers pass images in sorted order, so the
+// license posture stays first-wins-by-sorted-image — unchanged, just visible).
+// ---------------------------------------------------------------------------
+
+describe("unionOsComponents (cross-image membership union, sidecar v2)", () => {
+  const sharedInA: OsComponent[] = [
+    {
+      type: "library",
+      name: "busybox",
+      version: "1.37.0-r19",
+      purl: "pkg:apk/alpine/busybox@1.37.0-r19",
+      licenses: [{ license: { id: "GPL-2.0-only" } }],
+    },
+    {
+      type: "library",
+      name: "musl",
+      version: "1.2.5-r9",
+      purl: "pkg:apk/alpine/musl@1.2.5-r9",
+      licenses: [{ expression: "MIT" }],
+    },
+  ];
+  const sharedInB: OsComponent[] = [
+    {
+      type: "library",
+      name: "busybox",
+      version: "1.37.0-r19",
+      purl: "pkg:apk/alpine/busybox@1.37.0-r19",
+      // A DIFFERENT claim set for the same purl: the first-seen set must win.
+      licenses: [{ license: { name: "GPL" } }],
+    },
+    {
+      type: "library",
+      name: "zlib",
+      version: "1.3.1-r2",
+      purl: "pkg:apk/alpine/zlib@1.3.1-r2",
+      licenses: [{ license: { id: "Zlib" } }],
+    },
+  ];
+
+  test("a purl present in two images yields ONE row whose images lists BOTH tags sorted", () => {
+    const merged = unionOsComponents([
+      { image: "img/a", components: sharedInA },
+      { image: "img/b", components: sharedInB },
+    ]);
+    const busybox = merged.find((c) => c.name === "busybox");
+    expect(busybox?.images).toEqual(["img/a", "img/b"]);
+    // One row per purl — the dedup posture is unchanged, only more visible.
+    expect(merged.filter((c) => c.name === "busybox")).toHaveLength(1);
+    // The retained licenses are the FIRST-SEEN (image a) claim set.
+    expect(busybox?.licenses).toEqual([{ license: { id: "GPL-2.0-only" } }]);
+  });
+
+  test("a purl unique to one image carries exactly that one membership entry", () => {
+    const merged = unionOsComponents([
+      { image: "img/a", components: sharedInA },
+      { image: "img/b", components: sharedInB },
+    ]);
+    expect(merged.find((c) => c.name === "musl")?.images).toEqual(["img/a"]);
+    expect(merged.find((c) => c.name === "zlib")?.images).toEqual(["img/b"]);
+  });
+
+  test("membership arrays are sorted even when inputs arrive unsorted", () => {
+    const merged = unionOsComponents([
+      { image: "img/b", components: sharedInB },
+      { image: "img/a", components: sharedInA },
+    ]);
+    expect(merged.find((c) => c.name === "busybox")?.images).toEqual([
+      "img/a",
+      "img/b",
+    ]);
+  });
+
+  test("a duplicate image in the scan set never double-counts one membership", () => {
+    const merged = unionOsComponents([
+      { image: "img/a", components: sharedInA },
+      { image: "img/a", components: sharedInA },
+    ]);
+    expect(merged.find((c) => c.name === "busybox")?.images).toEqual(["img/a"]);
+  });
+
+  test("merged rows stay purl-sorted via compareCodeUnits", () => {
+    const merged = unionOsComponents([
+      { image: "img/b", components: sharedInB },
+      { image: "img/a", components: sharedInA },
+    ]);
+    const purls = merged.map((c) => c.purl);
+    const sorted = [...purls].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
+    expect(purls).toEqual(sorted);
+  });
+});
+
+describe("emitDockerOsDoc (deterministic emit, sidecar v2)", () => {
+  const DIGESTS = [
+    { image: "postgres:18", digest: "sha256:abc", source: "postgres:18" },
+  ];
+  const postgresAttributed = (): AttributedOsComponent[] =>
+    unionOsComponents([
+      { image: "postgres:18", components: filterOsComponents(postgresFixture) },
+    ]);
 
   test("emits ONLY {bomFormat, specVersion, components, dockerImages}", () => {
-    const json = emitDockerOsDoc(filterOsComponents(postgresFixture), DIGESTS);
+    const json = emitDockerOsDoc(postgresAttributed(), DIGESTS);
     const doc = JSON.parse(json) as Record<string, unknown>;
     expect(new Set(Object.keys(doc))).toEqual(
       new Set(["bomFormat", "specVersion", "components", "dockerImages"]),
@@ -348,30 +463,70 @@ describe("emitDockerOsDoc (deterministic emit)", () => {
     expect(json).not.toContain("serialNumber");
   });
 
-  test("the dockerImages sidecar is [{image, digest}] sorted by image", () => {
-    const json = emitDockerOsDoc(filterOsComponents(postgresFixture), [
-      { image: "nginx:stable-alpine", digest: "sha256:nnn" },
-      { image: "postgres:18", digest: "sha256:ppp" },
+  test("every component carries its sorted image membership (sidecar v2)", () => {
+    const json = emitDockerOsDoc(postgresAttributed(), DIGESTS);
+    const doc = JSON.parse(json) as {
+      components: Array<{ images?: unknown }>;
+    };
+    expect(doc.components.length).toBeGreaterThan(0);
+    // Single-image doc: every component's membership is exactly that image.
+    expect(
+      doc.components.every(
+        (c) =>
+          Array.isArray(c.images) &&
+          c.images.length === 1 &&
+          c.images[0] === "postgres:18",
+      ),
+    ).toBe(true);
+  });
+
+  test("the dockerImages sidecar is [{image, digest, source}] sorted by image", () => {
+    const json = emitDockerOsDoc(postgresAttributed(), [
+      {
+        image: "postgres:18",
+        digest: "sha256:ppp",
+        source: "db/Dockerfile",
+      },
+      {
+        image: "nginx:stable-alpine",
+        digest: "sha256:nnn",
+        source: "nginx:stable-alpine",
+      },
     ]);
     const doc = JSON.parse(json) as {
-      dockerImages: { image: string; digest: string }[];
+      dockerImages: { image: string; digest: string; source: string }[];
     };
     expect(doc.dockerImages).toEqual([
-      { image: "nginx:stable-alpine", digest: "sha256:nnn" },
-      { image: "postgres:18", digest: "sha256:ppp" },
+      {
+        image: "nginx:stable-alpine",
+        digest: "sha256:nnn",
+        source: "nginx:stable-alpine",
+      },
+      { image: "postgres:18", digest: "sha256:ppp", source: "db/Dockerfile" },
     ]);
   });
 
   test("double-emit from the same components+digests is byte-identical", () => {
-    const components = filterOsComponents(nginxFixture);
-    const digests = [{ image: "nginx:stable-alpine", digest: "sha256:zzz" }];
+    const components = unionOsComponents([
+      {
+        image: "nginx:stable-alpine",
+        components: filterOsComponents(nginxFixture),
+      },
+    ]);
+    const digests = [
+      {
+        image: "nginx:stable-alpine",
+        digest: "sha256:zzz",
+        source: "nginx:stable-alpine",
+      },
+    ];
     expect(emitDockerOsDoc(components, digests)).toBe(
       emitDockerOsDoc(components, digests),
     );
   });
 
   test("the emitted doc carries each component's preserved licenses array", () => {
-    const json = emitDockerOsDoc(filterOsComponents(postgresFixture), DIGESTS);
+    const json = emitDockerOsDoc(postgresAttributed(), DIGESTS);
     const doc = JSON.parse(json) as {
       components: Array<{
         name: string;

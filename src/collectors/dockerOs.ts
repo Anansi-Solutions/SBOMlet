@@ -31,9 +31,13 @@
  *
  * Emit: a minimal deterministic `{ bomFormat, specVersion:"1.6", components,
  * dockerImages }` doc and nothing else (no serialNumber, no metadata,
- * no timestamp). Serialized via the tool-wide `toSortedJson` contract so a
- * double-emit is byte-identical by construction. Zero new runtime deps — syft
- * and docker are orchestrated pinned CLIs, same posture as cdxgen/tofu.
+ * no timestamp). Each component carries `images` — the sorted membership of
+ * `dockerImages[].image` values it was seen in — and each dockerImages entry
+ * carries `source`, the identity the image came from (the Dockerfile identity
+ * for built images, the requested ref verbatim otherwise). Serialized via the
+ * tool-wide `toSortedJson` contract so a double-emit is byte-identical by
+ * construction. Zero new runtime deps — syft and docker are orchestrated
+ * pinned CLIs, same posture as cdxgen/tofu.
  */
 
 import { existsSync, mkdtempSync, readFileSync, statSync } from "node:fs";
@@ -144,10 +148,39 @@ export interface OsComponent {
   licenses?: OsLicense[];
 }
 
-/** The image→platform-digest sidecar entry. */
+/**
+ * One EMITTED component: an OsComponent plus its cross-image membership.
+ * `images` is the sorted list of `dockerImages[].image` values the component
+ * was seen in. Attribution attaches ONLY in the cross-image union
+ * ({@link unionOsComponents}) — {@link filterOsComponents} stays per-image and
+ * membership-free — so the emitted doc always says which image(s) each
+ * component came from.
+ */
+export interface AttributedOsComponent extends OsComponent {
+  images: string[];
+}
+
+/**
+ * The image→platform-digest sidecar entry. `source` records the identity the
+ * image came from: the Dockerfile identity for built images (the exact string
+ * `--list-dockerfiles` prints), the requested ref verbatim for pre-existing
+ * images (source === image). A digest never appears in a source — digests
+ * live in `digest`, so a re-pin can never churn an identity.
+ */
 export interface DockerImageDigest {
   image: string;
   digest: string;
+  source: string;
+}
+
+/**
+ * One image to scan: the ref handed to syft/docker as an operand plus the
+ * source identity it stands for, carried into the emitted
+ * `dockerImages[].source` (see {@link DockerImageDigest}).
+ */
+export interface ScanImage {
+  image: string;
+  source: string;
 }
 
 /** A syft CycloneDX component as we narrow it — only the fields we read. */
@@ -276,14 +309,49 @@ export function filterOsComponents(sbom: unknown): OsComponent[] {
 }
 
 /**
+ * Cross-image membership UNION: fold each image's filtered components into one
+ * purl-keyed set where a purl shared between images is ONE row whose `images`
+ * lists every containing image (sorted before return). The retained
+ * name/version/licenses are the FIRST-SEEN values — callers pass images in
+ * compareCodeUnits-sorted order (collectDockerOsSbom's scan discipline), so
+ * the license posture stays first-wins-by-sorted-image: unchanged from the
+ * pre-membership dedup, just visible now that the row names both images.
+ */
+export function unionOsComponents(
+  perImage: ReadonlyArray<{ image: string; components: OsComponent[] }>,
+): AttributedOsComponent[] {
+  const byPurl = new Map<string, AttributedOsComponent>();
+  for (const { image, components } of perImage) {
+    for (const component of components) {
+      const existing = byPurl.get(component.purl);
+      if (existing === undefined) {
+        byPurl.set(component.purl, { ...component, images: [image] });
+      } else if (!existing.images.includes(image)) {
+        // Purl hit: union the membership, keep the first-seen fields. The
+        // includes guard keeps a duplicated ref in the scan set from
+        // double-counting one image.
+        existing.images.push(image);
+      }
+    }
+  }
+  const merged = [...byPurl.values()].sort((a, b) =>
+    compareCodeUnits(a.purl, b.purl),
+  );
+  for (const entry of merged) entry.images.sort(compareCodeUnits);
+  return merged;
+}
+
+/**
  * Serialize the minimal deterministic OS-SBOM doc:
  * `{ bomFormat, specVersion:"1.6", components, dockerImages }` and nothing else
- * — no serialNumber, no metadata, no timestamp. The dockerImages sidecar is
- * sorted by image. Uses the tool-wide `toSortedJson` contract (sorted keys, LF,
- * indent 2) so a double-emit from the same inputs is byte-identical.
+ * — no serialNumber, no metadata, no timestamp. Components carry their sorted
+ * `images` membership; dockerImages entries carry `source` alongside
+ * image/digest, and the sidecar is sorted by image. Uses the tool-wide
+ * `toSortedJson` contract (sorted keys, LF, indent 2) so a double-emit from
+ * the same inputs is byte-identical.
  */
 export function emitDockerOsDoc(
-  components: OsComponent[],
+  components: AttributedOsComponent[],
   dockerImages: DockerImageDigest[],
 ): string {
   const sortedImages = [...dockerImages].sort((a, b) =>
@@ -482,14 +550,15 @@ export function parseRepoDigests(stdout: string, invocation: string): string[] {
 }
 
 /**
- * Orchestrate per-image scan + digest + filter, merge all images' components
- * into one purl-deduped sorted list, build the sorted dockerImages sidecar, and
+ * Orchestrate per-image scan + digest + filter, union all images' components
+ * into one purl-keyed sorted list carrying per-image membership, build the
+ * sorted dockerImages sidecar (each entry carrying its source identity), and
  * return the deterministic doc plus the per-image SBOM temp paths. Async for
  * interface symmetry with the other collectors.
  *
  * Images are scanned in compareCodeUnits-SORTED order (never the caller's
- * argv order): the cross-image purl dedup below is first-wins, so when two
- * images share a purl with DIFFERENT license claims, whichever image is
+ * argv order): the cross-image union keeps the FIRST-SEEN license claims, so
+ * when two images share a purl with DIFFERENT claims, whichever image is
  * scanned first decides the committed license — an unsorted walk makes that
  * choice a function of argv order, breaking the byte-determinism contract
  * (D-14) for `--image b a` vs `--image a b` over the identical image SET.
@@ -515,7 +584,7 @@ async function collectOneImage(
   },
 ): Promise<{
   components: OsComponent[];
-  digest: DockerImageDigest;
+  digest: string;
   sbomPath: string;
 }> {
   // Probe-first implicit pull: a locally-present ref is scanned as-is (never
@@ -528,7 +597,7 @@ async function collectOneImage(
   const sbom = await scanImage(image, outFile, opts.syftBin, opts.spawnOpts);
   const components = filterOsComponents(sbom);
   const digest = await resolveDigest(image, opts.dockerBin, opts.spawnOpts);
-  return { components, digest: { image, digest }, sbomPath: outFile };
+  return { components, digest, sbomPath: outFile };
 }
 
 /**
@@ -551,7 +620,7 @@ async function imageIsPresentLocally(
 }
 
 export async function collectDockerOsSbom(
-  images: string[],
+  images: readonly ScanImage[],
   opts: DockerOsCollectOptions = {},
 ): Promise<DockerOsResult> {
   const timeoutMs = opts.timeoutMs ?? DEFAULT_TIMEOUT_MS;
@@ -561,13 +630,15 @@ export async function collectDockerOsSbom(
   const tempDir = opts.tempDir ?? mkdtempSync(join(tmpdir(), "licenses-syft-"));
   const spawnOpts = { timeoutMs, verbose };
 
-  const byPurl = new Map<string, OsComponent>();
+  const perImage: { image: string; components: OsComponent[] }[] = [];
   const dockerImages: DockerImageDigest[] = [];
   const sbomPaths: string[] = [];
 
-  const sortedImages = [...images].sort(compareCodeUnits);
+  const sortedImages = [...images].sort((a, b) =>
+    compareCodeUnits(a.image, b.image),
+  );
   let index = 0;
-  for (const image of sortedImages) {
+  for (const { image, source } of sortedImages) {
     const outFile = join(tempDir, `syft-${index}.json`);
     index += 1;
     const result = await collectOneImage(image, outFile, {
@@ -576,16 +647,12 @@ export async function collectDockerOsSbom(
       spawnOpts,
     });
     sbomPaths.push(result.sbomPath);
-    for (const component of result.components) {
-      // First-wins across images: a package shared between images is one row.
-      if (!byPurl.has(component.purl)) byPurl.set(component.purl, component);
-    }
-    dockerImages.push(result.digest);
+    perImage.push({ image, components: result.components });
+    dockerImages.push({ image, digest: result.digest, source });
   }
 
-  const components = [...byPurl.values()].sort((a, b) =>
-    compareCodeUnits(a.purl, b.purl),
-  );
-
-  return { doc: emitDockerOsDoc(components, dockerImages), sbomPaths };
+  return {
+    doc: emitDockerOsDoc(unionOsComponents(perImage), dockerImages),
+    sbomPaths,
+  };
 }

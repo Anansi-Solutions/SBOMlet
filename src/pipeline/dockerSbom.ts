@@ -365,7 +365,12 @@ async function scanAndWrite(
   outputPath: string,
   verbose: boolean,
 ): Promise<void> {
-  const { doc } = await collectDockerOsSbom(images, { verbose });
+  // The collector takes {image, source} pairs; at this boundary the scanned
+  // ref is the only identity available, so it doubles as the source.
+  const { doc } = await collectDockerOsSbom(
+    images.map((image) => ({ image, source: image })),
+    { verbose },
+  );
   writeArtifact(outputPath, doc);
   process.stderr.write(
     `wrote ${sanitizeForLog(outputPath)} (${images.length} image(s) scanned)\n`,
