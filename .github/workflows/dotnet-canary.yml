@@ -1,0 +1,45 @@
+name: .NET lockfile canary
+
+# packages.lock.json is an SDK-written format that has moved before (format
+# version 1 -> 2). The scanner breaks fast on a shape it cannot read, but
+# only once such a lock reaches a scan -- so this canary probes ahead of
+# adopters: restore a throwaway project with the newest GA .NET SDK and run
+# the lockfile collector over the result, asserting the expected purls come
+# out. A format move turns this run red here before it reaches any adopter's
+# repository. Monthly plus manual dispatch -- SDK releases move on roughly
+# that cadence.
+on:
+  schedule:
+    - cron: "43 4 2 * *" # monthly; offset from the intensive-scan slot
+  workflow_dispatch: {}
+
+jobs:
+  canary:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v6
+        with:
+          # No step needs authenticated git; the job only reads the tree.
+          persist-credentials: false
+
+      - name: Set up the SBOMlet toolchain
+        uses: jdx/mise-action@v4
+
+      - name: Set up the newest GA .NET SDK
+        # Floating feature version, GA quality only: a new SDK release changes
+        # what this canary exercises without a workflow edit. Bump the major
+        # when a new .NET generation goes GA. The SDK is deliberately NOT a
+        # mise.toml pin -- the probe's whole point is the newest SDK, and the
+        # exercised version lands in the run log ("probing with .NET SDK ...").
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 10.x
+          dotnet-quality: ga
+
+      - name: Restore a probe project and run the collector over its lockfile
+        # Same command a maintainer runs locally (needs a .NET SDK on PATH).
+        run: mise x -- task canary:dotnet

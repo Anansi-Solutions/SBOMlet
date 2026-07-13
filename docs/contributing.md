@@ -76,6 +76,7 @@ task test --summary  # any task's documentation and variables
 | `task typecheck` | `tsc --noEmit`. |
 | `task test` / `task test:watch` | The test suite; `--` forwards args (see below). |
 | `task adr:new` | Scaffold a decision record (see below). |
+| `task canary:dotnet` | Probe the `packages.lock.json` format against the local .NET SDK; CI runs it monthly with the newest GA SDK. |
 
 Most tasks declare `sources`, so a re-run with unchanged inputs is a no-op
 ("Task X is up to date"). The state lives in `.task/` (gitignored); delete it to

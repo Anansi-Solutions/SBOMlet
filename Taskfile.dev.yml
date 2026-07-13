@@ -106,3 +106,15 @@ tasks:
         TITLE  the decision title (required): task adr:new TITLE="Short decision title"
     cmds:
       - mise x -- bun scripts/new-adr.ts {{.TITLE | default "" | q}}
+
+  canary:dotnet:
+    summary: |
+      Probe the packages.lock.json format against the .NET SDK on PATH:
+      restore a throwaway pinned project with a lockfile and run the nuget
+      collector over the result, asserting the expected purls come out.
+      Needs a .NET SDK installed; never fingerprinted — the input is the
+      SDK, not this tree. CI runs it monthly with the newest GA SDK
+      (.github/workflows/dotnet-canary.yml).
+    deps: [install]
+    cmds:
+      - mise x -- bun scripts/dotnet-canary.ts

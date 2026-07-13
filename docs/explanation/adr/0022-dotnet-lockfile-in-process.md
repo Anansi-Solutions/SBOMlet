@@ -73,7 +73,12 @@ a hand-rolled text grammar.
 - **Neutral:** paket uses its own lockfile format and is a separate,
   unsupported lane. `getting-started.md` documents the prerequisite, and
   `dotnet restore --locked-mode` in the adopter's CI makes a stale lockfile
-  their build error. A future enrichment arm could route github license URLs
+  their build error. The lock format itself is owned by the SDK and has moved
+  before (version 1 → 2): a scheduled canary
+  (`.github/workflows/dotnet-canary.yml`) restores a probe project with the
+  newest GA SDK monthly and runs the collector over the resulting lockfile,
+  so a format move fails this repository's CI before it reaches an adopter.
+  A future enrichment arm could route github license URLs
   through the existing license lookup, recovering much of the url-only class.
 
 ## See also
