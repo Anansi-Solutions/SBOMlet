@@ -161,6 +161,153 @@ describe("parsePolicy — compatible pattern decomposition", () => {
 });
 
 // ===========================================================================
+// SCP-01 Task 2: the optional `where` scope on BOTH [[compatible]] forms — an
+// array of occurrence-identity prefixes, each validated like a suppression
+// path. Empty arrays reject (a rule that can never match anywhere is a dead
+// rule by construction).
+// ===========================================================================
+
+const DOCKER_ID = "docker:os-packages/examples/docker-scan/Dockerfile";
+
+/** License-form compatible rule with a raw TOML `where` clause. */
+const scopedLicenseFixture = (whereToml: string): string =>
+  [
+    "[[compatible]]",
+    'match = "license"',
+    'pattern = "MPL-2.0"',
+    'reason = "test reason"',
+    `where = ${whereToml}`,
+  ].join("\n");
+
+/** Package-form compatible rule with a raw TOML `where` clause. */
+const scopedPackageFixture = (whereToml: string): string =>
+  [
+    "[[compatible]]",
+    'match = "package"',
+    'name = "busybox"',
+    'reason = "test reason"',
+    `where = ${whereToml}`,
+  ].join("\n");
+
+describe("parsePolicy — compatible `where` scope (SCP-01)", () => {
+  test("license form parses with where; the rule carries the array", () => {
+    const policy = parsePolicy(
+      scopedLicenseFixture(JSON.stringify([DOCKER_ID])),
+    );
+    expect(policy.compatible).toEqual([
+      {
+        match: "license",
+        pattern: "MPL-2.0",
+        allowlist: ["MPL-2.0"],
+        reason: "test reason",
+        where: [DOCKER_ID],
+      },
+    ]);
+  });
+
+  test("package form parses with where (multi-entry) and version pins still work", () => {
+    const policy = parsePolicy(
+      [
+        "[[compatible]]",
+        'match = "package"',
+        'name = "busybox"',
+        'version = "1.37.0"',
+        'reason = "test reason"',
+        `where = ${JSON.stringify([DOCKER_ID, "docker:os-packages/other/Dockerfile"])}`,
+      ].join("\n"),
+    );
+    expect(policy.compatible).toEqual([
+      {
+        match: "package",
+        name: "busybox",
+        version: "1.37.0",
+        reason: "test reason",
+        where: [DOCKER_ID, "docker:os-packages/other/Dockerfile"],
+      },
+    ]);
+  });
+
+  test("absent where stays absent-not-present on both parsed forms", () => {
+    const policy = parsePolicy(VALID_POLICY);
+    expect("where" in (policy.compatible[0] ?? {})).toBe(false);
+    expect("where" in (policy.compatible[1] ?? {})).toBe(false);
+  });
+
+  test("colons in entries pass validation (image refs are legal identities)", () => {
+    const policy = parsePolicy(
+      scopedPackageFixture('["docker:os-packages/node:24-alpine"]'),
+    );
+    expect(policy.compatible[0]).toMatchObject({
+      where: ["docker:os-packages/node:24-alpine"],
+    });
+  });
+
+  test("a backslash entry rejects naming compatible[0].where", () => {
+    const error = expectPolicyError(
+      scopedLicenseFixture(JSON.stringify(["docker:os-packages\\bad"])),
+    );
+    expect(error.message).toContain("compatible[0].where[0]");
+    expect(error.message).toContain("forward slashes");
+  });
+
+  test('a ".." segment rejects naming compatible[0].where', () => {
+    const error = expectPolicyError(
+      scopedPackageFixture('["docker:os-packages/../etc"]'),
+    );
+    expect(error.message).toContain("compatible[0].where[0]");
+    expect(error.message).toContain('".." segments');
+  });
+
+  test("leading and trailing slashes reject naming compatible[0].where", () => {
+    for (const bad of ["/docker:os-packages", "docker:os-packages/"]) {
+      const error = expectPolicyError(
+        scopedLicenseFixture(JSON.stringify([bad])),
+      );
+      expect(error.message).toContain("compatible[0].where[0]");
+      expect(error.message).toContain("leading or trailing slash");
+    }
+  });
+
+  test("an empty segment rejects naming compatible[0].where", () => {
+    const error = expectPolicyError(
+      scopedPackageFixture('["docker:os-packages//x"]'),
+    );
+    expect(error.message).toContain("compatible[0].where[0]");
+    expect(error.message).toContain("could never match");
+  });
+
+  test("a non-array where rejects naming compatible[0] (both forms)", () => {
+    for (const fixture of [scopedLicenseFixture, scopedPackageFixture]) {
+      const error = expectPolicyError(fixture('"docker:os-packages"'));
+      expect(error.message).toContain("compatible[0]");
+      expect(error.message).toContain('"where"');
+    }
+  });
+
+  test("a non-string entry rejects naming compatible[0]", () => {
+    const error = expectPolicyError(scopedLicenseFixture("[42]"));
+    expect(error.message).toContain("compatible[0]");
+    expect(error.message).toContain("where[0]");
+  });
+
+  test("an EMPTY where array rejects on both forms (a dead rule by construction)", () => {
+    for (const fixture of [scopedLicenseFixture, scopedPackageFixture]) {
+      const error = expectPolicyError(fixture("[]"));
+      expect(error.message).toContain("compatible[0]");
+      expect(error.message).toContain('"where"');
+    }
+  });
+
+  test("an unknown key alongside where still rejects naming the key", () => {
+    const error = expectPolicyError(
+      scopedLicenseFixture(JSON.stringify([DOCKER_ID])) + '\nbogus = "x"',
+    );
+    expect(error.message).toContain("compatible[0]");
+    expect(error.message).toContain('"bogus"');
+  });
+});
+
+// ===========================================================================
 // POL-07 Task 1: the optional `expects` precondition on [[clarify]] + the
 // shipped tool-level BUILTIN_OVERRIDES set.
 // ===========================================================================

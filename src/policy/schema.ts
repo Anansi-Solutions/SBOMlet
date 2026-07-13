@@ -17,8 +17,10 @@
  * Policy text is untrusted config (repo-tampered or user-authored).
  * Suppression paths are validated — non-empty, forward slashes only, no ".."
  * segments, no leading/trailing slash — so a crafted path can never suppress
- * everything or escape the target namespace. smol-toml is a spec-compliant
- * TOML 1.0 parser with no eval; duplicate tables throw per spec.
+ * everything or escape the target namespace; compatible `where` scopes reuse
+ * the same validation, so a crafted scope cannot escape the identity
+ * namespace either. smol-toml is a spec-compliant TOML 1.0 parser with no
+ * eval; duplicate tables throw per spec.
  *
  * Pure function: no I/O, no logging — the CLI reads the file and owns stderr.
  */
@@ -59,6 +61,13 @@ export interface CompatibleLicenseRule {
    */
   allowlist: ReadonlyArray<string>;
   reason: string;
+  /**
+   * Optional occurrence scope (SCP-01): identity prefixes the rule is limited
+   * to, matched with the same segment-aware prefix comparison as suppression
+   * paths. Materialized present-only — an absent key means the rule applies
+   * at every occurrence (the pre-scoping behavior).
+   */
+  where?: ReadonlyArray<string>;
 }
 
 export interface CompatiblePackageRule {
@@ -66,6 +75,8 @@ export interface CompatiblePackageRule {
   name: string;
   version?: string;
   reason: string;
+  /** Optional occurrence scope — see CompatibleLicenseRule.where. */
+  where?: ReadonlyArray<string>;
 }
 
 export type CompatibleRule = CompatibleLicenseRule | CompatiblePackageRule;
@@ -495,6 +506,44 @@ function validateSuppressions(
   return suppressed;
 }
 
+/**
+ * Optional `where` scope on a [[compatible]] entry: a non-empty array of
+ * occurrence-identity prefixes, each validated exactly like a suppression path
+ * (the evaluator applies the same segment-aware prefix comparison to both). An
+ * EMPTY array is rejected — a rule that could never match anywhere is a dead
+ * rule by construction, the same posture as validatePath's could-never-match
+ * segments. `context` is the error-context string (conventionally named
+ * `where` elsewhere in this file — renamed here because `where` is the TOML
+ * key under validation).
+ */
+function validateWhere(
+  entry: Record<string, unknown>,
+  context: string,
+  problems: string[],
+): { where?: ReadonlyArray<string>; valid: boolean } {
+  if (!("where" in entry)) return { valid: true };
+  const raw = entry["where"];
+  if (!Array.isArray(raw) || raw.length === 0) {
+    problems.push(
+      `${context}: key "where" must be a non-empty array of occurrence-identity prefixes`,
+    );
+    return { valid: false };
+  }
+  const before = problems.length;
+  const scope: string[] = [];
+  raw.forEach((value, index) => {
+    const text = stringOf(value);
+    if (text === undefined) {
+      problems.push(`${context}: where[${index}] must be a string`);
+      return;
+    }
+    validatePath(text, `${context}.where[${index}]`, problems);
+    scope.push(text);
+  });
+  if (problems.length !== before) return { valid: false };
+  return { where: scope, valid: true };
+}
+
 function validateCompatible(
   root: Record<string, unknown>,
   problems: string[],
@@ -515,47 +564,81 @@ function validateCompatible(
     }
     const match = stringOf(entry["match"]);
     if (match === "license") {
-      checkKeys(entry, ["match", "pattern", "reason"], where, problems);
-      const pattern = requireText(entry, "pattern", where, problems);
-      const reason = requireText(entry, "reason", where, problems);
-      if (pattern === undefined) return;
-      const node = parseSpdxChecked(pattern, `${where}: pattern`, problems);
-      if (node === undefined) return;
-      const allowlist = orLeaves(node);
-      if (allowlist === null) {
-        problems.push(
-          `${where}: pattern "${pattern}" must be a license ID or an OR of license IDs (AND is not allowed — satisfies allowlists cannot hold AND expressions)`,
-        );
-        return;
-      }
-      if (reason !== undefined) {
-        compatible.push({ match: "license", pattern, allowlist, reason });
-      }
+      const rule = validateCompatibleLicense(entry, where, problems);
+      if (rule !== undefined) compatible.push(rule);
     } else if (match === "package") {
-      checkKeys(entry, ["match", "name", "version", "reason"], where, problems);
-      const name = requireText(entry, "name", where, problems);
-      const reason = requireText(entry, "reason", where, problems);
-      let version: string | undefined;
-      let versionValid = true;
-      if ("version" in entry) {
-        version = stringOf(entry["version"]);
-        if (version === undefined) {
-          problems.push(`${where}: key "version" must be a string`);
-          versionValid = false;
-        }
-      }
-      if (name !== undefined && reason !== undefined && versionValid) {
-        compatible.push(
-          version !== undefined
-            ? { match: "package", name, version, reason }
-            : { match: "package", name, reason },
-        );
-      }
+      const rule = validateCompatiblePackage(entry, where, problems);
+      if (rule !== undefined) compatible.push(rule);
     } else {
       problems.push(`${where}: key "match" must be "license" or "package"`);
     }
   });
   return compatible;
+}
+
+/** License-form [[compatible]] entry → rule, or undefined when invalid. */
+function validateCompatibleLicense(
+  entry: Record<string, unknown>,
+  where: string,
+  problems: string[],
+): CompatibleLicenseRule | undefined {
+  checkKeys(entry, ["match", "pattern", "reason", "where"], where, problems);
+  const pattern = requireText(entry, "pattern", where, problems);
+  const reason = requireText(entry, "reason", where, problems);
+  const scope = validateWhere(entry, where, problems);
+  if (pattern === undefined) return undefined;
+  const node = parseSpdxChecked(pattern, `${where}: pattern`, problems);
+  if (node === undefined) return undefined;
+  const allowlist = orLeaves(node);
+  if (allowlist === null) {
+    problems.push(
+      `${where}: pattern "${pattern}" must be a license ID or an OR of license IDs (AND is not allowed — satisfies allowlists cannot hold AND expressions)`,
+    );
+    return undefined;
+  }
+  if (reason === undefined || !scope.valid) return undefined;
+  return {
+    match: "license",
+    pattern,
+    allowlist,
+    reason,
+    ...(scope.where !== undefined ? { where: scope.where } : {}),
+  };
+}
+
+/** Package-form [[compatible]] entry → rule, or undefined when invalid. */
+function validateCompatiblePackage(
+  entry: Record<string, unknown>,
+  where: string,
+  problems: string[],
+): CompatiblePackageRule | undefined {
+  checkKeys(
+    entry,
+    ["match", "name", "version", "reason", "where"],
+    where,
+    problems,
+  );
+  const name = requireText(entry, "name", where, problems);
+  const reason = requireText(entry, "reason", where, problems);
+  const scope = validateWhere(entry, where, problems);
+  let version: string | undefined;
+  if ("version" in entry) {
+    version = stringOf(entry["version"]);
+    if (version === undefined) {
+      problems.push(`${where}: key "version" must be a string`);
+      return undefined;
+    }
+  }
+  if (name === undefined || reason === undefined || !scope.valid) {
+    return undefined;
+  }
+  return {
+    match: "package",
+    name,
+    ...(version !== undefined ? { version } : {}),
+    reason,
+    ...(scope.where !== undefined ? { where: scope.where } : {}),
+  };
 }
 
 interface ClarifyPackage {
