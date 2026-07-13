@@ -450,7 +450,7 @@ function parseSyftOutput(
  * `docker inspect --format '{{json .RepoDigests}}'`. Selects ONE digest
  * DETERMINISTICALLY from the daemon-returned set via {@link selectDigest}
  * (repo-match, else compareCodeUnits-smallest) so the committed
- * docker-os.sbom.json is byte-stable across machines (finding #2) — NOT the
+ * docker.sbom.json is byte-stable across machines (finding #2) — NOT the
  * daemon-order-dependent `digests[0]`, and NOT the manifest-list digest a
  * `buildx imagetools inspect` would return (T-07-03). Returns "" when the image
  * has no RepoDigests (a local-only / never-pushed build — e.g. a just-built
@@ -481,7 +481,7 @@ async function resolveDigest(
  * #2, 07-31). `docker inspect --format '{{json .RepoDigests}}'` returns a
  * daemon-ORDER-dependent array: an image pulled from / pushed to multiple
  * registries carries multiple RepoDigests whose array order varies by machine.
- * Selecting `digests[0]` therefore makes the committed docker-os.sbom.json
+ * Selecting `digests[0]` therefore makes the committed docker.sbom.json
  * machine-dependent, breaking byte-determinism (the check would flag a stale
  * artifact). This selects a pure function of the digest SET, never of emission
  * order:

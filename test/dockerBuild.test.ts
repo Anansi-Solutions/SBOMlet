@@ -48,7 +48,7 @@ function makeRecorder(fail = false): {
 describe("imageTag (deterministic tag lock)", () => {
   test("golden: reproduces the committed sidecar identity bit-exact", () => {
     // This exact string is the image identity recorded in the committed
-    // .sbomlet.cache/docker-os.sbom.json. The whole point of moving the build
+    // .sbomlet.cache/docker.sbom.json. The whole point of moving the build
     // step into src is that this identity survives the move byte-for-byte —
     // any drift here churns the committed artifact and every consumer's check.
     expect(imageTag("examples/docker-scan/Dockerfile")).toBe(

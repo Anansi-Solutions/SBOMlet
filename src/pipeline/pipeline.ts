@@ -59,15 +59,22 @@ export const ENRICHMENT_CACHE_FILE = "licenses.cache.json";
 export const SCANCODE_CACHE_FILE = "scancode.cache.json";
 
 /**
- * The committed Docker image SBOM filename inside the cache dir (COLL-04): a
- * deterministic emitter's output, committed and consumed as a scope:"os" MERGE
- * INPUT, never scanned per-run. A MISSING file is the enrichment-cache-miss
- * equivalent (NO os entries, NO docker, NO syft, fully offline). What POPULATES it
- * is the dedicated generate-docker-sbom subcommand, which builds or pulls a real
- * image and scans its full contents; generate and check read the same committed
- * bytes, so determinism is trivial.
+ * The committed docker image SBOM filename inside the cache dir: a
+ * deterministic emitter's output, committed and consumed as a scope:"os" merge
+ * input, never scanned per-run. A missing file means no os entries — no
+ * docker, no syft, fully offline. The generate-docker-sbom subcommand
+ * populates it by building or pulling a real image and scanning its full
+ * contents; generate and check read the same committed bytes.
  */
-export const DOCKER_OS_SBOM_FILE = "docker-os.sbom.json";
+export const DOCKER_SBOM_FILE = "docker.sbom.json";
+
+/**
+ * The filename this tool wrote before the docker.sbom.json rename. Never read
+ * as an input: its presence without the current file means the repo predates
+ * the rename, and proceeding would silently drop the docker inventory it
+ * holds, so the reader fails loudly and names the remedy instead.
+ */
+export const LEGACY_DOCKER_SBOM_FILE = "docker-os.sbom.json";
 
 export interface GenerateOptions {
   /** Single-target debug mode; mutually exclusive with repoRoot. */
@@ -137,13 +144,13 @@ export interface GenerateOptions {
    */
   scancodeCachePath?: string;
   /**
-   * Optional override for the committed Docker OS SBOM path (--docker-os-sbom).
-   * When unset it defaults to {@link DOCKER_OS_SBOM_FILE} inside the resolved cache
+   * Optional override for the committed Docker OS SBOM path (--docker-sbom).
+   * When unset it defaults to {@link DOCKER_SBOM_FILE} inside the resolved cache
    * dir. When the file exists it is size-gated, parsed, and threaded into the merge
    * as a scope:"os" input (COLL-04); when absent there are no os entries (the
    * offline cache-miss equivalent, never a live docker/syft scan).
    */
-  dockerOsSbomPath?: string;
+  dockerSbomPath?: string;
   /**
    * generate may fetch+write the enrichment cache; check NEVER fetches or
    * writes — a miss-needing-enrichment is a stale condition (exit 2), never a
@@ -279,7 +286,7 @@ function narrowAttributedSidecar(
 /**
  * Read the committed docker SBOM as scope:"os" merge inputs, or undefined when
  * it does not exist (the offline cache-miss equivalent — no os entries, never
- * a live scan). The default path is {@link DOCKER_OS_SBOM_FILE} inside the
+ * a live scan). The default path is {@link DOCKER_SBOM_FILE} inside the
  * resolved cache `dir` (repo-root-anchored), so the Action — running from its
  * own directory — reads the consumer repo's committed SBOM, not a stray file
  * beside the action; an explicit CLI path overrides it. The file is size-gated
@@ -297,18 +304,30 @@ function narrowAttributedSidecar(
  * (the emitter sorts dockerImages by image), so repeated reads are
  * byte-identical.
  */
-function readCommittedDockerOsSbom(
+function readCommittedDockerSbom(
   opts: GenerateOptions,
   dir: string,
 ): CollectedSbom[] | undefined {
   const osSbomPath =
-    opts.dockerOsSbomPath !== undefined
-      ? resolveFrom(
-          resolvedRepoRoot(opts) ?? opts.baseDir,
-          opts.dockerOsSbomPath,
-        )
-      : resolveFrom(dir, DOCKER_OS_SBOM_FILE);
-  if (!existsSync(osSbomPath)) return undefined;
+    opts.dockerSbomPath !== undefined
+      ? resolveFrom(resolvedRepoRoot(opts) ?? opts.baseDir, opts.dockerSbomPath)
+      : resolveFrom(dir, DOCKER_SBOM_FILE);
+  if (!existsSync(osSbomPath)) {
+    // Not a compatibility read — the legacy file's CONTENT is never used. Its
+    // presence without the current file means the repo predates the rename,
+    // and returning undefined here would silently drop the docker inventory.
+    if (
+      opts.dockerSbomPath === undefined &&
+      existsSync(resolveFrom(dir, LEGACY_DOCKER_SBOM_FILE))
+    ) {
+      throw new Error(
+        `legacy ${LEGACY_DOCKER_SBOM_FILE} found — re-run the docker scan ` +
+          `(task generate DOCKER=1) to write ${DOCKER_SBOM_FILE}, then delete ` +
+          `the legacy file`,
+      );
+    }
+    return undefined;
+  }
   // Size gate BEFORE read: a committed artifact must never balloon a run.
   assertSyftSbomSize(osSbomPath);
   const parsed: unknown = JSON.parse(readFileSync(osSbomPath, "utf8"));
@@ -516,7 +535,7 @@ export async function buildOutputs(
   // Thread the committed docker SBOM into the merge when it exists — one
   // scope:"os" input per attributed image. A missing file is the offline
   // cache-miss equivalent — no os entries, no docker, no syft.
-  const osInputs = readCommittedDockerOsSbom(opts, dir);
+  const osInputs = readCommittedDockerSbom(opts, dir);
   if (osInputs !== undefined) inputs.push(...osInputs);
 
   // One merged model from all targets: shared packages appear once with every

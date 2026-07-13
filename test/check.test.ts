@@ -610,7 +610,7 @@ describe("offline check contract — enrichment staleness (INTG-03, GATE-02)", (
 });
 
 // ===========================================================================
-// COLL-04: the committed docker-os.sbom.json is threaded into the merge as a
+// COLL-04: the committed docker.sbom.json is threaded into the merge as a
 // scope:"os" INPUT (07-01's emitter output), repo-root-resolved. A MISSING file
 // is the enrichment-cache-miss equivalent: NO os entries, NO scan, NO docker.
 // buildOutputs is write-free so these run directly against a temp base dir.
@@ -657,7 +657,7 @@ const EMPTY_FETCH = (async (): Promise<Response> =>
     headers: { "content-type": "application/json" },
   })) as unknown as typeof fetch;
 
-describe("COLL-04 committed docker-os.sbom.json as a scope:os merge input", () => {
+describe("COLL-04 committed docker.sbom.json as a scope:os merge input", () => {
   beforeAll(() => {
     mock.module("../src/collectors/cdxgen", () => ({
       ...REAL_CDXGEN,
@@ -668,11 +668,11 @@ describe("COLL-04 committed docker-os.sbom.json as a scope:os merge input", () =
     mock.module("../src/collectors/cdxgen", () => REAL_CDXGEN);
   });
 
-  test("a committed docker-os.sbom.json at the repo root threads os-scope deb/apk entries into the merged model", async () => {
+  test("a committed docker.sbom.json at the repo root threads os-scope deb/apk entries into the merged model", async () => {
     const { root } = makeScannableTree();
     mkdirSync(join(root, ".sbomlet.cache"), { recursive: true });
     writeFileSync(
-      join(root, ".sbomlet.cache", "docker-os.sbom.json"),
+      join(root, ".sbomlet.cache", "docker.sbom.json"),
       JSON.stringify(DOCKER_SBOM),
     );
     const paths = pathsFor(root, false);
@@ -700,7 +700,7 @@ describe("COLL-04 committed docker-os.sbom.json as a scope:os merge input", () =
     expect(osSection.includes("docker:postgres:18")).toBe(true);
   });
 
-  test("the committed docker-os.sbom.json is read from the REPO ROOT, not the base dir (the Action's divergent-dir case)", async () => {
+  test("the committed docker.sbom.json is read from the REPO ROOT, not the base dir (the Action's divergent-dir case)", async () => {
     const { root } = makeScannableTree();
     // The Action shape: `task` runs from the action's own directory, so
     // base-dir is NOT the scanned repo; the consumer commits the SBOM at
@@ -708,7 +708,7 @@ describe("COLL-04 committed docker-os.sbom.json as a scope:os merge input", () =
     const baseDir = mkdtempSync(join(tmpdir(), "licenses-check-basedir-"));
     mkdirSync(join(root, ".sbomlet.cache"), { recursive: true });
     writeFileSync(
-      join(root, ".sbomlet.cache", "docker-os.sbom.json"),
+      join(root, ".sbomlet.cache", "docker.sbom.json"),
       JSON.stringify(DOCKER_SBOM),
     );
     const paths = pathsFor(root, false);
@@ -733,14 +733,14 @@ describe("COLL-04 committed docker-os.sbom.json as a scope:os merge input", () =
     expect(osSection.includes("| musl | apk | 1.2.4-r2 |")).toBe(true);
   });
 
-  test("a docker-os.sbom.json beside the base dir is IGNORED when the base dir differs from the repo root (no base-dir leakage)", async () => {
+  test("a docker.sbom.json beside the base dir is IGNORED when the base dir differs from the repo root (no base-dir leakage)", async () => {
     const { root } = makeScannableTree();
     const baseDir = mkdtempSync(join(tmpdir(), "licenses-check-basedir-"));
     // A cache dir in the invocation dir (e.g. the action's own checkout) must
     // NOT leak into a scan of a different repo root.
     mkdirSync(join(baseDir, ".sbomlet.cache"), { recursive: true });
     writeFileSync(
-      join(baseDir, ".sbomlet.cache", "docker-os.sbom.json"),
+      join(baseDir, ".sbomlet.cache", "docker.sbom.json"),
       JSON.stringify(DOCKER_SBOM),
     );
     const paths = pathsFor(root, false);
@@ -768,7 +768,7 @@ describe("COLL-04 committed docker-os.sbom.json as a scope:os merge input", () =
 
   test("NO committed file → NO os entries and NO docker/syft scan (offline, the cache-miss equivalent)", async () => {
     const { root } = makeScannableTree();
-    // No docker-os.sbom.json written.
+    // No docker.sbom.json written.
     const paths = pathsFor(root, false);
 
     let outputs: Awaited<ReturnType<typeof buildOutputs>> | undefined;
@@ -793,6 +793,98 @@ describe("COLL-04 committed docker-os.sbom.json as a scope:os merge input", () =
     // No docker base-image packages counted.
     expect(md.includes("- Docker image packages: 0")).toBe(true);
   });
+
+  test("a LEGACY docker-os.sbom.json without the current file fails LOUDLY naming the remedy", async () => {
+    const { root } = makeScannableTree();
+    mkdirSync(join(root, ".sbomlet.cache"), { recursive: true });
+    // A repo generated before the rename: only the old filename exists.
+    writeFileSync(
+      join(root, ".sbomlet.cache", "docker-os.sbom.json"),
+      JSON.stringify(DOCKER_SBOM),
+    );
+    const paths = pathsFor(root, false);
+
+    await expect(
+      withFetch(EMPTY_FETCH, () =>
+        withCapturedStderr(async () => {
+          await buildOutputs({
+            repoRoot: root,
+            baseDir: root,
+            ...paths,
+            verbose: false,
+          });
+        }),
+      ),
+    ).rejects.toThrow(/re-run the docker scan \(task generate DOCKER=1\)/);
+  });
+
+  test("a lingering legacy file beside the current docker.sbom.json is ignored — its content is never read", async () => {
+    const { root } = makeScannableTree();
+    mkdirSync(join(root, ".sbomlet.cache"), { recursive: true });
+    writeFileSync(
+      join(root, ".sbomlet.cache", "docker.sbom.json"),
+      JSON.stringify(DOCKER_SBOM),
+    );
+    // Deliberately unparseable: reading it would throw, proving it is not read.
+    writeFileSync(
+      join(root, ".sbomlet.cache", "docker-os.sbom.json"),
+      "not json",
+    );
+    const paths = pathsFor(root, false);
+
+    let outputs: Awaited<ReturnType<typeof buildOutputs>> | undefined;
+    await withFetch(EMPTY_FETCH, () =>
+      withCapturedStderr(async () => {
+        outputs = await buildOutputs({
+          repoRoot: root,
+          baseDir: root,
+          ...paths,
+          verbose: false,
+        });
+      }),
+    );
+
+    const osSection = squish(
+      outputs!.licensesMd.slice(
+        outputs!.licensesMd.indexOf("## Docker image packages"),
+      ),
+    );
+    expect(osSection.includes("| libc6 | deb | 2.36-9 |")).toBe(true);
+  });
+
+  test("an explicit --docker-sbom override reads that file only — no legacy-file guard", async () => {
+    const { root } = makeScannableTree();
+    mkdirSync(join(root, ".sbomlet.cache"), { recursive: true });
+    // Legacy file present at the default location, but the caller names an
+    // explicit path: the override wins and the guard stays silent.
+    writeFileSync(
+      join(root, ".sbomlet.cache", "docker-os.sbom.json"),
+      "not json",
+    );
+    const override = join(root, "custom.sbom.json");
+    writeFileSync(override, JSON.stringify(DOCKER_SBOM));
+    const paths = pathsFor(root, false);
+
+    let outputs: Awaited<ReturnType<typeof buildOutputs>> | undefined;
+    await withFetch(EMPTY_FETCH, () =>
+      withCapturedStderr(async () => {
+        outputs = await buildOutputs({
+          repoRoot: root,
+          baseDir: root,
+          ...paths,
+          dockerSbomPath: override,
+          verbose: false,
+        });
+      }),
+    );
+
+    const osSection = squish(
+      outputs!.licensesMd.slice(
+        outputs!.licensesMd.indexOf("## Docker image packages"),
+      ),
+    );
+    expect(osSection.includes("| libc6 | deb | 2.36-9 |")).toBe(true);
+  });
 });
 
 // ===========================================================================
@@ -805,11 +897,11 @@ describe("COLL-04 committed docker-os.sbom.json as a scope:os merge input", () =
 // inventory.
 // ===========================================================================
 
-/** Write `doc` as the committed docker-os.sbom.json inside root's cache dir. */
+/** Write `doc` as the committed docker.sbom.json inside root's cache dir. */
 function writeSidecar(root: string, doc: unknown): void {
   mkdirSync(join(root, ".sbomlet.cache"), { recursive: true });
   writeFileSync(
-    join(root, ".sbomlet.cache", "docker-os.sbom.json"),
+    join(root, ".sbomlet.cache", "docker.sbom.json"),
     JSON.stringify(doc),
   );
 }

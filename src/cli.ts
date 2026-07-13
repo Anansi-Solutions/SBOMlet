@@ -75,8 +75,8 @@ const USAGE =
   "  generate-docker-sbom (--dockerfile <path>... | " +
   "--repo-root <dir> [--policy <file>] [--exclude <glob>]... | " +
   "--image <ref>... | --list-dockerfiles --repo-root <dir>) " +
-  "[--docker-os-sbom <path>] [--base-dir <path>] [--verbose]\n" +
-  "           Writes the committed docker-os.sbom.json. MAINTAINER-ONLY, " +
+  "[--docker-sbom <path>] [--base-dir <path>] [--verbose]\n" +
+  "           Writes the committed docker.sbom.json. MAINTAINER-ONLY, " +
   "REQUIRES A DOCKER DAEMON. THREE mutually exclusive lanes:\n" +
   "           --dockerfile <path>...: build each explicitly named Dockerfile " +
   "to a deterministic tag, then scan the built image (full contents).\n" +
@@ -154,7 +154,7 @@ interface CliValues {
    */
   dockerfile?: string[];
   /** generate-docker-sbom output path; base-dir-resolved like every artifact. */
-  "docker-os-sbom"?: string;
+  "docker-sbom"?: string;
   /**
    * generate-docker-sbom --list-dockerfiles: print the tool policy-aware
    * discovered Dockerfile identities to stdout, one per line, and exit --
@@ -327,7 +327,7 @@ export function dockerSbomOptionsFrom(
     // exactly as lockfile discovery does (targets.ts:53). cli.ts lives in src/,
     // so one level up is the tool root. Computed with zero hardcoded paths.
     toolDir: join(import.meta.dir, ".."),
-    dockerOsSbomPath: values["docker-os-sbom"],
+    dockerSbomPath: values["docker-sbom"],
     baseDir: values["base-dir"],
     verbose: values.verbose ?? false,
   };
@@ -413,7 +413,7 @@ async function main(argv: string[]): Promise<void> {
         verbose: { type: "boolean", default: false },
         image: { type: "string", multiple: true },
         dockerfile: { type: "string", multiple: true },
-        "docker-os-sbom": { type: "string" },
+        "docker-sbom": { type: "string" },
         "list-dockerfiles": { type: "boolean", default: false },
         intensive: { type: "boolean" },
       },

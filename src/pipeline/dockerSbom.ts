@@ -3,7 +3,7 @@
  * that touches the docker daemon / syft / buildx. It resolves ONE of three
  * mutually exclusive lanes, builds when the lane calls for it, scans each
  * resulting image with the single-posture collector (collectDockerOsSbom), and
- * writes the deterministic committed `docker-os.sbom.json` at the base-dir-
+ * writes the deterministic committed `docker.sbom.json` at the base-dir-
  * resolved output path.
  *
  * THE THREE LANES (D-01 — pairwise mutually exclusive):
@@ -37,7 +37,7 @@ import { execTool } from "../collectors/exec";
 import { compareCodeUnits } from "../model/dependencies";
 import { parsePolicy } from "../policy/schema";
 import { resolveFrom, writeArtifact } from "./paths";
-import { DOCKER_OS_SBOM_FILE, resolveCacheDir } from "./pipeline";
+import { DOCKER_SBOM_FILE, resolveCacheDir } from "./pipeline";
 import { sanitizeForLog } from "./summary";
 
 /**
@@ -297,10 +297,10 @@ export interface GenerateDockerSbomOptions {
   policyPath?: string;
   /**
    * Optional override for the committed OS-SBOM output path. When unset it
-   * defaults to DOCKER_OS_SBOM_FILE inside the resolved cache dir (the policy
+   * defaults to DOCKER_SBOM_FILE inside the resolved cache dir (the policy
    * `[cache] dir`, or DEFAULT_CACHE_DIR), the same file generate and check read.
    */
-  dockerOsSbomPath?: string;
+  dockerSbomPath?: string;
   /**
    * Base directory for resolving relative paths — same anchoring as runGenerate.
    * The default output lands in the resolved cache dir (repo-root-anchored)
@@ -526,21 +526,21 @@ export async function runGenerateDockerSbom(
     return;
   }
 
-  // Default output: DOCKER_OS_SBOM_FILE inside the resolved cache dir (the policy
+  // Default output: DOCKER_SBOM_FILE inside the resolved cache dir (the policy
   // `[cache] dir`, or the default, anchored to the scanned repo), so the file this
-  // command WRITES is exactly the one generate and check READ; --docker-os-sbom
+  // command WRITES is exactly the one generate and check READ; --docker-sbom
   // overrides it. resolveCacheDir already handles repoRoot: undefined (the
   // --dockerfile / --image lanes have no repo root).
   const outputPath =
-    opts.dockerOsSbomPath !== undefined
-      ? resolveFrom(opts.baseDir, opts.dockerOsSbomPath)
+    opts.dockerSbomPath !== undefined
+      ? resolveFrom(opts.baseDir, opts.dockerSbomPath)
       : resolveFrom(
           resolveCacheDir({
             baseDir: opts.baseDir,
             repoRoot: opts.repoRoot,
             policyPath: opts.policyPath,
           }),
-          DOCKER_OS_SBOM_FILE,
+          DOCKER_SBOM_FILE,
         );
 
   // LANE 1 — targeted build (--dockerfile).
