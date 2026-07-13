@@ -180,7 +180,8 @@ re-authoring them, and your own `[[clarify]]` wins on any conflict.
 A licence is fine for your project even though it isn't permissive by default, or
 one specific package is reviewed and accepted. Use `[[compatible]]`.
 
-Accept a licence everywhere:
+Accept a licence everywhere — a rule without `where` applies at every
+occurrence:
 
 ```toml
 [[compatible]]
@@ -205,10 +206,50 @@ MIT` is rejected, because an `AND` can't be satisfied by a single allowlist
 entry. A package rule matches by exact name; with `version` it pins to that one
 version, and without it covers every version.
 
-Both forms remove the package from copyleft flagging everywhere, not in one
-workspace alone. That is the difference from `[[workspace.copyleft_suppressed]]`,
-which is scoped to a path. Use compatible for a documented judgment call, and
-keep it narrow.
+Both forms remove the package from copyleft flagging everywhere, unless a
+`where` field narrows the rule to the occurrences you name — the next recipe.
+Use compatible for a documented judgment call, and keep it narrow; `where` is
+how you keep it narrow.
+
+## Accept a package only where you reviewed it
+
+Your repo builds two images, `a/Dockerfile` and `b/Dockerfile`. You reviewed
+busybox in the first image's OS layer and accepted it there. A plain
+`[[compatible]]` entry would also accept it in the second image, which nobody
+reviewed. Add `where` to limit the rule to what you judged:
+
+```toml
+[[compatible]]
+match = "package"
+name = "busybox"
+where = ["docker:os-packages/a/Dockerfile"]
+reason = "Reviewed in a/Dockerfile's image: shipped unmodified in the OS layer."
+```
+
+busybox is now `ok` in the first image only. The same package in
+`b/Dockerfile`'s image still warns — or fails, when `[os_dependencies]` is set
+to `fail` — and the verdict names that unreviewed occurrence. `where` works on
+both compatible forms, licence and package.
+
+Each entry is an occurrence-identity prefix, matched with the same
+segment-aware rule as a suppression `path`: the occurrence's
+[target](../glossary.md#target) must be the entry itself or sit under it as a
+whole segment. Docker targets are `docker:os-packages/<source>` — the
+Dockerfile's repo-relative path for an image the tool builds, or the image
+reference exactly as you passed it (`docker:os-packages/node:24-alpine`) for an
+`--image` scan. App targets are the workspace paths you see in the Used-in
+column.
+
+Prefer the narrowest identity you actually reviewed. The bare
+`docker:os-packages` prefix matches every image; it exists so an acceptance
+predating per-image identities can keep its old reach. Scoping to it is a
+deliberate widening, not the default.
+
+A scoped rule that matches nothing is reported as an unused entry — check the
+`where` value. One special case: a committed `docker-os.sbom.json` written
+before per-image attribution reads under the single aggregate identity
+`docker:os-packages`, which no rule scoped below that prefix can match; the
+tool prints a one-line hint telling you to regenerate the sidecar.
 
 ## Set how unknown, dev, and OS dependencies are handled
 

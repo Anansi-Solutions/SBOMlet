@@ -132,6 +132,14 @@ keeps its application scope and is only cross-referenced there via Used in.
 Lockfile-only scans that were never enriched will show `unknown` in the License
 column; that is correct pre-annotation behavior, not a defect.
 
+A Docker row's targets take the form `docker:os-packages/<source>`: the
+Dockerfile's repo-relative path for an image the tool built
+(`docker:os-packages/examples/docker-scan/Dockerfile`), or the image reference
+verbatim for an `--image` scan (`docker:os-packages/node:24-alpine`). A package
+present in several images lists each image's occurrence. A sidecar written
+before per-image attribution reads under the single aggregate target
+`docker:os-packages`.
+
 ### Problematic licenses
 
 A self-contained gate report, rendered on a policy run only, before the copyleft
@@ -328,9 +336,13 @@ when a fetch resolves a new licence, so a warm run rewrites identical bytes.
 holds the full contents of each scanned image, not only the OS layer: every
 component the image carries, application packages included. It is a minimal
 CycloneDX-shaped document holding `bomFormat`, `specVersion`, `components`, and a
-`dockerImages` array pinning each scanned image to its content digest (empty for a
-locally built, never-pushed image, which has none), and nothing else. It is **not**
-written by `generate`. It is produced by the docker scan
+`dockerImages` array, and nothing else. Each component carries an `images` list
+naming the scanned image(s) it was found in. Each `dockerImages` entry pins a
+scanned image to its content digest (empty for a locally built, never-pushed
+image, which has none) and records its `source` — the Dockerfile's repo-relative
+path for a built image, the reference as requested for an `--image` scan —
+which is where the Used-in targets `docker:os-packages/<source>` come from. It
+is **not** written by `generate`. It is produced by the docker scan
 (`task sbomlet:generate DOCKER=1`, driving the `generate-docker-sbom` subcommand, the
 only path in the tool that touches Docker or syft) — by hand over named
 Dockerfiles or images, or by CI discovering and building each of the repository's

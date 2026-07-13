@@ -32,7 +32,7 @@ decides:
 | 1 | Deny | `[[deny]]` | Force-fail. Terminal — nothing below can license it back in. |
 | 2 | Clarify | `[[clarify]]` | Replace the package's [licence finding](../glossary.md#license-finding) with a precise expression, then re-decide. |
 | 3 | Compatible (package) | `[[compatible]]` with `match = "package"` | Allow this exact package. |
-| 4 | Compatible (licence) | `[[compatible]]` with `match = "license"` | Allow this licence everywhere. |
+| 4 | Compatible (licence) | `[[compatible]]` with `match = "license"` | Allow this licence. |
 | 5 | Workspace suppression | `[[workspace.copyleft_suppressed]]` | Stop flagging absorbed copyleft inside a workspace that ships under that copyleft. |
 | 6 | Category default | `[unknown]`, `[dev_dependencies]`, `[os_dependencies]` | What an unresolved, dev-only, or OS-scope would-be-fail does when no lane above caught it. |
 
@@ -67,10 +67,11 @@ The rules that hold across the file:
 - Licence patterns flow through the SPDX parser, never a text compare, so there
   is no substring matching. `BSD` does not match `BSD-3-Clause`; name them
   exactly or use an `OR`.
-- Suppression `path` values and `[docker]` `ignore` globs must use forward
-  slashes, carry no `..` segment, and have no leading or trailing slash. This
-  confines them to the repo, so a crafted value cannot suppress everything or
-  escape the repo namespace.
+- Suppression `path` values, `[docker]` `ignore` globs, and compatible `where`
+  entries must use forward slashes, carry no `..` segment, and have no leading
+  or trailing slash. This confines each to its namespace — the repo for paths
+  and globs, the occurrence identities for `where` — so a crafted value cannot
+  suppress everything or escape it.
 - Unknown top-level tables and unknown keys inside a known table are both
   errors. A misspelled `[[deney]]` or a stray field is not silently ignored.
 
@@ -170,7 +171,8 @@ projects, applied without your re-authoring them. When a project-level
 
 An array of tables. Each entry accepts a licence or a package that would
 otherwise be flagged as [copyleft](../glossary.md#copyleft). Acceptance applies
-everywhere, not per workspace. Absent table: no compatible rules.
+at every occurrence unless the optional `where` narrows it. Absent table: no
+compatible rules.
 
 Exactly one of two match modes per entry.
 
@@ -181,6 +183,7 @@ Licence mode (`match = "license"`):
 | `match` | `"license"` | yes | Selects licence mode. |
 | `pattern` | string | yes | An SPDX id or `OR` of ids, satisfies-matched. `AND` is rejected. |
 | `reason` | string (non-empty) | yes | The documented judgment call. |
+| `where` | array of strings | no | Occurrence-identity prefixes the rule is limited to; omit to apply everywhere. |
 
 Package mode (`match = "package"`):
 
@@ -190,11 +193,24 @@ Package mode (`match = "package"`):
 | `name` | string | yes | Exact package name, as the inventory reports it. |
 | `version` | string | no | Pin to one version; omit to cover all versions. |
 | `reason` | string (non-empty) | yes | The documented judgment call. |
+| `where` | array of strings | no | Occurrence-identity prefixes the rule is limited to; omit to apply everywhere. |
 
 Licence mode allows a whole licence, such as a weak copyleft you have reviewed
 and accepted like `MPL-2.0`. Package mode allows one specific dependency,
 optionally one version of it, for when only a single package's obligations have
 been reviewed rather than a whole licence.
+
+`where` limits either form to the occurrences whose target matches one of its
+entries: the target is the entry itself, or sits under it as a whole segment.
+`docker:os-packages` covers `docker:os-packages/a/Dockerfile`; `apps/scratch`
+never covers `apps/scratch-helper`. Docker targets are
+`docker:os-packages/<source>` — the Dockerfile's repo-relative path for a built
+image, the image reference verbatim for an `--image` scan; app targets are
+workspace paths. Entries are validated like suppression paths (forward slashes
+only, no `..` segment, no leading or trailing slash); an empty array is
+rejected. Rules are consulted in file order per occurrence, and the first whose
+match and scope both hold decides. A scoped rule that matches no occurrence is
+reported as an unused entry on stderr.
 
 ## `[[workspace.copyleft_suppressed]]`
 
