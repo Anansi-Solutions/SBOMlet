@@ -333,7 +333,9 @@ export function npmFirstPartyNames(lockfileText: string): ReadonlySet<string> {
  * `=== 0` comparison downstream consumes the value.
  *
  * Returns `undefined` (unknown count) — not 0 — for non-JSON text, a failed
- * document narrow, or a missing dependencies map: a garbage file proves
+ * document narrow, an UNSUPPORTED lock format version (the collector throws
+ * on those: a schema it refuses to interpret is one the counter must never
+ * claim to have read), or a missing dependencies map: a garbage file proves
  * nothing. Unknown routes the target to the scan, so the collector's loud
  * throw or the zero-component hard-fail fires; only a positively-determined
  * zero (every section empty or Project-only) takes the warn+skip branch.
@@ -351,8 +353,17 @@ export function nugetThirdPartyEntryCount(
   // A failed document narrow is the unknown path — same as no dependencies
   // map (the npmThirdPartyEntryCount posture).
   const doc = NugetLockDocument(parsed);
-  const dependencies =
-    doc instanceof type.errors ? undefined : doc.dependencies;
+  if (doc instanceof type.errors) {
+    return undefined;
+  }
+  // The collector accepts lock versions 1 and 2 ONLY (it throws on others).
+  // Mirror that acceptance: an unsupported version is UNKNOWN, so the target
+  // routes to the scan where the collector's loud version error fires —
+  // a future-format lock can never take the silent warn+skip branch.
+  if (doc.version !== undefined && doc.version !== 1 && doc.version !== 2) {
+    return undefined;
+  }
+  const dependencies = doc.dependencies;
   if (dependencies === undefined) {
     return undefined;
   }

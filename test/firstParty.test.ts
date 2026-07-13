@@ -351,6 +351,27 @@ describe("nugetThirdPartyEntryCount — entries with type !== 'Project' across a
       nugetThirdPartyEntryCount('{"version":2,"dependencies":42}'),
     ).toBeUndefined();
   });
+
+  test("an UNSUPPORTED lock version → undefined, never a positively-determined zero", () => {
+    // The collector THROWS on version 3 (an unknown schema it refuses to
+    // interpret); the counter must never claim it read one. An empty-looking
+    // v3 lock must route to the scan — where the collector's loud version
+    // error fires — never to the silent warn+skip branch.
+    expect(
+      nugetThirdPartyEntryCount('{"version":3,"dependencies":{"net9.0":{}}}'),
+    ).toBeUndefined();
+    // With entries the outcome is the same: unknown, route to the scan.
+    expect(
+      nugetThirdPartyEntryCount(
+        JSON.stringify({
+          version: 3,
+          dependencies: {
+            "net9.0": { "Pkg.A": { type: "Direct", resolved: "1.0.0" } },
+          },
+        }),
+      ),
+    ).toBeUndefined();
+  });
 });
 
 describe("npmFirstPartyNames — link:true and local-path lockfile entries", () => {
