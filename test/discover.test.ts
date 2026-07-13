@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { afterEach, describe, expect, test } from "bun:test";
 
 import {
+  csprojNoLockWarnings,
   discoverTargets,
   discoverTargetsWithWarnings,
   lockfileNameFor,
@@ -624,6 +625,26 @@ describe("discoverTargetsWithWarnings — csproj sighted without packages.lock.j
     // JS_PRECEDENCE never sees nuget, so no collision warning.
     expect(targets.map((t) => t.lockfile)).toEqual(["npm", "nuget"]);
     expect(warnings).toEqual([]);
+  });
+
+  test("HOSTILE directory identities are sanitized in BOTH warning shapes (no stderr line forgery)", () => {
+    // Directory names are repo-author-controlled and (on POSIX) can carry
+    // control characters; the warning prints them to stderr, so a crafted
+    // name could forge warning lines (\n) or erase real ones (ANSI ESC[2K).
+    // Tested via the exported pure builder — such names cannot be created on
+    // every filesystem, but discovery must stay safe where they can.
+    const hostile = "evil\u001b[2K\nok: all clear";
+    // eslint-disable-next-line no-control-regex -- deliberate control-character class: the forgery probe
+    const controlChars = /[\u0000-\u001f\u007f-\u009f]/;
+    const [aggregated] = csprojNoLockWarnings([hostile], false);
+    const [verbose] = csprojNoLockWarnings([hostile], true);
+    expect(aggregated).toBeDefined();
+    expect(verbose).toBeDefined();
+    expect(aggregated).not.toMatch(controlChars);
+    expect(verbose).not.toMatch(controlChars);
+    // The sanitized identity is still visibly present (spaces, not deletion).
+    expect(aggregated).toContain("evil");
+    expect(verbose).toContain("evil");
   });
 });
 

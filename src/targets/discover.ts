@@ -36,6 +36,7 @@ import { readdirSync, statSync } from "node:fs";
 import { join, relative, resolve, sep } from "node:path";
 
 import { compareCodeUnits } from "../model/dependencies";
+import { sanitizeForLog } from "../pipeline/summary";
 import type { Target } from "./target";
 
 export type LockfileKind =
@@ -275,8 +276,14 @@ const CSPROJ_EXAMPLE_LIMIT = 3;
  * inventoried as zero. One aggregated summary line by default; one line per
  * directory when `verbose` (the CLI's --verbose) is set. `lockless` arrives
  * compareCodeUnits-sorted, so both shapes are deterministic.
+ *
+ * Identities are repo-author-controlled directory names printed to stderr,
+ * so they pass through sanitizeForLog AT RENDER ONLY (a crafted name cannot
+ * forge or erase warning lines); the suppression/exclusion matching upstream
+ * stays on the raw identities. Exported for direct unit testing — hostile
+ * names cannot be created on every filesystem.
  */
-function csprojNoLockWarnings(
+export function csprojNoLockWarnings(
   lockless: readonly string[],
   verbose: boolean,
 ): string[] {
@@ -284,8 +291,8 @@ function csprojNoLockWarnings(
   if (verbose) {
     return lockless.map(
       (identity) =>
-        `target "${identity}" has a .csproj but no packages.lock.json, ` +
-        "which is required for .NET scanning — set " +
+        `target "${sanitizeForLog(identity)}" has a .csproj but no ` +
+        "packages.lock.json, which is required for .NET scanning — set " +
         "RestorePackagesWithLockFile=true in the project and run " +
         "`dotnet restore`, commit the lockfile, then re-scan",
     );
@@ -294,7 +301,7 @@ function csprojNoLockWarnings(
   const truncated = count > CSPROJ_EXAMPLE_LIMIT;
   const examples = lockless
     .slice(0, CSPROJ_EXAMPLE_LIMIT)
-    .map((identity) => `"${identity}"`)
+    .map((identity) => `"${sanitizeForLog(identity)}"`)
     .join(", ");
   const countPhrase =
     count === 1 ? "1 directory contains" : `${count} directories contain`;
