@@ -142,6 +142,9 @@ match = "package"
 name = "@img/sharp-win32-x64"
 # Optional: pin the exception to one version; omit to cover all versions.
 version = "0.34.5"
+# Optional: scope the acceptance to the occurrence(s) it was judged in --
+# omitted, the rule applies everywhere (see `where` in docs/reference/policy.md).
+# where = ["docker:os-packages/examples/docker-scan/Dockerfile"]
 reason = "Dual-licensed Apache-2.0 AND LGPL-3.0-or-later; the LGPL obligations are reviewed and accepted for these prebuilt sharp binaries."
 
 # ---------------------------------------------------------------------------

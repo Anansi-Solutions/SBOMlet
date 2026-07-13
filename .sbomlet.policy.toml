@@ -28,61 +28,73 @@ ignore = ["src/collectors/dockerfile.ts", "test/dockerfile.test.ts"]
 # unmodified distro packages whose copyleft obligations are met by the distro
 # itself (source via Alpine aports; the image aggregates, never derives).
 # Reviewed and accepted per package -- version-independent judgments, so the
-# rules are unpinned and survive base-image bumps.
+# rules are unpinned and survive base-image bumps. Each acceptance is scoped
+# via `where` to the occurrence it was judged in: this image's OS layer.
 
 [[compatible]]
 match = "package"
 name = "busybox"
+where = ["docker:os-packages/examples/docker-scan/Dockerfile"]
 reason = "GPL-2.0-only Alpine base package, shipped unmodified in the image's OS layer; aggregation, source available from Alpine aports."
 
 [[compatible]]
 match = "package"
 name = "busybox-binsh"
+where = ["docker:os-packages/examples/docker-scan/Dockerfile"]
 reason = "GPL-2.0-only busybox /bin/sh applet package, same unmodified-Alpine-base reasoning as busybox."
 
 [[compatible]]
 match = "package"
 name = "ssl_client"
+where = ["docker:os-packages/examples/docker-scan/Dockerfile"]
 reason = "GPL-2.0-only busybox TLS applet package, same unmodified-Alpine-base reasoning as busybox."
 
 [[compatible]]
 match = "package"
 name = "apk-tools"
+where = ["docker:os-packages/examples/docker-scan/Dockerfile"]
 reason = "GPL-2.0-only Alpine package manager, shipped unmodified in the image's OS layer; aggregation, source available from Alpine aports."
 
 [[compatible]]
 match = "package"
 name = "libapk2"
+where = ["docker:os-packages/examples/docker-scan/Dockerfile"]
 reason = "GPL-2.0-only apk-tools library package, same unmodified-Alpine-base reasoning as apk-tools."
 
 [[compatible]]
 match = "package"
 name = "alpine-baselayout"
+where = ["docker:os-packages/examples/docker-scan/Dockerfile"]
 reason = "GPL-2.0-only Alpine filesystem baselayout, shipped unmodified in the image's OS layer; aggregation, source available from Alpine aports."
 
 [[compatible]]
 match = "package"
 name = "alpine-baselayout-data"
+where = ["docker:os-packages/examples/docker-scan/Dockerfile"]
 reason = "GPL-2.0-only baselayout data files, same unmodified-Alpine-base reasoning as alpine-baselayout."
 
 [[compatible]]
 match = "package"
 name = "scanelf"
+where = ["docker:os-packages/examples/docker-scan/Dockerfile"]
 reason = "GPL-2.0-only pax-utils ELF scanner, shipped unmodified in the image's OS layer; aggregation, source available from Alpine aports."
 
 [[compatible]]
 match = "package"
 name = "ca-certificates"
+where = ["docker:os-packages/examples/docker-scan/Dockerfile"]
 reason = "MPL-2.0 AND MIT; MPL-2.0 is file-level copyleft satisfied by shipping the files unmodified in the OS layer."
 
 [[compatible]]
 match = "package"
 name = "ca-certificates-bundle"
+where = ["docker:os-packages/examples/docker-scan/Dockerfile"]
 reason = "MPL-2.0 AND MIT certificate bundle, same file-level-copyleft reasoning as ca-certificates."
 
 [[compatible]]
 match = "package"
 name = "musl-utils"
+where = ["docker:os-packages/examples/docker-scan/Dockerfile"]
 reason = "MIT AND BSD-2-Clause AND GPL-2.0-or-later; the GPL part covers unmodified musl utility binaries in the OS layer, aggregation with source available from Alpine aports."
 
 # Two source-vs-registry assessment conflicts, resolved by hand.
