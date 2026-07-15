@@ -583,7 +583,7 @@ function problematicSectionLines(
 
   // Non-blocking roll-up: count warn verdicts by coarse category; render ONE
   // line naming every non-zero category in a fixed order. Omitted entirely when
-  // there are zero warns.
+  // zero warns exist.
   const warnCounts = new Map<string, number>();
   let warnTotal = 0;
   for (const verdict of verdicts) {

@@ -3,6 +3,7 @@ import tseslint from "typescript-eslint";
 import importX from "eslint-plugin-import-x";
 import tsdoc from "eslint-plugin-tsdoc";
 import commentLength from "eslint-plugin-comment-length";
+import writeGoodComments from "eslint-plugin-write-good-comments-2";
 import eslintPluginPrettierRecommended from "eslint-plugin-prettier/recommended";
 
 /**
@@ -108,6 +109,7 @@ export default tseslint.config(
       sbomlet: { rules: { "no-comment-jargon": noCommentJargon } },
       tsdoc,
       "comment-length": commentLength,
+      "write-good-comments": writeGoodComments,
     },
     rules: {
       "sbomlet/no-comment-jargon": "error",
@@ -122,6 +124,27 @@ export default tseslint.config(
         { maxLength: 100 },
       ],
       "comment-length/limit-multi-line-comments": ["error", { maxLength: 100 }],
+      // Kept checks: illusion (repeated words), thereIs, cliches.
+      "write-good-comments/write-good-comments": [
+        "error",
+        {
+          // Off: docs here describe what happens to inputs ("malformed
+          // entries are skipped") — active voice would obscure the actor.
+          passive: false,
+          // Off: "only"/"exactly"/"several" are precision words in a
+          // spec, not hedges.
+          weasel: false,
+          // Off: "silently"/"loudly" name failure-mode semantics in this
+          // codebase; deleting them changes meaning.
+          adverb: false,
+          // Off: its dictionary rewrites domain vocabulary (evaluate,
+          // satisfy, validate, minimum) into vaguer verbs.
+          tooWordy: false,
+          // Off: a line-wrapped mid-sentence "so" reads as a sentence
+          // start and false-positives on every wrapped comment.
+          so: false,
+        },
+      ],
     },
   },
   {

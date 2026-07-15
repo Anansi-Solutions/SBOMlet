@@ -8,7 +8,7 @@
  *   2. `info.license` free-text field, GUARDED — HIGH. The guard mirrors
  *      normalize.ts's full-text trap exactly: a multi-line OR >=60-char value
  *      is full license TEXT (the `comm` package put the whole BSD-3 text here),
- *      never an id, so it is rejected and falls through to Layer 3.
+ *      never an id, so it is rejected and falls through to the next layer.
  *   3. `info.classifiers` "License :: OSI Approved :: X" — a precise trove
  *      mapping is HIGH; an ambiguous classifier (BSD/Apache) yields the label
  *      text as raw, tagged LOW for optional `[[clarify]]` pinning.

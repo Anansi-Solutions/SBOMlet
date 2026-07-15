@@ -160,10 +160,12 @@ A custom rule also errors on process shorthand in `src/` comments — comments
 are written in plain words a reader of the code understands. Goldens and
 fixtures are excluded from both.
 
-Comments in `src/` carry three further gates: `eslint-plugin-tsdoc` checks
+Comments in `src/` carry four further gates: `eslint-plugin-tsdoc` checks
 TSDoc syntax, `eslint-plugin-comment-length` auto-wraps any comment line past
-100 columns, and a comment-density budget (`task metrics:comments:check`, run
-by `task quality`) caps comment lines and words as a share of the source.
+100 columns, `eslint-plugin-write-good-comments-2` flags repeated words,
+"there is/are" verbiage, and cliches, and a comment-density budget
+(`task metrics:comments:check`, run by `task quality`) caps comment lines and
+words as a share of the source.
 
 Run `task test` and `task quality` before you commit.
 
