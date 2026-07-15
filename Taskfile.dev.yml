@@ -62,7 +62,7 @@ tasks:
     cmds:
       - task: lint
       - task: typecheck
-      - mise x -- bun scripts/comment-metrics.ts --check
+      - task: metrics:comments:check
 
   test:
     # The label keys the fingerprint per CLI_ARGS value, so a filtered run
@@ -107,6 +107,16 @@ tasks:
     deps: [install]
     cmds:
       - mise x -- bun scripts/comment-metrics.ts
+
+  metrics:comments:check:
+    summary: |
+      Enforce the comment-density budget over src/ — the gate form of
+      metrics:comments (nonzero exit when comment lines or words exceed
+      budget). `task quality` runs this; the same budget is covered by
+      test/comment-metrics.test.ts.
+    deps: [install]
+    cmds:
+      - mise x -- bun scripts/comment-metrics.ts --check
 
   adr:new:
     summary: |
