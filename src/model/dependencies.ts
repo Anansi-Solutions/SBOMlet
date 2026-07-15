@@ -64,7 +64,10 @@ export interface LicenseFinding {
   expression: string | null;
   /** Elected branch as rendered canonical string; null = unknown or imprecise. */
   elected: string | null;
-  /** "generator" (exact parse or unknown), "corrected", "registry" (enrichment-appended), "override" (clarify); "curated" reserved. */
+  /**
+   * "generator" (exact parse or unknown), "corrected", "registry" (enrichment-appended),
+   * "override" (clarify); "curated" reserved.
+   */
   source: LicenseClaimSource;
   confidence: FindingConfidence;
   /**
@@ -188,7 +191,11 @@ export interface Verdict {
   purl: string;
   occurrenceTarget: string;
   status: VerdictStatus;
-  /** Machine-readable deciding rule: "compatible[1]", "clarify[0]", "workspace.copyleft_suppressed[0]", "default:copyleft", "default:unknown", "default:imprecise", "default:imprecise-copyleft", "default:ok". */
+  /**
+   * Machine-readable deciding rule: "compatible[1]", "clarify[0]",
+   * "workspace.copyleft_suppressed[0]", "default:copyleft", "default:unknown",
+   * "default:imprecise", "default:imprecise-copyleft", "default:ok".
+   */
   rule: string;
   reason: string;
 }
@@ -271,11 +278,16 @@ export interface Occurrence {
  * statement we have. All stored text is control-character-sanitized at intake.
  */
 export interface PackageAttribution {
-  /** Concrete copyright lines extracted from evidence texts (deduped, capped at 20, never fabricated). */
+  /**
+   * Concrete copyright lines extracted from evidence texts (deduped, capped at 20, never
+   * fabricated).
+   */
   copyrightLines: string[];
   /** Decoded NOTICE file contents (Apache section 4(d) input), sanitized verbatim. */
   noticeTexts: string[];
-  /** component.author when string-typed — secondary "Author:" attribution, never a copyright claim. */
+  /**
+   * component.author when string-typed — secondary "Author:" attribution, never a copyright claim.
+   */
   author?: string;
   /** True when at least one non-NOTICE license file was decoded for this package. */
   hasVerbatimText: boolean;

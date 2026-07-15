@@ -534,6 +534,12 @@
       "resolvable": true,
       "via": "version-license"
     },
+    "pkg:npm/eslint-plugin-comment-length@2.3.1": {
+      "fetchedFrom": "npm",
+      "license": "MIT",
+      "resolvable": true,
+      "via": "version-license"
+    },
     "pkg:npm/eslint-plugin-import-x@4.16.2": {
       "fetchedFrom": "npm",
       "license": "MIT",

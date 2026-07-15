@@ -2,6 +2,7 @@ import js from "@eslint/js";
 import tseslint from "typescript-eslint";
 import importX from "eslint-plugin-import-x";
 import tsdoc from "eslint-plugin-tsdoc";
+import commentLength from "eslint-plugin-comment-length";
 import eslintPluginPrettierRecommended from "eslint-plugin-prettier/recommended";
 
 /**
@@ -106,10 +107,21 @@ export default tseslint.config(
     plugins: {
       sbomlet: { rules: { "no-comment-jargon": noCommentJargon } },
       tsdoc,
+      "comment-length": commentLength,
     },
     rules: {
       "sbomlet/no-comment-jargon": "error",
       "tsdoc/syntax": "warn",
+      // Auto-wrap comment lines that exceed 100 cols — the hard ceiling for
+      // comment width (~80 stays the prose target by convention). Default
+      // mode reflows only the overflowing line and skips URLs and
+      // code-bearing comments, enforcing the ceiling without rewriting
+      // legitimate content.
+      "comment-length/limit-single-line-comments": [
+        "error",
+        { maxLength: 100 },
+      ],
+      "comment-length/limit-multi-line-comments": ["error", { maxLength: 100 }],
     },
   },
   {

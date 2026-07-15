@@ -94,7 +94,8 @@ export async function runCheck(opts: GenerateOptions): Promise<CheckResult> {
 
   // A miss-needing-enrichment with no committed cache entry is stale by the
   // same logic as a missing output: check cannot fetch it, so the committed
-  // cache is out of date. Name the purl and the regenerate remedy. These join staleFiles so exitCodeFor maps them to exit 2.
+  // cache is out of date. Name the purl and the regenerate remedy. These join staleFiles so
+  // exitCodeFor maps them to exit 2.
   for (const purl of outputs.staleUnknowns) {
     staleFiles.push(purl);
     process.stderr.write(

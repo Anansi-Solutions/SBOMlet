@@ -332,7 +332,9 @@ export function sourceDirsFor(purl: string, targetDirs: string[]): string[] {
  * (EnrichOptions.now?, ScancodeScanOptions.scancodeBin?).
  */
 export interface IntensiveOptions {
-  /** Candidate roots probed by {@link sourceDirsFor} (compareCodeUnits-sorted, first match wins). */
+  /**
+   * Candidate roots probed by {@link sourceDirsFor} (compareCodeUnits-sorted, first match wins).
+   */
   targetDirs: string[];
   /** Executable that runs the pinned scancode binary. Defaults to "scancode". */
   scancodeBin?: string;
@@ -398,7 +400,10 @@ export function assertScancodeOutputSize(path: string): void {
   }
 }
 
-/** Assert the parsed output's headers[0].tool_version matches the pin, naming the invocation on drift. */
+/**
+ * Assert the parsed output's headers[0].tool_version matches the pin, naming the invocation on
+ * drift.
+ */
 function assertScancodeVersion(parsed: unknown, invocation: string): void {
   const headers = (parsed as RawScancodeOutput).headers;
   const toolVersion =
@@ -462,7 +467,10 @@ function isRootLevelPath(path: string): boolean {
   return path.split("/").length === 2;
 }
 
-/** Elect the first ROOT-LEVEL file entry matching a basename pattern with a non-null, non-noise expression. */
+/**
+ * Elect the first ROOT-LEVEL file entry matching a basename pattern with a non-null, non-noise
+ * expression.
+ */
 function electFromPattern(
   entries: RawScancodeFile[],
   pattern: RegExp,

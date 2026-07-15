@@ -62,7 +62,10 @@ function sleep(ms: number): Promise<void> {
 
 /** Retry/backoff tuning. The default `backoffBaseMs` is production; tests pass a small value. */
 export interface FetchOptions {
-  /** Backoff base in ms (attempt N waits backoffBaseMs * 2**N). Defaults to {@link BACKOFF_BASE_MS}. */
+  /**
+   * Backoff base in ms (attempt N waits backoffBaseMs * 2**N). Defaults to {@link
+   * BACKOFF_BASE_MS}.
+   */
   backoffBaseMs?: number;
 }
 
@@ -181,7 +184,10 @@ export async function fetchGithubLicense(
   throw new GithubTransientError(`github ${response.status} for ${url}`);
 }
 
-/** The result of a JSON fetch that treats 404 as a value: the parsed body, or a definitive not-found. */
+/**
+ * The result of a JSON fetch that treats 404 as a value: the parsed body, or a definitive
+ * not-found.
+ */
 export type JsonOr404 = { status: 200; body: unknown } | { status: 404 };
 
 /**

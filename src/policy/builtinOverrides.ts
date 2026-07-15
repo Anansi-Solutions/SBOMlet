@@ -3,8 +3,9 @@
  *
  * A curated, committed literal data module of REAL disambiguations for
  * commonly-ambiguous well-known projects. Any repo consuming this tool benefits
- * from these defaults WITHOUT re-authoring them. The set is GENERAL (well-known projects), NOT a per-consumer data
- * dump: project-specific judgments live in the consuming repo's .sbomlet.policy.toml
+ * from these defaults WITHOUT re-authoring them. The set is GENERAL (well-known projects), NOT a
+ * per-consumer data dump: project-specific judgments live in the consuming repo's
+ * .sbomlet.policy.toml
  * `[[clarify]]` table, which WINS over this set on conflict (project-wins).
  *
  * Each entry is a PRECONDITIONED assertion, never a blind replacement. `expects`

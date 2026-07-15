@@ -314,7 +314,10 @@ function propertyDevMarker(component: SbomComponentShape): boolean {
  */
 const IS_WORKSPACE_PROPERTY = "cdx:npm:isWorkspace";
 
-/** True iff the component carries cdx:npm:isWorkspace=true (same per-entry tolerance as propertyDevMarker). */
+/**
+ * True iff the component carries cdx:npm:isWorkspace=true (same per-entry tolerance as
+ * propertyDevMarker).
+ */
 function hasWorkspaceMarker(component: SbomComponentShape): boolean {
   const properties = component.properties;
   if (properties === undefined) return false;
