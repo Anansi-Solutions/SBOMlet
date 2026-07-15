@@ -41,7 +41,8 @@ footprint small.
   only when enrichment fetches a new licence, so a warm run rewrites identical
   bytes. With `--cyclonedx` it also writes a
   [CycloneDX](../glossary.md#cyclonedx) 1.6 export, and with `--dump-model` a
-  debug model dump that is not committed.
+  debug model dump that is not committed. `--intensive` adds a ScanCode source
+  assessment over the package set (generate-only), described below.
 - **`check`** is the CI gate. It re-runs the *same* pipeline entirely offline
   against the committed caches, byte-compares every configured output, evaluates
   the policy, and exits with a code that says which class of thing is wrong. It
@@ -75,7 +76,8 @@ flowchart TD
     B --> C["Each collector emits a CollectedSbom<br/>(per-target CycloneDX doc + scope)"]
     C --> D["Merge (purl-keyed)<br/>mergeSboms → CanonicalDependencies"]
     D --> E["Enrich unknowns<br/>(PyPI / npm / NuGet / GitHub via committed cache)"]
-    E --> F["Normalize + annotate findings<br/>(raw claims → SPDX LicenseFinding)"]
+    E --> EA["Assess with ScanCode<br/>(replay committed memo; scan on generate --intensive)"]
+    EA --> F["Normalize + annotate findings<br/>(raw claims → SPDX LicenseFinding)"]
     F --> G{"Policy loaded<br/>(--policy)?"}
     G -->|yes| H["Evaluate policy<br/>→ Verdict[] + stderr summary"]
     G -->|no| I
@@ -93,6 +95,8 @@ The order is deliberate at a few points:
 - [Enrichment](../glossary.md#enrichment-and-the-enrichment-cache) runs before
   annotation, so a license claim fetched from a registry flows through the same
   normalizer as a claim from a generator.
+- The ScanCode assessment runs after enrichment, so a package carries both its
+  quick-check answer and the in-depth reading when annotation compares them.
 - The policy is evaluated only when one was loaded. Without `--policy` the
   documents still render, with normalized license expressions and no verdicts.
 
@@ -344,6 +348,30 @@ either mode.
 
 Source: `src/enrich/enrich.ts`, `src/enrich/cache.ts`.
 
+### The ScanCode assessment
+
+[ScanCode](https://github.com/aboutcode-org/scancode-toolkit) reads a package's
+own source rather than a declared field, so its reading outranks the registry
+and the manifest. It is a peer stage after enrichment, not a lane inside it,
+with its own committed memo, `.sbomlet.cache/scancode.cache.json`, versioned
+separately from the enrichment cache.
+
+The stage replays that memo over every package in both modes, appending a
+`source: "scancode"` claim wherever the memo holds a positive answer. Only
+`generate --intensive` analyzes: it scans every package not yet memoized — a
+precisely-declared one included — across the npm and PyPI ecosystems whose
+sources are installed locally, memoizing each result, positive or no-license, so
+a warm rerun analyzes nothing. A package whose sources are absent is never
+memoized, so an entry always means its tree was read. `check` only replays, so an
+intensive `generate` and a later offline `check` render byte-identically.
+
+The senior comparison happens downstream in annotation: where ScanCode agrees
+with the declared or registry claims its expression becomes the finding, and
+where it disagrees the package fails the gate as a `conflict:scancode` verdict,
+resolvable with a [`[[clarify]]`](../glossary.md#policy-lanes) override.
+
+Source: `src/enrich/assess.ts`, `src/enrich/scancode.ts`.
+
 ### The policy engine
 
 The policy engine is a pure producer of [verdicts](../glossary.md#verdict). It
@@ -568,8 +596,9 @@ treats each one in full.
    and would break byte-identity across platforms, and every JSON artifact shares
    one serializer.
 2. **Minimal dependencies, standard tools orchestrated.** cdxgen, the Yarn-4
-   plugin, syft, and tofu are pinned CLIs driven through argv arrays; the CLI uses
-   `node:util`'s `parseArgs`; discovery is a hand-rolled `node:fs` walk; and the
+   plugin, syft, tofu, and ScanCode are pinned CLIs driven through argv arrays;
+   the CLI uses `node:util`'s `parseArgs`; discovery is a hand-rolled `node:fs`
+   walk; and the
    only in-process parsers exist where no upstream tool does the job: bun,
    NuGet, Terraform, and Dockerfile base derivation.
 3. **Honest residual.** When something cannot be computed precisely, render `—` or

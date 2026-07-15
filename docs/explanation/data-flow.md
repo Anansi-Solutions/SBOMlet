@@ -44,10 +44,11 @@ flowchart TD
         S2b["+ committed .sbomlet.cache/docker.sbom.json<br/>read as scope:&quot;os&quot; merge input"]
         S3["3. MERGE purl-keyed<br/>src/merge/merge.ts → CanonicalDependencies"]
         S4["4. ENRICH unknowns<br/>src/enrich/enrich.ts (cache; fetch only in generate)"]
-        S5["5. NORMALIZE + annotate<br/>src/normalize/normalize.ts → finding per package"]
-        S6["6. EVALUATE policy<br/>src/policy/evaluate.ts → Verdict[]"]
-        S7["7. RENDER in memory<br/>markdown.ts + notices.ts + cyclonedx.ts"]
-        S1 --> S2 --> S2b --> S3 --> S4 --> S5 --> S6 --> S7
+        S4a["5. ASSESS with ScanCode<br/>src/enrich/assess.ts (replay memo; scan only on generate --intensive)"]
+        S5["6. NORMALIZE + annotate<br/>src/normalize/normalize.ts → finding per package"]
+        S6["7. EVALUATE policy<br/>src/policy/evaluate.ts → Verdict[]"]
+        S7["8. RENDER in memory<br/>markdown.ts + notices.ts + cyclonedx.ts"]
+        S1 --> S2 --> S2b --> S3 --> S4 --> S4a --> S5 --> S6 --> S7
     end
 
     GEN -->|mode: generate| CORE
@@ -74,6 +75,7 @@ lists the stages; the sections after it walk each row.
 | Collect | one target (one-or-many scan units for an expanded Yarn workspace) | raw CycloneDX (`CollectedSbom`) | `collectors/` via `registry.ts` |
 | Merge | `CollectedSbom[]` | `CanonicalDependencies` | `merge/merge.ts` |
 | Enrich | model + committed cache | model with registry claims appended | `enrich/enrich.ts` |
+| Assess | model + committed ScanCode memo | model with ScanCode claims appended | `enrich/assess.ts` |
 | Normalize | claims per package | a `LicenseFinding` per package | `normalize/normalize.ts` |
 | Evaluate | annotated model + policy | `Verdict[]` (per package × occurrence) | `policy/evaluate.ts` |
 | Render | annotated model + verdicts | Markdown / notices / CycloneDX bytes | `render/` |
@@ -224,6 +226,40 @@ committed cache; a miss that would need the network is a
 [staleness](../glossary.md#staleness) condition, not a network call.
 
 Source: `enrich/enrich.ts` (`enrichUnknowns`, `needsEnrichment`).
+
+### Assess
+
+[ScanCode](https://github.com/aboutcode-org/scancode-toolkit) reads a package's
+own source — its LICENSE files and manifests — far more accurately than a
+declared field or a registry answer, so its reading is the senior one. It runs
+as its own stage after enrichment, over the whole package set rather than only
+the unknowns, and keeps a committed memo, `.sbomlet.cache/scancode.cache.json`,
+separate from the enrichment cache so the two version independently.
+
+The stage has two passes:
+
+- Replay runs in both modes over every package. A package with a positive memo
+  entry gains a `source: "scancode"` claim, plus the memo's copyright lines when
+  it carries no attribution yet.
+- Scan runs only on `generate --intensive`. It analyzes every package not already
+  in the memo — a precisely-declared one too, since a second, deeper opinion is
+  the point — for the npm and PyPI ecosystems whose sources are present in the
+  install tree. A positive result is memoized with its elected expression; a scan
+  that finds no license is memoized as a no-result so it is skipped next run. A
+  package whose sources are absent is never memoized, so an entry always means the
+  tree was analyzed.
+
+`check` only ever replays; it never scans. An intensive `generate` and a later
+offline `check` therefore produce byte-identical output, and a repository with no
+memo file is untouched.
+
+Whether a ScanCode claim becomes the finding or surfaces a conflict is decided in
+the next stage. Where it agrees with the declared or registry claims the
+assessment becomes the finding; where it disagrees the package fails the gate as a
+`conflict:scancode` verdict a `[[clarify]]` can resolve.
+
+Source: `enrich/assess.ts` (`assessPackages`, `scanFullSet`, `replayMemo`),
+`enrich/scancode.ts`.
 
 ### Normalize
 
@@ -394,9 +430,9 @@ stage, and the pieces are small:
   differ across Windows and Linux. The same comparator drives the package sort,
   the verdict sort, every table's row order, and the sorted-key JSON serializer.
 - Sorted keys. The on-disk JSON — the dump model, the enrichment cache, the
-  docker SBOM — is serialized with sorted object keys, two-space indent, and a
-  trailing newline. The CycloneDX emitter keeps its top-level keys in spec order
-  on purpose but sorts components by purl.
+  ScanCode memo, the docker SBOM — is serialized with sorted object keys,
+  two-space indent, and a trailing newline. The CycloneDX emitter keeps its
+  top-level keys in spec order on purpose but sorts components by purl.
 - LF only. Every renderer joins with literal `"\n"`, never the platform line
   ending, and the JSON serializer never emits a carriage return, so the output is
   LF-only by construction. Evidence texts are normalized to LF at intake.
@@ -409,8 +445,9 @@ stage, and the pieces are small:
   input is appended last, so the merge order is fixed; the same-target occurrence
   folds are order-independent by design.
 - `check` is offline. It forces check mode, so enrichment reads the committed
-  cache and never fetches, and the committed docker SBOM is read rather than
-  scanned. Nothing about a `check` run reaches the network.
+  cache and never fetches, the ScanCode memo is replayed rather than scanned,
+  and the committed docker SBOM is read rather than scanned. Nothing about a
+  `check` run reaches the network.
 
 An end-to-end test asserts the result: generating twice from the same inputs
 yields byte-identical documents. That identity is what `check` relies on. It

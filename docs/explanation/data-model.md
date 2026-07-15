@@ -178,7 +178,7 @@ or the [enrichment](../glossary.md#enrichment-and-the-enrichment-cache) stage em
 interface LicenseClaim {
   raw: string; // verbatim asserted value
   kind: LicenseClaimKind; // "spdx-id" | "name" | "expression"
-  source: LicenseClaimSource; // "generator" | "corrected" | "curated" | "override" | "registry"
+  source: LicenseClaimSource; // "generator" | "corrected" | "curated" | "override" | "registry" | "scancode"
 }
 ```
 
@@ -191,10 +191,11 @@ SPDX expression, an SPDX id, or a free-text name. The three shapes are tried in
 that order and the first that narrows wins.
 
 `source` records provenance, for auditability. Collectors emit `"generator"`.
-The enrichment stage appends `"registry"` when a PyPI or npm response supplies a
-license for an otherwise-unknown package, so a registry-sourced finding can be
-traced back. `"corrected"`, `"curated"`, and `"override"` are reserved values on
-the type.
+The enrichment stage appends `"registry"` when a registry response supplies a
+license for an otherwise-unknown package, and the ScanCode assessment stage
+appends `"scancode"` when its source scan reads one, so either can be traced
+back. `"corrected"`, `"curated"`, and `"override"` are reserved values on the
+type.
 
 A package keeps every distinct claim. Claims are deduped structurally by their
 `(kind, source, raw)` triple, NUL-joined so distinct fields can never collide.
@@ -213,13 +214,14 @@ run; without `--policy` the field is absent.
 | ---------------------- | -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `expression`           | `string \| null`     | Full normalized SPDX expression. `null` means unknown or imprecise — an [imprecise family](../glossary.md#imprecise-family) is not a valid SPDX expression and is never emitted as one. |
 | `elected`              | `string \| null`     | The elected branch as a rendered canonical string, such as the permissive branch of an `OR`. `null` when unknown or imprecise.                                                       |
-| `source`               | `LicenseClaimSource` | `"generator"` for an exact parse or unknown, or `"corrected"`, `"registry"`, or `"override"` for a clarify or builtin.                                                              |
+| `source`               | `LicenseClaimSource` | `"generator"` for an exact parse or unknown, `"scancode"` when a ScanCode assessment became the finding, or `"corrected"`, `"registry"`, or `"override"` for a clarify or builtin. |
 | `confidence`           | `FindingConfidence`  | `"exact" \| "corrected" \| "none" \| "imprecise"` — see below.                                                                                                                      |
 | `impreciseFamily?`     | `string`             | The faithful ambiguous family label (`"BSD"`, `"Apache"`, `"GPL"`). Present only when `confidence` is `"imprecise"`.                                                                |
 | `overrideRule?`        | `string`             | The citation for a tool-level builtin override that decided this finding, such as `"override:builtin[3]"`. A project `[[clarify]]` keeps its own `clarify[i]` citation, so this is absent for those. |
 | `staleOverride?`       | `StaleOverride`      | Set when an override's `expects` precondition no longer matches the observed signal. The override is not applied, and the engine fails the gate loudly.                              |
 | `observedExpression?`  | `string`             | The pre-override observed expression, set when an override rewrote `expression`. The deny terminal reads it so a denied observed license can never be licensed back in.              |
 | `observedExpressions?` | `readonly string[]`  | The set of every observed per-claim precise expression, deduped and sorted. The deny terminal also reads this so a denied member is seen even when combination elected an imprecise family or collapsed to unknown. |
+| `conflict?`            | `AssessmentConflict` | Set when the in-depth ScanCode assessment disagrees with a quick-check claim. Carries the assessed expression and the disagreeing members, and drives a `conflict:scancode` fail. Absent when no ScanCode claim exists or the assessment agrees. |
 | `unrecognizedTokens?`  | `readonly string[]`  | Non-normalizable tokens surfaced for a non-gating `os`-scope partial finding only. Advisory: never enters `expression`, never gates.                                                |
 
 ### Why `imprecise` is not `none`
@@ -286,6 +288,22 @@ precondition. When the package's pre-override observed signal no longer matches
 `expects`, the asserted expression is not applied, and the engine emits a `fail`
 naming the package, the expected value, and the now-observed value. A stale
 override must never silently mask a relicense.
+
+### `AssessmentConflict`
+
+```ts
+interface AssessmentConflict {
+  assessed: string; // the ScanCode-elected expression, or a bare family token
+  disagreeing: readonly string[]; // the disagreeing quick-check members, sorted
+}
+```
+
+Set when the in-depth ScanCode assessment reads a license that contradicts a
+quick-check claim, the declared metadata or a registry answer. The marker lives
+on the un-overridden base finding, so the base stands in full and the
+disagreement is surfaced rather than absorbed in either direction. An applied
+`[[clarify]]` or builtin override is the human resolution and clears it. The
+engine turns the marker into a `conflict:scancode` fail that a person resolves.
 
 ## `DependencyIntroduction`
 
@@ -376,9 +394,9 @@ build), or `suppressed` (a family-justified workspace copyleft suppression).
 `rule` is the machine-readable deciding rule id, such as `compatible[1]`,
 `clarify[0]`, `denied[2]`, `workspace.copyleft_suppressed[0]`, `default:copyleft`,
 `default:unknown`, `default:imprecise`, `default:imprecise-copyleft`,
-`default:ok`, `override:builtin[3]`, or `override:stale[clarify|builtin]`. The
-renderer and the gate are pure consumers of these structured ids; neither
-re-derives policy.
+`default:ok`, `override:builtin[3]`, `override:stale[clarify|builtin]`, or
+`conflict:scancode`. The renderer and the gate are pure consumers of these
+structured ids; neither re-derives policy.
 
 `reason` is a sentence naming the deciding input, such as the matched license,
 the workspace path, or the elected expression, so the rendered document carries

@@ -98,7 +98,10 @@ other npm and pnpm lockfiles and all Python lockfiles route to cdxgen, which is
 where Poetry licences come from. Docker images are scanned by syft, but only in the `generate-docker-sbom`
 subcommand, which writes a committed `.sbomlet.cache/docker.sbom.json`;
 `generate` and `check` never run a docker daemon — they read that file as an
-`os`-scope merge input. The version tag inside each argv is
+`os`-scope merge input. ScanCode is orchestrated the same way on the opt-in
+`--intensive` lane: a pinned source scanner whose in-depth reading outranks the
+registry answer, run on `generate` only and replayed from a committed memo on
+`check`. The version tag inside each argv is
 the pin, floating tags are forbidden, and each argv is locked byte-for-byte by a
 test, so changing a flag must consciously break that test and invalidate the
 goldens.
@@ -118,7 +121,8 @@ tool already does the job; if you must write one, record why no tool serves in t
 module header, the way the Terraform and `bun.lock` collectors do.
 
 Source: `cli.ts`, `package.json`, `collectors/cdxgen.ts`,
-`collectors/dockerOs.ts` (`SYFT_TOOL`), `collectors/terraform.ts`.
+`collectors/dockerOs.ts` (`SYFT_TOOL`), `enrich/scancode.ts` (`SCANCODE_TOOL`),
+`collectors/terraform.ts`.
 See [ADR-0002](adr/) (orchestrate generators), [ADR-0010](adr/) (JS generator
 routing), [ADR-0011](adr/) (Python via cdxgen), [ADR-0001](adr/) (TypeScript on
 Bun).
