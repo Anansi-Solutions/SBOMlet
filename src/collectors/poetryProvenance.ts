@@ -2,11 +2,26 @@
  * Python dependency provenance from poetry.lock + pyproject.toml.
  *
  * @privateRemarks
+ * cdxgen --no-install-deps yields no usable graph, so we use the lockfile.
+ *
  * The lockfile's `[package.dependencies]` tables are the edges;
  * pyproject declares the roots. Optionality is out of scope by
  * decision — poetry marker semantics were a recurring mislabeling
  * bug source (see docs/explanation/adr/0014-dependency-provenance.md).
+ *
+ * - Each poetry.lock `[[package]]` carries a `[package.dependencies]` table
+ * (the introducer edges);
+ * - pyproject gives the declared-direct roots: `[project].dependencies`
+ * (PEP 621 `"name (constraint)"`) when present is authoritative, else
+ * - the legacy `[tool.poetry.dependencies]` table;
+ * + every `[tool.poetry.group.<name>.dependencies]` table, always.
+ *
+ * Optionality is deliberately ignored. Deriving optionality from poetry
+ * markers (`optional = true`, PEP 508 marker variables, extras, multi-variant
+ * spec arrays) was a recurring mislabeling bug class.
+ * The `optional` distinction is ignored: no required-vs-optional partition.
  */
+
 
 import { parse as parseToml } from "smol-toml";
 

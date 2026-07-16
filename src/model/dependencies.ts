@@ -239,8 +239,8 @@ export interface DependencyIntroduction {
    */
   introducedBy: readonly string[];
   /**
-   * One representative shortest root-to-package purl chain; omitted for
-   * a direct dependency.
+   * Deterministic representative root→component purl chain (one shortest path).
+   * Omitted for a direct dependency (the chain would be just the package itself).
    *
    * @privateRemarks
    * BFS with ties broken on the smallest child purl at each level, not
