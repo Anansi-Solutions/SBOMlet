@@ -128,4 +128,11 @@ describe("ecosystemFor / manifestFilesFor", () => {
     );
     expect(manifestFilesFor("nuget")).toEqual(["packages.lock.json"]);
   });
+
+  test("maven has no cdxgen ecosystem (in-process collection) and hashes ONLY the committed sidecar", () => {
+    expect(() => ecosystemFor("maven")).toThrow(
+      "maven targets are collected in-process and have no cdxgen ecosystem",
+    );
+    expect(manifestFilesFor("maven")).toEqual(["maven.sbom.json"]);
+  });
 });

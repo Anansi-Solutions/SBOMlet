@@ -17,6 +17,7 @@ import { afterAll, describe, expect, test } from "bun:test";
 
 import { mergeSboms } from "../src/merge/merge";
 import { collectWithBunLock } from "../src/collectors/bunLock";
+import { collectWithMavenSbom } from "../src/collectors/mavenSbom";
 import { collectWithNugetLock } from "../src/collectors/nugetLock";
 import {
   toSortedDependenciesJson,
@@ -486,5 +487,144 @@ describe("determinism — nuget collector double-run byte-identity", () => {
     expect(first.md.includes("\r")).toBe(false);
     expect(first.md.endsWith("\n")).toBe(true);
     expect(first.md.endsWith("\n\n")).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Collector-path determinism, extended to the maven sidecar reader
+// ---------------------------------------------------------------------------
+
+/**
+ * Temp maven fixture project for the collector double-run: a classifier purl
+ * (a distinct identity from its non-classifier sibling) and a no-license
+ * synthetic commercial-looking GAV (the system-scoped class, Q3) — proving
+ * the verbatim pass-through is stable across both shapes on a double run.
+ */
+const MAVEN_DET_SBOM_LINES = [
+  "{",
+  '  "bomFormat": "CycloneDX",',
+  '  "specVersion": "1.6",',
+  '  "version": 1,',
+  '  "metadata": {',
+  '    "component": {',
+  '      "type": "application",',
+  '      "group": "com.example",',
+  '      "name": "det-app",',
+  '      "version": "1.0.0",',
+  '      "purl": "pkg:maven/com.example/det-app@1.0.0?type=jar"',
+  "    }",
+  "  },",
+  '  "components": [',
+  "    {",
+  '      "type": "library",',
+  '      "group": "com.example",',
+  '      "name": "det-lib",',
+  '      "version": "2.0.0",',
+  '      "purl": "pkg:maven/com.example/det-lib@2.0.0?classifier=jakarta&type=jar",',
+  '      "licenses": [{"license": {"id": "Apache-2.0"}}]',
+  "    },",
+  "    {",
+  '      "type": "library",',
+  '      "group": "com.example.commercial",',
+  '      "name": "det-proprietary",',
+  '      "version": "1.0.0",',
+  '      "purl": "pkg:maven/com.example.commercial/det-proprietary@1.0.0?type=jar"',
+  "    }",
+  "  ]",
+  "}",
+  "",
+];
+const MAVEN_DET_SBOM = MAVEN_DET_SBOM_LINES.join("\n");
+
+const MAVEN_TARGET_IDENTITY = "fixtures/maven-det";
+
+/** Writes the fixture sidecar into a fresh temp project dir. */
+function makeMavenFixtureTarget(): Target {
+  const dir = mkdtempSync(join(tmpdir(), "licenses-det-maven-"));
+  collectorTempDirs.push(dir);
+  writeFileSync(join(dir, "maven.sbom.json"), MAVEN_DET_SBOM);
+  return { dir, identity: MAVEN_TARGET_IDENTITY };
+}
+
+/** One collector run into its own fresh temp dir; returns the raw bom bytes. */
+async function collectMavenBomText(target: Target): Promise<string> {
+  const tempDir = mkdtempSync(join(tmpdir(), "licenses-det-out-"));
+  collectorTempDirs.push(tempDir);
+  const result = await collectWithMavenSbom(target, { tempDir });
+  return readFileSync(result.sbomPath, "utf-8");
+}
+
+describe("determinism — maven collector double-run byte-identity", () => {
+  test("two collector runs over the same committed sidecar write byte-identical bom.json", async () => {
+    const target = makeMavenFixtureTarget();
+    const first = await collectMavenBomText(target);
+    const second = await collectMavenBomText(target);
+    expect(first).toBe(second);
+
+    // Verbatim pass-through is exercised on both the classifier purl and the
+    // no-license component, not vacuously equal.
+    expect(first).toContain(
+      "pkg:maven/com.example/det-lib@2.0.0?classifier=jakarta&type=jar",
+    );
+    expect(first).toContain("det-proprietary");
+  });
+
+  test("double-build double-render of the collector bom is byte-identical", async () => {
+    const bomText = await collectMavenBomText(makeMavenFixtureTarget());
+    const build = (): { md: string; dump: string } => {
+      const model = mergeSboms([
+        { sbom: JSON.parse(bomText), targetIdentity: MAVEN_TARGET_IDENTITY },
+      ]);
+      return {
+        md: renderMarkdown(model),
+        dump: toSortedDependenciesJson(model),
+      };
+    };
+    const first = build();
+    const second = build();
+    expect(first.md).toBe(second.md);
+    expect(first.dump).toBe(second.dump);
+
+    // Not vacuously equal: both the classifier purl and the no-license
+    // component reach the merged model.
+    expect(
+      first.dump.includes(
+        "pkg:maven/com.example/det-lib@2.0.0?classifier=jakarta&type=jar",
+      ),
+    ).toBe(true);
+    expect(first.md.includes("det-proprietary")).toBe(true);
+
+    // LF contract holds on the collector-fed render path too.
+    expect(first.md.includes("\r")).toBe(false);
+    expect(first.md.endsWith("\n")).toBe(true);
+    expect(first.md.endsWith("\n\n")).toBe(false);
+  });
+
+  test("mixed bun + cdxgen-shaped npm fixture double-render is byte-identical (multi-PM)", async () => {
+    const bomText = await collectBomText(makeBunFixtureTarget());
+    const npmRaw = readFileSync(
+      join(import.meta.dir, "fixtures", "npm-scope-properties.json"),
+      "utf-8",
+    );
+    const build = (): { md: string; dump: string } => {
+      const model = mergeSboms([
+        { sbom: JSON.parse(bomText), targetIdentity: BUN_TARGET_IDENTITY },
+        { sbom: JSON.parse(npmRaw), targetIdentity: "fixtures/npm-scope" },
+      ]);
+      return {
+        md: renderMarkdown(model),
+        dump: toSortedDependenciesJson(model),
+      };
+    };
+    const first = build();
+    const second = build();
+    expect(first.md).toBe(second.md);
+    expect(first.dump).toBe(second.dump);
+
+    // Both kinds are present in the merged dump (multi-PM, not vacuous).
+    expect(first.dump.includes("pkg:npm/smol-toml@1.6.1")).toBe(true);
+    expect(
+      first.dump.includes("pkg:npm/%40next/swc-win32-x64-msvc@16.0.10"),
+    ).toBe(true);
   });
 });
