@@ -277,14 +277,15 @@ const nugetCollector: Collector = {
  * generator can produce a correct closure at scan time (cdxgen either runs
  * `mvn` inside the target — forbidden — or silently emits an 8% fraction
  * with version-less purls; syft sees pom directs only and fabricates
- * identity from stale local jars, 17-RESEARCH §1.2/§1.3) — only the
- * consumer's own build can resolve Maven, so their CI commits the standard
- * cyclonedx-maven-plugin output and this reader consumes it. No subprocess,
- * so timeoutMs is ignored; the sidecar size gate fires inside
+ * identity from stale local jars) — only the consumer's own build can
+ * resolve Maven, so their CI commits the standard cyclonedx-maven-plugin
+ * output and this reader consumes it (ADR-0023). No subprocess, so
+ * timeoutMs is ignored; the sidecar size gate fires inside
  * collectWithMavenSbom as well as in the CLI loop. NO firstPartyNames / NO
- * prodPurlSet: the collector carries no per-component Maven scope (17-05
- * documents the honest omission) and reactor sibling exclusion is a
- * separate cross-target pre-pass, not this registration's job.
+ * prodPurlSet: the collector carries no per-component Maven scope (the CLI
+ * reference's Maven-targets limits record the honest omission) and reactor
+ * sibling exclusion is a separate cross-target pre-pass, not this
+ * registration's job.
  */
 const mavenCollector: Collector = {
   tool: (): ToolIdentity => MAVEN_COLLECTOR_TOOL,
