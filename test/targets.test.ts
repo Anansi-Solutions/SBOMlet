@@ -1706,7 +1706,7 @@ describe("collectTargets — maven reactor attribution", () => {
  * liba's test-inclusive sidecar: a superset adding one test-only dependency
  * beside liba's existing commons-lang3 — same root purl as REACTOR_LIBA_SBOM
  * (the pre-pass and sibling exclusion key on the DEFAULT doc's root purl
- * only, per the locked design; this fixture never touches that).
+ * only; this fixture never touches that).
  */
 const REACTOR_LIBA_TEST_SBOM = JSON.stringify({
   bomFormat: "CycloneDX",

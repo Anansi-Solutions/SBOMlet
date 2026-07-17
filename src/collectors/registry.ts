@@ -285,7 +285,7 @@ const nugetCollector: Collector = {
  * collector carries no per-component Maven scope, so name-collision exclusion
  * is meaningless here; reactor sibling exclusion is a separate cross-target
  * pre-pass, not this registration's job. prodPurlSet IS threaded through when
- * the collector derives one — the dual-document dev/prod follow-up: a module
+ * the collector derives one: a module
  * committing both maven.sbom.json and maven.test.sbom.json gets its
  * prodPurlSet from the default doc's purls (the yarn dual-run / poetry
  * precedent); a module with only the default doc still carries none, so

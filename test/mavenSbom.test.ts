@@ -654,7 +654,7 @@ describe("excludeMavenFirstParty — reactor sibling exclusion", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Dual-document composed inventory + prodPurlSet (TS-02, D-02 dual-doc)
+// Dual-document composed inventory + prodPurlSet
 // ---------------------------------------------------------------------------
 
 /** Clean-superset pair: the test doc is default-doc-plus-test-only-deps. */
@@ -717,7 +717,7 @@ const CLEAN_SUPERSET_TEST_SBOM = `{
 `;
 
 /**
- * Mediation-shift pair (Q2): the SAME GA resolves to a DIFFERENT version in
+ * Mediation-shift pair: the SAME GA resolves to a DIFFERENT version in
  * each build — the default (prod) build mediates to 2.0.0, the test build to
  * 1.0.0. Neither purl may be dropped.
  */
@@ -771,7 +771,7 @@ const MEDIATION_TEST_SBOM = `{
 }
 `;
 
-/** A package resolved to compile scope: identical purl in BOTH docs (Q2). */
+/** A package resolved to compile scope: identical purl in BOTH docs. */
 const DUAL_SCOPE_DEFAULT_SBOM = `{
   "bomFormat": "CycloneDX",
   "specVersion": "1.6",
@@ -929,7 +929,7 @@ describe("collectWithMavenSbom — dual-document envelope pass-through", () => {
   });
 });
 
-describe("collectWithMavenSbom — dual-document Q2 edge cases", () => {
+describe("collectWithMavenSbom — dual-document mediation edge cases", () => {
   test("mediation shift: BOTH versions survive — the default version is prod, the test version is dev", async () => {
     const target = makeDualMavenTarget(
       MEDIATION_DEFAULT_SBOM,

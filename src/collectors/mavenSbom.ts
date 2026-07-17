@@ -30,7 +30,7 @@
  * A consumer MAY additionally commit `maven.test.sbom.json` — the same
  * module built with `-DincludeTestScope=true` (a superset that also carries
  * test-only dependencies, indistinguishable from production ones by any
- * field the plugin emits, per ADR-0023's dev/prod follow-up). When present,
+ * field the plugin emits — ADR-0023). When present,
  * this reader composes the inventory from the test doc (the superset) plus
  * any default-doc component whose purl the test doc dropped — a mediation
  * residual, never a hand-rebuilt document — and derives `prodPurlSet` from
@@ -150,7 +150,7 @@ export interface MavenCollectResult extends CollectorSbomFile {
    * CollectedSbom.prodPurlSet by the registry; merge.ts then derives
    * occurrence dev = not in this set (the yarn dual-run / poetry precedent).
    * Absent when only maven.sbom.json exists — every component classifies
-   * prod, byte-identical to the pre-follow-up reader.
+   * prod and the committed bytes pass through unchanged.
    */
   prodPurlSet?: ReadonlySet<string>;
 }
@@ -213,7 +213,7 @@ function readAndNarrowMavenSbom(
 /**
  * Compose the dual-document inventory: the test doc's own components PLUS
  * any default-doc component whose purl is absent from the test doc's purl
- * set (the mediation residual, Q2 — guarantees a version Maven mediated
+ * set (the mediation residual — guarantees a version Maven mediated
  * differently between the two builds is never silently dropped). Every
  * other envelope field is taken from the test doc; every surviving
  * component, from either source, passes through completely untouched. A
@@ -253,7 +253,7 @@ function composeMavenInventory(
  * Read a target's maven.sbom.json (no subprocess, no cwd change) and emit
  * the inventory the merge consumes. When no maven.test.sbom.json sidecar
  * sits beside it, the committed bytes are copied VERBATIM (never
- * re-serialized) — byte-identical to the pre-follow-up reader. When a test
+ * re-serialized). When a test
  * doc IS present, the two are composed (see {@link composeMavenInventory})
  * and `prodPurlSet` is derived from the default doc's own purls, both
  * carried on the returned {@link MavenCollectResult}.
