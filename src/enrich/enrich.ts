@@ -5,9 +5,10 @@
  * findingFromClaims' emptiness/any-unresolvable test) and, in GENERATE mode,
  * fetches each from its ecosystem registry (PyPI JSON for `pkg:pypi`, the npm
  * packument for `pkg:npm`, the NuGet registration leaf → catalogEntry pair for
- * `pkg:nuget`), resolves a RAW license string via the per-ecosystem
- * resolvers, appends a `source:"registry"` LicenseClaim, and records the result
- * in the committed cache — a positive entry with the raw, OR a negative entry
+ * `pkg:nuget`, the deps.dev v3 version lookup for `pkg:maven`), resolves a RAW
+ * license string (or, for maven, one-or-more) via the per-ecosystem resolvers,
+ * appends `source:"registry"` LicenseClaim(s), and records the result in the
+ * committed cache — a positive entry with the raw(s), OR a negative entry
  * ONLY on a clean 200-empty answer (the resolver returned null on a successful
  * fetch). A fetch FAILURE propagates loudly and writes NO entry, so a transient
  * outage can never become a false negative (Pitfall 1).
@@ -50,6 +51,7 @@ import {
   githubRepoFor,
   resolveGithubLicense,
 } from "./github";
+import { depsDevVersionUrl, resolveMavenLicenses } from "./maven";
 import { resolveNpmLicense } from "./npm";
 import {
   catalogEntryUrlOf,
@@ -170,18 +172,26 @@ export function resolveFromDocument(
 }
 
 /**
- * Append a cache-sourced claim to a package via spread (input never mutated).
- * `source` flows from the caller — a registry resolution appends "registry",
- * a cache hit appends whatever provenance the entry carries (replay is
- * exact in every mode, never hardcoded).
+ * Append one or more cache-sourced claims to a package via spread (input
+ * never mutated). `source` flows from the caller — a registry resolution
+ * appends "registry", a cache hit appends whatever provenance the entry
+ * carries (replay is exact in every mode, never hardcoded). `raw` is USUALLY
+ * a single string; the maven/deps.dev arm can pass several DISTINCT raws from
+ * one multi-entry `licenses[]` answer — each becomes its own claim, never a
+ * synthesized compound (17-04).
  */
 export function withCacheClaim(
   entry: PackageEntry,
-  raw: string,
+  raw: string | ReadonlyArray<string>,
   source: LicenseClaimSource,
 ): PackageEntry {
-  const claim: LicenseClaim = { raw, kind: "expression", source };
-  return { ...entry, licenseClaims: [...entry.licenseClaims, claim] };
+  const raws = Array.isArray(raw) ? raw : [raw];
+  const claims: LicenseClaim[] = raws.map((r) => ({
+    raw: r,
+    kind: "expression",
+    source,
+  }));
+  return { ...entry, licenseClaims: [...entry.licenseClaims, ...claims] };
 }
 
 /**
@@ -246,7 +256,8 @@ export async function enrichUnknowns(
       parsed.type !== "pypi" &&
       parsed.type !== "npm" &&
       parsed.type !== "terraform" &&
-      parsed.type !== "nuget"
+      parsed.type !== "nuget" &&
+      parsed.type !== "maven"
     ) {
       return;
     }
@@ -329,11 +340,13 @@ async function fetchMisses(
   );
   const terraformMisses = misses.filter((m) => m.parsed.type === "terraform");
   const nugetMisses = misses.filter((m) => m.parsed.type === "nuget");
+  const mavenMisses = misses.filter((m) => m.parsed.type === "maven");
 
   await Promise.all([
     fetchRegistryMisses(registryMisses, packages, cache, fetchOpts),
     fetchTerraformMisses(terraformMisses, packages, cache, fetchOpts, opts),
     fetchNugetMisses(nugetMisses, packages, cache, fetchOpts),
+    fetchMavenMisses(mavenMisses, packages, cache, fetchOpts),
   ]);
 }
 
@@ -477,6 +490,52 @@ async function fetchNugetMisses(
     putEntry(cache, miss.entry.purl, {
       license: resolved.raw,
       fetchedFrom: "nuget",
+      via: resolved.via,
+      resolvable: true,
+    });
+  });
+}
+
+/**
+ * The deps.dev path: ONE fetch per miss (fixed host, GAV path, qualifiers
+ * stripped) — the smallest honest fetcher in the existing npm/pypi/nuget
+ * shape. A clean 404 is DEFINITIVE (no registry presence, the nuget
+ * private-feed classification); a clean 200 whose `licenses` are ALL
+ * non-standard/empty is the SAME governed negative. A resolved answer may
+ * carry SEVERAL raw claims (never joined into a guessed compound). Every
+ * throw (429/5xx/network) propagates loudly out of mapLimit and writes
+ * NOTHING — negative-poison impossible, identical to every other arm.
+ */
+async function fetchMavenMisses(
+  misses: Unknown[],
+  packages: PackageEntry[],
+  cache: Map<string, CacheEntry>,
+  fetchOpts: { backoffBaseMs?: number },
+): Promise<void> {
+  await mapLimit(misses, FETCH_CONCURRENCY, async (miss): Promise<void> => {
+    const result = await fetchJsonOr404(
+      depsDevVersionUrl(miss.parsed.encodedName, miss.parsed.version),
+      fetchOpts,
+    );
+    if (result.status === 404) {
+      recordNegative(miss, cache, "deps-dev"); // no registry presence — definitive
+      return;
+    }
+    const resolved = resolveMavenLicenses(result.body);
+    if (resolved === null) {
+      recordNegative(miss, cache, "deps-dev"); // non-standard/empty — honest unknown
+      return;
+    }
+    const license =
+      resolved.raws.length === 1 ? resolved.raws[0]! : resolved.raws;
+    packages[miss.index] = withCacheClaim(
+      miss.entry,
+      resolved.raws,
+      "registry",
+    );
+    putEntry(cache, miss.entry.purl, {
+      license,
+      fetchedFrom: "deps-dev",
       via: resolved.via,
       resolvable: true,
     });

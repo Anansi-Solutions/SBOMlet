@@ -179,6 +179,30 @@ export function narrowNugetCatalogEntry(
   };
 }
 
+/** Tolerant deps.dev v3 version-lookup projection: the only field enrichment consumes. */
+export interface DepsDevVersion {
+  /** licenses — deps.dev's own license classification, zero or more entries. */
+  licenses?: string[];
+}
+
+const DepsDevVersionDocument = type({ "licenses?": "unknown" });
+
+/**
+ * Narrow a raw deps.dev v3 version-lookup response to {@link DepsDevVersion}.
+ * A non-object top-level value yields undefined; a missing or wrong-typed
+ * `licenses` coerces to absent, and non-string array entries are dropped
+ * (skip-don't-throw, ASVS V5) — the resolver simply sees an absent/shorter
+ * array and falls through its own empty-result handling.
+ */
+export function narrowDepsDevVersion(
+  value: unknown,
+): DepsDevVersion | undefined {
+  if (recordOf(value) === undefined) return undefined;
+  const parsed = DepsDevVersionDocument(value);
+  if (parsed instanceof type.errors) return undefined;
+  return { licenses: stringArrayOf(parsed.licenses) };
+}
+
 /** A string[] field: non-array → undefined, non-string entries dropped. */
 function stringArrayOf(value: unknown): string[] | undefined {
   if (!Array.isArray(value)) return undefined;

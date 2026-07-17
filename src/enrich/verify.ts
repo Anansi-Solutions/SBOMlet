@@ -28,6 +28,7 @@ import {
   resolveFromDocument,
   type ParsedPurl,
 } from "./enrich";
+import { depsDevVersionUrl, resolveMavenLicenses } from "./maven";
 import { readCache, type CacheEntry } from "./cache";
 import {
   fetchGithubLicense,
@@ -50,7 +51,13 @@ import {
 const VERIFY_CONCURRENCY = 8;
 
 /** The purl types the cache can hold and this audit can re-resolve. */
-const VERIFIABLE_TYPES = new Set(["pypi", "npm", "terraform", "nuget"]);
+const VERIFIABLE_TYPES = new Set([
+  "pypi",
+  "npm",
+  "terraform",
+  "nuget",
+  "maven",
+]);
 
 export interface VerifyOptions {
   /** Committed cache path (base-dir-resolved by the caller). */
@@ -64,9 +71,9 @@ export interface VerifyOptions {
 export interface CacheMismatch {
   purl: string;
   /** The committed raw license (null = a committed negative entry). */
-  cached: string | null;
+  cached: string | ReadonlyArray<string> | null;
   /** The registry's current raw license (null = no license / not found). */
-  current: string | null;
+  current: string | ReadonlyArray<string> | null;
   /** A short, human reason for the divergence. */
   reason: string;
 }
@@ -92,7 +99,7 @@ async function currentRegistryLicense(
   parsed: ParsedPurl,
   fetchDoc: FetchDoc,
   fetchOpts: { backoffBaseMs?: number },
-): Promise<string | null> {
+): Promise<string | ReadonlyArray<string> | null> {
   if (parsed.type === "pypi" || parsed.type === "npm") {
     const url =
       parsed.type === "pypi"
@@ -102,6 +109,7 @@ async function currentRegistryLicense(
     return resolved === null ? null : resolved.raw;
   }
   if (parsed.type === "nuget") return currentNugetLicense(parsed, fetchOpts);
+  if (parsed.type === "maven") return currentMavenLicense(parsed, fetchOpts);
   // terraform → GitHub License API at the version tag (same ordered-ref walk as
   // generate: v<version> then <version>; first resolvable wins, 404 advances).
   const repo = githubRepoFor(parsed);
@@ -145,8 +153,49 @@ async function currentNugetLicense(
   return resolved === null ? null : resolved.raw;
 }
 
+/**
+ * The deps.dev re-resolution: ONE fetch (no two-step hop) using the SAME
+ * fixed-host URL builder and honest-sentinel resolver `generate` uses
+ * (maven.ts). A clean 404 and an all-non-standard/empty answer both map to
+ * null — the definitive no-answer — while a transient failure throws (loud).
+ */
+async function currentMavenLicense(
+  parsed: ParsedPurl,
+  fetchOpts: { backoffBaseMs?: number },
+): Promise<string | ReadonlyArray<string> | null> {
+  const result = await fetchJsonOr404(
+    depsDevVersionUrl(parsed.encodedName, parsed.version),
+    fetchOpts,
+  );
+  if (result.status === 404) return null;
+  const resolved = resolveMavenLicenses(result.body);
+  if (resolved === null) return null;
+  return resolved.raws.length === 1 ? resolved.raws[0]! : resolved.raws;
+}
+
+/**
+ * Order/shape-independent equality for a cache-license value: a plain string
+ * and a single-element array of the same string compare equal, and two
+ * arrays compare equal regardless of entry order (deps.dev's `licenses[]`
+ * carries no ordering guarantee). Both null → equal (no divergence).
+ */
+function licenseValuesEqual(
+  a: string | ReadonlyArray<string> | null,
+  b: string | ReadonlyArray<string> | null,
+): boolean {
+  const arrA = a === null ? [] : Array.isArray(a) ? a : [a];
+  const arrB = b === null ? [] : Array.isArray(b) ? b : [b];
+  if (arrA.length !== arrB.length) return false;
+  const sortedA = [...arrA].sort(compareCodeUnits);
+  const sortedB = [...arrB].sort(compareCodeUnits);
+  return sortedA.every((value, index) => value === sortedB[index]);
+}
+
 /** Describe a divergence between the committed value and the registry's answer. */
-function reasonFor(cached: string | null, current: string | null): string {
+function reasonFor(
+  cached: string | ReadonlyArray<string> | null,
+  current: string | ReadonlyArray<string> | null,
+): string {
   if (cached !== null && current === null) {
     return "committed a license; the registry now resolves none (yanked, retagged, or fabricated)";
   }
@@ -178,7 +227,7 @@ async function auditEntry(
     };
   }
   const current = await currentRegistryLicense(parsed, fetchDoc, fetchOpts);
-  if (entry.license === current) return null;
+  if (licenseValuesEqual(entry.license, current)) return null;
   return {
     purl,
     cached: entry.license,

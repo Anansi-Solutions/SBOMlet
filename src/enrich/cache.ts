@@ -31,24 +31,29 @@ const CACHE_VERSION = 1;
 /**
  * One cached resolution, keyed by purl. `license` is the RAW string (resolution
  * to SPDX happens downstream via normalizeRaw), or null for a negative entry.
- * Every entry is produced by a PyPI/npm/GitHub/NuGet lookup — this is the
- * registry enrichment lane and the only lane this file serves. `fetchedFrom`
- * records which registry answered; `via` records which resolver layer won
- * (audit/debug); `resolvable:false` marks a negative entry that must never be
- * re-fetched.
+ * A READONLY ARRAY is the ONE exception: deps.dev's maven arm can answer a
+ * single GAV with SEVERAL distinct license entries in one fetch, and each
+ * stays a SEPARATE raw claim rather than being joined into a synthesized
+ * compound expression it never asserted (17-04) — a single-entry answer
+ * still stores the plain string, so every other ecosystem's committed bytes
+ * are unaffected. Every entry is produced by a PyPI/npm/GitHub/NuGet/deps.dev
+ * lookup — this is the registry enrichment lane and the only lane this file
+ * serves. `fetchedFrom` records which registry answered; `via` records which
+ * resolver layer won (audit/debug); `resolvable:false` marks a negative
+ * entry that must never be re-fetched.
  *
  * `fetchedAt` is an OPTIONAL ISO timestamp stamped (via an injectable clock)
  * ONLY on a NEW `fetchedFrom:"github"` entry on first resolve — it is the
  * audit record for the version-tag license read. It is NEVER written for
  * pypi/npm entries (no backfill, no churn of the existing entries), NEVER for
- * nuget entries (registration/catalog blobs are stable versioned CDN content
- * like the pypi/npm documents — zero churn on warm generates), and NEVER
- * rewritten on a cache hit, so a warm double-generate is byte-identical. It
- * lives ONLY here — never in any output (the determinism control).
+ * nuget/deps-dev entries (their documents are stable versioned CDN/registry
+ * content like the pypi/npm documents — zero churn on warm generates), and
+ * NEVER rewritten on a cache hit, so a warm double-generate is byte-identical.
+ * It lives ONLY here — never in any output (the determinism control).
  */
 export interface CacheEntry {
-  license: string | null;
-  fetchedFrom: "pypi" | "npm" | "github" | "nuget";
+  license: string | ReadonlyArray<string> | null;
+  fetchedFrom: "pypi" | "npm" | "github" | "nuget" | "deps-dev";
   via: string;
   resolvable: boolean;
   /** ISO timestamp on NEW github entries only (injectable-clock-stamped). */
