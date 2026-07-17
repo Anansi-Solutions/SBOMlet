@@ -15,7 +15,7 @@ in [data-flow](data-flow.md), and the reasoning behind the design in
 ## What the tool does
 
 It produces a complete, legally compliant license inventory for any repository,
-across JS/TS, Python, .NET, Terraform/OpenTofu, and the packages inside a
+across JS/TS, Python, .NET, Maven, Terraform/OpenTofu, and the packages inside a
 project's Docker images — their full contents, the OS layer and the
 application packages layered on top — and it fails CI when a dependency
 violates a [policy](../glossary.md#policy-lanes).
@@ -158,21 +158,23 @@ Source: `src/gate/check.ts`, `src/cli.ts`.
 Discovery walks `--repo-root` with a hand-rolled `node:fs` traversal, adding no
 new dependency, looking for the lockfiles it knows: `yarn.lock`,
 `package-lock.json`, `pnpm-lock.yaml`, `bun.lock`, `poetry.lock`, `uv.lock`,
-`packages.lock.json`, and `.terraform.lock.hcl`. It skips `node_modules`,
-`.git`, every leading-dot directory (which covers `.terraform`, `.yarn`,
-`.cache`), and the tool's own directory. Symlinks report as
-non-directories on the way in, so they are never followed.
+`packages.lock.json`, `maven.sbom.json`, and `.terraform.lock.hcl`. It skips
+`node_modules`, `.git`, every leading-dot directory (which covers
+`.terraform`, `.yarn`, `.cache`), and the tool's own directory. Symlinks
+report as non-directories on the way in, so they are never followed.
 
 A [target](../glossary.md#target)'s identity is its forward-slash, repo-relative
 directory path, and results sort by `(identity, lockfile)` using the single
-tool-wide string comparator. Three pure post-steps run over the sorted output.
+tool-wide string comparator. Four pure post-steps run over the sorted output.
 When several JS lockfiles share a directory, they collapse to one target by the
 precedence `bun > pnpm > yarn > npm`, with a warning. A leftover binary
 `bun.lockb` with no surviving `bun.lock` warns you to migrate. A directory with
 a `.csproj` but no committed `packages.lock.json` is not a target; one
 aggregated warning names every such directory and the lockfile opt-in recipe
-(`--verbose` expands it per directory). Discovery itself writes no stderr;
-the warnings come back as data, and the pipeline prints them.
+(`--verbose` expands it per directory). A directory with a `pom.xml` but no
+committed `maven.sbom.json` gets the same aggregated-warning treatment,
+naming the `cyclonedx-maven-plugin` adoption recipe instead. Discovery itself
+writes no stderr; the warnings come back as data, and the pipeline prints them.
 
 A Yarn-4 target whose lockfile declares workspace members expands into one scan
 unit per workspace inside the collect loop, after discovery: the workspace paths
@@ -204,6 +206,7 @@ per-target loop owns that line.
 | `poetry` | `poetryCollector` | cdxgen `-t python`, plus `poetry.lock` for scope |
 | `uv` | `cdxgenCollector("uv")` | cdxgen `-t python` |
 | `nuget` | `nugetCollector` | in-process `packages.lock.json` parser ([ADR-0022](adr/0022-dotnet-lockfile-in-process.md)) |
+| `maven` | `mavenCollector` | in-process `maven.sbom.json` reader ([ADR-0023](adr/0023-maven-committed-sidecar.md)) |
 | `terraform` | `terraformCollector` | in-process lock + `modules.json` parser |
 
 A few collectors have behaviour worth knowing before you change them.
@@ -231,18 +234,29 @@ directory and never travels past it. The poetry lane departs from this:
 lock's own `groups` arrays into the production purl set, threaded in the same way
 as the Yarn dual-run path.
 
-bun, NuGet, and Terraform take no subprocess at all. No upstream tool preserves
-`bun.lock` identity, reads `packages.lock.json` without side effects or data
-loss ([ADR-0022](adr/0022-dotnet-lockfile-in-process.md)), or resolves
-Terraform licenses, so all three are in-process parsers, and all ignore the
-timeout budget. The Terraform collector has its own section below.
+bun, NuGet, Maven, and Terraform take no subprocess at all. No upstream tool
+preserves `bun.lock` identity, reads `packages.lock.json` without side effects
+or data loss ([ADR-0022](adr/0022-dotnet-lockfile-in-process.md)), resolves a
+Maven closure without running Maven itself, or resolves Terraform licenses, so
+all four are in-process parsers, and all ignore the timeout budget. Maven's
+input is different from the other three: `maven.sbom.json` is not a lockfile
+someone hand-wrote, but a committed CycloneDX document the consumer's own CI
+produces by running the pinned `cyclonedx-maven-plugin`
+([ADR-0023](adr/0023-maven-committed-sidecar.md)) — the collector validates
+its shape and copies the bytes through unchanged, rather than re-deriving
+anything the plugin already resolved. A sibling module referenced inside a
+dependent module's own document is excluded by an exact-purl match against
+every discovered module's own root purl, gathered in a pipeline pre-pass
+before any module is collected (`pipeline/targets.ts`) — cross-target
+knowledge the registry-level collector itself does not have. The Terraform
+collector has its own section below.
 
 [Dependency provenance](../glossary.md#dependency-provenance), the "Why" a
 package is present, is collected here for the lanes that can supply it. The
 Yarn-4 plugin lane derives it from the BOM's root-anchored dependency graph; the
 poetry lane derives it from `poetry.lock` and `pyproject.toml`. The npm, pnpm,
-bun, uv, NuGet, and Terraform lanes leave provenance absent, and the render
-layer shows an honest `—`.
+bun, uv, NuGet, Maven, and Terraform lanes leave provenance absent, and the
+render layer shows an honest `—`.
 
 Each collector returns a `CollectedSbom`: the parsed CycloneDX document (treated
 as an untrusted shape), the target identity, and optionally a production purl

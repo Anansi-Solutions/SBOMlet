@@ -220,10 +220,10 @@ that doesn't exist, or a real license quietly recorded as no-license — would p
 the gate unnoticed. `verify-cache` is the audit that closes that gap.
 
 It re-resolves every committed cache entry against its registry — npm, PyPI,
-the NuGet registration API, or the GitHub License API for Terraform
-providers — with the same logic `generate` uses, and compares each answer to
-the stored license. A divergence is either tampering or a genuine upstream
-license change; either way it wants a person's eyes before you ship.
+the NuGet registration API, deps.dev for Maven, or the GitHub License API for
+Terraform providers — with the same logic `generate` uses, and compares each
+answer to the stored license. A divergence is either tampering or a genuine
+upstream license change; either way it wants a person's eyes before you ship.
 
 ```sh
 task sbomlet:verify:cache
@@ -347,6 +347,42 @@ unresolved conflict should not pass.
 
 `--intensive` is generate-only; passing it to `check` is a config error, because
 the gate never scans anything.
+
+## Maven: regenerate the committed sidecar in your own CI
+
+Maven is the one lane where the tool reads an artifact it never generates.
+Same as the Docker scan below, this is a step alongside `task sbomlet:check`,
+not a replacement for it — `generate` and `check` only ever read the
+committed `maven.sbom.json` each module carries; neither one invokes Maven.
+
+Run the pinned, ecosystem-standard `cyclonedx-maven-plugin` once at your
+reactor root; its `makeBom` goal runs per module automatically:
+
+```sh
+./mvnw org.cyclonedx:cyclonedx-maven-plugin:2.9.2:makeBom -DoutputFormat=json -DoutputDirectory=. -DoutputName=maven.sbom -Dproject.build.outputTimestamp=2020-01-01T00:00:00Z
+```
+
+Commit every module's `maven.sbom.json`, then guard against a stale one the
+same way you'd guard any other committed input — regenerate and fail the
+build when the result differs from what's committed:
+
+```yaml
+# a step in your own build workflow, ahead of the SBOMlet gate
+- run: ./mvnw org.cyclonedx:cyclonedx-maven-plugin:2.9.2:makeBom -DoutputFormat=json -DoutputDirectory=. -DoutputName=maven.sbom -Dproject.build.outputTimestamp=2020-01-01T00:00:00Z
+- run: git diff --exit-code -- '**/maven.sbom.json'
+```
+
+A reactor regenerates every module's sidecar in the same run, so a module you
+bump always leaves a matching sibling behind — the guard step above exists so
+that never has to be caught downstream. If a sidecar ever does go stale
+anyway, it fails safe rather than silently: the bumped module's new version
+no longer matches what its siblings recorded as its identity, so the stale
+reference surfaces as an ordinary third-party component in the inventory
+instead of being excluded.
+
+`makeAggregateBom`, the plugin's other goal, is deliberately not the recipe
+here: it merges the whole reactor into one file and loses the per-module
+attribution the inventory needs.
 
 ## The Docker scan is a separate step from the gate
 
