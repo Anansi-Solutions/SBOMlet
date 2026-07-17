@@ -5,6 +5,7 @@ import { describe, expect, test } from "bun:test";
 
 import {
   firstPartyNames,
+  mavenThirdPartyEntryCount,
   npmFirstPartyNames,
   npmThirdPartyEntryCount,
   nugetThirdPartyEntryCount,
@@ -857,5 +858,115 @@ describe("yarnWorkspaceMembers — a workspaces-monorepo fixture (workspace-berr
       { name: "backend", relPath: "backend", hasDependencies: true },
       { name: "frontend", relPath: "frontend", hasDependencies: true },
     ]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// mavenThirdPartyEntryCount — the maven counterpart of nugetThirdPartyEntryCount
+// (17-02, P-07): shares src/validate/mavenSbom.ts's narrow with the
+// collector, so the two can never disagree about what parses.
+// ---------------------------------------------------------------------------
+
+const MAVEN_MODULE_SBOM = JSON.stringify({
+  bomFormat: "CycloneDX",
+  metadata: {
+    component: {
+      purl: "pkg:maven/com.example.fixture/appb@1.0.0?type=jar",
+    },
+  },
+  components: [
+    { purl: "pkg:maven/com.example.fixture/liba@1.0.0?type=jar" },
+    { purl: "pkg:maven/com.example.fixture/commons-lang3@3.12.0?type=jar" },
+    { purl: "pkg:maven/com.example.fixture/gson@2.10.1?type=jar" },
+  ],
+});
+
+const MAVEN_AGGREGATOR_SBOM = JSON.stringify({
+  bomFormat: "CycloneDX",
+  metadata: {
+    component: {
+      purl: "pkg:maven/com.example.fixture/reactor-parent@1.0.0?type=pom",
+    },
+  },
+  components: [],
+});
+
+describe("mavenThirdPartyEntryCount — components count excluding the doc's own root purl", () => {
+  test("counts all components when none match the root purl", () => {
+    expect(mavenThirdPartyEntryCount(MAVEN_MODULE_SBOM)).toBe(3);
+  });
+
+  test("the aggregator pom's zero-components doc counts 0 (the warn+skip branch)", () => {
+    expect(mavenThirdPartyEntryCount(MAVEN_AGGREGATOR_SBOM)).toBe(0);
+  });
+
+  test("excludes a component purl that duplicates the doc's own root purl", () => {
+    const doc = JSON.stringify({
+      bomFormat: "CycloneDX",
+      metadata: {
+        component: {
+          purl: "pkg:maven/com.example.fixture/liba@1.0.0?type=jar",
+        },
+      },
+      components: [
+        { purl: "pkg:maven/com.example.fixture/liba@1.0.0?type=jar" },
+        {
+          purl: "pkg:maven/com.example.fixture/commons-lang3@3.12.0?type=jar",
+        },
+      ],
+    });
+    expect(mavenThirdPartyEntryCount(doc)).toBe(1);
+  });
+
+  test("cross-target siblings are NOT subtracted here (no set exists in the pure counter) — they count as third-party", () => {
+    // liba appears as a plain component (the sibling leak) with no marker
+    // distinguishing it — the pure per-doc counter has no cross-target
+    // knowledge, so it counts toward the total, erring toward the scan.
+    expect(mavenThirdPartyEntryCount(MAVEN_MODULE_SBOM)).toBe(3);
+  });
+
+  test("garbage text -> undefined, never throws", () => {
+    expect(mavenThirdPartyEntryCount("not json at all }{")).toBeUndefined();
+    expect(mavenThirdPartyEntryCount("")).toBeUndefined();
+    expect(mavenThirdPartyEntryCount('"just a string"')).toBeUndefined();
+  });
+
+  test("valid JSON that is not CycloneDX -> undefined", () => {
+    expect(
+      mavenThirdPartyEntryCount(
+        JSON.stringify({ notes: "unrelated", components: [] }),
+      ),
+    ).toBeUndefined();
+  });
+
+  test("a wrong-ecosystem root purl -> undefined (the collector throws on this; never a positively-determined zero)", () => {
+    const doc = JSON.stringify({
+      bomFormat: "CycloneDX",
+      metadata: { component: { purl: "pkg:npm/not-maven-at-all@1.0.0" } },
+      components: [],
+    });
+    expect(mavenThirdPartyEntryCount(doc)).toBeUndefined();
+  });
+
+  test("missing components entirely -> undefined (a doc that proves nothing is unknown, not zero)", () => {
+    const doc = JSON.stringify({
+      bomFormat: "CycloneDX",
+      metadata: {
+        component: {
+          purl: "pkg:maven/com.example.fixture/liba@1.0.0?type=jar",
+        },
+      },
+    });
+    expect(mavenThirdPartyEntryCount(doc)).toBeUndefined();
+  });
+
+  test("missing metadata.component.purl entirely -> undefined", () => {
+    const doc = JSON.stringify({ bomFormat: "CycloneDX", components: [] });
+    expect(mavenThirdPartyEntryCount(doc)).toBeUndefined();
+  });
+
+  test("counter/collector agreement: a doc missing bomFormat is never a positively-determined zero (15-05 finding class)", () => {
+    const doc = JSON.stringify({ components: [] });
+    expect(mavenThirdPartyEntryCount(doc)).toBeUndefined();
   });
 });

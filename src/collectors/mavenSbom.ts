@@ -50,6 +50,7 @@ import { join } from "node:path";
 import { type } from "arktype";
 
 import { MavenSbomDocument } from "../validate/mavenSbom";
+import { recordOf } from "../validate/record";
 import { computeCacheKey, type CollectorSbomFile } from "./cdxgen";
 import { manifestFilesFor } from "./dispatch";
 import type { Target } from "../targets/target";
@@ -202,4 +203,66 @@ export async function collectWithMavenSbom(
     ),
     tool: MAVEN_COLLECTOR_TOOL,
   };
+}
+
+/**
+ * Extract a maven.sbom.json sidecar's own root purl (metadata.component.purl)
+ * without validating anything else about the document — the pre-pass primitive
+ * behind the reactor first-party purl set (17-RESEARCH §6). Only the pipeline
+ * sees every discovered target, so cross-target sibling knowledge is gathered
+ * HERE, before any target is collected, and threaded into
+ * {@link excludeMavenFirstParty} at the post-collect step.
+ *
+ * Tolerant by design: garbage, non-JSON, non-CycloneDX, and purl-less text all
+ * yield undefined rather than throwing. The pre-pass must never abort the
+ * whole run over one target's bad sidecar — that target's OWN collect call
+ * fails loud later, on its own turn, via collectWithMavenSbom's ladder.
+ *
+ * @returns The root purl, or undefined when the text cannot be read as a
+ * CycloneDX document with one.
+ */
+export function mavenRootPurlOf(text: string): string | undefined {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    return undefined;
+  }
+  const narrowed = MavenSbomDocument(parsed);
+  if (narrowed instanceof type.errors) return undefined;
+  if (narrowed.bomFormat !== "CycloneDX") return undefined;
+  return narrowed.metadata?.component?.purl;
+}
+
+/**
+ * Filter a maven.sbom.json document's components by an exact-purl-match
+ * first-party set, returning a NEW document — the input is never mutated.
+ * Purl-string equality is the only comparison: both sides come from the same
+ * cyclonedx-maven-plugin producer with the same `?type=jar` qualifier shape,
+ * so a version-qualified exact match is safe (17-RESEARCH §6).
+ *
+ * A STALE sibling reference (the module bumped its version, the sibling's
+ * sidecar was not regenerated) deliberately does NOT match — it surfaces as
+ * an ordinary third-party component instead of silently vanishing, the
+ * loud direction a mismatched exclusion should take (Pitfall 8).
+ *
+ * Every field other than `components` — and every field of a surviving
+ * component — passes through completely untouched. A document this function
+ * cannot recognize as a record with a components array is returned as-is:
+ * the collector's own loud ladder owns malformed-sidecar failures, not this
+ * pure filter.
+ */
+export function excludeMavenFirstParty(
+  sbom: unknown,
+  purls: ReadonlySet<string>,
+): unknown {
+  const doc = recordOf(sbom);
+  if (doc === undefined) return sbom;
+  const components = doc["components"];
+  if (!Array.isArray(components)) return sbom;
+  const filtered = components.filter((component) => {
+    const purl = recordOf(component)?.["purl"];
+    return typeof purl !== "string" || !purls.has(purl);
+  });
+  return { ...doc, components: filtered };
 }

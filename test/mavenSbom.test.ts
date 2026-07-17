@@ -20,7 +20,9 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { computeCacheKey } from "../src/collectors/cdxgen";
 import {
   collectWithMavenSbom,
+  excludeMavenFirstParty,
   MAVEN_COLLECTOR_TOOL,
+  mavenRootPurlOf,
 } from "../src/collectors/mavenSbom";
 import { collectors } from "../src/collectors/registry";
 import type { Target } from "../src/targets/target";
@@ -126,6 +128,96 @@ const WRONG_ROOT_PURL_SBOM = `{
   "metadata": {
     "component": {
       "purl": "pkg:npm/not-maven-at-all@1.0.0"
+    }
+  },
+  "components": []
+}
+`;
+
+/**
+ * Reactor fixture pair (17-RESEARCH §6, synthetic GAVs per P-08): a
+ * 2-module reactor whose dependent module (appb) carries its sibling
+ * (liba) as a PLAIN component — no marker distinguishes it from a real
+ * third-party dependency, which is exactly the leak excludeMavenFirstParty
+ * exists to close. liba's transitive (commons-lang3) and appb's own
+ * dependency (gson) are ordinary third-party and must survive the filter.
+ */
+const MODULE_A_SBOM = `{
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.6",
+  "metadata": {
+    "component": {
+      "type": "library",
+      "group": "com.example.fixture",
+      "name": "liba",
+      "version": "1.0.0",
+      "purl": "pkg:maven/com.example.fixture/liba@1.0.0?type=jar"
+    }
+  },
+  "components": [
+    {
+      "type": "library",
+      "group": "com.example.fixture",
+      "name": "commons-lang3",
+      "version": "3.12.0",
+      "purl": "pkg:maven/com.example.fixture/commons-lang3@3.12.0?type=jar",
+      "licenses": [{"license": {"id": "Apache-2.0"}}]
+    }
+  ]
+}
+`;
+
+const MODULE_B_SBOM = `{
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.6",
+  "metadata": {
+    "component": {
+      "type": "library",
+      "group": "com.example.fixture",
+      "name": "appb",
+      "version": "1.0.0",
+      "purl": "pkg:maven/com.example.fixture/appb@1.0.0?type=jar"
+    }
+  },
+  "components": [
+    {
+      "type": "library",
+      "group": "com.example.fixture",
+      "name": "liba",
+      "version": "1.0.0",
+      "purl": "pkg:maven/com.example.fixture/liba@1.0.0?type=jar"
+    },
+    {
+      "type": "library",
+      "group": "com.example.fixture",
+      "name": "commons-lang3",
+      "version": "3.12.0",
+      "purl": "pkg:maven/com.example.fixture/commons-lang3@3.12.0?type=jar",
+      "licenses": [{"license": {"id": "Apache-2.0"}}]
+    },
+    {
+      "type": "library",
+      "group": "com.example.fixture",
+      "name": "gson",
+      "version": "2.10.1",
+      "purl": "pkg:maven/com.example.fixture/gson@2.10.1?type=jar",
+      "licenses": [{"license": {"id": "Apache-2.0"}}]
+    }
+  ]
+}
+`;
+
+/** The reactor aggregator pom's own sidecar: zero components, root type=pom. */
+const AGGREGATOR_SBOM = `{
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.6",
+  "metadata": {
+    "component": {
+      "type": "application",
+      "group": "com.example.fixture",
+      "name": "reactor-parent",
+      "version": "1.0.0",
+      "purl": "pkg:maven/com.example.fixture/reactor-parent@1.0.0?type=pom"
     }
   },
   "components": []
@@ -428,5 +520,133 @@ describe("collectWithMavenSbom — failure modes", () => {
       expect(message).toContain("pkg:maven/"); // expected
       expect(message).toContain(join(target.dir, "maven.sbom.json"));
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// mavenRootPurlOf — the cross-target pre-pass primitive (17-02, P-07)
+// ---------------------------------------------------------------------------
+
+describe("mavenRootPurlOf — pre-pass root purl extraction", () => {
+  test("returns metadata.component.purl for a valid sidecar", () => {
+    expect(mavenRootPurlOf(MODULE_A_SBOM)).toBe(
+      "pkg:maven/com.example.fixture/liba@1.0.0?type=jar",
+    );
+  });
+
+  test("returns the aggregator pom's own root purl even with zero components", () => {
+    expect(mavenRootPurlOf(AGGREGATOR_SBOM)).toBe(
+      "pkg:maven/com.example.fixture/reactor-parent@1.0.0?type=pom",
+    );
+  });
+
+  test("returns undefined for non-JSON garbage — never throws", () => {
+    expect(mavenRootPurlOf("this is not json {{{")).toBeUndefined();
+  });
+
+  test("returns undefined for valid JSON that is not CycloneDX", () => {
+    expect(mavenRootPurlOf(NON_CYCLONEDX_JSON)).toBeUndefined();
+  });
+
+  test("returns undefined when metadata.component.purl is missing", () => {
+    const noPurl = JSON.stringify({
+      bomFormat: "CycloneDX",
+      components: [],
+      metadata: { component: { name: "no-purl-here" } },
+    });
+    expect(mavenRootPurlOf(noPurl)).toBeUndefined();
+  });
+
+  test("returns undefined when metadata itself is absent", () => {
+    const noMetadata = JSON.stringify({
+      bomFormat: "CycloneDX",
+      components: [],
+    });
+    expect(mavenRootPurlOf(noMetadata)).toBeUndefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// excludeMavenFirstParty — reactor sibling exclusion (17-02, P-07)
+// ---------------------------------------------------------------------------
+
+describe("excludeMavenFirstParty — reactor sibling exclusion", () => {
+  test("excludes an exact purl-string match; liba's transitive and appb's own dep remain", () => {
+    const purls = new Set([
+      "pkg:maven/com.example.fixture/liba@1.0.0?type=jar",
+    ]);
+    const filtered = excludeMavenFirstParty(
+      JSON.parse(MODULE_B_SBOM),
+      purls,
+    ) as { components: Array<Record<string, unknown>> };
+    expect(filtered.components.map((c) => c["purl"])).toEqual([
+      "pkg:maven/com.example.fixture/commons-lang3@3.12.0?type=jar",
+      "pkg:maven/com.example.fixture/gson@2.10.1?type=jar",
+    ]);
+  });
+
+  test("a STALE sibling reference (version bumped) is NOT excluded — the loud direction (Pitfall 8)", () => {
+    const purls = new Set([
+      "pkg:maven/com.example.fixture/liba@2.0.0?type=jar",
+    ]);
+    const filtered = excludeMavenFirstParty(
+      JSON.parse(MODULE_B_SBOM),
+      purls,
+    ) as { components: Array<Record<string, unknown>> };
+    expect(filtered.components.map((c) => c["purl"])).toEqual([
+      "pkg:maven/com.example.fixture/liba@1.0.0?type=jar",
+      "pkg:maven/com.example.fixture/commons-lang3@3.12.0?type=jar",
+      "pkg:maven/com.example.fixture/gson@2.10.1?type=jar",
+    ]);
+  });
+
+  test("an empty purl set deep-equals the input document", () => {
+    const doc = JSON.parse(MODULE_B_SBOM);
+    expect(excludeMavenFirstParty(doc, new Set())).toEqual(doc);
+  });
+
+  test("never mutates the input document", () => {
+    const doc = JSON.parse(MODULE_B_SBOM) as { components: unknown[] };
+    const originalLength = doc.components.length;
+    excludeMavenFirstParty(
+      doc,
+      new Set(["pkg:maven/com.example.fixture/liba@1.0.0?type=jar"]),
+    );
+    expect(doc.components.length).toBe(originalLength);
+  });
+
+  test("module A's own inventory is untouched (no sibling purl present)", () => {
+    const doc = JSON.parse(MODULE_A_SBOM);
+    const purls = new Set([
+      "pkg:maven/com.example.fixture/appb@1.0.0?type=jar",
+    ]);
+    expect(excludeMavenFirstParty(doc, purls)).toEqual(doc);
+  });
+
+  test("the aggregator pom's zero-component doc passes through with an empty array, never crashes", () => {
+    const doc = JSON.parse(AGGREGATOR_SBOM);
+    const purls = new Set([
+      "pkg:maven/com.example.fixture/liba@1.0.0?type=jar",
+    ]);
+    const filtered = excludeMavenFirstParty(doc, purls) as {
+      components: unknown[];
+    };
+    expect(filtered.components).toEqual([]);
+  });
+
+  test("order, claims, and extra fields pass through untouched for surviving components", () => {
+    const doc = JSON.parse(MODULE_B_SBOM);
+    const filtered = excludeMavenFirstParty(
+      doc,
+      new Set(["pkg:maven/com.example.fixture/liba@1.0.0?type=jar"]),
+    ) as { components: Array<Record<string, unknown>> };
+    expect(filtered.components[0]).toEqual({
+      type: "library",
+      group: "com.example.fixture",
+      name: "commons-lang3",
+      version: "3.12.0",
+      purl: "pkg:maven/com.example.fixture/commons-lang3@3.12.0?type=jar",
+      licenses: [{ license: { id: "Apache-2.0" } }],
+    });
   });
 });
