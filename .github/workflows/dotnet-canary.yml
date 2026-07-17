@@ -3,11 +3,13 @@ name: .NET lockfile canary
 # packages.lock.json is an SDK-written format that has moved before (format
 # version 1 -> 2). The scanner breaks fast on a shape it cannot read, but
 # only once such a lock reaches a scan -- so this canary probes ahead of
-# adopters: restore a throwaway project with the newest GA .NET SDK and run
-# the lockfile collector over the result, asserting the expected purls come
-# out. A format move turns this run red here before it reaches any adopter's
-# repository. Monthly plus manual dispatch -- SDK releases move on roughly
-# that cadence.
+# adopters: restore a throwaway project with the newest .NET SDK and run the
+# lockfile collector over the result, asserting the expected purls come out.
+# Two legs -- ga and preview -- each pinned to the newest build of that
+# quality; preview is the earlier warning of a format change, before it
+# reaches GA. A format move turns a leg red here before it reaches any
+# adopter's repository. Monthly plus manual dispatch -- SDK releases move on
+# roughly that cadence.
 on:
   schedule:
     - cron: "43 4 2 * *" # monthly; offset from the intensive-scan slot
@@ -17,6 +19,13 @@ jobs:
   canary:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    strategy:
+      # Both legs fail honestly -- no continue-on-error. The preview leg is
+      # the earlier warning of a format change; ga must not be skipped when
+      # it fires.
+      fail-fast: false
+      matrix:
+        quality: [ga, preview]
     permissions:
       contents: read
     steps:
@@ -29,17 +38,19 @@ jobs:
       - name: Set up the SBOMlet toolchain
         uses: jdx/mise-action@v4
 
-      - name: Set up the newest GA .NET SDK
-        # Floating feature version, GA quality only: a new SDK release changes
-        # what this canary exercises without a workflow edit. Bump the major
-        # when a new .NET generation goes GA. The SDK is deliberately NOT a
-        # mise.toml pin -- the probe's whole point is the newest SDK, and the
-        # exercised version lands in the run log ("probing with .NET SDK ...").
+      - name: Set up the newest .NET SDK (${{ matrix.quality }})
+        # `latest` dynamically resolves to the highest active SDK version;
+        # dotnet-quality narrows it to a GA or preview build. Deliberately
+        # NOT a mise.toml pin -- the probe's whole point is the newest SDK,
+        # and the exercised version lands in the run log ("probing with
+        # .NET SDK ...").
         uses: actions/setup-dotnet@v5
         with:
-          dotnet-version: 10.x
-          dotnet-quality: ga
+          dotnet-version: latest
+          dotnet-quality: ${{ matrix.quality }}
 
       - name: Restore a probe project and run the collector over its lockfile
         # Same command a maintainer runs locally (needs a .NET SDK on PATH).
         run: mise x -- task canary:dotnet
+        env:
+          DOTNET_CANARY_QUALITY: ${{ matrix.quality }}

@@ -146,7 +146,11 @@ if (sdkVersion === undefined) {
   );
   process.exit(2);
 }
-console.log(`probing with .NET SDK ${sdkVersion.stdout.trim()}`);
+const canaryQuality = process.env.DOTNET_CANARY_QUALITY?.trim();
+console.log(
+  `probing with .NET SDK ${sdkVersion.stdout.trim()}` +
+    (canaryQuality ? ` (${canaryQuality} leg)` : ""),
+);
 
 const scratch = mkdtempSync(join(tmpdir(), "dotnet-canary-"));
 try {
