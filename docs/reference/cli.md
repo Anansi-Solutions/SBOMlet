@@ -145,19 +145,25 @@ ordinary third-party component instead of silently vanishing.
 
 The lane's limits, stated plainly:
 
-- Test-scope dependencies are absent from the sidecar entirely — the
-  plugin's default `makeBom` goal excludes them, so they are not inventoried,
-  not merely hidden in a dev column. `includeTestScope=true` is not the way
-  to recover them: the flag makes every test dependency indistinguishable
-  from production in the sidecar, so all of them would gate as production
-  too. A future sidecar carrying both the default document and a
-  test-inclusive one is the documented way to add real dev/prod
-  classification for Maven; it is not built.
-- Every other Maven package gates as **production** — compile, runtime,
+- By default, test-scope dependencies are absent from the sidecar entirely —
+  the plugin's default `makeBom` goal excludes them, so they are not
+  inventoried, not merely hidden in a dev column. Committing a second,
+  test-inclusive sidecar, `maven.test.sbom.json` (built with
+  `-DincludeTestScope=true`), changes that: a component present only in the
+  test document classifies **dev**, and every component in the default
+  document still classifies production. The two documents' root purls must
+  match exactly, produced in the same build; a mismatched pair is refused
+  rather than composed. Folding `includeTestScope=true` into the single
+  default document instead is still not a recovery path — it makes every
+  test dependency indistinguishable from production, so all of it would gate
+  as production too. A module committing only the default document keeps
+  today's all-production behavior.
+- Every non-dev Maven package gates as **production** — compile, runtime,
   provided, and system scope alike — because the sidecar carries no
-  per-component scope to classify by. This is the safe direction: nothing,
-  including a `system`-scoped commercial jar, can hide in a dev scope it was
-  never assigned.
+  per-component Maven scope; only the separation between the two committed
+  documents classifies dev. This is the safe direction: nothing, including a
+  `system`-scoped commercial jar, can hide in a dev scope it was never
+  assigned.
 - [Dependency provenance](../glossary.md#dependency-provenance) is not
   available; the "Why" column shows `—`.
 - A package with no public record on Maven Central resolves as license

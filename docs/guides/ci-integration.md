@@ -352,8 +352,9 @@ the gate never scans anything.
 
 Maven is the one lane where the tool reads an artifact it never generates.
 Same as the Docker scan below, this is a step alongside `task sbomlet:check`,
-not a replacement for it — `generate` and `check` only ever read the
-committed `maven.sbom.json` each module carries; neither one invokes Maven.
+not a replacement for it — `generate` and `check` only ever read each
+module's committed `maven.sbom.json` (and `maven.test.sbom.json`, when a
+module carries one); neither one invokes Maven.
 
 Run the pinned, ecosystem-standard `cyclonedx-maven-plugin` once at your
 reactor root; its `makeBom` goal runs per module automatically:
@@ -383,6 +384,24 @@ instead of being excluded.
 `makeAggregateBom`, the plugin's other goal, is deliberately not the recipe
 here: it merges the whole reactor into one file and loses the per-module
 attribution the inventory needs.
+
+To also classify test-only dependencies as dev, add a second run in the same
+CI step with `-DincludeTestScope=true`, writing to `maven.test.sbom.json`,
+and extend the staleness guard to cover it too:
+
+```yaml
+# add alongside the default-document step above, still ahead of the gate
+- run: ./mvnw org.cyclonedx:cyclonedx-maven-plugin:2.9.2:makeBom -DoutputFormat=json -DoutputDirectory=. -DoutputName=maven.test.sbom -DincludeTestScope=true -Dproject.build.outputTimestamp=2020-01-01T00:00:00Z
+- run: git diff --exit-code -- '**/maven.sbom.json' '**/maven.test.sbom.json'
+```
+
+Run both invocations in the same build: the tool requires the two
+documents' root purls to match exactly and refuses a mismatched pair rather
+than composing it, so a test document that falls out of sync with its
+default sibling fails loudly instead of silently misclassifying dependencies.
+A module committing only `maven.sbom.json` keeps today's all-production
+behavior — the test-inclusive document is optional and additive, never
+required.
 
 ## The Docker scan is a separate step from the gate
 
