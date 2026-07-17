@@ -25,6 +25,7 @@ import {
   mavenRootPurlOf,
 } from "../src/collectors/mavenSbom";
 import { collectors } from "../src/collectors/registry";
+import { mergeSboms } from "../src/merge/merge";
 import type { Target } from "../src/targets/target";
 
 // ---------------------------------------------------------------------------
@@ -261,6 +262,7 @@ interface ScannedDoc {
   sbomPath: string;
   cacheKey: string;
   tool: { name: string; version: string };
+  prodPurlSet?: ReadonlySet<string>;
   raw: string;
   doc: Record<string, unknown>;
   components: Array<Record<string, unknown>>;
@@ -311,7 +313,7 @@ describe("MAVEN_COLLECTOR_TOOL", () => {
   test("identity the CLI prints as name@version", () => {
     expect(MAVEN_COLLECTOR_TOOL).toEqual({
       name: "maven-sbom-reader",
-      version: "1",
+      version: "2",
     });
   });
 });
@@ -648,5 +650,493 @@ describe("excludeMavenFirstParty — reactor sibling exclusion", () => {
       purl: "pkg:maven/com.example.fixture/commons-lang3@3.12.0?type=jar",
       licenses: [{ license: { id: "Apache-2.0" } }],
     });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Dual-document composed inventory + prodPurlSet (TS-02, D-02 dual-doc)
+// ---------------------------------------------------------------------------
+
+/** Clean-superset pair: the test doc is default-doc-plus-test-only-deps. */
+const CLEAN_SUPERSET_DEFAULT_SBOM = `{
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.6",
+  "metadata": {
+    "component": {
+      "type": "application",
+      "group": "com.example.dual",
+      "name": "app",
+      "version": "1.0.0",
+      "purl": "pkg:maven/com.example.dual/app@1.0.0?type=jar"
+    }
+  },
+  "components": [
+    {
+      "type": "library",
+      "group": "com.example.dual",
+      "name": "compile-lib",
+      "version": "1.0.0",
+      "purl": "pkg:maven/com.example.dual/compile-lib@1.0.0?type=jar",
+      "licenses": [{"license": {"id": "MIT"}}]
+    }
+  ]
+}
+`;
+
+const CLEAN_SUPERSET_TEST_SBOM = `{
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.6",
+  "metadata": {
+    "component": {
+      "type": "application",
+      "group": "com.example.dual",
+      "name": "app",
+      "version": "1.0.0",
+      "purl": "pkg:maven/com.example.dual/app@1.0.0?type=jar"
+    }
+  },
+  "components": [
+    {
+      "type": "library",
+      "group": "com.example.dual",
+      "name": "compile-lib",
+      "version": "1.0.0",
+      "purl": "pkg:maven/com.example.dual/compile-lib@1.0.0?type=jar",
+      "licenses": [{"license": {"id": "MIT"}}]
+    },
+    {
+      "type": "library",
+      "group": "com.example.dual",
+      "name": "test-only-lib",
+      "version": "1.0.0",
+      "purl": "pkg:maven/com.example.dual/test-only-lib@1.0.0?type=jar",
+      "licenses": [{"license": {"id": "EPL-2.0"}}]
+    }
+  ]
+}
+`;
+
+/**
+ * Mediation-shift pair (Q2): the SAME GA resolves to a DIFFERENT version in
+ * each build — the default (prod) build mediates to 2.0.0, the test build to
+ * 1.0.0. Neither purl may be dropped.
+ */
+const MEDIATION_DEFAULT_SBOM = `{
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.6",
+  "metadata": {
+    "component": {
+      "type": "application",
+      "group": "com.example.dual",
+      "name": "app",
+      "version": "1.0.0",
+      "purl": "pkg:maven/com.example.dual/app@1.0.0?type=jar"
+    }
+  },
+  "components": [
+    {
+      "type": "library",
+      "group": "com.example.dual",
+      "name": "mediated-lib",
+      "version": "2.0.0",
+      "purl": "pkg:maven/com.example.dual/mediated-lib@2.0.0?type=jar",
+      "licenses": [{"license": {"id": "BSD-3-Clause"}}]
+    }
+  ]
+}
+`;
+
+const MEDIATION_TEST_SBOM = `{
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.6",
+  "metadata": {
+    "component": {
+      "type": "application",
+      "group": "com.example.dual",
+      "name": "app",
+      "version": "1.0.0",
+      "purl": "pkg:maven/com.example.dual/app@1.0.0?type=jar"
+    }
+  },
+  "components": [
+    {
+      "type": "library",
+      "group": "com.example.dual",
+      "name": "mediated-lib",
+      "version": "1.0.0",
+      "purl": "pkg:maven/com.example.dual/mediated-lib@1.0.0?type=jar",
+      "licenses": [{"license": {"id": "BSD-3-Clause"}}]
+    }
+  ]
+}
+`;
+
+/** A package resolved to compile scope: identical purl in BOTH docs (Q2). */
+const DUAL_SCOPE_DEFAULT_SBOM = `{
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.6",
+  "metadata": {
+    "component": {
+      "type": "application",
+      "group": "com.example.dual",
+      "name": "app",
+      "version": "1.0.0",
+      "purl": "pkg:maven/com.example.dual/app@1.0.0?type=jar"
+    }
+  },
+  "components": [
+    {
+      "type": "library",
+      "group": "com.example.dual",
+      "name": "shared-scope-lib",
+      "version": "1.0.0",
+      "purl": "pkg:maven/com.example.dual/shared-scope-lib@1.0.0?type=jar",
+      "licenses": [{"license": {"id": "Apache-2.0"}}]
+    }
+  ]
+}
+`;
+
+const DUAL_SCOPE_TEST_SBOM = DUAL_SCOPE_DEFAULT_SBOM;
+
+/** Non-superset pair: a default component the test build's run entirely omits. */
+const NON_SUPERSET_DEFAULT_SBOM = `{
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.6",
+  "metadata": {
+    "component": {
+      "type": "application",
+      "group": "com.example.dual",
+      "name": "app",
+      "version": "1.0.0",
+      "purl": "pkg:maven/com.example.dual/app@1.0.0?type=jar"
+    }
+  },
+  "components": [
+    {
+      "type": "library",
+      "group": "com.example.dual",
+      "name": "system-lib",
+      "version": "1.0.0",
+      "purl": "pkg:maven/com.example.dual/system-lib@1.0.0?type=jar"
+    }
+  ]
+}
+`;
+
+const NON_SUPERSET_TEST_SBOM = `{
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.6",
+  "metadata": {
+    "component": {
+      "type": "application",
+      "group": "com.example.dual",
+      "name": "app",
+      "version": "1.0.0",
+      "purl": "pkg:maven/com.example.dual/app@1.0.0?type=jar"
+    }
+  },
+  "components": []
+}
+`;
+
+function makeDualMavenTarget(defaultSbom: string, testSbom: string): Target {
+  return makeTargetWithFiles({
+    "maven.sbom.json": defaultSbom,
+    "maven.test.sbom.json": testSbom,
+  });
+}
+
+describe("collectWithMavenSbom — dual-document composed inventory", () => {
+  test("clean superset: inventory equals the test doc (residual empty); prodPurlSet is the default doc's purls", async () => {
+    const target = makeDualMavenTarget(
+      CLEAN_SUPERSET_DEFAULT_SBOM,
+      CLEAN_SUPERSET_TEST_SBOM,
+    );
+    const result = await collectWithMavenSbom(target, {
+      tempDir: makeOutDir(),
+    });
+    const doc = JSON.parse(readFileSync(result.sbomPath, "utf8")) as {
+      components: Array<Record<string, unknown>>;
+    };
+    expect(componentPurls(doc.components)).toEqual([
+      "pkg:maven/com.example.dual/compile-lib@1.0.0?type=jar",
+      "pkg:maven/com.example.dual/test-only-lib@1.0.0?type=jar",
+    ]);
+    expect(result.prodPurlSet).toEqual(
+      new Set(["pkg:maven/com.example.dual/compile-lib@1.0.0?type=jar"]),
+    );
+  });
+
+  test("clean superset: merge classifies the default-doc purl prod and the test-only purl dev", async () => {
+    const target = makeDualMavenTarget(
+      CLEAN_SUPERSET_DEFAULT_SBOM,
+      CLEAN_SUPERSET_TEST_SBOM,
+    );
+    const result = await collectWithMavenSbom(target, {
+      tempDir: makeOutDir(),
+    });
+    const sbom = JSON.parse(readFileSync(result.sbomPath, "utf8"));
+    const model = mergeSboms([
+      {
+        sbom,
+        targetIdentity: target.identity,
+        prodPurlSet: result.prodPurlSet,
+      },
+    ]);
+    const compileLib = model.packages.find(
+      (p) => p.purl === "pkg:maven/com.example.dual/compile-lib@1.0.0?type=jar",
+    );
+    const testOnlyLib = model.packages.find(
+      (p) =>
+        p.purl === "pkg:maven/com.example.dual/test-only-lib@1.0.0?type=jar",
+    );
+    expect(compileLib?.occurrences[0]?.isDevDependency).toBe(false);
+    expect(testOnlyLib?.occurrences[0]?.isDevDependency).toBe(true);
+  });
+});
+
+describe("collectWithMavenSbom — dual-document Q2 edge cases", () => {
+  test("mediation shift: BOTH versions survive — the default version is prod, the test version is dev", async () => {
+    const target = makeDualMavenTarget(
+      MEDIATION_DEFAULT_SBOM,
+      MEDIATION_TEST_SBOM,
+    );
+    const result = await collectWithMavenSbom(target, {
+      tempDir: makeOutDir(),
+    });
+    const doc = JSON.parse(readFileSync(result.sbomPath, "utf8")) as {
+      components: Array<Record<string, unknown>>;
+    };
+    expect(componentPurls(doc.components).sort()).toEqual(
+      [
+        "pkg:maven/com.example.dual/mediated-lib@1.0.0?type=jar",
+        "pkg:maven/com.example.dual/mediated-lib@2.0.0?type=jar",
+      ].sort(),
+    );
+    const model = mergeSboms([
+      {
+        sbom: doc,
+        targetIdentity: target.identity,
+        prodPurlSet: result.prodPurlSet,
+      },
+    ]);
+    const prodVersion = model.packages.find(
+      (p) =>
+        p.purl === "pkg:maven/com.example.dual/mediated-lib@2.0.0?type=jar",
+    );
+    const devVersion = model.packages.find(
+      (p) =>
+        p.purl === "pkg:maven/com.example.dual/mediated-lib@1.0.0?type=jar",
+    );
+    expect(prodVersion?.occurrences[0]?.isDevDependency).toBe(false);
+    expect(devVersion?.occurrences[0]?.isDevDependency).toBe(true);
+  });
+
+  test("a package resolved to compile scope (identical purl in both docs) classifies prod", async () => {
+    const target = makeDualMavenTarget(
+      DUAL_SCOPE_DEFAULT_SBOM,
+      DUAL_SCOPE_TEST_SBOM,
+    );
+    const result = await collectWithMavenSbom(target, {
+      tempDir: makeOutDir(),
+    });
+    const doc = JSON.parse(readFileSync(result.sbomPath, "utf8")) as {
+      components: Array<Record<string, unknown>>;
+    };
+    expect(componentPurls(doc.components)).toEqual([
+      "pkg:maven/com.example.dual/shared-scope-lib@1.0.0?type=jar",
+    ]);
+    const model = mergeSboms([
+      {
+        sbom: doc,
+        targetIdentity: target.identity,
+        prodPurlSet: result.prodPurlSet,
+      },
+    ]);
+    const shared = model.packages.find(
+      (p) =>
+        p.purl === "pkg:maven/com.example.dual/shared-scope-lib@1.0.0?type=jar",
+    );
+    expect(shared?.occurrences[0]?.isDevDependency).toBe(false);
+  });
+
+  test("non-superset test doc: a default component entirely absent from the test doc is carried in as prod — never dropped", async () => {
+    const target = makeDualMavenTarget(
+      NON_SUPERSET_DEFAULT_SBOM,
+      NON_SUPERSET_TEST_SBOM,
+    );
+    const result = await collectWithMavenSbom(target, {
+      tempDir: makeOutDir(),
+    });
+    const doc = JSON.parse(readFileSync(result.sbomPath, "utf8")) as {
+      components: Array<Record<string, unknown>>;
+    };
+    expect(componentPurls(doc.components)).toEqual([
+      "pkg:maven/com.example.dual/system-lib@1.0.0?type=jar",
+    ]);
+    expect(result.prodPurlSet).toEqual(
+      new Set(["pkg:maven/com.example.dual/system-lib@1.0.0?type=jar"]),
+    );
+  });
+
+  test("default-doc-only (no test doc): prodPurlSet is undefined — the backward-compat regression lock", async () => {
+    const result = await scanSbom(HAPPY_SBOM);
+    expect(result.prodPurlSet).toBeUndefined();
+  });
+
+  test("default-doc-only (no test doc): the output bytes are STILL the verbatim committed default doc", async () => {
+    const { raw } = await scanSbom(HAPPY_SBOM);
+    expect(raw).toBe(HAPPY_SBOM);
+  });
+});
+
+describe("collectWithMavenSbom — test doc loud narrow", () => {
+  test("a present maven.test.sbom.json that is not CycloneDX throws naming the test doc's own path", async () => {
+    const target = makeDualMavenTarget(HAPPY_SBOM, NON_CYCLONEDX_JSON);
+    expect.assertions(2);
+    try {
+      await collectWithMavenSbom(target, { tempDir: makeOutDir() });
+    } catch (error) {
+      const message = String(error);
+      expect(message).toContain("CycloneDX");
+      expect(message).toContain(join(target.dir, "maven.test.sbom.json"));
+    }
+  });
+
+  test("a present maven.test.sbom.json whose root purl is not pkg:maven/ throws naming both purls", async () => {
+    const target = makeDualMavenTarget(HAPPY_SBOM, WRONG_ROOT_PURL_SBOM);
+    expect.assertions(3);
+    try {
+      await collectWithMavenSbom(target, { tempDir: makeOutDir() });
+    } catch (error) {
+      const message = String(error);
+      expect(message).toContain("pkg:npm/not-maven-at-all@1.0.0");
+      expect(message).toContain("pkg:maven/");
+      expect(message).toContain(join(target.dir, "maven.test.sbom.json"));
+    }
+  });
+
+  test("an oversized maven.test.sbom.json fails loudly BEFORE any parse, naming its own path", async () => {
+    const cap = 32 * 1024 * 1024;
+    const oversize = `{${" ".repeat(cap)}}`;
+    const target = makeDualMavenTarget(HAPPY_SBOM, oversize);
+    expect.assertions(2);
+    try {
+      await collectWithMavenSbom(target, { tempDir: makeOutDir() });
+    } catch (error) {
+      const message = String(error);
+      expect(message).toContain(join(target.dir, "maven.test.sbom.json"));
+      expect(message).toContain(String(cap + 2));
+    }
+  });
+});
+
+describe("collectWithMavenSbom — dual-document cache key", () => {
+  test("a present test doc yields a DIFFERENT cache key than the same default doc with no test doc", async () => {
+    const noTestTarget = makeMavenTarget(CLEAN_SUPERSET_DEFAULT_SBOM);
+    const withTestTarget = makeDualMavenTarget(
+      CLEAN_SUPERSET_DEFAULT_SBOM,
+      CLEAN_SUPERSET_TEST_SBOM,
+    );
+    const noTestResult = await collectWithMavenSbom(noTestTarget, {
+      tempDir: makeOutDir(),
+    });
+    const withTestResult = await collectWithMavenSbom(withTestTarget, {
+      tempDir: makeOutDir(),
+    });
+    expect(noTestResult.cacheKey).not.toBe(withTestResult.cacheKey);
+  });
+
+  test("changing the test doc's bytes changes the cache key", async () => {
+    const targetA = makeDualMavenTarget(
+      CLEAN_SUPERSET_DEFAULT_SBOM,
+      CLEAN_SUPERSET_TEST_SBOM,
+    );
+    const targetB = makeDualMavenTarget(
+      CLEAN_SUPERSET_DEFAULT_SBOM,
+      MEDIATION_TEST_SBOM,
+    );
+    const resultA = await collectWithMavenSbom(targetA, {
+      tempDir: makeOutDir(),
+    });
+    const resultB = await collectWithMavenSbom(targetB, {
+      tempDir: makeOutDir(),
+    });
+    expect(resultA.cacheKey).not.toBe(resultB.cacheKey);
+  });
+
+  test("two reads of the same dual-doc pair yield a STABLE cache key", async () => {
+    const target = makeDualMavenTarget(
+      CLEAN_SUPERSET_DEFAULT_SBOM,
+      CLEAN_SUPERSET_TEST_SBOM,
+    );
+    const first = await collectWithMavenSbom(target, {
+      tempDir: makeOutDir(),
+    });
+    const second = await collectWithMavenSbom(target, {
+      tempDir: makeOutDir(),
+    });
+    expect(first.cacheKey).toBe(second.cacheKey);
+  });
+
+  test("absent test doc: cache key equals the locked framing (unchanged args + manifest)", async () => {
+    const target = makeMavenTarget(CLEAN_SUPERSET_DEFAULT_SBOM);
+    const result = await collectWithMavenSbom(target, {
+      tempDir: makeOutDir(),
+    });
+    expect(result.cacheKey).toBe(
+      computeCacheKey(
+        target,
+        MAVEN_COLLECTOR_TOOL,
+        ["maven-sbom-reader-v1"],
+        ["maven.sbom.json"],
+      ),
+    );
+  });
+});
+
+describe("collectWithMavenSbom — dual-document determinism", () => {
+  test("two collect() calls over the same dual-doc pair emit byte-identical inventory bytes", async () => {
+    const target = makeDualMavenTarget(
+      CLEAN_SUPERSET_DEFAULT_SBOM,
+      CLEAN_SUPERSET_TEST_SBOM,
+    );
+    const first = await collectWithMavenSbom(target, {
+      tempDir: makeOutDir(),
+    });
+    const second = await collectWithMavenSbom(target, {
+      tempDir: makeOutDir(),
+    });
+    expect(readFileSync(first.sbomPath, "utf8")).toBe(
+      readFileSync(second.sbomPath, "utf8"),
+    );
+  });
+});
+
+describe("maven registry collector — dual-doc prodPurlSet threading", () => {
+  test("a target with both docs threads prodPurlSet into CollectedSbom", async () => {
+    const target = makeDualMavenTarget(
+      CLEAN_SUPERSET_DEFAULT_SBOM,
+      CLEAN_SUPERSET_TEST_SBOM,
+    );
+    const collector = collectors.get("maven");
+    const result = await collector!.collect(
+      { ...target, lockfile: "maven" },
+      { timeoutMs: 0, verbose: false, log: () => {} },
+    );
+    expect(result.prodPurlSet).toEqual(
+      new Set(["pkg:maven/com.example.dual/compile-lib@1.0.0?type=jar"]),
+    );
+  });
+
+  test("a target with only the default doc still carries no prodPurlSet key at all", async () => {
+    const target = makeMavenTarget(HAPPY_SBOM);
+    const collector = collectors.get("maven");
+    const result = await collector!.collect(
+      { ...target, lockfile: "maven" },
+      { timeoutMs: 0, verbose: false, log: () => {} },
+    );
+    expect("prodPurlSet" in result).toBe(false);
   });
 });

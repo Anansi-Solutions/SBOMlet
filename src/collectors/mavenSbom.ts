@@ -17,13 +17,27 @@
  *
  * The committed document is already canonical — components, purls, and
  * license claims are the effective-model truth the plugin resolved inside
- * the build. This reader therefore rewrites NOTHING: it validates the
- * document's shape (bomFormat, a components array, a `pkg:maven/`
- * metadata.component.purl) and then copies the exact committed bytes into
- * the per-run temp dir, never re-serializing them — a rewrite risks
- * silently reordering or dropping fields this reader does not even declare.
- * Purl casing (groupId/artifactId) is never touched: Maven coordinates are
- * case-sensitive and the plugin already emits registry-canonical casing.
+ * the build. When no test-inclusive sidecar sits beside it, this reader
+ * rewrites NOTHING: it validates the document's shape (bomFormat, a
+ * components array, a `pkg:maven/` metadata.component.purl) and then copies
+ * the exact committed bytes into the per-run temp dir, never re-serializing
+ * them — a rewrite risks silently reordering or dropping fields this reader
+ * does not even declare. Purl casing (groupId/artifactId) is never touched:
+ * Maven coordinates are case-sensitive and the plugin already emits
+ * registry-canonical casing.
+ */
+/**
+ * A consumer MAY additionally commit `maven.test.sbom.json` — the same
+ * module built with `-DincludeTestScope=true` (a superset that also carries
+ * test-only dependencies, indistinguishable from production ones by any
+ * field the plugin emits, per ADR-0023's dev/prod follow-up). When present,
+ * this reader composes the inventory from the test doc (the superset) plus
+ * any default-doc component whose purl the test doc dropped — a mediation
+ * residual, never a hand-rebuilt document — and derives `prodPurlSet` from
+ * the default doc's own purls via merge.ts's `purlSetOf`. The merge then
+ * classifies any inventory purl outside that set as dev (the yarn dual-run /
+ * poetry precedent). Without the test doc, behavior is unchanged: no
+ * `prodPurlSet`, every component classifies prod.
  *
  * First-party exclusion for multi-module reactors (a sibling module
  * appearing as a plain component in a dependent module's BOM) is cross-target
@@ -34,9 +48,10 @@
  * MAX_MAVEN_SBOM_BYTES stat gate bounds memory before any read/parse; a
  * missing file, an oversized file, non-JSON text, a non-CycloneDX document,
  * and a document whose root purl is not `pkg:maven/` all throw loudly — a
- * committed artifact under this fixed name must never silently misparse.
+ * committed artifact under either fixed name must never silently misparse.
  */
 
+import { createHash } from "node:crypto";
 import {
   existsSync,
   mkdtempSync,
@@ -49,6 +64,7 @@ import { join } from "node:path";
 
 import { type } from "arktype";
 
+import { purlSetOf } from "../merge/merge";
 import { MavenSbomDocument } from "../validate/mavenSbom";
 import { recordOf } from "../validate/record";
 import { computeCacheKey, type CollectorSbomFile } from "./cdxgen";
@@ -58,25 +74,30 @@ import type { Target } from "../targets/target";
 /**
  * Collector identity (the CLI prints `${name}@${version}`). Version bumps
  * when the parse or validation semantics change — it is hashed into the
- * cache key, so a bump invalidates cache entries on purpose.
+ * cache key, so a bump invalidates cache entries on purpose. Bumped to "2"
+ * for the dual-document composed inventory: the emission semantics changed
+ * (a maven.test.sbom.json sidecar, when present, now changes what a target
+ * emits) even though a target without one still emits byte-identical bytes.
  */
 export const MAVEN_COLLECTOR_TOOL = {
   name: "maven-sbom-reader",
-  version: "1",
+  version: "2",
 } as const;
 
 /**
  * DoS bound: the research fixture's real per-module BOM is ~1.5 MB; 32 MiB is
  * generous headroom. The stat gate fires before any read or parse so a
- * hostile file can never balloon memory.
+ * hostile file can never balloon memory. Shared by both the default and the
+ * test-inclusive sidecar — a committed artifact under either fixed name must
+ * clear the same bound before anything touches its bytes.
  */
 export const MAX_MAVEN_SBOM_BYTES = 32 * 1024 * 1024;
 
 /**
- * Stat-gate a maven.sbom.json path against MAX_MAVEN_SBOM_BYTES before any
- * read or parse. Shared by collectWithMavenSbom and the CLI loop — the CLI
- * reads the full sidecar text for the coverage counter before the collector
- * ever runs, so every entry point that touches the file must honor the same
+ * Stat-gate a maven sidecar path against MAX_MAVEN_SBOM_BYTES before any
+ * read or parse. Shared by collectWithMavenSbom (for both the default and
+ * the optional test-inclusive sidecar), the pipeline pre-pass, and the CLI
+ * loop — every entry point that touches either file must honor the same
  * single-sourced cap and loud message.
  */
 export function assertMavenSbomSize(sbomPath: string): void {
@@ -94,16 +115,26 @@ export function assertMavenSbomSize(sbomPath: string): void {
  * The constant pseudo-argv hashed into the cache key. There is no real
  * subprocess invocation to hash — this sentinel plays the role
  * cdxgenCacheArgs plays for cdxgen targets, and changes only when the
- * collector's observable behavior changes (alongside the tool version).
+ * collector's observable behavior changes (alongside the tool version). A
+ * present maven.test.sbom.json appends one more domain-tagged entry (its
+ * own content hash) so a changed test doc invalidates the key while an
+ * absent one leaves this base array — and therefore the key framing for a
+ * default-doc-only target — untouched.
  */
 const MAVEN_CACHE_ARGS = ["maven-sbom-reader-v1"];
 
 /**
  * Manifest files hashed into the cache key — derived from the single source
  * (dispatch.ts) so the collector's cache-key framing can never drift from
- * the dispatch table's maven entry.
+ * the dispatch table's maven entry. Deliberately NEVER includes
+ * maven.test.sbom.json: computeCacheKey throws on a missing manifest, and
+ * the test doc is optional-additive (manifestFilesFor("maven") stays the
+ * single source of truth for the REQUIRED file only).
  */
 const MAVEN_MANIFEST_FILES = manifestFilesFor("maven");
+
+/** The optional test-inclusive sidecar's fixed name (mirrors maven.sbom.json). */
+const MAVEN_TEST_SBOM_FILENAME = "maven.test.sbom.json";
 
 /** Options mirror the cdxgen adapter's per-run temp-dir injection point. */
 export interface MavenCollectOptions {
@@ -111,30 +142,144 @@ export interface MavenCollectOptions {
   tempDir?: string;
 }
 
+/** collectWithMavenSbom's return shape: the base contract plus the optional dual-doc prod signal. */
+export interface MavenCollectResult extends CollectorSbomFile {
+  /**
+   * Purl set of the DEFAULT doc's components — set ONLY when a
+   * maven.test.sbom.json sidecar is also present. Threaded into
+   * CollectedSbom.prodPurlSet by the registry; merge.ts then derives
+   * occurrence dev = not in this set (the yarn dual-run / poetry precedent).
+   * Absent when only maven.sbom.json exists — every component classifies
+   * prod, byte-identical to the pre-follow-up reader.
+   */
+  prodPurlSet?: ReadonlySet<string>;
+}
+
 /**
- * Read a target's maven.sbom.json (no subprocess, no cwd change) and copy
- * the committed bytes VERBATIM into the per-run temp dir — the existing SBOM
- * parse path consumes it unchanged.
+ * sha256 hex digest of a sidecar's raw text — the cache-key ingredient for a
+ * present maven.test.sbom.json.
+ */
+function sha256Hex(text: string): string {
+  return createHash("sha256").update(text, "utf8").digest("hex");
+}
+
+/**
+ * Parse and validate one committed Maven CycloneDX sidecar — the loud ladder
+ * shared by the default and the optional test-inclusive doc: JSON parse, the
+ * MavenSbomDocument narrow, bomFormat, and a `pkg:maven/` root purl. A
+ * committed artifact under either fixed name has exactly one honest shape;
+ * `label` (the file's own name) appears in every error message so a failure
+ * always names which of the two sidecars misparsed.
+ */
+function readAndNarrowMavenSbom(
+  sbomPath: string,
+  label: string,
+): { text: string; parsed: unknown } {
+  const text = readFileSync(sbomPath, "utf8");
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch (error) {
+    throw new Error(
+      `${label} at ${sbomPath} is not valid JSON: ${String(error)}`,
+      { cause: error },
+    );
+  }
+
+  const narrowed = MavenSbomDocument(parsed);
+  if (narrowed instanceof type.errors) {
+    throw new Error(
+      `${label} at ${sbomPath} does not match the expected ` +
+        `CycloneDX shape: ${narrowed.summary}`,
+    );
+  }
+  if (narrowed.bomFormat !== "CycloneDX") {
+    throw new Error(
+      `${label} at ${sbomPath} is not a CycloneDX document ` +
+        `(bomFormat: ${JSON.stringify(narrowed.bomFormat)}, expected "CycloneDX")`,
+    );
+  }
+  const rootPurl = narrowed.metadata?.component?.purl;
+  if (rootPurl === undefined || !rootPurl.startsWith("pkg:maven/")) {
+    throw new Error(
+      `${label} at ${sbomPath} has metadata.component.purl ` +
+        `${JSON.stringify(rootPurl)}, expected a "pkg:maven/" purl — a ` +
+        "committed artifact under this name must be a Maven module's BOM",
+    );
+  }
+  return { text, parsed };
+}
+
+/**
+ * Compose the dual-document inventory: the test doc's own components PLUS
+ * any default-doc component whose purl is absent from the test doc's purl
+ * set (the mediation residual, Q2 — guarantees a version Maven mediated
+ * differently between the two builds is never silently dropped). Every
+ * other envelope field is taken from the test doc; every surviving
+ * component, from either source, passes through completely untouched. A
+ * shallow spread over the test doc — the excludeMavenFirstParty new-doc
+ * pattern — never a hand-rebuilt document that could drop a field neither
+ * narrow declares.
+ */
+function composeMavenInventory(
+  testParsed: unknown,
+  defaultParsed: unknown,
+): unknown {
+  const testDoc = recordOf(testParsed);
+  if (testDoc === undefined) return testParsed;
+  const testComponents = Array.isArray(testDoc["components"])
+    ? (testDoc["components"] as unknown[])
+    : [];
+  const testPurls = new Set<string>();
+  for (const raw of testComponents) {
+    const purl = recordOf(raw)?.["purl"];
+    if (typeof purl === "string") testPurls.add(purl);
+  }
+
+  const defaultDoc = recordOf(defaultParsed);
+  const defaultComponents =
+    defaultDoc !== undefined && Array.isArray(defaultDoc["components"])
+      ? (defaultDoc["components"] as unknown[])
+      : [];
+  const residual = defaultComponents.filter((raw) => {
+    const purl = recordOf(raw)?.["purl"];
+    return typeof purl !== "string" || !testPurls.has(purl);
+  });
+
+  return { ...testDoc, components: [...testComponents, ...residual] };
+}
+
+/**
+ * Read a target's maven.sbom.json (no subprocess, no cwd change) and emit
+ * the inventory the merge consumes. When no maven.test.sbom.json sidecar
+ * sits beside it, the committed bytes are copied VERBATIM (never
+ * re-serialized) — byte-identical to the pre-follow-up reader. When a test
+ * doc IS present, the two are composed (see {@link composeMavenInventory})
+ * and `prodPurlSet` is derived from the default doc's own purls, both
+ * carried on the returned {@link MavenCollectResult}.
  *
  * Async for interface symmetry with collectWithCdxgen (keeps a future
  * generator swap cheap).
  *
- * Failure modes (all loud — a committed artifact under this fixed name must
- * never silently misparse):
+ * Failure modes (all loud — a committed artifact under either fixed name
+ * must never silently misparse):
  * - missing maven.sbom.json → target.ts-shaped error;
- * - sidecar over MAX_MAVEN_SBOM_BYTES → loud error naming path, size, cap,
- *   before any read or parse;
- * - non-JSON text → loud error naming the path;
+ * - either sidecar over MAX_MAVEN_SBOM_BYTES → loud error naming path,
+ *   size, cap, before any read or parse;
+ * - non-JSON text in either sidecar → loud error naming the path;
  * - a document whose bomFormat is not "CycloneDX" → loud error naming the
  *   expectation;
  * - a document whose metadata.component.purl is not `pkg:maven/...` → loud
  *   error naming both the found purl and the expected prefix (a deliberate
  *   wrong-ecosystem file committed under this name).
+ *
+ * maven.test.sbom.json is entirely optional-additive: its absence changes
+ * nothing about the default doc's failure ladder or output bytes.
  */
 export async function collectWithMavenSbom(
   target: Target,
   opts: MavenCollectOptions = {},
-): Promise<CollectorSbomFile> {
+): Promise<MavenCollectResult> {
   const sbomPath = join(target.dir, "maven.sbom.json");
   if (!existsSync(sbomPath)) {
     throw new Error(
@@ -144,53 +289,47 @@ export async function collectWithMavenSbom(
 
   // Size gate FIRST — before read, before parse (the DoS bound above).
   assertMavenSbomSize(sbomPath);
+  const { text, parsed: defaultParsed } = readAndNarrowMavenSbom(
+    sbomPath,
+    "maven.sbom.json",
+  );
 
-  const text = readFileSync(sbomPath, "utf8");
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(text);
-  } catch (error) {
-    throw new Error(
-      `maven.sbom.json at ${sbomPath} is not valid JSON: ${String(error)}`,
-      { cause: error },
-    );
-  }
+  const testSbomPath = join(target.dir, MAVEN_TEST_SBOM_FILENAME);
+  const hasTestDoc = existsSync(testSbomPath);
 
-  // Loud narrow: unlike the tolerant lockfile collectors, a committed
-  // artifact under this fixed name has exactly one honest shape — a failed
-  // narrow (a present-but-wrong-typed metadata/component/purl chain) is
-  // itself evidence of a wrong file, so it throws rather than falling back
-  // to an empty-map skip.
-  const narrowed = MavenSbomDocument(parsed);
-  if (narrowed instanceof type.errors) {
-    throw new Error(
-      `maven.sbom.json at ${sbomPath} does not match the expected ` +
-        `CycloneDX shape: ${narrowed.summary}`,
+  let outputText = text;
+  let prodPurlSet: ReadonlySet<string> | undefined;
+  let cacheArgs: string[] = MAVEN_CACHE_ARGS;
+
+  if (hasTestDoc) {
+    assertMavenSbomSize(testSbomPath);
+    const { text: testText, parsed: testParsed } = readAndNarrowMavenSbom(
+      testSbomPath,
+      MAVEN_TEST_SBOM_FILENAME,
     );
-  }
-  if (narrowed.bomFormat !== "CycloneDX") {
-    throw new Error(
-      `maven.sbom.json at ${sbomPath} is not a CycloneDX document ` +
-        `(bomFormat: ${JSON.stringify(narrowed.bomFormat)}, expected "CycloneDX")`,
+
+    // Composing builds a NEW document object (the shallow-spread pattern
+    // above), so — unlike the default-doc-only verbatim path — this is a
+    // deliberate re-serialization: JSON.stringify over that new object.
+    outputText = JSON.stringify(
+      composeMavenInventory(testParsed, defaultParsed),
     );
-  }
-  const rootPurl = narrowed.metadata?.component?.purl;
-  if (rootPurl === undefined || !rootPurl.startsWith("pkg:maven/")) {
-    throw new Error(
-      `maven.sbom.json at ${sbomPath} has metadata.component.purl ` +
-        `${JSON.stringify(rootPurl)}, expected a "pkg:maven/" purl — a ` +
-        "committed artifact under this name must be a Maven module's BOM",
-    );
+    prodPurlSet = purlSetOf(defaultParsed);
+    cacheArgs = [
+      ...MAVEN_CACHE_ARGS,
+      `maven-test-sbom-sha256:${sha256Hex(testText)}`,
+    ];
   }
 
-  // Verbatim pass-through: the committed bytes are copied UNCHANGED into the
-  // per-run temp dir — never JSON.stringify(parsed), which would
-  // re-serialize and risk silently reordering or dropping fields this
-  // narrow does not even declare. The committed artifact is already
-  // canonical; rewriting it here would only risk data loss.
+  // Verbatim pass-through in the common (no test doc) case: the committed
+  // bytes are copied UNCHANGED into the per-run temp dir — never
+  // JSON.stringify(parsed), which would re-serialize and risk silently
+  // reordering or dropping fields this reader does not even declare. The
+  // committed artifact is already canonical; rewriting it here would only
+  // risk data loss.
   const tempDir = opts.tempDir ?? mkdtempSync(join(tmpdir(), "licenses-"));
   const outPath = join(tempDir, "bom.json");
-  writeFileSync(outPath, text);
+  writeFileSync(outPath, outputText);
 
   return {
     sbomPath: outPath,
@@ -198,10 +337,11 @@ export async function collectWithMavenSbom(
     cacheKey: computeCacheKey(
       target,
       MAVEN_COLLECTOR_TOOL,
-      MAVEN_CACHE_ARGS,
+      cacheArgs,
       MAVEN_MANIFEST_FILES,
     ),
     tool: MAVEN_COLLECTOR_TOOL,
+    ...(prodPurlSet !== undefined ? { prodPurlSet } : {}),
   };
 }
 

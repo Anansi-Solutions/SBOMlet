@@ -281,11 +281,15 @@ const nugetCollector: Collector = {
  * resolve Maven, so their CI commits the standard cyclonedx-maven-plugin
  * output and this reader consumes it (ADR-0023). No subprocess, so
  * timeoutMs is ignored; the sidecar size gate fires inside
- * collectWithMavenSbom as well as in the CLI loop. NO firstPartyNames / NO
- * prodPurlSet: the collector carries no per-component Maven scope (the CLI
- * reference's Maven-targets limits record the honest omission) and reactor
- * sibling exclusion is a separate cross-target pre-pass, not this
- * registration's job.
+ * collectWithMavenSbom as well as in the CLI loop. NO firstPartyNames: the
+ * collector carries no per-component Maven scope, so name-collision exclusion
+ * is meaningless here; reactor sibling exclusion is a separate cross-target
+ * pre-pass, not this registration's job. prodPurlSet IS threaded through when
+ * the collector derives one — the dual-document dev/prod follow-up: a module
+ * committing both maven.sbom.json and maven.test.sbom.json gets its
+ * prodPurlSet from the default doc's purls (the yarn dual-run / poetry
+ * precedent); a module with only the default doc still carries none, so
+ * every component classifies prod exactly as before.
  */
 const mavenCollector: Collector = {
   tool: (): ToolIdentity => MAVEN_COLLECTOR_TOOL,
@@ -294,6 +298,9 @@ const mavenCollector: Collector = {
     return {
       sbom: readSbom(result.sbomPath),
       targetIdentity: target.identity,
+      ...(result.prodPurlSet !== undefined
+        ? { prodPurlSet: result.prodPurlSet }
+        : {}),
     };
   },
 };
