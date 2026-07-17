@@ -22,6 +22,7 @@ import {
 import { BUN_COLLECTOR_TOOL, collectWithBunLock } from "./bunLock";
 import { CDXGEN_TOOL, collectWithCdxgen } from "./cdxgen";
 import { ecosystemFor, manifestFilesFor, selectJsGenerator } from "./dispatch";
+import { MAVEN_COLLECTOR_TOOL, collectWithMavenSbom } from "./mavenSbom";
 import { npmIntroductions } from "./npmProvenance";
 import { NUGET_COLLECTOR_TOOL, collectWithNugetLock } from "./nugetLock";
 import { poetryProdPurlSet } from "./poetryLock";
@@ -272,6 +273,31 @@ const nugetCollector: Collector = {
 };
 
 /**
+ * maven targets use the in-process maven.sbom.json collector: no upstream
+ * generator can produce a correct closure at scan time (cdxgen either runs
+ * `mvn` inside the target — forbidden — or silently emits an 8% fraction
+ * with version-less purls; syft sees pom directs only and fabricates
+ * identity from stale local jars, 17-RESEARCH §1.2/§1.3) — only the
+ * consumer's own build can resolve Maven, so their CI commits the standard
+ * cyclonedx-maven-plugin output and this reader consumes it. No subprocess,
+ * so timeoutMs is ignored; the sidecar size gate fires inside
+ * collectWithMavenSbom as well as in the CLI loop. NO firstPartyNames / NO
+ * prodPurlSet: the collector carries no per-component Maven scope (17-05
+ * documents the honest omission) and reactor sibling exclusion is a
+ * separate cross-target pre-pass, not this registration's job.
+ */
+const mavenCollector: Collector = {
+  tool: (): ToolIdentity => MAVEN_COLLECTOR_TOOL,
+  async collect(target): Promise<CollectedSbom> {
+    const result = await collectWithMavenSbom(target, {});
+    return {
+      sbom: readSbom(result.sbomPath),
+      targetIdentity: target.identity,
+    };
+  },
+};
+
+/**
  * The dispatch table, exhaustive over LockfileKind. npm members are emitted by cdxgen at their REAL
  * versions with cdx:npm:isWorkspace=true — the merge pairs that marker with
  * the npm lockfile-derived name set. The pnpm importer-name set is
@@ -290,4 +316,5 @@ export const collectors: ReadonlyMap<LockfileKind, Collector> = new Map<
   ["uv", cdxgenCollector("uv")],
   ["terraform", terraformCollector],
   ["nuget", nugetCollector],
+  ["maven", mavenCollector],
 ]);

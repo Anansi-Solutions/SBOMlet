@@ -47,7 +47,8 @@ export type LockfileKind =
   | "poetry"
   | "uv"
   | "terraform"
-  | "nuget";
+  | "nuget"
+  | "maven";
 
 export interface DiscoveredTarget extends Target {
   /** Which lockfile produced this target. One DiscoveredTarget per lockfile found. */
@@ -77,6 +78,7 @@ const LOCKFILES = new Map<string, LockfileKind>([
   ["uv.lock", "uv"],
   [".terraform.lock.hcl", "terraform"],
   ["packages.lock.json", "nuget"],
+  ["maven.sbom.json", "maven"],
 ]);
 
 /**

@@ -9,6 +9,7 @@ import { join, relative, resolve, sep } from "node:path";
 
 import { assertBunLockSize } from "../collectors/bunLock";
 import { manifestFilesFor, selectJsGenerator } from "../collectors/dispatch";
+import { assertMavenSbomSize } from "../collectors/mavenSbom";
 import { assertNugetLockSize } from "../collectors/nugetLock";
 import { collectors } from "../collectors/registry";
 import { compareCodeUnits } from "../model/dependencies";
@@ -419,6 +420,9 @@ export async function collectTargets(
     }
     if (target.lockfile === "nuget") {
       assertNugetLockSize(lockfilePath);
+    }
+    if (target.lockfile === "maven") {
+      assertMavenSbomSize(lockfilePath);
     }
     // Read once; reused for the empty-check, generator dispatch, expansion,
     // and the first-party member set.
