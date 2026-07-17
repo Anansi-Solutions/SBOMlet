@@ -359,6 +359,20 @@ describe("coverageSkipReason — maven.sbom.json arm (strict === 0)", () => {
     );
   });
 
+  test("an aggregator BOM with NO components key at all — the shape the plugin actually writes — also skips, never a hard fail", () => {
+    const doc = JSON.stringify({
+      bomFormat: "CycloneDX",
+      metadata: {
+        component: {
+          purl: "pkg:maven/com.example.fixture/reactor-parent@1.0.0?type=pom",
+        },
+      },
+    });
+    expect(coverageSkipReason("maven.sbom.json", doc)).toBe(
+      "maven.sbom.json has no third-party entries (no components other than its own root, e.g. the reactor aggregator pom)",
+    );
+  });
+
   test("garbage text routes to the scan (undefined — the collector's loud throw fires there)", () => {
     expect(
       coverageSkipReason("maven.sbom.json", "not json at all }{"),

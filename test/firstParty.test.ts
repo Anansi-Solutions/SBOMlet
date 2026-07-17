@@ -948,7 +948,7 @@ describe("mavenThirdPartyEntryCount — components count excluding the doc's own
     expect(mavenThirdPartyEntryCount(doc)).toBeUndefined();
   });
 
-  test("missing components entirely -> undefined (a doc that proves nothing is unknown, not zero)", () => {
+  test("a valid Maven BOM with NO components key counts 0 — the plugin omits the array for an aggregator pom, so this shape takes warn+skip, never a hard fail", () => {
     const doc = JSON.stringify({
       bomFormat: "CycloneDX",
       metadata: {
@@ -957,7 +957,7 @@ describe("mavenThirdPartyEntryCount — components count excluding the doc's own
         },
       },
     });
-    expect(mavenThirdPartyEntryCount(doc)).toBeUndefined();
+    expect(mavenThirdPartyEntryCount(doc)).toBe(0);
   });
 
   test("missing metadata.component.purl entirely -> undefined", () => {

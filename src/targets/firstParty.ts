@@ -476,9 +476,16 @@ export function pnpmImporterNames(lockfileText: string): ReadonlySet<string> {
  * the reactor aggregator pom's own sidecar, whose components array is
  * genuinely empty.
  *
- * Returns undefined (unknown count) for non-JSON text, a failed document
- * narrow, or a missing components array — a doc that proves nothing routes
- * the target to the scan, never to the warn+skip branch. Never throws.
+ * A document that passes those checks but has NO components key counts 0:
+ * CycloneDX makes the array optional and cyclonedx-maven-plugin omits it
+ * entirely for an aggregator pom's BOM (verified against 2.9.2 output), so
+ * the absent-array shape must reach the same warn+skip branch as an empty
+ * one — never the zero-component hard fail. A crafted sidecar gains nothing:
+ * an empty array already takes the skip branch.
+ *
+ * Returns undefined (unknown count) for non-JSON text or a failed document
+ * narrow — a doc that proves nothing routes the target to the scan, never
+ * to the warn+skip branch. Never throws.
  */
 export function mavenThirdPartyEntryCount(
   lockfileText: string,
@@ -497,7 +504,7 @@ export function mavenThirdPartyEntryCount(
     return undefined;
   }
   const components = doc.components;
-  if (components === undefined) return undefined;
+  if (components === undefined) return 0;
   let count = 0;
   for (const raw of components) {
     const purl = recordOf(raw)?.["purl"];
