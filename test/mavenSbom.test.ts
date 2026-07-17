@@ -896,6 +896,39 @@ describe("collectWithMavenSbom — dual-document composed inventory", () => {
   });
 });
 
+describe("collectWithMavenSbom — dual-document envelope pass-through", () => {
+  test("undeclared top-level fields of the test doc survive composing", async () => {
+    // Composing spreads the test doc, so fields this reader never declares
+    // (specVersion, serialNumber, the dependencies graph) must reach the
+    // output untouched — a hand-rebuilt document would silently drop them.
+    const testDocWithExtras = JSON.stringify({
+      ...(JSON.parse(CLEAN_SUPERSET_TEST_SBOM) as Record<string, unknown>),
+      serialNumber: "urn:uuid:22222222-2222-2222-2222-222222222222",
+      dependencies: [
+        { ref: "pkg:maven/com.example.dual/app@1.0.0?type=jar", dependsOn: [] },
+      ],
+    });
+    const target = makeDualMavenTarget(
+      CLEAN_SUPERSET_DEFAULT_SBOM,
+      testDocWithExtras,
+    );
+    const result = await collectWithMavenSbom(target, {
+      tempDir: makeOutDir(),
+    });
+    const doc = JSON.parse(readFileSync(result.sbomPath, "utf8")) as Record<
+      string,
+      unknown
+    >;
+    expect(doc["specVersion"]).toBe("1.6");
+    expect(doc["serialNumber"]).toBe(
+      "urn:uuid:22222222-2222-2222-2222-222222222222",
+    );
+    expect(doc["dependencies"]).toEqual([
+      { ref: "pkg:maven/com.example.dual/app@1.0.0?type=jar", dependsOn: [] },
+    ]);
+  });
+});
+
 describe("collectWithMavenSbom — dual-document Q2 edge cases", () => {
   test("mediation shift: BOTH versions survive — the default version is prod, the test version is dev", async () => {
     const target = makeDualMavenTarget(
@@ -1013,6 +1046,36 @@ describe("collectWithMavenSbom — test doc loud narrow", () => {
       const message = String(error);
       expect(message).toContain("pkg:npm/not-maven-at-all@1.0.0");
       expect(message).toContain("pkg:maven/");
+      expect(message).toContain(join(target.dir, "maven.test.sbom.json"));
+    }
+  });
+
+  test("a test doc whose root purl differs from the default doc's throws naming BOTH roots — never composes", async () => {
+    // The merge drops the inventory component matching a document's own root
+    // purl. A test doc from another build or module can therefore name a REAL
+    // dependency as its root and silently remove it from the inventory. A
+    // mismatched pair must fail loudly instead.
+    const mismatchedRootTestSbom = `{
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.6",
+  "metadata": {
+    "component": {
+      "purl": "pkg:maven/com.example/commons-id@1.2.0?type=jar"
+    }
+  },
+  "components": []
+}
+`;
+    const target = makeDualMavenTarget(HAPPY_SBOM, mismatchedRootTestSbom);
+    expect.assertions(3);
+    try {
+      await collectWithMavenSbom(target, { tempDir: makeOutDir() });
+    } catch (error) {
+      const message = String(error);
+      expect(message).toContain(
+        "pkg:maven/com.example/commons-id@1.2.0?type=jar",
+      );
+      expect(message).toContain("pkg:maven/com.example/app@1.0.0?type=jar");
       expect(message).toContain(join(target.dir, "maven.test.sbom.json"));
     }
   });

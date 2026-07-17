@@ -174,7 +174,7 @@ function sha256Hex(text: string): string {
 function readAndNarrowMavenSbom(
   sbomPath: string,
   label: string,
-): { text: string; parsed: unknown } {
+): { text: string; parsed: unknown; rootPurl: string } {
   const text = readFileSync(sbomPath, "utf8");
   let parsed: unknown;
   try {
@@ -207,7 +207,7 @@ function readAndNarrowMavenSbom(
         "committed artifact under this name must be a Maven module's BOM",
     );
   }
-  return { text, parsed };
+  return { text, parsed, rootPurl };
 }
 
 /**
@@ -271,7 +271,9 @@ function composeMavenInventory(
  *   expectation;
  * - a document whose metadata.component.purl is not `pkg:maven/...` → loud
  *   error naming both the found purl and the expected prefix (a deliberate
- *   wrong-ecosystem file committed under this name).
+ *   wrong-ecosystem file committed under this name);
+ * - a test doc whose root purl differs from the default doc's → loud error
+ *   naming both roots (a stale or wrong-module pair must never compose).
  *
  * maven.test.sbom.json is entirely optional-additive: its absence changes
  * nothing about the default doc's failure ladder or output bytes.
@@ -289,10 +291,11 @@ export async function collectWithMavenSbom(
 
   // Size gate FIRST — before read, before parse (the DoS bound above).
   assertMavenSbomSize(sbomPath);
-  const { text, parsed: defaultParsed } = readAndNarrowMavenSbom(
-    sbomPath,
-    "maven.sbom.json",
-  );
+  const {
+    text,
+    parsed: defaultParsed,
+    rootPurl: defaultRootPurl,
+  } = readAndNarrowMavenSbom(sbomPath, "maven.sbom.json");
 
   const testSbomPath = join(target.dir, MAVEN_TEST_SBOM_FILENAME);
   const hasTestDoc = existsSync(testSbomPath);
@@ -303,10 +306,24 @@ export async function collectWithMavenSbom(
 
   if (hasTestDoc) {
     assertMavenSbomSize(testSbomPath);
-    const { text: testText, parsed: testParsed } = readAndNarrowMavenSbom(
-      testSbomPath,
-      MAVEN_TEST_SBOM_FILENAME,
-    );
+    const {
+      text: testText,
+      parsed: testParsed,
+      rootPurl: testRootPurl,
+    } = readAndNarrowMavenSbom(testSbomPath, MAVEN_TEST_SBOM_FILENAME);
+
+    // The pair must be two builds of the SAME module. The merge excludes the
+    // inventory component matching a document's own root purl, so a test doc
+    // whose root names a real dependency (a stale, wrong-module, or crafted
+    // file) would silently drop that dependency from the inventory.
+    if (testRootPurl !== defaultRootPurl) {
+      throw new Error(
+        `${MAVEN_TEST_SBOM_FILENAME} at ${testSbomPath} has root purl ` +
+          `${JSON.stringify(testRootPurl)} but the maven.sbom.json beside ` +
+          `it has ${JSON.stringify(defaultRootPurl)} — the pair must be ` +
+          "two builds of the same module; regenerate both sidecars together",
+      );
+    }
 
     // Composing builds a NEW document object (the shallow-spread pattern
     // above), so — unlike the default-doc-only verbatim path — this is a
