@@ -6,6 +6,7 @@ import parseSpdxId from "spdx-expression-parse";
 
 import {
   annotateFindings,
+  normalizeRaw,
   type BuiltinOverrideInput,
 } from "../src/normalize/normalize";
 import { evaluate, unusedRuleIds } from "../src/policy/evaluate";
@@ -1439,6 +1440,64 @@ describe("evaluate — clarify usage visibility", () => {
     expect(usedClarifyIndices.has(0)).toBe(true);
     expect(verdicts[0].status).toBe("ok");
     expect(verdicts[0].rule).toBe("clarify[0]");
+  });
+});
+
+describe("evaluate — LicenseRef acceptance for commercial clarifies (A4/P-05)", () => {
+  test("a [[clarify]] with a LicenseRef- expression on an honest-unknown pkg:maven component VALIDATES and the verdict cites clarify[0] with the LicenseRef expression", () => {
+    const policyText = [
+      "[[clarify]]",
+      'package = { name = "proprietary-reporting-engine", version = "9.0.0" }',
+      'expression = "LicenseRef-commercial-vendor-agreement"',
+      'reason = "system-scoped commercial jar; the vendor agreement governs, not a public license"',
+    ].join("\n");
+    const spec: PackageSpec = {
+      purl: "pkg:maven/com.example.vendor/proprietary-reporting-engine@9.0.0",
+      name: "proprietary-reporting-engine",
+      version: "9.0.0",
+      claims: [], // the honest unknown: no registry presence, no POM license
+      occurrences: ["backend"],
+    };
+    const { verdicts, usedClarifyIndices, policy } = runEngine(
+      [spec],
+      policyText,
+    );
+    expect(policy.clarify[0]?.expression).toBe(
+      "LicenseRef-commercial-vendor-agreement",
+    );
+    expect(usedClarifyIndices.has(0)).toBe(true);
+    expect(verdicts[0].status).toBe("ok");
+    expect(verdicts[0].rule).toBe("clarify[0]");
+    expect(verdicts[0].reason).toContain(
+      "LicenseRef-commercial-vendor-agreement",
+    );
+  });
+
+  test("a LicenseRef- expression inside a compound (LicenseRef-x OR MIT) is LOCKED to whatever the in-tree machinery already does — no compound handling is extended here", () => {
+    const policyText = [
+      "[[clarify]]",
+      'package = { name = "dual-ref-pkg" }',
+      'expression = "LicenseRef-x OR MIT"',
+      'reason = "dual: a proprietary ref or MIT, whichever the consumer prefers"',
+    ].join("\n");
+    const spec: PackageSpec = {
+      purl: "pkg:maven/com.example/dual-ref-pkg@1.0.0",
+      name: "dual-ref-pkg",
+      version: "1.0.0",
+      claims: [],
+      occurrences: ["backend"],
+    };
+    const { verdicts } = runEngine([spec], policyText);
+    // LOCKED: the OR election prefers the non-copyleft, non-ref branch
+    // (normalize/expression.ts elect's LicenseRef/DocumentRef tie-break) —
+    // MIT wins over the opaque LicenseRef- atom.
+    expect(verdicts[0].status).toBe("ok");
+    expect(verdicts[0].rule).toBe("clarify[0]");
+  });
+
+  test("normalizeRaw NEVER mints a LicenseRef from free text — a commercial-sounding raw name stays an honest unknown, not a guessed LicenseRef", () => {
+    const result = normalizeRaw("Commercial License Agreement");
+    expect(result.expression).toBeNull();
   });
 });
 
