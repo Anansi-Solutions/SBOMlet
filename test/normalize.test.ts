@@ -383,52 +383,71 @@ describe("normalizeRaw — live 33-value corpus", () => {
 });
 
 // ---------------------------------------------------------------------------
-// 17-04: the six real-world free-text Maven license raws from research §4 —
-// verified byte-for-byte against the real public repo1.maven.org POMs this
-// session (mysql-connector-j 9.5.0, jasperreports/-fonts 6.21.0, jcommon/
-// jfreechart 1.0.23/1.0.19, juniversalchardet 2.5.0 — P-08, the one
-// sanctioned use of real GAVs). Each raw's ACTUAL normalizeRaw outcome is
-// locked as a decided fact, whatever it is — some are GUESS-SHAPED surprises
-// (a version-specific id from an unversioned label, or a wrong SPDX family
-// entirely) that this task does NOT soften or fix; they are flagged in
-// AFK-CHECKLIST.md and handed to the 17-06 adversarial review lens list.
+// Real-world free-text Maven license raws, verified byte-for-byte against the
+// real public repo1.maven.org POMs (mysql-connector-j 9.5.0,
+// jasperreports/-fonts 6.21.0, jcommon/jfreechart 1.0.23/1.0.19,
+// juniversalchardet 2.5.0 — real public GAVs, sanctioned for this one use).
+// Three of these labels originally surfaced guess-shaped correct() outcomes
+// (a version-specific id from an unversioned label, a family flip, a
+// version-contradicting id); the review fixed them via the ambiguous-family
+// intercept and the precise-label fixup, and these tests lock the honest
+// outcomes.
 // ---------------------------------------------------------------------------
-describe("normalizeRaw — six real-world Maven free-text raws (17-RESEARCH §4, locked)", () => {
-  test("mysql-connector-j's FOSS-exception GPLv2 label GUESSES to GPL-3.0-or-later — a confidently WRONG major-version+scope id (flagged, not fixed here)", () => {
+describe("normalizeRaw — real-world Maven free-text raws (locked)", () => {
+  test("mysql-connector-j's FOSS-exception GPLv2 label resolves to the PRECISE GPL-2.0-only WITH Universal-FOSS-exception-1.0 — never the GPL-3.0-or-later fuzzy guess that contradicted the stated v2", () => {
     const result = normalizeRaw(
       "The GNU General Public License, v2 with Universal FOSS Exception, v1.0",
     );
-    // LOCKED as-observed: correct()'s fuzzy matcher resolves this to
-    // GPL-3.0-or-later, silently dropping BOTH the v2 pin and the FOSS
-    // exception clause. The real license is GPL-2 plus a MySQL-specific
-    // exception, never GPL-3-or-later — a guess-shaped surprise (17-06).
+    // The label states BOTH a version (v2) and an exception (Universal FOSS
+    // Exception v1.0), and each has an exact SPDX spelling — the fixup maps
+    // the whole label to it. correct() used to resolve this to
+    // GPL-3.0-or-later, contradicting the stated version and dropping the
+    // exception clause entirely.
     expect(result).toEqual({
-      expression: "GPL-3.0-or-later",
+      expression: "GPL-2.0-only WITH Universal-FOSS-exception-1.0",
       source: "corrected",
     });
   });
 
-  test('bare "GNU Lesser General Public License" (jasperreports, jasperreports-fonts) is NOT in AMBIGUOUS_FAMILY and GUESSES to a specific version id, LGPL-2.1-only', () => {
+  test('bare "GNU Lesser General Public License" (jasperreports, jasperreports-fonts) is an IMPRECISE LGPL family — never a guessed version id', () => {
     const result = normalizeRaw("GNU Lesser General Public License");
-    // LOCKED as-observed: the AMBIGUOUS_FAMILY intercept only keys on the
-    // short "lgpl"/"lgpl license" tokens, not this full-text label, so it
-    // falls through to correct()'s fuzzy match — a version-specific guess
-    // from an unversioned source label (the plan's own flagged example).
+    // The spelled-out family name carries no version; correct() used to
+    // guess LGPL-2.1-only from it. It now routes to the same imprecise
+    // could-be-copyleft lane as the short "lgpl" label.
     expect(result).toEqual({
-      expression: "LGPL-2.1-only",
-      source: "corrected",
+      expression: null,
+      source: "generator",
+      imprecise: true,
+      impreciseFamily: "LGPL",
     });
   });
 
-  test('the British-spelling "GNU Lesser General Public Licence" (jcommon, jfreechart) GUESSES to GPL-3.0-or-later, dropping "Lesser" entirely', () => {
+  test('the British-spelling "GNU Lesser General Public Licence" (jcommon, jfreechart) is the SAME imprecise LGPL family — never the GPL-3.0-or-later family flip', () => {
     const result = normalizeRaw("GNU Lesser General Public Licence");
-    // LOCKED as-observed: the spelling variant sends correct()'s fuzzy
-    // matcher to the GPL family instead of LGPL — a severe misclassification
-    // (a weak-copyleft label resolving to a strong-copyleft id), flagged.
+    // correct() used to send the spelling variant to the GPL family,
+    // resolving a weak-copyleft label to a strong-copyleft id.
     expect(result).toEqual({
-      expression: "GPL-3.0-or-later",
-      source: "corrected",
+      expression: null,
+      source: "generator",
+      imprecise: true,
+      impreciseFamily: "LGPL",
     });
+  });
+
+  test("the spelled-out GPL and AGPL family names (both spellings) are imprecise families too — correct() guessed a precise or-later id from every one of them", () => {
+    for (const [raw, family] of [
+      ["GNU General Public License", "GPL"],
+      ["GNU General Public Licence", "GPL"],
+      ["GNU Affero General Public License", "AGPL"],
+      ["GNU Affero General Public Licence", "AGPL"],
+    ] as const) {
+      expect(normalizeRaw(raw)).toEqual({
+        expression: null,
+        source: "generator",
+        imprecise: true,
+        impreciseFamily: family,
+      });
+    }
   });
 
   test('juniversalchardet\'s "Mozilla Public License Version 1.1" resolves PRECISELY to MPL-1.1', () => {

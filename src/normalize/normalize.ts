@@ -71,6 +71,16 @@ const AMBIGUOUS_FAMILY: ReadonlyMap<string, string> = new Map([
   ["agpl license", "AGPL"],
   ["lgpl", "LGPL"],
   ["lgpl license", "LGPL"],
+  // Spelled-out GNU family names, both spellings: all carry no version, and
+  // correct() guesses a precise id from every one — including a family FLIP
+  // for the British "GNU Lesser General Public Licence" (→ GPL-3.0-or-later,
+  // dropping "Lesser"). Real Maven POMs carry exactly these labels.
+  ["gnu general public license", "GPL"],
+  ["gnu general public licence", "GPL"],
+  ["gnu lesser general public license", "LGPL"],
+  ["gnu lesser general public licence", "LGPL"],
+  ["gnu affero general public license", "AGPL"],
+  ["gnu affero general public licence", "AGPL"],
   // Bare EUPL (W1 correction): EUPL is STRONG copyleft, but spdx-correct
   // cross-maps the bare label to the PERMISSIVE "UPL-1.0" (Universal Permissive
   // License) — a copyleft→permissive mis-guess that would silently pass the
@@ -93,6 +103,14 @@ const AMBIGUOUS_FAMILY: ReadonlyMap<string, string> = new Map([
  */
 const PRECISE_LABEL_FIXUP: ReadonlyMap<string, string> = new Map([
   ["isc license", "ISC"],
+  // MySQL's standard license label: it states BOTH the version (v2) and the
+  // exception, and each has an exact SPDX spelling — correct() instead
+  // resolved the label to GPL-3.0-or-later, contradicting the stated v2 and
+  // dropping the exception clause.
+  [
+    "the gnu general public license, v2 with universal foss exception, v1.0",
+    "GPL-2.0-only WITH Universal-FOSS-exception-1.0",
+  ],
 ]);
 
 /**
