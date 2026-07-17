@@ -9,7 +9,11 @@ import { join, relative, resolve, sep } from "node:path";
 
 import { assertBunLockSize } from "../collectors/bunLock";
 import { manifestFilesFor, selectJsGenerator } from "../collectors/dispatch";
-import { assertMavenSbomSize } from "../collectors/mavenSbom";
+import {
+  assertMavenSbomSize,
+  excludeMavenFirstParty,
+  mavenRootPurlOf,
+} from "../collectors/mavenSbom";
 import { assertNugetLockSize } from "../collectors/nugetLock";
 import { collectors } from "../collectors/registry";
 import { compareCodeUnits } from "../model/dependencies";
@@ -386,6 +390,57 @@ function absorbUnitInputs(
   }
 }
 /**
+ * Cross-target first-party purl pre-pass for Maven reactors (17-RESEARCH
+ * §6): gather EVERY discovered maven target's own root purl BEFORE any
+ * target is collected, so a sibling module's leaked dependency edge can be
+ * recognized no matter which order targets scan in. This lives at the
+ * pipeline, not inside the collector, because only the pipeline sees every
+ * target — the maven collector only ever sees its OWN sidecar (the
+ * expandYarnWorkspaceUnits precedent for kind-specific pipeline logic).
+ *
+ * Tolerant: a target whose sidecar fails to parse contributes no purl and is
+ * left for that target's own turn through collectWithMavenSbom's loud
+ * failure ladder — the pre-pass must never abort the whole run over one
+ * target's bad sidecar. The size gate still fires here, before this read,
+ * same as every other entry point that touches a maven.sbom.json.
+ */
+function mavenFirstPartyPurls(
+  targets: readonly DiscoveredTarget[],
+): ReadonlySet<string> {
+  const purls = new Set<string>();
+  for (const target of targets) {
+    if (target.lockfile !== "maven") continue;
+    const sbomPath = join(target.dir, "maven.sbom.json");
+    assertMavenSbomSize(sbomPath);
+    const purl = mavenRootPurlOf(readFileSync(sbomPath, "utf8"));
+    if (purl !== undefined) purls.add(purl);
+  }
+  return purls;
+}
+
+/**
+ * Post-collect maven sibling filter: a maven target's collected doc has its
+ * components replaced with the first-party-excluded set before it joins the
+ * merge inputs — a no-op for every other lockfile kind, since the
+ * cross-target purl set means nothing outside the reactor case. The
+ * coverage verdict inside dispatchAndCollect already ran against the
+ * UNFILTERED component count (an all-siblings module still classifies
+ * "scan"), so this step can never turn an included target into a spurious
+ * zero-component hard fail — it only trims what reaches the merge.
+ */
+function applyMavenFirstPartyFilter(
+  target: DiscoveredTarget,
+  input: CollectedSbom,
+  mavenFirstPartySet: ReadonlySet<string>,
+): CollectedSbom {
+  if (target.lockfile !== "maven") return input;
+  return {
+    ...input,
+    sbom: excludeMavenFirstParty(input.sbom, mavenFirstPartySet),
+  };
+}
+
+/**
  * The per-target collect loop: resolve targets, dispatch each through the
  * collector registry, and apply the coverage policy. The loop owns the
  * "collecting"/"skipping" stderr lines, routed through the caller-provided log
@@ -405,6 +460,7 @@ export async function collectTargets(
   const targets = resolveTargets(opts);
   const inputs: CollectedSbom[] = [];
   const dirs = new Set<string>();
+  const mavenFirstPartySet = mavenFirstPartyPurls(targets);
 
   // Sequential scan in sorted (identity, kind) order — discoverTargets
   // already sorts; single-target mode is a one-element list.
@@ -469,7 +525,7 @@ export async function collectTargets(
       log,
     );
     if (input === undefined) continue;
-    inputs.push(input);
+    inputs.push(applyMavenFirstPartyFilter(target, input, mavenFirstPartySet));
     dirs.add(target.dir);
   }
 

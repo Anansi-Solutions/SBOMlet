@@ -323,3 +323,71 @@ describe("classifyCoverage — packages.lock.json warn+skip vs hard-fail split",
     ).toBe("include");
   });
 });
+
+// maven arm: the reactor aggregator pom's sidecar (zero components) warns
+// and skips; garbage/non-CycloneDX text routes to the scan where the
+// collector's own loud throw fires — the same strict === 0 undefined-falls-
+// through pattern shared with the npm/bun/nuget arms.
+const MAVEN_AGGREGATOR_SBOM = JSON.stringify({
+  bomFormat: "CycloneDX",
+  metadata: {
+    component: {
+      purl: "pkg:maven/com.example.fixture/reactor-parent@1.0.0?type=pom",
+    },
+  },
+  components: [],
+});
+
+const MAVEN_MODULE_SBOM = JSON.stringify({
+  bomFormat: "CycloneDX",
+  metadata: {
+    component: {
+      purl: "pkg:maven/com.example.fixture/liba@1.0.0?type=jar",
+    },
+  },
+  components: [
+    {
+      purl: "pkg:maven/com.example.fixture/commons-lang3@3.12.0?type=jar",
+    },
+  ],
+});
+
+describe("coverageSkipReason — maven.sbom.json arm (strict === 0)", () => {
+  test("a zero-component aggregator pom is a positively-determined zero → skip with the house reason", () => {
+    expect(coverageSkipReason("maven.sbom.json", MAVEN_AGGREGATOR_SBOM)).toBe(
+      "maven.sbom.json has no third-party entries (no components other than its own root, e.g. the reactor aggregator pom)",
+    );
+  });
+
+  test("garbage text routes to the scan (undefined — the collector's loud throw fires there)", () => {
+    expect(
+      coverageSkipReason("maven.sbom.json", "not json at all }{"),
+    ).toBeUndefined();
+  });
+
+  test("a non-zero count falls through to the scan", () => {
+    expect(
+      coverageSkipReason("maven.sbom.json", MAVEN_MODULE_SBOM),
+    ).toBeUndefined();
+  });
+});
+
+describe("classifyCoverage — maven.sbom.json warn+skip vs hard-fail split", () => {
+  test("the aggregator pom's zero-component doc is skipped (never a hard fail)", () => {
+    expect(
+      classifyCoverage("reactor", "maven.sbom.json", MAVEN_AGGREGATOR_SBOM, 0),
+    ).toBe("skip");
+  });
+
+  test("a garbage sidecar that scans to zero components HARD-FAILS (unknown is never a silent skip)", () => {
+    expect(() =>
+      classifyCoverage("reactor", "maven.sbom.json", "not json at all }{", 0),
+    ).toThrow(/zero components|coverage assertion/);
+  });
+
+  test("a real module sidecar with a positive component count is included", () => {
+    expect(
+      classifyCoverage("liba", "maven.sbom.json", MAVEN_MODULE_SBOM, 1),
+    ).toBe("include");
+  });
+});

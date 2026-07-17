@@ -18,6 +18,7 @@ import {
   terraformComponentCount,
 } from "../collectors/terraform";
 import {
+  mavenThirdPartyEntryCount,
   npmThirdPartyEntryCount,
   nugetThirdPartyEntryCount,
   pnpmThirdPartyEntryCount,
@@ -119,6 +120,13 @@ function terraformSkipReason(
  *   fall-through, so an unreadable lock routes to the scan where the
  *   collector's loud parse throw or the zero-component hard-fail fires.
  *
+ * - maven: a maven.sbom.json whose components hold nothing but its own root
+ *   purl counts a positively-determined zero → warn+skip (the reactor
+ *   aggregator pom's sidecar is the case that matters). The counter shares
+ *   its document narrow with the collector, so a sidecar the collector
+ *   would throw on returns undefined here too — the scan routes there and
+ *   the collector's loud throw fires, never a silent skip.
+ *
  * - terraform: a `.terraform.lock.hcl` whose sibling
  *   `.terraform/modules/modules.json` is ABSENT AND whose `<dir>/.terraform/`
  *   directory is also ABSENT (init never ran) is NOT skip-classified and NOT a
@@ -207,6 +215,14 @@ const ZERO_THIRD_PARTY_ARMS = new Map<
     {
       count: nugetThirdPartyEntryCount,
       reason: "only Project entries, or empty dependency sections",
+    },
+  ],
+  [
+    "maven.sbom.json",
+    {
+      count: mavenThirdPartyEntryCount,
+      reason:
+        "no components other than its own root, e.g. the reactor aggregator pom",
     },
   ],
 ]);

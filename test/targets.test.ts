@@ -1565,3 +1565,139 @@ describe("collectTargets — nuget packages.lock.json coverage integration", () 
     expect(result.targetDirs).toEqual([root]);
   });
 });
+
+// ---------------------------------------------------------------------------
+// collectTargets — maven reactor attribution (17-02): the pipeline pre-pass +
+// post-collect sibling filter, exercised end-to-end via the in-process maven
+// collector (no mocking — no subprocess exists to stub).
+// ---------------------------------------------------------------------------
+
+/** Reactor aggregator pom: zero components, root type=pom. */
+const REACTOR_AGGREGATOR_SBOM = JSON.stringify({
+  bomFormat: "CycloneDX",
+  metadata: {
+    component: {
+      purl: "pkg:maven/com.example.fixture/reactor-parent@1.0.0?type=pom",
+    },
+  },
+  components: [],
+});
+
+/** Module liba: one ordinary third-party dependency. */
+const REACTOR_LIBA_SBOM = JSON.stringify({
+  bomFormat: "CycloneDX",
+  metadata: {
+    component: { purl: "pkg:maven/com.example.fixture/liba@1.0.0?type=jar" },
+  },
+  components: [
+    {
+      purl: "pkg:maven/com.example.fixture/commons-lang3@3.12.0?type=jar",
+      licenses: [{ license: { id: "Apache-2.0" } }],
+    },
+  ],
+});
+
+/**
+ * Module appb: depends on liba (the sibling leak — a plain component with no
+ * marker) plus liba's own transitive and appb's own dependency.
+ */
+const REACTOR_APPB_SBOM = JSON.stringify({
+  bomFormat: "CycloneDX",
+  metadata: {
+    component: { purl: "pkg:maven/com.example.fixture/appb@1.0.0?type=jar" },
+  },
+  components: [
+    { purl: "pkg:maven/com.example.fixture/liba@1.0.0?type=jar" },
+    {
+      purl: "pkg:maven/com.example.fixture/commons-lang3@3.12.0?type=jar",
+      licenses: [{ license: { id: "Apache-2.0" } }],
+    },
+    {
+      purl: "pkg:maven/com.example.fixture/gson@2.10.1?type=jar",
+      licenses: [{ license: { id: "Apache-2.0" } }],
+    },
+  ],
+});
+
+/**
+ * Module allsiblings: its ONLY component is a sibling module — a real
+ * cyclonedx-maven-plugin edge case (a module depending on nothing but
+ * another reactor module). Post-filter this collapses to zero components,
+ * which must merge as an empty contribution, never a hard fail.
+ */
+const REACTOR_ALLSIBLINGS_SBOM = JSON.stringify({
+  bomFormat: "CycloneDX",
+  metadata: {
+    component: {
+      purl: "pkg:maven/com.example.fixture/allsiblings@1.0.0?type=jar",
+    },
+  },
+  components: [{ purl: "pkg:maven/com.example.fixture/liba@1.0.0?type=jar" }],
+});
+
+function componentPurlsOf(sbom: unknown): string[] {
+  const doc = sbom as { components?: Array<Record<string, unknown>> };
+  return (doc.components ?? []).map((c) => String(c["purl"]));
+}
+
+describe("collectTargets — maven reactor attribution", () => {
+  test("three module targets collect; the aggregator pom skips; sibling exclusion and the all-siblings empty contribution both hold", async () => {
+    const root = mkdtempSync(join(tmpdir(), "licenses-maven-reactor-"));
+    writeFileSync(join(root, "maven.sbom.json"), REACTOR_AGGREGATOR_SBOM);
+    const libaDir = join(root, "liba");
+    const appbDir = join(root, "appb");
+    const allsiblingsDir = join(root, "allsiblings");
+    mkdirSync(libaDir);
+    mkdirSync(appbDir);
+    mkdirSync(allsiblingsDir);
+    writeFileSync(join(libaDir, "maven.sbom.json"), REACTOR_LIBA_SBOM);
+    writeFileSync(join(appbDir, "maven.sbom.json"), REACTOR_APPB_SBOM);
+    writeFileSync(
+      join(allsiblingsDir, "maven.sbom.json"),
+      REACTOR_ALLSIBLINGS_SBOM,
+    );
+
+    const log: string[] = [];
+    const result = await collectTargets(baseOpts(root), (line) => {
+      log.push(line);
+    });
+
+    // The aggregator pom is never pushed into the merge, and never hard-fails.
+    expect(result.inputs.some((input) => input.targetIdentity === ".")).toBe(
+      false,
+    );
+    expect(
+      log.some(
+        (line) =>
+          line.startsWith("warning: skipping . —") &&
+          line.includes("maven.sbom.json has no third-party entries"),
+      ),
+    ).toBe(true);
+
+    expect(result.inputs.map((input) => input.targetIdentity).sort()).toEqual([
+      "allsiblings",
+      "appb",
+      "liba",
+    ]);
+
+    const appbInput = result.inputs.find(
+      (input) => input.targetIdentity === "appb",
+    );
+    expect(componentPurlsOf(appbInput?.sbom)).toEqual([
+      "pkg:maven/com.example.fixture/commons-lang3@3.12.0?type=jar",
+      "pkg:maven/com.example.fixture/gson@2.10.1?type=jar",
+    ]);
+
+    const libaInput = result.inputs.find(
+      (input) => input.targetIdentity === "liba",
+    );
+    expect(componentPurlsOf(libaInput?.sbom)).toEqual([
+      "pkg:maven/com.example.fixture/commons-lang3@3.12.0?type=jar",
+    ]);
+
+    const allsiblingsInput = result.inputs.find(
+      (input) => input.targetIdentity === "allsiblings",
+    );
+    expect(componentPurlsOf(allsiblingsInput?.sbom)).toEqual([]);
+  });
+});
