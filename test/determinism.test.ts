@@ -600,6 +600,109 @@ describe("determinism — maven collector double-run byte-identity", () => {
     expect(first.md.endsWith("\n\n")).toBe(false);
   });
 
+  describe("dual-document (maven.sbom.json + maven.test.sbom.json)", () => {
+    const DUAL_DET_DEFAULT_SBOM = JSON.stringify({
+      bomFormat: "CycloneDX",
+      specVersion: "1.6",
+      metadata: {
+        component: {
+          purl: "pkg:maven/com.example.det/dual-app@1.0.0?type=jar",
+        },
+      },
+      components: [
+        {
+          purl: "pkg:maven/com.example.det/dual-compile-lib@1.0.0?type=jar",
+          name: "dual-compile-lib",
+          version: "1.0.0",
+          group: "com.example.det",
+          licenses: [{ license: { id: "MIT" } }],
+        },
+      ],
+    });
+
+    const DUAL_DET_TEST_SBOM = JSON.stringify({
+      bomFormat: "CycloneDX",
+      specVersion: "1.6",
+      metadata: {
+        component: {
+          purl: "pkg:maven/com.example.det/dual-app@1.0.0?type=jar",
+        },
+      },
+      components: [
+        {
+          purl: "pkg:maven/com.example.det/dual-compile-lib@1.0.0?type=jar",
+          name: "dual-compile-lib",
+          version: "1.0.0",
+          group: "com.example.det",
+          licenses: [{ license: { id: "MIT" } }],
+        },
+        {
+          purl: "pkg:maven/com.example.det/dual-test-only-lib@1.0.0?type=jar",
+          name: "dual-test-only-lib",
+          version: "1.0.0",
+          group: "com.example.det",
+          licenses: [{ license: { id: "EPL-2.0" } }],
+        },
+      ],
+    });
+
+    const DUAL_DET_TARGET_IDENTITY = "fixtures/maven-det-dual";
+
+    function makeDualMavenFixtureTarget(): Target {
+      const dir = mkdtempSync(join(tmpdir(), "licenses-det-maven-dual-"));
+      collectorTempDirs.push(dir);
+      writeFileSync(join(dir, "maven.sbom.json"), DUAL_DET_DEFAULT_SBOM);
+      writeFileSync(join(dir, "maven.test.sbom.json"), DUAL_DET_TEST_SBOM);
+      return { dir, identity: DUAL_DET_TARGET_IDENTITY };
+    }
+
+    test("two collector runs over the same dual-doc pair write byte-identical composed bom.json", async () => {
+      const target = makeDualMavenFixtureTarget();
+      const first = await collectMavenBomText(target);
+      const second = await collectMavenBomText(target);
+      expect(first).toBe(second);
+      expect(first).toContain("dual-compile-lib");
+      expect(first).toContain("dual-test-only-lib");
+    });
+
+    test("double-build double-render of the composed dual-doc bom, with prodPurlSet threaded, is byte-identical", async () => {
+      const buildOnce = async (): Promise<{ md: string; dump: string }> => {
+        const tempDir = mkdtempSync(join(tmpdir(), "licenses-det-out-"));
+        collectorTempDirs.push(tempDir);
+        const result = await collectWithMavenSbom(
+          makeDualMavenFixtureTarget(),
+          { tempDir },
+        );
+        const sbom = JSON.parse(readFileSync(result.sbomPath, "utf-8"));
+        const model = mergeSboms([
+          {
+            sbom,
+            targetIdentity: DUAL_DET_TARGET_IDENTITY,
+            prodPurlSet: result.prodPurlSet,
+          },
+        ]);
+        return {
+          md: renderMarkdown(model),
+          dump: toSortedDependenciesJson(model),
+        };
+      };
+      const first = await buildOnce();
+      const second = await buildOnce();
+      expect(first.md).toBe(second.md);
+      expect(first.dump).toBe(second.dump);
+
+      // Not vacuously equal: both the composed inventory and the dev/prod
+      // classification reach the merged model.
+      expect(first.dump.includes("dual-compile-lib")).toBe(true);
+      expect(first.dump.includes("dual-test-only-lib")).toBe(true);
+
+      // LF contract holds on the dual-doc collector-fed render path too.
+      expect(first.md.includes("\r")).toBe(false);
+      expect(first.md.endsWith("\n")).toBe(true);
+      expect(first.md.endsWith("\n\n")).toBe(false);
+    });
+  });
+
   test("mixed bun + cdxgen-shaped npm fixture double-render is byte-identical (multi-PM)", async () => {
     const bomText = await collectBomText(makeBunFixtureTarget());
     const npmRaw = readFileSync(

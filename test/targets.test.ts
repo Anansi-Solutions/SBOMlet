@@ -1701,3 +1701,106 @@ describe("collectTargets — maven reactor attribution", () => {
     expect(componentPurlsOf(allsiblingsInput?.sbom)).toEqual([]);
   });
 });
+
+/**
+ * liba's test-inclusive sidecar: a superset adding one test-only dependency
+ * beside liba's existing commons-lang3 — same root purl as REACTOR_LIBA_SBOM
+ * (the pre-pass and sibling exclusion key on the DEFAULT doc's root purl
+ * only, per the locked design; this fixture never touches that).
+ */
+const REACTOR_LIBA_TEST_SBOM = JSON.stringify({
+  bomFormat: "CycloneDX",
+  metadata: {
+    component: { purl: "pkg:maven/com.example.fixture/liba@1.0.0?type=jar" },
+  },
+  components: [
+    {
+      purl: "pkg:maven/com.example.fixture/commons-lang3@3.12.0?type=jar",
+      licenses: [{ license: { id: "Apache-2.0" } }],
+    },
+    {
+      purl: "pkg:maven/com.example.fixture/junit-fixture@5.0.0?type=jar",
+      licenses: [{ license: { id: "EPL-2.0" } }],
+    },
+  ],
+});
+
+describe("collectTargets — maven reactor attribution with a test-inclusive sidecar present", () => {
+  test("a test doc on ONE reactor module changes only that module's own inventory — the aggregator skip, target set, and sibling exclusion for every module are unchanged", async () => {
+    const root = mkdtempSync(join(tmpdir(), "licenses-maven-reactor-dual-"));
+    writeFileSync(join(root, "maven.sbom.json"), REACTOR_AGGREGATOR_SBOM);
+    const libaDir = join(root, "liba");
+    const appbDir = join(root, "appb");
+    const allsiblingsDir = join(root, "allsiblings");
+    mkdirSync(libaDir);
+    mkdirSync(appbDir);
+    mkdirSync(allsiblingsDir);
+    writeFileSync(join(libaDir, "maven.sbom.json"), REACTOR_LIBA_SBOM);
+    // The ONLY difference from the plain reactor test above: liba also
+    // commits a test-inclusive sidecar.
+    writeFileSync(
+      join(libaDir, "maven.test.sbom.json"),
+      REACTOR_LIBA_TEST_SBOM,
+    );
+    writeFileSync(join(appbDir, "maven.sbom.json"), REACTOR_APPB_SBOM);
+    writeFileSync(
+      join(allsiblingsDir, "maven.sbom.json"),
+      REACTOR_ALLSIBLINGS_SBOM,
+    );
+
+    const log: string[] = [];
+    const result = await collectTargets(baseOpts(root), (line) => {
+      log.push(line);
+    });
+
+    // The aggregator pom still skips exactly as before — the counter and
+    // coverage arm never see the test doc (they read maven.sbom.json only).
+    expect(result.inputs.some((input) => input.targetIdentity === ".")).toBe(
+      false,
+    );
+    expect(
+      log.some(
+        (line) =>
+          line.startsWith("warning: skipping . —") &&
+          line.includes("maven.sbom.json has no third-party entries"),
+      ),
+    ).toBe(true);
+
+    // The target set is unchanged — one target per module, never a second
+    // target for the test doc.
+    expect(result.inputs.map((input) => input.targetIdentity).sort()).toEqual([
+      "allsiblings",
+      "appb",
+      "liba",
+    ]);
+
+    // liba's OWN inventory now carries the composed dual-doc set (its
+    // default component plus the test-only addition).
+    const libaInput = result.inputs.find(
+      (input) => input.targetIdentity === "liba",
+    );
+    expect(componentPurlsOf(libaInput?.sbom).sort()).toEqual(
+      [
+        "pkg:maven/com.example.fixture/commons-lang3@3.12.0?type=jar",
+        "pkg:maven/com.example.fixture/junit-fixture@5.0.0?type=jar",
+      ].sort(),
+    );
+
+    // appb's sibling exclusion is UNCHANGED: liba's purl (from the default
+    // doc's own root, the only thing the pre-pass ever reads) still drops
+    // out of appb's inventory exactly as in the no-test-doc reactor test.
+    const appbInput = result.inputs.find(
+      (input) => input.targetIdentity === "appb",
+    );
+    expect(componentPurlsOf(appbInput?.sbom)).toEqual([
+      "pkg:maven/com.example.fixture/commons-lang3@3.12.0?type=jar",
+      "pkg:maven/com.example.fixture/gson@2.10.1?type=jar",
+    ]);
+
+    // allsiblings is untouched by liba's test doc — still collapses to zero.
+    const allsiblingsInput = result.inputs.find(
+      (input) => input.targetIdentity === "allsiblings",
+    );
+    expect(componentPurlsOf(allsiblingsInput?.sbom)).toEqual([]);
+  });
+});

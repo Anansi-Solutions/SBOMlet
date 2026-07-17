@@ -416,6 +416,77 @@ function unsidecaredPomWarnings(
   return pomNoSidecarWarnings(unsidecared, opts?.verbose ?? false);
 }
 
+/**
+ * The maven.test.sbom.json-without-maven.sbom.json warning strings: the
+ * test-inclusive sidecar is optional-additive and never its own discovery
+ * trigger (§ LOCKFILES above), so a directory that commits ONLY the test
+ * doc — no default `maven.sbom.json` beside it — must be TOLD it never
+ * became a target, rather than silently vanishing. One aggregated summary
+ * line by default; one line per directory when `verbose` (the CLI's
+ * --verbose) is set. `orphaned` arrives compareCodeUnits-sorted, so both
+ * shapes are deterministic.
+ *
+ * Identities are repo-author-controlled directory names printed to stderr,
+ * so they pass through sanitizeForLog AT RENDER ONLY (a crafted name cannot
+ * forge or erase warning lines); the suppression/exclusion matching upstream
+ * stays on the raw identities. Exported for direct unit testing — hostile
+ * names cannot be created on every filesystem.
+ */
+export function mavenTestSbomOrphanWarnings(
+  orphaned: readonly string[],
+  verbose: boolean,
+): string[] {
+  if (orphaned.length === 0) return [];
+  if (verbose) {
+    return orphaned.map(
+      (identity) =>
+        `target "${sanitizeForLog(identity)}" has a maven.test.sbom.json ` +
+        "but no maven.sbom.json — commit maven.sbom.json (the default " +
+        "sidecar) beside it; the test-inclusive document is read only " +
+        "alongside the default one",
+    );
+  }
+  const count = orphaned.length;
+  const truncated = count > AGGREGATE_EXAMPLE_LIMIT;
+  const examples = orphaned
+    .slice(0, AGGREGATE_EXAMPLE_LIMIT)
+    .map((identity) => `"${sanitizeForLog(identity)}"`)
+    .join(", ");
+  const countPhrase =
+    count === 1 ? "1 directory contains" : `${count} directories contain`;
+  return [
+    `${countPhrase} a maven.test.sbom.json but no maven.sbom.json ` +
+      `(${truncated ? "e.g. " : ""}${examples}) — commit maven.sbom.json ` +
+      "(the default sidecar) beside each one; the test-inclusive document " +
+      "is read only alongside the default one" +
+      (truncated ? "; re-run with --verbose to list every directory" : ""),
+  ];
+}
+
+/**
+ * Post-step 5's warning computation: every recorded maven.test.sbom.json
+ * identity with NO surviving maven target at that identity (a committed
+ * maven.sbom.json is authoritative and suppresses the warning — the same
+ * same-directory suppression as post-step 4), compareCodeUnits-sorted,
+ * rendered by {@link mavenTestSbomOrphanWarnings}.
+ */
+function orphanedMavenTestSbomWarnings(
+  mavenTestSbomIdentities: ReadonlySet<string>,
+  targets: readonly DiscoveredTarget[],
+  opts?: DiscoverOptions,
+): string[] {
+  const orphaned = [...mavenTestSbomIdentities]
+    .filter(
+      (identity) =>
+        !targets.some(
+          (target) =>
+            target.identity === identity && target.lockfile === "maven",
+        ),
+    )
+    .sort(compareCodeUnits);
+  return mavenTestSbomOrphanWarnings(orphaned, opts?.verbose ?? false);
+}
+
 /** Discovery output: collision-resolved targets plus warning data. */
 export interface DiscoveryResult {
   targets: DiscoveredTarget[];
@@ -453,6 +524,7 @@ export function discoverTargetsWithWarnings(
   const bunLockbIdentities = new Set<string>();
   const csprojIdentities = new Set<string>();
   const pomIdentities = new Set<string>();
+  const mavenTestSbomIdentities = new Set<string>();
 
   const identityOf = (dir: string): string =>
     relative(repoRoot, dir).split(sep).join("/") || ".";
@@ -509,6 +581,16 @@ export function discoverTargetsWithWarnings(
     pomIdentities.add(identity);
   };
 
+  const recordMavenTestSbom = (dir: string): void => {
+    // Observed, never a target: maven.test.sbom.json is optional-additive
+    // (not in LOCKFILES) — the post-step below decides whether a lone
+    // sighting (no maven.sbom.json in the same directory) warrants the
+    // orphan warning.
+    const identity = identityOf(dir);
+    if (isExcluded(identity, matchers)) return;
+    mavenTestSbomIdentities.add(identity);
+  };
+
   const walk = (dir: string): void => {
     // Symlinks report isDirectory() === false on Dirent entries, so they are
     // never followed — no cycle traversal, no escape from repoRoot. Do not add
@@ -525,6 +607,8 @@ export function discoverTargetsWithWarnings(
         recordCsproj(dir);
       } else if (entry.isFile() && entry.name === "pom.xml") {
         recordPom(dir);
+      } else if (entry.isFile() && entry.name === "maven.test.sbom.json") {
+        recordMavenTestSbom(dir);
       }
     }
   };
@@ -605,6 +689,15 @@ export function discoverTargetsWithWarnings(
   // directory joins the no-sidecar warning — aggregated by default,
   // per-directory under the verbose option.
   warnings.push(...unsidecaredPomWarnings(pomIdentities, targets, opts));
+
+  // Post-step 5: maven.test.sbom.json sightings (the pom.xml idiom,
+  // suppressed by a surviving maven target in the same directory — a
+  // committed maven.sbom.json is authoritative). The test doc is
+  // optional-additive and never its own target, so a lone sighting must
+  // never scan to zero silently.
+  warnings.push(
+    ...orphanedMavenTestSbomWarnings(mavenTestSbomIdentities, targets, opts),
+  );
 
   warnings.sort(compareCodeUnits);
   return { targets, warnings };

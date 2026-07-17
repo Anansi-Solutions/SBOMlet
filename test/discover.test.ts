@@ -8,6 +8,7 @@ import {
   discoverTargets,
   discoverTargetsWithWarnings,
   lockfileNameFor,
+  mavenTestSbomOrphanWarnings,
   pomNoSidecarWarnings,
 } from "../src/targets/discover";
 
@@ -853,5 +854,117 @@ describe("lockfileNameFor", () => {
     expect(lockfileNameFor("pnpm")).toBe("pnpm-lock.yaml");
     expect(lockfileNameFor("bun")).toBe("bun.lock");
     expect(lockfileNameFor("nuget")).toBe("packages.lock.json");
+  });
+});
+
+function writeMavenTestSbomOnly(dir: string): void {
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(
+    join(dir, "maven.test.sbom.json"),
+    '{ "bomFormat": "CycloneDX", "components": [] }',
+  );
+}
+
+function addMavenTestSbom(dir: string): void {
+  writeFileSync(
+    join(dir, "maven.test.sbom.json"),
+    '{ "bomFormat": "CycloneDX", "components": [] }',
+  );
+}
+
+describe("discoverTargetsWithWarnings — maven.test.sbom.json without maven.sbom.json", () => {
+  test("a dir with BOTH docs yields exactly ONE maven target and no orphan warning", () => {
+    const root = makeTempRoot();
+    const dir = join(root, "app");
+    makeMavenProject(dir);
+    addMavenTestSbom(dir);
+
+    const { targets, warnings } = discoverTargetsWithWarnings(root);
+
+    expect(targets.map((t) => t.identity)).toEqual(["app"]);
+    expect(targets.map((t) => t.lockfile)).toEqual(["maven"]);
+    expect(warnings).toEqual([]);
+  });
+
+  test("a lone maven.test.sbom.json (no maven.sbom.json) yields NO maven target and ONE aggregated orphan warning", () => {
+    const root = makeTempRoot();
+    writeMavenTestSbomOnly(join(root, "app"));
+
+    const { targets, warnings } = discoverTargetsWithWarnings(root);
+
+    expect(targets).toEqual([]);
+    expect(warnings).toEqual([
+      "1 directory contains a maven.test.sbom.json but no maven.sbom.json " +
+        '("app") — commit maven.sbom.json (the default sidecar) beside ' +
+        "each one; the test-inclusive document is read only alongside " +
+        "the default one",
+    ]);
+  });
+
+  test("suppression is per-directory: a lone test doc beside a covered dir stays independent", () => {
+    const root = makeTempRoot();
+    makeMavenProject(join(root, "covered"));
+    writeMavenTestSbomOnly(join(root, "uncovered"));
+
+    const { targets, warnings } = discoverTargetsWithWarnings(root);
+
+    expect(targets.map((t) => t.identity)).toEqual(["covered"]);
+    expect(warnings).toEqual([
+      "1 directory contains a maven.test.sbom.json but no maven.sbom.json " +
+        '("uncovered") — commit maven.sbom.json (the default sidecar) ' +
+        "beside each one; the test-inclusive document is read only " +
+        "alongside the default one",
+    ]);
+  });
+
+  test("verbose emits one warning per directory instead of the aggregate, sorted deterministically", () => {
+    const root = makeTempRoot();
+    writeMavenTestSbomOnly(join(root, "b-mod"));
+    writeMavenTestSbomOnly(join(root, "a-mod"));
+
+    const { warnings } = discoverTargetsWithWarnings(root, { verbose: true });
+
+    expect(warnings).toEqual([
+      'target "a-mod" has a maven.test.sbom.json but no maven.sbom.json ' +
+        "— commit maven.sbom.json (the default sidecar) beside it; the " +
+        "test-inclusive document is read only alongside the default one",
+      'target "b-mod" has a maven.test.sbom.json but no maven.sbom.json ' +
+        "— commit maven.sbom.json (the default sidecar) beside it; the " +
+        "test-inclusive document is read only alongside the default one",
+    ]);
+  });
+
+  test("an excluded identity produces neither targets nor the orphan warning", () => {
+    const root = makeTempRoot();
+    writeMavenTestSbomOnly(join(root, "skipme"));
+
+    const { targets, warnings } = discoverTargetsWithWarnings(root, {
+      excludes: ["skipme"],
+    });
+
+    expect(targets).toEqual([]);
+    expect(warnings).toEqual([]);
+  });
+
+  test("HOSTILE directory identities are sanitized in BOTH warning shapes (no stderr line forgery)", () => {
+    const esc = String.fromCharCode(27);
+    const lf = String.fromCharCode(10);
+    const hostile = "evil" + esc + "[2K" + lf + "ok: all clear";
+    const controlChars = new RegExp(
+      "[" +
+        String.fromCharCode(0) +
+        "-" +
+        String.fromCharCode(31) +
+        String.fromCharCode(127) +
+        "-" +
+        String.fromCharCode(159) +
+        "]",
+    );
+    const [aggregated] = mavenTestSbomOrphanWarnings([hostile], false);
+    const [verbose] = mavenTestSbomOrphanWarnings([hostile], true);
+    expect(aggregated).toBeDefined();
+    expect(verbose).toBeDefined();
+    expect(controlChars.test(aggregated as string)).toBe(false);
+    expect(controlChars.test(verbose as string)).toBe(false);
   });
 });
