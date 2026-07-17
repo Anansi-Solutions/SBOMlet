@@ -390,8 +390,8 @@ function absorbUnitInputs(
   }
 }
 /**
- * Cross-target first-party purl pre-pass for Maven reactors (17-RESEARCH
- * §6): gather EVERY discovered maven target's own root purl BEFORE any
+ * Cross-target first-party purl pre-pass for Maven reactors: gather
+ * EVERY discovered maven target's own root purl BEFORE any
  * target is collected, so a sibling module's leaked dependency edge can be
  * recognized no matter which order targets scan in. This lives at the
  * pipeline, not inside the collector, because only the pipeline sees every

@@ -171,11 +171,13 @@ The lane's limits, stated plainly:
 The system-scoped jars a `<dependency>` with `<scope>system</scope>` declares
 are exactly this last case — a commercial licence with no public claim to
 enrich from. Record the decision with a `LicenseRef-` [[clarify]] expression,
-the sanctioned spelling for that case:
+the sanctioned spelling for that case. The `name` is the package as the
+inventory's Name column reports it — for Maven that is `group/artifact`, not
+the bare artifact:
 
 ```toml
 [[clarify]]
-package = { name = "reporting-engine-pro", version = "9.0.0" }
+package = { name = "com.example.vendor/reporting-engine-pro", version = "9.0.0" }
 expression = "LicenseRef-reporting-engine-pro-commercial"
 reason = "Commercial reporting-engine licence, vendored under lib/; no public SPDX id exists."
 ```

@@ -104,7 +104,7 @@ export function ecosystemFor(kind: LockfileKind): "js" | "python" {
       );
     case "maven":
       // maven targets are collected in-process from a committed CycloneDX
-      // sidecar (17-RESEARCH §2) — no build tool runs, so there is no
+      // sidecar — no build tool runs, so there is no
       // cdxgen ecosystem to select. Reaching here is a wiring bug.
       throw new Error(
         "maven targets are collected in-process and have no cdxgen ecosystem",

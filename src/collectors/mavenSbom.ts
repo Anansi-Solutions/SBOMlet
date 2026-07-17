@@ -208,7 +208,7 @@ export async function collectWithMavenSbom(
 /**
  * Extract a maven.sbom.json sidecar's own root purl (metadata.component.purl)
  * without validating anything else about the document — the pre-pass primitive
- * behind the reactor first-party purl set (17-RESEARCH §6). Only the pipeline
+ * behind the reactor first-party purl set. Only the pipeline
  * sees every discovered target, so cross-target sibling knowledge is gathered
  * HERE, before any target is collected, and threaded into
  * {@link excludeMavenFirstParty} at the post-collect step.
@@ -239,7 +239,7 @@ export function mavenRootPurlOf(text: string): string | undefined {
  * first-party set, returning a NEW document — the input is never mutated.
  * Purl-string equality is the only comparison: both sides come from the same
  * cyclonedx-maven-plugin producer with the same `?type=jar` qualifier shape,
- * so a version-qualified exact match is safe (17-RESEARCH §6).
+ * so a version-qualified exact match is safe.
  *
  * A STALE sibling reference (the module bumped its version, the sibling's
  * sidecar was not regenerated) deliberately does NOT match — it surfaces as
