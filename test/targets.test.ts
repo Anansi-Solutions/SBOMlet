@@ -1804,3 +1804,61 @@ describe("collectTargets — maven reactor attribution with a test-inclusive sid
     expect(componentPurlsOf(allsiblingsInput?.sbom)).toEqual([]);
   });
 });
+
+/**
+ * appb's test-inclusive sidecar OMITS the sibling (liba) and one third-party
+ * dep (commons-lang3): both come back through the composed inventory's
+ * residual, and the post-collect filter must still drop the sibling.
+ */
+const REACTOR_APPB_NON_SUPERSET_TEST_SBOM = JSON.stringify({
+  bomFormat: "CycloneDX",
+  metadata: {
+    component: { purl: "pkg:maven/com.example.fixture/appb@1.0.0?type=jar" },
+  },
+  components: [
+    {
+      purl: "pkg:maven/com.example.fixture/gson@2.10.1?type=jar",
+      licenses: [{ license: { id: "Apache-2.0" } }],
+    },
+    {
+      purl: "pkg:maven/com.example.fixture/mockito-fixture@4.0.0?type=jar",
+      licenses: [{ license: { id: "MIT" } }],
+    },
+  ],
+});
+
+describe("collectTargets — maven reactor: the residual never re-introduces a sibling", () => {
+  test("a sibling carried back by the composed inventory's residual is still excluded", async () => {
+    const root = mkdtempSync(join(tmpdir(), "licenses-maven-reactor-res-"));
+    const libaDir = join(root, "liba");
+    const appbDir = join(root, "appb");
+    mkdirSync(libaDir);
+    mkdirSync(appbDir);
+    writeFileSync(join(libaDir, "maven.sbom.json"), REACTOR_LIBA_SBOM);
+    writeFileSync(join(appbDir, "maven.sbom.json"), REACTOR_APPB_SBOM);
+    writeFileSync(
+      join(appbDir, "maven.test.sbom.json"),
+      REACTOR_APPB_NON_SUPERSET_TEST_SBOM,
+    );
+
+    const result = await collectTargets(baseOpts(root), () => {});
+    const appbInput = result.inputs.find(
+      (input) => input.targetIdentity === "appb",
+    );
+    // liba (the residual-carried sibling) is gone; commons-lang3 (the
+    // residual-carried third-party dep) survives; the test-only dep joins.
+    expect(componentPurlsOf(appbInput?.sbom).sort()).toEqual(
+      [
+        "pkg:maven/com.example.fixture/commons-lang3@3.12.0?type=jar",
+        "pkg:maven/com.example.fixture/gson@2.10.1?type=jar",
+        "pkg:maven/com.example.fixture/mockito-fixture@4.0.0?type=jar",
+      ].sort(),
+    );
+    // The prod purl set (the default doc's own purls) rides the filter spread.
+    expect(
+      appbInput?.prodPurlSet?.has(
+        "pkg:maven/com.example.fixture/commons-lang3@3.12.0?type=jar",
+      ),
+    ).toBe(true);
+  });
+});
