@@ -5,6 +5,7 @@ import {
   githubBlobLicenseTarget,
   githubTagObjectUrl,
   githubTagRefUrl,
+  resolveUrlOnlyGithubLicense,
   type GithubApiGet,
 } from "../src/enrich/nugetGithub";
 import type { GithubLicenseFetch } from "../src/enrich/fetch";
@@ -342,5 +343,148 @@ describe("commitShaForRef — tag-to-commit immutability proof", () => {
     await expect(
       commitShaForRef("aspnet", "Home", "2.0.0", "symbol", get),
     ).rejects.toThrow(GithubTransientError);
+  });
+});
+
+describe("resolveUrlOnlyGithubLicense — the one registration point (classify → prove tag → read License API)", () => {
+  const AUTH_LICENSE_URL =
+    "https://raw.githubusercontent.com/aspnet/Home/2.0.0/LICENSE.txt";
+  const TAG_REF_URL =
+    "https://api.github.com/repos/aspnet/Home/git/ref/tags/2.0.0";
+  const SHA = "abcdef0123456789abcdef0123456789abcdef01";
+  const LICENSE_AT_SHA_URL = `https://api.github.com/repos/aspnet/Home/license?ref=${SHA}`;
+
+  function withStubbedFetch<T>(
+    byUrl: Record<string, { status: number; body?: unknown }>,
+    calls: string[],
+    fn: () => Promise<T>,
+  ): Promise<T> {
+    const original = globalThis.fetch;
+    globalThis.fetch = (async (
+      input: string | URL | Request,
+    ): Promise<Response> => {
+      const url = typeof input === "string" ? input : input.toString();
+      calls.push(url);
+      const stub = byUrl[url];
+      if (stub === undefined) throw new Error(`unexpected fetch ${url}`);
+      return new Response(
+        stub.body === undefined ? "{}" : JSON.stringify(stub.body),
+        {
+          status: stub.status,
+          headers: { "content-type": "application/json" },
+        },
+      );
+    }) as typeof fetch;
+    return fn().finally(() => {
+      globalThis.fetch = original;
+    });
+  }
+
+  test("a tag-pinned URL resolves the SPDX id, ref, and commit sha end-to-end", async () => {
+    const calls: string[] = [];
+    const result = await withStubbedFetch(
+      {
+        [TAG_REF_URL]: {
+          status: 200,
+          body: { object: { sha: SHA, type: "commit" } },
+        },
+        [LICENSE_AT_SHA_URL]: {
+          status: 200,
+          body: { license: { spdx_id: "Apache-2.0" } },
+        },
+      },
+      calls,
+      () => resolveUrlOnlyGithubLicense(AUTH_LICENSE_URL, { backoffBaseMs: 1 }),
+    );
+    expect(result).toEqual({ raw: "Apache-2.0", ref: "2.0.0", sha: SHA });
+    expect(calls).toEqual([TAG_REF_URL, LICENSE_AT_SHA_URL]);
+  });
+
+  test("a 40-hex ref resolves with a SINGLE fetch — no tag lookup call made", async () => {
+    const calls: string[] = [];
+    const url = `https://raw.githubusercontent.com/aspnet/Home/${SHA}/LICENSE`;
+    const licenseUrl = `https://api.github.com/repos/aspnet/Home/license?ref=${SHA}`;
+    const result = await withStubbedFetch(
+      { [licenseUrl]: { status: 200, body: { license: { spdx_id: "MIT" } } } },
+      calls,
+      () => resolveUrlOnlyGithubLicense(url, { backoffBaseMs: 1 }),
+    );
+    expect(result).toEqual({ raw: "MIT", ref: SHA, sha: SHA });
+    expect(calls).toEqual([licenseUrl]);
+  });
+
+  test("a branch ref (blob/master) is a negative — the tag-ref 404s, NO License API call", async () => {
+    const calls: string[] = [];
+    const branchTagRefUrl =
+      "https://api.github.com/repos/dotnet/corefx/git/ref/tags/master";
+    const result = await withStubbedFetch(
+      { [branchTagRefUrl]: { status: 404 } },
+      calls,
+      () =>
+        resolveUrlOnlyGithubLicense(
+          "https://github.com/dotnet/corefx/blob/master/LICENSE.TXT",
+          { backoffBaseMs: 1 },
+        ),
+    );
+    expect(result).toBeNull();
+    expect(calls).toEqual([branchTagRefUrl]);
+  });
+
+  test("a fwlink / non-GitHub URL is a negative with ZERO GitHub calls", async () => {
+    const calls: string[] = [];
+    const result = await withStubbedFetch({}, calls, () =>
+      resolveUrlOnlyGithubLicense(
+        "https://go.microsoft.com/fwlink/?LinkId=329770",
+        {
+          backoffBaseMs: 1,
+        },
+      ),
+    );
+    expect(result).toBeNull();
+    expect(calls).toEqual([]);
+  });
+
+  test("a 404 at the pinned commit's License API is a definitive negative", async () => {
+    const calls: string[] = [];
+    const result = await withStubbedFetch(
+      {
+        [TAG_REF_URL]: {
+          status: 200,
+          body: { object: { sha: SHA, type: "commit" } },
+        },
+        [LICENSE_AT_SHA_URL]: { status: 404 },
+      },
+      calls,
+      () => resolveUrlOnlyGithubLicense(AUTH_LICENSE_URL, { backoffBaseMs: 1 }),
+    );
+    expect(result).toBeNull();
+  });
+
+  test("a NOASSERTION at the pinned commit is a definitive negative", async () => {
+    const calls: string[] = [];
+    const result = await withStubbedFetch(
+      {
+        [TAG_REF_URL]: {
+          status: 200,
+          body: { object: { sha: SHA, type: "commit" } },
+        },
+        [LICENSE_AT_SHA_URL]: {
+          status: 200,
+          body: { license: { spdx_id: "NOASSERTION" } },
+        },
+      },
+      calls,
+      () => resolveUrlOnlyGithubLicense(AUTH_LICENSE_URL, { backoffBaseMs: 1 }),
+    );
+    expect(result).toBeNull();
+  });
+
+  test("a transient failure at any hop propagates as GithubTransientError, never a null", async () => {
+    const calls: string[] = [];
+    await expect(
+      withStubbedFetch({ [TAG_REF_URL]: { status: 403 } }, calls, () =>
+        resolveUrlOnlyGithubLicense(AUTH_LICENSE_URL, { backoffBaseMs: 1 }),
+      ),
+    ).rejects.toThrow(/github 403/);
   });
 });

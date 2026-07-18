@@ -1,25 +1,34 @@
 /**
  * The immutable-ref GitHub rung for NuGet's url-only `licenseUrl` class: a
- * pure classifier over the URL string, naming a `github.com`/
- * `raw.githubusercontent.com` root-LICENSE blob at a tag or a 40-hex commit
- * SHA.
+ * pure classifier over the URL string, tag-to-commit resolution through the
+ * GitHub Git API, and the License API read at the resulting pinned commit.
  *
  * A NuGet package's bare `licenseUrl` (the pre-2019 metadata class,
  * superseded by `licenseExpression`) is author-controlled and can point
  * anywhere; following it blindly would let a mutable target silently change
  * what a cached answer means. This module resolves ONLY the shapes that are
- * verifiably immutable: a URL naming the repository-root LICENSE file at an
- * exact commit SHA, or at a tag — and a tag is only trusted after proving it
- * exists via the GitHub Git Refs API, never by reading the URL's ref segment
- * as a fact. A branch name (including one that happens to look like a
- * version) fails that proof and is fenced out by construction, never
- * reaching the license read.
+ * verifiably immutable: a `github.com`/`raw.githubusercontent.com` URL
+ * naming the repository-root LICENSE file at an exact commit SHA, or at a
+ * tag — and a tag is only trusted after proving it exists via the GitHub
+ * Git Refs API, never by reading the URL's ref segment as a fact. A branch
+ * name (including one that happens to look like a version) fails that proof
+ * and is fenced out by construction, never reaching the license read.
+ *
+ * The `licenseUrl` string itself is never fetched — every network request
+ * targets a URL built from the fixed `api.github.com` host and the owner/
+ * repo/ref extracted by the classifier, the same SSRF control every other
+ * fixed-host resolver in this codebase uses.
  */
 import {
   narrowGithubTagObject,
   narrowGithubTagRef,
 } from "../validate/registry";
-import type { GithubLicenseFetch } from "./fetch";
+import {
+  fetchGithubLicense,
+  type FetchOptions,
+  type GithubLicenseFetch,
+} from "./fetch";
+import { resolveGithubLicense } from "./github";
 
 /** The GitHub API base — a FIXED host (the SSRF control, the NUGET_API_HOST idiom). */
 export const GITHUB_API_HOST = "https://api.github.com";
@@ -141,6 +150,15 @@ export function githubTagObjectUrl(
   return `${GITHUB_API_HOST}/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/git/tags/${encodeURIComponent(sha)}`;
 }
 
+/** The License API URL at an exact ref — the fixed-host shape the tag endpoints share. */
+function githubLicenseAtRefUrl(
+  owner: string,
+  repo: string,
+  ref: string,
+): string {
+  return `${GITHUB_API_HOST}/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/license?ref=${encodeURIComponent(ref)}`;
+}
+
 /** The injected GitHub API GET — `fetchGithubLicense`'s exact shape, stubbed by tests. */
 export type GithubApiGet = (url: string) => Promise<GithubLicenseFetch>;
 
@@ -180,4 +198,53 @@ export async function commitShaForRef(
   if (tagObjectResult.status === 404) return null;
   const tagObject = narrowGithubTagObject(tagObjectResult.body);
   return tagObject?.commitSha ?? null;
+}
+
+/** A resolved url-only GitHub license: the raw SPDX id plus the ref/commit audit trail. */
+export interface UrlOnlyGithubResolution {
+  raw: string;
+  /** The ref exactly as named in the source `licenseUrl` (a tag, or a 40-hex SHA). */
+  ref: string;
+  /** The immutable commit SHA the License API actually read. */
+  sha: string;
+}
+
+/**
+ * The one registration point for the url-only NuGet `licenseUrl` GitHub
+ * rung: classify, resolve the ref to an immutable commit, then read the
+ * License API at that exact commit. Shared by the nuget miss path and
+ * reused for cache verification.
+ *
+ * Returns null for every honest-negative shape: an unrecognized URL, a ref
+ * that is not an existing tag, or a definitive 404/NOASSERTION answer at the
+ * pinned commit — the SAME null the caller already treats as a governed
+ * negative for every other class. A transient GitHub failure propagates
+ * loudly, never a null.
+ */
+export async function resolveUrlOnlyGithubLicense(
+  licenseUrl: string,
+  fetchOpts: FetchOptions = {},
+): Promise<UrlOnlyGithubResolution | null> {
+  const target = githubBlobLicenseTarget(licenseUrl);
+  if (target === null) return null;
+
+  const get: GithubApiGet = (url) => fetchGithubLicense(url, fetchOpts);
+  const sha = await commitShaForRef(
+    target.owner,
+    target.repo,
+    target.ref,
+    target.refKind,
+    get,
+  );
+  if (sha === null) return null;
+
+  const result = await fetchGithubLicense(
+    githubLicenseAtRefUrl(target.owner, target.repo, sha),
+    fetchOpts,
+  );
+  if (result.status === 404) return null; // no LICENSE at the pinned commit — definitive
+  const resolved = resolveGithubLicense(result.body);
+  if (resolved === null) return null; // NOASSERTION at the pinned commit — definitive
+
+  return { raw: resolved.raw, ref: target.ref, sha };
 }

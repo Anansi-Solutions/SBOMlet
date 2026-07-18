@@ -57,7 +57,9 @@ import {
   catalogEntryUrlOf,
   nugetRegistrationLeafUrl,
   resolveNugetCatalogLicense,
+  urlOnlyLicenseUrlOf,
 } from "./nuget";
+import { resolveUrlOnlyGithubLicense } from "./nugetGithub";
 import { resolvePypiLicense } from "./pypi";
 
 /** Cap on copyright lines attached from a scancode replay (matches the extractor/merge cap). */
@@ -345,7 +347,7 @@ async function fetchMisses(
   await Promise.all([
     fetchRegistryMisses(registryMisses, packages, cache, fetchOpts),
     fetchTerraformMisses(terraformMisses, packages, cache, fetchOpts, opts),
-    fetchNugetMisses(nugetMisses, packages, cache, fetchOpts),
+    fetchNugetMisses(nugetMisses, packages, cache, fetchOpts, opts),
     fetchMavenMisses(mavenMisses, packages, cache, fetchOpts),
   ]);
 }
@@ -452,15 +454,19 @@ async function fetchTerraformMisses(
  * resolver's clean null record governed NEGATIVE entries; every throw
  * (429/5xx/network/timeout) propagates loudly out of mapLimit and writes
  * NOTHING — negative-poison impossible. The cache key stays the VERBATIM
- * purl; only the URLs are lowercased (the builder owns that). Nuget entries
- * never carry fetchedAt: registration/catalog blobs are stable versioned CDN
- * content, the pypi/npm no-timestamp rule.
+ * purl; only the URLs are lowercased (the builder owns that). A catalog
+ * document with no resolvable expression/embedded-file/licenses.nuget.org
+ * claim falls through to the immutable-ref GitHub rung on its raw
+ * `licenseUrl` (see {@link resolveViaUrlOnlyGithub}) before recording the
+ * negative — that rung is the ONE case in this arm that carries fetchedAt,
+ * mirroring the terraform github arm.
  */
 async function fetchNugetMisses(
   misses: Unknown[],
   packages: PackageEntry[],
   cache: Map<string, CacheEntry>,
   fetchOpts: { backoffBaseMs?: number },
+  opts: EnrichOptions,
 ): Promise<void> {
   await mapLimit(misses, FETCH_CONCURRENCY, async (miss): Promise<void> => {
     const leaf = await fetchJsonOr404(
@@ -482,17 +488,65 @@ async function fetchNugetMisses(
       return;
     }
     const resolved = resolveNugetCatalogLicense(catalog.body);
-    if (resolved === null) {
-      recordNegative(miss, cache, "nuget"); // embedded-file / url-only / none — honest unknown
+    if (resolved !== null) {
+      packages[miss.index] = withCacheClaim(
+        miss.entry,
+        resolved.raw,
+        "registry",
+      );
+      putEntry(cache, miss.entry.purl, {
+        license: resolved.raw,
+        fetchedFrom: "nuget",
+        via: resolved.via,
+        resolvable: true,
+      });
       return;
     }
-    packages[miss.index] = withCacheClaim(miss.entry, resolved.raw, "registry");
-    putEntry(cache, miss.entry.purl, {
-      license: resolved.raw,
-      fetchedFrom: "nuget",
-      via: resolved.via,
-      resolvable: true,
-    });
+    await resolveViaUrlOnlyGithub(
+      miss,
+      catalog.body,
+      packages,
+      cache,
+      fetchOpts,
+      opts,
+    );
+  });
+}
+
+/**
+ * The url-only class-4 fallback for a nuget miss whose catalog document
+ * carries no resolvable licenseExpression/licenseFile/licenses.nuget.org
+ * claim: try the immutable-ref GitHub rung on its raw `licenseUrl`. A router
+ * null — an unrecognized URL, a ref that is not an existing tag, or a
+ * definitive 404/NOASSERTION at the pinned commit — is the SAME governed
+ * negative every other nuget miss gets; a resolution appends the registry
+ * claim and records the ref/commit audit trail in `via`, stamped with
+ * fetchedAt like the terraform github arm.
+ */
+async function resolveViaUrlOnlyGithub(
+  miss: Unknown,
+  catalogBody: unknown,
+  packages: PackageEntry[],
+  cache: Map<string, CacheEntry>,
+  fetchOpts: { backoffBaseMs?: number },
+  opts: EnrichOptions,
+): Promise<void> {
+  const licenseUrl = urlOnlyLicenseUrlOf(catalogBody);
+  const resolved =
+    licenseUrl === undefined
+      ? null
+      : await resolveUrlOnlyGithubLicense(licenseUrl, fetchOpts);
+  if (resolved === null) {
+    recordNegative(miss, cache, "nuget"); // unrecognized URL / branch ref / no license — honest unknown
+    return;
+  }
+  packages[miss.index] = withCacheClaim(miss.entry, resolved.raw, "registry");
+  putEntry(cache, miss.entry.purl, {
+    license: resolved.raw,
+    fetchedFrom: "github",
+    via: `license-url-github@${resolved.ref}=${resolved.sha}`,
+    resolvable: true,
+    fetchedAt: (opts.now ?? defaultNow)().toISOString(),
   });
 }
 

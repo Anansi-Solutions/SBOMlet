@@ -1983,6 +1983,8 @@ describe("nuget narrows (tolerant)", () => {
 describe("enrichUnknowns nuget (two-step fetch, negative discipline, offline check)", () => {
   // Tiny backoff so the transient retry loop doesn't take seconds.
   const fastBackoff = 1;
+  const FIXED_NOW = new Date("2026-06-14T00:00:00.000Z");
+  const fixedClock = (): Date => FIXED_NOW;
 
   function model(...packages: PackageEntry[]): CanonicalDependencies {
     return { packages };
@@ -2426,6 +2428,327 @@ describe("enrichUnknowns nuget (two-step fetch, negative discipline, offline che
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
+  });
+
+  describe("the url-only class-4 fallback: the immutable-ref GitHub rung", () => {
+    const AUTH_LICENSE_URL =
+      "https://raw.githubusercontent.com/aspnet/Home/2.0.0/LICENSE.txt";
+    const TAG_REF_URL =
+      "https://api.github.com/repos/aspnet/Home/git/ref/tags/2.0.0";
+    const SHA = "abcdef0123456789abcdef0123456789abcdef01";
+    const LICENSE_AT_SHA_URL = `https://api.github.com/repos/aspnet/Home/license?ref=${SHA}`;
+
+    test("tag-pinned success end-to-end: claims Apache-2.0, records the ref/sha audit trail, stamps fetchedAt once", async () => {
+      const { dir, path } = tempCachePath();
+      try {
+        const { fetch, calls } = fetchByUrl((url) => {
+          if (url === LEAF_URL)
+            return jsonResponse({ catalogEntry: CATALOG_URL });
+          if (url === CATALOG_URL) {
+            return jsonResponse({ licenseUrl: AUTH_LICENSE_URL });
+          }
+          if (url === TAG_REF_URL) {
+            return jsonResponse({ object: { sha: SHA, type: "commit" } });
+          }
+          if (url === LICENSE_AT_SHA_URL) {
+            return jsonResponse({ license: { spdx_id: "Apache-2.0" } });
+          }
+          throw new Error(`unexpected url ${url}`);
+        });
+        const result = await withFetch(fetch, () =>
+          enrichUnknowns(model(unknownNuget()), {
+            mode: "generate",
+            cachePath: path,
+            verbose: false,
+            backoffBaseMs: fastBackoff,
+            now: fixedClock,
+          }),
+        );
+        expect(calls).toEqual([
+          LEAF_URL,
+          CATALOG_URL,
+          TAG_REF_URL,
+          LICENSE_AT_SHA_URL,
+        ]);
+        expect(registryClaim(result.model.packages[0])).toEqual({
+          raw: "Apache-2.0",
+          kind: "expression",
+          source: "registry",
+        });
+        const recorded = getEntry(
+          readCache(path),
+          "pkg:nuget/Newtonsoft.Json@13.0.4",
+        );
+        expect(recorded).toEqual({
+          license: "Apache-2.0",
+          fetchedFrom: "github",
+          via: `license-url-github@2.0.0=${SHA}`,
+          resolvable: true,
+          fetchedAt: "2026-06-14T00:00:00.000Z",
+        });
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
+
+    test("a 40-hex ref resolves with NO tag lookup call — the sha is trusted directly", async () => {
+      const { dir, path } = tempCachePath();
+      const shaUrl = `https://raw.githubusercontent.com/aspnet/Home/${SHA}/LICENSE`;
+      const licenseUrl = `https://api.github.com/repos/aspnet/Home/license?ref=${SHA}`;
+      try {
+        const { fetch, calls } = fetchByUrl((url) => {
+          if (url === LEAF_URL)
+            return jsonResponse({ catalogEntry: CATALOG_URL });
+          if (url === CATALOG_URL) return jsonResponse({ licenseUrl: shaUrl });
+          if (url === licenseUrl) {
+            return jsonResponse({ license: { spdx_id: "MIT" } });
+          }
+          throw new Error(`unexpected url ${url}`);
+        });
+        const result = await withFetch(fetch, () =>
+          enrichUnknowns(model(unknownNuget()), {
+            mode: "generate",
+            cachePath: path,
+            verbose: false,
+            backoffBaseMs: fastBackoff,
+            now: fixedClock,
+          }),
+        );
+        expect(calls).toEqual([LEAF_URL, CATALOG_URL, licenseUrl]); // no git/ref/tags call
+        expect(registryClaim(result.model.packages[0])?.raw).toBe("MIT");
+        const recorded = getEntry(
+          readCache(path),
+          "pkg:nuget/Newtonsoft.Json@13.0.4",
+        );
+        expect(recorded?.via).toBe(`license-url-github@${SHA}=${SHA}`);
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
+
+    test("a branch ref (blob/master) is a NEGATIVE — the tag-ref 404s, NO License API call", async () => {
+      const { dir, path } = tempCachePath();
+      const branchTagRefUrl =
+        "https://api.github.com/repos/dotnet/corefx/git/ref/tags/master";
+      try {
+        const { fetch, calls } = fetchByUrl((url) => {
+          if (url === LEAF_URL)
+            return jsonResponse({ catalogEntry: CATALOG_URL });
+          if (url === CATALOG_URL) {
+            return jsonResponse({
+              licenseUrl:
+                "https://github.com/dotnet/corefx/blob/master/LICENSE.TXT",
+            });
+          }
+          if (url === branchTagRefUrl) return jsonResponse({}, 404);
+          throw new Error(`unexpected url ${url}`);
+        });
+        const result = await withFetch(fetch, () =>
+          enrichUnknowns(model(unknownNuget()), {
+            mode: "generate",
+            cachePath: path,
+            verbose: false,
+            backoffBaseMs: fastBackoff,
+          }),
+        );
+        expect(calls).toEqual([LEAF_URL, CATALOG_URL, branchTagRefUrl]); // no License API call
+        expect(registryClaim(result.model.packages[0])).toBeUndefined();
+        expect(
+          getEntry(readCache(path), "pkg:nuget/Newtonsoft.Json@13.0.4"),
+        ).toEqual({
+          license: null,
+          fetchedFrom: "nuget",
+          via: "unresolved",
+          resolvable: false,
+        });
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
+
+    test("a fwlink/non-GitHub licenseUrl is a NEGATIVE with ZERO GitHub calls", async () => {
+      const { dir, path } = tempCachePath();
+      try {
+        const { fetch, calls } = fetchByUrl((url) => {
+          if (url === LEAF_URL)
+            return jsonResponse({ catalogEntry: CATALOG_URL });
+          if (url === CATALOG_URL) {
+            return jsonResponse({
+              licenseUrl: "https://go.microsoft.com/fwlink/?LinkId=329770",
+            });
+          }
+          throw new Error(`unexpected url ${url}`);
+        });
+        const result = await withFetch(fetch, () =>
+          enrichUnknowns(model(unknownNuget()), {
+            mode: "generate",
+            cachePath: path,
+            verbose: false,
+            backoffBaseMs: fastBackoff,
+          }),
+        );
+        expect(calls).toEqual([LEAF_URL, CATALOG_URL]); // never a github.com call
+        expect(registryClaim(result.model.packages[0])).toBeUndefined();
+        expect(
+          getEntry(readCache(path), "pkg:nuget/Newtonsoft.Json@13.0.4")
+            ?.resolvable,
+        ).toBe(false);
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
+
+    test("a License 404 at the pinned commit is a definitive NEGATIVE", async () => {
+      const { dir, path } = tempCachePath();
+      try {
+        const { fetch } = fetchByUrl((url) => {
+          if (url === LEAF_URL)
+            return jsonResponse({ catalogEntry: CATALOG_URL });
+          if (url === CATALOG_URL) {
+            return jsonResponse({ licenseUrl: AUTH_LICENSE_URL });
+          }
+          if (url === TAG_REF_URL) {
+            return jsonResponse({ object: { sha: SHA, type: "commit" } });
+          }
+          if (url === LICENSE_AT_SHA_URL) return jsonResponse({}, 404);
+          throw new Error(`unexpected url ${url}`);
+        });
+        const result = await withFetch(fetch, () =>
+          enrichUnknowns(model(unknownNuget()), {
+            mode: "generate",
+            cachePath: path,
+            verbose: false,
+            backoffBaseMs: fastBackoff,
+          }),
+        );
+        expect(registryClaim(result.model.packages[0])).toBeUndefined();
+        expect(
+          getEntry(readCache(path), "pkg:nuget/Newtonsoft.Json@13.0.4")
+            ?.resolvable,
+        ).toBe(false);
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
+
+    test("a NOASSERTION at the pinned commit is a definitive NEGATIVE", async () => {
+      const { dir, path } = tempCachePath();
+      try {
+        const { fetch } = fetchByUrl((url) => {
+          if (url === LEAF_URL)
+            return jsonResponse({ catalogEntry: CATALOG_URL });
+          if (url === CATALOG_URL) {
+            return jsonResponse({ licenseUrl: AUTH_LICENSE_URL });
+          }
+          if (url === TAG_REF_URL) {
+            return jsonResponse({ object: { sha: SHA, type: "commit" } });
+          }
+          if (url === LICENSE_AT_SHA_URL) {
+            return jsonResponse({ license: { spdx_id: "NOASSERTION" } });
+          }
+          throw new Error(`unexpected url ${url}`);
+        });
+        const result = await withFetch(fetch, () =>
+          enrichUnknowns(model(unknownNuget()), {
+            mode: "generate",
+            cachePath: path,
+            verbose: false,
+            backoffBaseMs: fastBackoff,
+          }),
+        );
+        expect(registryClaim(result.model.packages[0])).toBeUndefined();
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
+
+    test("TRANSIENT: a persistent 500 on the tag-ref hop HARD-FAILS the run and writes NO entry", async () => {
+      const { dir, path } = tempCachePath();
+      try {
+        const { fetch } = fetchByUrl((url) => {
+          if (url === LEAF_URL)
+            return jsonResponse({ catalogEntry: CATALOG_URL });
+          if (url === CATALOG_URL) {
+            return jsonResponse({ licenseUrl: AUTH_LICENSE_URL });
+          }
+          return jsonResponse({}, 500); // the tag-ref hop, persistently transient
+        });
+        await expect(
+          withFetch(fetch, () =>
+            enrichUnknowns(model(unknownNuget()), {
+              mode: "generate",
+              cachePath: path,
+              verbose: false,
+              backoffBaseMs: fastBackoff,
+            }),
+          ),
+        ).rejects.toThrow(/github 500/);
+        // No cache written — a transient GitHub failure must never poison as a negative.
+        expect(existsSync(path)).toBe(false);
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
+
+    test("warm re-generate: a pre-seeded github-sourced positive entry replays with ZERO fetches, fetchedAt unchanged", async () => {
+      const { dir, path } = tempCachePath();
+      try {
+        const cache = new Map<string, CacheEntry>();
+        putEntry(cache, "pkg:nuget/Newtonsoft.Json@13.0.4", {
+          license: "Apache-2.0",
+          fetchedFrom: "github",
+          via: `license-url-github@2.0.0=${SHA}`,
+          resolvable: true,
+          fetchedAt: "2026-06-14T00:00:00.000Z",
+        });
+        writeFileSync(path, serializeCache(cache));
+
+        const { fetch, calls } = fetchByUrl(() => {
+          throw new Error("must not fetch on a warm cache hit");
+        });
+        const result = await withFetch(fetch, () =>
+          enrichUnknowns(model(unknownNuget()), {
+            mode: "generate",
+            cachePath: path,
+            verbose: false,
+          }),
+        );
+        expect(calls).toEqual([]);
+        expect(registryClaim(result.model.packages[0])?.raw).toBe("Apache-2.0");
+        expect(readFileSync(path, "utf8")).toBe(serializeCache(cache)); // byte-identical
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
+
+    test("check mode: a pre-seeded github-sourced NEGATIVE entry stays negative — hermetic, a stubbed-to-throw fetch is never called", async () => {
+      const { dir, path } = tempCachePath();
+      try {
+        const cache = new Map<string, CacheEntry>();
+        putEntry(cache, "pkg:nuget/Newtonsoft.Json@13.0.4", {
+          license: null,
+          fetchedFrom: "nuget",
+          via: "unresolved",
+          resolvable: false,
+        });
+        writeFileSync(path, serializeCache(cache));
+
+        const throwingFetch = (async (): Promise<Response> => {
+          throw new Error("check must never fetch");
+        }) as unknown as typeof fetch;
+        const result = await withFetch(throwingFetch, () =>
+          enrichUnknowns(model(unknownNuget()), {
+            mode: "check",
+            cachePath: path,
+            verbose: false,
+          }),
+        );
+        expect(registryClaim(result.model.packages[0])).toBeUndefined();
+        expect(result.staleUnknowns).toEqual([]);
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
   });
 });
 

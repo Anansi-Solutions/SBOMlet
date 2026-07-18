@@ -49,7 +49,12 @@ const CACHE_VERSION = 1;
  * nuget/deps-dev entries (their documents are stable versioned CDN/registry
  * content like the pypi/npm documents — zero churn on warm generates), and
  * NEVER rewritten on a cache hit, so a warm double-generate is byte-identical.
- * It lives ONLY here — never in any output (the determinism control).
+ * The stamp keys ONLY on `fetchedFrom`, never on the resolved package's own
+ * ecosystem: a NuGet package whose only license evidence is a GitHub URL
+ * still produces a `fetchedFrom:"github"` entry once that URL resolves
+ * through the immutable-ref GitHub lookup, and it carries fetchedAt exactly
+ * like a terraform package's github-sourced entry does. It lives ONLY here —
+ * never in any output (the determinism control).
  */
 export interface CacheEntry {
   license: string | ReadonlyArray<string> | null;
