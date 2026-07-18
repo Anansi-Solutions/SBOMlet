@@ -1308,12 +1308,6 @@
       "resolvable": true,
       "via": "version-license"
     },
-    "pkg:npm/eslint@10.4.1": {
-      "fetchedFrom": "npm",
-      "license": "MIT",
-      "resolvable": true,
-      "via": "version-license"
-    },
     "pkg:npm/eslint@10.7.0": {
       "fetchedFrom": "npm",
       "license": "MIT",
