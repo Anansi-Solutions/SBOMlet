@@ -29,6 +29,7 @@ import { parse as parseToml } from "smol-toml";
 import parseSpdx from "spdx-expression-parse";
 
 import { orLeaves, type ExpressionNode } from "../normalize/expression";
+import { parseGithubBlobPermalink } from "../validate/githubPermalink";
 import { PolicyRoot, TOP_LEVEL_KEYS } from "../validate/policy";
 import { recordOf, stringOf } from "../validate/record";
 import { BUILTIN_DENY_RULES } from "./builtinDenylist";
@@ -95,6 +96,20 @@ export interface ClarifyRule {
    * `expects` is the precondition for the new staleness-guarded disambiguation.
    */
   expects?: string;
+  /**
+   * Optional evidence pointer: a GitHub blob permalink pinned to an exact
+   * commit SHA, parsed and constraint-checked eagerly here (see
+   * validateClarifyEvidenceUrl). It never changes evaluate-time behavior —
+   * the clarify still matches on name/version and applies `expression`
+   * exactly as it would without it. It exists so a human reviewer, and later
+   * an online cache-drift check, can see exactly which pinned document a
+   * decision was based on. Requires `version`: an evidence-pinned decision is
+   * scoped to one package version, so a name-only clarify would let a new
+   * version silently inherit it. Mutually exclusive with `expects`: a package
+   * resolved only through cited evidence has no observed registry signal for
+   * `expects` to match, so the combination would always read stale.
+   */
+  evidence_url?: string;
   /** A valid SPDX expression — parsed eagerly here. */
   expression: string;
   reason: string;
@@ -681,14 +696,16 @@ function validateClarifyPackage(
 
 /**
  * Build a ClarifyRule with only the present optional keys materialized
- * (version, expects). Keeping the absent keys OFF the object — rather than
- * `undefined`-but-present — keeps "no precondition" observable and the parsed
- * shape minimal, matching the compatible-package-rule idiom above.
+ * (version, expects, evidence_url). Keeping the absent keys OFF the object —
+ * rather than `undefined`-but-present — keeps "no precondition" observable
+ * and the parsed shape minimal, matching the compatible-package-rule idiom
+ * above.
  */
 function makeClarifyRule(
   name: string,
   version: string | undefined,
   expects: string | undefined,
+  evidenceUrl: string | undefined,
   expression: string,
   reason: string,
 ): ClarifyRule {
@@ -696,9 +713,62 @@ function makeClarifyRule(
     name,
     ...(version !== undefined ? { version } : {}),
     ...(expects !== undefined ? { expects } : {}),
+    ...(evidenceUrl !== undefined ? { evidence_url: evidenceUrl } : {}),
     expression,
     reason,
   };
+}
+
+/**
+ * Validate the optional `evidence_url` on a [[clarify]] entry: it must parse
+ * as an immutable GitHub blob permalink (a full 40-hex commit SHA, never a
+ * branch or tag name), it requires `package.version` to be present, and it
+ * cannot be combined with `expects`. Returns the verbatim string on success;
+ * every rejection pushes one aggregated PolicyError message naming
+ * clarify[i] and returns undefined so the caller can tell "absent" from
+ * "present but invalid" (see the `evidence_url in entry` check at the call
+ * site). Only the parsed shape's validity is used here — the parsed
+ * owner/repo/sha/path themselves are discarded, because the rule keeps the
+ * verbatim string, not split fields (an online drift check re-parses the
+ * same string later).
+ */
+function validateClarifyEvidenceUrl(
+  entry: Record<string, unknown>,
+  where: string,
+  hasVersion: boolean,
+  hasExpects: boolean,
+  problems: string[],
+): string | undefined {
+  if (!("evidence_url" in entry)) return undefined;
+  const evidenceUrl = requireText(entry, "evidence_url", where, problems);
+  if (evidenceUrl === undefined) return undefined;
+
+  if (parseGithubBlobPermalink(evidenceUrl) === null) {
+    problems.push(
+      `${where}: key "evidence_url" must be an immutable GitHub blob permalink ` +
+        `("https://github.com/<owner>/<repo>/blob/<40-hex-commit-sha>/<path>") — ` +
+        `a branch or tag name is a mutable ref and cannot serve as pinned evidence; ` +
+        `open the file on github.com and press "y" to get a permalink`,
+    );
+    return undefined;
+  }
+  if (!hasVersion) {
+    problems.push(
+      `${where}: key "evidence_url" requires "package.version" — an evidence-pinned ` +
+        `decision is scoped to one package version, so a name-only clarify would let a ` +
+        `new version silently inherit it`,
+    );
+    return undefined;
+  }
+  if (hasExpects) {
+    problems.push(
+      `${where}: key "evidence_url" cannot be combined with "expects" — the two guards ` +
+        `cover different drift classes, and an evidence-pinned package has no observed ` +
+        `registry signal for "expects" to match, so the combination would always read stale`,
+    );
+    return undefined;
+  }
+  return evidenceUrl;
 }
 
 function validateClarify(
@@ -721,7 +791,7 @@ function validateClarify(
     }
     checkKeys(
       entry,
-      ["package", "expects", "expression", "reason"],
+      ["package", "expects", "expression", "reason", "evidence_url"],
       where,
       problems,
     );
@@ -740,6 +810,15 @@ function validateClarify(
       expects = requireText(entry, "expects", `${where}: expects`, problems);
       expectsValid = expects !== undefined;
     }
+    const evidenceUrl = validateClarifyEvidenceUrl(
+      entry,
+      where,
+      version !== undefined,
+      "expects" in entry,
+      problems,
+    );
+    const evidenceUrlValid =
+      !("evidence_url" in entry) || evidenceUrl !== undefined;
     const expression = requireText(entry, "expression", where, problems);
     let expressionValid = false;
     if (expression !== undefined) {
@@ -752,11 +831,21 @@ function validateClarify(
       name !== undefined &&
       versionValid &&
       expectsValid &&
+      evidenceUrlValid &&
       expressionValid &&
       expression !== undefined &&
       reason !== undefined
     ) {
-      clarify.push(makeClarifyRule(name, version, expects, expression, reason));
+      clarify.push(
+        makeClarifyRule(
+          name,
+          version,
+          expects,
+          evidenceUrl,
+          expression,
+          reason,
+        ),
+      );
     }
   });
   return clarify;
