@@ -2749,6 +2749,39 @@ describe("enrichUnknowns nuget (two-step fetch, negative discipline, offline che
         rmSync(dir, { recursive: true, force: true });
       }
     });
+
+    test("ladder-order bypass check: a catalogEntry with BOTH licenseFile and a GitHub licenseUrl never reaches the rung — embedded-file wins, zero GitHub calls", async () => {
+      const { dir, path } = tempCachePath();
+      try {
+        const { fetch, calls } = fetchByUrl((url) => {
+          if (url === LEAF_URL)
+            return jsonResponse({ catalogEntry: CATALOG_URL });
+          if (url === CATALOG_URL) {
+            return jsonResponse({
+              licenseFile: "LICENSE.txt",
+              licenseUrl: AUTH_LICENSE_URL,
+            });
+          }
+          throw new Error(`unexpected url ${url}`);
+        });
+        const result = await withFetch(fetch, () =>
+          enrichUnknowns(model(unknownNuget()), {
+            mode: "generate",
+            cachePath: path,
+            verbose: false,
+            backoffBaseMs: fastBackoff,
+          }),
+        );
+        expect(calls).toEqual([LEAF_URL, CATALOG_URL]); // never a github.com call
+        expect(registryClaim(result.model.packages[0])).toBeUndefined();
+        expect(
+          getEntry(readCache(path), "pkg:nuget/Newtonsoft.Json@13.0.4")
+            ?.resolvable,
+        ).toBe(false);
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
   });
 });
 

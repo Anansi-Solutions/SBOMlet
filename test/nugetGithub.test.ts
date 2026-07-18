@@ -189,6 +189,56 @@ describe("githubBlobLicenseTarget — pure classifier over a NuGet licenseUrl", 
     expect(githubBlobLicenseTarget("not a url at all")).toBeNull();
     expect(githubBlobLicenseTarget("")).toBeNull();
   });
+
+  test("Arm A mini-gate: a %2F-encoded segment stays opaque — never re-splits the path or shifts the root-LICENSE position", () => {
+    // The WHATWG URL parser leaves %2F undecoded inside a path segment, so an
+    // owner/ref carrying it is one literal segment, not an extra "/" boundary.
+    expect(
+      githubBlobLicenseTarget(
+        "https://raw.githubusercontent.com/o%2Fx/r/master/LICENSE",
+      ),
+    ).toEqual({ owner: "o%2Fx", repo: "r", ref: "master", refKind: "symbol" });
+    // An encoded slash inside the ref segment is equally inert — still one
+    // segment, so the file position (and the root-only fence) is unmoved.
+    expect(
+      githubBlobLicenseTarget(
+        "https://raw.githubusercontent.com/o/r/mas%2Fter/LICENSE",
+      ),
+    ).toEqual({
+      owner: "o",
+      repo: "r",
+      ref: "mas%2Fter",
+      refKind: "symbol",
+    });
+  });
+
+  test("Arm A mini-gate: a unicode-confusable host (punycode-normalized) is null — never coerces to the real github.com", () => {
+    // U+0261 LATIN SMALL LETTER SCRIPT G ("ɡithub.com") normalizes to a
+    // distinct xn-- punycode label, so the exact-hostname compare rejects it.
+    expect(
+      githubBlobLicenseTarget("https://ɡithub.com/o/r/blob/master/LICENSE"),
+    ).toBeNull();
+  });
+
+  test("Arm A mini-gate: a trailing-dot FQDN host (github.com.) is null — not treated as the same domain", () => {
+    expect(
+      githubBlobLicenseTarget("https://github.com./o/r/blob/master/LICENSE"),
+    ).toBeNull();
+  });
+
+  test("Arm A mini-gate: the backslash-authority trick (github.com\\@evil.example) is null — the real host is evil.example, not github.com", () => {
+    expect(
+      githubBlobLicenseTarget(
+        "https://github.com\\@evil.example/o/r/blob/master/LICENSE",
+      ),
+    ).toBeNull();
+  });
+
+  test("Arm A mini-gate: an explicit default port (:443) is accepted — it names the real github.com, not a bypass", () => {
+    expect(
+      githubBlobLicenseTarget("https://github.com:443/o/r/blob/master/LICENSE"),
+    ).toEqual({ owner: "o", repo: "r", ref: "master", refKind: "symbol" });
+  });
 });
 
 describe("urlOnlyLicenseUrlOf — class-4 ladder ordering (imported via nuget.ts)", () => {
