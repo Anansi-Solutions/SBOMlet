@@ -45,7 +45,9 @@ import {
   catalogEntryUrlOf,
   nugetRegistrationLeafUrl,
   resolveNugetCatalogLicense,
+  urlOnlyLicenseUrlOf,
 } from "./nuget";
+import { resolveUrlOnlyGithubLicense } from "./nugetGithub";
 
 /** Bounded concurrency over the audit fetch set (mirrors enrich's FETCH_CONCURRENCY). */
 const VERIFY_CONCURRENCY = 8;
@@ -133,8 +135,14 @@ async function currentRegistryLicense(
  * 404→null classification `generate` uses (enrich.ts). The two-step goes
  * DIRECT rather than through the memoized fetchDoc: that memo is single-URL
  * and the cache holds one entry per purl, so memoization buys nothing here.
- * A clean 404 (either hop) and a malformed/foreign-host catalogEntry map to
- * null — the definitive no-answer — while a transient failure throws (loud).
+ * When the catalogEntry has no directly resolvable license, the SAME
+ * {@link resolveUrlOnlyGithubLicense} router `generate` falls back to for a
+ * url-only `licenseUrl` re-runs here too: a rung-written entry re-verifies to
+ * the identical answer instead of reading as a false mismatch, and a
+ * pre-rung committed negative the rung can now resolve surfaces as the
+ * intended hidden-obligation mismatch, not a bug. A clean 404 (either hop)
+ * and a malformed/foreign-host catalogEntry map to null — the definitive
+ * no-answer — while a transient failure throws (loud).
  */
 async function currentNugetLicense(
   parsed: ParsedPurl,
@@ -150,7 +158,11 @@ async function currentNugetLicense(
   const catalog = await fetchJsonOr404(catalogUrl, fetchOpts);
   if (catalog.status === 404) return null;
   const resolved = resolveNugetCatalogLicense(catalog.body);
-  return resolved === null ? null : resolved.raw;
+  if (resolved !== null) return resolved.raw;
+  const licenseUrl = urlOnlyLicenseUrlOf(catalog.body);
+  if (licenseUrl === undefined) return null;
+  const viaGithub = await resolveUrlOnlyGithubLicense(licenseUrl, fetchOpts);
+  return viaGithub === null ? null : viaGithub.raw;
 }
 
 /**
