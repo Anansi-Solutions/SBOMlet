@@ -9,10 +9,17 @@
  * anywhere; following it blindly would let a mutable target silently change
  * what a cached answer means. This module resolves ONLY the shapes that are
  * verifiably immutable: a URL naming the repository-root LICENSE file at an
- * exact commit SHA, or at a tag — trusting a tag name is a later step (the
- * GitHub Git Refs API proof), not this module's job; the classifier only
- * decides whether a URL is shaped like a candidate at all.
+ * exact commit SHA, or at a tag — and a tag is only trusted after proving it
+ * exists via the GitHub Git Refs API, never by reading the URL's ref segment
+ * as a fact. A branch name (including one that happens to look like a
+ * version) fails that proof and is fenced out by construction, never
+ * reaching the license read.
  */
+import {
+  narrowGithubTagObject,
+  narrowGithubTagRef,
+} from "../validate/registry";
+import type { GithubLicenseFetch } from "./fetch";
 
 /** The GitHub API base — a FIXED host (the SSRF control, the NUGET_API_HOST idiom). */
 export const GITHUB_API_HOST = "https://api.github.com";
@@ -113,4 +120,64 @@ function rootLicenseTarget(
 ): GithubBlobLicenseTarget | null {
   if (ref === "" || !ROOT_LICENSE_FILE.test(file)) return null;
   return { owner, repo, ref, refKind: FULL_SHA.test(ref) ? "sha" : "symbol" };
+}
+
+/** Build the Git Refs API URL that proves a symbol ref is an existing tag. */
+export function githubTagRefUrl(
+  owner: string,
+  repo: string,
+  tag: string,
+): string {
+  const tagPath = tag.split("/").map(encodeURIComponent).join("/");
+  return `${GITHUB_API_HOST}/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/git/ref/tags/${tagPath}`;
+}
+
+/** Build the Git Tags API URL that peels an annotated tag object to its commit. */
+export function githubTagObjectUrl(
+  owner: string,
+  repo: string,
+  sha: string,
+): string {
+  return `${GITHUB_API_HOST}/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/git/tags/${encodeURIComponent(sha)}`;
+}
+
+/** The injected GitHub API GET — `fetchGithubLicense`'s exact shape, stubbed by tests. */
+export type GithubApiGet = (url: string) => Promise<GithubLicenseFetch>;
+
+/**
+ * Resolve a classified ref to the immutable commit SHA the License API must
+ * read, or null when the ref is not a tag that exists — the proof that
+ * fences every branch ref, including one literally named like a version, out
+ * of the license read by construction (the symbol name itself is never
+ * trusted, only what the tag-ref lookup returns).
+ *
+ * A `refKind: "sha"` ref is already immutable and needs no lookup. A
+ * `refKind: "symbol"` ref is looked up via the tag-ref endpoint: a 404 means
+ * it is not a tag and yields null; a lightweight tag's commit SHA is used
+ * directly; an annotated tag is peeled once via the tag-object endpoint to
+ * reach the commit it points at. A malformed response body is a clean null,
+ * never a throw. A transient GitHub failure propagates as
+ * {@link GithubTransientError} from `fetch.ts`.
+ */
+export async function commitShaForRef(
+  owner: string,
+  repo: string,
+  ref: string,
+  refKind: "sha" | "symbol",
+  get: GithubApiGet,
+): Promise<string | null> {
+  if (refKind === "sha") return ref;
+
+  const tagRefResult = await get(githubTagRefUrl(owner, repo, ref));
+  if (tagRefResult.status === 404) return null; // not a tag — fences every branch ref
+  const tagRef = narrowGithubTagRef(tagRefResult.body);
+  if (tagRef === undefined) return null;
+  if (tagRef.objectType === "commit") return tagRef.objectSha; // lightweight tag
+
+  const tagObjectResult = await get(
+    githubTagObjectUrl(owner, repo, tagRef.objectSha),
+  );
+  if (tagObjectResult.status === 404) return null;
+  const tagObject = narrowGithubTagObject(tagObjectResult.body);
+  return tagObject?.commitSha ?? null;
 }

@@ -123,6 +123,63 @@ export function narrowGithubLicense(value: unknown): GithubLicense | undefined {
   };
 }
 
+/** The `{object?: unknown}` shape shared by the GitHub Git Refs and Git Tags APIs. */
+const GithubGitObjectDocument = type({ "object?": "unknown" });
+
+/** Tolerant GitHub Git Refs API projection: the tag-ref lookup response. */
+export interface GithubTagRef {
+  /** object.sha — a commit SHA (lightweight tag) or a tag-object SHA (annotated, needs a peel). */
+  objectSha: string;
+  /** object.type — "commit" for a lightweight tag, "tag" for an annotated one. */
+  objectType: "commit" | "tag";
+}
+
+/**
+ * Narrow a raw GitHub Git Refs API response (`GET .../git/ref/tags/<tag>`) to
+ * {@link GithubTagRef}. A non-object top-level value, a missing/non-string
+ * `object.sha`, or an `object.type` outside `"commit"`/`"tag"` yields
+ * undefined — the caller treats every such shape as a clean null, never a
+ * throw (skip-don't-throw, ASVS V5).
+ */
+export function narrowGithubTagRef(value: unknown): GithubTagRef | undefined {
+  if (recordOf(value) === undefined) return undefined;
+  const parsed = GithubGitObjectDocument(value);
+  if (parsed instanceof type.errors) return undefined;
+  const object = recordOf(parsed.object);
+  const objectSha = stringOf(object?.["sha"]);
+  const objectType = stringOf(object?.["type"]);
+  if (objectSha === undefined) return undefined;
+  if (objectType !== "commit" && objectType !== "tag") return undefined;
+  return { objectSha, objectType };
+}
+
+/** Tolerant GitHub Git Tags API projection: the annotated-tag peel response. */
+export interface GithubTagObject {
+  /** object.sha — the commit an annotated tag object points at. */
+  commitSha: string;
+}
+
+/**
+ * Narrow a raw GitHub Git Tags API response (`GET .../git/tags/<sha>`) to
+ * {@link GithubTagObject}. Only an `object.type` of `"commit"` yields a
+ * result — an annotated tag pointing at anything else (a tree or a blob,
+ * both legal in git but never a license source) coerces to undefined, the
+ * same skip-don't-throw posture as every other narrow here.
+ */
+export function narrowGithubTagObject(
+  value: unknown,
+): GithubTagObject | undefined {
+  if (recordOf(value) === undefined) return undefined;
+  const parsed = GithubGitObjectDocument(value);
+  if (parsed instanceof type.errors) return undefined;
+  const object = recordOf(parsed.object);
+  const commitSha = stringOf(object?.["sha"]);
+  if (commitSha === undefined || stringOf(object?.["type"]) !== "commit") {
+    return undefined;
+  }
+  return { commitSha };
+}
+
 /** Tolerant NuGet registration-leaf projection: the only field the two-step hop reads. */
 export interface NugetLeaf {
   /** catalogEntry — the catalog document URL (string or absent); host-pinned by the caller. */
