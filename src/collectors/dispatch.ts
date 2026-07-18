@@ -102,6 +102,13 @@ export function ecosystemFor(kind: LockfileKind): "js" | "python" {
       throw new Error(
         "nuget targets are collected in-process and have no cdxgen ecosystem",
       );
+    case "maven":
+      // maven targets are collected in-process from a committed CycloneDX
+      // sidecar — no build tool runs, so there is no
+      // cdxgen ecosystem to select. Reaching here is a wiring bug.
+      throw new Error(
+        "maven targets are collected in-process and have no cdxgen ecosystem",
+      );
   }
 }
 
@@ -143,5 +150,11 @@ export function manifestFilesFor(kind: LockfileKind): readonly string[] {
       // edit that changes resolution rewrites the lock on the next restore,
       // so the lock byte-hash is a sufficient cache framing.
       return ["packages.lock.json"];
+    case "maven":
+      // The committed artifact IS the manifest (the terraform single-file
+      // precedent): maven.sbom.json is the whole cache-key input — a
+      // regenerated sidecar changes its own bytes, so nothing else needs
+      // hashing.
+      return ["maven.sbom.json"];
   }
 }

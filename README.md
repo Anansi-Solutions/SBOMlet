@@ -17,9 +17,9 @@ Point it at a repository and it inventories every dependency and its licence,
 writes the attribution files you redistribute, and runs as a CI gate that fails
 the build when a licence breaks your policy.
 
-It covers JS/TS, Python, .NET, Terraform/OpenTofu, and the packages in your Docker
-images — their full contents, the OS layer and the application packages on top. It
-has no dependency on the project it audits — you add
+It covers JS/TS, Python, .NET, Maven, Terraform/OpenTofu, and the packages in your
+Docker images — their full contents, the OS layer and the application packages on
+top. It has no dependency on the project it audits — you add
 it as one directory and one policy file.
 
 ## What you get
@@ -73,7 +73,7 @@ policy fail: pkg:npm/some-agpl-tool@2.1.0 in services/api — deny: AGPL-3.0 is 
 
 1. **Point.** SBOMlet walks the repo for the places dependencies are declared:
    `yarn.lock`, `package-lock.json`, `pnpm-lock.yaml`, `bun.lock`, `poetry.lock`,
-   `uv.lock`, `packages.lock.json`, `.terraform.lock.hcl`.
+   `uv.lock`, `packages.lock.json`, `maven.sbom.json`, `.terraform.lock.hcl`.
 2. **Read.** Each is read by a pinned standard generator
    ([cdxgen](https://github.com/CycloneDX/cdxgen),
    [syft](https://github.com/anchore/syft)) or a small in-house parser, and the
@@ -139,6 +139,7 @@ the same mise + Task pipeline as the Taskfile path — pick whichever fits your 
 | JS / TypeScript | `yarn.lock`, `package-lock.json`, `pnpm-lock.yaml`, `bun.lock` |
 | Python | `poetry.lock`, `uv.lock` |
 | .NET | `packages.lock.json` — opt-in; see the [adoption prerequisite](docs/getting-started.md#if-your-repository-is-net) |
+| Maven | `maven.sbom.json` — opt-in, one per module; see the [adoption prerequisite](docs/getting-started.md#if-your-repository-is-maven) |
 | Terraform / OpenTofu | `.terraform.lock.hcl` |
 | Docker images (full contents — OS and application packages) | a committed `.sbomlet.cache/docker.sbom.json` (see below) |
 

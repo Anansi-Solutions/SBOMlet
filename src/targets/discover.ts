@@ -26,6 +26,12 @@
  *   feeds one AGGREGATED warning naming the RestorePackagesWithLockFile=true +
  *   `dotnet restore` migration (per-directory detail under the verbose
  *   option) — a .NET repo never scans to zero targets silently.
+ * - `pom.xml` is likewise observed during the walk but never becomes a
+ *   target: a directory with a pom.xml sighting and no surviving maven
+ *   target feeds one AGGREGATED warning naming the cyclonedx-maven-plugin
+ *   adoption recipe (per-directory detail under the verbose option) — a
+ *   Maven repo never scans to zero targets silently, the same idiom as the
+ *   csproj near-miss above.
  *
  * This module is pure walk + classify: it never exits, never writes to stderr,
  * and returns an empty array for a lockfile-less root — the CLI owns the
@@ -47,7 +53,8 @@ export type LockfileKind =
   | "poetry"
   | "uv"
   | "terraform"
-  | "nuget";
+  | "nuget"
+  | "maven";
 
 export interface DiscoveredTarget extends Target {
   /** Which lockfile produced this target. One DiscoveredTarget per lockfile found. */
@@ -61,9 +68,9 @@ export interface DiscoverOptions {
   excludes?: readonly string[];
   /**
    * Per-directory warning detail (the CLI's --verbose): when true, the
-   * csproj-no-lock near-miss emits one warning per directory instead of the
-   * aggregated summary line. Affects warning FORMAT only — never the target
-   * set.
+   * csproj-no-lock and pom-no-sidecar near-misses emit one warning per
+   * directory instead of the aggregated summary line. Affects warning
+   * FORMAT only — never the target set.
    */
   verbose?: boolean;
 }
@@ -77,6 +84,7 @@ const LOCKFILES = new Map<string, LockfileKind>([
   ["uv.lock", "uv"],
   [".terraform.lock.hcl", "terraform"],
   ["packages.lock.json", "nuget"],
+  ["maven.sbom.json", "maven"],
 ]);
 
 /**
@@ -262,12 +270,14 @@ export function isExcluded(
 }
 
 /**
- * How many lockless-csproj directories the aggregated warning names verbatim;
- * past this the list truncates to "e.g." plus the --verbose hint. Real .NET
- * monorepos can hold ~100 lockless project directories — a per-directory
- * warning wall is unusable, so the default is one summary line.
+ * How many near-miss directories (lockless csproj, sidecar-less pom.xml) the
+ * aggregated warning names verbatim; past this the list truncates to "e.g."
+ * plus the --verbose hint. Real monorepos can hold ~100 such directories — a
+ * per-directory warning wall is unusable, so the default is one summary
+ * line. Shared by both near-miss kinds so their aggregation caps can never
+ * drift apart.
  */
-const CSPROJ_EXAMPLE_LIMIT = 3;
+const AGGREGATE_EXAMPLE_LIMIT = 3;
 
 /**
  * The csproj-sighted-but-no-lock warning strings: a .NET project without a
@@ -298,9 +308,9 @@ export function csprojNoLockWarnings(
     );
   }
   const count = lockless.length;
-  const truncated = count > CSPROJ_EXAMPLE_LIMIT;
+  const truncated = count > AGGREGATE_EXAMPLE_LIMIT;
   const examples = lockless
-    .slice(0, CSPROJ_EXAMPLE_LIMIT)
+    .slice(0, AGGREGATE_EXAMPLE_LIMIT)
     .map((identity) => `"${sanitizeForLog(identity)}"`)
     .join(", ");
   const countPhrase =
@@ -335,6 +345,146 @@ function locklessCsprojWarnings(
     )
     .sort(compareCodeUnits);
   return csprojNoLockWarnings(lockless, opts?.verbose ?? false);
+}
+
+/**
+ * The pom.xml-sighted-but-no-sidecar warning strings: a Maven project
+ * without a committed maven.sbom.json must be TOLD the adoption recipe (run
+ * the pinned cyclonedx-maven-plugin's makeBom goal in CI, commit the
+ * result), never silently inventoried as zero. One aggregated summary line
+ * by default; one line per directory when `verbose` (the CLI's --verbose)
+ * is set. `unsidecared` arrives compareCodeUnits-sorted, so both shapes are
+ * deterministic.
+ *
+ * Identities are repo-author-controlled directory names printed to stderr,
+ * so they pass through sanitizeForLog AT RENDER ONLY (a crafted name cannot
+ * forge or erase warning lines); the suppression/exclusion matching upstream
+ * stays on the raw identities. Exported for direct unit testing — hostile
+ * names cannot be created on every filesystem.
+ */
+export function pomNoSidecarWarnings(
+  unsidecared: readonly string[],
+  verbose: boolean,
+): string[] {
+  if (unsidecared.length === 0) return [];
+  if (verbose) {
+    return unsidecared.map(
+      (identity) =>
+        `target "${sanitizeForLog(identity)}" has a pom.xml but no ` +
+        "committed maven.sbom.json, which is required for Maven scanning " +
+        "— generate it in CI with the cyclonedx-maven-plugin's makeBom " +
+        "goal and commit maven.sbom.json in this directory, then re-scan",
+    );
+  }
+  const count = unsidecared.length;
+  const truncated = count > AGGREGATE_EXAMPLE_LIMIT;
+  const examples = unsidecared
+    .slice(0, AGGREGATE_EXAMPLE_LIMIT)
+    .map((identity) => `"${sanitizeForLog(identity)}"`)
+    .join(", ");
+  const countPhrase =
+    count === 1 ? "1 directory contains" : `${count} directories contain`;
+  return [
+    `${countPhrase} a pom.xml but no committed maven.sbom.json, which is ` +
+      `required for Maven scanning (${truncated ? "e.g. " : ""}${examples}) — ` +
+      "generate it in CI with the cyclonedx-maven-plugin's makeBom goal and " +
+      "commit maven.sbom.json in each directory, then re-scan" +
+      (truncated ? "; re-run with --verbose to list every directory" : ""),
+  ];
+}
+
+/**
+ * Post-step 4's warning computation: every recorded pom.xml identity with NO
+ * surviving maven target at that identity (the same-directory suppression —
+ * a committed maven.sbom.json is authoritative), compareCodeUnits-sorted,
+ * rendered by {@link pomNoSidecarWarnings}.
+ */
+function unsidecaredPomWarnings(
+  pomIdentities: ReadonlySet<string>,
+  targets: readonly DiscoveredTarget[],
+  opts?: DiscoverOptions,
+): string[] {
+  const unsidecared = [...pomIdentities]
+    .filter(
+      (identity) =>
+        !targets.some(
+          (target) =>
+            target.identity === identity && target.lockfile === "maven",
+        ),
+    )
+    .sort(compareCodeUnits);
+  return pomNoSidecarWarnings(unsidecared, opts?.verbose ?? false);
+}
+
+/**
+ * The maven.test.sbom.json-without-maven.sbom.json warning strings: the
+ * test-inclusive sidecar is optional-additive and never its own discovery
+ * trigger (§ LOCKFILES above), so a directory that commits ONLY the test
+ * doc — no default `maven.sbom.json` beside it — must be TOLD it never
+ * became a target, rather than silently vanishing. One aggregated summary
+ * line by default; one line per directory when `verbose` (the CLI's
+ * --verbose) is set. `orphaned` arrives compareCodeUnits-sorted, so both
+ * shapes are deterministic.
+ *
+ * Identities are repo-author-controlled directory names printed to stderr,
+ * so they pass through sanitizeForLog AT RENDER ONLY (a crafted name cannot
+ * forge or erase warning lines); the suppression/exclusion matching upstream
+ * stays on the raw identities. Exported for direct unit testing — hostile
+ * names cannot be created on every filesystem.
+ */
+export function mavenTestSbomOrphanWarnings(
+  orphaned: readonly string[],
+  verbose: boolean,
+): string[] {
+  if (orphaned.length === 0) return [];
+  if (verbose) {
+    return orphaned.map(
+      (identity) =>
+        `target "${sanitizeForLog(identity)}" has a maven.test.sbom.json ` +
+        "but no maven.sbom.json — commit maven.sbom.json (the default " +
+        "sidecar) beside it; the test-inclusive document is read only " +
+        "alongside the default one",
+    );
+  }
+  const count = orphaned.length;
+  const truncated = count > AGGREGATE_EXAMPLE_LIMIT;
+  const examples = orphaned
+    .slice(0, AGGREGATE_EXAMPLE_LIMIT)
+    .map((identity) => `"${sanitizeForLog(identity)}"`)
+    .join(", ");
+  const countPhrase =
+    count === 1 ? "1 directory contains" : `${count} directories contain`;
+  return [
+    `${countPhrase} a maven.test.sbom.json but no maven.sbom.json ` +
+      `(${truncated ? "e.g. " : ""}${examples}) — commit maven.sbom.json ` +
+      "(the default sidecar) beside each one; the test-inclusive document " +
+      "is read only alongside the default one" +
+      (truncated ? "; re-run with --verbose to list every directory" : ""),
+  ];
+}
+
+/**
+ * Post-step 5's warning computation: every recorded maven.test.sbom.json
+ * identity with NO surviving maven target at that identity (a committed
+ * maven.sbom.json is authoritative and suppresses the warning — the same
+ * same-directory suppression as post-step 4), compareCodeUnits-sorted,
+ * rendered by {@link mavenTestSbomOrphanWarnings}.
+ */
+function orphanedMavenTestSbomWarnings(
+  mavenTestSbomIdentities: ReadonlySet<string>,
+  targets: readonly DiscoveredTarget[],
+  opts?: DiscoverOptions,
+): string[] {
+  const orphaned = [...mavenTestSbomIdentities]
+    .filter(
+      (identity) =>
+        !targets.some(
+          (target) =>
+            target.identity === identity && target.lockfile === "maven",
+        ),
+    )
+    .sort(compareCodeUnits);
+  return mavenTestSbomOrphanWarnings(orphaned, opts?.verbose ?? false);
 }
 
 /** Discovery output: collision-resolved targets plus warning data. */
@@ -373,6 +523,8 @@ export function discoverTargetsWithWarnings(
   const found: DiscoveredTarget[] = [];
   const bunLockbIdentities = new Set<string>();
   const csprojIdentities = new Set<string>();
+  const pomIdentities = new Set<string>();
+  const mavenTestSbomIdentities = new Set<string>();
 
   const identityOf = (dir: string): string =>
     relative(repoRoot, dir).split(sep).join("/") || ".";
@@ -418,6 +570,27 @@ export function discoverTargetsWithWarnings(
     csprojIdentities.add(identity);
   };
 
+  const recordPom = (dir: string): void => {
+    // Observed, never a target (the bun.lockb/csproj idiom, simplified: the
+    // trigger is the exact name "pom.xml", no pattern needed — the
+    // committed sidecar is a fixed-name per-module file). The post-step
+    // below decides whether the sighting warrants the no-sidecar adoption
+    // warning.
+    const identity = identityOf(dir);
+    if (isExcluded(identity, matchers)) return;
+    pomIdentities.add(identity);
+  };
+
+  const recordMavenTestSbom = (dir: string): void => {
+    // Observed, never a target: maven.test.sbom.json is optional-additive
+    // (not in LOCKFILES) — the post-step below decides whether a lone
+    // sighting (no maven.sbom.json in the same directory) warrants the
+    // orphan warning.
+    const identity = identityOf(dir);
+    if (isExcluded(identity, matchers)) return;
+    mavenTestSbomIdentities.add(identity);
+  };
+
   const walk = (dir: string): void => {
     // Symlinks report isDirectory() === false on Dirent entries, so they are
     // never followed — no cycle traversal, no escape from repoRoot. Do not add
@@ -432,6 +605,10 @@ export function discoverTargetsWithWarnings(
         recordBunLockb(dir);
       } else if (entry.isFile() && entry.name.endsWith(".csproj")) {
         recordCsproj(dir);
+      } else if (entry.isFile() && entry.name === "pom.xml") {
+        recordPom(dir);
+      } else if (entry.isFile() && entry.name === "maven.test.sbom.json") {
+        recordMavenTestSbom(dir);
       }
     }
   };
@@ -505,6 +682,22 @@ export function discoverTargetsWithWarnings(
   // authoritative); otherwise the directory joins the no-lock warning —
   // aggregated by default, per-directory under the verbose option.
   warnings.push(...locklessCsprojWarnings(csprojIdentities, targets, opts));
+
+  // Post-step 4: pom.xml sightings (the csproj idiom, simplified to a fixed
+  // name trigger). Silent when a maven target survived in the same
+  // directory (the committed sidecar is authoritative); otherwise the
+  // directory joins the no-sidecar warning — aggregated by default,
+  // per-directory under the verbose option.
+  warnings.push(...unsidecaredPomWarnings(pomIdentities, targets, opts));
+
+  // Post-step 5: maven.test.sbom.json sightings (the pom.xml idiom,
+  // suppressed by a surviving maven target in the same directory — a
+  // committed maven.sbom.json is authoritative). The test doc is
+  // optional-additive and never its own target, so a lone sighting must
+  // never scan to zero silently.
+  warnings.push(
+    ...orphanedMavenTestSbomWarnings(mavenTestSbomIdentities, targets, opts),
+  );
 
   warnings.sort(compareCodeUnits);
   return { targets, warnings };

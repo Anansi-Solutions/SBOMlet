@@ -16,15 +16,18 @@
  * consumes: thirdPartyEntryCount (yarn), pythonThirdPartyEntryCount
  * (poetry/uv), npmThirdPartyEntryCount / npmFirstPartyNames
  * (package-lock.json v2/v3, plain JSON), pnpmThirdPartyEntryCount /
- * pnpmImporterNames (pnpm-lock.yaml v6/v9, stateful line scan), and
- * nugetThirdPartyEntryCount (packages.lock.json, plain JSON). It also hosts
- * yarnWorkspaceMembers, the root-lockfile workspace enumeration primitive
- * (resolution-body-line scan, lockfile-authoritative). All keep the same
- * contract: pure text in, data out, never throw on garbage.
+ * pnpmImporterNames (pnpm-lock.yaml v6/v9, stateful line scan),
+ * nugetThirdPartyEntryCount (packages.lock.json, plain JSON), and
+ * mavenThirdPartyEntryCount (maven.sbom.json, plain JSON, sharing the
+ * collector's own document narrow). It also hosts yarnWorkspaceMembers, the
+ * root-lockfile workspace enumeration primitive (resolution-body-line scan,
+ * lockfile-authoritative). All keep the same contract: pure text in, data
+ * out, never throw on garbage.
  */
 
 import { type } from "arktype";
 
+import { MavenSbomDocument } from "../validate/mavenSbom";
 import { NpmLockDocument } from "../validate/npmLock";
 import { NugetLockDocument } from "../validate/nugetLock";
 import { recordOf } from "../validate/record";
@@ -453,4 +456,60 @@ export function pnpmImporterNames(lockfileText: string): ReadonlySet<string> {
     names.add(key.slice(key.lastIndexOf("/") + 1));
   }
   return names;
+}
+
+/**
+ * Count the third-party components of a maven.sbom.json sidecar — the maven
+ * counterpart of nugetThirdPartyEntryCount. Shares the document narrow with
+ * the collector (src/validate/mavenSbom.ts) so the two can never disagree
+ * about what parses: a document collectWithMavenSbom would throw on (missing
+ * bomFormat, a non-CycloneDX bomFormat, or a root purl outside `pkg:maven/`)
+ * always returns undefined here too — never a positively-determined zero
+ * (the 15-05 counter/collector-disagreement finding class).
+ *
+ * The count excludes only the document's OWN root purl — the reactor
+ * cross-target sibling set does not exist inside this pure per-doc counter
+ * (that knowledge lives in the pipeline pre-pass, mavenRootPurlOf +
+ * excludeMavenFirstParty). A sibling module's leaked component therefore
+ * still counts here, erring toward the scan rather than a silent skip: the
+ * one doc shape this counter DOES resolve to a positively-determined zero is
+ * the reactor aggregator pom's own sidecar, whose components array is
+ * genuinely empty.
+ *
+ * A document that passes those checks but has NO components key counts 0:
+ * CycloneDX makes the array optional and cyclonedx-maven-plugin omits it
+ * entirely for an aggregator pom's BOM (verified against 2.9.2 output), so
+ * the absent-array shape must reach the same warn+skip branch as an empty
+ * one — never the zero-component hard fail. A crafted sidecar gains nothing:
+ * an empty array already takes the skip branch.
+ *
+ * Returns undefined (unknown count) for non-JSON text or a failed document
+ * narrow — a doc that proves nothing routes the target to the scan, never
+ * to the warn+skip branch. Never throws.
+ */
+export function mavenThirdPartyEntryCount(
+  lockfileText: string,
+): number | undefined {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(lockfileText);
+  } catch {
+    return undefined;
+  }
+  const doc = MavenSbomDocument(parsed);
+  if (doc instanceof type.errors) return undefined;
+  if (doc.bomFormat !== "CycloneDX") return undefined;
+  const rootPurl = doc.metadata?.component?.purl;
+  if (rootPurl === undefined || !rootPurl.startsWith("pkg:maven/")) {
+    return undefined;
+  }
+  const components = doc.components;
+  if (components === undefined) return 0;
+  let count = 0;
+  for (const raw of components) {
+    const purl = recordOf(raw)?.["purl"];
+    if (typeof purl === "string" && purl === rootPurl) continue;
+    count += 1;
+  }
+  return count;
 }

@@ -79,6 +79,76 @@ so: one aggregated warning names every directory that has a `.csproj` but no
 directory). Everything else in this guide works the same for .NET; the
 per-ecosystem limits are in the [CLI reference](./reference/cli.md#net-targets).
 
+## If your repository is Maven
+
+Maven has no lockfile either, and the one-time setup looks like .NET's, for
+the same reason: `pom.xml` declares direct dependencies only, and only Maven
+itself can resolve the real closure — parent BOMs, `dependencyManagement`,
+version mediation. The tool reads a committed CycloneDX document,
+`maven.sbom.json`, one per module, produced by the pinned, ecosystem-standard
+`cyclonedx-maven-plugin` in your own build. Run it once at the reactor root;
+its `makeBom` goal runs per module automatically, so one invocation covers
+every module in a multi-module build:
+
+```sh
+./mvnw org.cyclonedx:cyclonedx-maven-plugin:2.9.2:makeBom \
+  -DoutputFormat=json -DoutputDirectory=. -DoutputName=maven.sbom \
+  -Dproject.build.outputTimestamp=2020-01-01T00:00:00Z
+```
+
+That writes `maven.sbom.json` at each module's own root — where the tool
+looks for it. Pin the plugin version exactly, and keep
+`project.build.outputTimestamp` set: it is the standard reproducible-builds
+property, and without it the committed file churns on the build timestamp
+alone even when nothing else changed. Setting it once in the pom works the
+same as passing it on the command line:
+
+```xml
+<properties>
+  <project.build.outputTimestamp>2020-01-01T00:00:00Z</project.build.outputTimestamp>
+</properties>
+```
+
+`maven.sbom.json` is a production closure and everything in it gates as
+production; committing it alone is all a module needs. To also classify
+test-only dependencies as dev, run the plugin a second time in the same
+build with `-DincludeTestScope=true`, writing a second file,
+`maven.test.sbom.json`:
+
+```sh
+./mvnw org.cyclonedx:cyclonedx-maven-plugin:2.9.2:makeBom \
+  -DoutputFormat=json -DoutputDirectory=. -DoutputName=maven.test.sbom \
+  -DincludeTestScope=true \
+  -Dproject.build.outputTimestamp=2020-01-01T00:00:00Z
+```
+
+A component present only in `maven.test.sbom.json` classifies dev; every
+component in `maven.sbom.json` still classifies production. Run both
+invocations in the same build so the two files describe the same module: the
+tool requires their root purls to match exactly and refuses a mismatched
+pair rather than composing it. Committing only `maven.sbom.json` keeps
+today's all-production behavior — the test-inclusive document is optional
+and additive.
+
+Commit `maven.sbom.json` — and `maven.test.sbom.json`, if you adopt it — next
+to each module's `pom.xml`. The plugin's other goal, `makeAggregateBom`, is
+deliberately not the recipe: it merges the whole reactor into one file and
+collapses the per-module attribution the inventory is built to carry.
+
+In your own CI, regenerate the sidecars whenever a dependency changes and
+guard staleness with `git diff --exit-code`, the same way you'd guard any
+other committed input
+([ci-integration](./guides/ci-integration.md#maven-regenerate-the-committed-sidecar-in-your-own-ci)
+has the step). A reactor regenerates every module's sidecar in the same run,
+so a module bumped without regenerating its siblings is caught by that guard
+rather than reaching the inventory as a silent gap.
+
+A Maven project without a committed `maven.sbom.json` is not scanned, and the
+tool says so: one aggregated warning names every directory that has a
+`pom.xml` but no sidecar, along with this same recipe (`--verbose` lists
+every directory). Everything else in this guide works the same for Maven; the
+per-ecosystem limits are in the [CLI reference](./reference/cli.md#maven-targets).
+
 ## Route A — use the GitHub Action
 
 On this route your repository carries the policy file from step 1, a workflow,

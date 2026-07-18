@@ -8,6 +8,8 @@ import {
   discoverTargets,
   discoverTargetsWithWarnings,
   lockfileNameFor,
+  mavenTestSbomOrphanWarnings,
+  pomNoSidecarWarnings,
 } from "../src/targets/discover";
 
 // Self-contained temp trees only — no reference to any host-project path.
@@ -79,6 +81,23 @@ function writeCsproj(dir: string, name = "App"): void {
   writeFileSync(
     join(dir, `${name}.csproj`),
     '<Project Sdk="Microsoft.NET.Sdk" />\n',
+  );
+}
+
+function writePom(dir: string): void {
+  mkdirSync(dir, { recursive: true });
+  // Content is never read - only the exact pom.xml file NAME matters.
+  writeFileSync(
+    join(dir, "pom.xml"),
+    "<project><modelVersion>4.0.0</modelVersion></project>",
+  );
+}
+
+function makeMavenProject(dir: string): void {
+  writePom(dir);
+  writeFileSync(
+    join(dir, "maven.sbom.json"),
+    '{ "bomFormat": "CycloneDX", "components": [] }',
   );
 }
 
@@ -660,6 +679,172 @@ describe("discoverTargetsWithWarnings — csproj sighted without packages.lock.j
   });
 });
 
+describe("discoverTargetsWithWarnings — pom.xml sighted without maven.sbom.json", () => {
+  test("a sidecar-less pom dir yields zero maven targets and ONE aggregated warning naming the plugin, the file, and the directory", () => {
+    const root = makeTempRoot();
+    writePom(join(root, "App"));
+
+    const { targets, warnings } = discoverTargetsWithWarnings(root);
+
+    expect(targets).toEqual([]);
+    expect(warnings).toEqual([
+      "1 directory contains a pom.xml but no committed maven.sbom.json, " +
+        'which is required for Maven scanning ("App") — generate it in CI ' +
+        "with the cyclonedx-maven-plugin's makeBom goal and commit " +
+        "maven.sbom.json in each directory, then re-scan",
+    ]);
+    // The two adoption ingredients the loud-no-sidecar contract requires.
+    expect(warnings[0]).toContain("cyclonedx-maven-plugin");
+    expect(warnings[0]).toContain("maven.sbom.json");
+  });
+
+  test("pom.xml beside maven.sbom.json proceeds silently with one maven target (same-directory suppression)", () => {
+    const root = makeTempRoot();
+    const dir = join(root, "app");
+    makeMavenProject(dir);
+
+    const { targets, warnings } = discoverTargetsWithWarnings(root);
+
+    expect(targets.map((t) => t.identity)).toEqual(["app"]);
+    expect(targets.map((t) => t.lockfile)).toEqual(["maven"]);
+    expect(warnings).toEqual([]);
+  });
+
+  test("reactor: root pom.xml + two modules, only one module has a sidecar — warning counts the ROOT and the sidecar-less module, the covered module is silent", () => {
+    const root = makeTempRoot();
+    writePom(root);
+    makeMavenProject(join(root, "liba"));
+    writePom(join(root, "libb"));
+
+    const { targets, warnings } = discoverTargetsWithWarnings(root);
+
+    expect(targets.map((t) => t.identity)).toEqual(["liba"]);
+    expect(warnings).toEqual([
+      "2 directories contain a pom.xml but no committed maven.sbom.json, " +
+        'which is required for Maven scanning (".", "libb") — generate it ' +
+        "in CI with the cyclonedx-maven-plugin's makeBom goal and commit " +
+        "maven.sbom.json in each directory, then re-scan",
+    ]);
+  });
+
+  test("five sidecar-less pom dirs AGGREGATE into one summary warning naming exactly 3 sorted examples, past-limit truncated with the --verbose hint", () => {
+    const root = makeTempRoot();
+    for (const name of ["p1", "p2", "p3", "p4", "p5"]) {
+      writePom(join(root, name));
+    }
+
+    const { warnings } = discoverTargetsWithWarnings(root);
+
+    expect(warnings).toEqual([
+      "5 directories contain a pom.xml but no committed maven.sbom.json, " +
+        'which is required for Maven scanning (e.g. "p1", "p2", "p3") — ' +
+        "generate it in CI with the cyclonedx-maven-plugin's makeBom goal " +
+        "and commit maven.sbom.json in each directory, then re-scan; " +
+        "re-run with --verbose to list every directory",
+    ]);
+  });
+
+  test("verbose emits one warning per directory instead of the aggregate, sorted deterministically", () => {
+    const root = makeTempRoot();
+    writePom(join(root, "b-mod"));
+    writePom(join(root, "a-mod"));
+
+    const { warnings } = discoverTargetsWithWarnings(root, { verbose: true });
+
+    expect(warnings).toEqual([
+      'target "a-mod" has a pom.xml but no committed maven.sbom.json, ' +
+        "which is required for Maven scanning — generate it in CI with " +
+        "the cyclonedx-maven-plugin's makeBom goal and commit " +
+        "maven.sbom.json in this directory, then re-scan",
+      'target "b-mod" has a pom.xml but no committed maven.sbom.json, ' +
+        "which is required for Maven scanning — generate it in CI with " +
+        "the cyclonedx-maven-plugin's makeBom goal and commit " +
+        "maven.sbom.json in this directory, then re-scan",
+    ]);
+  });
+
+  test("suppression is per-directory: a sidecar-less sibling still counts while the covered dir stays silent", () => {
+    const root = makeTempRoot();
+    makeMavenProject(join(root, "covered"));
+    writePom(join(root, "uncovered"));
+
+    const { targets, warnings } = discoverTargetsWithWarnings(root);
+
+    expect(targets.map((t) => t.identity)).toEqual(["covered"]);
+    expect(warnings).toEqual([
+      "1 directory contains a pom.xml but no committed maven.sbom.json, " +
+        'which is required for Maven scanning ("uncovered") — generate it ' +
+        "in CI with the cyclonedx-maven-plugin's makeBom goal and commit " +
+        "maven.sbom.json in each directory, then re-scan",
+    ]);
+  });
+
+  test("an excluded identity produces neither targets nor pom warnings (csproj/bun.lockb parity)", () => {
+    const root = makeTempRoot();
+    writePom(join(root, "skipme"));
+
+    const { targets, warnings } = discoverTargetsWithWarnings(root, {
+      excludes: ["skipme"],
+    });
+
+    expect(targets).toEqual([]);
+    expect(warnings).toEqual([]);
+  });
+
+  test("a pom.xml at the repo ROOT warns with the '.' identity (never an empty or garbled name)", () => {
+    const root = makeTempRoot();
+    writePom(root);
+
+    const { targets, warnings } = discoverTargetsWithWarnings(root);
+
+    expect(targets).toEqual([]);
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toContain("1 directory contains");
+    expect(warnings[0]).toContain('(".")');
+  });
+
+  test("HOSTILE directory identities are sanitized in BOTH warning shapes (no stderr line forgery)", () => {
+    // Directory names are repo-author-controlled and (on POSIX) can carry
+    // control characters; the warning prints them to stderr, so a crafted
+    // name could forge warning lines or erase real ones (ANSI erase-line).
+    // Tested via the exported pure builder -- such names cannot be created
+    // on every filesystem, but discovery must stay safe where they can.
+    const esc = String.fromCharCode(27);
+    const lf = String.fromCharCode(10);
+    const hostile = "evil" + esc + "[2K" + lf + "ok: all clear";
+    const controlChars = new RegExp(
+      "[" +
+        String.fromCharCode(0) +
+        "-" +
+        String.fromCharCode(31) +
+        String.fromCharCode(127) +
+        "-" +
+        String.fromCharCode(159) +
+        "]",
+    );
+    const [aggregated] = pomNoSidecarWarnings([hostile], false);
+    const [verbose] = pomNoSidecarWarnings([hostile], true);
+    expect(aggregated).toBeDefined();
+    expect(verbose).toBeDefined();
+    expect(aggregated).not.toMatch(controlChars);
+    expect(verbose).not.toMatch(controlChars);
+    expect(aggregated).toContain("evil");
+    expect(verbose).toContain("evil");
+  });
+
+  test("walk-skip dirs (node_modules, .git, dot-dirs) never trigger the warning", () => {
+    const root = makeTempRoot();
+    writePom(join(root, "node_modules", "dep"));
+    writePom(join(root, ".git", "hooks"));
+    writePom(join(root, ".cache", "stuff"));
+
+    const { targets, warnings } = discoverTargetsWithWarnings(root);
+
+    expect(targets).toEqual([]);
+    expect(warnings).toEqual([]);
+  });
+});
+
 describe("lockfileNameFor", () => {
   test("maps each lockfile kind back to its file name", () => {
     expect(lockfileNameFor("yarn")).toBe("yarn.lock");
@@ -669,5 +854,117 @@ describe("lockfileNameFor", () => {
     expect(lockfileNameFor("pnpm")).toBe("pnpm-lock.yaml");
     expect(lockfileNameFor("bun")).toBe("bun.lock");
     expect(lockfileNameFor("nuget")).toBe("packages.lock.json");
+  });
+});
+
+function writeMavenTestSbomOnly(dir: string): void {
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(
+    join(dir, "maven.test.sbom.json"),
+    '{ "bomFormat": "CycloneDX", "components": [] }',
+  );
+}
+
+function addMavenTestSbom(dir: string): void {
+  writeFileSync(
+    join(dir, "maven.test.sbom.json"),
+    '{ "bomFormat": "CycloneDX", "components": [] }',
+  );
+}
+
+describe("discoverTargetsWithWarnings — maven.test.sbom.json without maven.sbom.json", () => {
+  test("a dir with BOTH docs yields exactly ONE maven target and no orphan warning", () => {
+    const root = makeTempRoot();
+    const dir = join(root, "app");
+    makeMavenProject(dir);
+    addMavenTestSbom(dir);
+
+    const { targets, warnings } = discoverTargetsWithWarnings(root);
+
+    expect(targets.map((t) => t.identity)).toEqual(["app"]);
+    expect(targets.map((t) => t.lockfile)).toEqual(["maven"]);
+    expect(warnings).toEqual([]);
+  });
+
+  test("a lone maven.test.sbom.json (no maven.sbom.json) yields NO maven target and ONE aggregated orphan warning", () => {
+    const root = makeTempRoot();
+    writeMavenTestSbomOnly(join(root, "app"));
+
+    const { targets, warnings } = discoverTargetsWithWarnings(root);
+
+    expect(targets).toEqual([]);
+    expect(warnings).toEqual([
+      "1 directory contains a maven.test.sbom.json but no maven.sbom.json " +
+        '("app") — commit maven.sbom.json (the default sidecar) beside ' +
+        "each one; the test-inclusive document is read only alongside " +
+        "the default one",
+    ]);
+  });
+
+  test("suppression is per-directory: a lone test doc beside a covered dir stays independent", () => {
+    const root = makeTempRoot();
+    makeMavenProject(join(root, "covered"));
+    writeMavenTestSbomOnly(join(root, "uncovered"));
+
+    const { targets, warnings } = discoverTargetsWithWarnings(root);
+
+    expect(targets.map((t) => t.identity)).toEqual(["covered"]);
+    expect(warnings).toEqual([
+      "1 directory contains a maven.test.sbom.json but no maven.sbom.json " +
+        '("uncovered") — commit maven.sbom.json (the default sidecar) ' +
+        "beside each one; the test-inclusive document is read only " +
+        "alongside the default one",
+    ]);
+  });
+
+  test("verbose emits one warning per directory instead of the aggregate, sorted deterministically", () => {
+    const root = makeTempRoot();
+    writeMavenTestSbomOnly(join(root, "b-mod"));
+    writeMavenTestSbomOnly(join(root, "a-mod"));
+
+    const { warnings } = discoverTargetsWithWarnings(root, { verbose: true });
+
+    expect(warnings).toEqual([
+      'target "a-mod" has a maven.test.sbom.json but no maven.sbom.json ' +
+        "— commit maven.sbom.json (the default sidecar) beside it; the " +
+        "test-inclusive document is read only alongside the default one",
+      'target "b-mod" has a maven.test.sbom.json but no maven.sbom.json ' +
+        "— commit maven.sbom.json (the default sidecar) beside it; the " +
+        "test-inclusive document is read only alongside the default one",
+    ]);
+  });
+
+  test("an excluded identity produces neither targets nor the orphan warning", () => {
+    const root = makeTempRoot();
+    writeMavenTestSbomOnly(join(root, "skipme"));
+
+    const { targets, warnings } = discoverTargetsWithWarnings(root, {
+      excludes: ["skipme"],
+    });
+
+    expect(targets).toEqual([]);
+    expect(warnings).toEqual([]);
+  });
+
+  test("HOSTILE directory identities are sanitized in BOTH warning shapes (no stderr line forgery)", () => {
+    const esc = String.fromCharCode(27);
+    const lf = String.fromCharCode(10);
+    const hostile = "evil" + esc + "[2K" + lf + "ok: all clear";
+    const controlChars = new RegExp(
+      "[" +
+        String.fromCharCode(0) +
+        "-" +
+        String.fromCharCode(31) +
+        String.fromCharCode(127) +
+        "-" +
+        String.fromCharCode(159) +
+        "]",
+    );
+    const [aggregated] = mavenTestSbomOrphanWarnings([hostile], false);
+    const [verbose] = mavenTestSbomOrphanWarnings([hostile], true);
+    expect(aggregated).toBeDefined();
+    expect(verbose).toBeDefined();
+    expect(controlChars.test(aggregated as string)).toBe(false);
+    expect(controlChars.test(verbose as string)).toBe(false);
   });
 });

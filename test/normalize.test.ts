@@ -382,6 +382,128 @@ describe("normalizeRaw — live 33-value corpus", () => {
   });
 });
 
+// ---------------------------------------------------------------------------
+// Real-world free-text Maven license raws, verified byte-for-byte against the
+// real public repo1.maven.org POMs (mysql-connector-j 9.5.0,
+// jasperreports/-fonts 6.21.0, jcommon/jfreechart 1.0.23/1.0.19,
+// juniversalchardet 2.5.0 — real public GAVs, sanctioned for this one use).
+// Three of these labels originally surfaced guess-shaped correct() outcomes
+// (a version-specific id from an unversioned label, a family flip, a
+// version-contradicting id); the review fixed them via the ambiguous-family
+// intercept and the precise-label fixup, and these tests lock the honest
+// outcomes.
+// ---------------------------------------------------------------------------
+describe("normalizeRaw — real-world Maven free-text raws (locked)", () => {
+  test("mysql-connector-j's FOSS-exception GPLv2 label resolves to the PRECISE GPL-2.0-only WITH Universal-FOSS-exception-1.0 — never the GPL-3.0-or-later fuzzy guess that contradicted the stated v2", () => {
+    const result = normalizeRaw(
+      "The GNU General Public License, v2 with Universal FOSS Exception, v1.0",
+    );
+    // The label states BOTH a version (v2) and an exception (Universal FOSS
+    // Exception v1.0), and each has an exact SPDX spelling — the fixup maps
+    // the whole label to it. correct() used to resolve this to
+    // GPL-3.0-or-later, contradicting the stated version and dropping the
+    // exception clause entirely.
+    expect(result).toEqual({
+      expression: "GPL-2.0-only WITH Universal-FOSS-exception-1.0",
+      source: "corrected",
+    });
+  });
+
+  test('bare "GNU Lesser General Public License" (jasperreports, jasperreports-fonts) is an IMPRECISE LGPL family — never a guessed version id', () => {
+    const result = normalizeRaw("GNU Lesser General Public License");
+    // The spelled-out family name carries no version; correct() used to
+    // guess LGPL-2.1-only from it. It now routes to the same imprecise
+    // could-be-copyleft lane as the short "lgpl" label.
+    expect(result).toEqual({
+      expression: null,
+      source: "generator",
+      imprecise: true,
+      impreciseFamily: "LGPL",
+    });
+  });
+
+  test('the British-spelling "GNU Lesser General Public Licence" (jcommon, jfreechart) is the SAME imprecise LGPL family — never the GPL-3.0-or-later family flip', () => {
+    const result = normalizeRaw("GNU Lesser General Public Licence");
+    // correct() used to send the spelling variant to the GPL family,
+    // resolving a weak-copyleft label to a strong-copyleft id.
+    expect(result).toEqual({
+      expression: null,
+      source: "generator",
+      imprecise: true,
+      impreciseFamily: "LGPL",
+    });
+  });
+
+  test("the spelled-out GPL and AGPL family names (both spellings) are imprecise families too — correct() guessed a precise or-later id from every one of them", () => {
+    for (const [raw, family] of [
+      ["GNU General Public License", "GPL"],
+      ["GNU General Public Licence", "GPL"],
+      ["GNU Affero General Public License", "AGPL"],
+      ["GNU Affero General Public Licence", "AGPL"],
+    ] as const) {
+      expect(normalizeRaw(raw)).toEqual({
+        expression: null,
+        source: "generator",
+        imprecise: true,
+        impreciseFamily: family,
+      });
+    }
+  });
+
+  test('juniversalchardet\'s "Mozilla Public License Version 1.1" resolves PRECISELY to MPL-1.1', () => {
+    const result = normalizeRaw("Mozilla Public License Version 1.1");
+    expect(result).toEqual({ expression: "MPL-1.1", source: "corrected" });
+  });
+
+  test('juniversalchardet\'s "GENERAL PUBLIC LICENSE, version 3 (GPL-3.0)" resolves to GPL-3.0-or-later (the bare-GPL correct() convention)', () => {
+    const result = normalizeRaw("GENERAL PUBLIC LICENSE, version 3 (GPL-3.0)");
+    expect(result).toEqual({
+      expression: "GPL-3.0-or-later",
+      source: "corrected",
+    });
+  });
+
+  test('juniversalchardet\'s PARALLEL "GNU LESSER GENERAL PUBLIC LICENSE, version 3 (LGPL-3.0)" stays an honest UNKNOWN — an asymmetry with its GPL sibling above, locked as-observed', () => {
+    const result = normalizeRaw(
+      "GNU LESSER GENERAL PUBLIC LICENSE, version 3 (LGPL-3.0)",
+    );
+    // LOCKED: despite the identical structure and an explicit "(LGPL-3.0)"
+    // hint, correct() fails to resolve this one while its GPL sibling (same
+    // POM, same author, same wording pattern) DOES resolve — an inconsistent
+    // guess/no-guess split, flagged to 17-06.
+    expect(result.expression).toBeNull();
+    expect(result.source).toBe("generator");
+  });
+
+  test("the juniversalchardet triple claim: each of the three raws normalizes SEPARATELY, and the genuinely-unknown LGPL member collapses the WHOLE app-scope finding to unknown (app-scope all-or-nothing, INV-04's conservative posture)", () => {
+    const claims: LicenseClaim[] = [
+      claim("Mozilla Public License Version 1.1", "name"),
+      claim("GENERAL PUBLIC LICENSE, version 3 (GPL-3.0)", "name"),
+      claim("GNU LESSER GENERAL PUBLIC LICENSE, version 3 (LGPL-3.0)", "name"),
+    ];
+    // Each claim's OWN normalizeRaw outcome is exactly the three locks above
+    // — never joined, never guessed at the claim level.
+    const perClaim = claims.map((c) => normalizeRaw(c.raw).expression);
+    expect(perClaim).toEqual(["MPL-1.1", "GPL-3.0-or-later", null]);
+
+    const { model } = annotateFindings(
+      modelOf(pkg("juniversalchardet", "2.5.0", claims)),
+      [],
+    );
+    const finding = model.packages[0]!.finding;
+    // LOCKED: two of three sub-licenses resolve, but the third's genuine
+    // unknown forces the combined app-scope finding to unknown — partial
+    // knowledge never hides a potential obligation (findingFromClaims).
+    expect(finding).toEqual({
+      expression: null,
+      elected: null,
+      source: "generator",
+      confidence: "none",
+      observedExpressions: ["GPL-3.0-or-later", "MPL-1.1"],
+    });
+  });
+});
+
 describe("normalizeRaw — guards", () => {
   test("UNLICENSED is unknown and NEVER Unlicense", () => {
     const result = normalizeRaw("UNLICENSED");

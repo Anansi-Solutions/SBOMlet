@@ -22,6 +22,7 @@ import {
 import { BUN_COLLECTOR_TOOL, collectWithBunLock } from "./bunLock";
 import { CDXGEN_TOOL, collectWithCdxgen } from "./cdxgen";
 import { ecosystemFor, manifestFilesFor, selectJsGenerator } from "./dispatch";
+import { MAVEN_COLLECTOR_TOOL, collectWithMavenSbom } from "./mavenSbom";
 import { npmIntroductions } from "./npmProvenance";
 import { NUGET_COLLECTOR_TOOL, collectWithNugetLock } from "./nugetLock";
 import { poetryProdPurlSet } from "./poetryLock";
@@ -272,6 +273,39 @@ const nugetCollector: Collector = {
 };
 
 /**
+ * maven targets use the in-process maven.sbom.json collector: no upstream
+ * generator can produce a correct closure at scan time (cdxgen either runs
+ * `mvn` inside the target — forbidden — or silently emits an 8% fraction
+ * with version-less purls; syft sees pom directs only and fabricates
+ * identity from stale local jars) — only the consumer's own build can
+ * resolve Maven, so their CI commits the standard cyclonedx-maven-plugin
+ * output and this reader consumes it (ADR-0023). No subprocess, so
+ * timeoutMs is ignored; the sidecar size gate fires inside
+ * collectWithMavenSbom as well as in the CLI loop. NO firstPartyNames: the
+ * collector carries no per-component Maven scope, so name-collision exclusion
+ * is meaningless here; reactor sibling exclusion is a separate cross-target
+ * pre-pass, not this registration's job. prodPurlSet IS threaded through when
+ * the collector derives one: a module
+ * committing both maven.sbom.json and maven.test.sbom.json gets its
+ * prodPurlSet from the default doc's purls (the yarn dual-run / poetry
+ * precedent); a module with only the default doc still carries none, so
+ * every component classifies prod exactly as before.
+ */
+const mavenCollector: Collector = {
+  tool: (): ToolIdentity => MAVEN_COLLECTOR_TOOL,
+  async collect(target): Promise<CollectedSbom> {
+    const result = await collectWithMavenSbom(target, {});
+    return {
+      sbom: readSbom(result.sbomPath),
+      targetIdentity: target.identity,
+      ...(result.prodPurlSet !== undefined
+        ? { prodPurlSet: result.prodPurlSet }
+        : {}),
+    };
+  },
+};
+
+/**
  * The dispatch table, exhaustive over LockfileKind. npm members are emitted by cdxgen at their REAL
  * versions with cdx:npm:isWorkspace=true — the merge pairs that marker with
  * the npm lockfile-derived name set. The pnpm importer-name set is
@@ -290,4 +324,5 @@ export const collectors: ReadonlyMap<LockfileKind, Collector> = new Map<
   ["uv", cdxgenCollector("uv")],
   ["terraform", terraformCollector],
   ["nuget", nugetCollector],
+  ["maven", mavenCollector],
 ]);

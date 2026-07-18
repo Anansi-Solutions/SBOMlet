@@ -86,8 +86,8 @@ The default mode walks the repository root and emits one
 [`DiscoveredTarget`](../glossary.md#target) per recognized lockfile. The
 recognized set is a closed list — `yarn.lock`, `package-lock.json`,
 `pnpm-lock.yaml`, `bun.lock`, `poetry.lock`, `uv.lock`, `packages.lock.json`,
-`.terraform.lock.hcl` — each mapped to one ecosystem. When several JS
-lockfiles sit in the same directory, a fixed precedence
+`maven.sbom.json`, `.terraform.lock.hcl` — each mapped to one ecosystem. When
+several JS lockfiles sit in the same directory, a fixed precedence
 (`bun > pnpm > yarn > npm`) picks one. Single-target mode (`--target`) wraps
 one resolved directory as a yarn target so it flows through the identical loop.
 
@@ -116,6 +116,7 @@ The registry holds the per-ecosystem choices:
 | bun | An in-process `bun.lock` parser — no upstream generator preserves `bun.lock` identity. |
 | poetry | cdxgen for the inventory, with dev/prod scope derived from the `poetry.lock` group arrays because cdxgen emits no poetry group markers. |
 | nuget | An in-process `packages.lock.json` parser ([ADR-0022](adr/0022-dotnet-lockfile-in-process.md)) — every side-effect-free candidate reads the same lockfile and adds nothing to it. |
+| maven | An in-process reader of the committed `maven.sbom.json` the consumer's own CI produces with the pinned `cyclonedx-maven-plugin` ([ADR-0023](adr/0023-maven-committed-sidecar.md)) — no candidate that avoids running Maven itself carries the same closure and license data. |
 | terraform | An in-process collector reading `.terraform/modules/modules.json`. |
 
 Before dispatch, a Yarn target whose lockfile declares workspace members expands

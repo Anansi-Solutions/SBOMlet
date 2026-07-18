@@ -127,6 +127,67 @@ The lane's limits, stated plainly:
   rather than a guess.
 - paket lockfiles are not supported; only `packages.lock.json` is read.
 
+### Maven targets
+
+Maven targets are discovered from a committed `maven.sbom.json`, one target
+per module — a multi-module reactor scans as one target per module
+directory, no expansion machinery. The sidecar is produced by the pinned
+`cyclonedx-maven-plugin` in the consumer's own CI, never by this tool
+([getting started](../getting-started.md#if-your-repository-is-maven) has
+the setup; [ADR-0023](../explanation/adr/0023-maven-committed-sidecar.md)
+records why). The collector parses the committed document in process: no
+generator subprocess, and no Maven toolchain needed on the scanning machine.
+A sibling module referenced inside a dependent module's own sidecar is
+excluded by an exact purl match against every discovered module's own root
+purl, computed before any module is collected — a module bumped without
+regenerating every sidecar in the reactor surfaces the stale reference as an
+ordinary third-party component instead of silently vanishing.
+
+The lane's limits, stated plainly:
+
+- By default, test-scope dependencies are absent from the sidecar entirely —
+  the plugin's default `makeBom` goal excludes them, so they are not
+  inventoried, not merely hidden in a dev column. Committing a second,
+  test-inclusive sidecar, `maven.test.sbom.json` (built with
+  `-DincludeTestScope=true`), changes that: a component present only in the
+  test document classifies **dev**, and every component in the default
+  document still classifies production. The two documents' root purls must
+  match exactly, produced in the same build; a mismatched pair is refused
+  rather than composed. Folding `includeTestScope=true` into the single
+  default document instead is still not a recovery path — it makes every
+  test dependency indistinguishable from production, so all of it would gate
+  as production too. A module committing only the default document keeps
+  today's all-production behavior.
+- Every non-dev Maven package gates as **production** — compile, runtime,
+  provided, and system scope alike — because the sidecar carries no
+  per-component Maven scope; only the separation between the two committed
+  documents classifies dev. This is the safe direction: nothing, including a
+  `system`-scoped commercial jar, can hide in a dev scope it was never
+  assigned.
+- [Dependency provenance](../glossary.md#dependency-provenance) is not
+  available; the "Why" column shows `—`.
+- A package with no public record on Maven Central resolves as license
+  **unknown** through [deps.dev](https://deps.dev), an aggregator of
+  Central's own metadata: its declared licence, not a scan of the package's
+  source, recorded as a negative cache entry when it has none; it never
+  fails the run.
+- A commercial or system-scoped jar with no public licence record resolves
+  the same way: an honest unknown, not a guess.
+
+The system-scoped jars a `<dependency>` with `<scope>system</scope>` declares
+are exactly this last case — a commercial licence with no public claim to
+enrich from. Record the decision with a `LicenseRef-` [[clarify]] expression,
+the sanctioned spelling for that case. The `name` is the package as the
+inventory's Name column reports it — for Maven that is `group/artifact`, not
+the bare artifact:
+
+```toml
+[[clarify]]
+package = { name = "com.example.vendor/reporting-engine-pro", version = "9.0.0" }
+expression = "LicenseRef-reporting-engine-pro-commercial"
+reason = "Commercial reporting-engine licence, vendored under lib/; no public SPDX id exists."
+```
+
 ## check
 
 The CI gate. It runs the same scan as `generate` entirely in memory, then reads
@@ -173,8 +234,8 @@ The cache-integrity audit, and the only subcommand that re-reads the registries
 on purpose. It loads the committed
 [enrichment cache](../glossary.md#enrichment-and-the-enrichment-cache),
 re-resolves every entry against the registry that produced it — npm, PyPI, the
-NuGet registration API, or the GitHub License API for `pkg:terraform`
-providers — and compares each fresh answer
+NuGet registration API, deps.dev for `pkg:maven`, or the GitHub License API
+for `pkg:terraform` providers — and compares each fresh answer
 to the stored licence. A single equality on the raw licence string catches every
 way the cache can go wrong: a value that changed upstream or was edited, an entry
 for a package the registry no longer resolves, and a no-licence entry the registry

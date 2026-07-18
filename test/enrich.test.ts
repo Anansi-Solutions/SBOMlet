@@ -26,6 +26,12 @@ import {
   nugetRegistrationLeafUrl,
   resolveNugetCatalogLicense,
 } from "../src/enrich/nuget";
+import {
+  DEPS_DEV_API_HOST,
+  depsDevVersionUrl,
+  mavenVersionWithoutQualifiers,
+  resolveMavenLicenses,
+} from "../src/enrich/maven";
 import { resolvePypiLicense } from "../src/enrich/pypi";
 import { resolveNpmLicense } from "../src/enrich/npm";
 import {
@@ -2417,6 +2423,582 @@ describe("enrichUnknowns nuget (two-step fetch, negative discipline, offline che
         "license-expression",
       );
       expect(loaded.size).toBe(3);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("maven deps.dev URL builder (qualifier stripping + SSRF pin)", () => {
+  test("strips ?type=jar and builds the group:artifact path segment", () => {
+    expect(depsDevVersionUrl("com.example/lib", "2.0.0?type=jar")).toBe(
+      "https://api.deps.dev/v3/systems/MAVEN/packages/com.example%3Alib/versions/2.0.0",
+    );
+  });
+
+  test("strips a classifier qualifier too (?classifier=jakarta&type=jar)", () => {
+    expect(
+      depsDevVersionUrl("com.example/lib", "2.0.0?classifier=jakarta&type=jar"),
+    ).toBe(
+      "https://api.deps.dev/v3/systems/MAVEN/packages/com.example%3Alib/versions/2.0.0",
+    );
+  });
+
+  test("a version with no qualifiers is used verbatim", () => {
+    expect(depsDevVersionUrl("commons-io/commons-io", "2.11.0")).toBe(
+      "https://api.deps.dev/v3/systems/MAVEN/packages/commons-io%3Acommons-io/versions/2.11.0",
+    );
+  });
+
+  test("mavenVersionWithoutQualifiers strips only the qualifier tail", () => {
+    expect(mavenVersionWithoutQualifiers("9.0.0?type=jar")).toBe("9.0.0");
+    expect(mavenVersionWithoutQualifiers("9.0.0")).toBe("9.0.0");
+  });
+
+  test("an attacker-shaped group/artifact (embedded slash, @, percent-escapes) can never change the host or path root", () => {
+    const url = depsDevVersionUrl(
+      "evil.example%2Fsteal/lib%40x",
+      "1.0.0?type=jar",
+    );
+    expect(
+      url.startsWith(`${DEPS_DEV_API_HOST}/v3/systems/MAVEN/packages/`),
+    ).toBe(true);
+    // A decoded "/" is re-encoded, never becoming a real path boundary.
+    expect(url).not.toContain("evil.example/steal");
+    expect(url).toContain(encodeURIComponent("evil.example/steal:lib@x"));
+  });
+
+  test("a classifier purl targets the SAME GAV document as its non-classifier sibling", () => {
+    const plain = depsDevVersionUrl(
+      "org.example/querydsl-apt",
+      "5.0.0?type=jar",
+    );
+    const classified = depsDevVersionUrl(
+      "org.example/querydsl-apt",
+      "5.0.0?classifier=jakarta&type=jar",
+    );
+    expect(plain).toBe(classified);
+  });
+});
+
+describe("maven deps.dev resolver (honest-sentinel ladder)", () => {
+  test("a resolved SPDX id is a single raw claim, HIGH confidence", () => {
+    expect(resolveMavenLicenses({ licenses: ["Apache-2.0"] })).toEqual({
+      raws: ["Apache-2.0"],
+      via: "deps-dev-licenses",
+      confidence: "high",
+    });
+  });
+
+  test('the "non-standard" sentinel is dropped — an honest unknown, never a fabricated id', () => {
+    expect(resolveMavenLicenses({ licenses: ["non-standard"] })).toBeNull();
+  });
+
+  test("non-standard is dropped case-insensitively, whitespace-trimmed", () => {
+    expect(resolveMavenLicenses({ licenses: [" Non-Standard "] })).toBeNull();
+  });
+
+  test("a multi-entry licenses array becomes MULTIPLE raw claims, sorted, never concatenated", () => {
+    expect(
+      resolveMavenLicenses({
+        licenses: ["MPL-1.1", "GPL-3.0-only", "LGPL-3.0-only"],
+      }),
+    ).toEqual({
+      raws: ["GPL-3.0-only", "LGPL-3.0-only", "MPL-1.1"],
+      via: "deps-dev-licenses",
+      confidence: "high",
+    });
+  });
+
+  test("a mix of a real id and non-standard keeps only the real one", () => {
+    expect(
+      resolveMavenLicenses({ licenses: ["Apache-2.0", "non-standard"] }),
+    ).toEqual({
+      raws: ["Apache-2.0"],
+      via: "deps-dev-licenses",
+      confidence: "high",
+    });
+  });
+
+  test("duplicate entries dedupe", () => {
+    expect(resolveMavenLicenses({ licenses: ["MIT", "MIT"] })).toEqual({
+      raws: ["MIT"],
+      via: "deps-dev-licenses",
+      confidence: "high",
+    });
+  });
+
+  test("an empty licenses array → null (a genuinely licenseless answer)", () => {
+    expect(resolveMavenLicenses({ licenses: [] })).toBeNull();
+  });
+
+  test("a missing licenses field or a malformed document → null, never throws", () => {
+    expect(resolveMavenLicenses({})).toBeNull();
+    expect(resolveMavenLicenses(null)).toBeNull();
+    expect(resolveMavenLicenses("nope")).toBeNull();
+    expect(resolveMavenLicenses([])).toBeNull();
+  });
+
+  test("blank/whitespace-only entries are dropped like non-standard", () => {
+    expect(resolveMavenLicenses({ licenses: ["  ", "MIT"] })).toEqual({
+      raws: ["MIT"],
+      via: "deps-dev-licenses",
+      confidence: "high",
+    });
+  });
+});
+
+describe("enrichUnknowns maven (deps.dev single fetch, honest sentinel, 404-definitive, offline check)", () => {
+  const fastBackoff = 1;
+
+  function model(...packages: PackageEntry[]): CanonicalDependencies {
+    return { packages };
+  }
+
+  function tempCachePath(): { dir: string; path: string } {
+    const dir = mkdtempSync(join(tmpdir(), "enrich-maven-"));
+    return { dir, path: join(dir, "enrichment-cache.json") };
+  }
+
+  /** A pkg:maven unknown carrying the type=jar qualifier tail. */
+  function unknownMaven(): PackageEntry {
+    return {
+      purl: "pkg:maven/com.example/lib@2.0.0?type=jar",
+      name: "lib",
+      version: "2.0.0",
+      occurrences: [{ target: "Fixture.App", isDevDependency: false }],
+      licenseClaims: [],
+      scope: "app",
+    };
+  }
+
+  const VERSION_URL =
+    "https://api.deps.dev/v3/systems/MAVEN/packages/com.example%3Alib/versions/2.0.0";
+
+  function registryClaims(entry: PackageEntry | undefined): LicenseClaim[] {
+    return entry?.licenseClaims.filter((c) => c.source === "registry") ?? [];
+  }
+
+  function fetchByUrl(responder: (url: string) => Response): {
+    fetch: typeof fetch;
+    calls: string[];
+  } {
+    const calls: string[] = [];
+    const impl = (async (input: string | URL | Request): Promise<Response> => {
+      const url = typeof input === "string" ? input : input.toString();
+      calls.push(url);
+      return responder(url);
+    }) as typeof fetch;
+    return { fetch: impl, calls };
+  }
+
+  function jsonResponse(body: unknown, status = 200): Response {
+    return new Response(JSON.stringify(body), {
+      status,
+      headers: { "content-type": "application/json" },
+    });
+  }
+
+  async function withFetch<T>(
+    impl: typeof fetch,
+    fn: () => Promise<T>,
+  ): Promise<T> {
+    const original = globalThis.fetch;
+    globalThis.fetch = impl;
+    try {
+      return await fn();
+    } finally {
+      globalThis.fetch = original;
+    }
+  }
+
+  test("resolved: a single licenses entry → ONE registry claim + a positive entry keyed by the VERBATIM (qualifier-bearing) purl", async () => {
+    const { dir, path } = tempCachePath();
+    try {
+      const { fetch, calls } = fetchByUrl((url) => {
+        if (url === VERSION_URL)
+          return jsonResponse({ licenses: ["Apache-2.0"] });
+        throw new Error(`unexpected url ${url}`);
+      });
+      const result = await withFetch(fetch, () =>
+        enrichUnknowns(model(unknownMaven()), {
+          mode: "generate",
+          cachePath: path,
+          verbose: false,
+          backoffBaseMs: fastBackoff,
+        }),
+      );
+      expect(calls).toEqual([VERSION_URL]);
+      expect(registryClaims(result.model.packages[0])).toEqual([
+        { raw: "Apache-2.0", kind: "expression", source: "registry" },
+      ]);
+      const recorded = getEntry(
+        readCache(path),
+        "pkg:maven/com.example/lib@2.0.0?type=jar",
+      );
+      expect(recorded).toEqual({
+        license: "Apache-2.0",
+        fetchedFrom: "deps-dev",
+        via: "deps-dev-licenses",
+        resolvable: true,
+      });
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test('sentinel: "non-standard" → NO registry claim, a governed NEGATIVE entry (a definitive answer, not a retry)', async () => {
+    const { dir, path } = tempCachePath();
+    try {
+      const { fetch } = fetchByUrl(() =>
+        jsonResponse({ licenses: ["non-standard"] }),
+      );
+      const result = await withFetch(fetch, () =>
+        enrichUnknowns(model(unknownMaven()), {
+          mode: "generate",
+          cachePath: path,
+          verbose: false,
+          backoffBaseMs: fastBackoff,
+        }),
+      );
+      expect(registryClaims(result.model.packages[0])).toEqual([]);
+      const recorded = getEntry(
+        readCache(path),
+        "pkg:maven/com.example/lib@2.0.0?type=jar",
+      );
+      expect(recorded).toEqual({
+        license: null,
+        fetchedFrom: "deps-dev",
+        via: "unresolved",
+        resolvable: false,
+      });
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("multi-entry licenses array → MULTIPLE separate registry claims, cache stores the sorted array (never a joined/guessed compound)", async () => {
+    const { dir, path } = tempCachePath();
+    try {
+      const { fetch } = fetchByUrl(() =>
+        jsonResponse({
+          licenses: ["MPL-1.1", "GPL-3.0-only", "LGPL-3.0-only"],
+        }),
+      );
+      const result = await withFetch(fetch, () =>
+        enrichUnknowns(model(unknownMaven()), {
+          mode: "generate",
+          cachePath: path,
+          verbose: false,
+          backoffBaseMs: fastBackoff,
+        }),
+      );
+      expect(registryClaims(result.model.packages[0])).toEqual([
+        { raw: "GPL-3.0-only", kind: "expression", source: "registry" },
+        { raw: "LGPL-3.0-only", kind: "expression", source: "registry" },
+        { raw: "MPL-1.1", kind: "expression", source: "registry" },
+      ]);
+      const recorded = getEntry(
+        readCache(path),
+        "pkg:maven/com.example/lib@2.0.0?type=jar",
+      );
+      expect(recorded?.license).toEqual([
+        "GPL-3.0-only",
+        "LGPL-3.0-only",
+        "MPL-1.1",
+      ]);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("404: DEFINITIVE negative — no registry presence — package stays unknown, generate does NOT throw", async () => {
+    const { dir, path } = tempCachePath();
+    try {
+      const { fetch, calls } = fetchByUrl(() => jsonResponse({}, 404));
+      const result = await withFetch(fetch, () =>
+        enrichUnknowns(model(unknownMaven()), {
+          mode: "generate",
+          cachePath: path,
+          verbose: false,
+          backoffBaseMs: fastBackoff,
+        }),
+      );
+      expect(calls).toEqual([VERSION_URL]);
+      expect(registryClaims(result.model.packages[0])).toEqual([]);
+      const recorded = getEntry(
+        readCache(path),
+        "pkg:maven/com.example/lib@2.0.0?type=jar",
+      );
+      expect(recorded).toEqual({
+        license: null,
+        fetchedFrom: "deps-dev",
+        via: "unresolved",
+        resolvable: false,
+      });
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("TRANSIENT: a persistent 500 THROWS loudly and writes NO entry (negative-poison impossible)", async () => {
+    const { dir, path } = tempCachePath();
+    try {
+      const { fetch } = fetchByUrl(() => jsonResponse({}, 500));
+      await expect(
+        withFetch(fetch, () =>
+          enrichUnknowns(model(unknownMaven()), {
+            mode: "generate",
+            cachePath: path,
+            verbose: false,
+            backoffBaseMs: fastBackoff,
+          }),
+        ),
+      ).rejects.toThrow(/registry 500/);
+      expect(readCache(path).size).toBe(0);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("a network error after retries throws loudly, writes NOTHING", async () => {
+    const { dir, path } = tempCachePath();
+    try {
+      const throwingFetch = (async (): Promise<Response> => {
+        throw new Error("NETWORK DOWN");
+      }) as unknown as typeof fetch;
+      await expect(
+        withFetch(throwingFetch, () =>
+          enrichUnknowns(model(unknownMaven()), {
+            mode: "generate",
+            cachePath: path,
+            verbose: false,
+            backoffBaseMs: fastBackoff,
+          }),
+        ),
+      ).rejects.toThrow(/registry fetch failed/);
+      expect(readCache(path).size).toBe(0);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("a pre-seeded POSITIVE maven entry (single string) resolves with ZERO fetches", async () => {
+    const { dir, path } = tempCachePath();
+    try {
+      const cache = new Map<string, CacheEntry>();
+      putEntry(cache, "pkg:maven/com.example/lib@2.0.0?type=jar", {
+        license: "Apache-2.0",
+        fetchedFrom: "deps-dev",
+        via: "deps-dev-licenses",
+        resolvable: true,
+      });
+      writeFileSync(path, serializeCache(cache));
+
+      const { fetch, calls } = fetchByUrl(() => jsonResponse({}));
+      const result = await withFetch(fetch, () =>
+        enrichUnknowns(model(unknownMaven()), {
+          mode: "generate",
+          cachePath: path,
+          verbose: false,
+        }),
+      );
+      expect(calls).toEqual([]);
+      expect(registryClaims(result.model.packages[0])).toEqual([
+        { raw: "Apache-2.0", kind: "expression", source: "registry" },
+      ]);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("a pre-seeded POSITIVE maven entry (multi-value array) replays as MULTIPLE claims with ZERO fetches", async () => {
+    const { dir, path } = tempCachePath();
+    try {
+      const cache = new Map<string, CacheEntry>();
+      putEntry(cache, "pkg:maven/com.example/lib@2.0.0?type=jar", {
+        license: ["GPL-3.0-only", "LGPL-3.0-only", "MPL-1.1"],
+        fetchedFrom: "deps-dev",
+        via: "deps-dev-licenses",
+        resolvable: true,
+      });
+      writeFileSync(path, serializeCache(cache));
+
+      const { fetch, calls } = fetchByUrl(() => jsonResponse({}));
+      const result = await withFetch(fetch, () =>
+        enrichUnknowns(model(unknownMaven()), {
+          mode: "generate",
+          cachePath: path,
+          verbose: false,
+        }),
+      );
+      expect(calls).toEqual([]);
+      expect(
+        registryClaims(result.model.packages[0]).map((c) => c.raw),
+      ).toEqual(["GPL-3.0-only", "LGPL-3.0-only", "MPL-1.1"]);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("a pre-seeded NEGATIVE maven entry stays unknown with ZERO fetches", async () => {
+    const { dir, path } = tempCachePath();
+    try {
+      const cache = new Map<string, CacheEntry>();
+      putEntry(cache, "pkg:maven/com.example/lib@2.0.0?type=jar", {
+        license: null,
+        fetchedFrom: "deps-dev",
+        via: "unresolved",
+        resolvable: false,
+      });
+      writeFileSync(path, serializeCache(cache));
+
+      const { fetch, calls } = fetchByUrl(() => jsonResponse({}));
+      const result = await withFetch(fetch, () =>
+        enrichUnknowns(model(unknownMaven()), {
+          mode: "generate",
+          cachePath: path,
+          verbose: false,
+        }),
+      );
+      expect(calls).toEqual([]);
+      expect(registryClaims(result.model.packages[0])).toEqual([]);
+      expect(result.staleUnknowns).toEqual([]);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("check mode: a maven unknown with NO cache entry is a stale unknown — NO network, NO cache write (offline check)", async () => {
+    const { dir, path } = tempCachePath();
+    try {
+      const throwingFetch = (async (): Promise<Response> => {
+        throw new Error("check must never fetch");
+      }) as unknown as typeof fetch;
+      const result = await withFetch(throwingFetch, () =>
+        enrichUnknowns(model(unknownMaven()), {
+          mode: "check",
+          cachePath: path,
+          verbose: false,
+        }),
+      );
+      expect(result.staleUnknowns).toEqual([
+        "pkg:maven/com.example/lib@2.0.0?type=jar",
+      ]);
+      expect(registryClaims(result.model.packages[0])).toEqual([]);
+      expect(readCache(path).size).toBe(0);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("check mode: a WARM committed cache performs ZERO fetches (the maven arm never touches the network in check — MVN-02 offline)", async () => {
+    const { dir, path } = tempCachePath();
+    try {
+      const cache = new Map<string, CacheEntry>();
+      putEntry(cache, "pkg:maven/com.example/lib@2.0.0?type=jar", {
+        license: "Apache-2.0",
+        fetchedFrom: "deps-dev",
+        via: "deps-dev-licenses",
+        resolvable: true,
+      });
+      writeFileSync(path, serializeCache(cache));
+
+      const throwingFetch = (async (): Promise<Response> => {
+        throw new Error("check must never fetch");
+      }) as unknown as typeof fetch;
+      const result = await withFetch(throwingFetch, () =>
+        enrichUnknowns(model(unknownMaven()), {
+          mode: "check",
+          cachePath: path,
+          verbose: false,
+        }),
+      );
+      expect(result.staleUnknowns).toEqual([]);
+      expect(registryClaims(result.model.packages[0])).toEqual([
+        { raw: "Apache-2.0", kind: "expression", source: "registry" },
+      ]);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("a classifier purl (?classifier=jakarta&type=jar) targets the SAME GAV document — qualifiers stripped for the fetch, purl stays verbatim as the cache key", async () => {
+    const { dir, path } = tempCachePath();
+    const classified: PackageEntry = {
+      purl: "pkg:maven/org.example/querydsl-apt@5.0.0?classifier=jakarta&type=jar",
+      name: "querydsl-apt",
+      version: "5.0.0",
+      occurrences: [{ target: "t", isDevDependency: false }],
+      licenseClaims: [],
+      scope: "app",
+    };
+    const CLASSIFIER_URL =
+      "https://api.deps.dev/v3/systems/MAVEN/packages/org.example%3Aquerydsl-apt/versions/5.0.0";
+    try {
+      const { fetch, calls } = fetchByUrl((url) => {
+        if (url === CLASSIFIER_URL) {
+          return jsonResponse({ licenses: ["Apache-2.0"] });
+        }
+        throw new Error(`unexpected url ${url}`);
+      });
+      const result = await withFetch(fetch, () =>
+        enrichUnknowns(model(classified), {
+          mode: "generate",
+          cachePath: path,
+          verbose: false,
+          backoffBaseMs: fastBackoff,
+        }),
+      );
+      expect(calls).toEqual([CLASSIFIER_URL]);
+      const recorded = getEntry(
+        readCache(path),
+        "pkg:maven/org.example/querydsl-apt@5.0.0?classifier=jakarta&type=jar",
+      );
+      expect(recorded?.license).toBe("Apache-2.0");
+      expect(registryClaims(result.model.packages[0])).toEqual([
+        { raw: "Apache-2.0", kind: "expression", source: "registry" },
+      ]);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("mixed misses: pypi + maven unknowns resolve through their own arms in one run", async () => {
+    const { dir, path } = tempCachePath();
+    try {
+      const pypiUnknown: PackageEntry = {
+        purl: "pkg:pypi/anyio@4.12.1",
+        name: "anyio",
+        version: "4.12.1",
+        occurrences: [{ target: "apps/jupyter", isDevDependency: false }],
+        licenseClaims: [],
+        scope: "app",
+      };
+      const { fetch, calls } = fetchByUrl((url) => {
+        if (url === "https://pypi.org/pypi/anyio/4.12.1/json") {
+          return jsonResponse({ info: { license_expression: "MIT" } });
+        }
+        if (url === VERSION_URL) {
+          return jsonResponse({ licenses: ["Apache-2.0"] });
+        }
+        throw new Error(`unexpected url ${url}`);
+      });
+      const result = await withFetch(fetch, () =>
+        enrichUnknowns(model(pypiUnknown, unknownMaven()), {
+          mode: "generate",
+          cachePath: path,
+          verbose: false,
+          backoffBaseMs: fastBackoff,
+        }),
+      );
+      expect(calls).toHaveLength(2);
+      const claims = result.model.packages.map(
+        (p) => registryClaims(p)[0]?.raw,
+      );
+      expect(claims).toEqual(["MIT", "Apache-2.0"]);
+      const loaded = readCache(path);
+      expect(loaded.size).toBe(2);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

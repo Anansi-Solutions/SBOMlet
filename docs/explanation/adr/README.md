@@ -49,3 +49,4 @@ something we no longer do but haven't replaced.
 | [0020](0020-yarn-workspace-scan-units.md) | Yarn workspace scan units from lockfile resolutions | Accepted |
 | [0021](0021-per-image-occurrence-identity.md) | Per-image occurrence identities — `docker:<source>` | Accepted |
 | [0022](0022-dotnet-lockfile-in-process.md) | Parse packages.lock.json in-process for .NET | Accepted |
+| [0023](0023-maven-committed-sidecar.md) | Read a committed CycloneDX sidecar for Maven, produced by the consumer's own CI | Accepted |
