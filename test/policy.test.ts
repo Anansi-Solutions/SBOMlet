@@ -384,6 +384,119 @@ describe("parsePolicy — clarify `expects` precondition", () => {
   });
 });
 
+// ===========================================================================
+// The optional `evidence_url` on [[clarify]] — an evidence-pinned decision
+// (the third clarify kind, alongside blind and expects-guarded). The value
+// must be an immutable GitHub blob permalink; it requires package.version
+// and forbids expects (the two guards cover disjoint drift classes).
+// ===========================================================================
+
+/** The real fwlink-329770 evidence pin: dotnet/core's license-information.md. */
+const PINNED_EVIDENCE_URL =
+  "https://github.com/dotnet/core/blob/8c8e5836c343f854b65437dfedb13598d3aa3707/license-information.md";
+
+const EVIDENCE_REASON =
+  "licenseUrl is the retired .NET Library EULA fwlink; Microsoft's license-information page states library packages are MIT — reviewed at the pinned revision";
+
+/** A [[clarify]] entry carrying an `evidence_url`, version-pinned by default. */
+const clarifyWithEvidence = (
+  evidenceUrl: string,
+  opts: { version?: string; expects?: string } = { version: "4.3.0" },
+): string =>
+  [
+    "[[clarify]]",
+    `package = { name = "System.IO"${opts.version !== undefined ? `, version = ${JSON.stringify(opts.version)}` : ""} }`,
+    'expression = "MIT"',
+    `evidence_url = ${JSON.stringify(evidenceUrl)}`,
+    ...(opts.expects !== undefined
+      ? [`expects = ${JSON.stringify(opts.expects)}`]
+      : []),
+    `reason = ${JSON.stringify(EVIDENCE_REASON)}`,
+  ].join("\n");
+
+describe("parsePolicy — clarify evidence_url (evidence-pinned decision)", () => {
+  test("a valid evidence_url permalink (40-hex SHA, version-pinned, no expects) parses and the ClarifyRule carries it verbatim", () => {
+    const policy = parsePolicy(clarifyWithEvidence(PINNED_EVIDENCE_URL));
+    expect(policy.clarify).toEqual([
+      {
+        name: "System.IO",
+        version: "4.3.0",
+        expression: "MIT",
+        evidence_url: PINNED_EVIDENCE_URL,
+        reason: EVIDENCE_REASON,
+      },
+    ]);
+  });
+
+  test("a branch permalink (blob/main) is rejected — mutable evidence is not pinned", () => {
+    const error = expectPolicyError(
+      clarifyWithEvidence(
+        "https://github.com/dotnet/core/blob/main/license-information.md",
+      ),
+    );
+    expect(error.message).toContain("clarify[0]");
+    expect(error.message).toContain("evidence_url");
+  });
+
+  test("a non-GitHub host is rejected", () => {
+    const error = expectPolicyError(
+      clarifyWithEvidence(
+        "https://example.com/dotnet/core/blob/8c8e5836c343f854b65437dfedb13598d3aa3707/license-information.md",
+      ),
+    );
+    expect(error.message).toContain("clarify[0]");
+    expect(error.message).toContain("evidence_url");
+  });
+
+  test("a 39-hex near-miss ref is rejected — not a full commit SHA", () => {
+    const shortSha = "8c8e5836c343f854b65437dfedb13598d3aa370"; // 39 hex chars
+    const error = expectPolicyError(
+      clarifyWithEvidence(
+        `https://github.com/dotnet/core/blob/${shortSha}/license-information.md`,
+      ),
+    );
+    expect(error.message).toContain("clarify[0]");
+    expect(error.message).toContain("evidence_url");
+  });
+
+  test("a 41-hex near-miss ref is rejected — not a full commit SHA", () => {
+    const longSha = "8c8e5836c343f854b65437dfedb13598d3aa37070"; // 41 hex chars
+    const error = expectPolicyError(
+      clarifyWithEvidence(
+        `https://github.com/dotnet/core/blob/${longSha}/license-information.md`,
+      ),
+    );
+    expect(error.message).toContain("clarify[0]");
+    expect(error.message).toContain("evidence_url");
+  });
+
+  test("evidence_url without package.version is rejected — a name-only clarify could inherit onto a new version", () => {
+    const error = expectPolicyError(
+      clarifyWithEvidence(PINNED_EVIDENCE_URL, {}),
+    );
+    expect(error.message).toContain("clarify[0]");
+    expect(error.message).toContain("evidence_url");
+    expect(error.message).toContain("version");
+  });
+
+  test("evidence_url combined with expects is rejected — the two guards cover disjoint drift classes", () => {
+    const error = expectPolicyError(
+      clarifyWithEvidence(PINNED_EVIDENCE_URL, {
+        version: "4.3.0",
+        expects: "MS-PL",
+      }),
+    );
+    expect(error.message).toContain("clarify[0]");
+    expect(error.message).toContain("evidence_url");
+    expect(error.message).toContain("expects");
+  });
+
+  test("absent evidence_url is today's behavior byte-for-byte (no key materializes)", () => {
+    const policy = parsePolicy(clarifyWithExpects("BSD"));
+    expect("evidence_url" in (policy.clarify[0] ?? {})).toBe(false);
+  });
+});
+
 describe("BUILTIN_OVERRIDES — the shipped tool-level set", () => {
   test("is a non-empty literal array; every entry has name, expects, expression, reason", () => {
     expect(BUILTIN_OVERRIDES.length).toBeGreaterThan(0);
@@ -1440,6 +1553,35 @@ describe("evaluate — clarify usage visibility", () => {
     expect(usedClarifyIndices.has(0)).toBe(true);
     expect(verdicts[0].status).toBe("ok");
     expect(verdicts[0].rule).toBe("clarify[0]");
+  });
+});
+
+describe("evaluate — clarify evidence_url is inert", () => {
+  test("an evidence_url-carrying clarify produces the IDENTICAL verdict to the same clarify without it", () => {
+    const withoutEvidence = [
+      "[[clarify]]",
+      'package = { name = "System.IO", version = "4.3.0" }',
+      'expression = "MIT"',
+      `reason = ${JSON.stringify(EVIDENCE_REASON)}`,
+    ].join("\n");
+    const withEvidence = clarifyWithEvidence(PINNED_EVIDENCE_URL);
+
+    const spec = pkgSpec(
+      "System.IO",
+      "go.microsoft.com/fwlink/?LinkId=329770",
+      ["backend"],
+      "4.3.0",
+    );
+    const without = runEngine([spec], withoutEvidence);
+    const withIt = runEngine([spec], withEvidence);
+
+    expect(withIt.verdicts).toEqual(without.verdicts);
+    expect(withIt.usedClarifyIndices.has(0)).toBe(true);
+    expect(without.usedClarifyIndices.has(0)).toBe(true);
+    expect(withIt.verdicts[0]?.status).toBe("ok");
+    expect(withIt.verdicts[0]?.rule).toBe("clarify[0]");
+    // evidence_url reaches the parsed rule but plays no role in the verdict.
+    expect(withIt.policy.clarify[0]?.evidence_url).toBe(PINNED_EVIDENCE_URL);
   });
 });
 
