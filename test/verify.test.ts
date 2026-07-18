@@ -442,6 +442,134 @@ describe("verifyCache nuget (two-step re-resolution, the same resolver generate 
   });
 });
 
+describe("verifyCache nuget url-only GitHub rung parity (the same resolveUrlOnlyGithubLicense router generate uses)", () => {
+  const NUGET_PURL = "pkg:nuget/Newtonsoft.Json@13.0.4";
+  const LEAF_URL =
+    "https://api.nuget.org/v3/registration5-gz-semver2/newtonsoft.json/13.0.4.json";
+  const CATALOG_URL =
+    "https://api.nuget.org/v3/catalog0/data/2024.03.27.08.21.03/newtonsoft.json.13.0.4.json";
+  const LICENSE_URL =
+    "https://raw.githubusercontent.com/aspnet/Home/2.0.0/LICENSE.txt";
+  const TAG_REF_URL =
+    "https://api.github.com/repos/aspnet/Home/git/ref/tags/2.0.0";
+  const SHA = "abcdef0123456789abcdef0123456789abcdef01";
+  const licenseAtRefUrl = (ref: string): string =>
+    `https://api.github.com/repos/aspnet/Home/license?ref=${ref}`;
+
+  /** Route the nuget two-step (a url-only catalogEntry) plus the tag-ref + License API hops. */
+  function githubRoute(
+    tagRef: { status: number; body?: unknown },
+    licenseAtSha: { status: number; body?: unknown },
+  ): (url: string) => { status: number; body?: unknown } {
+    return (url) => {
+      if (url === LEAF_URL) {
+        return { status: 200, body: { catalogEntry: CATALOG_URL } };
+      }
+      if (url === CATALOG_URL) {
+        return { status: 200, body: { licenseUrl: LICENSE_URL } };
+      }
+      if (url === TAG_REF_URL) return tagRef;
+      if (url === licenseAtRefUrl(SHA)) return licenseAtSha;
+      return { status: 500 };
+    };
+  }
+
+  test("a rung-written positive entry re-verifies clean through the SAME router (no false mismatch)", async () => {
+    const path = tempCachePath();
+    writeCache(path, { [NUGET_PURL]: positive("Apache-2.0", "github") });
+    const { fetch, calls } = fetchMock(
+      githubRoute(
+        { status: 200, body: { object: { sha: SHA, type: "commit" } } },
+        { status: 200, body: { license: { spdx_id: "Apache-2.0" } } },
+      ),
+    );
+    const result = await withFetch(fetch, () =>
+      verifyCache({ cachePath: path, verbose: false }),
+    );
+    expect(result.audited).toBe(1);
+    expect(result.mismatches).toEqual([]);
+    expect(calls).toEqual([
+      LEAF_URL,
+      CATALOG_URL,
+      TAG_REF_URL,
+      licenseAtRefUrl(SHA),
+    ]);
+  });
+
+  test("a hand-flipped rung entry (cache says MIT, GitHub still says Apache-2.0) → mismatch with the changed reason", async () => {
+    const path = tempCachePath();
+    writeCache(path, { [NUGET_PURL]: positive("MIT", "github") });
+    const { fetch } = fetchMock(
+      githubRoute(
+        { status: 200, body: { object: { sha: SHA, type: "commit" } } },
+        { status: 200, body: { license: { spdx_id: "Apache-2.0" } } },
+      ),
+    );
+    const result = await withFetch(fetch, () =>
+      verifyCache({ cachePath: path, verbose: false }),
+    );
+    expect(result.mismatches).toHaveLength(1);
+    expect(result.mismatches[0]).toMatchObject({
+      purl: NUGET_PURL,
+      cached: "MIT",
+      current: "Apache-2.0",
+    });
+    expect(result.mismatches[0]?.reason).toContain("changed");
+  });
+
+  test("upstream tag re-pointed to a commit whose license differs → the mutation surfaces as a mismatch", async () => {
+    const path = tempCachePath();
+    writeCache(path, { [NUGET_PURL]: positive("Apache-2.0", "github") });
+    const REPOINTED_SHA = "1111111111111111111111111111111111111a";
+    const { fetch } = fetchMock((url) => {
+      if (url === LEAF_URL) {
+        return { status: 200, body: { catalogEntry: CATALOG_URL } };
+      }
+      if (url === CATALOG_URL) {
+        return { status: 200, body: { licenseUrl: LICENSE_URL } };
+      }
+      if (url === TAG_REF_URL) {
+        return {
+          status: 200,
+          body: { object: { sha: REPOINTED_SHA, type: "commit" } },
+        };
+      }
+      if (url === licenseAtRefUrl(REPOINTED_SHA)) {
+        return { status: 200, body: { license: { spdx_id: "MIT" } } };
+      }
+      return { status: 500 };
+    });
+    const result = await withFetch(fetch, () =>
+      verifyCache({ cachePath: path, verbose: false }),
+    );
+    expect(result.mismatches).toHaveLength(1);
+    expect(result.mismatches[0]).toMatchObject({
+      cached: "Apache-2.0",
+      current: "MIT",
+    });
+  });
+
+  test("a PRE-RUNG committed negative for a tag-pinned URL now resolves positive → a DESIRABLE mismatch (hidden obligation), not a bug", async () => {
+    const path = tempCachePath();
+    writeCache(path, { [NUGET_PURL]: negative("nuget") });
+    const { fetch } = fetchMock(
+      githubRoute(
+        { status: 200, body: { object: { sha: SHA, type: "commit" } } },
+        { status: 200, body: { license: { spdx_id: "Apache-2.0" } } },
+      ),
+    );
+    const result = await withFetch(fetch, () =>
+      verifyCache({ cachePath: path, verbose: false }),
+    );
+    expect(result.mismatches).toHaveLength(1);
+    expect(result.mismatches[0]).toMatchObject({
+      cached: null,
+      current: "Apache-2.0",
+    });
+    expect(result.mismatches[0]?.reason).toContain("hidden obligation");
+  });
+});
+
 describe("verifyCache maven (deps.dev single-fetch re-resolution, the same resolver generate uses)", () => {
   const MAVEN_PURL = "pkg:maven/com.example/lib@2.0.0?type=jar";
   const VERSION_URL =
