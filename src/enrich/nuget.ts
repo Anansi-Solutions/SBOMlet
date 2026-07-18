@@ -127,3 +127,30 @@ function decodeSpdxPath(path: string): string | undefined {
   if (/[\u0000-\u001f\u007f-\u009f]/u.test(decoded)) return undefined;
   return decoded.trim();
 }
+
+/**
+ * Extract the raw licenseUrl string for the url-only class-4 case ONLY —
+ * mirrors resolveNugetCatalogLicense's exact class order so there is one
+ * ladder authority: an expression or an embedded file wins first, and a
+ * licenses.nuget.org URL is never returned here (its path IS the expression,
+ * already handled above). Any other licenseUrl — the pre-2019 url-only
+ * class — is returned verbatim for the caller to classify against the
+ * GitHub rung; every other shape (an expression, an embedded file, a
+ * licenses.nuget.org URL, or no license fields at all) yields undefined.
+ */
+export function urlOnlyLicenseUrlOf(doc: unknown): string | undefined {
+  const entry = narrowNugetCatalogEntry(doc);
+  if (entry === undefined) return undefined;
+
+  const expression = entry.licenseExpression?.trim();
+  if (expression !== undefined && expression !== "") return undefined;
+  if (entry.licenseFile !== undefined && entry.licenseFile !== "") {
+    return undefined;
+  }
+
+  const url = entry.licenseUrl;
+  if (url === undefined || url.startsWith(LICENSES_NUGET_ORG_PREFIX)) {
+    return undefined;
+  }
+  return url;
+}
