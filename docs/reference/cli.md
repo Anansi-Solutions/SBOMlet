@@ -125,6 +125,16 @@ The lane's limits, stated plainly:
 - A package whose license ships only as a file embedded in the package (no
   SPDX expression in its registry metadata) also resolves as **unknown**
   rather than a guess.
+- A package whose registry metadata carries only a bare, pre-2019
+  `licenseUrl` resolves through GitHub's License API, but only when the URL
+  names an immutable commit SHA or a proven tag on `github.com` /
+  `raw.githubusercontent.com`
+  ([ADR-0024](../explanation/adr/0024-honest-licenseurl-resolution.md)).
+  Every other shape — a branch reference, a redirect, a non-GitHub host —
+  stays an honest unknown by design. A cache entry committed before this
+  arm existed still reads `resolvable: false` for these packages and is
+  never re-fetched; delete the affected entries (or the cache file) and
+  re-run `generate` to let the arm attempt them.
 - paket lockfiles are not supported; only `packages.lock.json` is read.
 
 ### Maven targets
@@ -234,8 +244,9 @@ The cache-integrity audit, and the only subcommand that re-reads the registries
 on purpose. It loads the committed
 [enrichment cache](../glossary.md#enrichment-and-the-enrichment-cache),
 re-resolves every entry against the registry that produced it — npm, PyPI, the
-NuGet registration API, deps.dev for `pkg:maven`, or the GitHub License API
-for `pkg:terraform` providers — and compares each fresh answer
+NuGet registration API (including its GitHub-resolved `licenseUrl` entries,
+re-proven against the same tag/SHA), deps.dev for `pkg:maven`, or the GitHub
+License API for `pkg:terraform` providers — and compares each fresh answer
 to the stored licence. A single equality on the raw licence string catches every
 way the cache can go wrong: a value that changed upstream or was edited, an entry
 for a package the registry no longer resolves, and a no-licence entry the registry

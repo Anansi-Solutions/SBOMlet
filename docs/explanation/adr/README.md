@@ -50,3 +50,4 @@ something we no longer do but haven't replaced.
 | [0021](0021-per-image-occurrence-identity.md) | Per-image occurrence identities — `docker:<source>` | Accepted |
 | [0022](0022-dotnet-lockfile-in-process.md) | Parse packages.lock.json in-process for .NET | Accepted |
 | [0023](0023-maven-committed-sidecar.md) | Read a committed CycloneDX sidecar for Maven, produced by the consumer's own CI | Accepted |
+| [0024](0024-honest-licenseurl-resolution.md) | Honest licenseUrl resolution for NuGet: GitHub-only, immutable-ref-only | Accepted |
