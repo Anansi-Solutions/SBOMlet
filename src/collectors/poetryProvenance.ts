@@ -22,7 +22,6 @@
  * The `optional` distinction is ignored: no required-vs-optional partition.
  */
 
-
 import { parse as parseToml } from "smol-toml";
 
 import { recordOf, stringOf } from "../validate/record";

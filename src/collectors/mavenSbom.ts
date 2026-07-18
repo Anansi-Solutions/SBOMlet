@@ -142,7 +142,9 @@ export interface MavenCollectOptions {
   tempDir?: string;
 }
 
-/** collectWithMavenSbom's return shape: the base contract plus the optional dual-doc prod signal. */
+/**
+ * collectWithMavenSbom's return shape: the base contract plus the optional dual-doc prod signal.
+ */
 export interface MavenCollectResult extends CollectorSbomFile {
   /**
    * Purl set of the DEFAULT doc's components — set ONLY when a
