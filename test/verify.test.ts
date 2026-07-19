@@ -691,3 +691,190 @@ describe("verifyCache maven (deps.dev single-fetch re-resolution, the same resol
     ).rejects.toThrow(/registry 503/);
   });
 });
+
+describe("verifyCache evidence-drift audit (clarify evidence_url permalink re-check)", () => {
+  const EVIDENCE_SHA = "8c8e5836c343f854b65437dfedb13598d3aa3707";
+  const EVIDENCE_PERMALINK = `https://github.com/dotnet/core/blob/${EVIDENCE_SHA}/license-information.md`;
+  const PINNED_URL = `https://api.github.com/repos/dotnet/core/contents/license-information.md?ref=${EVIDENCE_SHA}`;
+  const HEAD_URL =
+    "https://api.github.com/repos/dotnet/core/contents/license-information.md";
+
+  function onePin(): { name: string; version: string; evidenceUrl: string } {
+    return {
+      name: "System.IO",
+      version: "4.3.0",
+      evidenceUrl: EVIDENCE_PERMALINK,
+    };
+  }
+
+  test("no evidencePins -> zero evidenceDrift and zero GitHub evidence calls", async () => {
+    const path = tempCachePath();
+    writeCache(path, {});
+    const { fetch, calls } = fetchMock(() => ({ status: 200, body: {} }));
+    const result = await withFetch(fetch, () =>
+      verifyCache({ cachePath: path, verbose: false }),
+    );
+    expect(result.evidenceDrift).toEqual([]);
+    expect(calls).toEqual([]);
+  });
+
+  test("pinned and default-branch blobs match -> no drift finding", async () => {
+    const path = tempCachePath();
+    writeCache(path, {});
+    const { fetch, calls } = fetchMock(() => ({
+      status: 200,
+      body: { sha: "blob-aaa" },
+    }));
+    const result = await withFetch(fetch, () =>
+      verifyCache({
+        cachePath: path,
+        verbose: false,
+        evidencePins: [onePin()],
+      }),
+    );
+    expect(result.evidenceDrift).toEqual([]);
+    expect(calls).toEqual([PINNED_URL, HEAD_URL]);
+  });
+
+  test("the pinned commit 404s (history rewritten/GC'd) -> a drift finding naming the gone evidence", async () => {
+    const path = tempCachePath();
+    writeCache(path, {});
+    const { fetch } = fetchMock((url) =>
+      url === PINNED_URL
+        ? { status: 404 }
+        : { status: 200, body: { sha: "x" } },
+    );
+    const result = await withFetch(fetch, () =>
+      verifyCache({
+        cachePath: path,
+        verbose: false,
+        evidencePins: [onePin()],
+      }),
+    );
+    expect(result.evidenceDrift).toHaveLength(1);
+    expect(result.evidenceDrift[0]).toMatchObject({
+      permalink: EVIDENCE_PERMALINK,
+      packages: [{ name: "System.IO", version: "4.3.0" }],
+    });
+    expect(result.evidenceDrift[0]?.reason).toContain("no longer resolvable");
+  });
+
+  test("the default branch 404s (file moved/renamed) -> a drift finding", async () => {
+    const path = tempCachePath();
+    writeCache(path, {});
+    const { fetch } = fetchMock((url) =>
+      url === PINNED_URL
+        ? { status: 200, body: { sha: "blob-aaa" } }
+        : { status: 404 },
+    );
+    const result = await withFetch(fetch, () =>
+      verifyCache({
+        cachePath: path,
+        verbose: false,
+        evidencePins: [onePin()],
+      }),
+    );
+    expect(result.evidenceDrift).toHaveLength(1);
+    expect(result.evidenceDrift[0]?.reason).toContain(
+      "no longer exists on the default branch",
+    );
+  });
+
+  test("the blob content differs -> a drift finding naming BOTH packages sharing the permalink, one fetch each (dedup)", async () => {
+    const path = tempCachePath();
+    writeCache(path, {});
+    const { fetch, calls } = fetchMock((url) =>
+      url === PINNED_URL
+        ? { status: 200, body: { sha: "blob-old" } }
+        : { status: 200, body: { sha: "blob-new" } },
+    );
+    const result = await withFetch(fetch, () =>
+      verifyCache({
+        cachePath: path,
+        verbose: false,
+        evidencePins: [
+          onePin(),
+          {
+            name: "Microsoft.NETCore.Platforms",
+            version: "5.0.0",
+            evidenceUrl: EVIDENCE_PERMALINK,
+          },
+        ],
+      }),
+    );
+    expect(result.evidenceDrift).toHaveLength(1);
+    expect(result.evidenceDrift[0]?.packages).toEqual([
+      { name: "System.IO", version: "4.3.0" },
+      { name: "Microsoft.NETCore.Platforms", version: "5.0.0" },
+    ]);
+    expect(result.evidenceDrift[0]?.reason).toContain("System.IO@4.3.0");
+    expect(result.evidenceDrift[0]?.reason).toContain(
+      "Microsoft.NETCore.Platforms@5.0.0",
+    );
+    expect(result.evidenceDrift[0]?.reason).toContain("changed upstream");
+    expect(calls).toEqual([PINNED_URL, HEAD_URL]);
+  });
+
+  test("two distinct permalinks -> evidenceDrift sorted deterministically", async () => {
+    const path = tempCachePath();
+    writeCache(path, {});
+    const otherSha = "1111111111111111111111111111111111111111";
+    const otherPermalink = `https://github.com/dotnet/core/blob/${otherSha}/other.md`;
+    const otherPinnedUrl = `https://api.github.com/repos/dotnet/core/contents/other.md?ref=${otherSha}`;
+    const otherHeadUrl =
+      "https://api.github.com/repos/dotnet/core/contents/other.md";
+    const { fetch } = fetchMock((url) => {
+      if (url === otherPinnedUrl) return { status: 200, body: { sha: "a" } };
+      if (url === otherHeadUrl) return { status: 200, body: { sha: "b" } };
+      if (url === PINNED_URL) return { status: 200, body: { sha: "a" } };
+      if (url === HEAD_URL) return { status: 200, body: { sha: "b" } };
+      return { status: 500 };
+    });
+    const result = await withFetch(fetch, () =>
+      verifyCache({
+        cachePath: path,
+        verbose: false,
+        evidencePins: [
+          onePin(),
+          { name: "Other.Pkg", version: "1.0.0", evidenceUrl: otherPermalink },
+        ],
+      }),
+    );
+    expect(result.evidenceDrift).toHaveLength(2);
+    // "1111..." sorts before "8c8e..." — otherPermalink first.
+    expect(result.evidenceDrift.map((f) => f.permalink)).toEqual([
+      otherPermalink,
+      EVIDENCE_PERMALINK,
+    ]);
+  });
+
+  test("a persistent 503 during the evidence audit propagates loudly, never a silent clean", async () => {
+    const path = tempCachePath();
+    writeCache(path, {});
+    const { fetch } = fetchMock(() => ({ status: 503 }));
+    await expect(
+      withFetch(fetch, () =>
+        verifyCache({
+          cachePath: path,
+          verbose: false,
+          backoffBaseMs: 1,
+          evidencePins: [onePin()],
+        }),
+      ),
+    ).rejects.toThrow(/github 503/);
+  });
+
+  test("a cache mismatch with no evidencePins leaves evidenceDrift empty (the two audits are independent)", async () => {
+    const path = tempCachePath();
+    writeCache(path, { "pkg:npm/foo@1.2.3": positive("MIT", "npm") });
+    const { fetch } = fetchMock(() => ({
+      status: 200,
+      body: npmPackument({ "1.2.3": "GPL-3.0-only" }),
+    }));
+    const result = await withFetch(fetch, () =>
+      verifyCache({ cachePath: path, verbose: false }),
+    );
+    expect(result.mismatches).toHaveLength(1);
+    expect(result.evidenceDrift).toEqual([]);
+  });
+});

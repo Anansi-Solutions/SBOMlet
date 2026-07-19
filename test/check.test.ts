@@ -607,6 +607,56 @@ describe("offline check contract — enrichment staleness", () => {
     // every output are byte-unchanged (the offline write-free proof).
     expect(snapshotTree(root)).toEqual(before);
   });
+
+  test("an evidence-pinned clarify entry never triggers a fetch during generate+check (the drift audit lives only in verify-cache)", async () => {
+    const { root } = makeScannableTree();
+    const paths = pathsFor(root, false);
+    const policyPath = writePolicy(
+      root,
+      [
+        // Accepts the fixture's AGPL package so the run is clean; the point of
+        // this test is the clarify entry below, not the AGPL verdict.
+        "[[compatible]]",
+        'match = "license"',
+        'pattern = "AGPL-3.0-only"',
+        'reason = "accepted for this fixture"',
+        "",
+        "[[clarify]]",
+        'package = { name = "mit-lib", version = "3.0.0" }',
+        'expression = "MIT"',
+        'evidence_url = "https://github.com/dotnet/core/blob/8c8e5836c343f854b65437dfedb13598d3aa3707/license-information.md"',
+        'reason = "evidence-pinned fixture entry"',
+        "",
+      ].join("\n"),
+    );
+    await withFetch(RESOLVING_FETCH, async () => {
+      await withCapturedStderr(async () => {
+        await runGenerate({
+          repoRoot: root,
+          ...paths,
+          policyPath,
+          verbose: false,
+        });
+      });
+    });
+
+    // A single egress for the evidence_url permalink would explode this stub —
+    // only verify-cache ever reads it; generate/check never do.
+    let result: Awaited<ReturnType<typeof runCheck>> | undefined;
+    await withFetch(THROWING_FETCH, () =>
+      withCapturedStderr(async () => {
+        result = await runCheck({
+          repoRoot: root,
+          ...paths,
+          policyPath,
+          verbose: false,
+        });
+      }),
+    );
+
+    expect(result!.staleFiles).toEqual([]);
+    expect(exitCodeFor(result!)).toBe(0);
+  });
 });
 
 // ===========================================================================

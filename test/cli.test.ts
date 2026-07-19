@@ -31,6 +31,7 @@ import { afterAll, beforeAll, describe, expect, mock, test } from "bun:test";
 import {
   dockerSbomOptionsFrom,
   dockerSbomModeConflict,
+  exitCodeForVerify,
   optionsFrom,
 } from "../src/cli";
 import { exitCodeFor, runCheck } from "../src/gate/check";
@@ -522,6 +523,57 @@ describe("resolveFrom — base-dir path anchoring (CR-01)", () => {
     const absolute = join(base, "abs.md");
     expect(resolveFrom(base, absolute)).toBe(absolute);
     expect(resolveFrom(undefined, "x.md")).toBe(resolve(process.cwd(), "x.md"));
+  });
+});
+
+describe("exitCodeForVerify — verify-cache exit mapping (pure)", () => {
+  const clean = { audited: 3, mismatches: [], evidenceDrift: [] };
+  const mismatchOnly = {
+    audited: 3,
+    mismatches: [
+      {
+        purl: "pkg:npm/foo@1.0.0",
+        cached: "MIT",
+        current: "GPL-3.0-only",
+        reason: "changed",
+      },
+    ],
+    evidenceDrift: [],
+  };
+  const driftOnly = {
+    audited: 0,
+    mismatches: [],
+    evidenceDrift: [
+      {
+        permalink:
+          "https://github.com/dotnet/core/blob/8c8e5836c343f854b65437dfedb13598d3aa3707/license-information.md",
+        packages: [{ name: "System.IO", version: "4.3.0" }],
+        reason:
+          "evidence for System.IO@4.3.0 changed upstream: re-verify and re-pin",
+      },
+    ],
+  };
+
+  test("zero mismatches and zero evidence drift -> 0", () => {
+    expect(exitCodeForVerify(clean)).toBe(0);
+  });
+
+  test("a cache mismatch with no evidence drift -> 1 (unchanged from before the drift audit)", () => {
+    expect(exitCodeForVerify(mismatchOnly)).toBe(1);
+  });
+
+  test("evidence drift with no cache mismatch -> 1 (the new drift lane)", () => {
+    expect(exitCodeForVerify(driftOnly)).toBe(1);
+  });
+
+  test("both a mismatch and evidence drift -> 1 (still one exit lane)", () => {
+    expect(
+      exitCodeForVerify({
+        audited: mismatchOnly.audited,
+        mismatches: mismatchOnly.mismatches,
+        evidenceDrift: driftOnly.evidenceDrift,
+      }),
+    ).toBe(1);
   });
 });
 

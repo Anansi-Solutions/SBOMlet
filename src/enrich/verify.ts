@@ -19,6 +19,8 @@
  * inability to verify (it propagates and the CLI exits 3), NEVER silently treated
  * as agreement — exactly the reliability posture `generate` already takes.
  */
+import { parseGithubBlobPermalink } from "../validate/githubPermalink";
+import { narrowGithubContentsFile } from "../validate/registry";
 import { compareCodeUnits } from "../model/dependencies";
 import {
   githubLicenseUrl,
@@ -47,7 +49,7 @@ import {
   resolveNugetCatalogLicense,
   urlOnlyLicenseUrlOf,
 } from "./nuget";
-import { resolveUrlOnlyGithubLicense } from "./nugetGithub";
+import { GITHUB_API_HOST, resolveUrlOnlyGithubLicense } from "./nugetGithub";
 
 /** Bounded concurrency over the audit fetch set (mirrors enrich's FETCH_CONCURRENCY). */
 const VERIFY_CONCURRENCY = 8;
@@ -67,6 +69,14 @@ export interface VerifyOptions {
   verbose: boolean;
   /** Backoff base in ms forwarded to the fetchers (tests pass a small value). */
   backoffBaseMs?: number;
+  /**
+   * Evidence-pinned `[[clarify]]` decisions to drift-check against their cited
+   * GitHub permalink. Shaped by the caller (verifyCache.ts) from the
+   * parsed policy's `clarify` entries that carry `evidence_url` — this module
+   * never reads TOML or the `Policy` type directly. Absent/empty runs zero
+   * evidence fetches, so a policy with no evidence-pinned clarify is unaffected.
+   */
+  evidencePins?: ReadonlyArray<EvidencePin>;
 }
 
 /** One entry whose committed license disagrees with the registry's current answer. */
@@ -80,11 +90,45 @@ export interface CacheMismatch {
   reason: string;
 }
 
+/**
+ * One evidence-pinned `[[clarify]]` decision: the package/version it
+ * disambiguates plus the GitHub blob permalink cited as evidence. Purl-free by
+ * design — a clarify targets a package name/version pair directly, not a purl.
+ */
+export interface EvidencePin {
+  name: string;
+  version: string;
+  /** The immutable GitHub blob permalink cited as evidence (schema-validated). */
+  evidenceUrl: string;
+}
+
+/** One package a drifted evidence permalink was cited for. */
+export interface EvidenceDriftPackage {
+  name: string;
+  version: string;
+}
+
+/**
+ * A pinned evidence document that no longer reads the way it was cited when the
+ * clarify decision was made — gone at the pinned commit, moved on the default
+ * branch, or changed content at the same path. Purl-independent: keyed by
+ * the permalink, naming every clarify package/version that cites it.
+ */
+export interface EvidenceDriftFinding {
+  /** The evidence_url permalink exactly as cited in the policy. */
+  permalink: string;
+  /** Every clarify package/version sharing this permalink. */
+  packages: EvidenceDriftPackage[];
+  reason: string;
+}
+
 export interface VerifyResult {
   /** Entries actually re-resolved against a registry. */
   audited: number;
   /** Divergences, sorted by purl for deterministic reporting. */
   mismatches: CacheMismatch[];
+  /** Evidence-permalink drift findings, sorted by permalink for deterministic reporting. */
+  evidenceDrift: EvidenceDriftFinding[];
 }
 
 /** Memoizing document fetcher: one network call per distinct URL, shared across entries. */
@@ -249,6 +293,139 @@ async function auditEntry(
 }
 
 /**
+ * The GitHub Contents API URL for a file at a ref (fixed `api.github.com` host,
+ * the same SSRF control every other GitHub resolver in this codebase uses). An
+ * absent `ref` reads the repo's default branch — the mutable side of the
+ * pinned-vs-current comparison.
+ */
+function githubContentsUrl(
+  owner: string,
+  repo: string,
+  path: string,
+  ref?: string,
+): string {
+  const encodedPath = path
+    .split("/")
+    .map((segment) => encodeURIComponent(segment))
+    .join("/");
+  const base = `${GITHUB_API_HOST}/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/contents/${encodedPath}`;
+  return ref === undefined ? base : `${base}?ref=${encodeURIComponent(ref)}`;
+}
+
+/**
+ * The git blob SHA of a file at a ref — content-addressed, so equal SHAs mean
+ * byte-identical content without fetching the body. Reuses
+ * {@link fetchGithubLicense}'s exact posture (token, retry/backoff, the
+ * transient-vs-definitive split): a 404 is DEFINITIVE (the file is gone at that
+ * ref, not a retrieval failure) and returns null; a persistent failure throws
+ * {@link GithubTransientError}, never a silent null.
+ */
+async function contentsBlobSha(
+  owner: string,
+  repo: string,
+  path: string,
+  ref: string | undefined,
+  fetchOpts: { backoffBaseMs?: number },
+): Promise<string | null> {
+  const result = await fetchGithubLicense(
+    githubContentsUrl(owner, repo, path, ref),
+    fetchOpts,
+  );
+  if (result.status === 404) return null;
+  return narrowGithubContentsFile(result.body)?.sha ?? null;
+}
+
+/**
+ * Group evidence pins by their cited permalink: 42 clarify entries may share
+ * one document, so the drift audit fetches each DISTINCT permalink once and
+ * names every package it was cited for.
+ */
+function groupEvidencePins(
+  pins: ReadonlyArray<EvidencePin>,
+): Map<string, EvidenceDriftPackage[]> {
+  const groups = new Map<string, EvidenceDriftPackage[]>();
+  for (const pin of pins) {
+    const packages = groups.get(pin.evidenceUrl) ?? [];
+    packages.push({ name: pin.name, version: pin.version });
+    groups.set(pin.evidenceUrl, packages);
+  }
+  return groups;
+}
+
+/**
+ * Audit one distinct evidence permalink: compare the pinned blob against the
+ * same path on the repo's current default branch. Three findings, each naming
+ * every package the permalink was cited for: the pinned commit no longer
+ * resolves (history rewritten or garbage-collected); the path is gone from the
+ * default branch (moved or renamed); or the content differs (drift).
+ * Whole-file granularity is intended — an unrelated edit re-firing this is
+ * an acceptable false positive for an advisory signal. A malformed
+ * `evidence_url` cannot reach here: the policy schema rejects it at parse time,
+ * so this is a defensive null, not a real path.
+ */
+async function auditEvidencePermalink(
+  permalink: string,
+  packages: EvidenceDriftPackage[],
+  fetchOpts: { backoffBaseMs?: number },
+): Promise<EvidenceDriftFinding | null> {
+  const target = parseGithubBlobPermalink(permalink);
+  if (target === null) return null;
+  const { owner, repo, sha, path } = target;
+  const names = packages.map((p) => `${p.name}@${p.version}`).join(", ");
+
+  const pinned = await contentsBlobSha(owner, repo, path, sha, fetchOpts);
+  if (pinned === null) {
+    return {
+      permalink,
+      packages,
+      reason:
+        `pinned evidence is no longer resolvable at commit ${sha} — the ` +
+        `history may have been rewritten, or the object garbage-collected — ` +
+        `for ${names}: re-verify and re-pin`,
+    };
+  }
+  const head = await contentsBlobSha(owner, repo, path, undefined, fetchOpts);
+  if (head === null) {
+    return {
+      permalink,
+      packages,
+      reason:
+        `evidence file "${path}" no longer exists on the default branch ` +
+        `for ${names}: re-verify and re-pin`,
+    };
+  }
+  if (head === pinned) return null;
+  return {
+    permalink,
+    packages,
+    reason:
+      `evidence for ${names} changed upstream since commit ${sha} — the ` +
+      `default branch now reads differently: re-verify and re-pin`,
+  };
+}
+
+/**
+ * Drift-check every distinct evidence permalink cited by an evidence-pinned
+ * clarify decision. Zero pins runs zero GitHub Contents fetches — a
+ * policy with no `evidence_url` entries is unaffected byte-for-byte.
+ */
+async function auditEvidenceDrift(
+  pins: ReadonlyArray<EvidencePin>,
+  fetchOpts: { backoffBaseMs?: number },
+): Promise<EvidenceDriftFinding[]> {
+  const groups = [...groupEvidencePins(pins)];
+  const findings = await mapLimit(
+    groups,
+    VERIFY_CONCURRENCY,
+    ([permalink, packages]) =>
+      auditEvidencePermalink(permalink, packages, fetchOpts),
+  );
+  return findings
+    .filter((f): f is EvidenceDriftFinding => f !== null)
+    .sort((a, b) => compareCodeUnits(a.permalink, b.permalink));
+}
+
+/**
  * Re-verify every committed cache entry against its registry. Reads the cache
  * (a malformed envelope throws loudly, as in `check`), re-resolves each entry
  * with bounded concurrency and per-URL fetch de-duplication, and returns the
@@ -281,9 +458,14 @@ export async function verifyCache(opts: VerifyOptions): Promise<VerifyResult> {
   const mismatches = audited
     .filter((m): m is CacheMismatch => m !== null)
     .sort((a, b) => compareCodeUnits(a.purl, b.purl));
+  const evidenceDrift = await auditEvidenceDrift(
+    opts.evidencePins ?? [],
+    fetchOpts,
+  );
 
   return {
     audited: entries.length,
     mismatches,
+    evidenceDrift,
   };
 }

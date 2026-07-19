@@ -397,25 +397,47 @@ function cacheDir(opts: GenerateOptions, policy: Policy | undefined): string {
  * present — for its `[cache] dir`, then anchors to the scanned repo exactly as the
  * in-process {@link cacheDir} does. A malformed policy throws PolicyError, the same
  * exit-3 config error the gate raises, so the audit never runs against a half-read
- * policy.
+ * policy. A thin wrapper over {@link resolveCacheDirAndPolicy} for callers that
+ * only need the directory.
  */
 export function resolveCacheDir(opts: {
   baseDir?: string;
   repoRoot?: string;
   policyPath?: string;
 }): string {
+  return resolveCacheDirAndPolicy(opts).dir;
+}
+
+/**
+ * {@link resolveCacheDir}, plus the full parsed `Policy` it already read to get
+ * `[cache] dir` — for a caller (verify-cache) that also needs another policy
+ * section (`clarify`, for the evidence-drift audit) and would otherwise have to
+ * parse the same file a second time. ONE `parsePolicy` call serves both; there is
+ * no second read.
+ */
+export function resolveCacheDirAndPolicy(opts: {
+  baseDir?: string;
+  repoRoot?: string;
+  policyPath?: string;
+}): { dir: string; policy: Policy | undefined } {
   const repoRoot =
     opts.repoRoot === undefined
       ? undefined
       : resolveFrom(opts.baseDir, opts.repoRoot);
-  let dirSetting: string | undefined;
+  let policy: Policy | undefined;
   if (opts.policyPath !== undefined) {
     const file = resolveFrom(opts.baseDir, opts.policyPath);
     if (existsSync(file)) {
-      dirSetting = parsePolicy(readFileSync(file, "utf8")).cache?.dir;
+      policy = parsePolicy(readFileSync(file, "utf8"));
     }
   }
-  return resolveFrom(repoRoot ?? opts.baseDir, dirSetting ?? DEFAULT_CACHE_DIR);
+  return {
+    dir: resolveFrom(
+      repoRoot ?? opts.baseDir,
+      policy?.cache?.dir ?? DEFAULT_CACHE_DIR,
+    ),
+    policy,
+  };
 }
 
 /**

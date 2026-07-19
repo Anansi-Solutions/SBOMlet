@@ -66,12 +66,16 @@ const USAGE =
   "memory and byte-compares every configured output; writes nothing\n" +
   "           exit codes: 0 clean, 1 policy violation (beats stale), " +
   "2 stale/missing output, 3+ tool/config error (warns print, never gate)\n" +
-  "  verify-cache [--enrichment-cache <path>] [--base-dir <path>] [--verbose]\n" +
+  "  verify-cache [--policy <path>] [--enrichment-cache <path>] " +
+  "[--base-dir <path>] [--verbose]\n" +
   "           ONLINE integrity audit — re-resolves every committed " +
   "enrichment-cache entry against its registry and reports any divergence from " +
-  "the stored license (run before a release/audit, or when the cache changes).\n" +
-  "           exit codes: 0 all match, 1 at least one mismatch, 3 tool/network " +
-  "error\n" +
+  "the stored license (run before a release/audit, or when the cache changes). " +
+  "Also re-checks every [[clarify]] evidence_url permalink against its repo's " +
+  "current default branch and reports any that changed since it was cited, " +
+  "in its own labelled re-verify section, distinct from cache mismatches.\n" +
+  "           exit codes: 0 all match, 1 at least one cache mismatch or " +
+  "evidence drift, 3 tool/network error\n" +
   "  generate-docker-sbom (--dockerfile <path>... | " +
   "--repo-root <dir> [--policy <file>] [--exclude <glob>]... | " +
   "--image <ref>... | --list-dockerfiles --repo-root <dir>) " +
@@ -124,6 +128,52 @@ function reportVerifyCache(result: VerifyResult): void {
     `verify-cache: ${result.mismatches.length} of ${result.audited} audited cache ${noun} ` +
       `${verb} upstream — investigate before release`,
   );
+}
+
+/**
+ * Print the evidence-drift audit to stderr, in its OWN labelled section —
+ * distinct from the cache-mismatch section above. Each finding names the
+ * evidence permalink, every clarify package that cites it, and why it needs
+ * a fresh look. Silent when there is nothing to report (a policy with no
+ * evidence-pinned clarify prints nothing new).
+ */
+function reportEvidenceDrift(result: VerifyResult): void {
+  if (result.evidenceDrift.length === 0) return;
+  const line = (text: string): void => {
+    process.stderr.write(`${text}\n`);
+  };
+  line("");
+  line(
+    "RE-VERIFY EVIDENCE — pinned documents cited by [[clarify]] evidence_url:",
+  );
+  for (const finding of result.evidenceDrift) {
+    const packages = finding.packages
+      .map((p) => `${p.name}@${p.version}`)
+      .join(", ");
+    line(`DRIFT  ${finding.permalink}`);
+    line(`  packages: ${packages}`);
+    line(`  ${finding.reason}`);
+  }
+  const noun = result.evidenceDrift.length === 1 ? "document" : "documents";
+  line(
+    `verify-cache: ${result.evidenceDrift.length} pinned evidence ${noun} changed upstream ` +
+      `— re-verify and re-pin before release`,
+  );
+}
+
+/**
+ * The verify-cache exit code: a cache mismatch and an evidence-permalink
+ * drift are the same "look before release" signal, so either one exits 1 —
+ * a mismatch-only run, a drift-only run, and a run with both all map here.
+ * All-clean exits 0. A network/malformed failure never reaches this
+ * function at all: it throws before a VerifyResult exists, so it stays on
+ * the {@link fail} 3-exit path. Exported (mirrors {@link exitCodeFor} for
+ * check) so the mapping is unit-testable without spawning the CLI.
+ */
+export function exitCodeForVerify(result: VerifyResult): number {
+  return result.mismatches.length === 0 && result.evidenceDrift.length === 0
+    ? 0
+    : 1;
 }
 
 /** The parseArgs value shape shared by both subcommands. */
@@ -389,7 +439,8 @@ async function runVerifyCacheCommand(values: CliValues): Promise<never> {
     fail(`${error instanceof Error ? error.message : String(error)}\n`);
   }
   reportVerifyCache(result);
-  process.exit(result.mismatches.length === 0 ? 0 : 1);
+  reportEvidenceDrift(result);
+  process.exit(exitCodeForVerify(result));
 }
 
 async function main(argv: string[]): Promise<void> {

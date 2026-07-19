@@ -180,6 +180,31 @@ export function narrowGithubTagObject(
   return { commitSha };
 }
 
+/** Tolerant GitHub Contents API projection: the only field the drift audit reads. */
+export interface GithubContentsFile {
+  /** sha — the git blob SHA (content-addressed) of the file at the requested ref. */
+  sha: string;
+}
+
+const GithubContentsDocument = type({ "sha?": "unknown" });
+
+/**
+ * Narrow a raw GitHub Contents API response (`GET .../contents/<path>?ref=`) to
+ * {@link GithubContentsFile}. A non-object top-level value or a missing/
+ * wrong-typed `sha` yields undefined — the caller treats it the same as a
+ * definitive 404 (skip-don't-throw, ASVS V5), never a throw.
+ */
+export function narrowGithubContentsFile(
+  value: unknown,
+): GithubContentsFile | undefined {
+  if (recordOf(value) === undefined) return undefined;
+  const parsed = GithubContentsDocument(value);
+  if (parsed instanceof type.errors) return undefined;
+  const sha = stringOf(parsed.sha);
+  if (sha === undefined) return undefined;
+  return { sha };
+}
+
 /** Tolerant NuGet registration-leaf projection: the only field the two-step hop reads. */
 export interface NugetLeaf {
   /** catalogEntry — the catalog document URL (string or absent); host-pinned by the caller. */
