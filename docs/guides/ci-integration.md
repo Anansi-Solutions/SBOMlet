@@ -225,6 +225,12 @@ Terraform providers — with the same logic `generate` uses, and compares each
 answer to the stored license. A divergence is either tampering or a genuine
 upstream license change; either way it wants a person's eyes before you ship.
 
+The same command also re-checks every `evidence_url` your policy's `[[clarify]]`
+entries cite (see [the policy reference](../reference/policy.md#clarify)):
+each pinned document is compared against the same path on its repo's current
+default branch, and a changed, moved, or gone document is reported in its own
+section, separate from cache mismatches.
+
 ```sh
 task sbomlet:verify:cache
 ```
@@ -235,8 +241,8 @@ audit, not on every build. Its exit codes follow the same taxonomy:
 
 | Exit code | Meaning | What to do |
 | --------- | ------- | ---------- |
-| `0` | Every cache entry still matches its registry | Nothing; the cache is sound |
-| `1` | At least one entry diverges from upstream | Read the report, then re-run `generate` to refresh the cache, or investigate the change |
+| `0` | Every cache entry still matches its registry, and every cited evidence document still reads the way it was cited | Nothing; the cache and its citations are sound |
+| `1` | At least one cache entry diverges from upstream, or at least one evidence citation has changed, moved, or gone | Read the report, then re-run `generate` to refresh the cache, or re-read the cited document and re-pin it with the new commit SHA |
 | `3` (and above) | A registry was unreachable, or the cache file is malformed — the audit could not complete | Retry, or fix the cache file |
 
 A `3` is deliberately distinct from a `1`: an unreachable registry means the tool
@@ -244,17 +250,18 @@ could not verify an entry, which is never quietly treated as agreement.
 
 ### Run it when the cache changes
 
-The cache can only gain a wrong value when the committed file changes, so the
-most useful trigger is exactly that — run the audit whenever the cache file is
-touched, and never otherwise. On GitHub Actions a path filter does this:
+The cache can only gain a wrong value when the committed file changes, and an
+evidence citation can only be added or repointed when the policy changes, so the
+most useful triggers are exactly those two files. On GitHub Actions a path
+filter does this:
 
 ```yaml
 name: License cache integrity
 on:
   push:
-    paths: [".sbomlet.cache/licenses.cache.json"]
+    paths: [".sbomlet.cache/licenses.cache.json", ".sbomlet.policy.toml"]
   pull_request:
-    paths: [".sbomlet.cache/licenses.cache.json"]
+    paths: [".sbomlet.cache/licenses.cache.json", ".sbomlet.policy.toml"]
 permissions:
   contents: read
 jobs:
@@ -271,9 +278,32 @@ jobs:
 ```
 
 The path filter is the point: the job runs on the one event that can introduce a
-bad entry — a commit that edits the cache — and stays idle the rest of the time.
-Point the filter at wherever your repository keeps the cache if it isn't at the
-root.
+bad cache entry or a new citation — a commit that edits either file — and stays
+idle the rest of the time. Point the filter at wherever your repository keeps
+these files if they aren't at the root.
+
+### Evidence-pinned clarify: schedule the audit too
+
+A path filter alone misses one case: the document an `evidence_url` cites can
+change on its own repository's default branch with no push to yours at all. If
+your policy has any evidence-pinned `[[clarify]]` entries, also run
+`verify-cache` on a schedule — monthly is enough, since a cited document moving
+is a slow-moving, advisory signal, not an urgent one:
+
+```yaml
+on:
+  schedule:
+    - cron: "9 4 3 * *" # monthly
+```
+
+A drift finding never fails your build or the offline `check` gate — only the
+explicit, online `verify-cache` run. It asks a human to do what they would for
+any manually verified fact: re-read the cited document at its repository's
+current default branch, confirm it still supports the recorded license, and
+re-pin `evidence_url` to the new commit SHA. A license grant already recorded
+for a shipped version is never retracted by a later edit — the audit exists to
+keep the citation current and catch a misread scope, not to re-litigate a past
+decision.
 
 ## Run an intensive scan to assess licenses at the source
 

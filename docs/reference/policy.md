@@ -185,10 +185,12 @@ compare against.
 
 `evidence_url` never changes what the engine does. It is not consulted while
 matching or deciding the verdict, and does not widen what a clarify can do —
-it is a citation for you, the reviewer, to read later. The tool does not
-currently re-check whether the pinned document still says what it said when
-you cited it, so treat it the way you would any manually verified fact:
-revisit it by hand if the package's situation changes.
+it is a citation for you, the reviewer, to read later. `verify-cache`
+(the [online cache audit](../guides/ci-integration.md)) re-checks the pinned
+document against its repo's current default branch and flags it for a fresh
+look if the two have diverged. That check is online-only, on the same
+release-or-schedule cadence as the rest of `verify-cache`; the offline `check`
+gate never touches the network and never reads `evidence_url` at all.
 
 A worked example, for a package whose only licence signal was a retired
 Microsoft redirector that now points at a page distinguishing library
