@@ -31,28 +31,33 @@ export interface VerifyCacheOptions {
 }
 
 /**
- * The evidence-pinned `[[clarify]]` entries, shaped for enrich/verify.ts. The
- * schema (validateClarifyEvidenceUrl) already requires `version` wherever
- * `evidence_url` is present, so this filter alone is enough to produce a
- * fully-typed {@link EvidencePin} list — no second validation needed.
+ * The evidence-pinned `[[clarify]]` entries, shaped for enrich/verify.ts —
+ * ONE pin per LISTED package (the multi-package clarify form fans a single
+ * rule out into N pins sharing one evidence_url, so the drift audit names
+ * every package that cites it, not just the first). The schema
+ * (validateClarifyEvidenceUrl) already requires a version on EVERY listed
+ * package wherever `evidence_url` is present, so this filter alone is
+ * enough to produce a fully-typed {@link EvidencePin} list — no second
+ * validation needed. Exported for direct unit testing (the sanitizeForLog
+ * precedent).
  */
-function evidencePinsOf(
+export function evidencePinsOf(
   clarify: ReadonlyArray<{
-    name: string;
-    version?: string;
+    packages: ReadonlyArray<{ name: string; version?: string }>;
     evidence_url?: string;
   }>,
 ): EvidencePin[] {
   const pins: EvidencePin[] = [];
   for (const entry of clarify) {
-    if (entry.evidence_url === undefined || entry.version === undefined) {
-      continue;
+    if (entry.evidence_url === undefined) continue;
+    for (const pkg of entry.packages) {
+      if (pkg.version === undefined) continue;
+      pins.push({
+        name: pkg.name,
+        version: pkg.version,
+        evidenceUrl: entry.evidence_url,
+      });
     }
-    pins.push({
-      name: entry.name,
-      version: entry.version,
-      evidenceUrl: entry.evidence_url,
-    });
   }
   return pins;
 }

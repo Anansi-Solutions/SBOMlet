@@ -10,6 +10,7 @@ import {
   type BuiltinOverrideInput,
 } from "../src/normalize/normalize";
 import { evaluate, unusedRuleIds } from "../src/policy/evaluate";
+import { unusedRuleReason } from "../src/pipeline/summary";
 import { BUILTIN_DENY_RULES } from "../src/policy/builtinDenylist";
 import { denyRuleFor } from "../src/policy/denylist";
 import {
@@ -122,8 +123,7 @@ describe("parsePolicy — happy path", () => {
     ]);
     expect(policy.clarify).toEqual([
       {
-        name: "jsonify",
-        version: "0.0.1",
+        packages: [{ name: "jsonify", version: "0.0.1" }],
         expression: "Unlicense",
         reason: CLARIFY_REASON,
       },
@@ -326,7 +326,7 @@ describe("parsePolicy — clarify `expects` precondition", () => {
     const policy = parsePolicy(clarifyWithExpects("BSD"));
     expect(policy.clarify).toEqual([
       {
-        name: "demo-pkg",
+        packages: [{ name: "demo-pkg" }],
         expects: "BSD",
         expression: "BSD-3-Clause",
         reason: "disambiguate the imprecise BSD label to BSD-3-Clause",
@@ -345,8 +345,7 @@ describe("parsePolicy — clarify `expects` precondition", () => {
     );
     expect(policy.clarify).toEqual([
       {
-        name: "jsonify",
-        version: "0.0.1",
+        packages: [{ name: "jsonify", version: "0.0.1" }],
         expression: "Unlicense",
         reason: CLARIFY_REASON,
       },
@@ -419,8 +418,7 @@ describe("parsePolicy — clarify evidence_url (evidence-pinned decision)", () =
     const policy = parsePolicy(clarifyWithEvidence(PINNED_EVIDENCE_URL));
     expect(policy.clarify).toEqual([
       {
-        name: "System.IO",
-        version: "4.3.0",
+        packages: [{ name: "System.IO", version: "4.3.0" }],
         expression: "MIT",
         evidence_url: PINNED_EVIDENCE_URL,
         reason: EVIDENCE_REASON,
@@ -494,6 +492,153 @@ describe("parsePolicy — clarify evidence_url (evidence-pinned decision)", () =
   test("absent evidence_url is today's behavior byte-for-byte (no key materializes)", () => {
     const policy = parsePolicy(clarifyWithExpects("BSD"));
     expect("evidence_url" in (policy.clarify[0] ?? {})).toBe(false);
+  });
+});
+
+// ===========================================================================
+// The `packages` list form of [[clarify]] (multi-package clarify): a rule may
+// name a LIST of packages sharing one expression/evidence_url/reason instead
+// of the single `package` inline table. Internally the single form desugars
+// to a one-element `packages` list, so `clarify[i]` always names the TOML
+// array index regardless of which form was written.
+// ===========================================================================
+
+/** A [[clarify]] entry using the `packages` list form. */
+const clarifyWithPackagesList = (
+  packagesToml: string,
+  opts: { evidenceUrl?: string; expects?: string } = {},
+): string =>
+  [
+    "[[clarify]]",
+    `packages = ${packagesToml}`,
+    'expression = "MIT"',
+    ...(opts.evidenceUrl !== undefined
+      ? [`evidence_url = ${JSON.stringify(opts.evidenceUrl)}`]
+      : []),
+    ...(opts.expects !== undefined
+      ? [`expects = ${JSON.stringify(opts.expects)}`]
+      : []),
+    'reason = "shared reason for every listed package"',
+  ].join("\n");
+
+describe("parsePolicy — clarify packages list (multi-package form)", () => {
+  test("a packages list of 3 elements parses; each validated like the single package inline table", () => {
+    const policy = parsePolicy(
+      clarifyWithPackagesList(
+        '[{ name = "System.IO", version = "4.3.0" }, { name = "System.Text", version = "4.3.0" }, { name = "System.Xml", version = "4.3.0" }]',
+      ),
+    );
+    expect(policy.clarify).toEqual([
+      {
+        packages: [
+          { name: "System.IO", version: "4.3.0" },
+          { name: "System.Text", version: "4.3.0" },
+          { name: "System.Xml", version: "4.3.0" },
+        ],
+        expression: "MIT",
+        reason: "shared reason for every listed package",
+      },
+    ]);
+  });
+
+  test("a version-less element in the list is accepted (name required, version optional per element)", () => {
+    const policy = parsePolicy(
+      clarifyWithPackagesList('[{ name = "System.IO" }]'),
+    );
+    expect(policy.clarify).toEqual([
+      {
+        packages: [{ name: "System.IO" }],
+        expression: "MIT",
+        reason: "shared reason for every listed package",
+      },
+    ]);
+  });
+
+  test("an element missing name is rejected naming clarify[0].packages[j]", () => {
+    const error = expectPolicyError(
+      clarifyWithPackagesList('[{ name = "ok" }, { version = "1.0.0" }]'),
+    );
+    expect(error.message).toContain("clarify[0].packages[1]");
+    expect(error.message).toContain('missing required key "name"');
+  });
+
+  test("an unknown key inside a list element is rejected naming clarify[0].packages[j]", () => {
+    const error = expectPolicyError(
+      clarifyWithPackagesList('[{ name = "ok", bogus = "x" }]'),
+    );
+    expect(error.message).toContain("clarify[0].packages[0]");
+    expect(error.message).toContain('unknown key "bogus"');
+  });
+
+  test("BOTH package and packages present is rejected — exactly one of the two is required", () => {
+    const error = expectPolicyError(
+      [
+        "[[clarify]]",
+        'package = { name = "a" }',
+        'packages = [{ name = "b" }]',
+        'expression = "MIT"',
+        'reason = "r"',
+      ].join("\n"),
+    );
+    expect(error.message).toContain("clarify[0]");
+    expect(error.message).toContain("exactly one of");
+  });
+
+  test("NEITHER package nor packages present is rejected", () => {
+    const error = expectPolicyError(
+      ["[[clarify]]", 'expression = "MIT"', 'reason = "r"'].join("\n"),
+    );
+    expect(error.message).toContain("clarify[0]");
+    expect(error.message).toContain('"package" or "packages"');
+  });
+
+  test("an EMPTY packages array is rejected — a rule that could never match is dead by construction", () => {
+    const error = expectPolicyError(clarifyWithPackagesList("[]"));
+    expect(error.message).toContain("clarify[0]");
+    expect(error.message).toContain("non-empty array");
+  });
+
+  test("evidence_url + a single listed element missing version is rejected, naming that packages[j]", () => {
+    const error = expectPolicyError(
+      clarifyWithPackagesList(
+        '[{ name = "System.IO", version = "4.3.0" }, { name = "System.Text" }]',
+        { evidenceUrl: PINNED_EVIDENCE_URL },
+      ),
+    );
+    expect(error.message).toContain("clarify[0]");
+    expect(error.message).toContain("evidence_url");
+    expect(error.message).toContain("clarify[0].packages[1]");
+  });
+
+  test("evidence_url + expects is still rejected at rule level with a packages list", () => {
+    const error = expectPolicyError(
+      clarifyWithPackagesList('[{ name = "System.IO", version = "4.3.0" }]', {
+        evidenceUrl: PINNED_EVIDENCE_URL,
+        expects: "MS-PL",
+      }),
+    );
+    expect(error.message).toContain("clarify[0]");
+    expect(error.message).toContain("evidence_url");
+    expect(error.message).toContain("expects");
+  });
+
+  test("expects WITH a packages list is allowed — no rule-level special case blocks it", () => {
+    const policy = parsePolicy(
+      clarifyWithPackagesList(
+        '[{ name = "System.IO", version = "4.3.0" }, { name = "System.Text", version = "4.3.0" }]',
+        { expects: "MS-PL" },
+      ),
+    );
+    expect(policy.clarify[0]?.expects).toBe("MS-PL");
+    expect(policy.clarify[0]?.packages).toHaveLength(2);
+  });
+
+  test("checkKeys allows the new packages key alongside the existing clarify keys", () => {
+    expect(() =>
+      parsePolicy(
+        clarifyWithPackagesList('[{ name = "System.IO", version = "4.3.0" }]'),
+      ),
+    ).not.toThrow();
   });
 });
 
@@ -953,15 +1098,21 @@ function runEngine(
 ): {
   verdicts: Verdict[];
   usedClarifyIndices: ReadonlySet<number>;
+  usedClarifyMembers: ReadonlySet<string>;
   policy: Policy;
 } {
   const policy = parsePolicy(policyText);
-  const { model, usedClarifyIndices } = annotateFindings(
+  const { model, usedClarifyIndices, usedClarifyMembers } = annotateFindings(
     makeModel(specs),
     policy.clarify,
     builtins,
   );
-  return { verdicts: evaluate(model, policy), usedClarifyIndices, policy };
+  return {
+    verdicts: evaluate(model, policy),
+    usedClarifyIndices,
+    usedClarifyMembers,
+    policy,
+  };
 }
 
 /** Suppression-only fixture policy: apps/scratch absorbs copyleft. */
@@ -1965,6 +2116,69 @@ describe("unusedRuleIds — stale-policy hygiene", () => {
       "compatible[1]",
       "clarify[0]",
     ]);
+  });
+
+  const DEAD_MEMBER_REASON =
+    "shared Microsoft fwlink evidence covers both listed packages";
+
+  /** A [[clarify]] packages-list entry with 2 members, one never matched. */
+  const packagesListWithDeadMember = [
+    "[[clarify]]",
+    'packages = [{ name = "used-pkg" }, { name = "never-matches-pkg" }]',
+    'expression = "MIT"',
+    `reason = ${JSON.stringify(DEAD_MEMBER_REASON)}`,
+  ].join("\n");
+
+  test("a USED multi-package clarify rule reports its dead listed member as clarify[i].packages[j], with a REAL reason (not blank)", () => {
+    const { usedClarifyIndices, usedClarifyMembers, policy, verdicts } =
+      runEngine(
+        [pkgSpec("used-pkg", "BSD", ["backend"])],
+        packagesListWithDeadMember,
+      );
+    expect(
+      unusedRuleIds(policy, verdicts, usedClarifyIndices, usedClarifyMembers),
+    ).toEqual(["clarify[0].packages[1]"]);
+    const reason = unusedRuleReason(policy, "clarify[0].packages[1]");
+    expect(reason).not.toBe("");
+    expect(reason).toContain(DEAD_MEMBER_REASON);
+    expect(reason).toContain("never-matches-pkg");
+  });
+
+  test("a WHOLLY unused multi-package clarify rule reports only clarify[i] — no per-member lines pile onto a rule that never fired (single-form byte-identity)", () => {
+    const { usedClarifyIndices, usedClarifyMembers, policy, verdicts } =
+      runEngine(
+        [pkgSpec("unrelated-pkg", "MIT", ["backend"])],
+        packagesListWithDeadMember,
+      );
+    expect(
+      unusedRuleIds(policy, verdicts, usedClarifyIndices, usedClarifyMembers),
+    ).toEqual(["clarify[0]"]);
+  });
+
+  test("unusedRuleReason regression: the plain clarify[i]/compatible[i] shapes render exactly as before", () => {
+    const policy = parsePolicy(
+      [
+        "[[compatible]]",
+        'match = "license"',
+        'pattern = "MPL-2.0"',
+        'reason = "compat reason"',
+        "",
+        "[[clarify]]",
+        'package = { name = "solo-pkg" }',
+        'expression = "MIT"',
+        'reason = "clarify reason"',
+      ].join("\n"),
+    );
+    expect(unusedRuleReason(policy, "compatible[0]")).toBe("compat reason");
+    expect(unusedRuleReason(policy, "clarify[0]")).toBe("clarify reason");
+  });
+
+  test("unusedRuleReason is defensive: an out-of-range or malformed id returns the empty string", () => {
+    const { policy } = runEngine([], packagesListWithDeadMember);
+    expect(unusedRuleReason(policy, "clarify[99]")).toBe("");
+    expect(unusedRuleReason(policy, "clarify[0].packages[99]")).toBe("");
+    expect(unusedRuleReason(policy, "bogus[0]")).toBe("");
+    expect(unusedRuleReason(policy, "clarify[0].packages[abc]")).toBe("");
   });
 });
 

@@ -14,6 +14,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 
 import { putEntry, serializeCache, type CacheEntry } from "../src/enrich/cache";
 import { verifyCache } from "../src/enrich/verify";
+import { evidencePinsOf } from "../src/pipeline/verifyCache";
 
 const tempDirs: string[] = [];
 
@@ -876,5 +877,87 @@ describe("verifyCache evidence-drift audit (clarify evidence_url permalink re-ch
     );
     expect(result.mismatches).toHaveLength(1);
     expect(result.evidenceDrift).toEqual([]);
+  });
+});
+
+describe("evidencePinsOf — multi-package clarify pin fanout", () => {
+  const EVIDENCE_SHA = "8c8e5836c343f854b65437dfedb13598d3aa3707";
+  const EVIDENCE_PERMALINK = `https://github.com/dotnet/core/blob/${EVIDENCE_SHA}/license-information.md`;
+  const PINNED_URL = `https://api.github.com/repos/dotnet/core/contents/license-information.md?ref=${EVIDENCE_SHA}`;
+  const HEAD_URL =
+    "https://api.github.com/repos/dotnet/core/contents/license-information.md";
+
+  test("ONE clarify rule with N listed packages + one evidence_url yields N pins", () => {
+    const pins = evidencePinsOf([
+      {
+        packages: [
+          { name: "System.IO", version: "4.3.0" },
+          { name: "System.Text", version: "4.3.1" },
+          { name: "System.Xml", version: "4.3.2" },
+        ],
+        evidence_url: EVIDENCE_PERMALINK,
+      },
+    ]);
+    expect(pins).toEqual([
+      { name: "System.IO", version: "4.3.0", evidenceUrl: EVIDENCE_PERMALINK },
+      {
+        name: "System.Text",
+        version: "4.3.1",
+        evidenceUrl: EVIDENCE_PERMALINK,
+      },
+      { name: "System.Xml", version: "4.3.2", evidenceUrl: EVIDENCE_PERMALINK },
+    ]);
+  });
+
+  test("a listed package missing version is skipped (schema guarantee, defense in depth)", () => {
+    const pins = evidencePinsOf([
+      {
+        packages: [
+          { name: "System.IO", version: "4.3.0" },
+          { name: "System.Text" },
+        ],
+        evidence_url: EVIDENCE_PERMALINK,
+      },
+    ]);
+    expect(pins).toEqual([
+      { name: "System.IO", version: "4.3.0", evidenceUrl: EVIDENCE_PERMALINK },
+    ]);
+  });
+
+  test("no evidence_url on the rule yields zero pins for its packages", () => {
+    const pins = evidencePinsOf([
+      { packages: [{ name: "System.IO", version: "4.3.0" }] },
+    ]);
+    expect(pins).toEqual([]);
+  });
+
+  test("end-to-end: the N pins from one multi-package rule drive ONE audit fetch and ONE finding naming all N", async () => {
+    const path = tempCachePath();
+    writeCache(path, {});
+    const { fetch, calls } = fetchMock((url) =>
+      url === PINNED_URL
+        ? { status: 200, body: { sha: "blob-old" } }
+        : { status: 200, body: { sha: "blob-new" } },
+    );
+    const pins = evidencePinsOf([
+      {
+        packages: [
+          { name: "System.IO", version: "4.3.0" },
+          { name: "Microsoft.NETCore.Platforms", version: "5.0.0" },
+        ],
+        evidence_url: EVIDENCE_PERMALINK,
+      },
+    ]);
+    const result = await withFetch(fetch, () =>
+      verifyCache({ cachePath: path, verbose: false, evidencePins: pins }),
+    );
+    expect(result.evidenceDrift).toHaveLength(1);
+    expect(result.evidenceDrift[0]?.packages).toEqual([
+      { name: "System.IO", version: "4.3.0" },
+      { name: "Microsoft.NETCore.Platforms", version: "5.0.0" },
+    ]);
+    // ONE fetch per distinct permalink — the permalink and the default-branch
+    // HEAD, never once per listed package.
+    expect(calls).toEqual([PINNED_URL, HEAD_URL]);
   });
 });

@@ -82,9 +82,23 @@ export interface CompatiblePackageRule {
 
 export type CompatibleRule = CompatibleLicenseRule | CompatiblePackageRule;
 
-export interface ClarifyRule {
+/** One listed package inside a [[clarify]] entry: a name plus optional version pin. */
+export interface ClarifyPackageRef {
   name: string;
   version?: string;
+}
+
+export interface ClarifyRule {
+  /**
+   * The package(s) this entry disambiguates, in TOML array order. A single
+   * `package = { name, version? }` desugars to a one-element list at parse
+   * time (see validateClarifyPackages), so every downstream consumer sees
+   * ONE shape and `clarify[i]` keeps naming the TOML array index. Each
+   * listed pair is matched and cited exactly as if it were its own entry
+   * (the multi-package form): the shared expression/reason/evidence_url
+   * apply to EACH one independently, never as a group verdict.
+   */
+  packages: ReadonlyArray<ClarifyPackageRef>;
   /**
    * Optional staleness precondition: the pre-override observed license
    * value this clarify disambiguates FROM. When present, the engine applies the
@@ -103,11 +117,12 @@ export interface ClarifyRule {
    * the clarify still matches on name/version and applies `expression`
    * exactly as it would without it. It exists so a human reviewer, and later
    * an online cache-drift check, can see exactly which pinned document a
-   * decision was based on. Requires `version`: an evidence-pinned decision is
-   * scoped to one package version, so a name-only clarify would let a new
-   * version silently inherit it. Mutually exclusive with `expects`: a package
-   * resolved only through cited evidence has no observed registry signal for
-   * `expects` to match, so the combination would always read stale.
+   * decision was based on. Requires a version on EVERY listed package: an
+   * evidence-pinned decision is scoped to one package version, so a
+   * name-only clarify would let a new version silently inherit it. Mutually
+   * exclusive with `expects`: a package resolved only through cited evidence
+   * has no observed registry signal for `expects` to match, so the
+   * combination would always read stale.
    */
   evidence_url?: string;
   /** A valid SPDX expression — parsed eagerly here. */
@@ -663,55 +678,106 @@ interface ClarifyPackage {
 }
 
 /**
- * Inline-table { name, version? } extraction for a clarify entry. Extracted
- * to keep validateClarify's loop body within the max-depth bar; messages and
- * push order are unchanged from the inline form.
+ * Inline-table { name, version? } extraction for ONE clarify package
+ * reference — the shared extractor for both the single `package` form and
+ * each element of the `packages` list form, so both validate identically.
+ * Extracted to keep validateClarify's loop body within the max-depth bar;
+ * messages and push order are unchanged from the original inline form.
  */
-function validateClarifyPackage(
-  entry: Record<string, unknown>,
+function validateClarifyPackageEntry(
+  raw: unknown,
   where: string,
   problems: string[],
 ): ClarifyPackage {
-  if (!("package" in entry)) {
-    problems.push(`${where}: missing required key "package"`);
-    return { versionValid: true };
-  }
-  const pkg = recordOf(entry["package"]);
+  const pkg = recordOf(raw);
   if (pkg === undefined) {
-    problems.push(
-      `${where}: key "package" must be an inline table { name, version? }`,
-    );
+    problems.push(`${where}: must be an inline table { name, version? }`);
     return { versionValid: true };
   }
-  checkKeys(pkg, ["name", "version"], `${where}: package`, problems);
-  const name = requireText(pkg, "name", `${where}: package`, problems);
+  checkKeys(pkg, ["name", "version"], where, problems);
+  const name = requireText(pkg, "name", where, problems);
   if (!("version" in pkg)) return { name, versionValid: true };
   const version = stringOf(pkg["version"]);
   if (version === undefined) {
-    problems.push(`${where}: package key "version" must be a string`);
+    problems.push(`${where}: key "version" must be a string`);
     return { name, versionValid: false };
   }
   return { name, version, versionValid: true };
 }
 
 /**
+ * Parse EXACTLY ONE of `package` (a single inline table) or `packages` (a
+ * non-empty array of inline tables) into the canonical packages list: the
+ * single form desugars to a one-element list so every downstream consumer —
+ * matching, citations, the drift-audit pin fanout — sees ONE shape and
+ * `clarify[i]` keeps naming the TOML array index. Both present, or neither,
+ * rejects; an empty `packages` array rejects (a rule that could never match
+ * is dead by construction, the validateWhere posture). Each element is
+ * validated by validateClarifyPackageEntry.
+ */
+function validateClarifyPackages(
+  entry: Record<string, unknown>,
+  where: string,
+  problems: string[],
+): ClarifyPackage[] {
+  const hasPackage = "package" in entry;
+  const hasPackages = "packages" in entry;
+  if (hasPackage && hasPackages) {
+    problems.push(
+      `${where}: exactly one of "package" or "packages" is required, not both`,
+    );
+    return [];
+  }
+  if (hasPackage) {
+    return [
+      validateClarifyPackageEntry(
+        entry["package"],
+        `${where}: package`,
+        problems,
+      ),
+    ];
+  }
+  if (hasPackages) {
+    const raw = entry["packages"];
+    if (!Array.isArray(raw)) {
+      problems.push(
+        `${where}: key "packages" must be an array of inline tables { name, version? }`,
+      );
+      return [];
+    }
+    if (raw.length === 0) {
+      problems.push(
+        `${where}: key "packages" must be a non-empty array — an empty list could never match (a dead rule by construction)`,
+      );
+      return [];
+    }
+    return raw.map((rawEntry, j) =>
+      validateClarifyPackageEntry(
+        rawEntry,
+        `${where}.packages[${j}]`,
+        problems,
+      ),
+    );
+  }
+  problems.push(`${where}: missing required key "package" or "packages"`);
+  return [];
+}
+
+/**
  * Build a ClarifyRule with only the present optional keys materialized
- * (version, expects, evidence_url). Keeping the absent keys OFF the object —
- * rather than `undefined`-but-present — keeps "no precondition" observable
- * and the parsed shape minimal, matching the compatible-package-rule idiom
- * above.
+ * (expects, evidence_url). Keeping the absent keys OFF the object — rather
+ * than `undefined`-but-present — keeps "no precondition" observable and the
+ * parsed shape minimal, matching the compatible-package-rule idiom above.
  */
 function makeClarifyRule(
-  name: string,
-  version: string | undefined,
+  packages: ReadonlyArray<ClarifyPackageRef>,
   expects: string | undefined,
   evidenceUrl: string | undefined,
   expression: string,
   reason: string,
 ): ClarifyRule {
   return {
-    name,
-    ...(version !== undefined ? { version } : {}),
+    packages,
     ...(expects !== undefined ? { expects } : {}),
     ...(evidenceUrl !== undefined ? { evidence_url: evidenceUrl } : {}),
     expression,
@@ -722,20 +788,22 @@ function makeClarifyRule(
 /**
  * Validate the optional `evidence_url` on a [[clarify]] entry: it must parse
  * as an immutable GitHub blob permalink (a full 40-hex commit SHA, never a
- * branch or tag name), it requires `package.version` to be present, and it
- * cannot be combined with `expects`. Returns the verbatim string on success;
- * every rejection pushes one aggregated PolicyError message naming
- * clarify[i] and returns undefined so the caller can tell "absent" from
- * "present but invalid" (see the `evidence_url in entry` check at the call
- * site). Only the parsed shape's validity is used here — the parsed
- * owner/repo/sha/path themselves are discarded, because the rule keeps the
- * verbatim string, not split fields (an online drift check re-parses the
- * same string later).
+ * branch or tag name), it requires a version on EVERY listed package (the
+ * single `package` form and each `packages[j]` element are held to the same
+ * constraint), and it cannot be combined with `expects`. Returns the
+ * verbatim string on success; every rejection pushes one aggregated
+ * PolicyError message naming clarify[i] (offending list elements named
+ * individually as clarify[i].packages[j]) and returns undefined so the
+ * caller can tell "absent" from "present but invalid" (see the
+ * `evidence_url in entry` check at the call site). Only the parsed shape's
+ * validity is used here — the parsed owner/repo/sha/path themselves are
+ * discarded, because the rule keeps the verbatim string, not split fields
+ * (an online drift check re-parses the same string later).
  */
 function validateClarifyEvidenceUrl(
   entry: Record<string, unknown>,
   where: string,
-  hasVersion: boolean,
+  packages: ReadonlyArray<ClarifyPackage>,
   hasExpects: boolean,
   problems: string[],
 ): string | undefined {
@@ -752,9 +820,18 @@ function validateClarifyEvidenceUrl(
     );
     return undefined;
   }
-  if (!hasVersion) {
+  const missingVersion = packages
+    .map((p, j) => (p.version === undefined ? j : -1))
+    .filter((j) => j !== -1);
+  if (missingVersion.length > 0) {
+    const detail =
+      packages.length === 1
+        ? `"package.version"`
+        : `a version on every listed package — missing on ${missingVersion
+            .map((j) => `${where}.packages[${j}]`)
+            .join(", ")}`;
     problems.push(
-      `${where}: key "evidence_url" requires "package.version" — an evidence-pinned ` +
+      `${where}: key "evidence_url" requires ${detail} — an evidence-pinned ` +
         `decision is scoped to one package version, so a name-only clarify would let a ` +
         `new version silently inherit it`,
     );
@@ -791,15 +868,21 @@ function validateClarify(
     }
     checkKeys(
       entry,
-      ["package", "expects", "expression", "reason", "evidence_url"],
+      [
+        "package",
+        "packages",
+        "expects",
+        "expression",
+        "reason",
+        "evidence_url",
+      ],
       where,
       problems,
     );
-    const { name, version, versionValid } = validateClarifyPackage(
-      entry,
-      where,
-      problems,
-    );
+    const parsedPackages = validateClarifyPackages(entry, where, problems);
+    const packagesValid =
+      parsedPackages.length > 0 &&
+      parsedPackages.every((p) => p.name !== undefined && p.versionValid);
     // `expects` is OPTIONAL (backward-compat) but, when present, must be a
     // non-empty string — a blank precondition could never match an observed
     // signal and would be silently dead. requireText records the existing
@@ -813,7 +896,7 @@ function validateClarify(
     const evidenceUrl = validateClarifyEvidenceUrl(
       entry,
       where,
-      version !== undefined,
+      parsedPackages,
       "expects" in entry,
       problems,
     );
@@ -828,23 +911,19 @@ function validateClarify(
     }
     const reason = requireText(entry, "reason", where, problems);
     if (
-      name !== undefined &&
-      versionValid &&
+      packagesValid &&
       expectsValid &&
       evidenceUrlValid &&
       expressionValid &&
       expression !== undefined &&
       reason !== undefined
     ) {
+      const packages: ClarifyPackageRef[] = parsedPackages.map((p) => ({
+        name: p.name as string,
+        ...(p.version !== undefined ? { version: p.version } : {}),
+      }));
       clarify.push(
-        makeClarifyRule(
-          name,
-          version,
-          expects,
-          evidenceUrl,
-          expression,
-          reason,
-        ),
+        makeClarifyRule(packages, expects, evidenceUrl, expression, reason),
       );
     }
   });

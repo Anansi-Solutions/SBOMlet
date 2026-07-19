@@ -73,6 +73,7 @@ import {
   renderNode,
   type ExpressionNode,
 } from "../normalize/expression";
+import { findClarifyMatch } from "../normalize/normalize";
 import { BUILTIN_DENY_RULE_ID } from "./builtinDenylist";
 import { COPYLEFT_FAMILY } from "./copyleft";
 import {
@@ -307,12 +308,14 @@ function suppressionJustification(
   );
 }
 
-/** Same matching as annotateFindings: first clarify rule for this package. */
+/**
+ * First clarify rule for this package, via the single matching authority
+ * shared with annotateFindings (normalize/normalize.ts findClarifyMatch) —
+ * no second name/version findIndex over clarify.
+ */
 function clarifyIndexFor(entry: PackageEntry, policy: Policy): number {
-  return policy.clarify.findIndex(
-    (rule) =>
-      rule.name === entry.name &&
-      (rule.version === undefined || rule.version === entry.version),
+  return (
+    findClarifyMatch(policy.clarify, entry.name, entry.version)?.ruleIndex ?? -1
   );
 }
 
@@ -897,12 +900,23 @@ export function evaluate(
  * clarify usage comes from annotateFindings' usedClarifyIndices (a clarify rule
  * is "used" when it replaced a finding, even if a higher-precedence compatible
  * rule decided the final verdict). Suppression entries are never reported.
- * Returned in TOML array order: compatible first, then clarify.
+ *
+ * A USED multi-package clarify rule additionally reports each LISTED member
+ * that never matched anything, as `clarify[i].packages[j]` — usedClarifyMembers
+ * defaults to empty, so a call site written before the multi-package form
+ * existed still compiles and behaves identically. A wholly UNUSED rule keeps
+ * the single `clarify[i]` line only: no per-member lines pile onto a rule
+ * that never fired at all, so a single-form policy (a one-element packages
+ * list) stays byte-identical to today's output.
+ *
+ * Returned in TOML array order: compatible first, then clarify (rule lines
+ * before that same rule's member lines).
  */
 export function unusedRuleIds(
   policy: Policy,
   verdicts: ReadonlyArray<Verdict>,
   usedClarifyIndices: ReadonlySet<number>,
+  usedClarifyMembers: ReadonlySet<string> = new Set(),
 ): string[] {
   const cited = new Set(verdicts.map((v) => v.rule));
   const unused: string[] = [];
@@ -910,8 +924,16 @@ export function unusedRuleIds(
     const id = `compatible[${index}]`;
     if (!cited.has(id)) unused.push(id);
   });
-  policy.clarify.forEach((_, index) => {
-    if (!usedClarifyIndices.has(index)) unused.push(`clarify[${index}]`);
+  policy.clarify.forEach((rule, index) => {
+    if (!usedClarifyIndices.has(index)) {
+      unused.push(`clarify[${index}]`);
+      return;
+    }
+    rule.packages.forEach((_, memberIndex) => {
+      if (!usedClarifyMembers.has(`${index}.${memberIndex}`)) {
+        unused.push(`clarify[${index}].packages[${memberIndex}]`);
+      }
+    });
   });
   return unused;
 }

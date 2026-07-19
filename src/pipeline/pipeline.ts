@@ -601,11 +601,11 @@ export async function buildOutputs(
   // BUILTIN_OVERRIDES set is always threaded in: it is imported config
   // (pure — no I/O in the engine), staleness-guarded, and project [[clarify]]
   // wins over it on conflict.
-  const { model: annotated, usedClarifyIndices } = annotateFindings(
-    assessed,
-    policy?.clarify ?? [],
-    BUILTIN_OVERRIDES,
-  );
+  const {
+    model: annotated,
+    usedClarifyIndices,
+    usedClarifyMembers,
+  } = annotateFindings(assessed, policy?.clarify ?? [], BUILTIN_OVERRIDES);
 
   // Policy stage: pure engine calls — evaluate verdicts, surface the summary
   // on stderr, and project the PolicyView for the document renderer. Policy-
@@ -615,7 +615,12 @@ export async function buildOutputs(
   let policyView: PolicyView | undefined;
   if (policy !== undefined && opts.policyPath !== undefined) {
     verdicts = evaluate(annotated, policy);
-    writePolicySummary(policy, verdicts, usedClarifyIndices);
+    writePolicySummary(
+      policy,
+      verdicts,
+      usedClarifyIndices,
+      usedClarifyMembers,
+    );
     policyView = projectPolicyView(policy, policyPointerPath(opts), verdicts);
   }
 

@@ -673,7 +673,7 @@ describe("annotateFindings — imprecise findings", () => {
   test("a clarify override on an imprecise package wins (precise expression, source override)", () => {
     const entry = pkg("jupyter-thing", "1.0.0", [claim("BSD", "name")]);
     const clarify: ClarifyInput[] = [
-      { name: "jupyter-thing", expression: "BSD-3-Clause" },
+      { packages: [{ name: "jupyter-thing" }], expression: "BSD-3-Clause" },
     ];
     const { model } = annotateFindings(modelOf(entry), clarify);
     const finding = model.packages[0]!.finding!;
@@ -822,8 +822,7 @@ describe("annotateFindings — clarify overrides", () => {
     ]);
     const clarify: ClarifyInput[] = [
       {
-        name: "@img/sharp-win32-x64",
-        version: "0.34.5",
+        packages: [{ name: "@img/sharp-win32-x64", version: "0.34.5" }],
         expression: "Apache-2.0",
       },
     ];
@@ -844,7 +843,10 @@ describe("annotateFindings — clarify overrides", () => {
       claim("Apache-2.0 AND LGPL-3.0-or-later", "expression"),
     ]);
     const clarify: ClarifyInput[] = [
-      { name: "@img/sharp-win32-x64", version: "9.9.9", expression: "MIT" },
+      {
+        packages: [{ name: "@img/sharp-win32-x64", version: "9.9.9" }],
+        expression: "MIT",
+      },
     ];
     const { model, usedClarifyIndices } = annotateFindings(
       modelOf(entry),
@@ -859,7 +861,7 @@ describe("annotateFindings — clarify overrides", () => {
   test("version-less clarify matches any version of the named package", () => {
     const entry = pkg("jsonify", "0.0.1", [claim("Public Domain", "name")]);
     const clarify: ClarifyInput[] = [
-      { name: "jsonify", expression: "Unlicense" },
+      { packages: [{ name: "jsonify" }], expression: "Unlicense" },
     ];
     const { model, usedClarifyIndices } = annotateFindings(
       modelOf(entry),
@@ -872,6 +874,119 @@ describe("annotateFindings — clarify overrides", () => {
 });
 
 // ===========================================================================
+// The `packages` list on ClarifyInput (multi-package clarify): a rule may
+// list several (name, version?) pairs sharing one expression/expects. Every
+// listed pair is matched and cited exactly as if it were its own entry —
+// SOME element's name AND that SAME element's version, never a cross-pairing
+// of one element's name with another's version.
+// ===========================================================================
+
+describe("annotateFindings — clarify packages list matching (multi-package clarify)", () => {
+  const threeListed: ClarifyInput[] = [
+    {
+      packages: [
+        { name: "System.IO", version: "4.3.0" },
+        { name: "System.Text", version: "4.3.1" },
+        { name: "System.Xml", version: "4.3.2" },
+      ],
+      expression: "MIT",
+    },
+  ];
+
+  test("each of the 3 listed (name, version) pairs matches its own entry", () => {
+    const io = pkg("System.IO", "4.3.0", [claim("MS-PL", "name")]);
+    const text = pkg("System.Text", "4.3.1", [claim("MS-PL", "name")]);
+    const xml = pkg("System.Xml", "4.3.2", [claim("MS-PL", "name")]);
+    const { model, usedClarifyIndices } = annotateFindings(
+      modelOf(io, text, xml),
+      threeListed,
+    );
+    for (const p of model.packages) {
+      expect(p.finding!.source).toBe("override");
+      expect(p.finding!.expression).toBe("MIT");
+    }
+    expect(usedClarifyIndices.has(0)).toBe(true);
+  });
+
+  test("a cross-pairing — one element's name with ANOTHER element's version — does NOT match (over-match class)", () => {
+    // "System.IO" is listed pinned to 4.3.0; 4.3.1 is System.Text's pin, not
+    // System.IO's. Naive per-field matching (any name AND any version present
+    // in the list) would wrongly accept this; the shared matcher must not.
+    const crossPaired = pkg("System.IO", "4.3.1", [claim("MS-PL", "name")]);
+    const { model, usedClarifyIndices } = annotateFindings(
+      modelOf(crossPaired),
+      threeListed,
+    );
+    expect(model.packages[0]!.finding!.source).not.toBe("override");
+    expect(usedClarifyIndices.size).toBe(0);
+  });
+
+  test("a NEW version of a listed pinned package does NOT match — it re-surfaces as honest unknown, same as a single-package clarify", () => {
+    const bumped = pkg("System.IO", "5.0.0", [claim("MS-PL", "name")]);
+    const { model, usedClarifyIndices } = annotateFindings(
+      modelOf(bumped),
+      threeListed,
+    );
+    expect(model.packages[0]!.finding!.source).not.toBe("override");
+    expect(usedClarifyIndices.size).toBe(0);
+  });
+
+  test("first-match precedence is unchanged across mixed single/list forms: the earlier TOML index wins", () => {
+    const clarify: ClarifyInput[] = [
+      { packages: [{ name: "shared-pkg" }], expression: "MIT" }, // single form, index 0
+      {
+        packages: [{ name: "shared-pkg" }, { name: "other-pkg" }],
+        expression: "Apache-2.0",
+      }, // list form, index 1 — also lists shared-pkg
+    ];
+    const entry = pkg("shared-pkg", "1.0.0", [claim("BSD", "name")]);
+    const { model, usedClarifyIndices } = annotateFindings(
+      modelOf(entry),
+      clarify,
+    );
+    expect(model.packages[0]!.finding!.expression).toBe("MIT");
+    expect(usedClarifyIndices.has(0)).toBe(true);
+    expect(usedClarifyIndices.has(1)).toBe(false);
+  });
+
+  test("dead-member tracking: usedClarifyMembers records ONLY the listed member that actually matched, not its siblings", () => {
+    const entry = pkg("System.Text", "4.3.1", [claim("MS-PL", "name")]);
+    const { usedClarifyIndices, usedClarifyMembers } = annotateFindings(
+      modelOf(entry),
+      threeListed,
+    );
+    expect(usedClarifyIndices.has(0)).toBe(true); // the rule is "used"
+    expect(usedClarifyMembers.has("0.1")).toBe(true); // System.Text is packages[1]
+    expect(usedClarifyMembers.has("0.0")).toBe(false); // System.IO never matched
+    expect(usedClarifyMembers.has("0.2")).toBe(false); // System.Xml never matched
+  });
+
+  test("expects semantics apply PER matched package: one listed package's signal matches expects and applies, a sibling's mismatching signal goes stale", () => {
+    const clarify: ClarifyInput[] = [
+      {
+        packages: [{ name: "clean-pkg" }, { name: "relicensed-pkg" }],
+        expects: "BSD",
+        expression: "BSD-3-Clause",
+      },
+    ];
+    const clean = pkg("clean-pkg", "1.0.0", [claim("BSD", "name")]);
+    const relicensed = pkg("relicensed-pkg", "2.0.0", [
+      claim("GPL-3.0-only", "spdx-id"),
+    ]);
+    const { model } = annotateFindings(modelOf(clean, relicensed), clarify);
+    const cleanFinding = model.packages[0]!.finding!;
+    const relicensedFinding = model.packages[1]!.finding!;
+    expect(cleanFinding.source).toBe("override");
+    expect(cleanFinding.expression).toBe("BSD-3-Clause");
+    expect(cleanFinding.staleOverride).toBeUndefined();
+    expect(relicensedFinding.source).not.toBe("override");
+    expect(relicensedFinding.expression).toBe("GPL-3.0-only");
+    expect(relicensedFinding.staleOverride).toBeDefined();
+    expect(relicensedFinding.staleOverride!.expected).toBe("BSD");
+  });
+});
+
+// ===========================================================================
 // Staleness-guarded two-level override chain in annotateFindings.
 // ===========================================================================
 
@@ -879,7 +994,11 @@ describe("annotateFindings — staleness-guarded clarify", () => {
   test("expects matching the imprecise-BSD signal APPLIES the disambiguation", () => {
     const entry = pkg("jupyter-thing", "1.0.0", [claim("BSD", "name")]);
     const clarify: ClarifyInput[] = [
-      { name: "jupyter-thing", expects: "BSD", expression: "BSD-3-Clause" },
+      {
+        packages: [{ name: "jupyter-thing" }],
+        expects: "BSD",
+        expression: "BSD-3-Clause",
+      },
     ];
     const { model, usedClarifyIndices } = annotateFindings(
       modelOf(entry),
@@ -896,7 +1015,7 @@ describe("annotateFindings — staleness-guarded clarify", () => {
     const entry = pkg("dateutil-ish", "1.0.0", [claim("Dual License", "name")]);
     const clarify: ClarifyInput[] = [
       {
-        name: "dateutil-ish",
+        packages: [{ name: "dateutil-ish" }],
         expects: "Dual License",
         expression: "Apache-2.0 OR BSD-3-Clause",
       },
@@ -911,7 +1030,11 @@ describe("annotateFindings — staleness-guarded clarify", () => {
   test("STALE: expects BSD but the package now reports GPL-3.0 → not applied, staleOverride recorded", () => {
     const entry = pkg("relicensed", "2.0.0", [claim("GPL-3.0-only")]);
     const clarify: ClarifyInput[] = [
-      { name: "relicensed", expects: "BSD", expression: "BSD-3-Clause" },
+      {
+        packages: [{ name: "relicensed" }],
+        expects: "BSD",
+        expression: "BSD-3-Clause",
+      },
     ];
     const { model } = annotateFindings(modelOf(entry), clarify);
     const finding = model.packages[0]!.finding!;
@@ -927,7 +1050,11 @@ describe("annotateFindings — staleness-guarded clarify", () => {
   test("expects is matched case-insensitively and trimmed", () => {
     const entry = pkg("ci-pkg", "1.0.0", [claim("BSD", "name")]);
     const clarify: ClarifyInput[] = [
-      { name: "ci-pkg", expects: "  bsd  ", expression: "BSD-3-Clause" },
+      {
+        packages: [{ name: "ci-pkg" }],
+        expects: "  bsd  ",
+        expression: "BSD-3-Clause",
+      },
     ];
     const { model } = annotateFindings(modelOf(entry), clarify);
     expect(model.packages[0]!.finding!.expression).toBe("BSD-3-Clause");
@@ -936,7 +1063,7 @@ describe("annotateFindings — staleness-guarded clarify", () => {
   test("no-expects clarify still applies blindly (backward-compat)", () => {
     const entry = pkg("jsonify", "0.0.1", [claim("Public Domain", "name")]);
     const clarify: ClarifyInput[] = [
-      { name: "jsonify", expression: "Unlicense" },
+      { packages: [{ name: "jsonify" }], expression: "Unlicense" },
     ];
     const { model } = annotateFindings(modelOf(entry), clarify);
     const finding = model.packages[0]!.finding!;
@@ -971,7 +1098,7 @@ describe("annotateFindings — tool-level BUILTIN overrides", () => {
   test("project clarify WINS over a tool-level override on conflict (project-wins)", () => {
     const entry = pkg("ipython", "8.0.0", [claim("BSD", "name")]);
     const clarify: ClarifyInput[] = [
-      { name: "ipython", expects: "BSD", expression: "MIT" },
+      { packages: [{ name: "ipython" }], expects: "BSD", expression: "MIT" },
     ];
     const { model, usedClarifyIndices } = annotateFindings(
       modelOf(entry),
@@ -1129,7 +1256,7 @@ describe("annotateFindings — redundant override when metadata catches up (gap 
     ]);
     const clarify: ClarifyInput[] = [
       {
-        name: "relicensed-permissive",
+        packages: [{ name: "relicensed-permissive" }],
         expects: "BSD",
         expression: "BSD-3-Clause",
       },
@@ -1149,7 +1276,7 @@ describe("annotateFindings — redundant override when metadata catches up (gap 
     ]);
     const clarify: ClarifyInput[] = [
       {
-        name: "relicensed-copyleft",
+        packages: [{ name: "relicensed-copyleft" }],
         expects: "BSD",
         expression: "BSD-3-Clause",
       },
@@ -1750,7 +1877,7 @@ describe("annotateFindings — scancode senior assessment (the re-pinned fill ma
       scancodeClaim("BSD-3-Clause"),
     ]);
     const clarify: ClarifyInput[] = [
-      { name: "imprecise-clarified-pkg", expression: "MIT" },
+      { packages: [{ name: "imprecise-clarified-pkg" }], expression: "MIT" },
     ];
     const { model } = annotateFindings(modelOf(entry), clarify);
     const finding = model.packages[0]!.finding!;
@@ -1890,7 +2017,7 @@ describe("annotateFindings — scancode senior assessment (the re-pinned fill ma
       scancodeClaim("MIT"),
     ]);
     const clarify: ClarifyInput[] = [
-      { name: "conflicted-clarified-pkg", expression: "MIT" },
+      { packages: [{ name: "conflicted-clarified-pkg" }], expression: "MIT" },
     ];
     const { model } = annotateFindings(modelOf(entry), clarify);
     const finding = model.packages[0]!.finding!;
@@ -1906,7 +2033,11 @@ describe("annotateFindings — scancode senior assessment (the re-pinned fill ma
       scancodeClaim("MIT"),
     ]);
     const clarify: ClarifyInput[] = [
-      { name: "stale-conflicted-pkg", expects: "BSD", expression: "MIT" },
+      {
+        packages: [{ name: "stale-conflicted-pkg" }],
+        expects: "BSD",
+        expression: "MIT",
+      },
     ];
     const { model } = annotateFindings(modelOf(entry), clarify);
     const finding = model.packages[0]!.finding!;
@@ -1924,7 +2055,7 @@ describe("annotateFindings — scancode senior assessment (the re-pinned fill ma
     ]);
     const clarify: ClarifyInput[] = [
       {
-        name: "guarded-clarified-pkg",
+        packages: [{ name: "guarded-clarified-pkg" }],
         expects: "MIT",
         expression: "BSD-3-Clause",
       },

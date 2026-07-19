@@ -9,12 +9,29 @@ import { unusedRuleIds } from "../policy/evaluate";
 import { type Policy } from "../policy/schema";
 
 /**
- * Reason text of an unused compatible[i]/clarify[i] rule id — surfaced in the
- * unused-entry warning so the stale policy line is self-explanatory.
- * Defensive empty string for an unrecognized id shape (unusedRuleIds only
- * emits these two shapes).
+ * Reason text of an unused compatible[i]/clarify[i]/clarify[i].packages[j]
+ * rule id — surfaced in the unused-entry warning so the stale policy line is
+ * self-explanatory. The member shape (a dead listed package inside a USED
+ * multi-package clarify rule) renders the rule's own shared `reason` — the
+ * human-authored text explains the whole entry — with the specific dead
+ * member's `name@version` (or bare `name` when unpinned) appended, so the
+ * line points at exactly which listed package never matched. Defensive
+ * empty string for an unrecognized id shape, an out-of-range rule/member
+ * index, or a malformed id. Exported for direct unit testing (the
+ * sanitizeForLog precedent above).
  */
-function unusedRuleReason(policy: Policy, ruleId: string): string {
+export function unusedRuleReason(policy: Policy, ruleId: string): string {
+  const memberMatch = /^clarify\[(\d+)\]\.packages\[(\d+)\]$/.exec(ruleId);
+  if (memberMatch !== null) {
+    const rule = policy.clarify[Number(memberMatch[1])];
+    const member = rule?.packages[Number(memberMatch[2])];
+    if (rule === undefined || member === undefined) return "";
+    const coordinate =
+      member.version !== undefined
+        ? `${member.name}@${member.version}`
+        : member.name;
+    return `${rule.reason} (${coordinate})`;
+  }
   const match = /^(compatible|clarify)\[(\d+)\]$/.exec(ruleId);
   if (match === null) return "";
   const index = Number(match[2]);
@@ -74,6 +91,7 @@ export function writePolicySummary(
   policy: Policy,
   verdicts: ReadonlyArray<Verdict>,
   usedClarifyIndices: ReadonlySet<number>,
+  usedClarifyMembers: ReadonlySet<string> = new Set(),
 ): void {
   const counts = { ok: 0, warn: 0, fail: 0, suppressed: 0 };
   for (const verdict of verdicts) counts[verdict.status] += 1;
@@ -142,7 +160,12 @@ export function writePolicySummary(
       );
     }
   }
-  for (const ruleId of unusedRuleIds(policy, verdicts, usedClarifyIndices)) {
+  for (const ruleId of unusedRuleIds(
+    policy,
+    verdicts,
+    usedClarifyIndices,
+    usedClarifyMembers,
+  )) {
     process.stderr.write(
       `policy warning: unused entry ${sanitizeForLog(ruleId)} — ` +
         `${sanitizeForLog(unusedRuleReason(policy, ruleId))}\n`,

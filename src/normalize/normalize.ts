@@ -458,16 +458,30 @@ function combinePrecise(
 }
 
 /**
+ * One listed package inside a clarify override: a name plus optional version
+ * pin, matched exactly as if it were its own single entry (the multi-package
+ * clarify form). Structurally compatible with schema.ts's ClarifyPackageRef —
+ * no import from policy/ (the validated policy is structurally compatible;
+ * the legal dependency direction is policy/ -> normalize/, never the
+ * reverse).
+ */
+export interface ClarifyPackageRef {
+  name: string;
+  version?: string;
+}
+
+/**
  * Inline structural type for project clarify rules — no import from policy/
  * (the validated policy is structurally compatible). `expression` must be a
  * valid SPDX expression: policy schema validation parses it eagerly before
  * evaluation. `expects` is the OPTIONAL staleness precondition: when
  * present, the override applies only while the package's pre-override observed
- * signal still matches it; absent = blind apply (backward-compat).
+ * signal still matches it; absent = blind apply (backward-compat). `packages`
+ * is the canonical list this rule disambiguates — a single-package rule is
+ * schema-desugared to a one-element list before it ever reaches this module.
  */
 export interface ClarifyInput {
-  name: string;
-  version?: string;
+  packages: ReadonlyArray<ClarifyPackageRef>;
   expects?: string;
   expression: string;
 }
@@ -487,6 +501,52 @@ export interface BuiltinOverrideInput {
 export interface AnnotatedFindings {
   model: CanonicalDependencies;
   usedClarifyIndices: ReadonlySet<number>;
+  /**
+   * Per-member usage, keyed `"${ruleIndex}.${memberIndex}"`: which specific
+   * listed package inside a USED clarify rule actually matched something. A
+   * rule can be "used" (usedClarifyIndices) via one member while another
+   * listed member sits dead forever (a typo, or a package the lockfile
+   * dropped) — this set is what lets the unused-rule lane surface THAT
+   * member, not just the whole rule.
+   */
+  usedClarifyMembers: ReadonlySet<string>;
+}
+
+/**
+ * The winning clarify rule and the specific listed member that matched it.
+ */
+export interface ClarifyMatch {
+  ruleIndex: number;
+  memberIndex: number;
+}
+
+/**
+ * First-match clarify lookup, the SINGLE matching authority shared by
+ * resolveOverride (below) and evaluate's clarify citation lookup
+ * (policy/evaluate.ts clarifyIndexFor) — replacing what was previously a
+ * duplicated findIndex there. Returns the earliest rule (TOML index) that
+ * carries a listed package matching (name, version), and WHICH listed member
+ * matched: SOME element with element.name === name AND (element.version ===
+ * undefined || element.version === version) — never a cross-pairing of one
+ * element's name with another's version. First-match precedence is
+ * unchanged (findIndex semantics) across mixed single/list-form rules, since
+ * every rule is a `packages` list by the time it reaches here.
+ */
+export function findClarifyMatch(
+  clarify: ReadonlyArray<{ packages: ReadonlyArray<ClarifyPackageRef> }>,
+  name: string,
+  version: string,
+): ClarifyMatch | undefined {
+  for (let ruleIndex = 0; ruleIndex < clarify.length; ruleIndex++) {
+    const rule = clarify[ruleIndex];
+    if (rule === undefined) continue;
+    const memberIndex = rule.packages.findIndex(
+      (p) =>
+        p.name === name && (p.version === undefined || p.version === version),
+    );
+    if (memberIndex !== -1) return { ruleIndex, memberIndex };
+  }
+  return undefined;
 }
 
 /**
@@ -682,16 +742,14 @@ function resolveOverride(
   base: LicenseFinding,
   signal: ReadonlyArray<string>,
   usedClarifyIndices: Set<number>,
+  usedClarifyMembers: Set<string>,
 ): LicenseFinding | undefined {
   // Project clarify FIRST (project-wins-on-conflict).
-  const clarifyIndex = clarify.findIndex(
-    (rule) =>
-      rule.name === entry.name &&
-      (rule.version === undefined || rule.version === entry.version),
-  );
-  if (clarifyIndex !== -1) {
-    usedClarifyIndices.add(clarifyIndex);
-    const rule = clarify[clarifyIndex] as ClarifyInput;
+  const match = findClarifyMatch(clarify, entry.name, entry.version);
+  if (match !== undefined) {
+    usedClarifyIndices.add(match.ruleIndex);
+    usedClarifyMembers.add(`${match.ruleIndex}.${match.memberIndex}`);
+    const rule = clarify[match.ruleIndex] as ClarifyInput;
     return applyOverride(
       rule.expects,
       rule.expression,
@@ -918,7 +976,10 @@ export function applyScancodeAssessment(
  * carries a distinct override:builtin[i] citation; a project clarify keeps its
  * clarify[i] citation via the engine. Returns new entries via object spread —
  * the input model is never mutated. Pure: no I/O, never throws on a stale
- * override.
+ * override. usedClarifyMembers records exactly which LISTED package inside
+ * each matched rule decided — the per-member counterpart to
+ * usedClarifyIndices, letting a multi-package rule's dead member surface
+ * even while the rule itself counts as used.
  */
 export function annotateFindings(
   model: CanonicalDependencies,
@@ -926,6 +987,7 @@ export function annotateFindings(
   builtins: ReadonlyArray<BuiltinOverrideInput> = [],
 ): AnnotatedFindings {
   const usedClarifyIndices = new Set<number>();
+  const usedClarifyMembers = new Set<string>();
   const packages = model.packages.map((entry: PackageEntry): PackageEntry => {
     const unrefinedBase = findingFromClaims(entry.licenseClaims, entry.scope);
     // The scancode SENIOR ASSESSMENT runs BEFORE overrides see the
@@ -941,6 +1003,7 @@ export function annotateFindings(
       base,
       signal,
       usedClarifyIndices,
+      usedClarifyMembers,
     );
     const finding = overridden ?? base;
     // C#1 — deny terminal over overrides: preserve the PRE-OVERRIDE observed
@@ -967,5 +1030,5 @@ export function annotateFindings(
       },
     };
   });
-  return { model: { packages }, usedClarifyIndices };
+  return { model: { packages }, usedClarifyIndices, usedClarifyMembers };
 }
