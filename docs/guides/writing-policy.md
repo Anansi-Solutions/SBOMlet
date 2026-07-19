@@ -204,6 +204,74 @@ The tool also ships its own curated clarifications for commonly-ambiguous
 projects, such as the Jupyter/IPython BSD stack. You get those without
 re-authoring them, and your own `[[clarify]]` wins on any conflict.
 
+## Onboard a .NET repository's honest-unknown packages
+
+A repository with a deep NuGet dependency tree can carry dozens of packages
+whose only registry evidence is a bare `licenseUrl` the tool won't
+auto-follow (see [.NET targets](../reference/cli.md#net-targets)) — the
+classic case is the retired `System.*` / `Microsoft.NETCore.*` family, whose
+registry metadata still points at a single Microsoft fwlink. Working through
+that population by hand, one `[[clarify]]` at a time, is the wall this
+workflow exists to remove.
+
+**1. Open the gate while you work.** Set unknown handling to `warn` (the
+default) so the honest unknowns list without failing the build:
+
+```toml
+[unknown]
+handling = "warn"
+```
+
+**2. Generate the starting point.** Run the read-only, offline
+[`suggest-clarifications`](../reference/cli.md#suggest-clarifications)
+subcommand and append its output to your policy:
+
+```sh
+task sbomlet:suggest:clarifications >> .sbomlet.policy.toml
+```
+
+It prints one fully commented, ready-to-paste `[[clarify]]` stub per shared
+`licenseUrl` — for example, every `System.*` package still pointing at
+Microsoft's retired fwlink lands in one stub together, using the
+[multi-package form](#several-packages-one-disambiguation) above.
+
+**3. Prune before you activate anything.** Skim the stubs and delete the
+ones you don't want to resolve yet. Packages whose name starts with
+`runtime.` arrive in their own separate stub, labelled for individual
+review — they wrap native (often third-party) code, so leave them for a
+closer look rather than folding them into the managed-library verdict next
+to them.
+
+**4. Read the evidence, then fill each stub in.** For each stub you keep,
+open the observed URL, read what it actually says, and replace the
+placeholders — never leave `FILL-ME-IN` in an uncommented line, since the
+schema rejects an activated entry with an empty `expression` or `reason`.
+The Microsoft fwlink case resolves to a `dotnet/core` document at GitHub;
+pin it as evidence with a permalink (open the file on github.com and press
+`y` to get one — the same instruction the stub itself carries):
+
+```toml
+[[clarify]]
+packages = [
+  { name = "System.Buffers", version = "4.5.1" },
+  { name = "System.Memory", version = "4.5.5" },
+]
+expression = "MIT"
+evidence_url = "https://github.com/dotnet/core/blob/8c8e5836c343f854b65437dfedb13598d3aa3707/license-information.md"
+reason = "licenseUrl is the retired .NET Library EULA fwlink; the pinned page states library packages use the MIT license"
+```
+
+An `evidence_url` pinned to a commit SHA lets [`verify-cache`](../reference/cli.md#verify-cache)
+re-check it later and flag if the cited document moved or changed — see
+[evidence-pinned clarify](policy.md#clarify) for what that guards against.
+
+**5. Tighten back once you're done.** As the honest-unknown population
+shrinks, re-run `suggest-clarifications` — packages you've already clarified
+are excluded automatically, so the output gets shorter each time and
+eventually prints nothing. Once nothing is left, switch `[unknown]` back to
+`fail` so a genuinely new unknown gates the build instead of quietly
+shipping.
+
 ## Allow a licence pattern or an exact package
 
 A licence is fine for your project even though it isn't permissive by default, or

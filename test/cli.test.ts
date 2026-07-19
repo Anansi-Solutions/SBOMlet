@@ -2351,7 +2351,7 @@ describe("Taskfile split invariants (static, YAML-parsed — locks the public/de
     expect(taskfile).toContain("{{if .INTENSIVE}} --intensive{{end}}");
   });
 
-  test("the public surface is exactly check, docker:list, generate, verify:cache — the desc-bearing tasks a consumer sees in `task --list`", () => {
+  test("the public surface is exactly check, docker:list, generate, suggest:clarifications, verify:cache — the desc-bearing tasks a consumer sees in `task --list`", () => {
     const tasks = loadTaskfile("Taskfile.yml").tasks ?? {};
     const described = Object.keys(tasks)
       .filter((name) => tasks[name]?.desc !== undefined)
@@ -2360,6 +2360,7 @@ describe("Taskfile split invariants (static, YAML-parsed — locks the public/de
       "check",
       "docker:list",
       "generate",
+      "suggest:clarifications",
       "verify:cache",
     ]);
   });

@@ -80,6 +80,24 @@ tasks:
     cmds:
       - mise x -- bun src/cli.ts check --base-dir {{.USER_WORKING_DIR | q}} --repo-root {{.REPO_ROOT | q}} --output {{.OUTPUT | q}} --notices {{.NOTICES | q}}{{if .POLICY}} --policy {{.POLICY | q}}{{end}}{{if .CYCLONEDX}} --cyclonedx {{.CYCLONEDX | q}}{{end}}
 
+  suggest:clarifications:
+    desc: "Print ready-to-paste [[clarify]] stubs for NuGet packages whose license is an honest unknown — read-only, offline, nothing written"
+    summary: |
+      Read the committed enrichment cache and the repository's current
+      dependencies (the same offline pass check uses — no network, no
+      writes) and print fully commented [[clarify]] stubs for NuGet
+      packages whose only registry evidence is a bare licenseUrl the tool
+      could not follow. Paste the output into your policy, then uncomment
+      and fill in each entry you want to resolve.
+
+      Variables:
+        REPO_ROOT  repository to scan                        (default: this Taskfile's directory)
+        POLICY     policy file, read for its existing [[clarify]] entries; only when set
+    deps: [install]
+    silent: true
+    cmds:
+      - mise x -- bun src/cli.ts suggest-clarifications --base-dir {{.USER_WORKING_DIR | q}} --repo-root {{.REPO_ROOT | q}}{{if .POLICY}} --policy {{.POLICY | q}}{{end}}
+
   verify:cache:
     desc: 'ONLINE cache audit — re-resolve every committed cache entry against its registry and report divergence. Exit 0 all match, 1 mismatch, 3 tool/network error'
     summary: |
