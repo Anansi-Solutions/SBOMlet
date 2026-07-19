@@ -146,12 +146,14 @@ corrected value. Absent table: no clarifications.
 |-------|------|----------|---------|
 | `package` | inline table `{ name, version? }` | yes | Which package. `name` is required; omit `version` to match all versions. |
 | `expression` | string (SPDX) | yes | The corrected SPDX expression, parsed at load time. |
-| `expects` | string | no | A staleness precondition — the pre-override value you're disambiguating *from*. |
+| `expects` | string | no | A staleness precondition — the pre-override value you're disambiguating *from*. Mutually exclusive with `evidence_url`. |
+| `evidence_url` | string (URL) | no | A GitHub blob permalink pinned to a commit SHA — the document the correction is based on. Requires `package.version`; mutually exclusive with `expects`. |
 | `reason` | string (non-empty) | yes | Where the correction comes from. |
 
-There are two kinds, distinguished by whether `expects` is present.
+There are three kinds, distinguished by which of `expects` and `evidence_url`
+is present.
 
-Without `expects`, the entry is a misdetection correction: `expression`
+Without either, the entry is a misdetection correction: `expression`
 replaces the finding unconditionally. Use it to fix garbage or missing upstream
 metadata, such as a package that declares `Public Domain` mapped to
 `Unlicense`.
@@ -162,6 +164,49 @@ applies only while the package's currently-observed licence still matches
 override on a package now reporting `GPL-3.0`, the override is stale, and the
 gate fails naming the package, the expected value, and the observed one. A stale
 assertion is never applied, so an old override cannot silently mask a relicence.
+
+With `evidence_url`, the entry is an evidence-pinned decision: the same
+unconditional override as a plain correction, plus a citation to the exact
+document a human read to reach it. Reach for this when the only licence
+signal available is a URL you do not want to follow automatically — a page a
+package's metadata points at can be edited later, so resolving it at generate
+time would let that later edit silently redefine what a version that already
+shipped is licensed under. `evidence_url` must be a GitHub blob permalink
+pinned to a full 40-character commit SHA
+(`https://github.com/<owner>/<repo>/blob/<sha>/<path>`, the form GitHub's own
+"y" key produces on a file page); a branch or tag name is rejected, because a
+mutable ref cannot serve as pinned evidence. It requires `package.version`,
+because the decision is scoped to what a human verified for that one
+release — a name-only entry would let a new version silently inherit a
+verdict nobody reviewed for it. It is mutually exclusive with `expects` for
+the same reason `expects` would always fail here: a package resolved only
+through cited evidence carries no separate registry claim for `expects` to
+compare against.
+
+`evidence_url` never changes what the engine does. It is not consulted while
+matching or deciding the verdict, and does not widen what a clarify can do —
+it is a citation for you, the reviewer, to read later. The tool does not
+currently re-check whether the pinned document still says what it said when
+you cited it, so treat it the way you would any manually verified fact:
+revisit it by hand if the package's situation changes.
+
+A worked example, for a package whose only licence signal was a retired
+Microsoft redirector that now points at a page distinguishing library
+packages (MIT) from product distributions (a separate licence):
+
+```toml
+[[clarify]]
+package = { name = "System.IO", version = "4.3.0" }
+expression = "MIT"
+evidence_url = "https://github.com/dotnet/core/blob/8c8e5836c343f854b65437dfedb13598d3aa3707/license-information.md"
+reason = "licenseUrl is the retired .NET Library EULA fwlink; the pinned page states library packages use the MIT license"
+```
+
+Do not extend one evidence citation across every package that happens to
+share its URL. The pinned page in this example draws a line between library
+packages and product distributions, and a package that wraps native code
+(a `runtime.native.*` package, say) can sit on the product side of that
+line — it deserves its own reading, not a copy of this entry.
 
 The tool also ships its own curated clarifications for commonly-ambiguous
 projects, applied without your re-authoring them. When a project-level

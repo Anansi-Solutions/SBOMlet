@@ -160,11 +160,11 @@ reason = "Dual-licensed Apache-2.0 AND LGPL-3.0-or-later; the LGPL obligations a
 # On conflict for the same package, the PROJECT level WINS (you can always
 # override a shipped default).
 #
-# Two flavours of [[clarify]]:
+# Three flavours of [[clarify]]:
 #
-#   (a) Misdetection correction (no `expects`): the finding is REPLACED by
-#       `expression` blindly (source "override", highest precedence). Use this
-#       to fix garbage/missing upstream metadata.
+#   (a) Misdetection correction (no `expects`, no `evidence_url`): the finding
+#       is REPLACED by `expression` blindly (source "override", highest
+#       precedence). Use this to fix garbage/missing upstream metadata.
 #
 #   (b) Staleness-guarded disambiguation (with `expects`): an override is a
 #       PRECONDITIONED assertion. `expects` records the value you are
@@ -175,6 +175,17 @@ reason = "Dual-licensed Apache-2.0 AND LGPL-3.0-or-later; the LGPL obligations a
 #       naming the package, the expected value, and the now-observed value --
 #       the stale assertion is NEVER applied, so an old override can never
 #       silently mask a relicense.
+#
+#   (c) Evidence-pinned decision (with `evidence_url`): the same blind
+#       override as (a), plus a citation to the exact document a human read.
+#       `evidence_url` must be a GitHub blob permalink pinned to a full
+#       40-character commit SHA (the form GitHub's own "y" key produces on a
+#       file page) -- a branch or tag name is rejected, since a mutable ref
+#       cannot serve as pinned evidence. REQUIRES `package.version` (the
+#       decision is scoped to one release); mutually exclusive with `expects`
+#       (a cited-evidence package has no separate registry claim for `expects`
+#       to compare against). The citation is inert: it never changes what the
+#       engine does, and the tool does not currently re-check it automatically.
 #
 # `expression` must be valid SPDX -- parsed at validation time, so a typo fails
 # fast instead of mid-evaluation.
@@ -196,6 +207,14 @@ reason = "Upstream declares the non-SPDX value 'Public Domain'; jsonify's README
 # expects = "BSD"                 # the imprecise value we are disambiguating FROM
 # expression = "BSD-3-Clause"     # the precise SPDX expression we assert
 # reason = "Confirmed BSD-3-Clause in the upstream LICENSE file."
+
+# [[clarify]]
+# Evidence-pinned decision: cites the exact commit a human read, scoped to one
+# package version, and never combined with `expects`.
+# package = { name = "System.IO", version = "4.3.0" }
+# expression = "MIT"
+# evidence_url = "https://github.com/dotnet/core/blob/8c8e5836c343f854b65437dfedb13598d3aa3707/license-information.md"
+# reason = "licenseUrl is the retired .NET Library EULA fwlink; the pinned page states library packages use the MIT license"
 
 # ---------------------------------------------------------------------------
 # Unknown-license handling
