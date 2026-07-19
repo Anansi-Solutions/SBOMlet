@@ -537,7 +537,13 @@ async function resolveViaUrlOnlyGithub(
       ? null
       : await resolveUrlOnlyGithubLicense(licenseUrl, fetchOpts);
   if (resolved === null) {
-    recordNegative(miss, cache, "nuget"); // unrecognized URL / branch ref / no license — honest unknown
+    // unrecognized URL / branch ref / no license — honest unknown. licenseUrl
+    // is threaded through UNCHANGED (never re-derived) so the recorded field
+    // is exactly what the rung saw; it is omitted entirely when the catalog
+    // carried no url-only URL at all (licenseUrl undefined) — recordNegative
+    // conditionalizes the write, so this shared call site can never stamp a
+    // junk value on that no-url sub-path.
+    recordNegative(miss, cache, "nuget", licenseUrl);
     return;
   }
   packages[miss.index] = withCacheClaim(miss.entry, resolved.raw, "registry");
@@ -601,17 +607,27 @@ function defaultNow(): Date {
   return new Date();
 }
 
-/** Record a definitive-no-license negative entry for a miss. */
+/**
+ * Record a definitive-no-license negative entry for a miss. `urlOnlyLicenseUrl`
+ * is an OPTIONAL pass-through for the one call site (resolveViaUrlOnlyGithub)
+ * that has an observed class-4 url-only licenseUrl to record; every other
+ * call site omits it, so the field never appears on those entries. Absent
+ * (not passed, or explicitly undefined) omits the key entirely — the
+ * present-only-keys idiom (makeClarifyRule) — never a present-but-undefined
+ * or empty-string junk value.
+ */
 function recordNegative(
   miss: Unknown,
   cache: Map<string, CacheEntry>,
   fetchedFrom: CacheEntry["fetchedFrom"],
+  urlOnlyLicenseUrl?: string,
 ): void {
   putEntry(cache, miss.entry.purl, {
     license: null,
     fetchedFrom,
     via: "unresolved",
     resolvable: false,
+    ...(urlOnlyLicenseUrl !== undefined ? { urlOnlyLicenseUrl } : {}),
   });
 }
 

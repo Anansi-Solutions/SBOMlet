@@ -55,6 +55,17 @@ const CACHE_VERSION = 1;
  * through the immutable-ref GitHub lookup, and it carries fetchedAt exactly
  * like a terraform package's github-sourced entry does. It lives ONLY here —
  * never in any output (the determinism control).
+ *
+ * `urlOnlyLicenseUrl` is an OPTIONAL verbatim string recorded ONLY on a
+ * NEGATIVE nuget entry (`resolvable:false`) whose catalog document carried a
+ * url-only `licenseUrl` that the immutable-ref GitHub rung declined to
+ * resolve (an unrecognized host, a mutable branch ref, or a definitive
+ * 404/NOASSERTION at the pinned ref) — never on a positive entry, and never
+ * when the catalog carried no such URL at all. It exists so an OFFLINE
+ * reader can group these honest-unknowns by their shared URL without
+ * re-fetching; it is audit data, never emitted to any generated output. Like
+ * `fetchedAt`, it is written on exactly one path and never rewritten on a
+ * cache hit, so a warm double-generate stays byte-identical.
  */
 export interface CacheEntry {
   license: string | ReadonlyArray<string> | null;
@@ -63,6 +74,8 @@ export interface CacheEntry {
   resolvable: boolean;
   /** ISO timestamp on NEW github entries only (injectable-clock-stamped). */
   fetchedAt?: string;
+  /** The observed url-only licenseUrl on a declined class-4 nuget negative. */
+  urlOnlyLicenseUrl?: string;
 }
 
 /** The on-disk envelope: a schema version plus the purl→entry table. */

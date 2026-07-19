@@ -2120,12 +2120,17 @@ describe("enrichUnknowns nuget (two-step fetch, negative discipline, offline che
         readCache(path),
         "pkg:nuget/Newtonsoft.Json@13.0.4",
       );
+      // A leaf 404 never reaches the catalog — no url-only URL was ever
+      // observed, so the field is ABSENT, not present-with-undefined.
       expect(recorded).toEqual({
         license: null,
         fetchedFrom: "nuget",
         via: "unresolved",
         resolvable: false,
       });
+      expect(recorded !== undefined && "urlOnlyLicenseUrl" in recorded).toBe(
+        false,
+      );
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
@@ -2182,6 +2187,13 @@ describe("enrichUnknowns nuget (two-step fetch, negative discipline, offline che
         "pkg:nuget/Newtonsoft.Json@13.0.4",
       );
       expect(recorded?.resolvable).toBe(false);
+      // FIX B, sub-path (b): urlOnlyLicenseUrlOf returns undefined here (no
+      // licenseUrl field at all on the catalog) — the SAME recordNegative call
+      // site (resolveViaUrlOnlyGithub) is reached, but the key must be ABSENT,
+      // never present-with-undefined or an empty string.
+      expect(recorded !== undefined && "urlOnlyLicenseUrl" in recorded).toBe(
+        false,
+      );
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
@@ -2553,6 +2565,8 @@ describe("enrichUnknowns nuget (two-step fetch, negative discipline, offline che
         );
         expect(calls).toEqual([LEAF_URL, CATALOG_URL, branchTagRefUrl]); // no License API call
         expect(registryClaim(result.model.packages[0])).toBeUndefined();
+        // FIX B, sub-path (a): a url-only URL EXISTED and the rung declined it
+        // (a mutable branch ref) — the verbatim URL is recorded on the negative.
         expect(
           getEntry(readCache(path), "pkg:nuget/Newtonsoft.Json@13.0.4"),
         ).toEqual({
@@ -2560,6 +2574,8 @@ describe("enrichUnknowns nuget (two-step fetch, negative discipline, offline che
           fetchedFrom: "nuget",
           via: "unresolved",
           resolvable: false,
+          urlOnlyLicenseUrl:
+            "https://github.com/dotnet/corefx/blob/master/LICENSE.TXT",
         });
       } finally {
         rmSync(dir, { recursive: true, force: true });
@@ -2589,10 +2605,16 @@ describe("enrichUnknowns nuget (two-step fetch, negative discipline, offline che
         );
         expect(calls).toEqual([LEAF_URL, CATALOG_URL]); // never a github.com call
         expect(registryClaim(result.model.packages[0])).toBeUndefined();
-        expect(
-          getEntry(readCache(path), "pkg:nuget/Newtonsoft.Json@13.0.4")
-            ?.resolvable,
-        ).toBe(false);
+        const recorded = getEntry(
+          readCache(path),
+          "pkg:nuget/Newtonsoft.Json@13.0.4",
+        );
+        expect(recorded?.resolvable).toBe(false);
+        // FIX B, sub-path (a): the catalog's url-only URL existed (unrecognized
+        // host) — the rung declined it, but the verbatim URL is still recorded.
+        expect(recorded?.urlOnlyLicenseUrl).toBe(
+          "https://go.microsoft.com/fwlink/?LinkId=329770",
+        );
       } finally {
         rmSync(dir, { recursive: true, force: true });
       }
@@ -2622,10 +2644,14 @@ describe("enrichUnknowns nuget (two-step fetch, negative discipline, offline che
           }),
         );
         expect(registryClaim(result.model.packages[0])).toBeUndefined();
-        expect(
-          getEntry(readCache(path), "pkg:nuget/Newtonsoft.Json@13.0.4")
-            ?.resolvable,
-        ).toBe(false);
+        const recorded = getEntry(
+          readCache(path),
+          "pkg:nuget/Newtonsoft.Json@13.0.4",
+        );
+        expect(recorded?.resolvable).toBe(false);
+        // FIX B, sub-path (a): a recognized, tag-pinned URL existed — the
+        // rung declined it (404 at the pinned commit), still recorded verbatim.
+        expect(recorded?.urlOnlyLicenseUrl).toBe(AUTH_LICENSE_URL);
       } finally {
         rmSync(dir, { recursive: true, force: true });
       }
@@ -2745,6 +2771,44 @@ describe("enrichUnknowns nuget (two-step fetch, negative discipline, offline che
         );
         expect(registryClaim(result.model.packages[0])).toBeUndefined();
         expect(result.staleUnknowns).toEqual([]);
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
+
+    test("warm generate over an OLD field-less negative (written before FIX B) rewrites nothing — byte-identical", async () => {
+      const { dir, path } = tempCachePath();
+      try {
+        const cache = new Map<string, CacheEntry>();
+        putEntry(cache, "pkg:nuget/Newtonsoft.Json@13.0.4", {
+          license: null,
+          fetchedFrom: "nuget",
+          via: "unresolved",
+          resolvable: false,
+        });
+        const before = serializeCache(cache);
+        writeFileSync(path, before);
+
+        const { fetch, calls } = fetchByUrl(() => {
+          throw new Error("resolvable:false is never re-fetched");
+        });
+        const result = await withFetch(fetch, () =>
+          enrichUnknowns(model(unknownNuget()), {
+            mode: "generate",
+            cachePath: path,
+            verbose: false,
+          }),
+        );
+        expect(calls).toEqual([]);
+        expect(registryClaim(result.model.packages[0])).toBeUndefined();
+        expect(readFileSync(path, "utf8")).toBe(before); // byte-identical
+        const recorded = getEntry(
+          readCache(path),
+          "pkg:nuget/Newtonsoft.Json@13.0.4",
+        );
+        expect(recorded !== undefined && "urlOnlyLicenseUrl" in recorded).toBe(
+          false,
+        );
       } finally {
         rmSync(dir, { recursive: true, force: true });
       }
