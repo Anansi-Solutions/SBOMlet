@@ -144,14 +144,16 @@ corrected value. Absent table: no clarifications.
 
 | Field | Type | Required | Meaning |
 |-------|------|----------|---------|
-| `package` | inline table `{ name, version? }` | yes | Which package. `name` is required; omit `version` to match all versions. |
+| `package` | inline table `{ name, version? }` | exactly one of `package`/`packages` | Which package. `name` is required; omit `version` to match all versions. |
+| `packages` | array of inline tables `{ name, version? }` | exactly one of `package`/`packages` | Several packages sharing this entry's `expression`/`expects`/`evidence_url`/`reason`. Must be non-empty. |
 | `expression` | string (SPDX) | yes | The corrected SPDX expression, parsed at load time. |
 | `expects` | string | no | A staleness precondition — the pre-override value you're disambiguating *from*. Mutually exclusive with `evidence_url`. |
-| `evidence_url` | string (URL) | no | A GitHub blob permalink pinned to a commit SHA — the document the correction is based on. Requires `package.version`; mutually exclusive with `expects`. |
+| `evidence_url` | string (URL) | no | A GitHub blob permalink pinned to a commit SHA — the document the correction is based on. Requires a version on every listed package; mutually exclusive with `expects`. |
 | `reason` | string (non-empty) | yes | Where the correction comes from. |
 
 There are three kinds, distinguished by which of `expects` and `evidence_url`
-is present.
+is present. Each kind works identically whether the entry names one package
+or a list.
 
 Without either, the entry is a misdetection correction: `expression`
 replaces the finding unconditionally. Use it to fix garbage or missing upstream
@@ -209,6 +211,39 @@ share its URL. The pinned page in this example draws a line between library
 packages and product distributions, and a package that wraps native code
 (a `runtime.native.*` package, say) can sit on the product side of that
 line — it deserves its own reading, not a copy of this entry.
+
+### Naming several packages: `packages`
+
+Use `packages` instead of `package` when several packages genuinely share the
+same disambiguation — one Microsoft redirector cited by forty related
+`System.*` packages, say. Write `packages = [{ name = "...", version =
+"..." }, ...]` in place of `package`; every other field (`expression`,
+`expects`, `evidence_url`, `reason`) stays exactly as documented above and
+applies identically to each listed package.
+
+Sharing the entry does not blur the decision: each listed pair is still its
+own version-pinned verdict, matched exactly as if it had its own `[[clarify]]`
+entry. A version you did not list — including a newer release of a package
+you DID list — is not covered and surfaces as unknown, same as any package
+with no clarify entry at all. With `evidence_url`, every listed package needs
+its own `version`, for the same reason the single-package form does: the
+decision is scoped to what a human verified for that one release.
+
+Listing a package here is you asserting the shared evidence and reasoning
+cover that specific package. Leave an outlier off the list — a package that
+wraps third-party native code and might not fall under the same reading, say —
+and give it its own entry instead of stretching this one to cover it.
+
+```toml
+[[clarify]]
+packages = [
+  { name = "System.IO", version = "4.3.0" },
+  { name = "System.Text", version = "4.3.1" },
+]
+expression = "MIT"
+evidence_url = "https://github.com/dotnet/core/blob/8c8e5836c343f854b65437dfedb13598d3aa3707/license-information.md"
+reason = "licenseUrl is the retired .NET Library EULA fwlink; the pinned page states library packages use the MIT license"
+```
 
 The tool also ships its own curated clarifications for commonly-ambiguous
 projects, applied without your re-authoring them. When a project-level

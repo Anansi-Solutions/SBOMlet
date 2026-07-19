@@ -171,6 +171,35 @@ disambiguation can't silently mask a relicense. Use the `expects` form when
 you're pinning down an imprecise family, and the plain form for fixing garbage
 metadata.
 
+### Several packages, one disambiguation
+
+Some ecosystems point a whole family of packages at the same evidence. Older
+`System.*` and `Microsoft.NETCore.*` packages all carry a `licenseUrl` that
+redirects to a single retired Microsoft page, so writing forty near-identical
+`[[clarify]]` entries would just be one decision copy-pasted forty times. Use
+`packages` in place of `package` to name the list once:
+
+```toml
+[[clarify]]
+packages = [
+  { name = "System.IO", version = "4.3.0" },
+  { name = "System.Text", version = "4.3.1" },
+  { name = "System.Xml", version = "4.3.2" },
+]
+expression = "MIT"
+evidence_url = "https://github.com/dotnet/core/blob/8c8e5836c343f854b65437dfedb13598d3aa3707/license-information.md"
+reason = "licenseUrl is the retired .NET Library EULA fwlink; the pinned page states library packages use the MIT license"
+```
+
+Every field besides `package`/`packages` stays the same and applies to each
+listed package individually: this is forty entries collapsed into one, not one
+group verdict. A version you didn't list — including a newer release of
+`System.IO` itself — isn't covered and surfaces as unknown, exactly as if it
+had no clarify entry at all. Leave a package off the list, or give it its own
+entry, when it doesn't genuinely share the reasoning — a package that wraps
+third-party native code, say, deserves its own reading rather than riding
+along on this one.
+
 The tool also ships its own curated clarifications for commonly-ambiguous
 projects, such as the Jupyter/IPython BSD stack. You get those without
 re-authoring them, and your own `[[clarify]]` wins on any conflict.

@@ -160,7 +160,7 @@ reason = "Dual-licensed Apache-2.0 AND LGPL-3.0-or-later; the LGPL obligations a
 # On conflict for the same package, the PROJECT level WINS (you can always
 # override a shipped default).
 #
-# Three flavours of [[clarify]]:
+# Three flavours of [[clarify]], plus the multi-package form below:
 #
 #   (a) Misdetection correction (no `expects`, no `evidence_url`): the finding
 #       is REPLACED by `expression` blindly (source "override", highest
@@ -181,14 +181,24 @@ reason = "Dual-licensed Apache-2.0 AND LGPL-3.0-or-later; the LGPL obligations a
 #       `evidence_url` must be a GitHub blob permalink pinned to a full
 #       40-character commit SHA (the form GitHub's own "y" key produces on a
 #       file page) -- a branch or tag name is rejected, since a mutable ref
-#       cannot serve as pinned evidence. REQUIRES `package.version` (the
-#       decision is scoped to one release); mutually exclusive with `expects`
-#       (a cited-evidence package has no separate registry claim for `expects`
-#       to compare against). The citation is inert: it never changes what the
-#       engine does, and the tool does not currently re-check it automatically.
+#       cannot serve as pinned evidence. REQUIRES a version on every listed
+#       package (the decision is scoped to one release); mutually exclusive
+#       with `expects` (a cited-evidence package has no separate registry
+#       claim for `expects` to compare against). The citation is inert: it
+#       never changes what the engine does, and the tool does not currently
+#       re-check it automatically.
 #
 # `expression` must be valid SPDX -- parsed at validation time, so a typo fails
 # fast instead of mid-evaluation.
+#
+# Any of the three flavours can name SEVERAL packages instead of one: replace
+# `package = { name, version? }` with `packages = [{ name, version? }, ...]`
+# (non-empty). Every field besides package/packages stays the same and
+# applies to EACH listed package independently -- a version you did not list
+# is not covered and surfaces as unknown, exactly like a package with no
+# clarify entry. Use this when one piece of evidence genuinely covers several
+# packages (see the commented example below); give an outlier its own entry
+# rather than stretching the list to cover it.
 # ---------------------------------------------------------------------------
 
 [[clarify]]
@@ -212,6 +222,22 @@ reason = "Upstream declares the non-SPDX value 'Public Domain'; jsonify's README
 # Evidence-pinned decision: cites the exact commit a human read, scoped to one
 # package version, and never combined with `expects`.
 # package = { name = "System.IO", version = "4.3.0" }
+# expression = "MIT"
+# evidence_url = "https://github.com/dotnet/core/blob/8c8e5836c343f854b65437dfedb13598d3aa3707/license-information.md"
+# reason = "licenseUrl is the retired .NET Library EULA fwlink; the pinned page states library packages use the MIT license"
+
+# [[clarify]]
+# Multi-package form: `packages` in place of `package` names SEVERAL packages
+# that genuinely share one decision -- here, several packages redirected by
+# the same retired Microsoft fwlink. Every other field applies to EACH listed
+# package independently: this is many entries collapsed into one, not a group
+# verdict. A version not listed (including a newer release of System.IO
+# itself) is not covered and surfaces as unknown, same as any package with no
+# clarify entry.
+# packages = [
+#   { name = "System.IO", version = "4.3.0" },
+#   { name = "System.Text", version = "4.3.1" },
+# ]
 # expression = "MIT"
 # evidence_url = "https://github.com/dotnet/core/blob/8c8e5836c343f854b65437dfedb13598d3aa3707/license-information.md"
 # reason = "licenseUrl is the retired .NET Library EULA fwlink; the pinned page states library packages use the MIT license"
