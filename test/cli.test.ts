@@ -33,8 +33,10 @@ import {
   dockerSbomModeConflict,
   exitCodeForVerify,
   optionsFrom,
+  USAGE,
 } from "../src/cli";
 import { exitCodeFor, runCheck } from "../src/gate/check";
+import * as suggestClarificationsMod from "../src/pipeline/suggestClarifications";
 import { classifyCoverage, coverageSkipReason } from "../src/pipeline/coverage";
 import { defaultNoticesPath, resolveFrom } from "../src/pipeline/paths";
 import { buildOutputs, runGenerate } from "../src/pipeline/pipeline";
@@ -2430,5 +2432,260 @@ describe("Taskfile split invariants (static, YAML-parsed — locks the public/de
     ]) {
       expect(tasks[retired], retired).toBeUndefined();
     }
+  });
+});
+
+describe("runSuggestClarifications (read-only, offline)", () => {
+  const FWLINK = "https://go.microsoft.com/fwlink/?LinkId=329770";
+
+  const NUGET_LOCK = JSON.stringify({
+    version: 2,
+    dependencies: {
+      "net8.0": {
+        "System.Buffers": {
+          type: "Direct",
+          requested: "[4.5.1, )",
+          resolved: "4.5.1",
+          contentHash: "sha512-aaa",
+        },
+        "System.Memory": {
+          type: "Direct",
+          requested: "[4.5.5, )",
+          resolved: "4.5.5",
+          contentHash: "sha512-bbb",
+        },
+        "runtime.native.System": {
+          type: "Direct",
+          requested: "[4.3.0, )",
+          resolved: "4.3.0",
+          contentHash: "sha512-ccc",
+        },
+        "Already.Clarified": {
+          type: "Direct",
+          requested: "[1.0.0, )",
+          resolved: "1.0.0",
+          contentHash: "sha512-ddd",
+        },
+        "Newtonsoft.Json": {
+          type: "Direct",
+          requested: "[13.0.4, )",
+          resolved: "13.0.4",
+          contentHash: "sha512-eee",
+        },
+      },
+    },
+  });
+
+  const CACHE_ENTRIES = {
+    "pkg:nuget/System.Buffers@4.5.1": {
+      license: null,
+      fetchedFrom: "nuget",
+      via: "unresolved",
+      resolvable: false,
+      urlOnlyLicenseUrl: FWLINK,
+    },
+    "pkg:nuget/System.Memory@4.5.5": {
+      license: null,
+      fetchedFrom: "nuget",
+      via: "unresolved",
+      resolvable: false,
+      urlOnlyLicenseUrl: FWLINK,
+    },
+    "pkg:nuget/runtime.native.System@4.3.0": {
+      license: null,
+      fetchedFrom: "nuget",
+      via: "unresolved",
+      resolvable: false,
+      urlOnlyLicenseUrl: FWLINK,
+    },
+    "pkg:nuget/Already.Clarified@1.0.0": {
+      license: null,
+      fetchedFrom: "nuget",
+      via: "unresolved",
+      resolvable: false,
+      urlOnlyLicenseUrl: FWLINK,
+    },
+    "pkg:nuget/Newtonsoft.Json@13.0.4": {
+      license: "MIT",
+      fetchedFrom: "nuget",
+      via: "license-expression",
+      resolvable: true,
+    },
+    // A purl that is NOT in the current lockfile — must never surface as a
+    // candidate ("lockfile-absent cache entries out").
+    "pkg:nuget/No.Longer.Referenced@9.9.9": {
+      license: null,
+      fetchedFrom: "nuget",
+      via: "unresolved",
+      resolvable: false,
+      urlOnlyLicenseUrl: FWLINK,
+    },
+    // A pre-FIX-B negative — no url-only field at all (the advisory count).
+    "pkg:nuget/Old.Fieldless@2.0.0": {
+      license: null,
+      fetchedFrom: "nuget",
+      via: "unresolved",
+      resolvable: false,
+    },
+  };
+
+  const CLARIFY_POLICY =
+    "[[clarify]]\n" +
+    'package = { name = "Already.Clarified", version = "1.0.0" }\n' +
+    'expression = "MIT"\n' +
+    'reason = "already resolved by a human"\n';
+
+  /** A fresh temp nuget-lockfile repo, with an optional pre-seeded cache/policy. */
+  function makeNugetTree(opts: {
+    cache?: Record<string, unknown>;
+    policy?: string;
+  }): { root: string } {
+    const root = mkdtempSync(join(tmpdir(), "licenses-suggest-clarify-"));
+    writeFileSync(join(root, "packages.lock.json"), NUGET_LOCK);
+    if (opts.cache !== undefined) {
+      mkdirSync(join(root, ".sbomlet.cache"), { recursive: true });
+      writeFileSync(
+        join(root, ".sbomlet.cache", "licenses.cache.json"),
+        JSON.stringify({ version: 1, entries: opts.cache }, null, 2),
+      );
+    }
+    if (opts.policy !== undefined) {
+      writeFileSync(join(root, ".sbomlet.policy.toml"), opts.policy);
+    }
+    return { root };
+  }
+
+  test("candidate join: url-carrying nuget negatives in the current lockfile become candidates; positives and non-current purls do not", async () => {
+    const { root } = makeNugetTree({ cache: CACHE_ENTRIES });
+    const result = await suggestClarificationsMod.runSuggestClarifications({
+      repoRoot: root,
+      baseDir: root,
+      verbose: false,
+    });
+    expect(result.stub).toContain("System.Buffers");
+    expect(result.stub).toContain("System.Memory");
+    expect(result.stub).not.toContain("Newtonsoft.Json"); // positive — excluded
+    expect(result.stub).not.toContain("No.Longer.Referenced"); // lockfile-absent — excluded
+    // No policy is loaded on this run, so Already.Clarified has no clarify
+    // decision yet and IS a legitimate candidate here (see the next test).
+    expect(result.stub).toContain("Already.Clarified");
+  });
+
+  test("exclusion: a package already covered by an existing [[clarify]] is never suggested", async () => {
+    const { root } = makeNugetTree({
+      cache: CACHE_ENTRIES,
+      policy: CLARIFY_POLICY,
+    });
+    const result = await suggestClarificationsMod.runSuggestClarifications({
+      repoRoot: root,
+      baseDir: root,
+      policyPath: join(root, ".sbomlet.policy.toml"),
+      verbose: false,
+    });
+    expect(result.stub).not.toContain("Already.Clarified");
+    expect(result.stub).toContain("System.Buffers");
+  });
+
+  test("runtime.* packages are pre-sorted into their own review-separately entry, never blanket-stamped with the library verdict", async () => {
+    const { root } = makeNugetTree({ cache: CACHE_ENTRIES });
+    const result = await suggestClarificationsMod.runSuggestClarifications({
+      repoRoot: root,
+      baseDir: root,
+      verbose: false,
+    });
+    const entries = result.stub.split("\n\n");
+    const libraryEntry = entries.find((e) => e.includes("System.Buffers"))!;
+    const nativeEntry = entries.find((e) =>
+      e.includes("runtime.native.System"),
+    )!;
+    expect(libraryEntry).not.toContain("runtime.native.System");
+    expect(nativeEntry).toContain("wraps native code — review separately");
+  });
+
+  test("the fieldless-negative advisory count reflects committed nuget negatives predating the recorded field", async () => {
+    const { root } = makeNugetTree({ cache: CACHE_ENTRIES });
+    const result = await suggestClarificationsMod.runSuggestClarifications({
+      repoRoot: root,
+      baseDir: root,
+      verbose: false,
+    });
+    expect(result.fieldlessNegativeCount).toBe(1); // Old.Fieldless only
+  });
+
+  test("no candidates and no policy → empty stub, zero counts, no throw", async () => {
+    const { root } = makeNugetTree({
+      cache: {
+        "pkg:nuget/Newtonsoft.Json@13.0.4": {
+          license: "MIT",
+          fetchedFrom: "nuget",
+          via: "license-expression",
+          resolvable: true,
+        },
+      },
+    });
+    const result = await suggestClarificationsMod.runSuggestClarifications({
+      repoRoot: root,
+      baseDir: root,
+      verbose: false,
+    });
+    expect(result.stub).toBe("");
+    expect(result.candidateCount).toBe(0);
+    expect(result.fieldlessNegativeCount).toBe(0);
+  });
+
+  test("an absent committed cache (never generated) → zero candidates, never throws", async () => {
+    const { root } = makeNugetTree({});
+    const result = await suggestClarificationsMod.runSuggestClarifications({
+      repoRoot: root,
+      baseDir: root,
+      verbose: false,
+    });
+    expect(result.stub).toBe("");
+  });
+
+  test("OFFLINE: the run never fetches — a global fetch stub that throws is never invoked", async () => {
+    const { root } = makeNugetTree({ cache: CACHE_ENTRIES });
+    const original = globalThis.fetch;
+    globalThis.fetch = (async (): Promise<Response> => {
+      throw new Error("suggest-clarifications must never fetch");
+    }) as unknown as typeof fetch;
+    try {
+      const result = await suggestClarificationsMod.runSuggestClarifications({
+        repoRoot: root,
+        baseDir: root,
+        verbose: false,
+      });
+      expect(result.candidateCount).toBeGreaterThan(0);
+    } finally {
+      globalThis.fetch = original;
+    }
+  });
+
+  test("determinism: two runs over the same tree produce byte-identical output", async () => {
+    const { root } = makeNugetTree({ cache: CACHE_ENTRIES });
+    const first = await suggestClarificationsMod.runSuggestClarifications({
+      repoRoot: root,
+      baseDir: root,
+      verbose: false,
+    });
+    const second = await suggestClarificationsMod.runSuggestClarifications({
+      repoRoot: root,
+      baseDir: root,
+      verbose: false,
+    });
+    expect(second.stub).toBe(first.stub);
+  });
+});
+
+describe("suggest-clarifications CLI wiring", () => {
+  test("USAGE documents the subcommand: read-only/offline framing, stdout/stderr channels, exit codes", () => {
+    expect(USAGE).toContain("suggest-clarifications");
+    expect(USAGE).toContain("READ-ONLY, OFFLINE");
+  });
+
+  test("suggest-clarifications is listed in the top usage line alongside the other subcommands", () => {
+    expect(USAGE).toContain(
+      "usage: sbomlet <generate|check|suggest-clarifications|verify-cache|generate-docker-sbom>",
+    );
   });
 });

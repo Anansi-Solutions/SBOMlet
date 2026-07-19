@@ -6,9 +6,14 @@ import parseSpdxId from "spdx-expression-parse";
 
 import {
   annotateFindings,
+  findClarifyMatch,
   normalizeRaw,
   type BuiltinOverrideInput,
 } from "../src/normalize/normalize";
+import {
+  renderClarifyStubs,
+  type ClarifyStubCandidate,
+} from "../src/policy/clarifyStub";
 import { evaluate, unusedRuleIds } from "../src/policy/evaluate";
 import { unusedRuleReason } from "../src/pipeline/summary";
 import { BUILTIN_DENY_RULES } from "../src/policy/builtinDenylist";
@@ -3957,5 +3962,204 @@ describe("parsePolicy — [cache] table", () => {
 
   test("an empty dir is rejected", () => {
     expect(expectPolicyError('[cache]\ndir = ""\n').message).toContain("cache");
+  });
+});
+
+describe("renderClarifyStubs (clarifyStub.ts)", () => {
+  const FWLINK = "https://go.microsoft.com/fwlink/?LinkId=329770";
+  const PERMALINK =
+    "https://github.com/dotnet/core/blob/abcdef0123456789abcdef0123456789abcdef01/release-notes/license-information.md";
+
+  test("empty input renders an empty string", () => {
+    expect(renderClarifyStubs([])).toBe("");
+  });
+
+  test("groups by url, sorts groups by url, sorts packages by name then version — deterministic across input order", () => {
+    const candidates: ClarifyStubCandidate[] = [
+      { name: "System.Memory", version: "4.5.5", url: FWLINK },
+      { name: "System.Buffers", version: "4.5.2", url: FWLINK },
+      { name: "System.Buffers", version: "4.5.1", url: FWLINK },
+      { name: "Foo.Bar", version: "1.0.0", url: "https://example.com/a" },
+    ];
+    const shuffled = [...candidates].reverse();
+    const a = renderClarifyStubs(candidates);
+    const b = renderClarifyStubs(shuffled);
+    expect(a).toBe(b);
+    // "https://example.com/a" sorts before the fwlink url (compareCodeUnits).
+    expect(a.indexOf("Foo.Bar")).toBeLessThan(a.indexOf("System.Buffers"));
+    // Within the fwlink group, System.Buffers@4.5.1 precedes @4.5.2 precedes System.Memory.
+    expect(a.indexOf('"4.5.1"')).toBeLessThan(a.indexOf('"4.5.2"'));
+    expect(a.indexOf('"4.5.2"')).toBeLessThan(a.indexOf("System.Memory"));
+  });
+
+  test("LF-only, single trailing newline, no CRLF anywhere", () => {
+    const out = renderClarifyStubs([
+      { name: "A", version: "1.0.0", url: FWLINK },
+    ]);
+    expect(out).not.toContain("\r");
+    expect(out.endsWith("\n")).toBe(true);
+    expect(out.endsWith("\n\n")).toBe(false);
+  });
+
+  test("every emitted line is a comment — pasting into a policy is INERT (parsePolicy result unchanged)", () => {
+    const stub = renderClarifyStubs([
+      { name: "System.Buffers", version: "4.5.1", url: FWLINK },
+      { name: "runtime.native.System", version: "4.3.0", url: FWLINK },
+      { name: "Foo.Bar", version: "1.0.0", url: PERMALINK },
+    ]);
+    const base = '[unknown]\nhandling = "warn"\n';
+    expect(
+      stub.split("\n").every((line) => line === "" || line.startsWith("#")),
+    ).toBe(true);
+    const before = parsePolicy(base);
+    const after = parsePolicy(`${base}\n${stub}`);
+    expect(after).toEqual(before);
+  });
+
+  test("runtime.* packages split into a SEPARATE 'review separately' entry, library entry first, never blanket-stamped", () => {
+    const stub = renderClarifyStubs([
+      { name: "System.Buffers", version: "4.5.1", url: FWLINK },
+      { name: "runtime.native.System", version: "4.3.0", url: FWLINK },
+    ]);
+    const entries = stub.split("\n\n");
+    expect(entries).toHaveLength(2);
+    expect(entries[0]).not.toContain("runtime.native.System");
+    expect(entries[0]).toContain("System.Buffers");
+    expect(entries[1]).toContain("wraps native code — review separately");
+    expect(entries[1]).toContain("runtime.native.System");
+    expect(entries[1]).not.toContain("System.Buffers");
+  });
+
+  test("a url group with ONLY runtime.* packages emits ONLY the native entry — no empty library block", () => {
+    const stub = renderClarifyStubs([
+      { name: "runtime.native.System", version: "4.3.0", url: FWLINK },
+    ]);
+    expect(stub.split("\n\n")).toHaveLength(1);
+    expect(stub).toContain("wraps native code");
+  });
+
+  test("uncommenting header+packages WITHOUT filling expression/reason fails parsePolicy loudly, naming the entry", () => {
+    const stub = renderClarifyStubs([
+      { name: "System.Buffers", version: "4.5.1", url: FWLINK },
+    ]);
+    // Strip the "# " prefix from the [[clarify]]/packages/closing-bracket lines only.
+    const headerAndPackages = stub
+      .split("\n")
+      .slice(0, 4)
+      .map((line) => line.replace(/^# /, ""))
+      .join("\n");
+    let thrown: unknown;
+    try {
+      parsePolicy(headerAndPackages);
+    } catch (error) {
+      thrown = error;
+    }
+    expect(thrown).toBeInstanceOf(PolicyError);
+    expect((thrown as PolicyError).message).toContain("clarify[0]");
+    expect((thrown as PolicyError).message).toContain(
+      'missing required key "expression"',
+    );
+  });
+
+  test("ROUND-TRIP: uncomment + fill expression/reason → parsePolicy accepts and the rule matches exactly the listed packages", () => {
+    const stub = renderClarifyStubs([
+      { name: "System.Buffers", version: "4.5.1", url: FWLINK },
+      { name: "System.Memory", version: "4.5.5", url: FWLINK },
+    ]);
+    // Activate every line up to (and including) "reason = ..."; leave the
+    // evidence_url lines commented (an optional field — most stubs never
+    // pre-fill it, so this is the common real-world activation).
+    const lines = stub.split("\n");
+    const reasonIndex = lines.findIndex((l) => l.includes('reason = "'));
+    const activated = lines
+      .slice(0, reasonIndex + 1)
+      .map((line) => line.replace(/^# /, "").replace(/^#$/, ""))
+      .join("\n")
+      .replace('expression = "FILL-ME-IN"', 'expression = "MIT"')
+      .replace('reason = "FILL-ME-IN"', 'reason = "test reason"');
+    const policy = parsePolicy(activated);
+    expect(policy.clarify).toHaveLength(1);
+    expect(policy.clarify[0]?.expression).toBe("MIT");
+    expect(findClarifyMatch(policy.clarify, "System.Buffers", "4.5.1")).toEqual(
+      { ruleIndex: 0, memberIndex: 0 },
+    );
+    expect(findClarifyMatch(policy.clarify, "System.Memory", "4.5.5")).toEqual({
+      ruleIndex: 0,
+      memberIndex: 1,
+    });
+    expect(
+      findClarifyMatch(policy.clarify, "Some.Other.Pkg", "1.0.0"),
+    ).toBeUndefined();
+  });
+
+  test("every URL in the output appears VERBATIM in the input — never fabricated", () => {
+    const stub = renderClarifyStubs([
+      { name: "System.Buffers", version: "4.5.1", url: FWLINK },
+      { name: "Foo.Bar", version: "1.0.0", url: PERMALINK },
+    ]);
+    expect(stub).toContain(FWLINK);
+    expect(stub).toContain(PERMALINK);
+    // Nothing beyond the two verbatim URLs and the fixed template text is a URL.
+    const urlMatches = stub.match(/https?:\/\/\S+/g) ?? [];
+    for (const match of urlMatches) {
+      const trimmed = match.replace(/[,"]+$/, "");
+      expect([FWLINK, PERMALINK]).toContain(trimmed);
+    }
+  });
+
+  test("evidence_url is pre-filled ONLY when the observed url is an immutable GitHub blob permalink", () => {
+    const withPermalink = renderClarifyStubs([
+      { name: "Foo.Bar", version: "1.0.0", url: PERMALINK },
+    ]);
+    expect(withPermalink).toContain(`# evidence_url = "${PERMALINK}"`);
+    expect(withPermalink).not.toContain('evidence_url = "FILL-ME-IN"');
+
+    const withFwlink = renderClarifyStubs([
+      { name: "System.Buffers", version: "4.5.1", url: FWLINK },
+    ]);
+    expect(withFwlink).toContain('# evidence_url = "FILL-ME-IN"');
+    expect(withFwlink).not.toContain(`evidence_url = "${FWLINK}"`);
+  });
+
+  test("a raw.githubusercontent.com sha-pinned url does NOT pass the permalink check — stays a placeholder", () => {
+    const rawUrl =
+      "https://raw.githubusercontent.com/dotnet/core/abcdef0123456789abcdef0123456789abcdef01/LICENSE";
+    const stub = renderClarifyStubs([
+      { name: "Foo.Bar", version: "1.0.0", url: rawUrl },
+    ]);
+    expect(stub).toContain('# evidence_url = "FILL-ME-IN"');
+  });
+
+  test("quotes and backslashes in a name are escaped as TOML basic strings — round-trips through parsePolicy", () => {
+    const stub = renderClarifyStubs([
+      { name: 'Weird"Name\\Pkg', version: "1.0.0", url: FWLINK },
+    ]);
+    expect(stub).toContain('{ name = "Weird\\"Name\\\\Pkg"');
+    const lines = stub.split("\n");
+    const reasonIndex = lines.findIndex((l) => l.includes('reason = "'));
+    const activated = lines
+      .slice(0, reasonIndex + 1)
+      .map((line) => line.replace(/^# /, ""))
+      .join("\n")
+      .replace('expression = "FILL-ME-IN"', 'expression = "MIT"')
+      .replace('reason = "FILL-ME-IN"', 'reason = "x"');
+    const policy = parsePolicy(activated);
+    expect(policy.clarify[0]?.packages[0]?.name).toBe('Weird"Name\\Pkg');
+  });
+
+  test("a control character in name/version/url throws loudly and emits nothing", () => {
+    expect(() =>
+      renderClarifyStubs([
+        { name: "Evil\nName", version: "1.0.0", url: FWLINK },
+      ]),
+    ).toThrow(/control character/);
+    expect(() =>
+      renderClarifyStubs([{ name: "Evil", version: "1.0.0\r", url: FWLINK }]),
+    ).toThrow(/control character/);
+    expect(() =>
+      renderClarifyStubs([
+        { name: "Evil", version: "1.0.0", url: `${FWLINK}\x1b[2K` },
+      ]),
+    ).toThrow(/control character/);
   });
 });

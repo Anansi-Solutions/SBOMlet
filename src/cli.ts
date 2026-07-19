@@ -47,11 +47,15 @@ import {
 import { exitCodeFor, runCheck, type CheckResult } from "./gate/check";
 import { defaultNoticesPath, resolveFrom } from "./pipeline/paths";
 import { runGenerate, type GenerateOptions } from "./pipeline/pipeline";
+import {
+  runSuggestClarifications,
+  type SuggestClarificationsResult,
+} from "./pipeline/suggestClarifications";
 import { runVerifyCache } from "./pipeline/verifyCache";
 import type { VerifyResult } from "./enrich/verify";
 
-const USAGE =
-  "usage: sbomlet <generate|check|verify-cache|generate-docker-sbom> [options]\n" +
+export const USAGE =
+  "usage: sbomlet <generate|check|suggest-clarifications|verify-cache|generate-docker-sbom> [options]\n" +
   "  generate [--repo-root <path> | --target <path>] [--exclude <glob>]... " +
   "[--policy <path>] [--output <path>] [--notices <path>] " +
   "[--cyclonedx <path>] [--dump-model <path>] [--base-dir <path>] " +
@@ -66,6 +70,20 @@ const USAGE =
   "memory and byte-compares every configured output; writes nothing\n" +
   "           exit codes: 0 clean, 1 policy violation (beats stale), " +
   "2 stale/missing output, 3+ tool/config error (warns print, never gate)\n" +
+  "  suggest-clarifications [--repo-root <path> | --target <path>] " +
+  "[--exclude <glob>]... [--policy <path>] [--base-dir <path>] " +
+  "[--enrichment-cache <path>] [--verbose]\n" +
+  "           READ-ONLY, OFFLINE — reads the committed enrichment cache and " +
+  "prints ready-to-paste, fully commented [[clarify]] stubs for url-only " +
+  "honest-unknown nuget packages: one stub per shared licenseUrl, split into " +
+  "likely-library vs wraps-native-code (runtime.* packages, review " +
+  "separately). Every stub is inert until a human uncomments it and fills in " +
+  "expression + reason — the tool never decides a license or fetches or " +
+  "writes anything. Packages already covered by a [[clarify]] entry are " +
+  "excluded, so repeated runs converge to empty as onboarding completes.\n" +
+  "           stdout: the stub set (empty when there is nothing to suggest); " +
+  "stderr: messages. exit codes: 0 always (nothing to suggest prints on " +
+  "stderr), 3 tool/config error\n" +
   "  verify-cache [--policy <path>] [--enrichment-cache <path>] " +
   "[--base-dir <path>] [--verbose]\n" +
   "           ONLINE integrity audit — re-resolves every committed " +
@@ -421,6 +439,40 @@ async function runCheckCommand(values: CliValues): Promise<never> {
 }
 
 /**
+ * Run `suggest-clarifications`. Read-only and offline: optionsFrom gives it
+ * the SAME target/repo-root/policy resolution and default-policy discovery
+ * as generate/check, so the assembled package set can never drift from what
+ * those subcommands would scan. The stub set is the paste channel (stdout);
+ * every message, including the delete-and-regenerate advisory, is stderr.
+ * Exit 0 in every non-error case, including "nothing to suggest" — this
+ * subcommand never gates a build, it only informs onboarding.
+ */
+async function runSuggestClarificationsCommand(
+  values: CliValues,
+): Promise<never> {
+  let result: SuggestClarificationsResult;
+  try {
+    result = await runSuggestClarifications(optionsFrom(values));
+  } catch (error) {
+    fail(`${error instanceof Error ? error.message : String(error)}\n`);
+  }
+  if (result.fieldlessNegativeCount > 0) {
+    const noun =
+      result.fieldlessNegativeCount === 1 ? "entry is" : "entries are";
+    process.stderr.write(
+      `suggest-clarifications: ${result.fieldlessNegativeCount} committed nuget negative ${noun} missing the url-only field (written before this command existed) — ` +
+        `delete them from the enrichment cache and run task generate to refresh before re-running\n`,
+    );
+  }
+  if (result.stub === "") {
+    process.stderr.write("suggest-clarifications: nothing to suggest\n");
+    process.exit(0);
+  }
+  process.stdout.write(result.stub);
+  process.exit(0);
+}
+
+/**
  * Run `verify-cache`, the online integrity audit. Like check, the gate verdict
  * (exit 1) comes ONLY from the structured result; a network or malformed-cache
  * failure stays on the 3+ throw path, never a false "all match".
@@ -484,6 +536,9 @@ async function main(argv: string[]): Promise<void> {
       return;
     case "check":
       await runCheckCommand(values);
+      return;
+    case "suggest-clarifications":
+      await runSuggestClarificationsCommand(values);
       return;
     case "verify-cache":
       await runVerifyCacheCommand(values);
