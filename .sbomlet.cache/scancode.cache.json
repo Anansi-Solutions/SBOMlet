@@ -16,6 +16,670 @@
       "scannedAt": "2026-07-09T14:20:17.266Z",
       "via": "scancode-toolkit@32.5.0/license-file"
     },
+    "pkg:npm/%40cspell/cspell-bundled-dicts@10.0.1": {
+      "copyrights": [
+        "Copyright (c) 2017 Jason Dent"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:25:54.209Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/%40cspell/cspell-performance-monitor@10.0.1": {
+      "copyrights": [
+        "Copyright (c) 2026 Jason Dent"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:25:59.980Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/%40cspell/cspell-pipe@10.0.1": {
+      "copyrights": [
+        "Copyright (c) 2017 Jason Dent"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:26:07.437Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/%40cspell/cspell-resolver@10.0.1": {
+      "copyrights": [
+        "Copyright (c) 2023 Jason Dent"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:26:13.244Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/%40cspell/cspell-service-bus@10.0.1": {
+      "copyrights": [
+        "Copyright (c) 2017 Jason Dent"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:26:19.555Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/%40cspell/cspell-types@10.0.1": {
+      "copyrights": [
+        "Copyright (c) 2017 Jason Dent"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:26:31.216Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/%40cspell/dict-ada@4.1.1": {
+      "copyrights": [
+        "Copyright (c) 2017-2025 Street Side Software <support@streetsidesoftware.nl>"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:26:37.186Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/%40cspell/dict-al@1.1.1": {
+      "copyrights": [
+        "Copyright (c) 2017-2022 Street Side Software <support@streetsidesoftware.nl>"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:26:44.090Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/%40cspell/dict-aws@4.0.17": {
+      "copyrights": [
+        "Copyright (c) 2017-2025 Street Side Software <support@streetsidesoftware.nl>",
+        "Copyright (c) 2019 Daniel Schroeder <deemes79@googlemail.com>"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:26:51.160Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/%40cspell/dict-bash@4.2.3": {
+      "copyrights": [
+        "Copyright (c) 2017-2025 Street Side Software <support@streetsidesoftware.nl>"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:26:57.108Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/%40cspell/dict-companies@3.2.12": {
+      "copyrights": [
+        "Copyright (c) 2017-2025 Street Side Software <support@streetsidesoftware.nl>"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:27:06.253Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/%40cspell/dict-cpp@7.0.2": {
+      "copyrights": [
+        "Copyright (c) 2017-2025 Street Side Software <support@streetsidesoftware.nl>"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:27:12.248Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/%40cspell/dict-cryptocurrencies@5.0.5": {
+      "copyrights": [
+        "Copyright (c) 2020 Shane Fontaine <shane6fontaine@gmail.com>",
+        "Copyright (c) 2023 Street Side Software"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:27:18.828Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/%40cspell/dict-csharp@4.0.8": {
+      "copyrights": [
+        "Copyright (c) 2017-2025 Street Side Software <support@streetsidesoftware.nl>"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:27:24.776Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/%40cspell/dict-css@4.1.2": {
+      "copyrights": [
+        "Copyright (c) 2017-2025 Street Side Software <support@streetsidesoftware.nl>"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:27:32.414Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/%40cspell/dict-dart@2.3.2": {
+      "copyrights": [
+        "Copyright (c) 2017-2025 Street Side Software <support@streetsidesoftware.nl>"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:27:38.353Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/%40cspell/dict-data-science@2.0.16": {
+      "copyrights": [
+        "Copyright (c) 2017-2022 Street Side Software <support@streetsidesoftware.nl>"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:27:44.449Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/%40cspell/dict-django@4.1.6": {
+      "copyrights": [
+        "Copyright (c) 2017-2020 Renaud Canarduck <renaud@canarduck.com>",
+        "Copyright (c) 2017-2025 Street Side Software <support@streetsidesoftware.nl>"
+      ],
+      "license": "WTFPL",
+      "scannedAt": "2026-08-01T05:27:50.441Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/%40cspell/dict-docker@1.1.17": {
+      "copyrights": [
+        "Copyright (c) 2022-2025 Street Side Software <support@streetsidesoftware.nl>"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:27:56.370Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/%40cspell/dict-dotnet@5.0.13": {
+      "copyrights": [
+        "Copyright (c) 2017-2025 Street Side Software <support@streetsidesoftware.nl>"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:28:04.831Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/%40cspell/dict-elixir@4.0.8": {
+      "copyrights": [
+        "Copyright (c) 2017-2025 Street Side Software <support@streetsidesoftware.nl>",
+        "Copyright (c) 2018 Todoroki (Ryo Konishi) <todoroki.auone@gmail.com>"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:28:10.958Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/%40cspell/dict-en-au@1.1.23": {
+      "copyrights": [
+        "Copyright (c) 2007 Street Side Software",
+        "Copyright (c) J Ross Beresford 1993-1999",
+        "Copyright 1993, Geoff Kuenning, Granada Hills, CA",
+        "Copyright 1997 by Princeton University",
+        "Copyright 2000-2016 by Kevin Atkinson",
+        "Copyright 2000-2018 by Kevin Atkinson",
+        "Copyright 2016 by Benjamin Titze",
+        "copyright of SCOWL."
+      ],
+      "license": "LGPL-3.0-only",
+      "scannedAt": "2026-08-01T05:28:28.357Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/%40cspell/dict-en-ca@1.0.61": {
+      "copyrights": [
+        "Copyright (c) 2007 Street Side Software",
+        "Copyright (c) J Ross Beresford 1993-1999",
+        "Copyright 1993, Geoff Kuenning, Granada Hills, CA",
+        "Copyright 1997 by Princeton University",
+        "Copyright 2000-2016 by Kevin Atkinson",
+        "Copyright 2000-2018 by Kevin Atkinson",
+        "Copyright 2016 by Benjamin Titze",
+        "copyright of SCOWL."
+      ],
+      "license": "LGPL-3.0-only",
+      "scannedAt": "2026-08-01T05:28:45.842Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/%40cspell/dict-en-common-misspellings@2.1.13": {
+      "license": "CC-BY-SA-4.0 AND MIT",
+      "scannedAt": "2026-08-01T05:29:43.779Z",
+      "via": "scancode-toolkit@32.5.0/manifest"
+    },
+    "pkg:npm/%40cspell/dict-en-gb-ise@1.0.30": {
+      "copyrights": [
+        "Copyright (c) 2017-2025 Street Side Software <support@streetsidesoftware.nl>"
+      ],
+      "license": "LGPL-3.0-only",
+      "scannedAt": "2026-08-01T05:29:56.180Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/%40cspell/dict-en-gb-legacy@1.0.30": {
+      "copyrights": [
+        "Copyright (c) 2017-2025 Street Side Software <support@streetsidesoftware.nl>"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:30:02.137Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/%40cspell/dict-en-gb-mit@3.1.25": {
+      "copyrights": [
+        "Copyright (c) 2017-2025 Street Side Software <support@streetsidesoftware.nl>"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:30:08.244Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/%40cspell/dict-en-gb@5.0.30": {
+      "copyrights": [
+        "Copyright (c) 2017-2025 Street Side Software <support@streetsidesoftware.nl>"
+      ],
+      "license": "LGPL-3.0-only",
+      "scannedAt": "2026-08-01T05:29:49.917Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/%40cspell/dict-en_us@4.4.36": {
+      "copyrights": [
+        "Copyright (c) 2017-2025 Street Side Software <support@streetsidesoftware.nl>",
+        "Copyright (c) J Ross Beresford 1993-1999",
+        "Copyright 1993, Geoff Kuenning, Granada Hills, CA",
+        "Copyright 1997 by Princeton University",
+        "Copyright 2000-2016 by Kevin Atkinson",
+        "Copyright 2000-2018 by Kevin Atkinson",
+        "Copyright 2016 by Benjamin Titze",
+        "copyright of SCOWL."
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:30:14.989Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/%40cspell/dict-filetypes@3.0.18": {
+      "copyrights": [
+        "Copyright (c) 2017-2025 Street Side Software <support@streetsidesoftware.nl>"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:30:20.887Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/%40cspell/dict-flutter@1.1.1": {
+      "copyrights": [
+        "Copyright (c) 2017-2025 Street Side Software <support@streetsidesoftware.nl>"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:30:26.703Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/%40cspell/dict-fonts@4.0.6": {
+      "copyrights": [
+        "Copyright (c) 2017-2025 Street Side Software <support@streetsidesoftware.nl>"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:30:34.357Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/%40cspell/dict-fsharp@1.1.1": {
+      "copyrights": [
+        "Copyright (c) 2017-2022 Street Side Software <support@streetsidesoftware.nl>"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:30:40.591Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/%40cspell/dict-fullstack@3.2.9": {
+      "copyrights": [
+        "Copyright (c) 2017-2025 Street Side Software <support@streetsidesoftware.nl>"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:30:46.943Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/%40cspell/dict-gaming-terms@1.1.2": {
+      "copyrights": [
+        "Copyright (c) 2017-2022 Street Side Software <support@streetsidesoftware.nl>"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:30:52.911Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/%40cspell/dict-git@3.1.0": {
+      "copyrights": [
+        "Copyright (c) 2017-2025 Street Side Software <support@streetsidesoftware.nl>"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:30:59.046Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/%40cspell/dict-golang@6.0.26": {
+      "copyrights": [
+        "Copyright (c) 2017-2025 Street Side Software <support@streetsidesoftware.nl>"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:31:12.550Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/%40cspell/dict-google@1.0.9": {
+      "copyrights": [
+        "Copyright (c) 2023 Street Side Software <support@streetsidesoftware.nl>"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:31:18.954Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/%40cspell/dict-haskell@4.0.6": {
+      "copyrights": [
+        "Copyright (c) 2017-2025 Street Side Software <support@streetsidesoftware.nl>"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:31:25.027Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/%40cspell/dict-html-symbol-entities@4.0.5": {
+      "copyrights": [
+        "Copyright (c) 2017-2025 Street Side Software <support@streetsidesoftware.nl>"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:31:36.831Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/%40cspell/dict-html@4.0.15": {
+      "copyrights": [
+        "Copyright (c) 2017-2025 Street Side Software <support@streetsidesoftware.nl>"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:31:30.970Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/%40cspell/dict-java@5.0.12": {
+      "copyrights": [
+        "Copyright (c) 2017-2025 Street Side Software <support@streetsidesoftware.nl>"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:31:51.173Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/%40cspell/dict-julia@1.1.1": {
+      "copyrights": [
+        "Copyright (c) 2023 Street Side Software <support@streetsidesoftware.nl>"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:31:58.116Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/%40cspell/dict-k8s@1.0.13": {
+      "copyrights": [
+        "Copyright (c) 2017-2022 Street Side Software <info@streetsidesoftware.nl>"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:32:05.120Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/%40cspell/dict-kotlin@1.1.1": {
+      "copyrights": [
+        "Copyright (c) 2017-2023 Street Side Software <support@streetsidesoftware.nl>"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:32:11.043Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/%40cspell/dict-latex@5.1.0": {
+      "copyrights": [
+        "Copyright (c) 2017-2025 Street Side Software <support@streetsidesoftware.nl>"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:32:17.733Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/%40cspell/dict-lorem-ipsum@4.0.5": {
+      "copyrights": [
+        "Copyright (c) 2017-2025 Street Side Software <support@streetsidesoftware.nl>"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:32:23.865Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/%40cspell/dict-lua@4.0.8": {
+      "copyrights": [
+        "Copyright (c) 2017-2025 Street Side Software <support@streetsidesoftware.nl>"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:32:30.220Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/%40cspell/dict-makefile@1.0.5": {
+      "copyrights": [
+        "Copyright (c) 2023 Street Side Software <support@streetsidesoftware.nl>"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:32:36.647Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/%40cspell/dict-markdown@2.0.17": {
+      "copyrights": [
+        "Copyright (c) 2017-2022 Street Side Software <support@streetsidesoftware.nl>"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:32:42.656Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/%40cspell/dict-mime-types@1.0.1": {
+      "copyrights": [
+        "Copyright (c) 2017-2026 Street Side Software <support@streetsidesoftware.nl>"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:32:48.605Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/%40cspell/dict-mnemonics@3.0.6": {
+      "copyrights": [
+        "Copyright (c) 2017-2025 Street Side Software <support@streetsidesoftware.nl>"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:32:54.626Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/%40cspell/dict-monkeyc@1.0.12": {
+      "copyrights": [
+        "Copyright (c) 2017-2025 Street Side Software <support@streetsidesoftware.nl>"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:33:00.491Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/%40cspell/dict-node@5.0.9": {
+      "copyrights": [
+        "Copyright (c) 2017-2025 Street Side Software <support@streetsidesoftware.nl>"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:33:11.790Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/%40cspell/dict-npm@5.2.43": {
+      "copyrights": [
+        "Copyright (c) 2017-2025 Street Side Software <support@streetsidesoftware.nl>"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:33:21.393Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/%40cspell/dict-people-names@1.1.16": {
+      "copyrights": [
+        "Copyright (c) 2023 Street Side Software <support@streetsidesoftware.nl>"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:34:06.474Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/%40cspell/dict-php@4.1.1": {
+      "copyrights": [
+        "Copyright (c) 2017-2025 Street Side Software <support@streetsidesoftware.nl>",
+        "Copyrighted"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:34:16.997Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/%40cspell/dict-powershell@5.0.15": {
+      "copyrights": [
+        "Copyright (c) 2017-2025 Street Side Software <support@streetsidesoftware.nl>"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:34:23.620Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/%40cspell/dict-public-licenses@2.0.16": {
+      "copyrights": [
+        "Copyright (c) 2017-2025 Street Side Software <support@streetsidesoftware.nl>"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:34:29.585Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/%40cspell/dict-python@4.2.29": {
+      "copyrights": [
+        "Copyright (c) 2017-2025 Street Side Software <support@streetsidesoftware.nl>"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:34:47.347Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/%40cspell/dict-r@2.1.1": {
+      "copyrights": [
+        "Copyright (c) 2017-2025 Street Side Software <support@streetsidesoftware.nl> , Matthew Toohey <contact@mtoohey.com>"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:34:53.191Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/%40cspell/dict-ruby@5.1.1": {
+      "copyrights": [
+        "Copyright (c) 2017-2025 Street Side Software <support@streetsidesoftware.nl>"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:35:00.411Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/%40cspell/dict-rust@4.1.2": {
+      "copyrights": [
+        "Copyright (c) 2017-2020 Alexander Andreev <andreevlex.as@gmail.com>",
+        "Copyright (c) 2017-2025 Street Side Software <support@streetsidesoftware.nl>"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:35:06.373Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/%40cspell/dict-scala@5.0.9": {
+      "copyrights": [
+        "Copyright (c) 2017-2025 Street Side Software <support@streetsidesoftware.nl>"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:35:13.729Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/%40cspell/dict-scientific-terms-us@3.1.0": {
+      "copyrights": [
+        "Copyright (c) 2017-2025 Street Side Software <support@streetsidesoftware.nl>"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:35:19.764Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/%40cspell/dict-shell@1.2.0": {
+      "copyrights": [
+        "Copyright (c) 2017-2025 Street Side Software <support@streetsidesoftware.nl>"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:35:26.393Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/%40cspell/dict-software-terms@5.2.4": {
+      "copyrights": [
+        "Copyright (c) 2017-2025 Street Side Software <support@streetsidesoftware.nl>"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:35:33.709Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/%40cspell/dict-sql@2.2.1": {
+      "copyrights": [
+        "Copyright (c) 2017-2025 Street Side Software <support@streetsidesoftware.nl>"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:35:39.565Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/%40cspell/dict-svelte@1.0.7": {
+      "copyrights": [
+        "Copyright (c) 2017-2022 Street Side Software <support@streetsidesoftware.nl>"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:35:45.654Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/%40cspell/dict-swift@2.0.6": {
+      "copyrights": [
+        "Copyright (c) 2017-2025 Street Side Software <support@streetsidesoftware.nl>"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:35:51.558Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/%40cspell/dict-terraform@1.1.4": {
+      "copyrights": [
+        "Copyright (c) 2023 Street Side Software <support@streetsidesoftware.nl>"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:35:57.666Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/%40cspell/dict-typescript@3.2.3": {
+      "copyrights": [
+        "Copyright (c) 2017-2025 Street Side Software <support@streetsidesoftware.nl>"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:36:07.237Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/%40cspell/dict-vue@3.0.5": {
+      "copyrights": [
+        "Copyright (c) 2017-2025 Street Side Software <support@streetsidesoftware.nl>"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:36:13.184Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/%40cspell/dict-win32@2.0.10": {
+      "copyrights": [
+        "Copyright (c) 2017-2025 Street Side Software <support@streetsidesoftware.nl>"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:36:19.305Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/%40cspell/dict-zig@1.0.0": {
+      "copyrights": [
+        "Copyright (c) 2023-2025 Street Side Software <support@streetsidesoftware.nl>"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:36:25.507Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/%40cspell/dynamic-import@10.0.1": {
+      "copyrights": [
+        "Copyright (c) 2017 Jason Dent"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:36:31.625Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/%40cspell/filetypes@10.0.1": {
+      "copyrights": [
+        "Copyright (c) 2024 Jason Dent"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:36:38.128Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/%40cspell/rpc@10.0.1": {
+      "copyrights": [
+        "Copyright (c) 2026 Jason Dent"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:36:45.104Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/%40cspell/strong-weak-map@10.0.1": {
+      "copyrights": [
+        "Copyright (c) 2017 Jason Dent"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:36:51.273Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/%40cspell/url@10.0.1": {
+      "copyrights": [
+        "Copyright (c) 2017 Jason Dent"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:36:57.669Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
     "pkg:npm/%40eslint-community/eslint-utils@4.9.1": {
       "copyrights": [
         "Copyright (c) 2018 Toru Nagashima"
@@ -96,6 +760,24 @@
       "scannedAt": "2026-07-09T14:23:10.834Z",
       "via": "scancode-toolkit@32.5.0/license-file"
     },
+    "pkg:npm/%40microsoft/tsdoc-config@0.18.1": {
+      "copyrights": [
+        "Copyright (c) 2015-2021 Evgeny Poberezkin",
+        "Copyright (c) 2017 Evgeny Poberezkin",
+        "Copyright (c) Microsoft Corporation"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:38:28.647Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/%40microsoft/tsdoc@0.16.0": {
+      "copyrights": [
+        "Copyright (c) Microsoft Corporation"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:37:55.626Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
     "pkg:npm/%40package-json/types@0.0.12": {
       "copyrights": [
         "Copyright (c) 2024 Lan"
@@ -104,12 +786,25 @@
       "scannedAt": "2026-07-09T14:23:20.412Z",
       "via": "scancode-toolkit@32.5.0/license-file"
     },
+    "pkg:npm/%40pkgr/core@0.3.6": {
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:38:34.619Z",
+      "via": "scancode-toolkit@32.5.0/manifest"
+    },
     "pkg:npm/%40types/bun@1.3.14": {
       "copyrights": [
         "Copyright (c) Microsoft Corporation"
       ],
       "license": "MIT",
       "scannedAt": "2026-07-09T14:23:29.096Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/%40types/debug@4.1.13": {
+      "copyrights": [
+        "Copyright (c) Microsoft Corporation"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:38:40.428Z",
       "via": "scancode-toolkit@32.5.0/license-file"
     },
     "pkg:npm/%40types/esrecurse@4.3.1": {
@@ -136,6 +831,30 @@
       "scannedAt": "2026-07-09T14:23:57.007Z",
       "via": "scancode-toolkit@32.5.0/license-file"
     },
+    "pkg:npm/%40types/mdast@4.0.4": {
+      "copyrights": [
+        "Copyright (c) Microsoft Corporation"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:38:47.861Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/%40types/ms@2.1.0": {
+      "copyrights": [
+        "Copyright (c) Microsoft Corporation"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:38:53.644Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/%40types/nlcst@2.0.3": {
+      "copyrights": [
+        "Copyright (c) Microsoft Corporation"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:38:59.962Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
     "pkg:npm/%40types/node@25.9.2": {
       "copyrights": [
         "Copyright (c) Microsoft Corporation",
@@ -143,6 +862,14 @@
       ],
       "license": "MIT",
       "scannedAt": "2026-07-09T14:24:29.281Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/%40types/pluralize@0.0.29": {
+      "copyrights": [
+        "Copyright (c) Microsoft Corporation"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:39:05.693Z",
       "via": "scancode-toolkit@32.5.0/license-file"
     },
     "pkg:npm/%40types/spdx-correct@3.1.3": {
@@ -169,6 +896,14 @@
       "scannedAt": "2026-07-09T14:24:56.677Z",
       "via": "scancode-toolkit@32.5.0/license-file"
     },
+    "pkg:npm/%40types/unist@3.0.3": {
+      "copyrights": [
+        "Copyright (c) Microsoft Corporation"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:39:11.510Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
     "pkg:npm/%40typescript-eslint/eslint-plugin@8.61.0": {
       "copyrights": [
         "Copyright (c) 2013 Kael Zhang <i@kael.me> , contributors http://kael.me",
@@ -184,6 +919,15 @@
       ],
       "license": "MIT",
       "scannedAt": "2026-07-09T14:25:43.325Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/%40typescript-eslint/parser@8.64.0": {
+      "copyrights": [
+        "Copyright (c) 2019 typescript-eslint and other contributors",
+        "Copyright (c) 2025 typescript-eslint and other contributors"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:39:47.200Z",
       "via": "scancode-toolkit@32.5.0/license-file"
     },
     "pkg:npm/%40typescript-eslint/project-service@8.61.0": {
@@ -218,6 +962,16 @@
       "scannedAt": "2026-07-09T14:27:06.621Z",
       "via": "scancode-toolkit@32.5.0/license-file"
     },
+    "pkg:npm/%40typescript-eslint/type-utils@8.64.0": {
+      "copyrights": [
+        "Copyright (c) 2019 typescript-eslint and other contributors",
+        "Copyright (c) 2021 typescript-eslint and other contributors",
+        "Copyright (c) 2025 typescript-eslint and other contributors"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:40:30.458Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
     "pkg:npm/%40typescript-eslint/types@8.61.0": {
       "copyrights": [
         "Copyright (c) 2019 typescript-eslint and other contributors"
@@ -250,6 +1004,24 @@
       "scannedAt": "2026-07-09T14:28:34.265Z",
       "via": "scancode-toolkit@32.5.0/license-file"
     },
+    "pkg:npm/%40typescript-eslint/visitor-keys@8.64.0": {
+      "copyrights": [
+        "Copyright (c) 2019 typescript-eslint and other contributors"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:40:37.722Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/%40unrs/resolver-binding-linux-x64-gnu@1.12.2": {
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:40:47.087Z",
+      "via": "scancode-toolkit@32.5.0/manifest"
+    },
+    "pkg:npm/%40unrs/resolver-binding-linux-x64-musl@1.12.2": {
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:40:56.508Z",
+      "via": "scancode-toolkit@32.5.0/manifest"
+    },
     "pkg:npm/%40unrs/resolver-binding-win32-x64-msvc@1.12.2": {
       "license": "MIT",
       "scannedAt": "2026-07-09T14:28:46.195Z",
@@ -269,6 +1041,14 @@
       ],
       "license": "MIT",
       "scannedAt": "2026-07-09T14:29:06.407Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/adverb-where@0.2.6": {
+      "copyrights": [
+        "Copyright (c) 2014 Matt Blair"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:41:02.456Z",
       "via": "scancode-toolkit@32.5.0/license-file"
     },
     "pkg:npm/ajv@6.15.0": {
@@ -306,6 +1086,41 @@
       "scannedAt": "2026-07-09T14:30:48.627Z",
       "via": "scancode-toolkit@32.5.0/license-file"
     },
+    "pkg:npm/array-iterate@2.0.1": {
+      "copyrights": [
+        "(c) Titus Wormer",
+        "Copyright (c) 2015 Titus Wormer <tituswormer@gmail.com>"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:41:08.713Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/array-timsort@1.0.3": {
+      "copyrights": [
+        "Copyright (c) 2015 Marco Ziccardi"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:41:16.590Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/automated-readability@2.0.1": {
+      "copyrights": [
+        "(c) Titus Wormer",
+        "Copyright (c) 2014 Titus Wormer <tituswormer@gmail.com>"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:41:22.814Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/bail@2.0.2": {
+      "copyrights": [
+        "(c) Titus Wormer",
+        "Copyright (c) 2015 Titus Wormer <tituswormer@gmail.com>"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:41:28.925Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
     "pkg:npm/balanced-match@4.0.4": {
       "copyrights": [
         "Copyright Isaac Z. Schlueter <i@izs.me>",
@@ -334,6 +1149,49 @@
       "scannedAt": "2026-07-09T14:31:55.184Z",
       "via": "scancode-toolkit@32.5.0/manifest"
     },
+    "pkg:npm/ccount@2.0.1": {
+      "copyrights": [
+        "(c) Titus Wormer",
+        "Copyright (c) 2015 Titus Wormer <tituswormer@gmail.com>"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:41:35.068Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/character-entities@2.0.2": {
+      "copyrights": [
+        "(c) Titus Wormer",
+        "Copyright (c) 2015 Titus Wormer <tituswormer@gmail.com>"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:41:43.328Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/coleman-liau@2.0.1": {
+      "copyrights": [
+        "(c) Titus Wormer",
+        "Copyright (c) 2014 Titus Wormer <tituswormer@gmail.com>"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:41:49.485Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/commander@2.20.3": {
+      "copyrights": [
+        "Copyright (c) 2011 TJ Holowaychuk <tj@vision-media.ca>"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:41:56.956Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/comment-json@5.0.0": {
+      "copyrights": [
+        "Copyright (c) 2013 kaelzhang , contributors http://kael.me"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:42:04.918Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
     "pkg:npm/comment-parser@1.4.7": {
       "copyrights": [
         "Copyright (c) 2014 Sergii Iavorskyi"
@@ -350,6 +1208,89 @@
       "scannedAt": "2026-07-09T14:32:38.710Z",
       "via": "scancode-toolkit@32.5.0/license-file"
     },
+    "pkg:npm/cspell-config-lib@10.0.1": {
+      "copyrights": [
+        "Copyright (c) 2017 Jason Dent"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:42:13.497Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/cspell-dictionary@10.0.1": {
+      "copyrights": [
+        "Copyright (c) 2022 Jason Dent"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:42:22.776Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/cspell-glob@10.0.1": {
+      "copyrights": [
+        "Copyright (c) 2017 Jason Dent"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:42:29.525Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/cspell-grammar@10.0.1": {
+      "copyrights": [
+        "Copyright (c) 2017 Jason Dent"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:42:37.976Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/cspell-io@10.0.1": {
+      "copyrights": [
+        "Copyright (c) 2017 Jason Dent"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:42:45.632Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/cspell-lib@10.0.1": {
+      "copyrights": [
+        "Copyright (c) 2017 Jason Dent"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:43:07.845Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/cspell-trie-lib@10.0.1": {
+      "copyrights": [
+        "Copyright (c) 2017 Jason Dent"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:43:27.506Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/cuss@2.2.0": {
+      "copyrights": [
+        "(c) Titus Wormer",
+        "Copyright (c) 2016 Titus Wormer <tituswormer@gmail.com>"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:43:37.835Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/dale-chall-formula@2.0.1": {
+      "copyrights": [
+        "(c) Titus Wormer",
+        "Copyright (c) 2014 Titus Wormer <tituswormer@gmail.com>"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:43:53.701Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/dale-chall@2.0.1": {
+      "copyrights": [
+        "(c) Titus Wormer",
+        "Copyright (c) 2014 Titus Wormer <tituswormer@gmail.com>"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:43:47.599Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
     "pkg:npm/debug@4.4.3": {
       "copyrights": [
         "Copyright (c) 2014-2017 TJ Holowaychuk <tj@vision-media.ca>",
@@ -357,6 +1298,15 @@
       ],
       "license": "MIT",
       "scannedAt": "2026-07-09T14:32:49.919Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/decode-named-character-reference@1.3.0": {
+      "copyrights": [
+        "(c) Titus Wormer",
+        "Copyright (c) Titus Wormer <tituswormer@gmail.com>"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:43:59.636Z",
       "via": "scancode-toolkit@32.5.0/license-file"
     },
     "pkg:npm/deep-is@0.1.4": {
@@ -367,6 +1317,48 @@
       ],
       "license": "MIT",
       "scannedAt": "2026-07-09T14:33:01.633Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/dequal@2.0.3": {
+      "copyrights": [
+        "(c) Luke Edwards (https://lukeed.com)",
+        "Copyright (c) Luke Edwards <luke.edwards05@gmail.com> (lukeed.com)"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:44:05.486Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/devlop@1.1.0": {
+      "copyrights": [
+        "(c) Titus Wormer",
+        "Copyright (c) 2023 Titus Wormer <tituswormer@gmail.com>"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:44:11.968Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/e-prime@0.10.4": {
+      "copyrights": [
+        "Copyright (c) 2015 Paul J. Miller"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:44:17.724Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/env-paths@4.0.0": {
+      "copyrights": [
+        "Copyright (c) Sindre Sorhus <sindresorhus@gmail.com> (https://sindresorhus.com)"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:44:23.676Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/es-errors@1.3.0": {
+      "copyrights": [
+        "Copyright (c) 2024 Jordan Harband"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:44:29.995Z",
       "via": "scancode-toolkit@32.5.0/license-file"
     },
     "pkg:npm/escape-string-regexp@4.0.0": {
@@ -393,12 +1385,55 @@
       "scannedAt": "2026-07-09T14:34:23.768Z",
       "via": "scancode-toolkit@32.5.0/license-file"
     },
+    "pkg:npm/eslint-plugin-comment-length@2.3.1": {
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:46:30.103Z",
+      "via": "scancode-toolkit@32.5.0/manifest"
+    },
     "pkg:npm/eslint-plugin-import-x@4.16.2": {
       "copyrights": [
         "Copyright (c) 2015 Ben Mosher"
       ],
       "license": "MIT",
       "scannedAt": "2026-07-09T14:35:00.665Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/eslint-plugin-prettier@5.5.6": {
+      "copyrights": [
+        "Copyright (c) 2017 Andres Suarez and Teddy Katz"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:46:36.562Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/eslint-plugin-tsdoc@0.5.2": {
+      "copyrights": [
+        "Copyright (c) 2019 typescript-eslint and other contributors",
+        "Copyright (c) 2025 typescript-eslint and other contributors",
+        "Copyright (c) Microsoft Corporation"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:47:21.091Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/eslint-plugin-write-good-comments-2@1.2.7": {
+      "copyrights": [
+        "(c) 2011 Gary Court",
+        "Copyright (c) 2013 Yusuke Suzuki <utatane.tea@gmail.com>",
+        "Copyright (c) 2013-2014 Yusuke Suzuki <utatane.tea@gmail.com>",
+        "Copyright (c) 2014 Ivan Nikulin <ifaaan@gmail.com>",
+        "Copyright (c) 2014-2016, Jon Schlinkert",
+        "Copyright (c) 2014-2017, Jon Schlinkert",
+        "Copyright (c) 2019 typescript-eslint and other contributors",
+        "Copyright (c) 2025 typescript-eslint and other contributors",
+        "Copyright (c) 2026",
+        "Copyright (c) jQuery Foundation, Inc. and Contributors",
+        "Copyright 2012-2015 Acorn",
+        "Copyright 2014-2015 Sebastian McKenzie <sebmck@gmail.com>",
+        "Copyright 2014-2015 various"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:50:17.373Z",
       "via": "scancode-toolkit@32.5.0/license-file"
     },
     "pkg:npm/eslint-scope@9.1.2": {
@@ -430,6 +1465,16 @@
       "scannedAt": "2026-07-09T14:33:56.693Z",
       "via": "scancode-toolkit@32.5.0/license-file"
     },
+    "pkg:npm/eslint@10.7.0": {
+      "copyrights": [
+        "Copyright (c) 2013, Joel Feenstra",
+        "Copyright (c) Microsoft Corporation",
+        "Copyright OpenJS Foundation and other contributors, <www.openjsf.org>"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:46:11.035Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
     "pkg:npm/espree@11.2.0": {
       "copyrights": [
         "Copyright (c) Open JS Foundation",
@@ -440,6 +1485,14 @@
       ],
       "license": "BSD-2-Clause",
       "scannedAt": "2026-07-09T14:35:48.542Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/esprima@4.0.1": {
+      "copyrights": [
+        "Copyright JS Foundation and other contributors, https://js.foundation"
+      ],
+      "license": "BSD-2-Clause",
+      "scannedAt": "2026-08-01T05:50:30.726Z",
       "via": "scancode-toolkit@32.5.0/license-file"
     },
     "pkg:npm/esquery@1.7.0": {
@@ -483,12 +1536,37 @@
       "scannedAt": "2026-07-09T14:36:43.243Z",
       "via": "scancode-toolkit@32.5.0/license-file"
     },
+    "pkg:npm/extend@3.0.2": {
+      "copyrights": [
+        "Copyright (c) 2014 Stefan Thomas"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:50:37.144Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
     "pkg:npm/fast-deep-equal@3.1.3": {
       "copyrights": [
         "Copyright (c) 2017 Evgeny Poberezkin"
       ],
       "license": "MIT",
       "scannedAt": "2026-07-09T14:36:56.058Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/fast-diff@1.3.0": {
+      "copyrights": [
+        "Copyright 2006 Google Inc. http://code.google.com/p/google-diff-match-patch",
+        "Copyright 2014-2023 Jason Chen"
+      ],
+      "license": "Apache-2.0",
+      "scannedAt": "2026-08-01T05:50:45.261Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/fast-equals@6.0.2": {
+      "copyrights": [
+        "Copyright (c) 2025 Tony Quetano"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:50:53.531Z",
       "via": "scancode-toolkit@32.5.0/license-file"
     },
     "pkg:npm/fast-json-stable-stringify@2.1.0": {
@@ -506,6 +1584,25 @@
       ],
       "license": "MIT",
       "scannedAt": "2026-07-09T14:37:23.163Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/fast-uri@3.1.3": {
+      "copyrights": [
+        "Copyright (c) 2011-2021, Gary Court until https://github.com/garycourt/uri-js/commit/a1acf730b4bba3f1097c9f52e7d9d3aba8cdcaae",
+        "Copyright (c) 2021-present The Fastify team https://github.com/fastify/fastify team",
+        "Copyright 2011 Gary Court"
+      ],
+      "license": "BSD-3-Clause",
+      "scannedAt": "2026-08-01T05:51:03.207Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/fault@2.0.1": {
+      "copyrights": [
+        "(c) Titus Wormer",
+        "Copyright (c) 2015 Titus Wormer <tituswormer@gmail.com>"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:51:09.511Z",
       "via": "scancode-toolkit@32.5.0/license-file"
     },
     "pkg:npm/fdir@6.5.0": {
@@ -552,6 +1649,40 @@
       "scannedAt": "2026-07-09T14:38:19.522Z",
       "via": "scancode-toolkit@32.5.0/license-file"
     },
+    "pkg:npm/flesch@2.0.1": {
+      "copyrights": [
+        "(c) Titus Wormer",
+        "Copyright (c) 2014 Titus Wormer <tituswormer@gmail.com>"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:51:15.662Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/format@0.2.2": {
+      "copyrights": [
+        "Copyright 2010 - 2013 Sami Samhuri <sami@samhuri.net>",
+        "Copyright 2010 - 2014 Sami Samhuri sami@samhuri.net"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:51:21.760Z",
+      "via": "scancode-toolkit@32.5.0/manifest"
+    },
+    "pkg:npm/function-bind@1.1.2": {
+      "copyrights": [
+        "Copyright (c) 2013 Raynos"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:51:28.462Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/gensequence@8.0.8": {
+      "copyrights": [
+        "Copyright (c) 2016 Jason Dent"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:51:35.416Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
     "pkg:npm/get-tsconfig@4.14.0": {
       "copyrights": [
         "Copyright (c) Hiroki Osame <hiroki.osame@gmail.com>"
@@ -568,6 +1699,31 @@
       "scannedAt": "2026-07-09T14:38:40.815Z",
       "via": "scancode-toolkit@32.5.0/license-file"
     },
+    "pkg:npm/global-directory@5.0.0": {
+      "copyrights": [
+        "Copyright (c) Sindre Sorhus <sindresorhus@gmail.com> (https://sindresorhus.com)"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:51:41.415Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/gunning-fog@2.0.1": {
+      "copyrights": [
+        "(c) Titus Wormer",
+        "Copyright (c) 2014 Titus Wormer <tituswormer@gmail.com>"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:51:47.477Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/hasown@2.0.4": {
+      "copyrights": [
+        "Copyright (c) Jordan Harband and contributors"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:51:53.643Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
     "pkg:npm/ignore@5.3.2": {
       "copyrights": [
         "Copyright (c) 2013 Kael Zhang <i@kael.me> , contributors http://kael.me"
@@ -576,6 +1732,25 @@
       "scannedAt": "2026-07-09T14:38:51.713Z",
       "via": "scancode-toolkit@32.5.0/manifest"
     },
+    "pkg:npm/import-fresh@4.0.0": {
+      "copyrights": [
+        "Copyright (c) Sindre Sorhus <sindresorhus@gmail.com> (https://sindresorhus.com)"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:52:00.813Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/import-meta-resolve@4.2.0": {
+      "copyrights": [
+        "(c) Titus Wormer",
+        "Copyright (c) Titus Wormer",
+        "Copyright Joyent, Inc. and other Node contributors",
+        "Copyright Node.js contributors"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:52:09.902Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
     "pkg:npm/imurmurhash@0.1.4": {
       "copyrights": [
         "Copyright (c) 2013 Gary Court, Jens Taylor"
@@ -583,6 +1758,22 @@
       "license": "MIT",
       "scannedAt": "2026-07-09T14:39:01.012Z",
       "via": "scancode-toolkit@32.5.0/manifest"
+    },
+    "pkg:npm/ini@6.0.0": {
+      "copyrights": [
+        "Copyright (c) Isaac Z. Schlueter and Contributors"
+      ],
+      "license": "ISC",
+      "scannedAt": "2026-08-01T05:52:15.984Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/is-core-module@2.16.2": {
+      "copyrights": [
+        "Copyright (c) 2014 Dave Justice"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:52:22.853Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
     },
     "pkg:npm/is-extglob@2.1.1": {
       "copyrights": [
@@ -602,12 +1793,36 @@
       "scannedAt": "2026-07-09T14:39:20.238Z",
       "via": "scancode-toolkit@32.5.0/license-file"
     },
+    "pkg:npm/is-plain-obj@4.1.0": {
+      "copyrights": [
+        "Copyright (c) Sindre Sorhus <sindresorhus@gmail.com> (https://sindresorhus.com)"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:52:28.709Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/is-safe-filename@0.1.1": {
+      "copyrights": [
+        "Copyright (c) Sindre Sorhus <sindresorhus@gmail.com> (https://sindresorhus.com)"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:52:34.766Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
     "pkg:npm/isexe@2.0.0": {
       "copyrights": [
         "Copyright (c) Isaac Z. Schlueter and Contributors"
       ],
       "license": "ISC",
       "scannedAt": "2026-07-09T14:39:31.657Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/jju@1.4.0": {
+      "copyrights": [
+        "Copyright (c) 2013 Alex Kocharin"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:52:42.628Z",
       "via": "scancode-toolkit@32.5.0/license-file"
     },
     "pkg:npm/json-buffer@3.0.1": {
@@ -629,6 +1844,16 @@
     "pkg:npm/json-stable-stringify-without-jsonify@1.0.1": {
       "license": "MIT",
       "scannedAt": "2026-07-09T14:40:09.567Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/json5@2.2.3": {
+      "copyrights": [
+        "(c) 2019 Denis Pushkarev",
+        "Copyright (c) 2012-2018 Aseem Kishore, and others",
+        "copyright (c) 2019 Denis Pushkarev"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:52:52.825Z",
       "via": "scancode-toolkit@32.5.0/license-file"
     },
     "pkg:npm/keyv@4.5.4": {
@@ -653,6 +1878,396 @@
       ],
       "license": "MIT",
       "scannedAt": "2026-07-09T14:40:40.199Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/longest-streak@3.1.0": {
+      "copyrights": [
+        "(c) Titus Wormer",
+        "Copyright (c) 2015 Titus Wormer"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:52:59.041Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/markdown-table@3.0.4": {
+      "copyrights": [
+        "(c) Titus Wormer",
+        "Copyright (c) Titus Wormer <tituswormer@gmail.com>"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:53:05.985Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/mdast-util-find-and-replace@3.0.2": {
+      "copyrights": [
+        "(c) Titus Wormer",
+        "Copyright (c) Sindre Sorhus <sindresorhus@gmail.com> (https://sindresorhus.com)",
+        "Copyright (c) Titus Wormer <tituswormer@gmail.com>"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:53:12.955Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/mdast-util-from-markdown@2.0.3": {
+      "copyrights": [
+        "(c) Titus Wormer",
+        "Copyright (c) Titus Wormer <tituswormer@gmail.com>"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:53:22.563Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/mdast-util-frontmatter@2.0.1": {
+      "copyrights": [
+        "(c) Titus Wormer",
+        "Copyright (c) 2020 Titus Wormer <tituswormer@gmail.com>",
+        "Copyright (c) Sindre Sorhus <sindresorhus@gmail.com> (https://sindresorhus.com)"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:53:29.396Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/mdast-util-gfm-autolink-literal@2.0.1": {
+      "copyrights": [
+        "(c) Titus Wormer",
+        "Copyright (c) 2020 Titus Wormer <tituswormer@gmail.com>"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:53:42.622Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/mdast-util-gfm-footnote@2.1.0": {
+      "copyrights": [
+        "(c) Titus Wormer",
+        "Copyright (c) Titus Wormer <tituswormer@gmail.com>"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:53:49.511Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/mdast-util-gfm-strikethrough@2.0.0": {
+      "copyrights": [
+        "(c) Titus Wormer",
+        "Copyright (c) 2020 Titus Wormer <tituswormer@gmail.com>"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:53:56.090Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/mdast-util-gfm-table@2.0.0": {
+      "copyrights": [
+        "(c) Titus Wormer",
+        "Copyright (c) 2020 Titus Wormer <tituswormer@gmail.com>"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:54:02.880Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/mdast-util-gfm-task-list-item@2.0.0": {
+      "copyrights": [
+        "(c) Titus Wormer",
+        "Copyright (c) 2020 Titus Wormer <tituswormer@gmail.com>"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:54:09.559Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/mdast-util-gfm@3.1.0": {
+      "copyrights": [
+        "(c) Titus Wormer",
+        "Copyright (c) Titus Wormer <tituswormer@gmail.com>"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:53:36.088Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/mdast-util-phrasing@4.1.0": {
+      "copyrights": [
+        "(c) Victor Felder",
+        "Copyright (c) 2017 Titus Wormer <tituswormer@gmail.com>",
+        "Copyright (c) 2017 Victor Felder <victor@draft.li>"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:54:15.837Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/mdast-util-to-markdown@2.1.2": {
+      "copyrights": [
+        "(c) Titus Wormer",
+        "Copyright (c) Titus Wormer <tituswormer@gmail.com>"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:54:27.307Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/mdast-util-to-string@4.0.0": {
+      "copyrights": [
+        "(c) Titus Wormer",
+        "Copyright (c) 2015 Titus Wormer <tituswormer@gmail.com>"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:54:33.512Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/micromark-core-commonmark@2.0.3": {
+      "copyrights": [
+        "(c) Titus Wormer",
+        "Copyright (c) Titus Wormer <tituswormer@gmail.com>"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:55:03.057Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/micromark-extension-frontmatter@2.0.0": {
+      "copyrights": [
+        "(c) Titus Wormer",
+        "Copyright (c) 2020 Titus Wormer <tituswormer@gmail.com>"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:55:11.110Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/micromark-extension-gfm-autolink-literal@2.1.0": {
+      "copyrights": [
+        "(c) Titus Wormer",
+        "Copyright (c) 2020 Titus Wormer <tituswormer@gmail.com>"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:55:26.088Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/micromark-extension-gfm-footnote@2.1.0": {
+      "copyrights": [
+        "(c) Titus Wormer",
+        "Copyright (c) 2021 Titus Wormer <tituswormer@gmail.com>"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:55:34.410Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/micromark-extension-gfm-strikethrough@2.1.0": {
+      "copyrights": [
+        "(c) Titus Wormer",
+        "Copyright (c) 2020 Titus Wormer <tituswormer@gmail.com>"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:55:41.072Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/micromark-extension-gfm-table@2.1.1": {
+      "copyrights": [
+        "(c) Titus Wormer",
+        "Copyright (c) Titus Wormer <tituswormer@gmail.com>"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:55:51.074Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/micromark-extension-gfm-tagfilter@2.0.0": {
+      "copyrights": [
+        "(c) Titus Wormer",
+        "Copyright (c) 2020 Titus Wormer <tituswormer@gmail.com>"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:55:57.350Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/micromark-extension-gfm-task-list-item@2.1.0": {
+      "copyrights": [
+        "(c) Titus Wormer",
+        "Copyright (c) 2020 Titus Wormer <tituswormer@gmail.com>"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:56:04.095Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/micromark-extension-gfm@3.0.0": {
+      "copyrights": [
+        "(c) Titus Wormer",
+        "Copyright (c) 2020 Titus Wormer <tituswormer@gmail.com>"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:55:17.454Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/micromark-factory-destination@2.0.1": {
+      "copyrights": [
+        "(c) Titus Wormer",
+        "Copyright (c) Titus Wormer <tituswormer@gmail.com>"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:56:10.698Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/micromark-factory-label@2.0.1": {
+      "copyrights": [
+        "(c) Titus Wormer",
+        "Copyright (c) Titus Wormer <tituswormer@gmail.com>"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:56:17.232Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/micromark-factory-space@2.0.1": {
+      "copyrights": [
+        "(c) Titus Wormer",
+        "Copyright (c) Titus Wormer <tituswormer@gmail.com>"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:56:23.501Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/micromark-factory-title@2.0.1": {
+      "copyrights": [
+        "(c) Titus Wormer",
+        "Copyright (c) Titus Wormer <tituswormer@gmail.com>"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:56:30.025Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/micromark-factory-whitespace@2.0.1": {
+      "copyrights": [
+        "(c) Titus Wormer",
+        "Copyright (c) Titus Wormer <tituswormer@gmail.com>"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:56:36.218Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/micromark-util-character@2.1.1": {
+      "copyrights": [
+        "(c) Titus Wormer",
+        "Copyright (c) Titus Wormer <tituswormer@gmail.com>"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:56:43.202Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/micromark-util-chunked@2.0.1": {
+      "copyrights": [
+        "(c) Titus Wormer",
+        "Copyright (c) Titus Wormer <tituswormer@gmail.com>"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:56:49.653Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/micromark-util-classify-character@2.0.1": {
+      "copyrights": [
+        "(c) Titus Wormer",
+        "Copyright (c) Titus Wormer <tituswormer@gmail.com>"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:56:55.859Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/micromark-util-combine-extensions@2.0.1": {
+      "copyrights": [
+        "(c) Titus Wormer",
+        "Copyright (c) Titus Wormer <tituswormer@gmail.com>"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:57:02.079Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/micromark-util-decode-numeric-character-reference@2.0.2": {
+      "copyrights": [
+        "(c) Titus Wormer",
+        "Copyright (c) Titus Wormer <tituswormer@gmail.com>"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:57:08.217Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/micromark-util-decode-string@2.0.1": {
+      "copyrights": [
+        "(c) Titus Wormer",
+        "Copyright (c) Titus Wormer <tituswormer@gmail.com>"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:57:14.532Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/micromark-util-encode@2.0.1": {
+      "copyrights": [
+        "(c) Titus Wormer",
+        "Copyright (c) Titus Wormer <tituswormer@gmail.com>"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:57:20.788Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/micromark-util-html-tag-name@2.0.1": {
+      "copyrights": [
+        "(c) Titus Wormer",
+        "Copyright (c) Titus Wormer <tituswormer@gmail.com>"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:57:27.262Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/micromark-util-normalize-identifier@2.0.1": {
+      "copyrights": [
+        "(c) Titus Wormer",
+        "Copyright (c) Titus Wormer <tituswormer@gmail.com>"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:57:33.428Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/micromark-util-resolve-all@2.0.1": {
+      "copyrights": [
+        "(c) Titus Wormer",
+        "Copyright (c) Titus Wormer <tituswormer@gmail.com>"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:57:39.690Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/micromark-util-sanitize-uri@2.0.1": {
+      "copyrights": [
+        "(c) Titus Wormer",
+        "Copyright (c) Titus Wormer <tituswormer@gmail.com>"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:57:46.221Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/micromark-util-subtokenize@2.1.0": {
+      "copyrights": [
+        "(c) Titus Wormer",
+        "Copyright (c) Titus Wormer <tituswormer@gmail.com>"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:57:53.823Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/micromark-util-symbol@2.0.1": {
+      "copyrights": [
+        "(c) Titus Wormer",
+        "Copyright (c) Titus Wormer <tituswormer@gmail.com>"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:58:01.226Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/micromark-util-types@2.0.2": {
+      "copyrights": [
+        "(c) Titus Wormer",
+        "Copyright (c) Titus Wormer <tituswormer@gmail.com>"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:58:08.672Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/micromark@4.0.2": {
+      "copyrights": [
+        "(c) Titus Wormer",
+        "Copyright (c) Titus Wormer <tituswormer@gmail.com>"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:54:46.169Z",
       "via": "scancode-toolkit@32.5.0/license-file"
     },
     "pkg:npm/minimatch@10.2.5": {
@@ -684,6 +2299,55 @@
       "scannedAt": "2026-07-09T14:41:49.175Z",
       "via": "scancode-toolkit@32.5.0/manifest"
     },
+    "pkg:npm/nlcst-is-literal@3.0.0": {
+      "copyrights": [
+        "(c) Titus Wormer",
+        "Copyright (c) 2015 Titus Wormer <tituswormer@gmail.com>"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:58:14.919Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/nlcst-normalize@4.0.0": {
+      "copyrights": [
+        "(c) Titus Wormer",
+        "Copyright (c) 2016 Titus Wormer <tituswormer@gmail.com>"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:58:21.131Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/nlcst-search@4.0.0": {
+      "copyrights": [
+        "(c) Titus Wormer",
+        "Copyright (c) 2016 Titus Wormer <tituswormer@gmail.com>"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:58:27.439Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/nlcst-to-string@4.0.0": {
+      "copyrights": [
+        "(c) Titus Wormer",
+        "Copyright (c) 2014 Titus Wormer <tituswormer@gmail.com>"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:58:33.611Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/no-cliches@0.3.6": {
+      "copyrights": [
+        "Copyright (c) 2021 Matt Blair"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:58:40.752Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/normalize-strings@1.1.1": {
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:58:47.089Z",
+      "via": "scancode-toolkit@32.5.0/manifest"
+    },
     "pkg:npm/optionator@0.9.4": {
       "copyrights": [
         "Copyright (c) George Zahariev"
@@ -708,6 +2372,29 @@
       "scannedAt": "2026-07-09T14:42:18.611Z",
       "via": "scancode-toolkit@32.5.0/license-file"
     },
+    "pkg:npm/parse-english@7.0.0": {
+      "copyrights": [
+        "(c) Titus Wormer",
+        "Copyright (c) 2014 Titus Wormer <tituswormer@gmail.com>"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:58:53.414Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/parse-latin@7.0.0": {
+      "copyrights": [
+        "(c) Titus Wormer",
+        "Copyright (c) 2014 Titus Wormer <tituswormer@gmail.com>"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:59:01.716Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/passive-voice@0.1.0": {
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:59:07.698Z",
+      "via": "scancode-toolkit@32.5.0/manifest"
+    },
     "pkg:npm/path-exists@4.0.0": {
       "copyrights": [
         "(c) Sindre Sorhus (https://sindresorhus.com)",
@@ -725,6 +2412,15 @@
       "scannedAt": "2026-07-09T14:42:37.808Z",
       "via": "scancode-toolkit@32.5.0/license-file"
     },
+    "pkg:npm/path-parse@1.0.7": {
+      "copyrights": [
+        "(c) Javier Blanco (http://jbgutierrez.info)",
+        "Copyright (c) 2015 Javier Blanco"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:59:13.565Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
     "pkg:npm/picomatch@4.0.4": {
       "copyrights": [
         "Copyright (c) 2017-present, Jon Schlinkert",
@@ -734,12 +2430,28 @@
       "scannedAt": "2026-07-09T14:42:51.992Z",
       "via": "scancode-toolkit@32.5.0/license-file"
     },
+    "pkg:npm/pluralize@8.0.0": {
+      "copyrights": [
+        "Copyright (c) 2013 Blake Embrey (hello@blakeembrey.com)"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:59:19.758Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
     "pkg:npm/prelude-ls@1.2.1": {
       "copyrights": [
         "Copyright (c) George Zahariev"
       ],
       "license": "MIT",
       "scannedAt": "2026-07-09T14:43:05.230Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/prettier-linter-helpers@1.0.1": {
+      "copyrights": [
+        "Copyright (c) 2017 Andres Suarez and Teddy Katz"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:59:25.855Z",
       "via": "scancode-toolkit@32.5.0/license-file"
     },
     "pkg:npm/prettier@3.8.4": {
@@ -777,12 +2489,118 @@
       "scannedAt": "2026-07-09T14:44:07.432Z",
       "via": "scancode-toolkit@32.5.0/manifest"
     },
+    "pkg:npm/quotation@2.0.3": {
+      "copyrights": [
+        "(c) Titus Wormer",
+        "Copyright (c) 2016 Titus Wormer <tituswormer@gmail.com>"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:59:31.922Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/remark-frontmatter@5.0.0": {
+      "copyrights": [
+        "(c) Titus Wormer",
+        "Copyright (c) 2017 Titus Wormer <tituswormer@gmail.com>"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:59:38.682Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/remark-gfm@4.0.1": {
+      "copyrights": [
+        "(c) Titus Wormer",
+        "Copyright (c) Titus Wormer <tituswormer@gmail.com>"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:59:45.307Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/remark-parse@11.0.0": {
+      "copyrights": [
+        "(c) Titus Wormer",
+        "Copyright (c) 2014 Titus Wormer <tituswormer@gmail.com>"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:59:51.807Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/remark-stringify@11.0.0": {
+      "copyrights": [
+        "(c) Titus Wormer",
+        "Copyright (c) 2014 Titus Wormer <tituswormer@gmail.com>"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T05:59:58.353Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/require-from-string@2.0.2": {
+      "copyrights": [
+        "(c) Vsevolod Strukchinsky (http://github.com/floatdrop)",
+        "Copyright (c) Vsevolod Strukchinsky <floatdrop@gmail.com>"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T06:00:04.164Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/resolve-from@5.0.0": {
+      "copyrights": [
+        "(c) Sindre Sorhus (https://sindresorhus.com)",
+        "Copyright (c) Sindre Sorhus <sindresorhus@gmail.com> (sindresorhus.com)"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T06:00:21.043Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
     "pkg:npm/resolve-pkg-maps@1.0.0": {
       "copyrights": [
         "Copyright (c) Hiroki Osame <hiroki.osame@gmail.com>"
       ],
       "license": "MIT",
       "scannedAt": "2026-07-09T14:44:18.152Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/resolve@1.22.12": {
+      "copyrights": [
+        "Copyright (c) 2012 James Halliday"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T06:00:15.054Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/retext-english@5.0.0": {
+      "copyrights": [
+        "(c) Titus Wormer"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T06:00:27.361Z",
+      "via": "scancode-toolkit@32.5.0/manifest"
+    },
+    "pkg:npm/retext-equality@7.1.0": {
+      "copyrights": [
+        "(c) Titus Wormer",
+        "Copyright (c) 2015 Titus Wormer <tituswormer@gmail.com>"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T06:00:40.481Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/retext-profanities@8.0.0": {
+      "copyrights": [
+        "(c) Titus Wormer",
+        "Copyright (c) 2016 Titus Wormer <tituswormer@gmail.com>"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T06:00:47.285Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/retext-readability@8.0.0": {
+      "copyrights": [
+        "(c) Titus Wormer",
+        "Copyright (c) 2016 Titus Wormer <tituswormer@gmail.com>"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T06:00:53.726Z",
       "via": "scancode-toolkit@32.5.0/license-file"
     },
     "pkg:npm/semver@7.8.4": {
@@ -811,12 +2629,39 @@
       "scannedAt": "2026-07-09T14:45:04.023Z",
       "via": "scancode-toolkit@32.5.0/license-file"
     },
+    "pkg:npm/smog-formula@2.0.1": {
+      "copyrights": [
+        "(c) Titus Wormer",
+        "Copyright (c) 2014 Titus Wormer <tituswormer@gmail.com>"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T06:00:59.885Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
     "pkg:npm/smol-toml@1.6.1": {
       "copyrights": [
         "Copyright (c) Squirrel Chat et al"
       ],
       "license": "BSD-3-Clause",
       "scannedAt": "2026-07-09T14:45:25.502Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/spache-formula@2.0.1": {
+      "copyrights": [
+        "(c) Titus Wormer",
+        "Copyright (c) 2014 Titus Wormer <tituswormer@gmail.com>"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T06:01:13.657Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/spache@2.0.1": {
+      "copyrights": [
+        "(c) Titus Wormer",
+        "Copyright (c) 2014 Titus Wormer <tituswormer@gmail.com>"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T06:01:07.358Z",
       "via": "scancode-toolkit@32.5.0/license-file"
     },
     "pkg:npm/spdx-compare@1.0.0": {
@@ -909,6 +2754,39 @@
       "scannedAt": "2026-07-09T14:49:59.616Z",
       "via": "scancode-toolkit@32.5.0/license-file"
     },
+    "pkg:npm/supports-preserve-symlinks-flag@1.0.0": {
+      "copyrights": [
+        "Copyright (c) 2022 Inspect JS"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T06:01:19.760Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/syllable@5.0.1": {
+      "copyrights": [
+        "(c) Titus Wormer",
+        "Copyright (c) 2014 Titus Wormer <tituswormer@gmail.com>"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T06:01:26.474Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/synckit@0.11.13": {
+      "copyrights": [
+        "Copyright (c) 2021 UnTS"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T06:01:33.715Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/tagged-tag@1.0.0": {
+      "copyrights": [
+        "Copyright (c) Sindre Sorhus <sindresorhus@gmail.com> (https://sindresorhus.com)"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T06:01:39.470Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
     "pkg:npm/tinyglobby@0.2.17": {
       "copyrights": [
         "Copyright (c) 2024 Madeline Gurriaran"
@@ -917,9 +2795,34 @@
       "scannedAt": "2026-07-09T14:50:10.214Z",
       "via": "scancode-toolkit@32.5.0/license-file"
     },
+    "pkg:npm/too-wordy@0.3.6": {
+      "copyrights": [
+        "Copyright (c) 2014 Matt Blair"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T06:01:45.632Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/trough@2.2.0": {
+      "copyrights": [
+        "(c) Titus Wormer",
+        "Copyright (c) 2016 Titus Wormer <tituswormer@gmail.com>"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T06:01:52.292Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
     "pkg:npm/ts-api-utils@2.5.0": {
       "license": "MIT",
       "scannedAt": "2026-07-09T14:50:23.298Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/ts-extras@1.2.0": {
+      "copyrights": [
+        "Copyright (c) Sindre Sorhus <sindresorhus@gmail.com> (https://sindresorhus.com)"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T06:02:02.847Z",
       "via": "scancode-toolkit@32.5.0/license-file"
     },
     "pkg:npm/type-check@0.4.0": {
@@ -929,6 +2832,14 @@
       "license": "MIT",
       "scannedAt": "2026-07-09T14:50:33.630Z",
       "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/type-fest@5.8.0": {
+      "copyrights": [
+        "Copyright (c) Sindre Sorhus <sindresorhus@gmail.com> (https://sindresorhus.com)"
+      ],
+      "license": "MIT AND CC0-1.0",
+      "scannedAt": "2026-08-01T06:02:29.932Z",
+      "via": "scancode-toolkit@32.5.0/manifest"
     },
     "pkg:npm/typescript-eslint@8.61.0": {
       "copyrights": [
@@ -959,6 +2870,79 @@
       "scannedAt": "2026-07-09T14:52:50.133Z",
       "via": "scancode-toolkit@32.5.0/license-file"
     },
+    "pkg:npm/unified@11.0.5": {
+      "copyrights": [
+        "(c) Titus Wormer",
+        "(c) Titus Wormer (https://wooorm.com)",
+        "Copyright (c) 2015 Titus Wormer <tituswormer@gmail.com>"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T06:02:39.186Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/unist-util-is@6.0.1": {
+      "copyrights": [
+        "(c) Titus Wormer",
+        "Copyright (c) 2015 Titus Wormer <tituswormer@gmail.com>"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T06:02:45.690Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/unist-util-modify-children@4.0.0": {
+      "copyrights": [
+        "(c) Titus Wormer",
+        "Copyright (c) 2015 Titus Wormer <tituswormer@gmail.com>"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T06:02:51.990Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/unist-util-position@5.0.0": {
+      "copyrights": [
+        "(c) Titus Wormer",
+        "Copyright (c) 2015 Titus Wormer <tituswormer@gmail.com>"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T06:02:58.159Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/unist-util-stringify-position@4.0.0": {
+      "copyrights": [
+        "(c) Titus Wormer",
+        "Copyright (c) 2016 Titus Wormer <tituswormer@gmail.com>"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T06:03:04.443Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/unist-util-visit-children@3.0.0": {
+      "copyrights": [
+        "(c) Titus Wormer",
+        "Copyright (c) 2015 Titus Wormer <tituswormer@gmail.com>"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T06:03:17.405Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/unist-util-visit-parents@6.0.2": {
+      "copyrights": [
+        "(c) Titus Wormer",
+        "Copyright (c) 2016 Titus Wormer <tituswormer@gmail.com>"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T06:03:24.413Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/unist-util-visit@5.1.0": {
+      "copyrights": [
+        "(c) Titus Wormer",
+        "Copyright (c) 2015 Titus Wormer <tituswormer@gmail.com>"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T06:03:11.117Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
     "pkg:npm/unrs-resolver@1.12.2": {
       "license": "MIT",
       "scannedAt": "2026-07-09T14:53:01.220Z",
@@ -972,6 +2956,49 @@
       "license": "BSD-2-Clause-Views",
       "scannedAt": "2026-07-09T14:53:30.657Z",
       "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/vfile-message@4.0.3": {
+      "copyrights": [
+        "(c) Titus Wormer",
+        "Copyright (c) Titus Wormer <tituswormer@gmail.com>"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T06:03:40.789Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/vfile@6.0.3": {
+      "copyrights": [
+        "(c) Titus Wormer",
+        "Copyright (c) 2013 James Halliday",
+        "Copyright (c) 2015 Titus Wormer <tituswormer@gmail.com>",
+        "Copyright Joyent, Inc. and other Node contributors"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T06:03:33.858Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/vscode-languageserver-textdocument@1.0.12": {
+      "copyrights": [
+        "Copyright (c) Microsoft Corporation"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T06:03:47.829Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/vscode-uri@3.1.0": {
+      "copyrights": [
+        "Copyright (c) Microsoft",
+        "Copyright (c) Microsoft Corporation",
+        "Copyright Joyent, Inc. and other Node contributors"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T06:03:57.690Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/weasel-words@0.1.1": {
+      "license": "MIT",
+      "scannedAt": "2026-08-01T06:04:03.482Z",
+      "via": "scancode-toolkit@32.5.0/manifest"
     },
     "pkg:npm/which@2.0.2": {
       "copyrights": [
@@ -991,12 +3018,45 @@
       "scannedAt": "2026-07-09T14:53:50.960Z",
       "via": "scancode-toolkit@32.5.0/license-file"
     },
+    "pkg:npm/write-good@1.0.8": {
+      "copyrights": [
+        "Copyright (c) 2014-2019 Brian Ford"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T06:04:10.687Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/xdg-basedir@5.1.0": {
+      "copyrights": [
+        "Copyright (c) Sindre Sorhus <sindresorhus@gmail.com> (https://sindresorhus.com)"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T06:04:16.619Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/yaml@2.9.0": {
+      "copyrights": [
+        "Copyright Eemeli Aro <eemeli@gmail.com>"
+      ],
+      "license": "ISC",
+      "scannedAt": "2026-08-01T06:04:42.512Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
     "pkg:npm/yocto-queue@0.1.0": {
       "copyrights": [
         "Copyright (c) Sindre Sorhus <sindresorhus@gmail.com> (https://sindresorhus.com)"
       ],
       "license": "MIT",
       "scannedAt": "2026-07-09T14:54:00.569Z",
+      "via": "scancode-toolkit@32.5.0/license-file"
+    },
+    "pkg:npm/zwitch@2.0.4": {
+      "copyrights": [
+        "(c) Titus Wormer",
+        "Copyright (c) 2016 Titus Wormer <tituswormer@gmail.com>"
+      ],
+      "license": "MIT",
+      "scannedAt": "2026-08-01T06:04:48.767Z",
       "via": "scancode-toolkit@32.5.0/license-file"
     }
   },
