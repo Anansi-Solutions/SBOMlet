@@ -17,6 +17,10 @@ inputs:
     description: "Set to any non-empty value to build and scan the repository's Dockerfiles and refresh the committed docker OS SBOM before generating. Needs a Docker daemon; pair with `mode: generate`."
     required: false
     default: ""
+  intensive:
+    description: "With `mode: generate`, set any non-empty value to scan every unmemoized package with available local sources using ScanCode. Slow; use occasionally."
+    required: false
+    default: ""
 
 runs:
   using: composite
@@ -44,6 +48,7 @@ runs:
         SBOMLET_MODE: ${{ inputs.mode }}
         SBOMLET_POLICY: ${{ inputs.policy }}
         SBOMLET_DOCKER: ${{ inputs.docker }}
+        SBOMLET_INTENSIVE: ${{ inputs.intensive }}
         SBOMLET_WS: ${{ github.workspace }}
       run: |
         vars=("REPO_ROOT=$SBOMLET_WS")
@@ -52,5 +57,8 @@ runs:
         fi
         if [ -n "$SBOMLET_DOCKER" ]; then
           vars+=("DOCKER=1")
+        fi
+        if [ -n "$SBOMLET_INTENSIVE" ]; then
+          vars+=("INTENSIVE=1")
         fi
         mise x -- task "$SBOMLET_MODE" "${vars[@]}"
