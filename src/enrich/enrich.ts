@@ -8,10 +8,12 @@
  * `pkg:nuget`, the deps.dev v3 version lookup for `pkg:maven`), resolves a RAW
  * license string (or, for maven, one-or-more) via the per-ecosystem resolvers,
  * appends `source:"registry"` LicenseClaim(s), and records the result in the
- * committed cache — a positive entry with the raw(s), OR a negative entry
- * ONLY on a clean 200-empty answer (the resolver returned null on a successful
- * fetch). A fetch FAILURE propagates loudly and writes NO entry, so a transient
- * outage can never become a false negative.
+ * committed cache — a positive entry with the raw(s), OR a negative entry on a
+ * clean 200-empty answer (the resolver returned null on a successful fetch) OR
+ * a clean 404 (the package is not on the public registry — a code-generated
+ * or private-registry artifact, the SAME definitive classification the nuget
+ * and deps.dev resolvers already use). A transient fetch FAILURE propagates
+ * loudly and writes NO entry, so an outage can never become a false negative.
  *
  * In CHECK mode it NEVER fetches and NEVER writes: a cache miss for an unknown
  * package needing enrichment is a stale condition — the purl is returned in
@@ -40,12 +42,7 @@ import {
   serializeCache,
   type CacheEntry,
 } from "./cache";
-import {
-  fetchGithubLicense,
-  fetchJson,
-  fetchJsonOr404,
-  mapLimit,
-} from "./fetch";
+import { fetchGithubLicense, fetchJsonOr404, mapLimit } from "./fetch";
 import {
   githubLicenseRefsFor,
   githubRepoFor,
@@ -351,8 +348,13 @@ async function fetchMisses(
 }
 
 /**
- * The pypi/npm path (UNCHANGED contract): one fetch per distinct registry URL,
- * fetchJson throws loudly on a persistent failure and writes NO entry.
+ * The pypi/npm path: one fetch per distinct registry URL via
+ * {@link fetchJsonOr404} — the nuget/deps.dev posture. A clean 404 (the
+ * package is not on the public registry — a code-generated or
+ * private-registry artifact) is a DEFINITIVE negative for every miss sharing
+ * that URL, recorded the same way a resolver's clean-empty 200 answer is.
+ * Every transient/persistent non-404 failure still throws loudly and writes
+ * NO entry.
  */
 async function fetchRegistryMisses(
   misses: Unknown[],
@@ -375,11 +377,20 @@ async function fetchRegistryMisses(
 
   const urls = [...byUrl.keys()];
   await mapLimit(urls, FETCH_CONCURRENCY, async (url): Promise<void> => {
-    // A fetch failure throws here and propagates out of mapLimit/enrichUnknowns
-    // — loud, never a silent skip, never a negative-cache write.
-    const document = await fetchJson(url, fetchOpts);
-    for (const miss of byUrl.get(url) ?? []) {
-      applyResolution(miss, document, packages, cache);
+    const result = await fetchJsonOr404(url, fetchOpts);
+    const group = byUrl.get(url) ?? [];
+    if (result.status === 404) {
+      for (const miss of group) {
+        recordNegative(
+          miss,
+          cache,
+          miss.parsed.type as CacheEntry["fetchedFrom"],
+        );
+      }
+      return;
+    }
+    for (const miss of group) {
+      applyResolution(miss, result.body, packages, cache);
     }
   });
 }

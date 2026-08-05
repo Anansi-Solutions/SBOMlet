@@ -1014,6 +1014,78 @@ describe("enrichUnknowns orchestrator (cache-first, generate-fetch, check-stale)
     }
   });
 
+  test("an npm package absent from the registry (404) resolves to an honest unknown, never a throw", async () => {
+    const { dir, path } = tempCachePath();
+    try {
+      const impl = (async (): Promise<Response> => {
+        return new Response(JSON.stringify({}), { status: 404 });
+      }) as unknown as typeof fetch;
+      const result = await withFetch(impl, () =>
+        enrichUnknowns(model(unknownNpm()), {
+          mode: "generate",
+          cachePath: path,
+          verbose: false,
+        }),
+      );
+      // The run COMPLETES — no throw — and the package stays unknown.
+      expect(registryClaim(result.model.packages[0])).toBeUndefined();
+      // A definitive negative is recorded, exactly like a clean 200-empty
+      // answer, so a later run doesn't re-fetch the same non-existent package.
+      const recorded = getEntry(readCache(path), "pkg:npm/no-claims@2.0.0");
+      expect(recorded?.resolvable).toBe(false);
+      expect(recorded?.license).toBeNull();
+      expect(recorded?.fetchedFrom).toBe("npm");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("a pypi package absent from the registry (404) resolves to an honest unknown, never a throw", async () => {
+    const { dir, path } = tempCachePath();
+    try {
+      const impl = (async (): Promise<Response> => {
+        return new Response(JSON.stringify({}), { status: 404 });
+      }) as unknown as typeof fetch;
+      const result = await withFetch(impl, () =>
+        enrichUnknowns(model(unknownPypi()), {
+          mode: "generate",
+          cachePath: path,
+          verbose: false,
+        }),
+      );
+      expect(registryClaim(result.model.packages[0])).toBeUndefined();
+      const recorded = getEntry(readCache(path), "pkg:pypi/anyio@4.12.1");
+      expect(recorded?.resolvable).toBe(false);
+      expect(recorded?.license).toBeNull();
+      expect(recorded?.fetchedFrom).toBe("pypi");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("a persistent 5xx on the npm/pypi path still throws loudly and writes NO cache entry (404 tolerance does not weaken the transient-failure gate)", async () => {
+    const { dir, path } = tempCachePath();
+    try {
+      const impl = (async (): Promise<Response> => {
+        return new Response(JSON.stringify({}), { status: 503 });
+      }) as unknown as typeof fetch;
+      await expect(
+        withFetch(impl, () =>
+          enrichUnknowns(model(unknownNpm()), {
+            mode: "generate",
+            cachePath: path,
+            verbose: false,
+            // small backoff so the retry loop doesn't take seconds
+            backoffBaseMs: 1,
+          }),
+        ),
+      ).rejects.toThrow(/503/);
+      expect(readCache(path).size).toBe(0);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   test("generate + fetch FAILURE: raises loudly and writes NO cache entry (never a false negative)", async () => {
     const { dir, path } = tempCachePath();
     try {
