@@ -2102,7 +2102,7 @@ License: MIT
 
 ### type-fest@5.8.0
 
-License: (MIT OR CC0-1.0) AND (MIT AND CC0-1.0)
+License: (MIT OR CC0-1.0)
 
 - Copyright (c) Sindre Sorhus &lt;sindresorhus@gmail.com&gt; (https://sindresorhus.com)
 

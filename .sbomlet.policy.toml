@@ -97,7 +97,7 @@ name = "musl-utils"
 where = ["docker:examples/docker-scan/Dockerfile"]
 reason = "MIT AND BSD-2-Clause AND GPL-2.0-or-later; the GPL part covers unmodified musl utility binaries in the OS layer, aggregation with source available from Alpine aports."
 
-# Two source-vs-registry assessment conflicts, resolved by hand.
+# Source-vs-registry assessment conflicts, resolved by hand.
 
 [[clarify]]
 package = { name = "spdx-ranges", version = "2.1.1" }
@@ -109,3 +109,18 @@ package = { name = "uri-js", version = "4.4.1" }
 expects = "BSD-2-Clause"
 expression = "BSD-2-Clause-Views"
 reason = "The scan read the actual LICENSE file and found the BSD-2-Clause-Views variant: plain BSD-2-Clause plus the views-and-conclusions advertising sentence. The registry flattened it to plain BSD-2-Clause. I adopt the precise variant the file carries."
+
+[[clarify]]
+package = { name = "type-fest", version = "5.8.0" }
+expression = "(MIT OR CC0-1.0)"
+reason = "The registry declares the author's dual-license (MIT OR CC0-1.0), a choice of either. The in-depth scan found both bundled license texts and mechanically joined them with AND. I adopt the declared choice-of-license."
+
+[[clarify]]
+package = { name = "@cspell/dict-en-common-misspellings", version = "2.1.13" }
+expression = "CC-BY-SA-4.0 AND MIT"
+reason = "The in-depth scan read both the CC-BY-SA-4.0 misspellings data (Wikipedia-derived) and the MIT packaging; the quick check saw only CC-BY-SA-4.0. I record the complete reading so both obligations stay on the inventory."
+
+[[clarify]]
+package = { name = "@cspell/dict-django", version = "4.1.6" }
+expression = "MIT AND WTFPL"
+reason = "The in-depth scan matched a WTFPL license file covering the bundled Django word-list data; the quick check declared only the MIT packaging. I record both: MIT for the package, WTFPL for the data it ships."
