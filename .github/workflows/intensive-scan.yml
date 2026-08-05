@@ -1,14 +1,13 @@
 name: Intensive license scan
 
-# Runs ScanCode against local source trees the registries left unresolved,
-# and commits any refreshed cache entries back. This is the occasional,
-# deep-scan lane -- source-level detection is slow, so it runs on a schedule
-# plus manual dispatch only, never on every push. Usually a no-op: it exists
-# for when a future dependency introduces a license the registries can't
-# answer. See docs/guides/ci-integration.md for the full story, including why
-# a successful commit-back touching .sbomlet.cache/** here is expected and
-# does not loop back into this workflow (no push/pull_request trigger below
-# for that commit to match).
+# Runs ScanCode against local source trees the registries left unresolved, and
+# opens a PR with any refreshed cache entries. The deep-scan lane is monthly and
+# slow, so it runs on a schedule plus manual dispatch only, never on every push
+# -- and its output reaches the default branch only through a reviewable PR,
+# never an unreviewed direct commit, so a wrong artifact is caught in review
+# rather than after it has already landed. Usually a no-op: no changes -> no PR.
+# This workflow triggers on schedule/dispatch only, so merging the PR it opens
+# never re-triggers it. See docs/guides/ci-integration.md for the full story.
 on:
   schedule:
     - cron: "17 4 1 * *" # monthly: the burn-down set is small and changes slowly
@@ -21,7 +20,8 @@ jobs:
     # minutes on this repo); later runs only scan versions never analyzed.
     timeout-minutes: 240
     permissions:
-      contents: write
+      contents: write # createCommitOnBranch writes the refresh onto its own branch
+      pull-requests: write # ...which is opened as a PR rather than committed to the default branch
     steps:
       - name: Check out repository code
         uses: actions/checkout@v6
@@ -39,7 +39,7 @@ jobs:
         # Same command a developer runs locally.
         run: mise x -- task generate INTENSIVE=1
 
-      - name: Commit refreshed cache entries
+      - name: Open a PR with refreshed cache entries
         uses: actions/github-script@v8
         with:
           script: |
@@ -47,9 +47,10 @@ jobs:
               { github, context, core },
               {
                 // The scan may only ever touch these paths -- anything else
-                // dirty is an earlier step's bug, not something to sweep
-                // into this commit.
+                // dirty is an earlier step's bug, not something to sweep into
+                // this refresh.
                 scope: [".sbomlet.cache", "THIRD_PARTY_LICENSES.md", "THIRD_PARTY_NOTICES.md"],
                 message: "chore: refresh intensive scan artifacts",
+                pullRequest: true,
               },
             );
