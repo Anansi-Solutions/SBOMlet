@@ -3,12 +3,12 @@
 //
 // Shared by docker-scan.yml (full changed set, committed to the pushed branch)
 // and intensive-scan.yml (artifact-scoped, and `pullRequest: true` so its
-// scheduled output reaches the default branch through a reviewable PR, never an
-// unreviewed direct commit). Called from a github-script step; `github`/
-// `context` are the step's authenticated octokit client and event context.
-// GraphQL's createCommitOnBranch takes additions/deletions as base64 file
-// contents directly, so there is no temp file and no argv size limit to worry
-// about.
+// scheduled output reaches the repository's DEFAULT branch through a reviewable
+// PR, never an unreviewed direct commit). Called from a github-script step;
+// `github`/`context` are the step's authenticated octokit client and event
+// context. GraphQL's createCommitOnBranch takes additions/deletions as base64
+// file contents directly, so there is no temp file and no argv size limit to
+// worry about.
 //
 // additions-only: a deletion, rename, copy, or a path git quotes in porcelain
 // output (non-ASCII under default core.quotepath) would corrupt the file list,
@@ -88,14 +88,18 @@ module.exports = async (
     contents: readFileSync(path).toString("base64"),
   }));
 
-  // Direct mode commits onto the checked-out branch; PR mode lands the refresh
-  // on a fresh per-run branch a maintainer merges after review.
-  const baseBranch = context.ref.replace(/^refs\/heads\//, "");
-  const targetBranch = pullRequest
-    ? `chore/intensive-scan-refresh-${context.runId}`
-    : baseBranch;
-
+  // Direct mode commits onto the checked-out branch. PR mode targets the
+  // repository's DEFAULT branch (so a scheduled refresh always lands against
+  // main, not wherever the run happened to check out) and stages the commit on
+  // a fresh per-run branch a maintainer merges after review.
+  let baseBranch = context.ref.replace(/^refs\/heads\//, "");
+  let targetBranch = baseBranch;
   if (pullRequest) {
+    const { data: repository } = await github.rest.repos.get({
+      ...context.repo,
+    });
+    baseBranch = repository.default_branch;
+    targetBranch = `chore/intensive-scan-refresh-${context.runId}`;
     try {
       await github.rest.git.createRef({
         ...context.repo,
@@ -147,5 +151,5 @@ module.exports = async (
     title: message,
     body: PR_BODY,
   });
-  core.info(`opened #${pr.data.number} from ${targetBranch} (commit ${oid})`);
+  core.info(`opened #${pr.data.number} into ${baseBranch} (commit ${oid})`);
 };
