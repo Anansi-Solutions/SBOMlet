@@ -24,6 +24,12 @@ handling = "warn"
 # abort the run. Excluded from the Docker-scan workflow's build set.
 ignore = ["src/collectors/dockerfile.ts", "test/dockerfile.test.ts"]
 
+# `source` is a glob over Dockerfile identities, matched exactly like
+# the [docker] ignore globs; a literal path matches one image.
+[[docker.development]]
+source = "examples/docker-scan/Dockerfile"
+reason = "Demo image for the docker-scan example; built only to exercise the scanner, never deployed or distributed."
+
 # The dogfood image (examples/docker-scan) is Alpine-based; its OS layer ships
 # unmodified distro packages whose copyleft obligations are met by the distro
 # itself (source via Alpine aports; the image aggregates, never derives).
