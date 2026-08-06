@@ -11,12 +11,9 @@ import { assertSyftSbomSize } from "../collectors/dockerOs";
 import { assessPackages } from "../enrich/assess";
 import { enrichUnknowns } from "../enrich/enrich";
 import { type IntensiveOptions } from "../enrich/scancode";
+import { mergeSboms, type CollectedSbom } from "../merge/merge";
 import {
   DOCKER_IDENTITY_PREFIX,
-  mergeSboms,
-  type CollectedSbom,
-} from "../merge/merge";
-import {
   toSortedDependenciesJson,
   type EvaluatedDependencies,
   type Verdict,

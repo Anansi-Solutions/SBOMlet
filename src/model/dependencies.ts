@@ -205,6 +205,18 @@ export interface Verdict {
 export type ScopeTaxonomy = "app" | "os";
 
 /**
+ * The prefix of every docker image occurrence identity ("docker:<source>").
+ * RESERVED for scope:"os" inputs — on a POSIX filesystem a directory can be
+ * literally named "docker:whatever", so without the reserved-namespace guard
+ * in merge.ts (assertNotReservedIdentity) a crafted workspace path could
+ * impersonate a docker image occurrence and inherit `where`-scoped
+ * acceptances reviewed for the image layer. Lives on the model hub — every
+ * other module imports from here — because the render layer needs it too
+ * (Containers section identities), not only merge/pipeline.
+ */
+export const DOCKER_IDENTITY_PREFIX = "docker:";
+
+/**
  * Dependency provenance — "why is this dependency here?" — derived per-target
  * at collect time from the lockfile/BOM dependency graph. Introduction
  * is PER-TARGET (per BOM): the same purl can be a direct dependency in one

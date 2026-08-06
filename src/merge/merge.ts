@@ -16,6 +16,7 @@ import { extractCopyrightLines } from "../extract/copyright";
 import {
   compareCodeUnits,
   comparePackages,
+  DOCKER_IDENTITY_PREFIX,
   type CanonicalDependencies,
   type DependencyIntroduction,
   type LicenseClaim,
@@ -480,15 +481,6 @@ function mergeInto(existing: PackageEntry, incoming: PackageEntry): void {
     existing.attribution = incoming.attribution;
   }
 }
-
-/**
- * The prefix of every docker image occurrence identity ("docker:<source>").
- * RESERVED for scope:"os" inputs — on a POSIX filesystem a directory can be
- * literally named "docker:whatever", so without the guard below a crafted
- * workspace path could impersonate a docker image occurrence and inherit
- * `where`-scoped acceptances reviewed for the image layer.
- */
-export const DOCKER_IDENTITY_PREFIX = "docker:";
 
 /**
  * Throw when a non-os input mints an identity in the reserved namespace.
