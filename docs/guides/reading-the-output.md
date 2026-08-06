@@ -31,9 +31,9 @@ where to look. From the top:
 | `## Problematic licenses` | What is failing the gate right now, and what is only being warned about |
 | `## Copyleft and special notices` | Which packages carry a [copyleft](../glossary.md#copyleft) obligation you might owe on |
 | `## Imprecise licenses` | Which licenses the tool couldn't pin to a precise id, and wants a human to resolve |
-| `## Production dependencies` | The full inventory of everything you ship |
-| `## Development-only dependencies` | The full inventory of build- and test-time-only packages |
-| `## Docker image packages` | The OS and application packages inside your scanned Docker images |
+| `## Containers` | Every analyzed container, and whether it renders production or development-only |
+| `## Production dependencies` | The full inventory of everything you ship, including each production container's packages |
+| `## Development-only dependencies` | The full inventory of build- and test-time-only packages, including each development container's packages |
 
 The header is a comment that names the regenerate command instead of a date.
 There is no timestamp anywhere in the file. A date would change on every run, and
@@ -61,7 +61,7 @@ Right under the header is a short list:
 - terraform: 19
 - Production packages: 2248
 - Development-only packages: 1388
-- Docker image packages: 310
+- Container packages: 310
 - Unknown license: 42
 ```
 
@@ -79,13 +79,15 @@ The next three lines partition that total exactly:
   split.
 - Development-only packages are ones whose every use is a dev dependency: build
   tools, test runners, and the like.
-- Docker image packages come from inside a scanned Docker image — its full
+- Container packages come from inside a scanned Docker image — its full
   contents, the OS layer and the application packages layered on top
   ([`os` scope](../glossary.md#scope-app-and-os)). They are counted
   on their own because a package that also ships at the application level keeps
-  its production/development-only classification there instead.
+  its production/development-only classification there instead; which
+  container each one came from is what `## Containers` and its per-container
+  subsections show.
 
-Production plus development-only plus Docker image packages equals the total. The last line,
+Production plus development-only plus container packages equals the total. The last line,
 **Unknown license**, is a separate tally that cuts across all three: it counts
 packages where the tool could determine no license at all. An
 [imprecise](../glossary.md#imprecise-family) license, such as `BSD` with no
@@ -150,12 +152,27 @@ unknown ones in the unknown-license parts of the notices.
 
 If this line is absent, there were no warnings at all.
 
+A package that fails here never repeats in the Copyleft section below — you
+find it in exactly one of the two, Problematic or Copyleft, never both. It
+still keeps its row in its Production/Development-only table, or its
+container's own subsection, so the full inventory is always complete; only the
+narrative sections dedup. This table is also where an AGPL container package
+always shows up: even a container whose ordinary GPL/LGPL packages are only
+warnings, `default:agpl-container` fails unconditionally, because AGPL's
+network-copyleft obligation reaches server-side use.
+
 ## Copyleft and special notices
 
 This section lists every package carrying a [copyleft](../glossary.md#copyleft)
 obligation in at least one workspace that the policy hasn't suppressed. Copyleft
 licenses (GPL, LGPL, AGPL, MPL) can require you to release your own changes under
 the same terms when you distribute, so a reviewer reads this section closely.
+
+A container's own base-image copyleft never appears here, whatever its verdict —
+the expected GPL/LGPL in a Debian or Alpine layer lists only under that
+container's own subsection (below `## Containers`), not repeated in this
+narrative section. Nor does a package already shown in Problematic licenses
+above; the two sections never overlap.
 
 It opens with a one-line summary sentence, then the suppressed-workspaces list
 when there is one:
@@ -223,15 +240,13 @@ once nothing is imprecise.
 
 ## The inventory tables
 
-Three tables hold the complete inventory. Every package appears in exactly one of
-them:
+Two tables hold the complete app-scope inventory. Every application package
+appears in exactly one of them:
 
 - Production dependencies are everything you ship.
 - Development-only dependencies are build- and test-time packages only.
-- Docker image packages are the packages from inside your scanned Docker images —
-  their full contents, the OS layer and the application packages on top.
 
-All three always render, even when empty, so the document's shape is stable. They
+Both always render, even when empty, so the document's shape is stable. They
 share five columns:
 
 | Column | What it tells you |
@@ -244,18 +259,54 @@ share five columns:
 
 The inventory tables do **not** carry a **Why** column. Provenance is shown only
 in the problematic and copyleft tables, where it answers a compliance question.
-Adding it to the full 3,900-row inventory would be noise. How an ordinary
-production package got pulled in is a question you ask when it's flagged, not for
-every row.
+Adding it to the full inventory would be noise. How an ordinary production
+package got pulled in is a question you ask when it's flagged, not for every
+row.
 
-A note on the **License** column for Docker image packages: an OS-family row
-often shows a long `AND`-joined expression, sometimes with a `(+ …)` suffix. The
-expression is every license the base distribution recorded for that package. The
-`(+ …)` suffix lists license tokens the tool recognized but couldn't map to a
-precise SPDX id, surfaced rather than dropped. A package the scan also finds at
-the application level does not get a second row here — it keeps its application
-scope and lists the image only in its **Used in** cell, so a row in this table is
-always one this scan uniquely contributes.
+## Containers
+
+Right after Imprecise licenses, `## Containers` lists every analyzed container
+once:
+
+```text
+## Containers
+
+| Container | Classification | Packages |
+| --- | --- | --- |
+| docker:services/backend/Dockerfile | production | 214 |
+| docker:tools/lint/Dockerfile | development | 96 |
+```
+
+Classification is `production` unless a policy `[[docker.development]]` entry
+marks that container's Dockerfile identity development-only — see the
+[writing-policy guide](./writing-policy.md#mark-a-container-development-only).
+It decides only where the container's packages are listed below, never a
+verdict: a routine copyleft package still downgrades or gates per
+`[os_dependencies]` regardless of the half it renders under, and an AGPL
+container package still fails unconditionally either way.
+
+Each container's own packages then appear as a `### Container: docker:<source>`
+subsection right after the app table of the half it classifies into —
+`## Production dependencies` for a production container,
+`## Development-only dependencies` for a development one. A container's
+subsection is its complete package inventory, four columns and no **Used in**,
+since every row in a single container's table is already scoped to that one
+image:
+
+| Column | What it tells you |
+| --- | --- |
+| Name, Ecosystem, Version | The package |
+| License | The finding, same rules as the inventory tables above |
+
+A note on the **License** column for a container row: it often shows a long
+`AND`-joined expression, sometimes with a `(+ …)` suffix. The expression is
+every license the base distribution recorded for that package. The `(+ …)`
+suffix lists license tokens the tool recognized but couldn't map to a precise
+SPDX id, surfaced rather than dropped. A package the scan also finds at the
+application level does not get a row in a container subsection at all — it
+keeps its application scope in the inventory table above and lists the image
+only in its **Used in** cell, so a container subsection row is always one that
+scan uniquely contributes.
 
 ### The Why column, read in detail
 
@@ -270,7 +321,7 @@ answers one question: how did this package end up in the workspaces named in
   chain is the path from a thing you declared down to it. A very long path or a
   wide set of parents is truncated with a stable `(+N more)`.
 - `—` means the tool has no usable provenance for this package in these
-  workspaces. This is the expected value for Docker image packages, Terraform
+  workspaces. This is the expected value for container packages, Terraform
   modules, and bun, not a failure. [Provenance](../glossary.md#dependency-provenance)
   is available for npm (from the Yarn-4 plugin) and Python (from `poetry.lock`);
   elsewhere you'll see the dash.

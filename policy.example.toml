@@ -269,10 +269,10 @@ handling = "warn"
 # of the distro -- is the operating system the container ships ON, not code your
 # project authored or redistributes as a library. Those obligations are
 # satisfied by shipping the image (the base distro handles its own compliance),
-# so the gate LISTS the OS packages in a dedicated
-# "## Docker image packages" section for the inventory rather than
-# FAILING your build on every standard base image. Mirrors [dev_dependencies]:
-# a scope whose would-be fails are a list, not a gate, by default.
+# so the gate LISTS the OS packages under their container's own subsection
+# (below "## Containers") rather than FAILING your build on every standard
+# base image. Mirrors [dev_dependencies]: a scope whose would-be fails are a
+# list, not a gate, by default.
 #
 #   handling = "warn"    -- an OS would-be-fail downgrades to WARN (the default).
 #   handling = "fail"    -- NO downgrade; gate OS packages EXACTLY like prod app
@@ -285,7 +285,10 @@ handling = "warn"
 # (BUSL, SSPL, Elastic, RSAL) in an OS package STILL FAILS the gate
 # unconditionally, regardless of this knob -- deny sits above os_dependencies
 # just as it sits above dev_dependencies. Omitting the whole [os_dependencies]
-# table defaults to "warn".
+# table defaults to "warn". AGPL in an OS package is its OWN exception: it
+# ALWAYS fails via "default:agpl-container", never downgraded by this knob --
+# network-copyleft (section 13) reaches server-side use and is not routine
+# base-image noise.
 #
 # ---------------------------------------------------------------------------
 # HOW the .sbomlet.cache/docker.sbom.json is produced -- THREE lanes, each a
@@ -316,6 +319,32 @@ handling = "warn"
 
 [os_dependencies]
 handling = "warn"
+
+# ---------------------------------------------------------------------------
+# Marking a container development-only ([[docker.development]])
+#
+# Every analyzed container defaults to PRODUCTION. An entry here moves a
+# matching container's packages to render under "## Development-only
+# dependencies" instead of "## Production dependencies" -- for images that
+# only run in CI or locally and are never shipped to a user (a lint runner, a
+# test harness). RENDER-ONLY: it moves the LISTING, never a verdict -- a
+# routine copyleft package inside the marked container still downgrades or
+# gates per [os_dependencies] above, and an AGPL container package still fails
+# unconditionally either way.
+#
+# `source` is a GLOB over the Dockerfile's repo-relative identity (no
+# "docker:" prefix), matched with the EXACT SAME dialect as [docker].ignore
+# above: "*" stays within one path segment, "**" crosses segments, matching is
+# case-insensitive and anchored to the whole identity -- a literal path is a
+# valid glob that matches only itself. `reason` is mandatory: the audit trail
+# for why this image never ships. A `source` matching no analyzed container
+# prints a stderr warning (a likely typo), mirroring the unused-rule posture
+# elsewhere in this file.
+# ---------------------------------------------------------------------------
+
+# [[docker.development]]
+# source = "ci/**"
+# reason = "every image under ci/ only runs the test suite in the pipeline and is never published or shipped."
 
 # ---------------------------------------------------------------------------
 # Exempting a built-in source-available deny (ADR-0013)

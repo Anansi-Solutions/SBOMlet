@@ -63,14 +63,15 @@ Sections appear in this order:
 | Problematic licenses | `## Problematic licenses` | policy run only |
 | Copyleft and special notices | `## Copyleft and special notices` | policy run only |
 | Imprecise licenses | `## Imprecise licenses (review / disambiguate)` | any [imprecise](../glossary.md#imprecise-family) package exists |
+| Containers | `## Containers` | always |
 | Production dependencies | `## Production dependencies` | always |
 | Development-only dependencies | `## Development-only dependencies` | always |
-| Docker image packages | `## Docker image packages` | always |
 
 A run without a policy omits the policy pointer line, the Problematic section,
-and the Copyleft section. The three summary sections always render their heading
-and table header even when they hold no rows, so the document shape stays the
-same whatever the dependency mix.
+and the Copyleft section; every container then classifies `production`, the
+conservative default. The Containers index and the two summary sections always
+render their heading and table header even when they hold no rows, so the
+document shape stays the same whatever the dependency mix.
 
 ### Package counts
 
@@ -85,24 +86,26 @@ A bullet list: the total, then one line per ecosystem (`npm`, `pypi`, `deb`,
 - pypi: 114
 - Production packages: 3100
 - Development-only packages: 516
-- Docker image packages: 0
+- Container packages: 0
 - Unknown license: 502
 ```
 
 The three population counts partition the total: every package is one of
-production, development-only, or Docker OS. A package is
+production, development-only, or a container's own inventory. A package is
 [development-only](../glossary.md#development-only-and-production) when it has at
 least one [occurrence](../glossary.md#occurrence) and every occurrence is a dev
-dependency; any production occurrence makes the whole package production. Docker
-OS packages are counted on their own because the dev/prod split is an app-scope
-idea. Unknown license is a separate tally that overlaps the other three: it
-counts packages whose [finding](../glossary.md#license-finding) resolved to no
-expression. An [imprecise](../glossary.md#imprecise-family) finding is present,
-not unknown, so it is excluded from this count.
+dependency; any production occurrence makes the whole package production.
+Container packages are counted on their own because the dev/prod split is an
+app-scope idea; which container each one came from, and whether that container is
+production or development, is what the [Containers](#containers) section and its
+per-container subsections show. Unknown license is a separate tally that overlaps
+the other three: it counts packages whose [finding](../glossary.md#license-finding)
+resolved to no expression. An [imprecise](../glossary.md#imprecise-family) finding
+is present, not unknown, so it is excluded from this count.
 
 ### The summary tables
 
-The three summary sections share five columns:
+The two summary sections, Production and Development-only, share five columns:
 
 | Column | Contents |
 | --- | --- |
@@ -126,20 +129,55 @@ variations:
   deduplicated raw [license claims](../glossary.md#license-claim) joined with
   commas.
 
-Docker image packages appear only in the Docker image packages section, never in
-the app sections — an application package that also ships inside a scanned image
-keeps its application scope and is only cross-referenced there via Used in.
-Lockfile-only scans that were never enriched will show `unknown` in the License
-column; that is correct pre-annotation behavior, not a defect.
+A package that comes only from a container's own image scan never rows in these
+two tables — it rows in its container's own subsection instead, see
+[Containers](#containers) below. An application package that also ships inside a
+scanned image keeps its application scope here and is cross-referenced to the
+image only through its Used-in cell. Lockfile-only scans that were never
+enriched will show `unknown` in the License column; that is correct
+pre-annotation behavior, not a defect.
 
-A Docker row's targets take the form `docker:<source>`: the Dockerfile's
-repo-relative path for an image the tool built
+A container occurrence's target takes the form `docker:<source>`: the
+Dockerfile's repo-relative path for an image the tool built
 (`docker:examples/docker-scan/Dockerfile`), or the image reference verbatim
-for an `--image` scan (`docker:node:24-alpine`). A package present in several
-images lists each image's occurrence. The whole `docker:` prefix is reserved
-for image occurrences: a workspace directory whose identity starts with it
-fails the run loudly, so an application occurrence can never impersonate an
-image one.
+for an `--image` scan (`docker:node:24-alpine`). The whole `docker:` prefix is
+reserved for image occurrences: a workspace directory whose identity starts
+with it fails the run loudly, so an application occurrence can never
+impersonate an image one.
+
+### Containers
+
+Rendered as `## Containers`, immediately before Production dependencies,
+regardless of whether the run used a policy. One row per analyzed container:
+
+| Column | Contents |
+| --- | --- |
+| Container | the container's `docker:<source>` identity |
+| Classification | `production` or `development` |
+| Packages | how many packages that container's image scan found |
+
+A container classifies `development` when a policy [`[[docker.development]]`](policy.md#docker)
+entry's `source` glob matches its identity; every other container classifies
+`production`, the conservative default — a run with no policy, or with no
+`[[docker.development]]` entries, marks every container production. The
+classification decides only where a container's packages are listed, Production
+or Development-only, never a verdict: a container's licence obligations gate the
+same way regardless of this marking.
+
+Each classified half then carries one `### Container: docker:<source>`
+subsection per container, right after that half's app table. A container's
+subsection is its complete package inventory — every package with an occurrence
+targeting that image — with four columns and no Used-in, since a single
+container's table already scopes every row to that one image:
+
+| Column | Contents |
+| --- | --- |
+| Name, Ecosystem, Version, License | as in the summary tables |
+
+A package present in several containers rows once per container, in each one's
+own subsection. There is no standalone Docker section any more: every container
+package is listed exactly once per container it occurs in, folded under
+Production or Development-only by that container's classification.
 
 ### Problematic licenses
 
@@ -164,6 +202,19 @@ After the table, when any `warn` verdicts exist, one non-blocking line rolls
 them up by coarse category (copyleft, unknown, deny, other) with a count each,
 for example `_Non-blocking: 12 copyleft warning(s), 3 unknown warning(s) (dev/os-downgraded or suppressed). See the sections below._`
 The line is omitted when there are no warnings.
+
+A package listed here is never repeated in the Copyleft section below — a
+package is listed under Problematic OR Copyleft, never both. It keeps its row in
+its Production/Development-only inventory table, or its container subsection,
+and in Assessment conflicts when it also carries a conflict marker; the dedup
+applies to Copyleft membership only.
+
+This table also carries the AGPL container exception. A container system
+package licensed AGPL always fails here, `default:agpl-container`, even when
+[`[os_dependencies]`](policy.md#os_dependencies) would otherwise downgrade a
+routine container copyleft to a warning: AGPL's network-copyleft obligation
+(section 13) reaches server-side use, so it is never treated as routine
+base-image noise the way an ordinary container GPL or LGPL package is.
 
 ### Copyleft and special notices
 
@@ -191,6 +242,14 @@ It uses the five summary columns plus a trailing **Why** column:
 The Used-in cell here lists only the flagged targets, not every place the
 package is used. This is how an elected copyleft branch surfaces in the output:
 the leaking workspaces are named.
+
+Container system-package copyleft is routine base-image noise and never appears
+in this table, whatever its verdict status — the expected GPL or LGPL in a
+Debian or Alpine base layer is listed only in its container's own subsection
+(see [Containers](#containers) above), not repeated here. The AGPL exception
+routes through Problematic licenses instead, above, rather than this table. A
+package already listed in Problematic licenses is also excluded here, per the
+dedup described there.
 
 ### The Why column
 

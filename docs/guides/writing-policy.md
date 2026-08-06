@@ -289,14 +289,17 @@ handling = "warn"
 The expected copyleft in a Debian or Alpine base image — glibc under LGPL, bash
 and coreutils under GPL — is the operating system the container ships on, not
 code your project redistributes as a library. Its obligations are satisfied by
-shipping the image, so `warn` (the default) lists those packages in a dedicated
-section rather than failing your build on every standard base image. The same
-downgrade covers an application package the image scan finds that isn't also
-declared directly — it entered the inventory only because the image ships it.
-`fail` gates [OS-scope](../glossary.md#scope-app-and-os) packages like app code,
-for projects that rebuild their base, or that want every image-sourced copyleft
-reviewed, and `ignore` opts out explicitly. A `[[deny]]` licence in an OS-scope
-package still fails regardless, because deny sits above this knob.
+shipping the image, so `warn` (the default) lists those packages under their
+container's own subsection rather than failing your build on every standard
+base image. The same downgrade covers an application package the image scan
+finds that isn't also declared directly — it entered the inventory only because
+the image ships it. `fail` gates [OS-scope](../glossary.md#scope-app-and-os)
+packages like app code, for projects that rebuild their base, or that want
+every image-sourced copyleft reviewed, and `ignore` opts out explicitly. A
+`[[deny]]` licence in an OS-scope package still fails regardless, because deny
+sits above this knob — and an AGPL container package still fails via the
+dedicated `default:agpl-container` rule regardless of this knob too, because
+network-copyleft reaches server-side use and is never routine base-image noise.
 
 These packages reach the merge only if a `.sbomlet.cache/docker.sbom.json` is present in your
 repo, produced separately by the `generate-docker-sbom` subcommand — run by hand
@@ -348,6 +351,33 @@ This affects every `generate-docker-sbom` discovery walk, whether run by hand or
 by CI's `--list-dockerfiles` build-set resolution — both share the same walk and
 the same `[docker]` ignore globs. The everyday `generate` and `check` commands
 don't discover Dockerfiles, so this table has no effect on them.
+
+## Mark a container development-only
+
+One of your Dockerfiles builds an image that only runs in CI — a lint runner, a
+test harness — and never ships to a user. Its packages currently render under
+`## Production dependencies`, alongside images you actually distribute.
+
+```toml
+[[docker.development]]
+source = "ci/**"
+reason = "every image under ci/ only runs the test suite in the pipeline and is never published or shipped."
+```
+
+Every container whose `docker:<source>` identity matches the glob now renders
+under `## Development-only dependencies` instead, in its own `### Container:`
+subsection. `source` uses the same glob dialect as `[docker].ignore`: `*` stays
+within one path segment, `**` crosses segments, and a literal path like
+`"ci/runner/Dockerfile"` matches only that one image. `reason` is mandatory —
+it is the audit trail for why the image never ships.
+
+This is placement only. It never changes a verdict: a routine copyleft package
+inside the marked container still downgrades or gates exactly as
+`[os_dependencies]` says, and an AGPL container package still fails regardless
+of which half it renders under. Don't mark a container development-only just to
+quiet a copyleft warning — mark it that way only when the image genuinely never
+reaches a user; anything you build, publish, or run in production stays at the
+absent default, production.
 
 ## What to do when the gate flags something
 
