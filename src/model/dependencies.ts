@@ -194,7 +194,8 @@ export interface Verdict {
   /**
    * Machine-readable deciding rule: "compatible[1]", "clarify[0]",
    * "workspace.copyleft_suppressed[0]", "default:copyleft", "default:unknown",
-   * "default:imprecise", "default:imprecise-copyleft", "default:ok".
+   * "default:imprecise", "default:imprecise-copyleft", "default:agpl-container",
+   * "default:ok".
    */
   rule: string;
   reason: string;

@@ -74,7 +74,7 @@ import {
   type ExpressionNode,
 } from "../normalize/expression";
 import { BUILTIN_DENY_RULE_ID } from "./builtinDenylist";
-import { COPYLEFT_FAMILY } from "./copyleft";
+import { AGPL_IDS, COPYLEFT_FAMILY } from "./copyleft";
 import {
   COULD_BE_COPYLEFT_FAMILIES,
   WORKSPACE_ABSORBS,
@@ -322,19 +322,34 @@ function clarifyIndexFor(entry: PackageEntry, policy: Policy): number {
  * the LITERAL COULD_BE_COPYLEFT_FAMILIES token set — NOT a COPYLEFT_FAMILY
  * lookup, which is keyed by exact SPDX ids and returns undefined for a bare
  * family token (silently mis-classifying it as permissive):
+ *   - os-scope AND family is the bare "AGPL" token → fail, rule
+ *     "default:agpl-container" (checked first — the imprecise mirror of the
+ *     elected-AGPL escalation in copyleftVerdict; a bare AGPL label could
+ *     carry the same network-copyleft obligation and must never be parked at
+ *     a warn).
  *   - family IN the set (bare GPL/AGPL/LGPL) → flagged-for-review, a warn that
  *     surfaces, rule "default:imprecise-copyleft". Conservative: an imprecise
  *     copyleft family is never silently passed.
  *   - family NOT in the set (a known-permissive family like BSD) → a non-gating
  *     warn, rule "default:imprecise". Surfaced for optional `[[clarify]]`
  *     disambiguation, but never a hard fail purely for being imprecise.
- * Both are status "warn": visible in the summary, non-gating by default.
+ * The latter two are status "warn": visible in the summary, non-gating by
+ * default.
  */
 function impreciseVerdict(
   base: { purl: string; occurrenceTarget: string },
   target: string,
   family: string,
+  scope: PackageEntry["scope"],
 ): Verdict {
+  if (scope === "os" && family === "AGPL") {
+    return {
+      ...base,
+      status: "fail",
+      rule: "default:agpl-container",
+      reason: `imprecise license family "AGPL" in container system package "${target}" could carry the AGPL network-copyleft obligation (section 13 reaches server-side use) — disambiguate via a [[clarify]] override, or add a scoped [[compatible]] rule if the container is accepted`,
+    };
+  }
   if (COULD_BE_COPYLEFT_FAMILIES.has(family)) {
     return {
       ...base,
@@ -695,8 +710,34 @@ function unknownVerdict(
 }
 
 /**
+ * Container AGPL escalation: an os-scope package whose ELECTED expression
+ * carries an AGPL leaf is a REAL fail, never the routine os-downgraded warn
+ * — network copyleft (AGPL section 13) applies to server-side container use,
+ * so it must not be softened by os_dependencies="warn"/"ignore" the way
+ * ordinary base-image GPL/LGPL is. Bypasses applyScopeDowngrades entirely
+ * (both the os and dev lanes); the reason names the elected expression, the
+ * container target, the network-interaction rationale, and the scoped
+ * `[[compatible]]` remedy.
+ */
+function agplContainerVerdict(
+  base: { purl: string; occurrenceTarget: string },
+  target: string,
+  elected: string,
+): Verdict {
+  return {
+    ...base,
+    status: "fail",
+    rule: "default:agpl-container",
+    reason: `AGPL leaf in elected "${elected}" is a network-copyleft obligation (AGPL section 13 reaches server-side use) in container system package "${target}" — not routine base-image copyleft; add a scoped [[compatible]] rule if this container is accepted`,
+  };
+}
+
+/**
  * Copyleft lane: a copyleft elected branch is SUPPRESSED when its occurrence
- * sits in a family-justified suppressed workspace, otherwise it is a would-be
+ * sits in a family-justified suppressed workspace; otherwise an os-scope
+ * package whose elected expression carries an AGPL leaf escalates to a REAL
+ * fail (agplContainerVerdict, checked BEFORE the scope downgraders so
+ * os_dependencies can never soften it); otherwise it is a would-be
  * default:copyleft FAIL routed through the scope downgraders.
  * Split out of verdictFor to keep the precedence walk within the complexity
  * budget; the behavior is unchanged — it runs only when assessment.copyleft is
@@ -730,6 +771,14 @@ function copyleftVerdict(
         reason: `copyleft "${assessment.elected}" suppressed in "${target}": ${justification} — workspace "${rule.path}" (${rule.description})`,
       };
     }
+  }
+  if (
+    entry.scope === "os" &&
+    assessment.electedNode !== null &&
+    assessment.elected !== null &&
+    copyleftLeafIds(assessment.electedNode).some((id) => AGPL_IDS.has(id))
+  ) {
+    return agplContainerVerdict(base, target, assessment.elected);
   }
   return applyScopeDowngrades(
     {
@@ -802,7 +851,12 @@ function verdictFor(
   }
 
   if (assessment.impreciseFamily !== undefined) {
-    return impreciseVerdict(base, target, assessment.impreciseFamily);
+    return impreciseVerdict(
+      base,
+      target,
+      assessment.impreciseFamily,
+      entry.scope,
+    );
   }
 
   if (assessment.expression === null) {

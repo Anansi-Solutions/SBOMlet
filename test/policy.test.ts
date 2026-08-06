@@ -12,6 +12,7 @@ import {
 import { evaluate, unusedRuleIds } from "../src/policy/evaluate";
 import { BUILTIN_DENY_RULES } from "../src/policy/builtinDenylist";
 import { denyRuleFor } from "../src/policy/denylist";
+import { AGPL_IDS, COPYLEFT_IDS } from "../src/policy/copyleft";
 import {
   COULD_BE_COPYLEFT_FAMILIES,
   WORKSPACE_ABSORBS,
@@ -3431,6 +3432,215 @@ describe("evaluate — os-scope partial finding", () => {
     const { verdicts } = runEngine([appMixed], '[unknown]\nhandling = "fail"');
     expect(verdicts[0].status).toBe("fail");
     expect(verdicts[0].rule).toBe("default:unknown");
+  });
+});
+
+// ===========================================================================
+// AGPL in a container system package escalates to a REAL fail
+// (default:agpl-container), never the routine os-scope downgrade —
+// network copyleft (AGPL section 13) applies to server-side container use.
+// ===========================================================================
+
+describe("AGPL_IDS — literal set (copyleft.ts)", () => {
+  test("is exactly the six AGPL ids", () => {
+    expect([...AGPL_IDS].sort()).toEqual([
+      "AGPL-1.0",
+      "AGPL-1.0-only",
+      "AGPL-1.0-or-later",
+      "AGPL-3.0",
+      "AGPL-3.0-only",
+      "AGPL-3.0-or-later",
+    ]);
+  });
+
+  test("every member is in COPYLEFT_IDS", () => {
+    for (const id of AGPL_IDS) {
+      expect(COPYLEFT_IDS.has(id)).toBe(true);
+    }
+  });
+
+  test('drift tripwire: every COPYLEFT_IDS id with the "AGPL-" prefix is in AGPL_IDS', () => {
+    // TEST-only prefix scan — a future FAMILY_MEMBERS addition can never
+    // silently miss the escalation set. Runtime matching stays exact-ID
+    // (AGPL_IDS.has), never a prefix check.
+    for (const id of COPYLEFT_IDS) {
+      if (id.startsWith("AGPL-")) {
+        expect(AGPL_IDS.has(id)).toBe(true);
+      }
+    }
+  });
+});
+
+describe("evaluate — os-scope AGPL container escalation", () => {
+  const AGPL_TARGET = "docker:img/Dockerfile";
+
+  test("HEADLINE: os-scope AGPL-3.0-only under os_dependencies=warn escalates to a REAL fail, not the routine warn", () => {
+    const { verdicts } = runEngine(
+      [
+        osPkgSpec("pkg:deb/debian/agpl-os@1.0.0", "agpl-os", "AGPL-3.0-only", [
+          AGPL_TARGET,
+        ]),
+      ],
+      "",
+    );
+    expect(verdicts[0].status).toBe("fail");
+    expect(verdicts[0].rule).toBe("default:agpl-container");
+  });
+
+  test("os_dependencies=ignore does not license the AGPL container package back in (the loudest current escape)", () => {
+    const { verdicts } = runEngine(
+      [
+        osPkgSpec("pkg:deb/debian/agpl-os@1.0.0", "agpl-os", "AGPL-3.0-only", [
+          AGPL_TARGET,
+        ]),
+      ],
+      '[os_dependencies]\nhandling = "ignore"',
+    );
+    expect(verdicts[0].status).toBe("fail");
+    expect(verdicts[0].rule).toBe("default:agpl-container");
+  });
+
+  test("os_dependencies=fail also fails with the SAME distinct rule id (deterministic across every handling)", () => {
+    const { verdicts } = runEngine(
+      [
+        osPkgSpec("pkg:deb/debian/agpl-os@1.0.0", "agpl-os", "AGPL-3.0-only", [
+          AGPL_TARGET,
+        ]),
+      ],
+      '[os_dependencies]\nhandling = "fail"',
+    );
+    expect(verdicts[0].status).toBe("fail");
+    expect(verdicts[0].rule).toBe("default:agpl-container");
+  });
+
+  test("OR-election: AGPL-3.0-only OR MIT elects MIT and stays default:ok (election semantics preserved)", () => {
+    const { verdicts } = runEngine(
+      [
+        osPkgSpec(
+          "pkg:deb/debian/agpl-or-mit@1.0.0",
+          "agpl-or-mit",
+          "AGPL-3.0-only OR MIT",
+          [AGPL_TARGET],
+        ),
+      ],
+      "",
+    );
+    expect(verdicts[0].status).toBe("ok");
+    expect(verdicts[0].rule).toBe("default:ok");
+  });
+
+  test("AND-taint: GPL-2.0-only AND AGPL-3.0-or-later escalates (copyleftLeafIds sees both conjuncts)", () => {
+    const { verdicts } = runEngine(
+      [
+        osPkgSpec(
+          "pkg:deb/debian/gpl-and-agpl@1.0.0",
+          "gpl-and-agpl",
+          "GPL-2.0-only AND AGPL-3.0-or-later",
+          [AGPL_TARGET],
+        ),
+      ],
+      "",
+    );
+    expect(verdicts[0].status).toBe("fail");
+    expect(verdicts[0].rule).toBe("default:agpl-container");
+  });
+
+  test("app-scope precise AGPL stays default:copyleft UNCHANGED — the new rule id is container-only", () => {
+    const { verdicts } = runEngine(
+      [pkgSpec("agpl-app", "AGPL-3.0-only", ["apps/a"])],
+      "",
+    );
+    expect(verdicts[0].status).toBe("fail");
+    expect(verdicts[0].rule).toBe("default:copyleft");
+  });
+
+  test("defensive: an os-scope AGPL occurrence marked isDevDependency=true still fails (no dev softening)", () => {
+    const { verdicts } = runEngine(
+      [
+        osPkgSpec("pkg:deb/debian/agpl-os@1.0.0", "agpl-os", "AGPL-3.0-only", [
+          { target: AGPL_TARGET, dev: true },
+        ]),
+      ],
+      "",
+    );
+    expect(verdicts[0].status).toBe("fail");
+    expect(verdicts[0].rule).toBe("default:agpl-container");
+  });
+
+  test("a where-scoped [[compatible]] package rule still accepts an os AGPL package (the explicit escape hatch)", () => {
+    const policyText = [
+      "[[compatible]]",
+      'match = "package"',
+      'name = "agpl-os-accepted"',
+      'reason = "explicitly accepted for this container"',
+      `where = ${JSON.stringify([AGPL_TARGET])}`,
+    ].join("\n");
+    const { verdicts } = runEngine(
+      [
+        osPkgSpec(
+          "pkg:deb/debian/agpl-os-accepted@1.0.0",
+          "agpl-os-accepted",
+          "AGPL-3.0-only",
+          [AGPL_TARGET],
+        ),
+      ],
+      policyText,
+    );
+    expect(verdicts[0].status).toBe("ok");
+    expect(verdicts[0].rule).toBe("compatible[0]");
+  });
+
+  test("a [[deny]] license match still yields denied[..] (deny is terminal above the AGPL escalation too)", () => {
+    const { verdicts } = runEngine(
+      [
+        osPkgSpec(
+          "pkg:deb/debian/agpl-os-denied@1.0.0",
+          "agpl-os-denied",
+          "AGPL-3.0-only",
+          [AGPL_TARGET],
+        ),
+      ],
+      denyLicenseFixture("AGPL-3.0-only"),
+    );
+    expect(verdicts[0].status).toBe("fail");
+    expect(verdicts[0].rule).toBe("denied[0]");
+  });
+});
+
+describe("evaluate — imprecise AGPL container escalation (imprecise variant)", () => {
+  test("os-scope imprecise AGPL fails default:agpl-container (the imprecise escape lane is closed too, not just the precise-expression one)", () => {
+    const { verdicts } = runEngine(
+      [
+        osPkgSpec("pkg:apk/alpine/agpl-ish@1.0.0", "agpl-ish", "AGPL", [
+          "docker:img/Dockerfile",
+        ]),
+      ],
+      "",
+    );
+    expect(verdicts[0].status).toBe("fail");
+    expect(verdicts[0].rule).toBe("default:agpl-container");
+  });
+
+  test("app-scope imprecise AGPL stays warn default:imprecise-copyleft UNCHANGED", () => {
+    const { verdicts } = runEngine(
+      [pkgSpec("agpl-ish-app", "AGPL", ["apps/a"])],
+      "",
+    );
+    expect(verdicts[0].status).toBe("warn");
+    expect(verdicts[0].rule).toBe("default:imprecise-copyleft");
+  });
+
+  test("os-scope imprecise GPL (not AGPL) stays warn default:imprecise-copyleft UNCHANGED — only the literal AGPL token escalates", () => {
+    const { verdicts } = runEngine(
+      [
+        osPkgSpec("pkg:deb/debian/gpl-ish-os@1.0.0", "gpl-ish-os", "GPL", [
+          "docker:img/Dockerfile",
+        ]),
+      ],
+      "",
+    );
+    expect(verdicts[0].status).toBe("warn");
+    expect(verdicts[0].rule).toBe("default:imprecise-copyleft");
   });
 });
 
