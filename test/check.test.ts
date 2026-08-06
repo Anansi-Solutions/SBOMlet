@@ -1556,3 +1556,152 @@ describe("PolicyView.developmentContainers — pipeline glob resolution", () => 
     ).toBe(true);
   });
 });
+
+// ===========================================================================
+// A [[docker.development]] pattern matching NO analyzed container source is a
+// dead entry (most likely a mistyped path) and warns once on stderr, per
+// pattern, via the SAME globToRegExp matcher that resolves classification —
+// a pattern can never be dead here and classifying above. The marking is
+// render-only: it must never change evaluate's verdict stream.
+// ===========================================================================
+
+describe("a dead [[docker.development]] pattern warns; the marking never touches verdicts", () => {
+  beforeAll(() => {
+    mock.module("../src/collectors/cdxgen", () => ({
+      ...REAL_CDXGEN,
+      collectWithCdxgen: fakeScanWithCdxgen,
+    }));
+  });
+  afterAll(() => {
+    mock.module("../src/collectors/cdxgen", () => REAL_CDXGEN);
+  });
+
+  test("a pattern matching no analyzed container warns; a matching pattern is silent", async () => {
+    const { root } = makeScannableTree();
+    writeSidecar(root, GLOB_SIDECAR);
+    const policyPath = writePolicy(
+      root,
+      developmentGlobPolicy("no/such/Dockerfile"),
+    );
+
+    const { stderr } = await buildAgainst(root, policyPath);
+
+    expect(
+      stderr.includes(
+        'policy: [[docker.development]] "no/such/Dockerfile" matches no analyzed container image',
+      ),
+    ).toBe(true);
+  });
+
+  test("a matching pattern prints no dead-entry warning", async () => {
+    const { root } = makeScannableTree();
+    writeSidecar(root, GLOB_SIDECAR);
+    const policyPath = writePolicy(root, developmentGlobPolicy("tools/**"));
+
+    const { stderr } = await buildAgainst(root, policyPath);
+
+    expect(stderr.includes("matches no analyzed container image")).toBe(false);
+  });
+
+  test("PER PATTERN: one matching + one dead pattern fires exactly ONE warning, naming the dead one", async () => {
+    const { root } = makeScannableTree();
+    writeSidecar(root, GLOB_SIDECAR);
+    const policyPath = writePolicy(
+      root,
+      [
+        "[unknown]",
+        'handling = "warn"',
+        "",
+        "[os_dependencies]",
+        'handling = "warn"',
+        "",
+        "[docker]",
+        "",
+        "[[docker.development]]",
+        'source = "tools/**"',
+        'reason = "matches the nested container"',
+        "",
+        "[[docker.development]]",
+        'source = "no/such/Dockerfile"',
+        'reason = "does not match anything"',
+        "",
+      ].join("\n"),
+    );
+
+    const { stderr } = await buildAgainst(root, policyPath);
+
+    const warnings = (
+      stderr.match(/policy: \[\[docker\.development\]\]/g) ?? []
+    ).length;
+    expect(warnings).toBe(1);
+    expect(
+      stderr.includes(
+        'policy: [[docker.development]] "no/such/Dockerfile" matches no analyzed container image',
+      ),
+    ).toBe(true);
+    expect(stderr.includes('policy: [[docker.development]] "tools/**"')).toBe(
+      false,
+    );
+  });
+
+  test("two DIFFERENT patterns matching the SAME container fire NO warning at all (idempotent dev marking is legal)", async () => {
+    const { root } = makeScannableTree();
+    writeSidecar(root, GLOB_SIDECAR);
+    const policyPath = writePolicy(
+      root,
+      [
+        "[unknown]",
+        'handling = "warn"',
+        "",
+        "[os_dependencies]",
+        'handling = "warn"',
+        "",
+        "[docker]",
+        "",
+        "[[docker.development]]",
+        'source = "tools/**"',
+        'reason = "matches via the double-star"',
+        "",
+        "[[docker.development]]",
+        'source = "tools/build/Dockerfile"',
+        'reason = "matches again via the literal path"',
+        "",
+      ].join("\n"),
+    );
+
+    const { stderr } = await buildAgainst(root, policyPath);
+
+    expect(stderr.includes("matches no analyzed container image")).toBe(false);
+  });
+
+  test("render-only contract: [[docker.development]] never changes evaluate's verdict stream", async () => {
+    const { root } = makeScannableTree();
+    writeSidecar(root, GLOB_SIDECAR);
+    const baselinePolicy = writePolicy(
+      root,
+      [
+        "[unknown]",
+        'handling = "warn"',
+        "",
+        "[os_dependencies]",
+        'handling = "warn"',
+        "",
+      ].join("\n"),
+    );
+    const { outputs: baseline } = await buildAgainst(root, baselinePolicy);
+
+    const { root: root2 } = makeScannableTree();
+    writeSidecar(root2, GLOB_SIDECAR);
+    const markedPolicy = writePolicy(root2, developmentGlobPolicy("a/**"));
+    const { outputs: marked } = await buildAgainst(root2, markedPolicy);
+
+    // The [[docker.development]] entry marks "a/Dockerfile" development-only
+    // in the RENDERED document, but the verdict stream — the gate-relevant
+    // half — is byte-for-byte identical either way.
+    expect(marked.verdicts).toEqual(baseline.verdicts);
+    // Sanity: the marking DID take effect in the render (placement-only).
+    expect(
+      marked.licensesMd.includes("### Container: docker:a/Dockerfile"),
+    ).toBe(true);
+  });
+});

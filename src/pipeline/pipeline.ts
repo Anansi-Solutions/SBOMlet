@@ -493,6 +493,13 @@ function analyzedContainerSources(
  * Set), so resolution is idempotent regardless of overlapping globs. Absent
  * [docker] table or an empty `development` array yields an empty set, the
  * conservative default (every container reads "production").
+ *
+ * A pattern matching NO analyzed container source is a dead entry — most
+ * likely a mistyped source path — and prints one stderr warning naming it, mirroring
+ * the unused scoped-rule posture. The check reuses the SAME per-pattern match
+ * loop that resolves classification, so a pattern can never be dead here and
+ * classifying above (one matcher, one truth). Placement-only: this never
+ * touches verdicts or the exit code.
  */
 function resolveDevelopmentContainers(
   model: CanonicalDependencies,
@@ -504,9 +511,18 @@ function resolveDevelopmentContainers(
   const resolved = new Set<string>();
   for (const entry of entries) {
     const matcher = globToRegExp(entry.source);
+    let matched = false;
     for (const source of sources) {
-      if (matcher.test(source))
+      if (matcher.test(source)) {
         resolved.add(`${DOCKER_IDENTITY_PREFIX}${source}`);
+        matched = true;
+      }
+    }
+    if (!matched) {
+      process.stderr.write(
+        `policy: [[docker.development]] "${sanitizeForLog(entry.source)}" ` +
+          `matches no analyzed container image\n`,
+      );
     }
   }
   return resolved;
