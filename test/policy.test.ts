@@ -3660,12 +3660,13 @@ describe("[docker] ignore parsing", () => {
     );
     expect(policy.docker).toEqual({
       ignore: ["docker/dev/**", "legacy/Dockerfile"],
+      development: [],
     });
   });
 
   test("[docker] with no ignore key → ignore defaults to empty array", () => {
     const policy = parsePolicy("[docker]\n");
-    expect(policy.docker).toEqual({ ignore: [] });
+    expect(policy.docker).toEqual({ ignore: [], development: [] });
   });
 
   test("a non-table [docker] value is rejected", () => {
@@ -3701,6 +3702,191 @@ describe("[docker] ignore parsing", () => {
   test("an unknown key under [docker] is rejected", () => {
     const err = expectPolicyError('[docker]\nbogus = "x"\n');
     expect(err.problems.some((p) => p.includes("bogus"))).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// [[docker.development]] — per-container development marking (glob source).
+// ---------------------------------------------------------------------------
+
+/** Minimal [docker] table with one [[docker.development]] entry. */
+const developmentFixture = (source: string, reason = "test reason"): string =>
+  [
+    "[docker]",
+    "",
+    "[[docker.development]]",
+    `source = ${JSON.stringify(source)}`,
+    `reason = ${JSON.stringify(reason)}`,
+  ].join("\n");
+
+describe("[[docker.development]] schema parsing", () => {
+  test("a literal path source parses; policy.docker.development carries it verbatim", () => {
+    const policy = parsePolicy(
+      developmentFixture(
+        "examples/docker-scan/Dockerfile",
+        "spun up only for local scan smoke-tests, never shipped",
+      ),
+    );
+    expect(policy.docker).toEqual({
+      ignore: [],
+      development: [
+        {
+          source: "examples/docker-scan/Dockerfile",
+          reason: "spun up only for local scan smoke-tests, never shipped",
+        },
+      ],
+    });
+  });
+
+  test("a `**` glob source parses and is stored verbatim", () => {
+    const policy = parsePolicy(developmentFixture("tools/**"));
+    expect(policy.docker?.development).toEqual([
+      { source: "tools/**", reason: "test reason" },
+    ]);
+  });
+
+  test("a `*` glob source parses and is stored verbatim", () => {
+    const policy = parsePolicy(developmentFixture("examples/*/Dockerfile"));
+    expect(policy.docker?.development).toEqual([
+      { source: "examples/*/Dockerfile", reason: "test reason" },
+    ]);
+  });
+
+  test("[docker] present without the development key → development defaults to []", () => {
+    const policy = parsePolicy("[docker]\nignore = []\n");
+    expect(policy.docker).toEqual({ ignore: [], development: [] });
+  });
+
+  test("no [docker] table at all → docker stays undefined (unchanged)", () => {
+    const policy = parsePolicy("");
+    expect(policy.docker).toBeUndefined();
+  });
+
+  test("missing reason rejects naming docker.development[0]", () => {
+    const err = expectPolicyError(
+      ["[docker]", "", "[[docker.development]]", 'source = "tools/**"'].join(
+        "\n",
+      ),
+    );
+    expect(
+      err.problems.some(
+        (p) =>
+          p.includes("docker.development[0]") &&
+          p.includes('missing required key "reason"'),
+      ),
+    ).toBe(true);
+  });
+
+  test("an empty-string source rejects naming docker.development[0]", () => {
+    const err = expectPolicyError(developmentFixture(""));
+    expect(err.problems.some((p) => p.includes("docker.development[0]"))).toBe(
+      true,
+    );
+  });
+
+  test("a backslash source rejects (forward-slash posture, byte-identical to docker.ignore)", () => {
+    const err = expectPolicyError(developmentFixture("tools\\dev"));
+    expect(err.problems.some((p) => p.includes("forward slashes"))).toBe(true);
+  });
+
+  test('a ".." segment source rejects', () => {
+    const err = expectPolicyError(developmentFixture("../escape/**"));
+    expect(err.problems.some((p) => p.includes(".."))).toBe(true);
+  });
+
+  test("a leading-slash source rejects", () => {
+    const err = expectPolicyError(developmentFixture("/tools/**"));
+    expect(
+      err.problems.some((p) => p.includes("leading or trailing slash")),
+    ).toBe(true);
+  });
+
+  test('a "docker:"-prefixed source rejects with a pointed double-prefix message', () => {
+    const err = expectPolicyError(
+      developmentFixture("docker:tools/Dockerfile"),
+    );
+    expect(
+      err.problems.some(
+        (p) => p.includes("docker.development[0]") && p.includes('"docker:"'),
+      ),
+    ).toBe(true);
+  });
+
+  test("two entries with the SAME pattern string reject as a dead duplicate", () => {
+    const policyText = [
+      "[docker]",
+      "",
+      "[[docker.development]]",
+      'source = "tools/**"',
+      'reason = "first"',
+      "",
+      "[[docker.development]]",
+      'source = "tools/**"',
+      'reason = "second, duplicate pattern"',
+    ].join("\n");
+    const err = expectPolicyError(policyText);
+    expect(
+      err.problems.some(
+        (p) => p.includes("docker.development[1]") && p.includes("duplicate"),
+      ),
+    ).toBe(true);
+  });
+
+  test("two DIFFERENT patterns that could match the same container are legal", () => {
+    const policyText = [
+      "[docker]",
+      "",
+      "[[docker.development]]",
+      'source = "tools/**"',
+      'reason = "first"',
+      "",
+      "[[docker.development]]",
+      'source = "tools/nested/**"',
+      'reason = "second, different pattern"',
+    ].join("\n");
+    const policy = parsePolicy(policyText);
+    expect(policy.docker?.development).toEqual([
+      { source: "tools/**", reason: "first" },
+      { source: "tools/nested/**", reason: "second, different pattern" },
+    ]);
+  });
+
+  test("an unknown key inside a [[docker.development]] entry rejects via checkKeys", () => {
+    const policyText = [
+      "[docker]",
+      "",
+      "[[docker.development]]",
+      'source = "tools/**"',
+      'reason = "test reason"',
+      "bogus = 1",
+    ].join("\n");
+    const err = expectPolicyError(policyText);
+    expect(
+      err.problems.some(
+        (p) => p.includes("docker.development[0]") && p.includes("bogus"),
+      ),
+    ).toBe(true);
+  });
+
+  test("[docker] ignore and [[docker.development]] compose in one policy", () => {
+    const policyText = [
+      "[docker]",
+      'ignore = ["legacy/**"]',
+      "",
+      "[[docker.development]]",
+      'source = "tools/Dockerfile"',
+      'reason = "internal tooling image, never shipped"',
+    ].join("\n");
+    const policy = parsePolicy(policyText);
+    expect(policy.docker).toEqual({
+      ignore: ["legacy/**"],
+      development: [
+        {
+          source: "tools/Dockerfile",
+          reason: "internal tooling image, never shipped",
+        },
+      ],
+    });
   });
 });
 
