@@ -763,7 +763,7 @@ describe("the committed docker.sbom.json as a scope:os merge input", () => {
     const osSection = squish(md.slice(md.indexOf("## Docker image packages")));
     expect(osSection.includes("libc6")).toBe(false);
     expect(osSection.includes("musl")).toBe(false);
-    expect(md.includes("- Docker image packages: 0")).toBe(true);
+    expect(md.includes("- Container packages: 0")).toBe(true);
   });
 
   test("NO committed file → NO os entries and NO docker/syft scan (offline, the cache-miss equivalent)", async () => {
@@ -791,7 +791,7 @@ describe("the committed docker.sbom.json as a scope:os merge input", () => {
     expect(osSection.includes("pkg:deb/")).toBe(false);
     expect(osSection.includes("pkg:apk/")).toBe(false);
     // No docker base-image packages counted.
-    expect(md.includes("- Docker image packages: 0")).toBe(true);
+    expect(md.includes("- Container packages: 0")).toBe(true);
   });
 
   test("a LEGACY docker-os.sbom.json without the current file fails LOUDLY naming the remedy", async () => {
@@ -1027,7 +1027,7 @@ describe("sidecar fan-out and the malformed-sidecar failure", () => {
       ),
     ).toBe(true);
     // Still one ROW per purl (the fan-out multiplies occurrences, not rows).
-    expect(md.includes("- Docker image packages: 3")).toBe(true);
+    expect(md.includes("- Container packages: 3")).toBe(true);
   });
 
   const MALFORMED_VARIANTS: ReadonlyArray<{ label: string; doc: unknown }> = [
@@ -1254,18 +1254,22 @@ describe("the two-Dockerfile scenario end-to-end", () => {
       false,
     );
 
-    // Rendered warn surface: the copyleft section flags ONLY the B occurrence,
-    // and the non-blocking roll-up names the copyleft warning.
+    // Rendered warn surface: container system-package copyleft is routine and
+    // is never surfaced in the detailed Copyleft table (regardless of which
+    // occurrence carries the warn) — only the non-blocking roll-up names it.
     const md = outputs.licensesMd;
     const copyleft = squish(
       md.slice(
         md.indexOf("## Copyleft and special notices"),
-        md.indexOf("## Production dependencies"),
+        md.indexOf("## Containers"),
       ),
     );
-    expect(copyleft.includes("| busybox |")).toBe(true);
-    expect(copyleft.includes("docker:b/Dockerfile")).toBe(true);
-    expect(copyleft.includes("docker:a/Dockerfile")).toBe(false);
+    expect(copyleft.includes("| busybox |")).toBe(false);
+    expect(
+      copyleft.includes(
+        "✅ No package carries copyleft or special license obligations.",
+      ),
+    ).toBe(true);
     expect(md.includes("1 copyleft warning(s)")).toBe(true);
 
     // The Docker section's Used-in still names BOTH occurrences (the flow

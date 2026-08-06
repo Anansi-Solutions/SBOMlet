@@ -12,7 +12,7 @@ Copyleft notice rules are configured in .sbomlet.policy.toml.
 - pypi: 1
 - Production packages: 15
 - Development-only packages: 388
-- Docker image packages: 19
+- Container packages: 19
 - Unknown license: 0
 
 ## Problematic licenses
@@ -32,6 +32,12 @@ The packages listed below carry copyleft or special license obligations in at le
 | @cspell/dict-en-common-misspellings | npm       | 2.1.13  | CC-BY-SA-4.0 AND MIT | .       | —   |
 | @cspell/dict-en-gb                  | npm       | 5.0.30  | LGPL-3.0-only        | .       | —   |
 | @cspell/dict-en-gb-ise              | npm       | 1.0.30  | LGPL-3.0-only        | .       | —   |
+
+## Containers
+
+| Container                              | Classification | Packages |
+| -------------------------------------- | -------------- | -------- |
+| docker:examples/docker-scan/Dockerfile | production     | 19       |
 
 ## Production dependencies
 

@@ -614,10 +614,29 @@ describe("renderMarkdown — the full document", () => {
     );
   });
 
-  test("Test 5: copyleft membership — fail/warn default:copyleft only; Used-in lists only flagged targets", () => {
+  test("Test 5: copyleft membership + copyleft-only dedup — a fail verdict of ANY rule excludes the purl from Copyleft entirely; a warn-only default:copyleft package stays a member; Used-in lists only flagged targets", () => {
+    const warnOnlyCopyleft = entry({
+      purl: "pkg:npm/warn-only-copyleft@1.0.0",
+      name: "warn-only-copyleft",
+      version: "1.0.0",
+      occurrences: [
+        { target: "backend", isDevDependency: false },
+        { target: "frontend", isDevDependency: false },
+      ],
+      licenseClaims: [
+        { raw: "LGPL-3.0-or-later", kind: "spdx-id", source: "generator" },
+      ],
+      finding: {
+        expression: "LGPL-3.0-or-later",
+        elected: "LGPL-3.0-or-later",
+        source: "generator",
+        confidence: "exact",
+      },
+    });
     const model: CanonicalDependencies = {
       packages: [
         sharpEntry,
+        warnOnlyCopyleft,
         entry({
           purl: "pkg:npm/suppressed-only@1.0.0",
           name: "suppressed-only",
@@ -650,6 +669,10 @@ describe("renderMarkdown — the full document", () => {
       policyPath: "policy.toml",
       suppressedWorkspaces: [],
       verdicts: [
+        // sharp carries BOTH a fail (frontend) and a warn (backend) verdict for
+        // the SAME rule -- the observed duplication defect this dedup fixes:
+        // the purl has a fail verdict, so it is excluded from Copyleft
+        // entirely, even though a warn default:copyleft verdict also exists.
         {
           purl: "pkg:npm/sharp@0.33.0",
           occurrenceTarget: "frontend",
@@ -670,6 +693,22 @@ describe("renderMarkdown — the full document", () => {
           status: "suppressed",
           rule: "workspace.copyleft_suppressed[0]",
           reason: "suppressed by workspace rule",
+        },
+        // warn-only-copyleft carries ONLY warn default:copyleft verdicts, no
+        // fail anywhere -- it stays a Copyleft member.
+        {
+          purl: "pkg:npm/warn-only-copyleft@1.0.0",
+          occurrenceTarget: "backend",
+          status: "warn",
+          rule: "default:copyleft",
+          reason: 'copyleft license "LGPL-3.0-or-later"',
+        },
+        {
+          purl: "pkg:npm/warn-only-copyleft@1.0.0",
+          occurrenceTarget: "frontend",
+          status: "warn",
+          rule: "default:copyleft",
+          reason: 'copyleft license "LGPL-3.0-or-later"',
         },
         {
           purl: "pkg:npm/unknown-pkg@1.0.0",
@@ -693,20 +732,23 @@ describe("renderMarkdown — the full document", () => {
     expect(copyleftStart).toBeGreaterThan(-1);
     const copyleftSection = output.slice(copyleftStart, summaryStart);
 
-    // Membership: fail/warn verdicts with rule exactly "default:copyleft";
-    // Used-in lists ONLY the flagged targets, compareCodeUnits-sorted — the
-    // suppressed "docs" occurrence never appears.
+    // Dedup: sharp has a fail verdict for its purl, so it is excluded from
+    // Copyleft entirely -- the observed duplication defect is gone.
+    expect(copyleftSection.includes("sharp")).toBe(false);
+    // Membership stands for a warn-only default:copyleft package; Used-in
+    // lists ONLY the flagged targets, compareCodeUnits-sorted.
     expect(
       copyleftSection.includes(
-        "| sharp | npm | 0.33.0 | LGPL-3.0-or-later | backend, frontend | — |",
+        "| warn-only-copyleft | npm | 1.0.0 | LGPL-3.0-or-later | backend, frontend | — |",
       ),
     ).toBe(true);
-    expect(copyleftSection.includes("docs")).toBe(false);
     // default:unknown warns and suppressed-only packages are omitted.
     expect(copyleftSection.includes("unknown-pkg")).toBe(false);
     expect(copyleftSection.includes("suppressed-only")).toBe(false);
-    // ...but both still appear in the summary.
+    // Inventory completeness: sharp is EXCLUDED from Copyleft but STILL rows
+    // in its Production/Development table (the dedup never drops inventory).
     const summary = output.slice(summaryStart);
+    expect(summary.includes("| sharp | npm | 0.33.0 |")).toBe(true);
     expect(summary.includes("| unknown-pkg |")).toBe(true);
     expect(summary.includes("| suppressed-only |")).toBe(true);
   });
@@ -1061,12 +1103,12 @@ describe("renderMarkdown — Docker image packages section", () => {
     expect(output.includes("evil|pkg`x")).toBe(false);
   });
 
-  test("the counts block carries a Docker image packages count", () => {
+  test("the counts block carries a Container packages count", () => {
     const model: CanonicalDependencies = {
       packages: [appProd, osDeb, osApk],
     };
     const output = renderMarkdown(model);
-    expect(output.includes("- Docker image packages: 2")).toBe(true);
+    expect(output.includes("- Container packages: 2")).toBe(true);
     // Total still counts every package across scopes.
     expect(output.includes("- Total packages: 3")).toBe(true);
   });
@@ -1736,7 +1778,7 @@ describe("renderMarkdown — Problematic licenses summary", () => {
     expect(section.includes("1 deny warning(s)")).toBe(true);
   });
 
-  test("(d) the summary sits ABOVE the detailed copyleft section and does not alter it", () => {
+  test("(d) the summary sits ABOVE the detailed copyleft section; a fail-flagged package is excluded from it by the copyleft-only dedup", () => {
     const model: CanonicalDependencies = { packages: [copyleftFail] };
     const view: PolicyView = {
       policyPath: "policy.toml",
@@ -1757,14 +1799,17 @@ describe("renderMarkdown — Problematic licenses summary", () => {
     const copyleftIdx = output.indexOf("## Copyleft and special notices");
     expect(countsIdx).toBeLessThan(problIdx);
     expect(problIdx).toBeLessThan(copyleftIdx);
-    // The detailed copyleft table still lists the flagged package unchanged.
+    // gpl-pkg carries a fail verdict, so the copyleft-only dedup excludes it
+    // from the detailed copyleft table entirely — it stays in Problematic
+    // (asserted above by the section ordering) and in its inventory row.
     const copyleftSection = output.slice(
       copyleftIdx,
       output.indexOf("## Production dependencies"),
     );
+    expect(copyleftSection.includes("gpl-pkg")).toBe(false);
     expect(
       copyleftSection.includes(
-        "| gpl-pkg | pypi | 2.0.0 | GPL-3.0-only | backend |",
+        "✅ No package carries copyleft or special license obligations.",
       ),
     ).toBe(true);
   });
@@ -1820,11 +1865,17 @@ describe("renderMarkdown — Problematic licenses summary", () => {
 // ---------------------------------------------------------------------------
 
 describe("renderMarkdown — provenance Why column", () => {
-  /** A copyleft-flagging verdict for a given purl + target. */
+  /**
+   * A copyleft-flagging verdict for a given purl + target. Status is "warn",
+   * never "fail": a fail verdict of ANY rule excludes its purl from Copyleft
+   * membership entirely (the copyleft-only dedup), which would defeat every
+   * Why-cell assertion in this block — these tests exercise Why-cell
+   * computation, not the dedup itself.
+   */
   const copyleftVerdict = (purl: string, target: string): Verdict => ({
     purl,
     occurrenceTarget: target,
-    status: "fail",
+    status: "warn",
     rule: "default:copyleft",
     reason: "copyleft",
   });
@@ -1958,14 +2009,17 @@ describe("renderMarkdown — provenance Why column", () => {
   });
 
   test("introduction absent → honest '—' (never fabricated)", () => {
+    // APP-scope, not os-scope: an os-scope package is excluded from Copyleft
+    // regardless of verdict (container copyleft is routine, not surfaced
+    // here), which would defeat this assertion — the test's real subject is
+    // the Why-cell honest-residual behavior, orthogonal to scope.
     const model: CanonicalDependencies = {
       packages: [
         entry({
-          purl: "pkg:deb/debian/libssl@3.0",
-          name: "libssl",
+          purl: "pkg:pypi/libssl-bindings@3.0",
+          name: "libssl-bindings",
           version: "3.0",
-          scope: "os",
-          occurrences: [{ target: "image:debian", isDevDependency: false }],
+          occurrences: [{ target: "apps/py", isDevDependency: false }],
           finding: {
             expression: "GPL-3.0-only",
             elected: "GPL-3.0-only",
@@ -1978,11 +2032,11 @@ describe("renderMarkdown — provenance Why column", () => {
     const view: PolicyView = {
       policyPath: "policy.toml",
       suppressedWorkspaces: [],
-      verdicts: [copyleftVerdict("pkg:deb/debian/libssl@3.0", "image:debian")],
+      verdicts: [copyleftVerdict("pkg:pypi/libssl-bindings@3.0", "apps/py")],
     };
     expect(
       copyleftSectionOf(model, view).includes(
-        "| libssl | deb | 3.0 | GPL-3.0-only | image:debian | — |",
+        "| libssl-bindings | pypi | 3.0 | GPL-3.0-only | apps/py | — |",
       ),
     ).toBe(true);
   });

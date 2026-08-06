@@ -15,6 +15,7 @@ import { mergeSboms, type CollectedSbom } from "../merge/merge";
 import {
   DOCKER_IDENTITY_PREFIX,
   toSortedDependenciesJson,
+  type CanonicalDependencies,
   type EvaluatedDependencies,
   type Verdict,
 } from "../model/dependencies";
@@ -26,6 +27,7 @@ import { alignTables } from "../render/alignTables";
 import { renderCyclonedx } from "../render/cyclonedx";
 import { renderMarkdown, type PolicyView } from "../render/markdown";
 import { renderNotices } from "../render/notices";
+import { globToRegExp } from "../targets/discover";
 import { resolveFrom } from "./paths";
 import { sanitizeForLog, writePolicySummary } from "./summary";
 import { collectTargets } from "./targets";
@@ -464,6 +466,53 @@ function intensiveOptionsFor(
 }
 
 /**
+ * The analyzed container SOURCES — the bare repo-relative identity of every
+ * docker:<source> occurrence target carried by an os-scope package, deduped.
+ * The bare form (prefix stripped) is what a `[[docker.development]]` glob
+ * matches against, mirroring `[docker].ignore`'s own bare-source patterns.
+ */
+function analyzedContainerSources(
+  model: CanonicalDependencies,
+): ReadonlySet<string> {
+  const sources = new Set<string>();
+  for (const pkg of model.packages) {
+    if (pkg.scope !== "os") continue;
+    for (const occurrence of pkg.occurrences) {
+      if (!occurrence.target.startsWith(DOCKER_IDENTITY_PREFIX)) continue;
+      sources.add(occurrence.target.slice(DOCKER_IDENTITY_PREFIX.length));
+    }
+  }
+  return sources;
+}
+
+/**
+ * Resolve PolicyView.developmentContainers: match each policy
+ * `[[docker.development]]` glob against the analyzed container sources via
+ * {@link globToRegExp} — the SAME matcher `[docker].ignore` uses, never a new
+ * dialect. Two patterns matching the same container fold into one entry (a
+ * Set), so resolution is idempotent regardless of overlapping globs. Absent
+ * [docker] table or an empty `development` array yields an empty set, the
+ * conservative default (every container reads "production").
+ */
+function resolveDevelopmentContainers(
+  model: CanonicalDependencies,
+  policy: Policy | undefined,
+): ReadonlySet<string> {
+  const entries = policy?.docker?.development ?? [];
+  if (entries.length === 0) return new Set();
+  const sources = analyzedContainerSources(model);
+  const resolved = new Set<string>();
+  for (const entry of entries) {
+    const matcher = globToRegExp(entry.source);
+    for (const source of sources) {
+      if (matcher.test(source))
+        resolved.add(`${DOCKER_IDENTITY_PREFIX}${source}`);
+    }
+  }
+  return resolved;
+}
+
+/**
  * Project the PolicyView the document renderer consumes. The policy pointer path
  * is repo-root-relative (policyPointerPath) so the committed bytes stay stable
  * across platforms. The author-supplied [document] title + preamble flow
@@ -474,11 +523,13 @@ function projectPolicyView(
   policy: Policy,
   policyPath: string,
   verdicts: ReadonlyArray<Verdict>,
+  developmentContainers: ReadonlySet<string>,
 ): PolicyView {
   return {
     policyPath,
     suppressedWorkspaces: policy.suppressedWorkspaces,
     verdicts,
+    developmentContainers,
     ...(policy.document !== undefined ? { document: policy.document } : {}),
   };
 }
@@ -591,7 +642,12 @@ export async function buildOutputs(
   if (policy !== undefined && opts.policyPath !== undefined) {
     verdicts = evaluate(annotated, policy);
     writePolicySummary(policy, verdicts, usedClarifyIndices);
-    policyView = projectPolicyView(policy, policyPointerPath(opts), verdicts);
+    policyView = projectPolicyView(
+      policy,
+      policyPointerPath(opts),
+      verdicts,
+      resolveDevelopmentContainers(annotated, policy),
+    );
   }
 
   // Dump surface: with a policy run the dump is the EvaluatedDependencies

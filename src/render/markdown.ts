@@ -8,11 +8,17 @@
  * carries the regenerate command, never a date.
  *
  * Document order (locked): title, dateless auto-generated header, policy
- * pointer line (policy runs only), package-counts block, copyleft and special
- * notices (policy runs only), full summary table. The License column shows the
- * full normalized expression when a finding exists — never only the elected
- * branch; election surfaces through copyleft section membership instead.
- * Without a policy view there is no policy pointer and no copyleft section.
+ * pointer line (policy runs only), package-counts block, problematic
+ * licenses roll-up (policy runs only), copyleft and special notices (policy
+ * runs only — container system-package copyleft is excluded as routine, and a
+ * package already flagged Problematic never duplicates into this section),
+ * imprecise licenses, assessment conflicts, the Containers index
+ * (scope-derived, rendered with or without a policy view), then the summary
+ * tables (Production, Development-only, Docker image packages). The License
+ * column shows the full normalized expression when a finding exists — never
+ * only the elected branch; election surfaces through copyleft section
+ * membership instead. Without a policy view there is no policy pointer and no
+ * problematic roll-up or copyleft section.
  *
  * This module deliberately does not render the notices companion, emit
  * CycloneDX, or evaluate policy — verdicts and suppressed workspaces arrive
@@ -22,6 +28,7 @@
 import {
   compareCodeUnits,
   comparePackages,
+  DOCKER_IDENTITY_PREFIX,
   type CanonicalDependencies,
   type DependencyIntroduction,
   type Occurrence,
@@ -43,6 +50,17 @@ export interface PolicyView {
   policyPath: string;
   suppressedWorkspaces: ReadonlyArray<SuppressedWorkspace>;
   verdicts: ReadonlyArray<Verdict>;
+  /**
+   * docker:<source> identities marked development-only by a policy
+   * `[[docker.development]]` glob, resolved by the pipeline against the
+   * analyzed containers (via the same matcher as `[docker].ignore`). Drives
+   * the Containers index classification column; every identity absent from
+   * this set — including when the whole field is absent — renders
+   * "production", the conservative default. A real policy run always
+   * supplies it (possibly empty); tests exercising other membership rules
+   * may omit it.
+   */
+  developmentContainers?: ReadonlySet<string>;
   /**
    * Author-supplied document presentation (from the policy [document]
    * table). `title` replaces the default H1; `preamble` renders verbatim as a
@@ -298,6 +316,55 @@ function isOsPackage(pkg: PackageEntry): boolean {
   return pkg.scope === "os";
 }
 
+/** The resolved development-container set for a no-policy render. */
+const EMPTY_DEVELOPMENT_CONTAINERS: ReadonlySet<string> = new Set();
+
+const CONTAINERS_HEAD = [
+  "| Container | Classification | Packages |",
+  "| --- | --- | --- |",
+];
+
+/**
+ * The "## Containers" thin index, rendered immediately before Production
+ * regardless of policy (scope-derived, not policy-gated): one row per
+ * analyzed container — its docker:<source> identity, production/development
+ * classification, and total os-package count. Identities are derived from
+ * os-scope packages' occurrence targets carrying the DOCKER_IDENTITY_PREFIX —
+ * the same identities the Docker image packages section lists — deduped and
+ * compareCodeUnits-sorted. Classification is "development" for an identity
+ * present in `developmentContainers`, else the conservative "production"
+ * default; a no-policy render passes an empty set, so every container reads
+ * "production".
+ */
+function containersSectionLines(
+  sorted: readonly PackageEntry[],
+  developmentContainers: ReadonlySet<string>,
+): string[] {
+  const counts = new Map<string, number>();
+  for (const pkg of sorted) {
+    if (pkg.scope !== "os") continue;
+    for (const occurrence of pkg.occurrences) {
+      if (!occurrence.target.startsWith(DOCKER_IDENTITY_PREFIX)) continue;
+      counts.set(occurrence.target, (counts.get(occurrence.target) ?? 0) + 1);
+    }
+  }
+  const identities = [...counts.keys()].sort(compareCodeUnits);
+  const heading = "## Containers";
+  if (identities.length === 0) {
+    return [heading, "", "✅ No containers are currently tracked."];
+  }
+  const lines: string[] = [heading, "", ...CONTAINERS_HEAD];
+  for (const identity of identities) {
+    const classification = developmentContainers.has(identity)
+      ? "development"
+      : "production";
+    lines.push(
+      `| ${escapeCell(identity)} | ${escapeCell(classification)} | ${counts.get(identity)} |`,
+    );
+  }
+  return lines;
+}
+
 const TABLE_HEAD = [
   "| Name | Ecosystem | Version | License | Used in |",
   "| --- | --- | --- | --- | --- |",
@@ -413,11 +480,11 @@ function conflictSectionLines(sorted: readonly PackageEntry[]): string[] {
 
 /**
  * The package-counts block: total, per-ecosystem (compareCodeUnits-sorted),
- * production / development-only / Docker-OS / unknown-license counts. App-scope
- * packages feed the prod/dev split (an app concept); os-scope packages are
- * counted separately as Docker base-image packages so the three buckets
- * (production + development-only + Docker OS) partition the total. Input is the
- * already-sorted package list.
+ * production / development-only / container / unknown-license counts.
+ * App-scope packages feed the prod/dev split (an app concept); os-scope
+ * packages are counted separately as container packages so the three
+ * buckets (production + development-only + container) partition the total.
+ * Input is the already-sorted package list.
  */
 function packageCountsLines(sorted: readonly PackageEntry[]): string[] {
   const ecosystemCounts = new Map<string, number>();
@@ -445,7 +512,7 @@ function packageCountsLines(sorted: readonly PackageEntry[]): string[] {
   lines.push(
     `- Production packages: ${prodCount}`,
     `- Development-only packages: ${devOnlyCount}`,
-    `- Docker image packages: ${osCount}`,
+    `- Container packages: ${osCount}`,
     `- Unknown license: ${unknownCount}`,
     "",
   );
@@ -611,6 +678,100 @@ function problematicSectionLines(
   return lines;
 }
 
+/**
+ * The "## Copyleft and special notices" section — policy runs only. Membership
+ * is at least one fail/warn verdict whose rule is exactly "default:copyleft"
+ * (the engine's only copyleft-flagging rule), on an APP-scope package not
+ * already carrying a fail verdict of any rule — the copyleft-only dedup: a
+ * package already named in the Problematic roll-up must never also duplicate
+ * into this section, though its inventory row, its Imprecise-review row, and
+ * its Assessment-conflicts row are untouched. Container system-package
+ * copyleft is routine base-image noise and is excluded here regardless of
+ * its verdict status (an AGPL container package escalates to a fail verdict
+ * upstream, which routes it through the same dedup instead). The Used-in
+ * cell lists only the flagged occurrence targets; the Why column carries the
+ * per-row provenance. Returns the full section (heading, suppressed-
+ * workspaces list, table or the ✅ empty state) for the caller to push.
+ */
+function copyleftSectionLines(
+  sorted: readonly PackageEntry[],
+  policyView: PolicyView,
+): string[] {
+  // Group verdicts by purl once — the renderer stays a pure function of its
+  // arguments.
+  const verdictsByPurl = new Map<string, Verdict[]>();
+  for (const verdict of policyView.verdicts) {
+    const list = verdictsByPurl.get(verdict.purl);
+    if (list === undefined) verdictsByPurl.set(verdict.purl, [verdict]);
+    else list.push(verdict);
+  }
+
+  // Purls carrying at least one fail verdict — excluded from Copyleft
+  // membership ONLY (the dedup is copyleft-scoped, not global).
+  const problematicPurls = new Set(
+    policyView.verdicts
+      .filter((verdict) => verdict.status === "fail")
+      .map((verdict) => verdict.purl),
+  );
+
+  // Collect the flagged rows first so the EMPTY state can be a ✅ line rather
+  // than a bare table head.
+  const copyleftRows: string[] = [];
+  for (const pkg of sorted) {
+    if (pkg.scope === "os") continue;
+    if (problematicPurls.has(pkg.purl)) continue;
+    const flagged = (verdictsByPurl.get(pkg.purl) ?? []).filter(
+      (verdict) =>
+        (verdict.status === "fail" || verdict.status === "warn") &&
+        verdict.rule === "default:copyleft",
+    );
+    if (flagged.length === 0) continue;
+    const targets = [
+      ...new Set(flagged.map((verdict) => verdict.occurrenceTarget)),
+    ].sort(compareCodeUnits);
+    copyleftRows.push(copyleftRow(pkg, targets));
+  }
+
+  const lines: string[] = ["## Copyleft and special notices", ""];
+
+  // Suppressed-workspaces list: every field is policy-authored and routes
+  // through escapeCell. Sorted by path (compareCodeUnits) for determinism
+  // regardless of policy-file order. Shown whenever configured — it explains
+  // the suppression even when nothing leaks.
+  const suppressed = [...policyView.suppressedWorkspaces].sort((a, b) =>
+    compareCodeUnits(a.path, b.path),
+  );
+  if (suppressed.length > 0) {
+    lines.push(
+      "Workspaces that are themselves distributed under a copyleft license are suppressed by policy:",
+      "",
+    );
+    for (const workspace of suppressed) {
+      lines.push(
+        `- ${escapeCell(workspace.path)} (${escapeCell(workspace.license)}) — ${escapeCell(workspace.description)}`,
+      );
+    }
+    lines.push("");
+  }
+
+  if (copyleftRows.length > 0) {
+    lines.push(
+      "The packages listed below carry copyleft or special license obligations in at least one non-suppressed workspace.",
+      "",
+      ...COPYLEFT_HEAD,
+      ...copyleftRows,
+      "",
+    );
+  } else {
+    lines.push(
+      "✅ No package carries copyleft or special license obligations.",
+      "",
+    );
+  }
+
+  return lines;
+}
+
 export function renderMarkdown(
   model: CanonicalDependencies,
   policyView?: PolicyView,
@@ -655,71 +816,7 @@ export function renderMarkdown(
 
   // Copyleft and special notices — policy runs only.
   if (policyView !== undefined) {
-    // Group verdicts by purl once — the renderer stays a pure function of its
-    // arguments.
-    const verdictsByPurl = new Map<string, Verdict[]>();
-    for (const verdict of policyView.verdicts) {
-      const list = verdictsByPurl.get(verdict.purl);
-      if (list === undefined) verdictsByPurl.set(verdict.purl, [verdict]);
-      else list.push(verdict);
-    }
-
-    // Collect the flagged copyleft rows first so the EMPTY state can be a ✅ line
-    // rather than a bare table head. Membership = at least one fail/warn verdict
-    // whose rule is exactly "default:copyleft" (the engine's only copyleft-
-    // flagging rule). The Used-in cell lists only the flagged occurrence targets
-    // — how the elected branch surfaces: the non-suppressed leaking workspaces
-    // are named. The Why column carries the per-row provenance.
-    const copyleftRows: string[] = [];
-    for (const pkg of sorted) {
-      const flagged = (verdictsByPurl.get(pkg.purl) ?? []).filter(
-        (verdict) =>
-          (verdict.status === "fail" || verdict.status === "warn") &&
-          verdict.rule === "default:copyleft",
-      );
-      if (flagged.length === 0) continue;
-      const targets = [
-        ...new Set(flagged.map((verdict) => verdict.occurrenceTarget)),
-      ].sort(compareCodeUnits);
-      copyleftRows.push(copyleftRow(pkg, targets));
-    }
-
-    lines.push("## Copyleft and special notices", "");
-
-    // Suppressed-workspaces list: every field is policy-authored and routes
-    // through escapeCell. Sorted by path (compareCodeUnits) for determinism
-    // regardless of policy-file order. Shown whenever configured — it explains
-    // the suppression even when nothing leaks.
-    const suppressed = [...policyView.suppressedWorkspaces].sort((a, b) =>
-      compareCodeUnits(a.path, b.path),
-    );
-    if (suppressed.length > 0) {
-      lines.push(
-        "Workspaces that are themselves distributed under a copyleft license are suppressed by policy:",
-        "",
-      );
-      for (const workspace of suppressed) {
-        lines.push(
-          `- ${escapeCell(workspace.path)} (${escapeCell(workspace.license)}) — ${escapeCell(workspace.description)}`,
-        );
-      }
-      lines.push("");
-    }
-
-    if (copyleftRows.length > 0) {
-      lines.push(
-        "The packages listed below carry copyleft or special license obligations in at least one non-suppressed workspace.",
-        "",
-        ...COPYLEFT_HEAD,
-        ...copyleftRows,
-        "",
-      );
-    } else {
-      lines.push(
-        "✅ No package carries copyleft or special license obligations.",
-        "",
-      );
-    }
+    lines.push(...copyleftSectionLines(sorted, policyView));
   }
 
   // Imprecise-licenses review section — finding-level (rendered with or without
@@ -730,6 +827,17 @@ export function renderMarkdown(
   // the imprecise section: absent when no package carries a conflict marker so
   // zero-conflict documents stay byte-identical.
   lines.push(...conflictSectionLines(sorted));
+
+  // Containers index — scope-derived, so it renders with or without a policy
+  // view (a no-policy render passes the empty set; every container reads
+  // "production"). Placed immediately before Production.
+  lines.push(
+    ...containersSectionLines(
+      sorted,
+      policyView?.developmentContainers ?? EMPTY_DEVELOPMENT_CONTAINERS,
+    ),
+  );
+  lines.push("");
 
   // Summary tables, split by package-level dev/prod classification for
   // APP-scope packages, then a dedicated Docker image packages section.
