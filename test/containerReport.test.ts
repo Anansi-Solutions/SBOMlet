@@ -1,0 +1,406 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import { describe, expect, test } from "bun:test";
+
+import {
+  DOCKER_IDENTITY_PREFIX,
+  type CanonicalDependencies,
+  type PackageEntry,
+} from "../src/model/dependencies";
+import { annotateFindings } from "../src/normalize/normalize";
+import { BUILTIN_OVERRIDES } from "../src/policy/builtinOverrides";
+import { evaluate } from "../src/policy/evaluate";
+import { parsePolicy, type Policy } from "../src/policy/schema";
+import { alignTables } from "../src/render/alignTables";
+import { renderMarkdown, type PolicyView } from "../src/render/markdown";
+import { globToRegExp } from "../src/targets/discover";
+
+/**
+ * A synthetic scenario shaped like the real-world report that motivated the
+ * container-aware restructure: a monorepo with one app workspace and two
+ * containers, exercising multi-container dedup, the AGPL container
+ * exception (precise and imprecise), and glob-based development marking.
+ * Every identifier below is invented or a generic public shape — no
+ * consumer-identifying string appears anywhere in this file.
+ */
+
+const API_CONTAINER = `${DOCKER_IDENTITY_PREFIX}services/api/Dockerfile`;
+const BUILD_CONTAINER = `${DOCKER_IDENTITY_PREFIX}tools/build/Dockerfile`;
+const APP_TARGET = "apps/web";
+
+const POLICY_TOML = [
+  "[unknown]",
+  'handling = "fail"',
+  "",
+  "[os_dependencies]",
+  'handling = "warn"',
+  "",
+  "[[docker.development]]",
+  'source = "tools/**"',
+  'reason = "the build container only runs CI tooling and is never shipped"',
+  "",
+  "[[compatible]]",
+  'match = "package"',
+  'name = "coreutils"',
+  `where = ["${API_CONTAINER}"]`,
+  'reason = "reviewed base-image utility, accepted in the api image"',
+  "",
+].join("\n");
+
+/** Hand-built PackageEntry with sensible defaults, mirroring render.test.ts. */
+function entry(
+  partial: Partial<PackageEntry> &
+    Pick<PackageEntry, "name" | "version" | "purl">,
+): PackageEntry {
+  return {
+    occurrences: [{ target: APP_TARGET, isDevDependency: false }],
+    licenseClaims: [],
+    scope: "app",
+    ...partial,
+  };
+}
+
+const bash = entry({
+  purl: "pkg:deb/bash@5.2-6",
+  name: "bash",
+  version: "5.2-6",
+  scope: "os",
+  occurrences: [{ target: API_CONTAINER, isDevDependency: false }],
+  licenseClaims: [
+    { raw: "GPL-3.0-or-later", kind: "spdx-id", source: "generator" },
+  ],
+});
+
+const libc6 = entry({
+  purl: "pkg:deb/libc6@2.36-9",
+  name: "libc6",
+  version: "2.36-9",
+  scope: "os",
+  occurrences: [{ target: API_CONTAINER, isDevDependency: false }],
+  licenseClaims: [
+    { raw: "LGPL-2.1-or-later", kind: "spdx-id", source: "generator" },
+  ],
+});
+
+const coreutils = entry({
+  purl: "pkg:deb/coreutils@9.1-1",
+  name: "coreutils",
+  version: "9.1-1",
+  scope: "os",
+  occurrences: [{ target: API_CONTAINER, isDevDependency: false }],
+  licenseClaims: [
+    { raw: "GPL-3.0-or-later", kind: "spdx-id", source: "generator" },
+  ],
+});
+
+/** Shared across BOTH containers — must row in each container's subsection. */
+const zlib = entry({
+  purl: "pkg:deb/zlib1g@1.2.13-1",
+  name: "zlib1g",
+  version: "1.2.13-1",
+  scope: "os",
+  occurrences: [
+    { target: API_CONTAINER, isDevDependency: false },
+    { target: BUILD_CONTAINER, isDevDependency: false },
+  ],
+  licenseClaims: [{ raw: "Zlib", kind: "spdx-id", source: "generator" }],
+});
+
+/** Precise AGPL in the production container — escalates via default:agpl-container. */
+const metricsDaemon = entry({
+  purl: "pkg:golang/metrics-daemon@1.2.0",
+  name: "metrics-daemon",
+  version: "1.2.0",
+  scope: "os",
+  occurrences: [{ target: API_CONTAINER, isDevDependency: false }],
+  licenseClaims: [
+    { raw: "AGPL-3.0-only", kind: "spdx-id", source: "generator" },
+  ],
+});
+
+/**
+ * Imprecise AGPL in the development container — a name-kind claim that
+ * normalizes to the bare "AGPL" family, escalating via the same
+ * default:agpl-container rule as the precise case (impreciseVerdict).
+ */
+const relayAgent = entry({
+  purl: "pkg:golang/relay-agent@0.4.0",
+  name: "relay-agent",
+  version: "0.4.0",
+  scope: "os",
+  occurrences: [{ target: BUILD_CONTAINER, isDevDependency: false }],
+  licenseClaims: [
+    {
+      raw: "GNU Affero General Public License",
+      kind: "name",
+      source: "generator",
+    },
+  ],
+});
+
+/**
+ * App-level production copyleft failure — sharp-shaped: transitive, with an
+ * introduction path, so it exercises the Why-cell provenance rendering too.
+ */
+const chartRender = entry({
+  purl: "pkg:npm/chart-render@2.3.1",
+  name: "chart-render",
+  version: "2.3.1",
+  occurrences: [
+    {
+      target: APP_TARGET,
+      isDevDependency: false,
+      introduction: {
+        direct: false,
+        introducedBy: ["pkg:npm/dashboard-kit@1.0.0"],
+        path: [
+          "pkg:npm/web-root@1.0.0",
+          "pkg:npm/dashboard-kit@1.0.0",
+          "pkg:npm/chart-render@2.3.1",
+        ],
+      },
+    },
+  ],
+  licenseClaims: [
+    { raw: "LGPL-3.0-or-later", kind: "spdx-id", source: "generator" },
+  ],
+});
+
+/** App-level dev-only copyleft warn — the obligation that must stay in Copyleft. */
+const docGen = entry({
+  purl: "pkg:npm/doc-gen@1.0.0",
+  name: "doc-gen",
+  version: "1.0.0",
+  occurrences: [{ target: APP_TARGET, isDevDependency: true }],
+  licenseClaims: [
+    { raw: "LGPL-2.1-or-later", kind: "spdx-id", source: "generator" },
+  ],
+});
+
+const rawModel: CanonicalDependencies = {
+  packages: [
+    bash,
+    libc6,
+    coreutils,
+    zlib,
+    metricsDaemon,
+    relayAgent,
+    chartRender,
+    docGen,
+  ],
+};
+
+/**
+ * Resolve PolicyView.developmentContainers the SAME way the pipeline does
+ * (pipeline.ts#resolveDevelopmentContainers): match each
+ * [[docker.development]] glob against the analyzed container sources via the
+ * REAL globToRegExp matcher — the same one [docker].ignore uses. Locks the
+ * ignore-dialect semantics (`**` crosses segments) live, rather than
+ * hand-asserting the resolved set.
+ */
+function resolveDevelopmentContainersForTest(
+  model: CanonicalDependencies,
+  policy: Policy,
+): ReadonlySet<string> {
+  const sources = new Set<string>();
+  for (const pkg of model.packages) {
+    if (pkg.scope !== "os") continue;
+    for (const occurrence of pkg.occurrences) {
+      if (occurrence.target.startsWith(DOCKER_IDENTITY_PREFIX)) {
+        sources.add(occurrence.target.slice(DOCKER_IDENTITY_PREFIX.length));
+      }
+    }
+  }
+  const resolved = new Set<string>();
+  for (const devEntry of policy.docker?.development ?? []) {
+    const matcher = globToRegExp(devEntry.source);
+    for (const source of sources) {
+      if (matcher.test(source))
+        resolved.add(`${DOCKER_IDENTITY_PREFIX}${source}`);
+    }
+  }
+  return resolved;
+}
+
+/** Build the rendered document through the real engine, end to end. */
+function renderScenario(): string {
+  const policy = parsePolicy(POLICY_TOML);
+  const { model: annotated } = annotateFindings(
+    rawModel,
+    policy.clarify,
+    BUILTIN_OVERRIDES,
+  );
+  const verdicts = evaluate(annotated, policy);
+  const policyView: PolicyView = {
+    policyPath: "policy.toml",
+    suppressedWorkspaces: policy.suppressedWorkspaces,
+    verdicts,
+    developmentContainers: resolveDevelopmentContainersForTest(
+      annotated,
+      policy,
+    ),
+  };
+  return alignTables(renderMarkdown(annotated, policyView));
+}
+
+function golden(name: string): string {
+  return readFileSync(join(import.meta.dir, "golden", name), "utf-8");
+}
+
+/** Collapse alignTables' column padding so a row can be matched by content. */
+const squish = (s: string): string => s.replace(/ {2,}/g, " ");
+
+/** Slice one "## Heading" section out of the document, up to the next "## ". */
+function section(doc: string, heading: string): string {
+  const start = doc.indexOf(heading);
+  expect(start).toBeGreaterThanOrEqual(0);
+  const rest = doc.slice(start + heading.length);
+  const nextHeadingOffset = rest.indexOf("\n## ");
+  return nextHeadingOffset === -1 ? rest : rest.slice(0, nextHeadingOffset);
+}
+
+describe("containerReport — multi-container golden scenario", () => {
+  test("locked byte-golden against the real engine (parsePolicy + evaluate + renderMarkdown + alignTables)", () => {
+    expect(renderScenario()).toBe(golden("container-report.md"));
+  });
+
+  test("determinism: rendering twice produces byte-identical output", () => {
+    expect(renderScenario()).toBe(renderScenario());
+  });
+
+  describe("invariant: at-most-once across {Problematic, Copyleft}", () => {
+    test("the precise-AGPL container package is in Problematic and NOT in Copyleft", () => {
+      const doc = renderScenario();
+      expect(
+        section(doc, "## Problematic licenses").includes("metrics-daemon"),
+      ).toBe(true);
+      expect(
+        section(doc, "## Copyleft and special notices").includes(
+          "metrics-daemon",
+        ),
+      ).toBe(false);
+    });
+
+    test("the imprecise-AGPL container package is in Problematic and NOT in Copyleft", () => {
+      const doc = renderScenario();
+      expect(
+        section(doc, "## Problematic licenses").includes("relay-agent"),
+      ).toBe(true);
+      expect(
+        section(doc, "## Copyleft and special notices").includes("relay-agent"),
+      ).toBe(false);
+    });
+
+    test("the app-level copyleft failure is in Problematic and NOT in Copyleft", () => {
+      const doc = renderScenario();
+      expect(
+        section(doc, "## Problematic licenses").includes("chart-render"),
+      ).toBe(true);
+      expect(
+        section(doc, "## Copyleft and special notices").includes(
+          "chart-render",
+        ),
+      ).toBe(false);
+    });
+
+    test("the app-level dev-only warn stays in Copyleft and is NOT in Problematic", () => {
+      const doc = renderScenario();
+      expect(
+        section(doc, "## Copyleft and special notices").includes("doc-gen"),
+      ).toBe(true);
+      expect(section(doc, "## Problematic licenses").includes("doc-gen")).toBe(
+        false,
+      );
+    });
+
+    test("routine container copyleft (bash, libc6) never surfaces in Copyleft or Problematic", () => {
+      const doc = renderScenario();
+      const copyleft = section(doc, "## Copyleft and special notices");
+      const problematic = section(doc, "## Problematic licenses");
+      for (const name of ["bash", "libc6"]) {
+        expect(copyleft.includes(name)).toBe(false);
+        expect(problematic.includes(name)).toBe(false);
+      }
+    });
+  });
+
+  describe("invariant: inventory completeness", () => {
+    test("the precise-AGPL package still rows in the api container's subsection", () => {
+      const doc = renderScenario();
+      const apiSection = section(doc, `### Container: ${API_CONTAINER}`);
+      expect(apiSection.includes("metrics-daemon")).toBe(true);
+    });
+
+    test("the imprecise-AGPL package rows in the build container's subsection AND the Imprecise review section", () => {
+      const doc = renderScenario();
+      const buildSection = section(doc, `### Container: ${BUILD_CONTAINER}`);
+      expect(buildSection.includes("relay-agent")).toBe(true);
+      expect(
+        section(doc, "## Imprecise licenses (review / disambiguate)").includes(
+          "relay-agent",
+        ),
+      ).toBe(true);
+    });
+
+    test("the app-level failure still rows in the Production dependencies table", () => {
+      const doc = renderScenario();
+      expect(
+        section(doc, "## Production dependencies").includes("chart-render"),
+      ).toBe(true);
+    });
+
+    test("routine GPL packages row only in their container subsection, never in a summary table", () => {
+      const doc = renderScenario();
+      const apiSection = section(doc, `### Container: ${API_CONTAINER}`);
+      expect(apiSection.includes("bash")).toBe(true);
+      expect(apiSection.includes("coreutils")).toBe(true);
+      // The [[compatible]] escape hatch renders ok, and the package still
+      // rows in its container's subsection.
+      expect(
+        section(doc, "## Problematic licenses").includes("coreutils"),
+      ).toBe(false);
+    });
+
+    test("the [[compatible]] where-scoped acceptance decides coreutils via compatible[0], not a fail", () => {
+      const policy = parsePolicy(POLICY_TOML);
+      const { model: annotated } = annotateFindings(
+        rawModel,
+        policy.clarify,
+        BUILTIN_OVERRIDES,
+      );
+      const coreutilsVerdict = evaluate(annotated, policy).find(
+        (v) => v.purl === "pkg:deb/coreutils@9.1-1",
+      );
+      expect(coreutilsVerdict?.status).toBe("ok");
+      expect(coreutilsVerdict?.rule).toBe("compatible[0]");
+    });
+
+    test("a package shared by both containers rows in EACH container's own subsection", () => {
+      const doc = renderScenario();
+      const apiSection = section(doc, `### Container: ${API_CONTAINER}`);
+      const buildSection = section(doc, `### Container: ${BUILD_CONTAINER}`);
+      expect(apiSection.includes("zlib1g")).toBe(true);
+      expect(buildSection.includes("zlib1g")).toBe(true);
+    });
+  });
+
+  test("the Containers index names both identities, the glob-resolved classification, and a package count", () => {
+    const doc = renderScenario();
+    const containers = squish(section(doc, "## Containers"));
+    expect(containers.includes(`| ${API_CONTAINER} | production | 5 |`)).toBe(
+      true,
+    );
+    expect(
+      containers.includes(`| ${BUILD_CONTAINER} | development | 2 |`),
+    ).toBe(true);
+  });
+
+  test("the dev container's packages fold under Development-only, not a standalone Docker section", () => {
+    const doc = renderScenario();
+    expect(doc.includes("## Docker image packages")).toBe(false);
+    const devSection = section(doc, "## Development-only dependencies");
+    expect(devSection.includes(`### Container: ${BUILD_CONTAINER}`)).toBe(true);
+    expect(devSection.includes("relay-agent")).toBe(true);
+    expect(devSection.includes("zlib1g")).toBe(true);
+  });
+});
