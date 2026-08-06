@@ -1555,6 +1555,106 @@ describe("PolicyView.developmentContainers — pipeline glob resolution", () => 
       containers.includes("| docker:a/Dockerfile | production | 1 |"),
     ).toBe(true);
   });
+
+  test('glob metachars are literal: "a.c/Dockerfile" does NOT match container "abc/Dockerfile"; "?", "(", "$" match only themselves', async () => {
+    const { root } = makeScannableTree();
+    const sidecar = sidecarDoc(
+      [
+        sidecarComponent("pkg-in-dotc", ["dotc-img"]),
+        sidecarComponent("pkg-in-abc", ["abc-img"]),
+        sidecarComponent("pkg-in-special", ["special-img"]),
+      ],
+      [
+        { image: "dotc-img", digest: "", source: "a.c/Dockerfile" },
+        { image: "abc-img", digest: "", source: "abc/Dockerfile" },
+        { image: "special-img", digest: "", source: "b?(1)$c/Dockerfile" },
+      ],
+    );
+    writeSidecar(root, sidecar);
+    const policyPath = writePolicy(
+      root,
+      [
+        "[unknown]",
+        'handling = "warn"',
+        "",
+        "[os_dependencies]",
+        'handling = "warn"',
+        "",
+        "[docker]",
+        "",
+        "[[docker.development]]",
+        'source = "a.c/Dockerfile"',
+        'reason = "literal-dot pattern"',
+        "",
+        "[[docker.development]]",
+        'source = "b?(1)$c/Dockerfile"',
+        'reason = "literal regex-metachar pattern"',
+        "",
+      ].join("\n"),
+    );
+
+    const { outputs } = await buildAgainst(root, policyPath);
+
+    const md = outputs.licensesMd;
+    const containers = squish(
+      md.slice(
+        md.indexOf("## Containers"),
+        md.indexOf("## Production dependencies"),
+      ),
+    );
+    // "a.c" matches only its own literal source — the dot is escaped, never
+    // a regex any-char wildcard, so "abc" stays production.
+    expect(
+      containers.includes("| docker:a.c/Dockerfile | development | 1 |"),
+    ).toBe(true);
+    expect(
+      containers.includes("| docker:abc/Dockerfile | production | 1 |"),
+    ).toBe(true);
+    // "?", "(", "$" are escaped too — the pattern matches only the
+    // byte-identical source.
+    expect(
+      containers.includes("| docker:b?(1)$c/Dockerfile | development | 1 |"),
+    ).toBe(true);
+  });
+
+  test('case-insensitive match: "a/**" classifies BOTH docker:a/... and docker:A/... development; the Containers index still sorts code-unit ("A" before "a"), and a second build is byte-identical', async () => {
+    const { root } = makeScannableTree();
+    const sidecar = sidecarDoc(
+      [
+        sidecarComponent("pkg-in-upper", ["upper-img"]),
+        sidecarComponent("pkg-in-lower", ["lower-img"]),
+      ],
+      [
+        { image: "upper-img", digest: "", source: "A/Dockerfile" },
+        { image: "lower-img", digest: "", source: "a/Dockerfile" },
+      ],
+    );
+    writeSidecar(root, sidecar);
+    const policyPath = writePolicy(root, developmentGlobPolicy("a/**"));
+
+    const first = await buildAgainst(root, policyPath);
+    const second = await buildAgainst(root, policyPath);
+
+    const md = first.outputs.licensesMd;
+    const containersBlock = md.slice(
+      md.indexOf("## Containers"),
+      md.indexOf("## Production dependencies"),
+    );
+    const containers = squish(containersBlock);
+    expect(
+      containers.includes("| docker:A/Dockerfile | development | 1 |"),
+    ).toBe(true);
+    expect(
+      containers.includes("| docker:a/Dockerfile | development | 1 |"),
+    ).toBe(true);
+    // Code-unit order: uppercase "A" (0x41) sorts before lowercase "a"
+    // (0x61) — never a locale-aware case-insensitive order.
+    expect(
+      containersBlock.indexOf("docker:A/Dockerfile") <
+        containersBlock.indexOf("docker:a/Dockerfile"),
+    ).toBe(true);
+    expect(second.outputs.licensesMd).toBe(first.outputs.licensesMd);
+  });
 });
 
 // ===========================================================================
