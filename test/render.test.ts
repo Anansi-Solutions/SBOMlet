@@ -753,6 +753,80 @@ describe("renderMarkdown — the full document", () => {
     expect(summary.includes("| suppressed-only |")).toBe(true);
   });
 
+  test("Test 5b: container system-package copyleft is routine and never surfaces in Copyleft, whatever its verdict status; the same warn on an APP package still surfaces", () => {
+    const osCopyleft = entry({
+      purl: "pkg:deb/debian/libssl@3.0",
+      name: "libssl",
+      version: "3.0",
+      occurrences: [
+        { target: "docker:img/Dockerfile", isDevDependency: false },
+      ],
+      licenseClaims: [
+        { raw: "GPL-3.0-only", kind: "spdx-id", source: "generator" },
+      ],
+      finding: {
+        expression: "GPL-3.0-only",
+        elected: "GPL-3.0-only",
+        source: "generator",
+        confidence: "exact",
+      },
+      scope: "os",
+    });
+    const appCopyleft = entry({
+      purl: "pkg:npm/app-copyleft@1.0.0",
+      name: "app-copyleft",
+      version: "1.0.0",
+      occurrences: [{ target: "backend", isDevDependency: false }],
+      licenseClaims: [
+        { raw: "GPL-3.0-only", kind: "spdx-id", source: "generator" },
+      ],
+      finding: {
+        expression: "GPL-3.0-only",
+        elected: "GPL-3.0-only",
+        source: "generator",
+        confidence: "exact",
+      },
+    });
+    const model: CanonicalDependencies = {
+      packages: [osCopyleft, appCopyleft],
+    };
+    const view: PolicyView = {
+      policyPath: "policy.toml",
+      suppressedWorkspaces: [],
+      verdicts: [
+        {
+          purl: "pkg:deb/debian/libssl@3.0",
+          occurrenceTarget: "docker:img/Dockerfile",
+          status: "warn",
+          rule: "default:copyleft",
+          reason: "os-downgraded copyleft",
+        },
+        {
+          purl: "pkg:npm/app-copyleft@1.0.0",
+          occurrenceTarget: "backend",
+          status: "warn",
+          rule: "default:copyleft",
+          reason: 'copyleft license "GPL-3.0-only"',
+        },
+      ],
+    };
+    const output = renderMarkdown(model, view);
+    const copyleftStart = output.indexOf("## Copyleft and special notices");
+    const copyleftSection = output.slice(
+      copyleftStart,
+      output.indexOf("## Containers"),
+    );
+    // Container copyleft is routine — excluded from the detailed table
+    // regardless of its warn status.
+    expect(copyleftSection.includes("libssl")).toBe(false);
+    // The app copyleft obligation is never dropped.
+    expect(
+      copyleftSection.includes(
+        "| app-copyleft | npm | 1.0.0 | GPL-3.0-only | backend | — |",
+      ),
+    ).toBe(true);
+  });
+
   test("Test 6: suppressed workspaces render path + license + description escaped", () => {
     const view: PolicyView = {
       policyPath: "configs/policy|v2.toml",
@@ -1140,6 +1214,146 @@ describe("renderMarkdown — Docker image packages section", () => {
         "| busybox | apk | 1.37.0-r19 | GPL-2.0-only | docker:a/Dockerfile, docker:b/Dockerfile |",
       ),
     ).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The Containers index: a thin, scope-derived section listing every analyzed
+// container's identity, prod/dev classification, and package count,
+// rendered immediately before Production regardless of policy.
+// ---------------------------------------------------------------------------
+
+describe("renderMarkdown — Containers index", () => {
+  const HEADING = "## Containers";
+
+  const osPkg = (
+    name: string,
+    purl: string,
+    targets: readonly string[],
+  ): PackageEntry =>
+    entry({
+      purl,
+      name,
+      version: "1.0.0",
+      occurrences: targets.map((target) => ({
+        target,
+        isDevDependency: false,
+      })),
+      licenseClaims: [{ raw: "MIT", kind: "spdx-id", source: "generator" }],
+      scope: "os",
+    });
+
+  test("two containers render a sorted 3-column index, placed immediately before Production", () => {
+    const model: CanonicalDependencies = {
+      packages: [
+        osPkg("busybox", "pkg:apk/alpine/busybox@1.0.0", [
+          "docker:b/Dockerfile",
+        ]),
+        osPkg("musl", "pkg:apk/alpine/musl@1.0.0", ["docker:a/Dockerfile"]),
+        osPkg("zlib", "pkg:apk/alpine/zlib@1.0.0", ["docker:a/Dockerfile"]),
+      ],
+    };
+    const output = renderMarkdown(model);
+    expect(output.includes(HEADING)).toBe(true);
+    const containersSection = output.slice(
+      output.indexOf(HEADING),
+      output.indexOf("## Production dependencies"),
+    );
+    expect(
+      containersSection.includes("| Container | Classification | Packages |"),
+    ).toBe(true);
+    // compareCodeUnits-sorted: "docker:a/Dockerfile" before "docker:b/Dockerfile".
+    expect(containersSection.indexOf("docker:a/Dockerfile")).toBeLessThan(
+      containersSection.indexOf("docker:b/Dockerfile"),
+    );
+    // Package counts are each container's full os-package inventory.
+    expect(
+      containersSection.includes("| docker:a/Dockerfile | production | 2 |"),
+    ).toBe(true);
+    expect(
+      containersSection.includes("| docker:b/Dockerfile | production | 1 |"),
+    ).toBe(true);
+    // Placed immediately before Production.
+    expect(output.indexOf(HEADING)).toBeLessThan(
+      output.indexOf("## Production dependencies"),
+    );
+  });
+
+  test("classification is development for identities in developmentContainers, else production", () => {
+    const model: CanonicalDependencies = {
+      packages: [
+        osPkg("musl", "pkg:apk/alpine/musl@1.0.0", ["docker:a/Dockerfile"]),
+        osPkg("zlib", "pkg:apk/alpine/zlib@1.0.0", ["docker:b/Dockerfile"]),
+      ],
+    };
+    const view: PolicyView = {
+      policyPath: "policy.toml",
+      suppressedWorkspaces: [],
+      verdicts: [],
+      developmentContainers: new Set(["docker:a/Dockerfile"]),
+    };
+    const output = renderMarkdown(model, view);
+    const containersSection = output.slice(
+      output.indexOf(HEADING),
+      output.indexOf("## Production dependencies"),
+    );
+    expect(
+      containersSection.includes("| docker:a/Dockerfile | development | 1 |"),
+    ).toBe(true);
+    expect(
+      containersSection.includes("| docker:b/Dockerfile | production | 1 |"),
+    ).toBe(true);
+  });
+
+  test("without a policy view every container classifies production", () => {
+    const model: CanonicalDependencies = {
+      packages: [
+        osPkg("musl", "pkg:apk/alpine/musl@1.0.0", ["docker:a/Dockerfile"]),
+      ],
+    };
+    const output = renderMarkdown(model);
+    const containersSection = output.slice(
+      output.indexOf(HEADING),
+      output.indexOf("## Production dependencies"),
+    );
+    expect(
+      containersSection.includes("| docker:a/Dockerfile | production | 1 |"),
+    ).toBe(true);
+  });
+
+  test("empty state renders the heading plus a stable message when there are no os packages", () => {
+    const model: CanonicalDependencies = {
+      packages: [
+        entry({
+          purl: "pkg:npm/app-only@1.0.0",
+          name: "app-only",
+          version: "1.0.0",
+          licenseClaims: [{ raw: "MIT", kind: "spdx-id", source: "generator" }],
+        }),
+      ],
+    };
+    const output = renderMarkdown(model);
+    expect(output.includes(HEADING)).toBe(true);
+    const containersSection = output.slice(output.indexOf(HEADING));
+    expect(
+      containersSection.includes("✅ No containers are currently tracked."),
+    ).toBe(true);
+    expect(
+      containersSection.includes("| Container | Classification | Packages |"),
+    ).toBe(false);
+  });
+
+  test("identity cells route through escapeCell", () => {
+    const model: CanonicalDependencies = {
+      packages: [
+        osPkg("evil", "pkg:apk/alpine/evil@1.0.0", [
+          "docker:evil|pkg`x/Dockerfile",
+        ]),
+      ],
+    };
+    const output = renderMarkdown(model);
+    expect(output.includes("docker:evil\\|pkg\\`x/Dockerfile")).toBe(true);
+    expect(output.includes("docker:evil|pkg`x/Dockerfile")).toBe(false);
   });
 });
 

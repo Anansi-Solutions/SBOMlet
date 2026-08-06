@@ -1347,3 +1347,202 @@ describe("the two-Dockerfile scenario end-to-end", () => {
     expect(stderr.includes(`policy warn: ${BUSYBOX_PURL}`)).toBe(false);
   });
 });
+
+// ===========================================================================
+// PolicyView.developmentContainers: the pipeline resolves each
+// [[docker.development]] glob against the analyzed container SOURCES using
+// the same globToRegExp matcher as [docker].ignore — anchored, `*` within a
+// segment, `**` across segments. Rendered classification lives in the
+// "## Containers" index.
+// ===========================================================================
+
+const TOOLS_IMG = {
+  image: "tools-img",
+  digest: "",
+  source: "tools/build/Dockerfile",
+};
+const A_IMG_2 = { image: "a-img-2", digest: "", source: "a/Dockerfile" };
+
+/** Two containers: a nested "tools/build/Dockerfile" and a top-level "a/Dockerfile". */
+const GLOB_SIDECAR = sidecarDoc(
+  [
+    sidecarComponent("pkg-in-tools", ["tools-img"]),
+    sidecarComponent("pkg-in-a", ["a-img-2"]),
+  ],
+  [TOOLS_IMG, A_IMG_2],
+);
+
+/** A minimal policy with a single [[docker.development]] entry. */
+function developmentGlobPolicy(source: string): string {
+  return [
+    "[unknown]",
+    'handling = "warn"',
+    "",
+    "[os_dependencies]",
+    'handling = "warn"',
+    "",
+    "[docker]",
+    "",
+    "[[docker.development]]",
+    `source = ${JSON.stringify(source)}`,
+    'reason = "test reason"',
+    "",
+  ].join("\n");
+}
+
+describe("PolicyView.developmentContainers — pipeline glob resolution", () => {
+  beforeAll(() => {
+    mock.module("../src/collectors/cdxgen", () => ({
+      ...REAL_CDXGEN,
+      collectWithCdxgen: fakeScanWithCdxgen,
+    }));
+  });
+  afterAll(() => {
+    mock.module("../src/collectors/cdxgen", () => REAL_CDXGEN);
+  });
+
+  test('a `**` glob matches ACROSS segments: "tools/**" marks the nested container development; the sibling stays production', async () => {
+    const { root } = makeScannableTree();
+    writeSidecar(root, GLOB_SIDECAR);
+    const policyPath = writePolicy(root, developmentGlobPolicy("tools/**"));
+
+    const { outputs } = await buildAgainst(root, policyPath);
+
+    const md = outputs.licensesMd;
+    const containers = squish(
+      md.slice(
+        md.indexOf("## Containers"),
+        md.indexOf("## Production dependencies"),
+      ),
+    );
+    expect(
+      containers.includes(
+        "| docker:tools/build/Dockerfile | development | 1 |",
+      ),
+    ).toBe(true);
+    expect(
+      containers.includes("| docker:a/Dockerfile | production | 1 |"),
+    ).toBe(true);
+  });
+
+  test('a `*` glob does NOT cross segments: "tools/*" leaves "tools/build/Dockerfile" production (the ignore matcher\'s documented semantics)', async () => {
+    const { root } = makeScannableTree();
+    writeSidecar(root, GLOB_SIDECAR);
+    const policyPath = writePolicy(root, developmentGlobPolicy("tools/*"));
+
+    const { outputs } = await buildAgainst(root, policyPath);
+
+    const md = outputs.licensesMd;
+    const containers = squish(
+      md.slice(
+        md.indexOf("## Containers"),
+        md.indexOf("## Production dependencies"),
+      ),
+    );
+    expect(
+      containers.includes("| docker:tools/build/Dockerfile | production | 1 |"),
+    ).toBe(true);
+    expect(
+      containers.includes("| docker:a/Dockerfile | production | 1 |"),
+    ).toBe(true);
+  });
+
+  test("a literal source matches exactly", async () => {
+    const { root } = makeScannableTree();
+    writeSidecar(root, GLOB_SIDECAR);
+    const policyPath = writePolicy(root, developmentGlobPolicy("a/Dockerfile"));
+
+    const { outputs } = await buildAgainst(root, policyPath);
+
+    const md = outputs.licensesMd;
+    const containers = squish(
+      md.slice(
+        md.indexOf("## Containers"),
+        md.indexOf("## Production dependencies"),
+      ),
+    );
+    expect(
+      containers.includes("| docker:a/Dockerfile | development | 1 |"),
+    ).toBe(true);
+    expect(
+      containers.includes("| docker:tools/build/Dockerfile | production | 1 |"),
+    ).toBe(true);
+  });
+
+  test("two patterns matching the SAME container mark it once (idempotent)", async () => {
+    const { root } = makeScannableTree();
+    writeSidecar(root, GLOB_SIDECAR);
+    const policyPath = writePolicy(
+      root,
+      [
+        "[unknown]",
+        'handling = "warn"',
+        "",
+        "[os_dependencies]",
+        'handling = "warn"',
+        "",
+        "[docker]",
+        "",
+        "[[docker.development]]",
+        'source = "tools/**"',
+        'reason = "matches via the double-star"',
+        "",
+        "[[docker.development]]",
+        'source = "tools/build/Dockerfile"',
+        'reason = "matches again via the literal path"',
+        "",
+      ].join("\n"),
+    );
+
+    const { outputs } = await buildAgainst(root, policyPath);
+
+    const md = outputs.licensesMd;
+    const containers = squish(
+      md.slice(
+        md.indexOf("## Containers"),
+        md.indexOf("## Production dependencies"),
+      ),
+    );
+    // Exactly ONE row for the doubly-matched container, still development.
+    expect(
+      (containers.match(/docker:tools\/build\/Dockerfile/g) ?? []).length,
+    ).toBe(1);
+    expect(
+      containers.includes(
+        "| docker:tools/build/Dockerfile | development | 1 |",
+      ),
+    ).toBe(true);
+  });
+
+  test("no [[docker.development]] entries → every container reads production", async () => {
+    const { root } = makeScannableTree();
+    writeSidecar(root, GLOB_SIDECAR);
+    const policyPath = writePolicy(
+      root,
+      [
+        "[unknown]",
+        'handling = "warn"',
+        "",
+        "[os_dependencies]",
+        'handling = "warn"',
+        "",
+      ].join("\n"),
+    );
+
+    const { outputs } = await buildAgainst(root, policyPath);
+
+    const md = outputs.licensesMd;
+    const containers = squish(
+      md.slice(
+        md.indexOf("## Containers"),
+        md.indexOf("## Production dependencies"),
+      ),
+    );
+    expect(
+      containers.includes("| docker:tools/build/Dockerfile | production | 1 |"),
+    ).toBe(true);
+    expect(
+      containers.includes("| docker:a/Dockerfile | production | 1 |"),
+    ).toBe(true);
+  });
+});
