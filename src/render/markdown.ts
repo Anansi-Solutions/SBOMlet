@@ -678,7 +678,7 @@ function problematicSectionLines(
   for (const verdict of verdicts) {
     if (verdict.status !== "fail") continue;
     if (!byPurl.has(verdict.purl)) continue;
-    const key = `${verdict.purl} ${verdict.rule} ${verdict.reason}`;
+    const key = `${verdict.purl} ${verdict.rule} ${verdict.reason}`;
     const existing = groups.get(key);
     if (existing === undefined) {
       groups.set(key, {
