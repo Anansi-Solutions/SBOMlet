@@ -522,6 +522,12 @@ function parseSpdxChecked(
  * segment text, so such a path can never match — and because suppression
  * entries are excluded from unused-rule reporting, a typo here would otherwise
  * be silently dead forever.
+ *
+ * Shared by every path-shaped policy field — a "docker:"-prefixed path is
+ * fine here (a [[compatible]] `where` scope deliberately targets a container
+ * occurrence). The suppression-only "docker:" fence lives in
+ * validateSuppressions instead, since only a workspace suppression must
+ * never absorb a container.
  */
 function validatePath(path: string, where: string, problems: string[]): void {
   if (path.includes("\\")) {
@@ -578,7 +584,14 @@ function validateSuppressions(
     const path = requireText(entry, "path", where, problems);
     const license = requireText(entry, "license", where, problems);
     const description = requireText(entry, "description", where, problems);
-    if (path !== undefined) validatePath(path, where, problems);
+    if (path !== undefined) {
+      validatePath(path, where, problems);
+      if (path.startsWith("docker:")) {
+        problems.push(
+          `${where}: path "${path}" must not start with "docker:" (a container image is not a workspace; accept a container's copyleft package with a scoped [[compatible]] rule instead)`,
+        );
+      }
+    }
     let licenseValid = false;
     if (license !== undefined) {
       const node = parseSpdxChecked(license, `${where}: license`, problems);

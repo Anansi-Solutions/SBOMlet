@@ -3614,6 +3614,30 @@ describe("evaluate — os-scope AGPL container escalation", () => {
     expect(verdicts[0].status).toBe("fail");
     expect(verdicts[0].rule).toBe("denied[0]");
   });
+
+  test("regression: a docker:-prefixed suppression can no longer absorb the os-scope AGPL escalation — parsePolicy rejects the policy outright, so evaluate never even runs against it", () => {
+    const policyText = [
+      "[[workspace.copyleft_suppressed]]",
+      `path = ${JSON.stringify(AGPL_TARGET)}`,
+      'license = "AGPL-3.0-only"',
+      'description = "attempted absorption of the container image"',
+    ].join("\n");
+    expect(() => parsePolicy(policyText)).toThrow(PolicyError);
+
+    // With that suppression impossible to construct, the same os-scope AGPL
+    // package at the same target has only one reachable outcome: the
+    // container escalation fail — never suppressed.
+    const { verdicts } = runEngine(
+      [
+        osPkgSpec("pkg:deb/debian/agpl-os@1.0.0", "agpl-os", "AGPL-3.0-only", [
+          AGPL_TARGET,
+        ]),
+      ],
+      "",
+    );
+    expect(verdicts[0].status).toBe("fail");
+    expect(verdicts[0].rule).toBe("default:agpl-container");
+  });
 });
 
 describe("evaluate — imprecise AGPL container escalation (imprecise variant)", () => {
