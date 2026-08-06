@@ -59,6 +59,30 @@ The packages listed below carry copyleft or special license obligations in at le
 | spdx-ranges           | npm       | 2.1.1   | (MIT AND CC-BY-3.0) | .       |
 | spdx-satisfies        | npm       | 6.0.0   | MIT                 | .       |
 
+### Container: docker:examples/docker-scan/Dockerfile
+
+| Name                   | Ecosystem | Version     | License                                   |
+| ---------------------- | --------- | ----------- | ----------------------------------------- |
+| alpine-baselayout      | apk       | 3.7.0-r0    | GPL-2.0-only                              |
+| alpine-baselayout-data | apk       | 3.7.0-r0    | GPL-2.0-only                              |
+| alpine-keys            | apk       | 2.5-r0      | MIT                                       |
+| alpine-release         | apk       | 3.22.5-r0   | MIT                                       |
+| apk-tools              | apk       | 2.14.10-r0  | GPL-2.0-only                              |
+| busybox                | apk       | 1.37.0-r20  | GPL-2.0-only                              |
+| busybox-binsh          | apk       | 1.37.0-r20  | GPL-2.0-only                              |
+| ca-certificates        | apk       | 20260611-r0 | MPL-2.0 AND MIT                           |
+| ca-certificates-bundle | apk       | 20260611-r0 | MPL-2.0 AND MIT                           |
+| demo-npm-package       | npm       | 0.0.0       | MIT                                       |
+| demo-python-package    | pypi      | 0.0.0       | Apache-2.0                                |
+| libapk2                | apk       | 2.14.10-r0  | GPL-2.0-only                              |
+| libcrypto3             | apk       | 3.5.7-r0    | Apache-2.0                                |
+| libssl3                | apk       | 3.5.7-r0    | Apache-2.0                                |
+| musl                   | apk       | 1.2.5-r12   | MIT                                       |
+| musl-utils             | apk       | 1.2.5-r12   | MIT AND BSD-2-Clause AND GPL-2.0-or-later |
+| scanelf                | apk       | 1.3.8-r1    | GPL-2.0-only                              |
+| ssl_client             | apk       | 1.37.0-r20  | GPL-2.0-only                              |
+| zlib                   | apk       | 1.3.2-r0    | Zlib                                      |
+
 ## Development-only dependencies
 
 | Name                                              | Ecosystem | Version | License              | Used in |
@@ -451,27 +475,3 @@ The packages listed below carry copyleft or special license obligations in at le
 | yaml                                              | npm       | 2.9.0   | ISC                  | .       |
 | yocto-queue                                       | npm       | 0.1.0   | MIT                  | .       |
 | zwitch                                            | npm       | 2.0.4   | MIT                  | .       |
-
-## Docker image packages
-
-| Name                   | Ecosystem | Version     | License                                   | Used in                                |
-| ---------------------- | --------- | ----------- | ----------------------------------------- | -------------------------------------- |
-| alpine-baselayout      | apk       | 3.7.0-r0    | GPL-2.0-only                              | docker:examples/docker-scan/Dockerfile |
-| alpine-baselayout-data | apk       | 3.7.0-r0    | GPL-2.0-only                              | docker:examples/docker-scan/Dockerfile |
-| alpine-keys            | apk       | 2.5-r0      | MIT                                       | docker:examples/docker-scan/Dockerfile |
-| alpine-release         | apk       | 3.22.5-r0   | MIT                                       | docker:examples/docker-scan/Dockerfile |
-| apk-tools              | apk       | 2.14.10-r0  | GPL-2.0-only                              | docker:examples/docker-scan/Dockerfile |
-| busybox                | apk       | 1.37.0-r20  | GPL-2.0-only                              | docker:examples/docker-scan/Dockerfile |
-| busybox-binsh          | apk       | 1.37.0-r20  | GPL-2.0-only                              | docker:examples/docker-scan/Dockerfile |
-| ca-certificates        | apk       | 20260611-r0 | MPL-2.0 AND MIT                           | docker:examples/docker-scan/Dockerfile |
-| ca-certificates-bundle | apk       | 20260611-r0 | MPL-2.0 AND MIT                           | docker:examples/docker-scan/Dockerfile |
-| demo-npm-package       | npm       | 0.0.0       | MIT                                       | docker:examples/docker-scan/Dockerfile |
-| demo-python-package    | pypi      | 0.0.0       | Apache-2.0                                | docker:examples/docker-scan/Dockerfile |
-| libapk2                | apk       | 2.14.10-r0  | GPL-2.0-only                              | docker:examples/docker-scan/Dockerfile |
-| libcrypto3             | apk       | 3.5.7-r0    | Apache-2.0                                | docker:examples/docker-scan/Dockerfile |
-| libssl3                | apk       | 3.5.7-r0    | Apache-2.0                                | docker:examples/docker-scan/Dockerfile |
-| musl                   | apk       | 1.2.5-r12   | MIT                                       | docker:examples/docker-scan/Dockerfile |
-| musl-utils             | apk       | 1.2.5-r12   | MIT AND BSD-2-Clause AND GPL-2.0-or-later | docker:examples/docker-scan/Dockerfile |
-| scanelf                | apk       | 1.3.8-r1    | GPL-2.0-only                              | docker:examples/docker-scan/Dockerfile |
-| ssl_client             | apk       | 1.37.0-r20  | GPL-2.0-only                              | docker:examples/docker-scan/Dockerfile |
-| zlib                   | apk       | 1.3.2-r0    | Zlib                                      | docker:examples/docker-scan/Dockerfile |

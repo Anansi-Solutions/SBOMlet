@@ -689,15 +689,16 @@ describe("the committed docker.sbom.json as a scope:os merge input", () => {
       }),
     );
 
-    // The rendered document carries the dedicated OS section AND the deb/apk
-    // rows — proof the committed SBOM crossed into the merge as scope:os.
+    // The rendered document carries the container's own subsection AND the
+    // deb/apk rows — proof the committed SBOM crossed into the merge as
+    // scope:os. The occurrence identity is per-image (image lane → the ref).
     const md = outputs!.licensesMd;
-    expect(md.includes("## Docker image packages")).toBe(true);
-    const osSection = squish(md.slice(md.indexOf("## Docker image packages")));
-    expect(osSection.includes("| libc6 | deb | 2.36-9 |")).toBe(true);
-    expect(osSection.includes("| musl | apk | 1.2.4-r2 |")).toBe(true);
-    // The occurrence identity is per-image (image lane → the ref).
-    expect(osSection.includes("docker:postgres:18")).toBe(true);
+    expect(md.includes("### Container: docker:postgres:18")).toBe(true);
+    const containerSection = squish(
+      md.slice(md.indexOf("### Container: docker:postgres:18")),
+    );
+    expect(containerSection.includes("| libc6 | deb | 2.36-9 |")).toBe(true);
+    expect(containerSection.includes("| musl | apk | 1.2.4-r2 |")).toBe(true);
   });
 
   test("the committed docker.sbom.json is read from the REPO ROOT, not the base dir (the Action's divergent-dir case)", async () => {
@@ -725,12 +726,15 @@ describe("the committed docker.sbom.json as a scope:os merge input", () => {
       }),
     );
 
-    // Read from the repo root, so the OS section and deb/apk rows are present.
+    // Read from the repo root, so the container's subsection and deb/apk
+    // rows are present.
     const md = outputs!.licensesMd;
-    expect(md.includes("## Docker image packages")).toBe(true);
-    const osSection = squish(md.slice(md.indexOf("## Docker image packages")));
-    expect(osSection.includes("| libc6 | deb | 2.36-9 |")).toBe(true);
-    expect(osSection.includes("| musl | apk | 1.2.4-r2 |")).toBe(true);
+    expect(md.includes("### Container: docker:postgres:18")).toBe(true);
+    const containerSection = squish(
+      md.slice(md.indexOf("### Container: docker:postgres:18")),
+    );
+    expect(containerSection.includes("| libc6 | deb | 2.36-9 |")).toBe(true);
+    expect(containerSection.includes("| musl | apk | 1.2.4-r2 |")).toBe(true);
   });
 
   test("a docker.sbom.json beside the base dir is IGNORED when the base dir differs from the repo root (no base-dir leakage)", async () => {
@@ -758,11 +762,11 @@ describe("the committed docker.sbom.json as a scope:os merge input", () => {
     );
 
     const md = outputs!.licensesMd;
-    // The OS section heading still renders, but the base-dir SBOM did NOT leak
-    // in: none of its rows appear and the count is zero.
-    const osSection = squish(md.slice(md.indexOf("## Docker image packages")));
-    expect(osSection.includes("libc6")).toBe(false);
-    expect(osSection.includes("musl")).toBe(false);
+    // The base-dir SBOM did NOT leak in: no container subsection renders at
+    // all (there is nothing to analyze), and the count is zero.
+    expect(md.includes("### Container:")).toBe(false);
+    expect(md.includes("libc6")).toBe(false);
+    expect(md.includes("musl")).toBe(false);
     expect(md.includes("- Container packages: 0")).toBe(true);
   });
 
@@ -784,12 +788,13 @@ describe("the committed docker.sbom.json as a scope:os merge input", () => {
     );
 
     const md = outputs!.licensesMd;
-    // The OS section heading still renders (stable shape) but carries NO rows.
-    const osSection = squish(md.slice(md.indexOf("## Docker image packages")));
-    expect(osSection.includes("libc6")).toBe(false);
-    expect(osSection.includes("musl")).toBe(false);
-    expect(osSection.includes("pkg:deb/")).toBe(false);
-    expect(osSection.includes("pkg:apk/")).toBe(false);
+    // No container was analyzed, so no "### Container:" subsection renders
+    // anywhere (there is nothing to group).
+    expect(md.includes("### Container:")).toBe(false);
+    expect(md.includes("libc6")).toBe(false);
+    expect(md.includes("musl")).toBe(false);
+    expect(md.includes("pkg:deb/")).toBe(false);
+    expect(md.includes("pkg:apk/")).toBe(false);
     // No docker base-image packages counted.
     expect(md.includes("- Container packages: 0")).toBe(true);
   });
@@ -844,12 +849,12 @@ describe("the committed docker.sbom.json as a scope:os merge input", () => {
       }),
     );
 
-    const osSection = squish(
+    const containerSection = squish(
       outputs!.licensesMd.slice(
-        outputs!.licensesMd.indexOf("## Docker image packages"),
+        outputs!.licensesMd.indexOf("### Container: docker:postgres:18"),
       ),
     );
-    expect(osSection.includes("| libc6 | deb | 2.36-9 |")).toBe(true);
+    expect(containerSection.includes("| libc6 | deb | 2.36-9 |")).toBe(true);
   });
 
   test("an explicit --docker-sbom override reads that file only — no legacy-file guard", async () => {
@@ -878,12 +883,12 @@ describe("the committed docker.sbom.json as a scope:os merge input", () => {
       }),
     );
 
-    const osSection = squish(
+    const containerSection = squish(
       outputs!.licensesMd.slice(
-        outputs!.licensesMd.indexOf("## Docker image packages"),
+        outputs!.licensesMd.indexOf("### Container: docker:postgres:18"),
       ),
     );
-    expect(osSection.includes("| libc6 | deb | 2.36-9 |")).toBe(true);
+    expect(containerSection.includes("| libc6 | deb | 2.36-9 |")).toBe(true);
   });
 });
 
@@ -1001,32 +1006,30 @@ describe("sidecar fan-out and the malformed-sidecar failure", () => {
     mock.module("../src/collectors/cdxgen", () => REAL_CDXGEN);
   });
 
-  test("the sidecar fans out per image: a shared purl carries BOTH per-image identities, unique purls one each", async () => {
+  test("the sidecar fans out per image: a shared purl rows in EACH container's own subsection, unique purls one each", async () => {
     const { root } = makeScannableTree();
     writeSidecar(root, TWO_IMAGE_SIDECAR);
 
     const { outputs } = await buildAgainst(root);
 
     const md = outputs.licensesMd;
-    const osSection = squish(md.slice(md.indexOf("## Docker image packages")));
-    // The shared purl crossed the untouched merge as TWO occurrences whose
-    // targets are the sorted per-image identities.
-    expect(
-      osSection.includes(
-        "| shared-pkg | apk | 1.0.0 | MIT | docker:a/Dockerfile, docker:b/Dockerfile |",
-      ),
-    ).toBe(true);
-    expect(
-      osSection.includes(
-        "| only-a | apk | 1.0.0 | MIT | docker:a/Dockerfile |",
-      ),
-    ).toBe(true);
-    expect(
-      osSection.includes(
-        "| only-b | apk | 1.0.0 | MIT | docker:b/Dockerfile |",
-      ),
-    ).toBe(true);
-    // Still one ROW per purl (the fan-out multiplies occurrences, not rows).
+    const aPos = md.indexOf("### Container: docker:a/Dockerfile");
+    const bPos = md.indexOf("### Container: docker:b/Dockerfile");
+    expect(aPos).toBeGreaterThan(-1);
+    expect(bPos).toBeGreaterThan(aPos);
+    const aSection = squish(md.slice(aPos, bPos));
+    const bSection = squish(md.slice(bPos));
+    // The shared purl crossed the untouched merge as TWO occurrences, and
+    // rows in EACH container's own subsection (no Used-in column here — the
+    // heading already scopes the row).
+    expect(aSection.includes("| shared-pkg | apk | 1.0.0 | MIT |")).toBe(true);
+    expect(bSection.includes("| shared-pkg | apk | 1.0.0 | MIT |")).toBe(true);
+    expect(aSection.includes("| only-a | apk | 1.0.0 | MIT |")).toBe(true);
+    expect(aSection.includes("only-b")).toBe(false);
+    expect(bSection.includes("| only-b | apk | 1.0.0 | MIT |")).toBe(true);
+    expect(bSection.includes("only-a")).toBe(false);
+    // Still one PACKAGE per purl (the fan-out multiplies occurrences/rows
+    // across containers, not distinct packages).
     expect(md.includes("- Container packages: 3")).toBe(true);
   });
 
@@ -1272,13 +1275,20 @@ describe("the two-Dockerfile scenario end-to-end", () => {
     ).toBe(true);
     expect(md.includes("1 copyleft warning(s)")).toBe(true);
 
-    // The Docker section's Used-in still names BOTH occurrences (the flow
-    // sidecar → merge → Used-in is per-image; only the FLAGGED surface narrows).
-    const osSection = squish(md.slice(md.indexOf("## Docker image packages")));
+    // busybox still rows in BOTH containers' own subsections (the flow
+    // sidecar → merge → per-container placement; only the FLAGGED surface
+    // narrows).
+    const aSection = squish(
+      md.slice(md.indexOf("### Container: docker:a/Dockerfile")),
+    );
+    const bSection = squish(
+      md.slice(md.indexOf("### Container: docker:b/Dockerfile")),
+    );
     expect(
-      osSection.includes(
-        "| busybox | apk | 1.37.0-r19 | GPL-2.0-only | docker:a/Dockerfile, docker:b/Dockerfile |",
-      ),
+      aSection.includes("| busybox | apk | 1.37.0-r19 | GPL-2.0-only |"),
+    ).toBe(true);
+    expect(
+      bSection.includes("| busybox | apk | 1.37.0-r19 | GPL-2.0-only |"),
     ).toBe(true);
   });
 

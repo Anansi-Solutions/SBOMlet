@@ -1065,7 +1065,7 @@ describe("renderMarkdown — prod/dev document split", () => {
   });
 });
 
-describe("renderMarkdown — Docker image packages section", () => {
+describe("renderMarkdown — per-container Production/Development grouping", () => {
   const appProd = entry({
     purl: "pkg:npm/app-prod@1.0.0",
     name: "app-prod",
@@ -1098,70 +1098,100 @@ describe("renderMarkdown — Docker image packages section", () => {
     scope: "os",
   });
 
-  const HEADING = "## Docker image packages";
+  const HEADING = "### Container: docker:img/Dockerfile";
+  const OLD_HEADING = "## Docker image packages";
 
-  test("OS packages render under the dedicated heading", () => {
+  test("the standalone Docker section never renders — with or without a policy view", () => {
     const model: CanonicalDependencies = { packages: [appProd, osDeb, osApk] };
-    const output = renderMarkdown(model);
-    expect(output.includes(HEADING)).toBe(true);
-    const osSection = output.slice(output.indexOf(HEADING));
-    expect(
-      osSection.includes("| libc6 | deb | 2.36-9 | LGPL-2.1-or-later |"),
-    ).toBe(true);
-    expect(osSection.includes("| musl | apk | 1.2.4-r2 | MIT |")).toBe(true);
+    expect(renderMarkdown(model).includes(OLD_HEADING)).toBe(false);
+    const view: PolicyView = {
+      policyPath: "policy.toml",
+      suppressedWorkspaces: [],
+      verdicts: [],
+    };
+    expect(renderMarkdown(model, view).includes(OLD_HEADING)).toBe(false);
   });
 
-  test("OS packages are EXCLUDED from the Production and Development-only app sections", () => {
-    const model: CanonicalDependencies = {
-      packages: [appProd, appDev, osDeb, osApk],
-    };
+  test("OS packages render under a per-container subsection, by default under Production", () => {
+    const model: CanonicalDependencies = { packages: [appProd, osDeb, osApk] };
     const output = renderMarkdown(model);
     const prod = output.slice(
       output.indexOf("## Production dependencies"),
       output.indexOf("## Development-only dependencies"),
     );
-    const dev = output.slice(
-      output.indexOf("## Development-only dependencies"),
+    expect(prod.includes(HEADING)).toBe(true);
+    const containerSection = output.slice(output.indexOf(HEADING));
+    expect(
+      containerSection.includes("| libc6 | deb | 2.36-9 | LGPL-2.1-or-later |"),
+    ).toBe(true);
+    expect(containerSection.includes("| musl | apk | 1.2.4-r2 | MIT |")).toBe(
+      true,
+    );
+    // No Used-in column: the container heading already scopes every row.
+    expect(
+      containerSection.includes("| Name | Ecosystem | Version | License |"),
+    ).toBe(true);
+  });
+
+  test("OS packages are EXCLUDED from the app Production and Development-only tables", () => {
+    const model: CanonicalDependencies = {
+      packages: [appProd, appDev, osDeb, osApk],
+    };
+    const output = renderMarkdown(model);
+    const prodTable = output.slice(
+      output.indexOf("## Production dependencies"),
       output.indexOf(HEADING),
     );
-    // OS rows never leak into the app sections.
-    expect(prod.includes("libc6")).toBe(false);
-    expect(prod.includes("musl")).toBe(false);
+    const dev = output.slice(
+      output.indexOf("## Development-only dependencies"),
+    );
+    // OS rows never leak into the app tables.
+    expect(prodTable.includes("libc6")).toBe(false);
+    expect(prodTable.includes("musl")).toBe(false);
     expect(dev.includes("libc6")).toBe(false);
     expect(dev.includes("musl")).toBe(false);
-    // The app packages stay in their app sections.
-    expect(prod.includes("| app-prod | npm | 1.0.0 |")).toBe(true);
+    // The app packages stay in their app tables.
+    expect(prodTable.includes("| app-prod | npm | 1.0.0 |")).toBe(true);
     expect(dev.includes("| app-dev | npm | 1.0.0 |")).toBe(true);
   });
 
-  test("the OS section renders heading + an empty-state line when there are NO OS packages (stable shape)", () => {
+  test("empty container set: Production/Development render exactly the app tables, no stray headings", () => {
     const model: CanonicalDependencies = { packages: [appProd] };
     const output = renderMarkdown(model);
-    const osSection = output.slice(output.indexOf(HEADING));
-    expect(output.includes(HEADING)).toBe(true);
-    expect(
-      osSection.includes("✅ No Docker images are currently tracked."),
-    ).toBe(true);
-    // The empty section shows the message in place of a bare table head.
-    expect(
-      osSection.includes("| Name | Ecosystem | Version | License | Used in |"),
-    ).toBe(false);
+    expect(output.includes("### Container:")).toBe(false);
+    expect(output.includes(OLD_HEADING)).toBe(false);
   });
 
-  test("section order is fixed/deterministic: Production, Development-only, then Docker image packages", () => {
+  test("section order is fixed/deterministic: Production (+ its containers), then Development-only (+ its containers)", () => {
     const model: CanonicalDependencies = {
       packages: [appProd, appDev, osDeb],
     };
     const output = renderMarkdown(model);
     const prodPos = output.indexOf("## Production dependencies");
     const devPos = output.indexOf("## Development-only dependencies");
-    const osPos = output.indexOf(HEADING);
+    const containerPos = output.indexOf(HEADING);
     expect(prodPos).toBeGreaterThan(-1);
-    expect(prodPos).toBeLessThan(devPos);
-    expect(devPos).toBeLessThan(osPos);
+    expect(prodPos).toBeLessThan(containerPos);
+    expect(containerPos).toBeLessThan(devPos);
   });
 
-  test("OS cells route through escapeCell (markdown-injection-safe via tableRow)", () => {
+  test("container heading text routes the identity through escapeCell", () => {
+    const evilOs = entry({
+      purl: "pkg:deb/debian/evil@1.0.0",
+      name: "evil-pkg",
+      version: "1.0.0",
+      occurrences: [
+        { target: "docker:evil|pkg`x/Dockerfile", isDevDependency: false },
+      ],
+      licenseClaims: [{ raw: "MIT", kind: "spdx-id", source: "generator" }],
+      scope: "os",
+    });
+    const output = renderMarkdown({ packages: [evilOs] });
+    expect(output.includes("docker:evil\\|pkg\\`x/Dockerfile")).toBe(true);
+    expect(output.includes("docker:evil|pkg`x/Dockerfile")).toBe(false);
+  });
+
+  test("OS row cells route through escapeCell (markdown-injection-safe)", () => {
     const evilOs = entry({
       purl: "pkg:deb/debian/evil@1.0.0",
       name: "evil|pkg`x",
@@ -1187,20 +1217,14 @@ describe("renderMarkdown — Docker image packages section", () => {
     expect(output.includes("- Total packages: 3")).toBe(true);
   });
 
-  test("a shared OS package's Used-in cell joins its per-image identities, sorted", () => {
+  test("a package shared by two production containers rows in EACH container's own subsection", () => {
     const osShared = entry({
       purl: "pkg:apk/alpine/busybox@1.37.0-r19",
       name: "busybox",
       version: "1.37.0-r19",
       occurrences: [
-        {
-          target: "docker:a/Dockerfile",
-          isDevDependency: false,
-        },
-        {
-          target: "docker:b/Dockerfile",
-          isDevDependency: false,
-        },
+        { target: "docker:a/Dockerfile", isDevDependency: false },
+        { target: "docker:b/Dockerfile", isDevDependency: false },
       ],
       licenseClaims: [
         { raw: "GPL-2.0-only", kind: "spdx-id", source: "generator" },
@@ -1208,12 +1232,101 @@ describe("renderMarkdown — Docker image packages section", () => {
       scope: "os",
     });
     const output = renderMarkdown({ packages: [osShared] });
-    const osSection = output.slice(output.indexOf(HEADING));
+    // Deterministic container order: docker:a/Dockerfile before docker:b/Dockerfile.
+    const aPos = output.indexOf("### Container: docker:a/Dockerfile");
+    const bPos = output.indexOf("### Container: docker:b/Dockerfile");
+    expect(aPos).toBeGreaterThan(-1);
+    expect(bPos).toBeGreaterThan(aPos);
+    // ONE row of the 4-column shape in EACH container's own subsection — never
+    // a single row with a joined Used-in cell (there is no Used-in column).
+    const aSection = output.slice(aPos, bPos);
+    const bSection = output.slice(bPos);
     expect(
-      osSection.includes(
-        "| busybox | apk | 1.37.0-r19 | GPL-2.0-only | docker:a/Dockerfile, docker:b/Dockerfile |",
-      ),
+      aSection.includes("| busybox | apk | 1.37.0-r19 | GPL-2.0-only |"),
     ).toBe(true);
+    expect(
+      bSection.includes("| busybox | apk | 1.37.0-r19 | GPL-2.0-only |"),
+    ).toBe(true);
+  });
+
+  test("a container classified development renders its subsection under Development-only", () => {
+    const model: CanonicalDependencies = { packages: [appProd, osDeb] };
+    const view: PolicyView = {
+      policyPath: "policy.toml",
+      suppressedWorkspaces: [],
+      verdicts: [],
+      developmentContainers: new Set(["docker:img/Dockerfile"]),
+    };
+    const output = renderMarkdown(model, view);
+    const prod = output.slice(
+      output.indexOf("## Production dependencies"),
+      output.indexOf("## Development-only dependencies"),
+    );
+    const dev = output.slice(
+      output.indexOf("## Development-only dependencies"),
+    );
+    expect(prod.includes(HEADING)).toBe(false);
+    expect(dev.includes(HEADING)).toBe(true);
+    expect(dev.includes("| libc6 | deb | 2.36-9 | LGPL-2.1-or-later |")).toBe(
+      true,
+    );
+  });
+
+  test("leak target: a package shared by a production container and a development container stays visible under BOTH", () => {
+    const shared = entry({
+      purl: "pkg:apk/alpine/shared-lib@1.0.0",
+      name: "shared-lib",
+      version: "1.0.0",
+      occurrences: [
+        { target: "docker:a/Dockerfile", isDevDependency: false },
+        { target: "docker:b/Dockerfile", isDevDependency: false },
+      ],
+      licenseClaims: [{ raw: "MIT", kind: "spdx-id", source: "generator" }],
+      scope: "os",
+    });
+    const view: PolicyView = {
+      policyPath: "policy.toml",
+      suppressedWorkspaces: [],
+      verdicts: [],
+      developmentContainers: new Set(["docker:b/Dockerfile"]),
+    };
+    const output = renderMarkdown({ packages: [shared] }, view);
+    const prod = output.slice(
+      output.indexOf("## Production dependencies"),
+      output.indexOf("## Development-only dependencies"),
+    );
+    const dev = output.slice(
+      output.indexOf("## Development-only dependencies"),
+    );
+    // Container A (production) still shows the package — marking B development
+    // moved nothing of A's.
+    expect(prod.includes("### Container: docker:a/Dockerfile")).toBe(true);
+    expect(prod.includes("| shared-lib | apk | 1.0.0 | MIT |")).toBe(true);
+    // Container B (development) shows it too.
+    expect(dev.includes("### Container: docker:b/Dockerfile")).toBe(true);
+    expect(dev.includes("| shared-lib | apk | 1.0.0 | MIT |")).toBe(true);
+  });
+
+  test("an app-scope package is NEVER pulled into a container subsection, even at a docker: target", () => {
+    const appAtDockerTarget = entry({
+      purl: "pkg:npm/app-at-docker-target@1.0.0",
+      name: "app-at-docker-target",
+      version: "1.0.0",
+      occurrences: [
+        { target: "docker:img/Dockerfile", isDevDependency: false },
+      ],
+      licenseClaims: [{ raw: "MIT", kind: "spdx-id", source: "generator" }],
+      // scope defaults to "app" — the discriminator, not the target prefix.
+    });
+    const output = renderMarkdown({ packages: [appAtDockerTarget, osDeb] });
+    const containerSection = output.slice(output.indexOf(HEADING));
+    expect(containerSection.includes("app-at-docker-target")).toBe(false);
+    // It DOES land in the app Production table instead.
+    const prodTable = output.slice(
+      output.indexOf("## Production dependencies"),
+      output.indexOf(HEADING),
+    );
+    expect(prodTable.includes("app-at-docker-target")).toBe(true);
   });
 });
 
@@ -1384,7 +1497,7 @@ describe("renderMarkdown — os-scope partial-license cell", () => {
     },
   });
 
-  const HEADING = "## Docker image packages";
+  const HEADING = "### Container: docker:img/Dockerfile";
 
   test("LOCKED FORMAT: expression (+ remainder) in the License cell", () => {
     const output = renderMarkdown({ packages: [osPartial] });
@@ -1588,16 +1701,23 @@ describe("renderMarkdown — Ecosystem column", () => {
 
   test("every table head carries the Ecosystem column after Name", () => {
     const output = renderMarkdown(mixed);
-    // Every rendered TABLE_HEAD carries the column. Non-empty summary sections
-    // render their head; an empty one shows a checkmark line instead, so the
-    // count is the non-empty sections (mixed: Production + Docker OS), not three.
+    // The 5-column app TABLE_HEAD renders once (Production; Development-only
+    // is empty here, so it shows a checkmark line instead), and the
+    // 4-column container-subsection head (no Used-in) renders once too.
     const headCount = output
       .split("\n")
       .filter(
         (line) => line === "| Name | Ecosystem | Version | License | Used in |",
       ).length;
-    expect(headCount).toBeGreaterThanOrEqual(2);
-    // The OLD 4-column head must never survive anywhere.
+    expect(headCount).toBe(1);
+    const containerHeadCount = output
+      .split("\n")
+      .filter(
+        (line) => line === "| Name | Ecosystem | Version | License |",
+      ).length;
+    expect(containerHeadCount).toBe(1);
+    // The OLD 4-column APP head (pre-Ecosystem-column) must never survive
+    // anywhere.
     expect(output.includes("| Name | Version | License | Used in |")).toBe(
       false,
     );
@@ -1605,8 +1725,8 @@ describe("renderMarkdown — Ecosystem column", () => {
 
   test("each row's Ecosystem cell is its own raw purl type", () => {
     const output = renderMarkdown(mixed);
-    // App-scope rows render in the Production section; os rows in the Docker
-    // section. Each carries its own purl type verbatim.
+    // App-scope rows render in the Production table; os rows in their
+    // container's own subsection. Each carries its own purl type verbatim.
     expect(output.includes("| npm-pkg | npm | 1.0.0 | MIT |")).toBe(true);
     expect(output.includes("| pypi-pkg | pypi | 2.0.0 | Apache-2.0 |")).toBe(
       true,

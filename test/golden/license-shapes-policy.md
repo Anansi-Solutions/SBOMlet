@@ -47,7 +47,3 @@ Workspaces that are themselves distributed under a copyleft license are suppress
 ## Development-only dependencies
 
 ✅ No development-only dependencies.
-
-## Docker image packages
-
-✅ No Docker images are currently tracked.

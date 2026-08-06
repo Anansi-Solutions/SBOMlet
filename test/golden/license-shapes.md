@@ -31,7 +31,3 @@
 ## Development-only dependencies
 
 ✅ No development-only dependencies.
-
-## Docker image packages
-
-✅ No Docker images are currently tracked.
