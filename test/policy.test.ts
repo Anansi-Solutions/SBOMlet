@@ -555,6 +555,15 @@ describe("parsePolicy — suppression path validation", () => {
     const error = expectPolicyError(suppressionFixture("."));
     expect(error.message).toContain("could never match");
   });
+
+  test('a "docker:"-prefixed path is rejected — a container image is not a workspace', () => {
+    const error = expectPolicyError(
+      suppressionFixture("docker:api/Dockerfile"),
+    );
+    expect(error.message).toContain("workspace.copyleft_suppressed[0]");
+    expect(error.message).toContain('"docker:"');
+    expect(error.message).toContain("not a workspace");
+  });
 });
 
 describe("parsePolicy — [unknown] handling knob", () => {
