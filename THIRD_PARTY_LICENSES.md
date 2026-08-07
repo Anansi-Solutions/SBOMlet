@@ -454,6 +454,8 @@ The packages listed below carry copyleft or special license obligations in at le
 
 ### Container: docker:examples/docker-scan/Dockerfile
 
+**System packages**
+
 | Name                   | Ecosystem | Version     | License                                   |
 | ---------------------- | --------- | ----------- | ----------------------------------------- |
 | alpine-baselayout      | apk       | 3.7.0-r0    | GPL-2.0-only                              |
@@ -465,8 +467,6 @@ The packages listed below carry copyleft or special license obligations in at le
 | busybox-binsh          | apk       | 1.37.0-r20  | GPL-2.0-only                              |
 | ca-certificates        | apk       | 20260611-r0 | MPL-2.0 AND MIT                           |
 | ca-certificates-bundle | apk       | 20260611-r0 | MPL-2.0 AND MIT                           |
-| demo-npm-package       | npm       | 0.0.0       | MIT                                       |
-| demo-python-package    | pypi      | 0.0.0       | Apache-2.0                                |
 | libapk2                | apk       | 2.14.10-r0  | GPL-2.0-only                              |
 | libcrypto3             | apk       | 3.5.7-r0    | Apache-2.0                                |
 | libssl3                | apk       | 3.5.7-r0    | Apache-2.0                                |
@@ -475,3 +475,10 @@ The packages listed below carry copyleft or special license obligations in at le
 | scanelf                | apk       | 1.3.8-r1    | GPL-2.0-only                              |
 | ssl_client             | apk       | 1.37.0-r20  | GPL-2.0-only                              |
 | zlib                   | apk       | 1.3.2-r0    | Zlib                                      |
+
+**Application packages**
+
+| Name                | Ecosystem | Version | License    |
+| ------------------- | --------- | ------- | ---------- |
+| demo-npm-package    | npm       | 0.0.0   | MIT        |
+| demo-python-package | pypi      | 0.0.0   | Apache-2.0 |

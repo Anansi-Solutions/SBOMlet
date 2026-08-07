@@ -367,6 +367,18 @@ export function comparePackages(a: PackageEntry, b: PackageEntry): number {
 }
 
 /**
+ * The purl TYPE segment — everything between "pkg:" and the first "/". Shared
+ * hub helper: the render layer's ecosystem column and the container
+ * system-vs-application discriminator (the OS-package allowlist) both key on
+ * this exact extraction, so there is one purl-parsing rule, not two.
+ */
+export function purlEcosystem(purl: string): string {
+  const rest = purl.startsWith("pkg:") ? purl.slice(4) : purl;
+  const slash = rest.indexOf("/");
+  return slash === -1 ? rest : rest.slice(0, slash);
+}
+
+/**
  * JSON.stringify replacer that sorts object keys (arrays untouched) by
  * {@link compareCodeUnits}. Exported so the committed enrichment cache shares
  * the exact tool-wide sorted-key serialization contract — there must be one

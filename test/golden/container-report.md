@@ -56,13 +56,20 @@ These packages report an ambiguous license family that was NOT guessed to a prec
 
 ### Container: docker:services/api/Dockerfile
 
-| Name           | Ecosystem | Version  | License           |
-| -------------- | --------- | -------- | ----------------- |
-| bash           | deb       | 5.2-6    | GPL-3.0-or-later  |
-| coreutils      | deb       | 9.1-1    | GPL-3.0-or-later  |
-| libc6          | deb       | 2.36-9   | LGPL-2.1-or-later |
-| metrics-daemon | golang    | 1.2.0    | AGPL-3.0-only     |
-| zlib1g         | deb       | 1.2.13-1 | Zlib              |
+**System packages**
+
+| Name      | Ecosystem | Version  | License           |
+| --------- | --------- | -------- | ----------------- |
+| bash      | deb       | 5.2-6    | GPL-3.0-or-later  |
+| coreutils | deb       | 9.1-1    | GPL-3.0-or-later  |
+| libc6     | deb       | 2.36-9   | LGPL-2.1-or-later |
+| zlib1g    | deb       | 1.2.13-1 | Zlib              |
+
+**Application packages**
+
+| Name           | Ecosystem | Version | License       |
+| -------------- | --------- | ------- | ------------- |
+| metrics-daemon | golang    | 1.2.0   | AGPL-3.0-only |
 
 ## Development-only dependencies
 
@@ -72,7 +79,14 @@ These packages report an ambiguous license family that was NOT guessed to a prec
 
 ### Container: docker:tools/build/Dockerfile
 
-| Name        | Ecosystem | Version  | License          |
-| ----------- | --------- | -------- | ---------------- |
-| relay-agent | golang    | 0.4.0    | AGPL (imprecise) |
-| zlib1g      | deb       | 1.2.13-1 | Zlib             |
+**System packages**
+
+| Name   | Ecosystem | Version  | License |
+| ------ | --------- | -------- | ------- |
+| zlib1g | deb       | 1.2.13-1 | Zlib    |
+
+**Application packages**
+
+| Name        | Ecosystem | Version | License          |
+| ----------- | --------- | ------- | ---------------- |
+| relay-agent | golang    | 0.4.0   | AGPL (imprecise) |

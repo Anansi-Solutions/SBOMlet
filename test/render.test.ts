@@ -1307,7 +1307,10 @@ describe("renderMarkdown — per-container Production/Development grouping", () 
     expect(dev.includes("| shared-lib | apk | 1.0.0 | MIT |")).toBe(true);
   });
 
-  test("an app-scope package is NEVER pulled into a container subsection, even at a docker: target", () => {
+  test("a package whose ONLY occurrence targets a container lists in that container's subsection regardless of its scope field", () => {
+    // Grouping is occurrence-keyed, not scope-keyed: this package's scope
+    // defaults to "app", but its sole occurrence is a docker: target, so it
+    // is a Container package by inventory, not by scope.
     const appAtDockerTarget = entry({
       purl: "pkg:npm/app-at-docker-target@1.0.0",
       name: "app-at-docker-target",
@@ -1316,23 +1319,227 @@ describe("renderMarkdown — per-container Production/Development grouping", () 
         { target: "docker:img/Dockerfile", isDevDependency: false },
       ],
       licenseClaims: [{ raw: "MIT", kind: "spdx-id", source: "generator" }],
-      // scope defaults to "app" — the discriminator, not the target prefix.
     });
     const output = renderMarkdown({ packages: [appAtDockerTarget, osDeb] });
     const containerSection = output.slice(output.indexOf(HEADING));
-    expect(containerSection.includes("app-at-docker-target")).toBe(false);
-    // It DOES land in the app Production table instead.
+    expect(containerSection.includes("app-at-docker-target")).toBe(true);
+    // It is EXCLUDED from the app Production table — it has no workspace
+    // occurrence of its own.
     const prodTable = output.slice(
       output.indexOf("## Production dependencies"),
       output.indexOf(HEADING),
     );
-    expect(prodTable.includes("app-at-docker-target")).toBe(true);
+    expect(prodTable.includes("app-at-docker-target")).toBe(false);
+    // Counted as a Container package (npm 1 + deb 1 = 2).
+    expect(output.includes("- Container packages: 2")).toBe(true);
+  });
+
+  test("a package with BOTH a workspace occurrence and a docker occurrence lists in BOTH its app table and the container subsection", () => {
+    const shared = entry({
+      purl: "pkg:npm/shared-app-and-container@1.0.0",
+      name: "shared-app-and-container",
+      version: "1.0.0",
+      occurrences: [
+        { target: "apps/a", isDevDependency: false },
+        { target: "docker:img/Dockerfile", isDevDependency: false },
+      ],
+      licenseClaims: [{ raw: "MIT", kind: "spdx-id", source: "generator" }],
+    });
+    const output = renderMarkdown({ packages: [shared, osDeb] });
+    const prodTable = output.slice(
+      output.indexOf("## Production dependencies"),
+      output.indexOf(HEADING),
+    );
+    expect(prodTable.includes("shared-app-and-container")).toBe(true);
+    const containerSection = output.slice(output.indexOf(HEADING));
+    expect(containerSection.includes("shared-app-and-container")).toBe(true);
+    // Complete-inventory sharing does not double-count it as Container: it
+    // has a non-docker occurrence, so isContainerPackage is false for it.
+    expect(output.includes("- Container packages: 1")).toBe(true);
+  });
+
+  test("a package with ONLY workspace occurrences never appears in a container subsection and is never counted as Container", () => {
+    const workspaceOnly = entry({
+      purl: "pkg:npm/workspace-only@1.0.0",
+      name: "workspace-only",
+      version: "1.0.0",
+      licenseClaims: [{ raw: "MIT", kind: "spdx-id", source: "generator" }],
+    });
+    const output = renderMarkdown({ packages: [workspaceOnly, osDeb] });
+    const containerSection = output.slice(output.indexOf(HEADING));
+    expect(containerSection.includes("workspace-only")).toBe(false);
+    expect(output.includes("- Container packages: 1")).toBe(true);
+  });
+
+  test("counts partition invariant: Production + Development-only + Container equals Total", () => {
+    const containerOnly = entry({
+      purl: "pkg:pypi/container-only@1.0.0",
+      name: "container-only",
+      version: "1.0.0",
+      occurrences: [
+        { target: "docker:img/Dockerfile", isDevDependency: false },
+      ],
+      licenseClaims: [{ raw: "MIT", kind: "spdx-id", source: "generator" }],
+    });
+    const model: CanonicalDependencies = {
+      packages: [appProd, appDev, containerOnly, osDeb, osApk],
+    };
+    const output = renderMarkdown(model);
+    const total = Number(/- Total packages: (\d+)/.exec(output)![1]);
+    const prod = Number(/- Production packages: (\d+)/.exec(output)![1]);
+    const devOnly = Number(
+      /- Development-only packages: (\d+)/.exec(output)![1],
+    );
+    const container = Number(/- Container packages: (\d+)/.exec(output)![1]);
+    expect(prod + devOnly + container).toBe(total);
+    // Container is exactly the pure-container packages (every occurrence
+    // docker-prefixed): containerOnly, osDeb, osApk — 3.
+    expect(container).toBe(3);
   });
 });
 
 // ---------------------------------------------------------------------------
-// The Containers index: a thin, scope-derived section listing every analyzed
-// container's identity, prod/dev classification, and package count,
+// Per-container System/Application table split: each "### Container:"
+// subsection partitions its rows into a System packages table (the
+// OS_PACKAGE_ECOSYSTEMS allowlist) and an Application packages table
+// (everything else), omitting an empty partition.
+// ---------------------------------------------------------------------------
+
+describe("renderMarkdown — per-container System/Application split", () => {
+  const HEADING = "### Container: docker:img/Dockerfile";
+
+  const systemPkg = entry({
+    purl: "pkg:deb/debian/libc6@2.36-9",
+    name: "libc6",
+    version: "2.36-9",
+    occurrences: [{ target: "docker:img/Dockerfile", isDevDependency: false }],
+    licenseClaims: [
+      { raw: "LGPL-2.1-or-later", kind: "spdx-id", source: "generator" },
+    ],
+    scope: "os",
+  });
+  const applicationPkg = entry({
+    purl: "pkg:npm/app-in-container@1.0.0",
+    name: "app-in-container",
+    version: "1.0.0",
+    occurrences: [{ target: "docker:img/Dockerfile", isDevDependency: false }],
+    licenseClaims: [{ raw: "MIT", kind: "spdx-id", source: "generator" }],
+  });
+
+  test("a container with both system and application rows emits System THEN Application, each labeled and 4-column", () => {
+    const output = renderMarkdown({ packages: [systemPkg, applicationPkg] });
+    const section = output.slice(output.indexOf(HEADING));
+    const systemPos = section.indexOf("**System packages**");
+    const applicationPos = section.indexOf("**Application packages**");
+    expect(systemPos).toBeGreaterThan(-1);
+    expect(applicationPos).toBeGreaterThan(systemPos);
+    // Every row is in exactly one partition (exhaustive, non-overlapping).
+    const systemBlock = section.slice(systemPos, applicationPos);
+    const applicationBlock = section.slice(applicationPos);
+    expect(systemBlock.includes("libc6")).toBe(true);
+    expect(systemBlock.includes("app-in-container")).toBe(false);
+    expect(applicationBlock.includes("app-in-container")).toBe(true);
+    expect(applicationBlock.includes("libc6")).toBe(false);
+    // Both labeled tables share the 4-column container head.
+    const headCount = section
+      .split("\n")
+      .filter(
+        (line) => line === "| Name | Ecosystem | Version | License |",
+      ).length;
+    expect(headCount).toBe(2);
+  });
+
+  test("a base-image-only container (system rows only) shows just the System table — no empty Application block", () => {
+    const output = renderMarkdown({ packages: [systemPkg] });
+    const section = output.slice(output.indexOf(HEADING));
+    expect(section.includes("**System packages**")).toBe(true);
+    expect(section.includes("**Application packages**")).toBe(false);
+  });
+
+  test("an all-application container shows just the Application table — no empty System block", () => {
+    const output = renderMarkdown({ packages: [applicationPkg] });
+    const section = output.slice(output.indexOf(HEADING));
+    expect(section.includes("**Application packages**")).toBe(true);
+    expect(section.includes("**System packages**")).toBe(false);
+  });
+
+  test("the partition is exhaustive: every row in the container's inventory appears in exactly one sub-table", () => {
+    const rpmPkg = entry({
+      purl: "pkg:rpm/fedora/glibc@2.38",
+      name: "glibc",
+      version: "2.38",
+      occurrences: [
+        { target: "docker:img/Dockerfile", isDevDependency: false },
+      ],
+      licenseClaims: [
+        { raw: "LGPL-2.1-only", kind: "spdx-id", source: "generator" },
+      ],
+      scope: "os",
+    });
+    const alpmPkg = entry({
+      purl: "pkg:alpm/arch/pacman@6.1.0",
+      name: "pacman",
+      version: "6.1.0",
+      occurrences: [
+        { target: "docker:img/Dockerfile", isDevDependency: false },
+      ],
+      licenseClaims: [
+        { raw: "GPL-2.0-only", kind: "spdx-id", source: "generator" },
+      ],
+      scope: "os",
+    });
+    const pypiPkg = entry({
+      purl: "pkg:pypi/app-py@1.0.0",
+      name: "app-py",
+      version: "1.0.0",
+      occurrences: [
+        { target: "docker:img/Dockerfile", isDevDependency: false },
+      ],
+      licenseClaims: [
+        { raw: "Apache-2.0", kind: "spdx-id", source: "generator" },
+      ],
+    });
+    const output = renderMarkdown({
+      packages: [systemPkg, rpmPkg, alpmPkg, applicationPkg, pypiPkg],
+    });
+    const section = output.slice(output.indexOf(HEADING));
+    const systemPos = section.indexOf("**System packages**");
+    const applicationPos = section.indexOf("**Application packages**");
+    const systemBlock = section.slice(systemPos, applicationPos);
+    const applicationBlock = section.slice(applicationPos);
+    for (const name of ["libc6", "glibc", "pacman"]) {
+      expect(systemBlock.includes(name)).toBe(true);
+      expect(applicationBlock.includes(name)).toBe(false);
+    }
+    for (const name of ["app-in-container", "app-py"]) {
+      expect(applicationBlock.includes(name)).toBe(true);
+      expect(systemBlock.includes(name)).toBe(false);
+    }
+  });
+
+  test("byte-neutrality of the grouping half: when scope==='os' exactly coincides with pure-container, the split changes only layout, never membership", () => {
+    // Every package here is either pure-app (never a container row) or
+    // pure-container with an OS-allowlist ecosystem — the pre-correction
+    // reality this task must not disturb.
+    const appOnly = entry({
+      purl: "pkg:npm/app-only@1.0.0",
+      name: "app-only",
+      version: "1.0.0",
+      licenseClaims: [{ raw: "MIT", kind: "spdx-id", source: "generator" }],
+    });
+    const output = renderMarkdown({ packages: [appOnly, systemPkg] });
+    const section = output.slice(output.indexOf(HEADING));
+    // Only System renders (both are OS-ecosystem-only here); no Application
+    // block and no leakage of the app-only package into the container.
+    expect(section.includes("**System packages**")).toBe(true);
+    expect(section.includes("**Application packages**")).toBe(false);
+    expect(section.includes("app-only")).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The Containers index: a thin, occurrence-derived section listing every
+// analyzed container's identity, prod/dev classification, and package count,
 // rendered immediately before Production regardless of policy.
 // ---------------------------------------------------------------------------
 
