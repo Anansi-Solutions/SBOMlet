@@ -7,6 +7,7 @@ import {
   type CanonicalDependencies,
   type PackageEntry,
 } from "../src/model/dependencies";
+import { mergeSboms } from "../src/merge/merge";
 import { annotateFindings } from "../src/normalize/normalize";
 import { applyContainerScopes } from "../src/pipeline/containerScope";
 import { BUILTIN_OVERRIDES } from "../src/policy/builtinOverrides";
@@ -602,5 +603,110 @@ describe("containerReport — multi-container golden scenario", () => {
     expect(devSection.includes("relay-agent")).toBe(true);
     expect(devSection.includes("cache-relay")).toBe(true);
     expect(devSection.includes("zlib1g")).toBe(true);
+  });
+});
+
+// ===========================================================================
+// A package shared between a real workspace occurrence and a docker
+// occurrence, through the actual pipeline path: mergeSboms' own
+// app-wins-over-os scope reconciliation feeding the container re-scope
+// transform, not a hand-built PackageEntry. Locks that the shared package's
+// docker occurrence still dev-marks under [[docker.development]] even
+// though merge already settled its scope to "app" before the transform ever
+// sees it.
+// ===========================================================================
+
+describe("a shared workspace+docker package through the real merge/scope/evaluate/render path", () => {
+  const SHARED_PURL = "pkg:npm/shared-workspace-and-image@2.0.0";
+  const WORKSPACE_TARGET = "apps/dashboard";
+
+  function sharedCopyleftDoc(): unknown {
+    return {
+      bomFormat: "CycloneDX",
+      specVersion: "1.6",
+      components: [
+        {
+          type: "library",
+          name: "shared-workspace-and-image",
+          version: "2.0.0",
+          purl: SHARED_PURL,
+          licenses: [{ license: { id: "LGPL-3.0-or-later" } }],
+        },
+      ],
+    };
+  }
+
+  function buildSharedScenario(): {
+    doc: string;
+    prodContainerVerdict: ReturnType<typeof evaluate>[number] | undefined;
+  } {
+    const merged = mergeSboms([
+      { sbom: sharedCopyleftDoc(), targetIdentity: WORKSPACE_TARGET },
+      {
+        sbom: sharedCopyleftDoc(),
+        targetIdentity: BUILD_CONTAINER,
+        scope: "os",
+      },
+    ]);
+    const policyText = [
+      "[[docker.development]]",
+      'source = "tools/**"',
+      'reason = "ci tooling only"',
+      "",
+    ].join("\n");
+    const policy = parsePolicy(policyText);
+    const { model: annotated } = annotateFindings(
+      merged,
+      policy.clarify,
+      BUILTIN_OVERRIDES,
+    );
+    const developmentContainers = resolveDevelopmentContainersForTest(
+      annotated,
+      policy,
+    );
+    const scoped = applyContainerScopes(annotated, developmentContainers);
+    const verdicts = evaluate(scoped, policy);
+    const policyView: PolicyView = {
+      policyPath: "policy.toml",
+      suppressedWorkspaces: policy.suppressedWorkspaces,
+      verdicts,
+      developmentContainers,
+    };
+    return {
+      doc: alignTables(renderMarkdown(scoped, policyView)),
+      prodContainerVerdict: verdicts.find(
+        (v) => v.occurrenceTarget === BUILD_CONTAINER,
+      ),
+    };
+  }
+
+  test("merge promotes the shared purl to scope app (app wins over os)", () => {
+    const merged = mergeSboms([
+      { sbom: sharedCopyleftDoc(), targetIdentity: WORKSPACE_TARGET },
+      {
+        sbom: sharedCopyleftDoc(),
+        targetIdentity: BUILD_CONTAINER,
+        scope: "os",
+      },
+    ]);
+    expect(merged.packages).toHaveLength(1);
+    expect(merged.packages[0]!.scope).toBe("app");
+  });
+
+  test("the docker occurrence in the dev-marked container WARNS (dev-downgraded), not FAILS", () => {
+    const { prodContainerVerdict } = buildSharedScenario();
+    expect(prodContainerVerdict?.status).toBe("warn");
+    expect(prodContainerVerdict?.rule).toBe("default:copyleft");
+  });
+
+  test("the package renders in BOTH its app Production table AND the container's Application sub-table", () => {
+    const { doc } = buildSharedScenario();
+    expect(
+      section(doc, "## Production dependencies").includes(
+        "shared-workspace-and-image",
+      ),
+    ).toBe(true);
+    const containerSection = section(doc, `### Container: ${BUILD_CONTAINER}`);
+    expect(containerSection.includes("shared-workspace-and-image")).toBe(true);
   });
 });
