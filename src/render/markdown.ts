@@ -935,7 +935,7 @@ function copyleftSectionLines(
   );
   if (notices.length > 0) {
     lines.push(
-      "An os-scope container package's AGPL network-copyleft obligation was accepted by policy configuration — recorded here as a non-blocking notice, not counted toward the copyleft warning total:",
+      "A container system package's AGPL network-copyleft obligation was accepted by policy configuration — recorded here as a non-blocking notice, not counted toward the copyleft warning total:",
       "",
     );
     for (const notice of notices) {

@@ -29,7 +29,7 @@ _Non-blocking: 5 copyleft warning(s) (dev/os-downgraded or suppressed). See the 
 
 ## Copyleft and special notices
 
-An os-scope container package's AGPL network-copyleft obligation was accepted by policy configuration — recorded here as a non-blocking notice, not counted toward the copyleft warning total:
+A container system package's AGPL network-copyleft obligation was accepted by policy configuration — recorded here as a non-blocking notice, not counted toward the copyleft warning total:
 
 - licensed-relay@1.0.0 (AGPL) in docker:services/api/Dockerfile — accepted via compatible\[2\]: package "licensed-relay" accepted by compatible package rule: imprecise AGPL family reviewed and accepted for the api image
 - licensed-daemon@2.1.0 (AGPL-3.0-only) in docker:services/api/Dockerfile — accepted via compatible\[1\]: package "licensed-daemon" accepted by compatible package rule: AGPL network-copyleft obligation reviewed and accepted for the api image
