@@ -107,11 +107,36 @@ const zlib = entry({
   licenseClaims: [{ raw: "Zlib", kind: "spdx-id", source: "generator" }],
 });
 
-/** Precise AGPL in the production container — escalates via default:agpl-container. */
+/**
+ * Precise AGPL in the production container, application ecosystem (golang
+ * is not on the OS-package allowlist) — escalates via default:copyleft, the
+ * normal application-dependency path, never default:agpl-container (that
+ * rule is reserved for a SYSTEM package; see diagTools below, same
+ * container, opposite ecosystem).
+ */
 const metricsDaemon = entry({
   purl: "pkg:golang/metrics-daemon@1.2.0",
   name: "metrics-daemon",
   version: "1.2.0",
+  scope: "os",
+  occurrences: [{ target: API_CONTAINER, isDevDependency: false }],
+  licenseClaims: [
+    { raw: "AGPL-3.0-only", kind: "spdx-id", source: "generator" },
+  ],
+});
+
+/**
+ * System-package AGPL in the SAME production container as metricsDaemon —
+ * the discriminator's other half. An OS-allowlist ecosystem (apk) still
+ * escalates via the routine container AGPL rule, default:agpl-container,
+ * even though it carries the same license family as metricsDaemon: the two
+ * packages land on different rules and in different container sub-tables
+ * purely because of ecosystem, not because of anything else in the fixture.
+ */
+const diagTools = entry({
+  purl: "pkg:apk/diag-tools@3.0.1",
+  name: "diag-tools",
+  version: "3.0.1",
   scope: "os",
   occurrences: [{ target: API_CONTAINER, isDevDependency: false }],
   licenseClaims: [
@@ -136,6 +161,25 @@ const relayAgent = entry({
       kind: "name",
       source: "generator",
     },
+  ],
+});
+
+/**
+ * Precise application-ecosystem copyleft in the DEV-marked container — the
+ * dev-downgraded counterpart to metricsDaemon's production fail: the same
+ * default:copyleft rule and the same AGPL family, but the dev-only
+ * occurrence warns instead of failing. Precise (unlike relayAgent's bare
+ * "AGPL" family label), so it is a default:copyleft warn — it lands in the
+ * Copyleft and special notices section, not the Imprecise review section.
+ */
+const cacheRelay = entry({
+  purl: "pkg:pypi/cache-relay@0.9.0",
+  name: "cache-relay",
+  version: "0.9.0",
+  scope: "os",
+  occurrences: [{ target: BUILD_CONTAINER, isDevDependency: false }],
+  licenseClaims: [
+    { raw: "AGPL-3.0-only", kind: "spdx-id", source: "generator" },
   ],
 });
 
@@ -185,7 +229,9 @@ const rawModel: CanonicalDependencies = {
     coreutils,
     zlib,
     metricsDaemon,
+    diagTools,
     relayAgent,
+    cacheRelay,
     chartRender,
     docGen,
   ],
@@ -355,6 +401,26 @@ describe("containerReport — multi-container golden scenario", () => {
         expect(problematic.includes(name)).toBe(false);
       }
     });
+
+    test("the system-package AGPL (diag-tools) is in Problematic and NOT in Copyleft", () => {
+      const doc = renderScenario();
+      expect(
+        section(doc, "## Problematic licenses").includes("diag-tools"),
+      ).toBe(true);
+      expect(
+        section(doc, "## Copyleft and special notices").includes("diag-tools"),
+      ).toBe(false);
+    });
+
+    test("the dev-marked application-ecosystem copyleft (cache-relay) is in Copyleft and NOT in Problematic", () => {
+      const doc = renderScenario();
+      expect(
+        section(doc, "## Copyleft and special notices").includes("cache-relay"),
+      ).toBe(true);
+      expect(
+        section(doc, "## Problematic licenses").includes("cache-relay"),
+      ).toBe(false);
+    });
   });
 
   describe("invariant: inventory completeness", () => {
@@ -415,16 +481,116 @@ describe("containerReport — multi-container golden scenario", () => {
       expect(apiSection.includes("zlib1g")).toBe(true);
       expect(buildSection.includes("zlib1g")).toBe(true);
     });
+
+    test("the system-package AGPL rows in the api container's System table AND in Problematic", () => {
+      const doc = renderScenario();
+      const apiSection = section(doc, `### Container: ${API_CONTAINER}`);
+      const systemPos = apiSection.indexOf("**System packages**");
+      const applicationPos = apiSection.indexOf("**Application packages**");
+      const systemBlock = apiSection.slice(systemPos, applicationPos);
+      expect(systemBlock.includes("diag-tools")).toBe(true);
+      expect(
+        section(doc, "## Problematic licenses").includes("diag-tools"),
+      ).toBe(true);
+    });
+
+    test("the dev-marked application-ecosystem copyleft rows in the build container's Application table AND in Copyleft", () => {
+      const doc = renderScenario();
+      const buildSection = section(doc, `### Container: ${BUILD_CONTAINER}`);
+      const applicationPos = buildSection.indexOf("**Application packages**");
+      const applicationBlock = buildSection.slice(applicationPos);
+      expect(applicationBlock.includes("cache-relay")).toBe(true);
+      expect(
+        section(doc, "## Copyleft and special notices").includes("cache-relay"),
+      ).toBe(true);
+    });
+  });
+
+  describe("invariant: the discriminator is ecosystem, not scope", () => {
+    test("the system package and the application-ecosystem package in the SAME production container get DIFFERENT verdict rules and land in different sub-tables", () => {
+      const policy = parsePolicy(POLICY_TOML);
+      const { model: annotated } = annotateFindings(
+        rawModel,
+        policy.clarify,
+        BUILTIN_OVERRIDES,
+      );
+      const scoped = applyContainerScopes(
+        annotated,
+        resolveDevelopmentContainersForTest(annotated, policy),
+      );
+      const verdicts = evaluate(scoped, policy);
+      const diagToolsVerdict = verdicts.find(
+        (v) => v.purl === "pkg:apk/diag-tools@3.0.1",
+      );
+      const metricsDaemonVerdict = verdicts.find(
+        (v) => v.purl === "pkg:golang/metrics-daemon@1.2.0",
+      );
+      expect(diagToolsVerdict?.status).toBe("fail");
+      expect(diagToolsVerdict?.rule).toBe("default:agpl-container");
+      expect(metricsDaemonVerdict?.status).toBe("fail");
+      expect(metricsDaemonVerdict?.rule).toBe("default:copyleft");
+      expect(diagToolsVerdict?.rule).not.toBe(metricsDaemonVerdict?.rule);
+
+      const doc = renderScenario();
+      const apiSection = section(doc, `### Container: ${API_CONTAINER}`);
+      const systemPos = apiSection.indexOf("**System packages**");
+      const applicationPos = apiSection.indexOf("**Application packages**");
+      const systemBlock = apiSection.slice(systemPos, applicationPos);
+      const applicationBlock = apiSection.slice(applicationPos);
+      expect(systemBlock.includes("diag-tools")).toBe(true);
+      expect(systemBlock.includes("metrics-daemon")).toBe(false);
+      expect(applicationBlock.includes("metrics-daemon")).toBe(true);
+      expect(applicationBlock.includes("diag-tools")).toBe(false);
+    });
+  });
+
+  describe("invariant: per-container System/Application split is exhaustive and non-overlapping", () => {
+    test("the api container's System and Application tables partition its package set", () => {
+      const doc = renderScenario();
+      const apiSection = section(doc, `### Container: ${API_CONTAINER}`);
+      const systemPos = apiSection.indexOf("**System packages**");
+      const applicationPos = apiSection.indexOf("**Application packages**");
+      const systemBlock = apiSection.slice(systemPos, applicationPos);
+      const applicationBlock = apiSection.slice(applicationPos);
+      for (const name of [
+        "bash",
+        "coreutils",
+        "libc6",
+        "zlib1g",
+        "diag-tools",
+      ]) {
+        expect(systemBlock.includes(name)).toBe(true);
+        expect(applicationBlock.includes(name)).toBe(false);
+      }
+      expect(applicationBlock.includes("metrics-daemon")).toBe(true);
+      expect(systemBlock.includes("metrics-daemon")).toBe(false);
+    });
+
+    test("the build container's System and Application tables partition its package set", () => {
+      const doc = renderScenario();
+      const buildSection = section(doc, `### Container: ${BUILD_CONTAINER}`);
+      const systemPos = buildSection.indexOf("**System packages**");
+      const applicationPos = buildSection.indexOf("**Application packages**");
+      const systemBlock = buildSection.slice(systemPos, applicationPos);
+      const applicationBlock = buildSection.slice(applicationPos);
+      expect(systemBlock.includes("zlib1g")).toBe(true);
+      expect(systemBlock.includes("relay-agent")).toBe(false);
+      expect(systemBlock.includes("cache-relay")).toBe(false);
+      for (const name of ["relay-agent", "cache-relay"]) {
+        expect(applicationBlock.includes(name)).toBe(true);
+        expect(systemBlock.includes(name)).toBe(false);
+      }
+    });
   });
 
   test("the Containers index names both identities, the glob-resolved classification, and a package count", () => {
     const doc = renderScenario();
     const containers = squish(section(doc, "## Containers"));
-    expect(containers.includes(`| ${API_CONTAINER} | production | 5 |`)).toBe(
+    expect(containers.includes(`| ${API_CONTAINER} | production | 6 |`)).toBe(
       true,
     );
     expect(
-      containers.includes(`| ${BUILD_CONTAINER} | development | 2 |`),
+      containers.includes(`| ${BUILD_CONTAINER} | development | 3 |`),
     ).toBe(true);
   });
 
@@ -434,6 +600,7 @@ describe("containerReport — multi-container golden scenario", () => {
     const devSection = section(doc, "## Development-only dependencies");
     expect(devSection.includes(`### Container: ${BUILD_CONTAINER}`)).toBe(true);
     expect(devSection.includes("relay-agent")).toBe(true);
+    expect(devSection.includes("cache-relay")).toBe(true);
     expect(devSection.includes("zlib1g")).toBe(true);
   });
 });
