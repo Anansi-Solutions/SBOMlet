@@ -132,10 +132,11 @@ variations:
 A package that comes only from a container's own image scan never rows in these
 two tables — it rows in its container's own subsection instead, see
 [Containers](#containers) below. An application package that also ships inside a
-scanned image keeps its application scope here and is cross-referenced to the
-image only through its Used-in cell. Lockfile-only scans that were never
-enriched will show `unknown` in the License column; that is correct
-pre-annotation behavior, not a defect.
+scanned image keeps its row here AND rows again in that image's container
+subsection — the two views answer different questions (what does this
+workspace depend on, versus what does this image contain) and both stay
+complete. Lockfile-only scans that were never enriched will show `unknown` in
+the License column; that is correct pre-annotation behavior, not a defect.
 
 A container occurrence's target takes the form `docker:<source>`: the
 Dockerfile's repo-relative path for an image the tool built
@@ -167,17 +168,26 @@ same way regardless of this marking.
 Each classified half then carries one `### Container: docker:<source>`
 subsection per container, right after that half's app table. A container's
 subsection is its complete package inventory — every package with an occurrence
-targeting that image — with four columns and no Used-in, since a single
-container's table already scopes every row to that one image:
+targeting that image, including one that also has an application occurrence
+elsewhere. Each subsection splits into two four-column tables, in this order,
+with no Used-in column since every row is already scoped to that one image:
+
+| Table | Contents |
+| --- | --- |
+| **System packages** | packages on the OS package-manager allowlist (`deb`, `apk`, `rpm`, `alpm`) — base-image content |
+| **Application packages** | everything else — a package an application layer installed into the image |
 
 | Column | Contents |
 | --- | --- |
 | Name, Ecosystem, Version, License | as in the summary tables |
 
-A package present in several containers rows once per container, in each one's
-own subsection. There is no standalone Docker section any more: every container
-package is listed exactly once per container it occurs in, folded under
-Production or Development-only by that container's classification.
+A table with no rows is omitted entirely, so a base-image-only container shows
+just System packages and vice versa. A package present in several containers
+rows once per container, in each one's own subsection, on whichever side of
+the split its ecosystem puts it. There is no standalone Docker section any
+more: every container package is listed exactly once per container it occurs
+in, folded under Production or Development-only by that container's
+classification.
 
 ### Problematic licenses
 
@@ -209,12 +219,17 @@ its Production/Development-only inventory table, or its container subsection,
 and in Assessment conflicts when it also carries a conflict marker; the dedup
 applies to Copyleft membership only.
 
-This table also carries the AGPL container exception. A container system
-package licensed AGPL always fails here, `default:agpl-container`, even when
+This table also carries the AGPL container exception, scoped to SYSTEM
+packages (the OS package-manager allowlist): one always fails here,
+`default:agpl-container`, even when
 [`[os_dependencies]`](policy.md#os_dependencies) would otherwise downgrade a
-routine container copyleft to a warning: AGPL's network-copyleft obligation
-(section 13) reaches server-side use, so it is never treated as routine
-base-image noise the way an ordinary container GPL or LGPL package is.
+routine base-image copyleft to a warning — AGPL's network-copyleft obligation
+(section 13) reaches server-side use, so it is never treated as routine noise
+the way an ordinary system GPL or LGPL package is. An application-ecosystem
+package baked into a container (npm, pypi, go, and the rest) is not part of
+this exception: it gates on its actual license like any other application
+dependency, so its AGPL fails here too, but via the ordinary
+`default:copyleft` rule.
 
 ### Copyleft and special notices
 
@@ -243,13 +258,16 @@ The Used-in cell here lists only the flagged targets, not every place the
 package is used. This is how an elected copyleft branch surfaces in the output:
 the leaking workspaces are named.
 
-Container system-package copyleft is routine base-image noise and never appears
-in this table, whatever its verdict status — the expected GPL or LGPL in a
-Debian or Alpine base layer is listed only in its container's own subsection
-(see [Containers](#containers) above), not repeated here. The AGPL exception
-routes through Problematic licenses instead, above, rather than this table. A
-package already listed in Problematic licenses is also excluded here, per the
-dedup described there.
+A container's SYSTEM-package copyleft is routine base-image noise and never
+appears in this table, whatever its verdict status — the expected GPL or LGPL
+in a Debian or Alpine base layer is listed only in its container's own
+subsection (see [Containers](#containers) above), not repeated here. Its AGPL
+exception routes through Problematic licenses instead, above, rather than
+this table. An application-ecosystem package baked into a container is not
+covered by that exclusion: a dev-downgraded copyleft warning on one — the
+same case as an application `devDependency` — rows here like any other
+copyleft warning. A package already listed in Problematic licenses is
+excluded here regardless of ecosystem, per the dedup described there.
 
 ### The Why column
 

@@ -290,16 +290,21 @@ The expected copyleft in a Debian or Alpine base image — glibc under LGPL, bas
 and coreutils under GPL — is the operating system the container ships on, not
 code your project redistributes as a library. Its obligations are satisfied by
 shipping the image, so `warn` (the default) lists those packages under their
-container's own subsection rather than failing your build on every standard
-base image. The same downgrade covers an application package the image scan
-finds that isn't also declared directly — it entered the inventory only because
-the image ships it. `fail` gates [OS-scope](../glossary.md#scope-app-and-os)
-packages like app code, for projects that rebuild their base, or that want
-every image-sourced copyleft reviewed, and `ignore` opts out explicitly. A
-`[[deny]]` licence in an OS-scope package still fails regardless, because deny
-sits above this knob — and an AGPL container package still fails via the
-dedicated `default:agpl-container` rule regardless of this knob too, because
-network-copyleft reaches server-side use and is never routine base-image noise.
+container's own System-packages table rather than failing your build on every
+standard base image. This knob only covers packages on the OS package-manager
+allowlist (`deb`, `apk`, `rpm`, `alpm`); an application package the image scan
+finds — npm, pypi, go, and the rest — is an application dependency wherever it
+lives, so it gates on [`[dev_dependencies]`](#set-how-unknown-dev-and-os-dependencies-are-handled)
+and the normal copyleft rule instead, not this knob. `fail` gates
+[OS-scope](../glossary.md#scope-app-and-os) packages like app code, for
+projects that rebuild their base, or that want every base-image copyleft
+reviewed, and `ignore` opts out explicitly. A `[[deny]]` licence in an
+OS-scope package still fails regardless, because deny sits above this knob —
+and an AGPL system package still fails via the dedicated
+`default:agpl-container` rule regardless of this knob too, because
+network-copyleft reaches server-side use and is never routine base-image
+noise. An AGPL application-ecosystem package in a container fails as well,
+through the ordinary copyleft rule, since it was never OS-scope.
 
 These packages reach the merge only if a `.sbomlet.cache/docker.sbom.json` is present in your
 repo, produced separately by the `generate-docker-sbom` subcommand — run by hand
@@ -371,11 +376,14 @@ within one path segment, `**` crosses segments, and a literal path like
 `"ci/runner/Dockerfile"` matches only that one image. `reason` is mandatory —
 it is the audit trail for why the image never ships.
 
-This is placement only. It never changes a verdict: a routine copyleft package
-inside the marked container still downgrades or gates exactly as
-`[os_dependencies]` says, and an AGPL container package still fails regardless
-of which half it renders under. Don't mark a container development-only just to
-quiet a copyleft warning — mark it that way only when the image genuinely never
+For a SYSTEM package (the OS package-manager allowlist) this is placement
+only: a routine copyleft package inside the marked container still downgrades
+or gates exactly as `[os_dependencies]` says, and an AGPL system package still
+fails regardless of which half it renders under. For an application-ecosystem
+package baked into the image, it is not placement only — the marking
+dev-downgrades its copyleft the same way marking a lockfile dependency a
+`devDependency` would. Don't mark a container development-only just to quiet
+a copyleft warning — mark it that way only when the image genuinely never
 reaches a user; anything you build, publish, or run in production stays at the
 absent default, production.
 

@@ -80,12 +80,12 @@ The next three lines partition that total exactly:
 - Development-only packages are ones whose every use is a dev dependency: build
   tools, test runners, and the like.
 - Container packages come from inside a scanned Docker image — its full
-  contents, the OS layer and the application packages layered on top
-  ([`os` scope](../glossary.md#scope-app-and-os)). They are counted
-  on their own because a package that also ships at the application level keeps
-  its production/development-only classification there instead; which
-  container each one came from is what `## Containers` and its per-container
-  subsections show.
+  contents, the base-image (OS) layer and any application packages layered on
+  top of it. They are counted on their own because a package that also ships
+  at the application level keeps its production/development-only
+  classification there instead; which container each one came from, and
+  whether it is base-image or application content, is what `## Containers`
+  and its per-container subsections show.
 
 Production plus development-only plus container packages equals the total. The last line,
 **Unknown license**, is a separate tally that cuts across all three: it counts
@@ -156,10 +156,14 @@ A package that fails here never repeats in the Copyleft section below — you
 find it in exactly one of the two, Problematic or Copyleft, never both. It
 still keeps its row in its Production/Development-only table, or its
 container's own subsection, so the full inventory is always complete; only the
-narrative sections dedup. This table is also where an AGPL container package
-always shows up: even a container whose ordinary GPL/LGPL packages are only
-warnings, `default:agpl-container` fails unconditionally, because AGPL's
-network-copyleft obligation reaches server-side use.
+narrative sections dedup. This table is also where an AGPL SYSTEM package
+(base-image content — `deb`, `apk`, `rpm`, `alpm`) always shows up: even in a
+container whose ordinary GPL/LGPL packages are only warnings,
+`default:agpl-container` fails unconditionally, because AGPL's network-copyleft
+obligation reaches server-side use. An AGPL package an application layer
+installed into the image fails here too, but as an ordinary `default:copyleft`
+failure — see [Containers](#containers) below for why the two are judged
+differently.
 
 ## Copyleft and special notices
 
@@ -168,11 +172,14 @@ obligation in at least one workspace that the policy hasn't suppressed. Copyleft
 licenses (GPL, LGPL, AGPL, MPL) can require you to release your own changes under
 the same terms when you distribute, so a reviewer reads this section closely.
 
-A container's own base-image copyleft never appears here, whatever its verdict —
-the expected GPL/LGPL in a Debian or Alpine layer lists only under that
-container's own subsection (below `## Containers`), not repeated in this
-narrative section. Nor does a package already shown in Problematic licenses
-above; the two sections never overlap.
+A container's own base-image (system-package) copyleft never appears here,
+whatever its verdict — the expected GPL/LGPL in a Debian or Alpine layer lists
+only under that container's own System-packages table (below `## Containers`),
+not repeated in this narrative section. An application-ecosystem package an
+application layer installed into the image is not covered by that exclusion:
+a dev-downgraded copyleft warning on one rows here like any other copyleft
+warning. Nor does a package already shown in Problematic licenses above; the
+two sections never overlap.
 
 It opens with a one-line summary sentence, then the suppressed-workspaces list
 when there is one:
@@ -280,18 +287,34 @@ once:
 Classification is `production` unless a policy `[[docker.development]]` entry
 marks that container's Dockerfile identity development-only — see the
 [writing-policy guide](./writing-policy.md#mark-a-container-development-only).
-It decides only where the container's packages are listed below, never a
-verdict: a routine copyleft package still downgrades or gates per
-`[os_dependencies]` regardless of the half it renders under, and an AGPL
-container package still fails unconditionally either way.
+For a base-image (system) package it decides only where the container's
+packages are listed below, never a verdict: a routine system copyleft package
+still downgrades or gates per `[os_dependencies]` regardless of the half it
+renders under, and an AGPL system package still fails unconditionally either
+way. For an application-ecosystem package baked into the image, it also
+decides the verdict: exactly like marking a lockfile dependency a
+`devDependency`, a copyleft fail becomes a warning once the container is
+marked. This is the reason a `pip`- or `npm`-installed package inside an
+image can be a blocking copyleft while a `deb` package right next to it,
+carrying the same license, is routine — one is code an application layer
+chose to install, the other is the base distribution the image runs on, and
+the report holds them to the standards their own ecosystem implies.
 
 Each container's own packages then appear as a `### Container: docker:<source>`
 subsection right after the app table of the half it classifies into —
 `## Production dependencies` for a production container,
 `## Development-only dependencies` for a development one. A container's
-subsection is its complete package inventory, four columns and no **Used in**,
-since every row in a single container's table is already scoped to that one
-image:
+subsection is its complete package inventory — including a package that also
+has an application occurrence elsewhere — split into two four-column tables,
+no **Used in** since every row is already scoped to that one image:
+
+- **System packages** — base-image content: `deb`, `apk`, `rpm`, `alpm`.
+- **Application packages** — everything else, installed by an application
+  layer into the image.
+
+A table with no rows is omitted, so a base-image-only container shows just
+System packages. Both tables share the same two columns beyond Name and
+Version:
 
 | Column | What it tells you |
 | --- | --- |
@@ -303,10 +326,9 @@ A note on the **License** column for a container row: it often shows a long
 every license the base distribution recorded for that package. The `(+ …)`
 suffix lists license tokens the tool recognized but couldn't map to a precise
 SPDX id, surfaced rather than dropped. A package the scan also finds at the
-application level does not get a row in a container subsection at all — it
-keeps its application scope in the inventory table above and lists the image
-only in its **Used in** cell, so a container subsection row is always one that
-scan uniquely contributes.
+application level still gets a row in its container subsection — it keeps its
+application scope in the inventory table above too, so both views stay
+complete.
 
 ### The Why column, read in detail
 
