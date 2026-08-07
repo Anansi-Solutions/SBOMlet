@@ -70,30 +70,28 @@ The first line is the total distinct
 follow it, before "Production packages", are per-ecosystem counts, one per
 [purl](../glossary.md#purl) type the scan found.
 
-The next three lines partition that total exactly:
+Production and Development-only partition that total exactly:
 
-- Production packages ship somewhere. A single shipped use is enough to count a
-  package here, because only what you ship carries a distribution obligation.
-  This is the conservative side of the
+- Production packages ship somewhere, including a package whose only
+  occurrence is inside a production container. A single shipped use is enough
+  to count a package here — the conservative side of the
   [development-only / production](../glossary.md#development-only-and-production)
   split.
-- Development-only packages are ones whose every use is a dev dependency: build
-  tools, test runners, and the like.
-- Container packages come from inside a scanned Docker image — its full
-  contents, the base-image (OS) layer and any application packages layered on
-  top of it. They are counted on their own because a package that also ships
-  at the application level keeps its production/development-only
-  classification there instead; which container each one came from, and
-  whether it is base-image or application content, is what `## Containers`
-  and its per-container subsections show.
+- Development-only packages are ones whose every use is a dev dependency or a
+  development-marked container: build tools, test runners, and the like.
 
-Production plus development-only plus container packages equals the total. The last line,
-**Unknown license**, is a separate tally that cuts across all three: it counts
-packages where the tool could determine no license at all. An
-[imprecise](../glossary.md#imprecise-family) license, such as `BSD` with no
-clause, is *not* unknown. It's a present-but-vague finding, counted with the rest
-and surfaced in its own section, so the unknown count and the imprecise section
-never overlap.
+Container and Unknown license are cross-cutting subtotals, not a third slice
+of that partition — a package can also be counted in either, in addition to
+its Production or Development-only bucket:
+
+- Container counts every package with at least one occurrence inside a
+  scanned Docker image. Which container each one came from, and whether it is
+  base-image or application content, is what `## Containers` and its
+  per-container subsections show.
+- Unknown license counts packages where the tool could determine no license at
+  all. An [imprecise](../glossary.md#imprecise-family) license, such as `BSD`
+  with no clause, is *not* unknown — it's a present-but-vague finding, counted
+  with the rest and surfaced in its own section.
 
 ## Problematic licenses: the gate report
 

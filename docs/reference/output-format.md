@@ -90,18 +90,22 @@ A bullet list: the total, then one line per ecosystem (`npm`, `pypi`, `deb`,
 - Unknown license: 502
 ```
 
-The three population counts partition the total: every package is one of
-production, development-only, or a container's own inventory. A package is
-[development-only](../glossary.md#development-only-and-production) when it has at
-least one [occurrence](../glossary.md#occurrence) and every occurrence is a dev
-dependency; any production occurrence makes the whole package production.
-Container packages are counted on their own because the dev/prod split is an
-app-scope idea; which container each one came from, and whether that container is
-production or development, is what the [Containers](#containers) section and its
-per-container subsections show. Unknown license is a separate tally that overlaps
-the other three: it counts packages whose [finding](../glossary.md#license-finding)
-resolved to no expression. An [imprecise](../glossary.md#imprecise-family) finding
-is present, not unknown, so it is excluded from this count.
+Production and Development-only partition the total: every package is one or
+the other. A package is
+[development-only](../glossary.md#development-only-and-production) when every
+[occurrence](../glossary.md#occurrence) is a dev dependency or is inside a
+development-marked container; any production occurrence — including one
+inside a container that isn't marked development — makes the whole package
+production. Container and Unknown license are cross-cutting subtotals, not a
+third slice of that partition: a package can also be counted in either, in
+addition to its Production or Development-only bucket. Container counts every
+package with at least one occurrence inside a scanned container; which
+container each one came from, and whether that container is production or
+development, is what the [Containers](#containers) section and its
+per-container subsections show. Unknown license counts packages whose
+[finding](../glossary.md#license-finding) resolved to no expression. An
+[imprecise](../glossary.md#imprecise-family) finding is present, not unknown,
+so it is excluded from this count.
 
 ### The summary tables
 

@@ -341,6 +341,32 @@ function isContainerPackage(pkg: PackageEntry): boolean {
   );
 }
 
+/**
+ * The counts-block Development-only predicate — mirrors exactly where the
+ * renderer PLACES a package, so the count matches rendered section
+ * membership. A package renders development-only when it has no production
+ * placement: it is either app-classified development-only
+ * ({@link isDevelopmentOnly}) or a pure container package
+ * ({@link isContainerPackage}), AND none of its occurrences targets a
+ * production (non-dev-marked) container — a single production container
+ * occurrence is a production placement regardless of any other occurrence,
+ * matching the app-table split's own conservative-to-production rule.
+ */
+function rendersDevelopmentOnly(
+  pkg: PackageEntry,
+  developmentContainers: ReadonlySet<string>,
+): boolean {
+  return (
+    pkg.occurrences.length > 0 &&
+    (isContainerPackage(pkg) || isDevelopmentOnly(pkg)) &&
+    !pkg.occurrences.some(
+      (occurrence) =>
+        occurrence.target.startsWith(DOCKER_IDENTITY_PREFIX) &&
+        !developmentContainers.has(occurrence.target),
+    )
+  );
+}
+
 /** The resolved development-container set for a no-policy render. */
 const EMPTY_DEVELOPMENT_CONTAINERS: ReadonlySet<string> = new Set();
 
@@ -605,13 +631,19 @@ function conflictSectionLines(sorted: readonly PackageEntry[]): string[] {
 /**
  * The package-counts block: total, per-ecosystem (compareCodeUnits-sorted),
  * production / development-only / container / unknown-license counts.
- * Non-container packages feed the prod/dev split (an app concept); a
- * {@link isContainerPackage} package (every occurrence docker-prefixed) is
- * counted separately as a Container package so the three buckets
- * (production + development-only + container) partition the total. Input is
- * the already-sorted package list.
+ * Production and Development-only partition the total exactly — every
+ * package renders under one or the other, per
+ * {@link rendersDevelopmentOnly} — while Container and Unknown license are
+ * cross-cutting subtotals: a package can be counted under Container and/or
+ * Unknown in addition to its Production/Development-only bucket. Container
+ * counts every package with any container occurrence
+ * ({@link hasContainerOccurrence}), not only a pure-container package. Input
+ * is the already-sorted package list.
  */
-function packageCountsLines(sorted: readonly PackageEntry[]): string[] {
+function packageCountsLines(
+  sorted: readonly PackageEntry[],
+  developmentContainers: ReadonlySet<string>,
+): string[] {
   const ecosystemCounts = new Map<string, number>();
   let unknownCount = 0;
   let devOnlyCount = 0;
@@ -620,10 +652,10 @@ function packageCountsLines(sorted: readonly PackageEntry[]): string[] {
     const ecosystem = purlEcosystem(pkg.purl);
     ecosystemCounts.set(ecosystem, (ecosystemCounts.get(ecosystem) ?? 0) + 1);
     if (isUnknownLicense(pkg)) unknownCount += 1;
-    if (isContainerPackage(pkg)) containerCount += 1;
-    else if (isDevelopmentOnly(pkg)) devOnlyCount += 1;
+    if (hasContainerOccurrence(pkg)) containerCount += 1;
+    if (rendersDevelopmentOnly(pkg, developmentContainers)) devOnlyCount += 1;
   }
-  const prodCount = sorted.length - devOnlyCount - containerCount;
+  const prodCount = sorted.length - devOnlyCount;
   const lines: string[] = [
     "**Package counts:**",
     "",
@@ -930,7 +962,15 @@ export function renderMarkdown(
     );
   }
 
-  lines.push(...packageCountsLines(sorted));
+  // Containers index — scope-derived, so it renders with or without a policy
+  // view (a no-policy render passes the empty set; every container reads
+  // "production"). Resolved once, above the counts block, so the
+  // Production/Development-only counts can classify a container package by
+  // the same set the Containers index and the container subsections use.
+  const developmentContainers =
+    policyView?.developmentContainers ?? EMPTY_DEVELOPMENT_CONTAINERS;
+
+  lines.push(...packageCountsLines(sorted, developmentContainers));
 
   // Problematic licenses roll-up — policy runs only. Rendered AFTER the
   // counts block and BEFORE the copyleft section so the gate-blocking findings
@@ -953,11 +993,7 @@ export function renderMarkdown(
   // zero-conflict documents stay byte-identical.
   lines.push(...conflictSectionLines(sorted));
 
-  // Containers index — scope-derived, so it renders with or without a policy
-  // view (a no-policy render passes the empty set; every container reads
-  // "production"). Placed immediately before Production.
-  const developmentContainers =
-    policyView?.developmentContainers ?? EMPTY_DEVELOPMENT_CONTAINERS;
+  // Containers index — resolved above, placed immediately before Production.
   lines.push(...containersSectionLines(sorted, developmentContainers));
   lines.push("");
 

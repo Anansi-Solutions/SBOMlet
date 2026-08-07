@@ -12,8 +12,8 @@ Copyleft notice rules are configured in policy.toml.
 - golang: 2
 - npm: 2
 - pypi: 1
-- Production packages: 1
-- Development-only packages: 1
+- Production packages: 7
+- Development-only packages: 3
 - Container packages: 8
 - Unknown license: 0
 

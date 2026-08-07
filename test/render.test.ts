@@ -1353,9 +1353,10 @@ describe("renderMarkdown — per-container Production/Development grouping", () 
     expect(prodTable.includes("shared-app-and-container")).toBe(true);
     const containerSection = output.slice(output.indexOf(HEADING));
     expect(containerSection.includes("shared-app-and-container")).toBe(true);
-    // Complete-inventory sharing does not double-count it as Container: it
-    // has a non-docker occurrence, so isContainerPackage is false for it.
-    expect(output.includes("- Container packages: 1")).toBe(true);
+    // Container is the cross-cutting hasContainerOccurrence count, so a
+    // package with a non-docker occurrence still counts there once it also
+    // carries a docker occurrence: shared-app-and-container plus osDeb — 2.
+    expect(output.includes("- Container packages: 2")).toBe(true);
   });
 
   test("a package with ONLY workspace occurrences never appears in a container subsection and is never counted as Container", () => {
@@ -1371,7 +1372,7 @@ describe("renderMarkdown — per-container Production/Development grouping", () 
     expect(output.includes("- Container packages: 1")).toBe(true);
   });
 
-  test("counts partition invariant: Production + Development-only + Container equals Total", () => {
+  test("counts partition invariant: Production + Development-only equals Total (Container is a cross-cutting subtotal, not summed in)", () => {
     const containerOnly = entry({
       purl: "pkg:pypi/container-only@1.0.0",
       name: "container-only",
@@ -1391,10 +1392,126 @@ describe("renderMarkdown — per-container Production/Development grouping", () 
       /- Development-only packages: (\d+)/.exec(output)![1],
     );
     const container = Number(/- Container packages: (\d+)/.exec(output)![1]);
-    expect(prod + devOnly + container).toBe(total);
-    // Container is exactly the pure-container packages (every occurrence
-    // docker-prefixed): containerOnly, osDeb, osApk — 3.
+    expect(prod + devOnly).toBe(total);
+    // Container is the cross-cutting hasContainerOccurrence count —
+    // containerOnly, osDeb, osApk — still 3, and every one of the three is
+    // ALSO folded into Production (no dev-marked container in this
+    // no-policy render, the conservative default): the subtotal overlaps
+    // the partition rather than being subtracted from it.
     expect(container).toBe(3);
+    expect(container).toBeLessThanOrEqual(total);
+  });
+
+  describe("Production/Development-only counts match the container's OWN classification (the undercount regression)", () => {
+    const PROD_CONTAINER = "docker:prod-img/Dockerfile";
+    const DEV_CONTAINER = "docker:dev-img/Dockerfile";
+
+    /** A pure-container, application-ecosystem package (golang is not on the OS allowlist). */
+    const prodContainerAppPkg = entry({
+      purl: "pkg:golang/prod-container-app@1.0.0",
+      name: "prod-container-app",
+      version: "1.0.0",
+      occurrences: [{ target: PROD_CONTAINER, isDevDependency: false }],
+      licenseClaims: [
+        { raw: "AGPL-3.0-only", kind: "spdx-id", source: "generator" },
+      ],
+    });
+
+    const devContainerPkg = entry({
+      purl: "pkg:golang/dev-container-only@1.0.0",
+      name: "dev-container-only",
+      version: "1.0.0",
+      occurrences: [{ target: DEV_CONTAINER, isDevDependency: false }],
+      licenseClaims: [{ raw: "MIT", kind: "spdx-id", source: "generator" }],
+    });
+
+    test("an application-ecosystem package baked into a PRODUCTION container counts as Production, not siloed under Container", () => {
+      const view: PolicyView = {
+        policyPath: "policy.toml",
+        suppressedWorkspaces: [],
+        verdicts: [],
+        developmentContainers: new Set(),
+      };
+      const output = renderMarkdown({ packages: [prodContainerAppPkg] }, view);
+      expect(output.includes("- Production packages: 1")).toBe(true);
+      expect(output.includes("- Development-only packages: 0")).toBe(true);
+      // Still a cross-cutting Container subtotal — the fix does not remove
+      // it from that count, only stops subtracting it from Production.
+      expect(output.includes("- Container packages: 1")).toBe(true);
+      const prodSection = output.slice(
+        output.indexOf("## Production dependencies"),
+      );
+      expect(prodSection.includes("prod-container-app")).toBe(true);
+    });
+
+    test("a package whose ONLY occurrence targets a dev-marked container counts as Development-only", () => {
+      const view: PolicyView = {
+        policyPath: "policy.toml",
+        suppressedWorkspaces: [],
+        verdicts: [],
+        developmentContainers: new Set([DEV_CONTAINER]),
+      };
+      const output = renderMarkdown({ packages: [devContainerPkg] }, view);
+      expect(output.includes("- Production packages: 0")).toBe(true);
+      expect(output.includes("- Development-only packages: 1")).toBe(true);
+      expect(output.includes("- Container packages: 1")).toBe(true);
+      const devSection = output.slice(
+        output.indexOf("## Development-only dependencies"),
+      );
+      expect(devSection.includes("dev-container-only")).toBe(true);
+    });
+
+    test("count/section alignment: Production equals the distinct packages under Production (app table + its production container subsections), and likewise Development-only", () => {
+      const prodApp = entry({
+        purl: "pkg:npm/prod-app@1.0.0",
+        name: "prod-app",
+        version: "1.0.0",
+        licenseClaims: [{ raw: "MIT", kind: "spdx-id", source: "generator" }],
+      });
+      const devApp = entry({
+        purl: "pkg:npm/dev-app@1.0.0",
+        name: "dev-app",
+        version: "1.0.0",
+        occurrences: [{ target: "apps/a", isDevDependency: true }],
+        licenseClaims: [{ raw: "MIT", kind: "spdx-id", source: "generator" }],
+      });
+      // No package straddles both containers here, so every package renders
+      // under exactly one of Production/Development-only — the count and the
+      // distinct rendered package set line up exactly.
+      const model: CanonicalDependencies = {
+        packages: [prodApp, devApp, prodContainerAppPkg, devContainerPkg],
+      };
+      const view: PolicyView = {
+        policyPath: "policy.toml",
+        suppressedWorkspaces: [],
+        verdicts: [],
+        developmentContainers: new Set([DEV_CONTAINER]),
+      };
+      const output = renderMarkdown(model, view);
+      const prodCount = Number(/- Production packages: (\d+)/.exec(output)![1]);
+      const devOnlyCount = Number(
+        /- Development-only packages: (\d+)/.exec(output)![1],
+      );
+
+      const prodSection = output.slice(
+        output.indexOf("## Production dependencies"),
+        output.indexOf("## Development-only dependencies"),
+      );
+      const devSection = output.slice(
+        output.indexOf("## Development-only dependencies"),
+      );
+      const namesIn = (text: string, names: readonly string[]): number =>
+        names.filter((name) => text.includes(name)).length;
+
+      expect(prodCount).toBe(2);
+      expect(namesIn(prodSection, ["prod-app", "prod-container-app"])).toBe(
+        prodCount,
+      );
+      expect(devOnlyCount).toBe(2);
+      expect(namesIn(devSection, ["dev-app", "dev-container-only"])).toBe(
+        devOnlyCount,
+      );
+    });
   });
 });
 

@@ -11,7 +11,7 @@ Copyleft notice rules are configured in .sbomlet.policy.toml.
 - npm: 404
 - pypi: 1
 - Production packages: 15
-- Development-only packages: 388
+- Development-only packages: 407
 - Container packages: 19
 - Unknown license: 0
 
