@@ -11,7 +11,7 @@ import { mergeSboms } from "../src/merge/merge";
 import { annotateFindings } from "../src/normalize/normalize";
 import { applyContainerScopes } from "../src/pipeline/containerScope";
 import { BUILTIN_OVERRIDES } from "../src/policy/builtinOverrides";
-import { evaluate } from "../src/policy/evaluate";
+import { acceptedContainerNotices, evaluate } from "../src/policy/evaluate";
 import { parsePolicy, type Policy } from "../src/policy/schema";
 import { alignTables } from "../src/render/alignTables";
 import { renderMarkdown, type PolicyView } from "../src/render/markdown";
@@ -46,6 +46,18 @@ const POLICY_TOML = [
   'name = "coreutils"',
   `where = ["${API_CONTAINER}"]`,
   'reason = "reviewed base-image utility, accepted in the api image"',
+  "",
+  "[[compatible]]",
+  'match = "package"',
+  'name = "licensed-daemon"',
+  `where = ["${API_CONTAINER}"]`,
+  'reason = "AGPL network-copyleft obligation reviewed and accepted for the api image"',
+  "",
+  "[[compatible]]",
+  'match = "package"',
+  'name = "licensed-relay"',
+  `where = ["${API_CONTAINER}"]`,
+  'reason = "imprecise AGPL family reviewed and accepted for the api image"',
   "",
 ].join("\n");
 
@@ -146,6 +158,45 @@ const diagTools = entry({
 });
 
 /**
+ * Precise AGPL system package in the SAME production container, ACCEPTED via
+ * a scoped `[[compatible]]` package rule (compatible[1]) — the discriminator
+ * against diagTools (the same obligation, unaccepted, above): the accepted
+ * occurrence surfaces as a non-blocking special notice instead of vanishing,
+ * never in Problematic and never counted toward the copyleft warning total.
+ */
+const licensedDaemon = entry({
+  purl: "pkg:deb/licensed-daemon@2.1.0",
+  name: "licensed-daemon",
+  version: "2.1.0",
+  scope: "os",
+  occurrences: [{ target: API_CONTAINER, isDevDependency: false }],
+  licenseClaims: [
+    { raw: "AGPL-3.0-only", kind: "spdx-id", source: "generator" },
+  ],
+});
+
+/**
+ * Imprecise "AGPL" family system package, ACCEPTED via a scoped
+ * `[[compatible]]` package rule (compatible[2]) — the imprecise counterpart
+ * to licensedDaemon: an accepted imprecise AGPL family obligation surfaces as
+ * the same kind of special notice as the precise case.
+ */
+const licensedRelay = entry({
+  purl: "pkg:apk/licensed-relay@1.0.0",
+  name: "licensed-relay",
+  version: "1.0.0",
+  scope: "os",
+  occurrences: [{ target: API_CONTAINER, isDevDependency: false }],
+  licenseClaims: [
+    {
+      raw: "GNU Affero General Public License",
+      kind: "name",
+      source: "generator",
+    },
+  ],
+});
+
+/**
  * Imprecise AGPL in the development container — a name-kind claim that
  * normalizes to the bare "AGPL" family, escalating via the same
  * default:agpl-container rule as the precise case (impreciseVerdict).
@@ -231,6 +282,8 @@ const rawModel: CanonicalDependencies = {
     zlib,
     metricsDaemon,
     diagTools,
+    licensedDaemon,
+    licensedRelay,
     relayAgent,
     cacheRelay,
     chartRender,
@@ -295,6 +348,7 @@ function renderScenario(): string {
     suppressedWorkspaces: policy.suppressedWorkspaces,
     verdicts,
     developmentContainers,
+    acceptedContainerNotices: acceptedContainerNotices(scoped, verdicts),
   };
   return alignTables(renderMarkdown(scoped, policyView));
 }
@@ -421,6 +475,59 @@ describe("containerReport — multi-container golden scenario", () => {
       expect(
         section(doc, "## Problematic licenses").includes("cache-relay"),
       ).toBe(false);
+    });
+  });
+
+  describe("invariant: an accepted container AGPL obligation is a non-blocking notice, not Problematic and not the copyleft table", () => {
+    test("the precise-AGPL accepted system package (licensed-daemon) is a Copyleft-section notice, NOT in Problematic, and NOT in the flagged copyleft table", () => {
+      const doc = renderScenario();
+      const copyleft = section(doc, "## Copyleft and special notices");
+      expect(copyleft.includes("licensed-daemon")).toBe(true);
+      expect(
+        section(doc, "## Problematic licenses").includes("licensed-daemon"),
+      ).toBe(false);
+      // Not a flagged-copyleft ROW (that table is scoped to rule ===
+      // "default:copyleft"); it is the special-notice bullet list instead.
+      expect(copyleft.includes("accepted via compatible\\[1\\]")).toBe(true);
+    });
+
+    test("the imprecise-AGPL accepted system package (licensed-relay) is ALSO a Copyleft-section notice, NOT in Problematic", () => {
+      const doc = renderScenario();
+      const copyleft = section(doc, "## Copyleft and special notices");
+      expect(copyleft.includes("licensed-relay")).toBe(true);
+      expect(
+        section(doc, "## Problematic licenses").includes("licensed-relay"),
+      ).toBe(false);
+      expect(copyleft.includes("accepted via compatible\\[2\\]")).toBe(true);
+    });
+
+    test("an accepted container AGPL notice does NOT count toward the copyleft warning roll-up (the roll-up count is unchanged by adding two accepted-ok packages)", () => {
+      const doc = renderScenario();
+      const problematic = section(doc, "## Problematic licenses");
+      // Same "5 copyleft warning(s)" total as before the two accepted AGPL
+      // packages were added — their verdict status is "ok", never "warn".
+      expect(problematic.includes("5 copyleft warning(s)")).toBe(true);
+    });
+
+    test("acceptedContainerNotices(scoped, verdicts) reports exactly the two accepted packages, sorted by purl, and excludes the failing diag-tools/metrics-daemon", () => {
+      const policy = parsePolicy(POLICY_TOML);
+      const { model: annotated } = annotateFindings(
+        rawModel,
+        policy.clarify,
+        BUILTIN_OVERRIDES,
+      );
+      const scoped = applyContainerScopes(
+        annotated,
+        resolveDevelopmentContainersForTest(annotated, policy),
+      );
+      const verdicts = evaluate(scoped, policy);
+      const notices = acceptedContainerNotices(scoped, verdicts);
+      // Sorted by purl: "pkg:apk/..." < "pkg:deb/..." (apk before deb).
+      expect(notices.map((n) => n.name)).toEqual([
+        "licensed-relay",
+        "licensed-daemon",
+      ]);
+      expect(notices.every((n) => n.rule.startsWith("compatible["))).toBe(true);
     });
   });
 
@@ -587,7 +694,7 @@ describe("containerReport — multi-container golden scenario", () => {
   test("the Containers index names both identities, the glob-resolved classification, and a package count", () => {
     const doc = renderScenario();
     const containers = squish(section(doc, "## Containers"));
-    expect(containers.includes(`| ${API_CONTAINER} | production | 6 |`)).toBe(
+    expect(containers.includes(`| ${API_CONTAINER} | production | 8 |`)).toBe(
       true,
     );
     expect(

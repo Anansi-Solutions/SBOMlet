@@ -6,15 +6,15 @@ Copyleft notice rules are configured in policy.toml.
 
 **Package counts:**
 
-- Total packages: 10
-- apk: 1
-- deb: 4
+- Total packages: 12
+- apk: 2
+- deb: 5
 - golang: 2
 - npm: 2
 - pypi: 1
-- Production packages: 7
+- Production packages: 9
 - Development-only packages: 3
-- Container packages: 8
+- Container packages: 10
 - Unknown license: 0
 
 ## Problematic licenses
@@ -29,6 +29,11 @@ _Non-blocking: 5 copyleft warning(s) (dev/os-downgraded or suppressed). See the 
 
 ## Copyleft and special notices
 
+An os-scope container package's AGPL network-copyleft obligation was accepted by policy configuration — recorded here as a non-blocking notice, not counted toward the copyleft warning total:
+
+- licensed-relay@1.0.0 (AGPL) in docker:services/api/Dockerfile — accepted via compatible\[2\]: package "licensed-relay" accepted by compatible package rule: imprecise AGPL family reviewed and accepted for the api image
+- licensed-daemon@2.1.0 (AGPL-3.0-only) in docker:services/api/Dockerfile — accepted via compatible\[1\]: package "licensed-daemon" accepted by compatible package rule: AGPL network-copyleft obligation reviewed and accepted for the api image
+
 The packages listed below carry copyleft or special license obligations in at least one non-suppressed workspace.
 
 | Name        | Ecosystem | Version | License           | Used in                       | Why |
@@ -40,15 +45,16 @@ The packages listed below carry copyleft or special license obligations in at le
 
 These packages report an ambiguous license family that was NOT guessed to a precise SPDX id. Disambiguate each via a policy `[[clarify]]` override.
 
-| Name        | Ecosystem | Version | License          | Used in                       |
-| ----------- | --------- | ------- | ---------------- | ----------------------------- |
-| relay-agent | golang    | 0.4.0   | AGPL (imprecise) | docker:tools/build/Dockerfile |
+| Name           | Ecosystem | Version | License          | Used in                        |
+| -------------- | --------- | ------- | ---------------- | ------------------------------ |
+| licensed-relay | apk       | 1.0.0   | AGPL (imprecise) | docker:services/api/Dockerfile |
+| relay-agent    | golang    | 0.4.0   | AGPL (imprecise) | docker:tools/build/Dockerfile  |
 
 ## Containers
 
 | Container                      | Classification | Packages |
 | ------------------------------ | -------------- | -------- |
-| docker:services/api/Dockerfile | production     | 6        |
+| docker:services/api/Dockerfile | production     | 8        |
 | docker:tools/build/Dockerfile  | development    | 3        |
 
 ## Production dependencies
@@ -61,13 +67,15 @@ These packages report an ambiguous license family that was NOT guessed to a prec
 
 **System packages**
 
-| Name       | Ecosystem | Version  | License           |
-| ---------- | --------- | -------- | ----------------- |
-| bash       | deb       | 5.2-6    | GPL-3.0-or-later  |
-| coreutils  | deb       | 9.1-1    | GPL-3.0-or-later  |
-| diag-tools | apk       | 3.0.1    | AGPL-3.0-only     |
-| libc6      | deb       | 2.36-9   | LGPL-2.1-or-later |
-| zlib1g     | deb       | 1.2.13-1 | Zlib              |
+| Name            | Ecosystem | Version  | License           |
+| --------------- | --------- | -------- | ----------------- |
+| bash            | deb       | 5.2-6    | GPL-3.0-or-later  |
+| coreutils       | deb       | 9.1-1    | GPL-3.0-or-later  |
+| diag-tools      | apk       | 3.0.1    | AGPL-3.0-only     |
+| libc6           | deb       | 2.36-9   | LGPL-2.1-or-later |
+| licensed-daemon | deb       | 2.1.0    | AGPL-3.0-only     |
+| licensed-relay  | apk       | 1.0.0    | AGPL (imprecise)  |
+| zlib1g          | deb       | 1.2.13-1 | Zlib              |
 
 **Application packages**
 

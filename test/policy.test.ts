@@ -9,7 +9,11 @@ import {
   normalizeRaw,
   type BuiltinOverrideInput,
 } from "../src/normalize/normalize";
-import { evaluate, unusedRuleIds } from "../src/policy/evaluate";
+import {
+  acceptedContainerNotices,
+  evaluate,
+  unusedRuleIds,
+} from "../src/policy/evaluate";
 import { BUILTIN_DENY_RULES } from "../src/policy/builtinDenylist";
 import { denyRuleFor } from "../src/policy/denylist";
 import { AGPL_IDS, COPYLEFT_IDS } from "../src/policy/copyleft";
@@ -851,6 +855,7 @@ function runEngine(
   verdicts: Verdict[];
   usedClarifyIndices: ReadonlySet<number>;
   policy: Policy;
+  model: CanonicalDependencies;
 } {
   const policy = parsePolicy(policyText);
   const { model, usedClarifyIndices } = annotateFindings(
@@ -858,7 +863,12 @@ function runEngine(
     policy.clarify,
     builtins,
   );
-  return { verdicts: evaluate(model, policy), usedClarifyIndices, policy };
+  return {
+    verdicts: evaluate(model, policy),
+    usedClarifyIndices,
+    policy,
+    model,
+  };
 }
 
 /** Suppression-only fixture policy: apps/scratch absorbs copyleft. */
@@ -3674,6 +3684,180 @@ describe("evaluate — imprecise AGPL container escalation (imprecise variant)",
     );
     expect(verdicts[0].status).toBe("warn");
     expect(verdicts[0].rule).toBe("default:imprecise-copyleft");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Accepted-AGPL container notices (evaluate.ts#acceptedContainerNotices): an
+// os-scope AGPL obligation that was ACCEPTED (status "ok" via a
+// `[[compatible]]` rule) rather than failing must still surface, as a
+// non-blocking notice, distinct from the Verdict[] the CycloneDX/summary
+// consumers read.
+// ---------------------------------------------------------------------------
+
+describe("evaluate — accepted-AGPL container notices (acceptedContainerNotices)", () => {
+  const NOTICE_TARGET = "docker:img/Dockerfile";
+
+  test("a precise AGPL system package accepted via a scoped [[compatible]] package rule surfaces as an accepted-container notice", () => {
+    const policyText = [
+      "[[compatible]]",
+      'match = "package"',
+      'name = "agpl-os-notice"',
+      'reason = "network-copyleft obligation reviewed and accepted for this image"',
+      `where = ${JSON.stringify([NOTICE_TARGET])}`,
+    ].join("\n");
+    const { verdicts, model } = runEngine(
+      [
+        osPkgSpec(
+          "pkg:deb/debian/agpl-os-notice@1.0.0",
+          "agpl-os-notice",
+          "AGPL-3.0-only",
+          [NOTICE_TARGET],
+        ),
+      ],
+      policyText,
+    );
+    expect(verdicts[0].status).toBe("ok");
+    expect(verdicts[0].rule).toBe("compatible[0]");
+
+    const notices = acceptedContainerNotices(model, verdicts);
+    expect(notices).toHaveLength(1);
+    expect(notices[0]).toMatchObject({
+      purl: "pkg:deb/debian/agpl-os-notice@1.0.0",
+      name: "agpl-os-notice",
+      version: "1.0.0",
+      license: "AGPL-3.0-only",
+      targets: [NOTICE_TARGET],
+      rule: "compatible[0]",
+    });
+  });
+
+  test('the imprecise "AGPL" family accepted via a scoped [[compatible]] package rule also surfaces as a notice', () => {
+    const policyText = [
+      "[[compatible]]",
+      'match = "package"',
+      'name = "agpl-ish-notice"',
+      'reason = "network-copyleft obligation reviewed and accepted for this image"',
+      `where = ${JSON.stringify([NOTICE_TARGET])}`,
+    ].join("\n");
+    const { verdicts, model } = runEngine(
+      [
+        osPkgSpec(
+          "pkg:apk/alpine/agpl-ish-notice@1.0.0",
+          "agpl-ish-notice",
+          "AGPL",
+          [NOTICE_TARGET],
+        ),
+      ],
+      policyText,
+    );
+    expect(verdicts[0].status).toBe("ok");
+    expect(verdicts[0].rule).toBe("compatible[0]");
+
+    const notices = acceptedContainerNotices(model, verdicts);
+    expect(notices).toHaveLength(1);
+    expect(notices[0]).toMatchObject({
+      purl: "pkg:apk/alpine/agpl-ish-notice@1.0.0",
+      license: "AGPL",
+      targets: [NOTICE_TARGET],
+      rule: "compatible[0]",
+    });
+  });
+
+  test("regression: a routine GPL/LGPL system package (accepted or os-downgraded) is never an accepted-container notice — the fix does not widen the net", () => {
+    const acceptPolicy = [
+      "[[compatible]]",
+      'match = "package"',
+      'name = "gpl-os-accepted"',
+      'reason = "reviewed base-image utility"',
+    ].join("\n");
+    const { verdicts: acceptedVerdicts, model: acceptedModel } = runEngine(
+      [
+        osPkgSpec(
+          "pkg:deb/debian/gpl-os-accepted@1.0.0",
+          "gpl-os-accepted",
+          "GPL-3.0-only",
+          [NOTICE_TARGET],
+        ),
+      ],
+      acceptPolicy,
+    );
+    expect(acceptedVerdicts[0].status).toBe("ok");
+    expect(
+      acceptedContainerNotices(acceptedModel, acceptedVerdicts),
+    ).toHaveLength(0);
+
+    const { verdicts: warnVerdicts, model: warnModel } = runEngine(
+      [
+        osPkgSpec(
+          "pkg:deb/debian/lgpl-os-warn@1.0.0",
+          "lgpl-os-warn",
+          "LGPL-2.1-or-later",
+          [NOTICE_TARGET],
+        ),
+      ],
+      "",
+    );
+    expect(warnVerdicts[0].status).toBe("warn");
+    expect(acceptedContainerNotices(warnModel, warnVerdicts)).toHaveLength(0);
+  });
+
+  test("a FAILING AGPL system package (not accepted) is not an accepted-container notice — Problematic only, never duplicated", () => {
+    const { verdicts, model } = runEngine(
+      [
+        osPkgSpec(
+          "pkg:deb/debian/agpl-os-failing@1.0.0",
+          "agpl-os-failing",
+          "AGPL-3.0-only",
+          [NOTICE_TARGET],
+        ),
+      ],
+      "",
+    );
+    expect(verdicts[0].status).toBe("fail");
+    expect(verdicts[0].rule).toBe("default:agpl-container");
+    expect(acceptedContainerNotices(model, verdicts)).toHaveLength(0);
+  });
+
+  test("determinism: notices sort by purl (compareCodeUnits), target lists dedupe+sort, and repeated calls are byte-identical", () => {
+    const TARGET_A = "docker:a/Dockerfile";
+    const TARGET_B = "docker:b/Dockerfile";
+    const policyText = [
+      "[[compatible]]",
+      'match = "package"',
+      'name = "zeta-agpl"',
+      'reason = "accepted"',
+      "",
+      "[[compatible]]",
+      'match = "package"',
+      'name = "alpha-agpl"',
+      'reason = "accepted"',
+    ].join("\n");
+    const { verdicts, model } = runEngine(
+      [
+        osPkgSpec(
+          "pkg:deb/debian/zeta-agpl@1.0.0",
+          "zeta-agpl",
+          "AGPL-3.0-only",
+          [TARGET_B, TARGET_A],
+        ),
+        osPkgSpec(
+          "pkg:deb/debian/alpha-agpl@1.0.0",
+          "alpha-agpl",
+          "AGPL-3.0-only",
+          [TARGET_A],
+        ),
+      ],
+      policyText,
+    );
+    const notices1 = acceptedContainerNotices(model, verdicts);
+    const notices2 = acceptedContainerNotices(model, verdicts);
+    expect(notices1).toEqual(notices2);
+    expect(notices1.map((n) => n.purl)).toEqual([
+      "pkg:deb/debian/alpha-agpl@1.0.0",
+      "pkg:deb/debian/zeta-agpl@1.0.0",
+    ]);
+    expect(notices1[1]!.targets).toEqual([TARGET_A, TARGET_B]);
   });
 });
 

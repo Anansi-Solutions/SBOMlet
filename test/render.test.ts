@@ -827,6 +827,95 @@ describe("renderMarkdown — the full document", () => {
     ).toBe(true);
   });
 
+  test("Test 5c: an accepted-AGPL container notice (PolicyView.acceptedContainerNotices) renders as a special-notice bullet, distinct from the flagged copyleft table, and is deduped when the same purl also carries a fail verdict elsewhere", () => {
+    const model: CanonicalDependencies = { packages: [] };
+    const view: PolicyView = {
+      policyPath: "policy.toml",
+      suppressedWorkspaces: [],
+      verdicts: [
+        {
+          purl: "pkg:deb/debian/agpl-also-failing@2.0.0",
+          occurrenceTarget: "docker:img/Dockerfile",
+          status: "fail",
+          rule: "default:agpl-container",
+          reason: "fails elsewhere",
+        },
+      ],
+      acceptedContainerNotices: [
+        {
+          purl: "pkg:deb/debian/agpl-daemon@1.0.0",
+          name: "agpl-daemon",
+          version: "1.0.0",
+          license: "AGPL-3.0-only",
+          targets: ["docker:img/Dockerfile"],
+          rule: "compatible[0]",
+          reason:
+            'package "agpl-daemon" accepted by compatible package rule: reviewed',
+        },
+        // This purl ALSO carries a fail verdict above — must be excluded
+        // from the notice list (the same Problematic dedup the flagged
+        // copyleft rows already apply).
+        {
+          purl: "pkg:deb/debian/agpl-also-failing@2.0.0",
+          name: "agpl-also-failing",
+          version: "2.0.0",
+          license: "AGPL-3.0-only",
+          targets: ["docker:img/Dockerfile"],
+          rule: "compatible[1]",
+          reason:
+            'package "agpl-also-failing" accepted by compatible package rule: reviewed',
+        },
+      ],
+    };
+    const output = renderMarkdown(model, view);
+    const copyleftStart = output.indexOf("## Copyleft and special notices");
+    const copyleftSection = output.slice(
+      copyleftStart,
+      output.indexOf("## Containers"),
+    );
+    expect(copyleftSection.includes("agpl-daemon@1.0.0")).toBe(true);
+    expect(copyleftSection.includes("accepted via compatible\\[0\\]")).toBe(
+      true,
+    );
+    // Deduped: the purl with a fail verdict elsewhere never surfaces as a notice.
+    expect(copyleftSection.includes("agpl-also-failing")).toBe(false);
+    // Never a row in the flagged copyleft TABLE (that table is scoped to
+    // rule === "default:copyleft" fail/warn verdicts, not notices).
+    expect(copyleftSection.includes("| agpl-daemon | deb |")).toBe(false);
+  });
+
+  test("Test 5d: an accepted-AGPL notice alone (no flagged copyleft rows) makes the section non-empty — the ✅ empty-state line is suppressed", () => {
+    const model: CanonicalDependencies = { packages: [] };
+    const view: PolicyView = {
+      policyPath: "policy.toml",
+      suppressedWorkspaces: [],
+      verdicts: [],
+      acceptedContainerNotices: [
+        {
+          purl: "pkg:deb/debian/agpl-daemon@1.0.0",
+          name: "agpl-daemon",
+          version: "1.0.0",
+          license: "AGPL-3.0-only",
+          targets: ["docker:img/Dockerfile"],
+          rule: "compatible[0]",
+          reason: "accepted",
+        },
+      ],
+    };
+    const output = renderMarkdown(model, view);
+    const copyleftStart = output.indexOf("## Copyleft and special notices");
+    const copyleftSection = output.slice(
+      copyleftStart,
+      output.indexOf("## Containers"),
+    );
+    expect(copyleftSection.includes("agpl-daemon")).toBe(true);
+    expect(
+      copyleftSection.includes(
+        "✅ No package carries copyleft or special license obligations.",
+      ),
+    ).toBe(false);
+  });
+
   test("Test 6: suppressed workspaces render path + license + description escaped", () => {
     const view: PolicyView = {
       policyPath: "configs/policy|v2.toml",

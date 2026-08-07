@@ -45,6 +45,7 @@ import {
   type Verdict,
 } from "../model/dependencies";
 import { OS_PACKAGE_ECOSYSTEMS } from "../policy/osEcosystems";
+import type { AcceptedContainerNotice } from "../policy/evaluate";
 import type { SuppressedWorkspace } from "../policy/schema";
 
 const HEADER_LINE =
@@ -60,6 +61,15 @@ export interface PolicyView {
   policyPath: string;
   suppressedWorkspaces: ReadonlyArray<SuppressedWorkspace>;
   verdicts: ReadonlyArray<Verdict>;
+  /**
+   * Accepted container AGPL obligations (policy/evaluate.ts): an os-scope
+   * package whose AGPL network-copyleft obligation was accepted through a
+   * `[[compatible]]` rule rather than failing. Rendered as a non-blocking
+   * special notice in the copyleft section instead of vanishing — absent
+   * when the pipeline finds none (possibly empty); tests exercising other
+   * membership rules may omit the field entirely.
+   */
+  acceptedContainerNotices?: ReadonlyArray<AcceptedContainerNotice>;
   /**
    * docker:<source> identities marked development-only by a policy
    * `[[docker.development]]` glob, resolved by the pipeline against the
@@ -844,11 +854,16 @@ function problematicSectionLines(
  * into this section, though its inventory row, its Imprecise-review row, and
  * its Assessment-conflicts row are untouched. Container system-package
  * copyleft is routine base-image noise and is excluded here regardless of
- * its verdict status (an AGPL container package escalates to a fail verdict
- * upstream, which routes it through the same dedup instead). The Used-in
- * cell lists only the flagged occurrence targets; the Why column carries the
- * per-row provenance. Returns the full section (heading, suppressed-
- * workspaces list, table or the ✅ empty state) for the caller to push.
+ * its verdict status, EXCEPT an accepted AGPL obligation
+ * (policyView.acceptedContainerNotices): a failing AGPL container package
+ * still escalates to Problematic through the same dedup, but an ACCEPTED one
+ * renders here as a non-blocking special notice instead of vanishing — it
+ * is neither counted in the warning roll-up above (its verdict status is
+ * "ok") nor duplicated when the same purl already carries a fail elsewhere.
+ * The Used-in cell lists only the flagged occurrence targets; the Why column
+ * carries the per-row provenance. Returns the full section (heading,
+ * suppressed-workspaces list, accepted-notices list, table or the ✅ empty
+ * state) for the caller to push.
  */
 function copyleftSectionLines(
   sorted: readonly PackageEntry[],
@@ -911,6 +926,26 @@ function copyleftSectionLines(
     lines.push("");
   }
 
+  // Accepted-AGPL container notices: candidates from policy/evaluate.ts,
+  // deduped against the SAME problematicPurls set the flagged rows above use
+  // — a purl already failing anywhere is never also shown as an accepted
+  // notice. Sorted by purl already (acceptedContainerNotices' contract).
+  const notices = (policyView.acceptedContainerNotices ?? []).filter(
+    (notice) => !problematicPurls.has(notice.purl),
+  );
+  if (notices.length > 0) {
+    lines.push(
+      "An os-scope container package's AGPL network-copyleft obligation was accepted by policy configuration — recorded here as a non-blocking notice, not counted toward the copyleft warning total:",
+      "",
+    );
+    for (const notice of notices) {
+      lines.push(
+        `- ${escapeCell(notice.name)}@${escapeCell(notice.version)} (${escapeCell(notice.license)}) in ${escapeCell(notice.targets.join(", "))} — accepted via ${escapeCell(notice.rule)}: ${escapeCell(notice.reason)}`,
+      );
+    }
+    lines.push("");
+  }
+
   if (copyleftRows.length > 0) {
     lines.push(
       "The packages listed below carry copyleft or special license obligations in at least one non-suppressed workspace.",
@@ -919,7 +954,7 @@ function copyleftSectionLines(
       ...copyleftRows,
       "",
     );
-  } else {
+  } else if (notices.length === 0) {
     lines.push(
       "✅ No package carries copyleft or special license obligations.",
       "",

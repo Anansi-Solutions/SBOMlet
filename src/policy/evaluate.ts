@@ -954,6 +954,114 @@ export function evaluate(
 }
 
 /**
+ * One accepted-AGPL container obligation: an os-scope (container SYSTEM
+ * package) occurrence whose elected license carries the AGPL network-copyleft
+ * obligation (precise: an AGPL_IDS leaf in the elected expression; imprecise:
+ * the bare "AGPL" family token, the SAME predicates agplContainerVerdict and
+ * impreciseVerdict already gate on) but whose verdict at that occurrence is an
+ * ACCEPTANCE — status "ok" via a `[[compatible]]` rule — rather than the
+ * default:agpl-container fail. Surfaced as a non-blocking special notice
+ * (render/markdown.ts) instead of vanishing: the obligation is accepted, not
+ * absent.
+ */
+export interface AcceptedContainerNotice {
+  readonly purl: string;
+  readonly name: string;
+  readonly version: string;
+  /** Elected SPDX id for a precise finding; the bare "AGPL" family token otherwise. */
+  readonly license: string;
+  /** Deduped, compareCodeUnits-sorted occurrence targets accepted at. */
+  readonly targets: ReadonlyArray<string>;
+  /** The accepting `compatible[i]` rule id (citation, mirrors Verdict.rule). */
+  readonly rule: string;
+  /** The accepting verdict's reason (citation, mirrors Verdict.reason). */
+  readonly reason: string;
+}
+
+/**
+ * An assessment carries the AGPL network-copyleft obligation — precise (an
+ * AGPL_IDS leaf in the elected expression) or imprecise (the bare "AGPL"
+ * family token) — the exact two predicates agplContainerVerdict and
+ * impreciseVerdict already gate os-scope escalation on, reused here so
+ * detection can never drift from the escalation itself.
+ */
+function carriesAgplObligation(assessment: Assessment): boolean {
+  if (
+    assessment.electedNode !== null &&
+    copyleftLeafIds(assessment.electedNode).some((id) => AGPL_IDS.has(id))
+  ) {
+    return true;
+  }
+  return assessment.impreciseFamily === "AGPL";
+}
+
+/**
+ * Accepted-AGPL container notices: one entry per os-scope package carrying
+ * the AGPL obligation with at least one occurrence whose verdict is an
+ * acceptance (status "ok", rule cites a `compatible[i]` entry — the ONLY
+ * lever above the AGPL-container escalation in the precedence walk). A
+ * package with no accepted occurrence contributes nothing; a package also
+ * carrying a fail elsewhere is still returned here — the render layer applies
+ * the Problematic dedup, matching how the flagged-copyleft rows dedup today.
+ * Sorted by purl (compareCodeUnits) for determinism; each notice's targets are
+ * deduped and sorted the same way.
+ */
+export function acceptedContainerNotices(
+  model: CanonicalDependencies,
+  verdicts: ReadonlyArray<Verdict>,
+): AcceptedContainerNotice[] {
+  const verdictByKey = new Map<string, Verdict>();
+  for (const verdict of verdicts) {
+    verdictByKey.set(
+      `${verdict.purl}\u0000${verdict.occurrenceTarget}`,
+      verdict,
+    );
+  }
+
+  const notices: AcceptedContainerNotice[] = [];
+  for (const entry of model.packages) {
+    if (entry.scope !== "os") continue;
+    const assessment = assessPackage(entry);
+    if (!carriesAgplObligation(assessment)) continue;
+
+    const targets: string[] = [];
+    let rule: string | undefined;
+    let reason: string | undefined;
+    for (const occurrence of entry.occurrences) {
+      const verdict = verdictByKey.get(
+        `${entry.purl}\u0000${occurrence.target}`,
+      );
+      if (
+        verdict === undefined ||
+        verdict.status !== "ok" ||
+        !verdict.rule.startsWith("compatible[")
+      ) {
+        continue;
+      }
+      targets.push(occurrence.target);
+      if (rule === undefined) {
+        rule = verdict.rule;
+        reason = verdict.reason;
+      }
+    }
+    if (targets.length === 0 || rule === undefined || reason === undefined) {
+      continue;
+    }
+
+    notices.push({
+      purl: entry.purl,
+      name: entry.name,
+      version: entry.version,
+      license: assessment.elected ?? "AGPL",
+      targets: [...new Set(targets)].sort(compareCodeUnits),
+      rule,
+      reason,
+    });
+  }
+  return notices.sort((a, b) => compareCodeUnits(a.purl, b.purl));
+}
+
+/**
  * Rule ids of compatible/clarify entries that never decided anything —
  * stale-policy hygiene. Compatible usage is read from cited verdict rules;
  * clarify usage comes from annotateFindings' usedClarifyIndices (a clarify rule

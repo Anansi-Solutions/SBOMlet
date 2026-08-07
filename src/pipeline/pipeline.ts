@@ -21,7 +21,7 @@ import {
 } from "../model/dependencies";
 import { annotateFindings } from "../normalize/normalize";
 import { BUILTIN_OVERRIDES } from "../policy/builtinOverrides";
-import { evaluate } from "../policy/evaluate";
+import { acceptedContainerNotices, evaluate } from "../policy/evaluate";
 import { parsePolicy, type Policy } from "../policy/schema";
 import { alignTables } from "../render/alignTables";
 import { renderCyclonedx } from "../render/cyclonedx";
@@ -542,6 +542,7 @@ function resolveDevelopmentContainers(
 function projectPolicyView(
   policy: Policy,
   policyPath: string,
+  model: CanonicalDependencies,
   verdicts: ReadonlyArray<Verdict>,
   developmentContainers: ReadonlySet<string>,
 ): PolicyView {
@@ -550,6 +551,7 @@ function projectPolicyView(
     suppressedWorkspaces: policy.suppressedWorkspaces,
     verdicts,
     developmentContainers,
+    acceptedContainerNotices: acceptedContainerNotices(model, verdicts),
     ...(policy.document !== undefined ? { document: policy.document } : {}),
   };
 }
@@ -675,6 +677,7 @@ export async function buildOutputs(
     policyView = projectPolicyView(
       policy,
       policyPointerPath(opts),
+      scoped,
       verdicts,
       developmentContainers,
     );

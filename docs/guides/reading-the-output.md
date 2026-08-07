@@ -170,14 +170,13 @@ obligation in at least one workspace that the policy hasn't suppressed. Copyleft
 licenses (GPL, LGPL, AGPL, MPL) can require you to release your own changes under
 the same terms when you distribute, so a reviewer reads this section closely.
 
-A container's own base-image (system-package) copyleft never appears here,
-whatever its verdict — the expected GPL/LGPL in a Debian or Alpine layer lists
-only under that container's own System-packages table (below `## Containers`),
-not repeated in this narrative section. An application-ecosystem package an
-application layer installed into the image is not covered by that exclusion:
-a dev-downgraded copyleft warning on one rows here like any other copyleft
-warning. Nor does a package already shown in Problematic licenses above; the
-two sections never overlap.
+A package already shown in Problematic licenses above never repeats here. A
+container's own base-image (system-package) copyleft is routine and stays out
+too — except AGPL: its network-copyleft obligation shows up here as a
+non-blocking special notice when accepted via `[[compatible]]`, and in
+Problematic instead when it fails. An application-ecosystem package an
+application layer installed into the image isn't covered by that exclusion —
+its copyleft rows here normally.
 
 It opens with a one-line summary sentence, then the suppressed-workspaces list
 when there is one:

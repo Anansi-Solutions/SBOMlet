@@ -262,16 +262,14 @@ The Used-in cell here lists only the flagged targets, not every place the
 package is used. This is how an elected copyleft branch surfaces in the output:
 the leaking workspaces are named.
 
-A container's SYSTEM-package copyleft is routine base-image noise and never
-appears in this table, whatever its verdict status — the expected GPL or LGPL
-in a Debian or Alpine base layer is listed only in its container's own
-subsection (see [Containers](#containers) above), not repeated here. Its AGPL
-exception routes through Problematic licenses instead, above, rather than
-this table. An application-ecosystem package baked into a container is not
-covered by that exclusion: a dev-downgraded copyleft warning on one — the
-same case as an application `devDependency` — rows here like any other
-copyleft warning. A package already listed in Problematic licenses is
-excluded here regardless of ecosystem, per the dedup described there.
+A container's SYSTEM-package copyleft is routine base-image noise and stays
+out of this table, whatever its verdict — except AGPL, which fails into
+Problematic licenses above or, when accepted via
+[`[[compatible]]`](policy.md#compatible), appears here instead as a
+non-blocking special notice. An application-ecosystem package baked into a
+container isn't covered by that exclusion — its copyleft rows here normally.
+A package already listed in Problematic licenses is excluded here regardless
+of ecosystem, per the dedup described there.
 
 ### The Why column
 
