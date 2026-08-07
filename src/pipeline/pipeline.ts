@@ -28,6 +28,7 @@ import { renderCyclonedx } from "../render/cyclonedx";
 import { renderMarkdown, type PolicyView } from "../render/markdown";
 import { renderNotices } from "../render/notices";
 import { globToRegExp } from "../targets/discover";
+import { applyContainerScopes } from "./containerScope";
 import { resolveFrom } from "./paths";
 import { sanitizeForLog, writePolicySummary } from "./summary";
 import { collectTargets } from "./targets";
@@ -467,16 +468,19 @@ function intensiveOptionsFor(
 
 /**
  * The analyzed container SOURCES — the bare repo-relative identity of every
- * docker:<source> occurrence target carried by an os-scope package, deduped.
- * The bare form (prefix stripped) is what a `[[docker.development]]` glob
+ * docker:<source> occurrence target carried by ANY package, deduped. The
+ * bare form (prefix stripped) is what a `[[docker.development]]` glob
  * matches against, mirroring `[docker].ignore`'s own bare-source patterns.
+ * Occurrence-keyed, not scope-keyed: this runs BEFORE {@link
+ * applyContainerScopes} re-keys application-ecosystem container packages to
+ * scope "app", and it must not lose an app-only container just because its
+ * packages already carry the gating scope.
  */
 function analyzedContainerSources(
   model: CanonicalDependencies,
 ): ReadonlySet<string> {
   const sources = new Set<string>();
   for (const pkg of model.packages) {
-    if (pkg.scope !== "os") continue;
     for (const occurrence of pkg.occurrences) {
       if (!occurrence.target.startsWith(DOCKER_IDENTITY_PREFIX)) continue;
       sources.add(occurrence.target.slice(DOCKER_IDENTITY_PREFIX.length));
@@ -649,6 +653,16 @@ export async function buildOutputs(
     BUILTIN_OVERRIDES,
   );
 
+  // The container re-scope transform: resolve the development-container set
+  // ONCE — from the still-"os"-scoped annotated model, so an app-only
+  // container is never lost — and feed the SAME set to the scope transform
+  // AND the render classification below (one resolution, two consumers).
+  // Runs unconditionally (even without a policy): the transform only ever
+  // NARROWS which packages carry the gating "app" scope, so the annotated
+  // model stays the honest one everywhere downstream, dump-model included.
+  const developmentContainers = resolveDevelopmentContainers(annotated, policy);
+  const scoped = applyContainerScopes(annotated, developmentContainers);
+
   // Policy stage: pure engine calls — evaluate verdicts, surface the summary
   // on stderr, and project the PolicyView for the document renderer. Policy-
   // authored strings reaching the .md route through escapeCell inside the
@@ -656,34 +670,34 @@ export async function buildOutputs(
   let verdicts: Verdict[] | undefined;
   let policyView: PolicyView | undefined;
   if (policy !== undefined && opts.policyPath !== undefined) {
-    verdicts = evaluate(annotated, policy);
+    verdicts = evaluate(scoped, policy);
     writePolicySummary(policy, verdicts, usedClarifyIndices);
     policyView = projectPolicyView(
       policy,
       policyPointerPath(opts),
       verdicts,
-      resolveDevelopmentContainers(annotated, policy),
+      developmentContainers,
     );
   }
 
   // Dump surface: with a policy run the dump is the EvaluatedDependencies
-  // (findings + verdicts); without one it is the annotated model.
+  // (findings + verdicts); without one it is the re-scoped model.
   const evaluated: EvaluatedDependencies | undefined =
     verdicts === undefined
       ? undefined
-      : { packages: annotated.packages, verdicts };
-  const dumpJson = toSortedDependenciesJson(evaluated ?? annotated);
+      : { packages: scoped.packages, verdicts };
+  const dumpJson = toSortedDependenciesJson(evaluated ?? scoped);
 
   return {
-    licensesMd: alignTables(renderMarkdown(annotated, policyView)),
-    noticesMd: renderNotices(annotated),
+    licensesMd: alignTables(renderMarkdown(scoped, policyView)),
+    noticesMd: renderNotices(scoped),
     ...(opts.cyclonedxPath !== undefined
-      ? { cyclonedxJson: renderCyclonedx(annotated, verdicts) }
+      ? { cyclonedxJson: renderCyclonedx(scoped, verdicts) }
       : {}),
     dumpJson,
     ...(verdicts !== undefined ? { verdicts } : {}),
     ...(policy !== undefined ? { policy } : {}),
-    packageCount: annotated.packages.length,
+    packageCount: scoped.packages.length,
     staleUnknowns,
   };
 }

@@ -1359,6 +1359,211 @@ describe("the two-Dockerfile scenario end-to-end", () => {
 });
 
 // ===========================================================================
+// The container re-scope transform, end to end through buildOutputs: an
+// application-ecosystem package baked into an image gates like an
+// application dependency (fails in production, dev-downgrades in a
+// [[docker.development]]-marked container), while an OS-allowlist system
+// package keeps every routine Phase-18 behavior unchanged. The
+// [[docker.development]] glob resolution runs ONCE and feeds both the
+// re-scope transform and the render classification.
+// ===========================================================================
+
+const PROD_IMG = { image: "prod-img", digest: "", source: "prod/Dockerfile" };
+const DEV_IMG = { image: "dev-img", digest: "", source: "dev/Dockerfile" };
+
+/** One production container (pypi + deb) and one dev-marked container (golang). */
+const ECOSYSTEM_SIDECAR = sidecarDoc(
+  [
+    {
+      type: "library",
+      name: "pip-copyleft",
+      version: "1.0.0",
+      purl: "pkg:pypi/pip-copyleft@1.0.0",
+      licenses: [{ license: { id: "LGPL-3.0-or-later" } }],
+      images: [PROD_IMG.image, DEV_IMG.image],
+    },
+    {
+      type: "library",
+      name: "sys-gpl",
+      version: "1.0.0",
+      purl: "pkg:deb/debian/sys-gpl@1.0.0",
+      licenses: [{ license: { id: "GPL-2.0-only" } }],
+      images: [PROD_IMG.image],
+    },
+    {
+      type: "library",
+      name: "sys-agpl",
+      version: "1.0.0",
+      purl: "pkg:deb/debian/sys-agpl@1.0.0",
+      licenses: [{ license: { id: "AGPL-3.0-only" } }],
+      images: [PROD_IMG.image],
+    },
+    {
+      type: "library",
+      name: "go-agpl",
+      version: "1.0.0",
+      purl: "pkg:golang/go-agpl@1.0.0",
+      licenses: [{ license: { id: "AGPL-3.0-only" } }],
+      images: [PROD_IMG.image],
+    },
+  ],
+  [PROD_IMG, DEV_IMG],
+);
+
+/** Marks "dev/Dockerfile" development-only; [os_dependencies]/[dev_dependencies] vary by test. */
+function ecosystemPolicy(osHandling: string, devHandling: string): string {
+  return [
+    "[unknown]",
+    'handling = "warn"',
+    "",
+    "[os_dependencies]",
+    `handling = "${osHandling}"`,
+    "",
+    "[dev_dependencies]",
+    `handling = "${devHandling}"`,
+    "",
+    "[[docker.development]]",
+    'source = "dev/Dockerfile"',
+    'reason = "the dev image only runs local tooling"',
+    "",
+  ].join("\n");
+}
+
+describe("the container re-scope transform end to end (buildOutputs)", () => {
+  beforeAll(() => {
+    mock.module("../src/collectors/cdxgen", () => ({
+      ...REAL_CDXGEN,
+      collectWithCdxgen: fakeScanWithCdxgen,
+    }));
+  });
+  afterAll(() => {
+    mock.module("../src/collectors/cdxgen", () => REAL_CDXGEN);
+  });
+
+  test("an application-ecosystem copyleft package in a PRODUCTION container FAILS via default:copyleft", async () => {
+    const { root } = makeScannableTree();
+    writeSidecar(root, ECOSYSTEM_SIDECAR);
+    const policyPath = writePolicy(root, ecosystemPolicy("warn", "warn"));
+
+    const { outputs } = await buildAgainst(root, policyPath);
+
+    const verdict = outputs.verdicts!.find(
+      (v) =>
+        v.purl === "pkg:pypi/pip-copyleft@1.0.0" &&
+        v.occurrenceTarget === "docker:prod/Dockerfile",
+    );
+    expect(verdict?.status).toBe("fail");
+    expect(verdict?.rule).toBe("default:copyleft");
+  });
+
+  test("the SAME application-ecosystem package in a DEV-marked container dev-downgrades to warn (dev_dependencies=warn)", async () => {
+    const { root } = makeScannableTree();
+    writeSidecar(root, ECOSYSTEM_SIDECAR);
+    const policyPath = writePolicy(root, ecosystemPolicy("warn", "warn"));
+
+    const { outputs } = await buildAgainst(root, policyPath);
+
+    const verdict = outputs.verdicts!.find(
+      (v) =>
+        v.purl === "pkg:pypi/pip-copyleft@1.0.0" &&
+        v.occurrenceTarget === "docker:dev/Dockerfile",
+    );
+    expect(verdict?.status).toBe("warn");
+    expect(verdict?.rule).toBe("default:copyleft");
+  });
+
+  test("a deb (OS-allowlist) GPL package in a production container still os-downgrades to warn under os_dependencies=warn — routine behavior unchanged", async () => {
+    const { root } = makeScannableTree();
+    writeSidecar(root, ECOSYSTEM_SIDECAR);
+    const policyPath = writePolicy(root, ecosystemPolicy("warn", "warn"));
+
+    const { outputs } = await buildAgainst(root, policyPath);
+
+    const verdict = outputs.verdicts!.find(
+      (v) => v.purl === "pkg:deb/debian/sys-gpl@1.0.0",
+    );
+    expect(verdict?.status).toBe("warn");
+    expect(verdict?.rule).toBe("default:copyleft");
+  });
+
+  test("a deb (OS-allowlist) AGPL package FAILS via default:agpl-container under os_dependencies warn/fail/ignore — system-package escalation unchanged", async () => {
+    for (const osHandling of ["warn", "fail", "ignore"]) {
+      const { root } = makeScannableTree();
+      writeSidecar(root, ECOSYSTEM_SIDECAR);
+      const policyPath = writePolicy(root, ecosystemPolicy(osHandling, "warn"));
+
+      const { outputs } = await buildAgainst(root, policyPath);
+
+      const verdict = outputs.verdicts!.find(
+        (v) => v.purl === "pkg:deb/debian/sys-agpl@1.0.0",
+      );
+      expect(verdict?.status).toBe("fail");
+      expect(verdict?.rule).toBe("default:agpl-container");
+    }
+  });
+
+  test("a golang (application-ecosystem) AGPL package in a production container FAILS via the normal copyleft path (default:copyleft), not default:agpl-container", async () => {
+    const { root } = makeScannableTree();
+    writeSidecar(root, ECOSYSTEM_SIDECAR);
+    const policyPath = writePolicy(root, ecosystemPolicy("warn", "warn"));
+
+    const { outputs } = await buildAgainst(root, policyPath);
+
+    const verdict = outputs.verdicts!.find(
+      (v) => v.purl === "pkg:golang/go-agpl@1.0.0",
+    );
+    expect(verdict?.status).toBe("fail");
+    expect(verdict?.rule).toBe("default:copyleft");
+  });
+
+  test("the [[docker.development]] dead-pattern warning still fires per unmatched pattern; the resolved set drives BOTH the transform and the render from ONE resolution", async () => {
+    const { root } = makeScannableTree();
+    writeSidecar(root, ECOSYSTEM_SIDECAR);
+    const policyPath = writePolicy(
+      root,
+      [
+        "[unknown]",
+        'handling = "warn"',
+        "",
+        "[os_dependencies]",
+        'handling = "warn"',
+        "",
+        "[[docker.development]]",
+        'source = "dev/Dockerfile"',
+        'reason = "the dev image only runs local tooling"',
+        "",
+        "[[docker.development]]",
+        'source = "no/such/Dockerfile"',
+        'reason = "a typo — matches nothing"',
+        "",
+      ].join("\n"),
+    );
+
+    const { outputs, stderr } = await buildAgainst(root, policyPath);
+
+    expect(
+      stderr.includes(
+        'policy: [[docker.development]] "no/such/Dockerfile" matches no analyzed container image',
+      ),
+    ).toBe(true);
+
+    // The SAME resolved set dev-downgrades the transform's verdict AND
+    // classifies the render — one resolution, two consumers.
+    const devVerdict = outputs.verdicts!.find(
+      (v) =>
+        v.purl === "pkg:pypi/pip-copyleft@1.0.0" &&
+        v.occurrenceTarget === "docker:dev/Dockerfile",
+    );
+    expect(devVerdict?.status).toBe("warn");
+    expect(
+      squish(outputs.licensesMd).includes(
+        "| docker:dev/Dockerfile | development | 1 |",
+      ),
+    ).toBe(true);
+  });
+});
+
+// ===========================================================================
 // PolicyView.developmentContainers: the pipeline resolves each
 // [[docker.development]] glob against the analyzed container SOURCES using
 // the same globToRegExp matcher as [docker].ignore — anchored, `*` within a

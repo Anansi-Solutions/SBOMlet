@@ -322,11 +322,13 @@ function clarifyIndexFor(entry: PackageEntry, policy: Policy): number {
  * the LITERAL COULD_BE_COPYLEFT_FAMILIES token set — NOT a COPYLEFT_FAMILY
  * lookup, which is keyed by exact SPDX ids and returns undefined for a bare
  * family token (silently mis-classifying it as permissive):
- *   - os-scope AND family is the bare "AGPL" token → fail, rule
- *     "default:agpl-container" (checked first — the imprecise mirror of the
- *     elected-AGPL escalation in copyleftVerdict; a bare AGPL label could
- *     carry the same network-copyleft obligation and must never be parked at
- *     a warn).
+ *   - os-scope (a container SYSTEM package, the OS-ecosystem allowlist) AND
+ *     family is the bare "AGPL" token → fail, rule "default:agpl-container"
+ *     (checked first — the imprecise mirror of the elected-AGPL escalation
+ *     in copyleftVerdict; a bare AGPL label could carry the same
+ *     network-copyleft obligation and must never be parked at a warn). An
+ *     application-ecosystem container package is scope "app" here (re-keyed
+ *     upstream) and falls through to the next branch instead.
  *   - family IN the set (bare GPL/AGPL/LGPL) → flagged-for-review, a warn that
  *     surfaces, rule "default:imprecise-copyleft". Conservative: an imprecise
  *     copyleft family is never silently passed.
@@ -509,9 +511,13 @@ function applyDevScope(
  * Package-level os-scope downgrade, applied ONLY to a verdict that
  * would otherwise be a default FAIL (default:copyleft, or default:unknown when
  * unknownHandling="fail"). Keyed STRICTLY on the PACKAGE-level entry.scope ===
- * "os" (distinct from applyDevScope's occurrence-level isDevDependency):
+ * "os" (distinct from applyDevScope's occurrence-level isDevDependency) —
+ * the container re-scope transform (pipeline.ts) keeps this "os" iff the
+ * package is on the OS-ecosystem allowlist, so this check is now
+ * ecosystem-accurate: a container SYSTEM package, never an application
+ * dependency baked into an image:
  *   - an APP-scope package → the fail is returned UNCHANGED (the os knob never
- *     touches app dependencies).
+ *     touches app dependencies, container or not).
  *   - an OS-scope package branches on policy.osDependencies:
  *       "fail"   → no downgrade (an os-scope copyleft gates like an app one).
  *       "warn"   → status "warn", reason appends the auditable os-scope cause,
@@ -710,14 +716,16 @@ function unknownVerdict(
 }
 
 /**
- * Container AGPL escalation: an os-scope package whose ELECTED expression
- * carries an AGPL leaf is a REAL fail, never the routine os-downgraded warn
- * — network copyleft (AGPL section 13) applies to server-side container use,
- * so it must not be softened by os_dependencies="warn"/"ignore" the way
- * ordinary base-image GPL/LGPL is. Bypasses applyScopeDowngrades entirely
- * (both the os and dev lanes); the reason names the elected expression, the
- * container target, the network-interaction rationale, and the scoped
- * `[[compatible]]` remedy.
+ * Container AGPL escalation: an os-scope SYSTEM package (the OS-ecosystem
+ * allowlist — an application-ecosystem container package is re-keyed to
+ * scope "app" upstream and never reaches this branch) whose ELECTED
+ * expression carries an AGPL leaf is a REAL fail, never the routine
+ * os-downgraded warn — network copyleft (AGPL section 13) applies to
+ * server-side container use, so it must not be softened by
+ * os_dependencies="warn"/"ignore" the way ordinary base-image GPL/LGPL is.
+ * Bypasses applyScopeDowngrades entirely (both the os and dev lanes); the
+ * reason names the elected expression, the container target, the
+ * network-interaction rationale, and the scoped `[[compatible]]` remedy.
  */
 function agplContainerVerdict(
   base: { purl: string; occurrenceTarget: string },

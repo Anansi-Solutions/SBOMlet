@@ -8,6 +8,7 @@ import {
   type PackageEntry,
 } from "../src/model/dependencies";
 import { annotateFindings } from "../src/normalize/normalize";
+import { applyContainerScopes } from "../src/pipeline/containerScope";
 import { BUILTIN_OVERRIDES } from "../src/policy/builtinOverrides";
 import { evaluate } from "../src/policy/evaluate";
 import { parsePolicy, type Policy } from "../src/policy/schema";
@@ -196,7 +197,9 @@ const rawModel: CanonicalDependencies = {
  * [[docker.development]] glob against the analyzed container sources via the
  * REAL globToRegExp matcher — the same one [docker].ignore uses. Locks the
  * ignore-dialect semantics (`**` crosses segments) live, rather than
- * hand-asserting the resolved set.
+ * hand-asserting the resolved set. Occurrence-keyed (any scope), mirroring
+ * the pipeline's resolution — this runs BEFORE the container re-scope
+ * transform, on the still-"os"-scoped model.
  */
 function resolveDevelopmentContainersForTest(
   model: CanonicalDependencies,
@@ -204,7 +207,6 @@ function resolveDevelopmentContainersForTest(
 ): ReadonlySet<string> {
   const sources = new Set<string>();
   for (const pkg of model.packages) {
-    if (pkg.scope !== "os") continue;
     for (const occurrence of pkg.occurrences) {
       if (occurrence.target.startsWith(DOCKER_IDENTITY_PREFIX)) {
         sources.add(occurrence.target.slice(DOCKER_IDENTITY_PREFIX.length));
@@ -222,7 +224,12 @@ function resolveDevelopmentContainersForTest(
   return resolved;
 }
 
-/** Build the rendered document through the real engine, end to end. */
+/**
+ * Build the rendered document through the real engine, end to end — merge
+ * (via the hand-built model) -> annotate -> resolve the development set once
+ * -> the container re-scope transform -> evaluate -> render, the SAME order
+ * pipeline.ts#buildOutputs wires.
+ */
 function renderScenario(): string {
   const policy = parsePolicy(POLICY_TOML);
   const { model: annotated } = annotateFindings(
@@ -230,17 +237,19 @@ function renderScenario(): string {
     policy.clarify,
     BUILTIN_OVERRIDES,
   );
-  const verdicts = evaluate(annotated, policy);
+  const developmentContainers = resolveDevelopmentContainersForTest(
+    annotated,
+    policy,
+  );
+  const scoped = applyContainerScopes(annotated, developmentContainers);
+  const verdicts = evaluate(scoped, policy);
   const policyView: PolicyView = {
     policyPath: "policy.toml",
     suppressedWorkspaces: policy.suppressedWorkspaces,
     verdicts,
-    developmentContainers: resolveDevelopmentContainersForTest(
-      annotated,
-      policy,
-    ),
+    developmentContainers,
   };
-  return alignTables(renderMarkdown(annotated, policyView));
+  return alignTables(renderMarkdown(scoped, policyView));
 }
 
 function golden(name: string): string {
@@ -281,11 +290,35 @@ describe("containerReport — multi-container golden scenario", () => {
       ).toBe(false);
     });
 
-    test("the imprecise-AGPL container package is in Problematic and NOT in Copyleft", () => {
+    test("the imprecise-AGPL application-ecosystem package (a dev-marked container) warns via default:imprecise-copyleft — it is NOT a fail, so it never reaches Problematic", () => {
+      // Corrected routing: golang is an application ecosystem, not the
+      // OS-package allowlist, so relay-agent gates like an application
+      // dependency rather than the routine container AGPL escalation. Its
+      // imprecise "AGPL" family label routes through the normal
+      // could-be-copyleft review lane (a warn), never default:agpl-container.
+      const policy = parsePolicy(POLICY_TOML);
+      const { model: annotated } = annotateFindings(
+        rawModel,
+        policy.clarify,
+        BUILTIN_OVERRIDES,
+      );
+      const scoped = applyContainerScopes(
+        annotated,
+        resolveDevelopmentContainersForTest(annotated, policy),
+      );
+      const relayAgentVerdict = evaluate(scoped, policy).find(
+        (v) => v.purl === "pkg:golang/relay-agent@0.4.0",
+      );
+      expect(relayAgentVerdict?.status).toBe("warn");
+      expect(relayAgentVerdict?.rule).toBe("default:imprecise-copyleft");
+
       const doc = renderScenario();
       expect(
         section(doc, "## Problematic licenses").includes("relay-agent"),
-      ).toBe(true);
+      ).toBe(false);
+      // Not in the detailed Copyleft table either (that table is scoped to
+      // rule === "default:copyleft" exactly) — it surfaces in the dedicated
+      // Imprecise-licenses review section instead (asserted elsewhere).
       expect(
         section(doc, "## Copyleft and special notices").includes("relay-agent"),
       ).toBe(false);
