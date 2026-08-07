@@ -120,8 +120,32 @@ describe("applyContainerScopes — application ecosystems re-key to app", () => 
   });
 });
 
-describe("applyContainerScopes — an already-app package is left untouched", () => {
-  test("scope stays app; isDevDependency is never mutated (the shared-purl app-promotion case)", () => {
+describe("applyContainerScopes — an already-app package still dev-marks its docker occurrences", () => {
+  test("regression: a package merged to scope app via the shared-purl promotion (merge.ts) still dev-marks its docker occurrence when the container is development-marked — the scope-level fact is not a substitute for the per-occurrence one", () => {
+    const pkg: PackageEntry = {
+      purl: "pkg:npm/shared@1.0.0",
+      name: "shared",
+      version: "1.0.0",
+      occurrences: [
+        { target: "apps/web", isDevDependency: false },
+        { target: BUILD_CONTAINER, isDevDependency: false },
+      ],
+      licenseClaims: [],
+      scope: "app",
+    };
+    const result = applyContainerScopes(
+      { packages: [pkg] },
+      new Set([BUILD_CONTAINER]),
+    );
+    expect(result.packages[0]!.scope).toBe("app");
+    const [atApp, atBuild] = result.packages[0]!.occurrences;
+    expect(atApp!.target).toBe("apps/web");
+    expect(atApp!.isDevDependency).toBe(false);
+    expect(atBuild!.target).toBe(BUILD_CONTAINER);
+    expect(atBuild!.isDevDependency).toBe(true);
+  });
+
+  test("an already-dev occurrence and a non-development container are both left untouched, by reference", () => {
     const pkg: PackageEntry = {
       purl: "pkg:npm/shared@1.0.0",
       name: "shared",
@@ -130,11 +154,8 @@ describe("applyContainerScopes — an already-app package is left untouched", ()
       licenseClaims: [],
       scope: "app",
     };
-    const result = applyContainerScopes(
-      { packages: [pkg] },
-      new Set([BUILD_CONTAINER]),
-    );
-    expect(result.packages[0]).toEqual(pkg);
+    const result = applyContainerScopes({ packages: [pkg] }, new Set());
+    expect(result.packages[0]).toBe(pkg);
   });
 });
 

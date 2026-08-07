@@ -34,18 +34,18 @@ import {
 import { OS_PACKAGE_ECOSYSTEMS } from "../policy/osEcosystems";
 
 /**
- * Re-key `scope` and `isDevDependency` for every still-`"os"` package
- * against the OS-ecosystem allowlist and the resolved development-container
- * set. A package already scope "app" (the merge-time shared-purl promotion,
- * merge.ts) is left untouched — it already gates, and re-marking its
- * occurrences here would be a second, redundant lever for the same fact.
+ * Re-key `scope` for every still-`"os"` package against the OS-ecosystem
+ * allowlist, and dev-mark occurrences for every package that ends up scope
+ * "app" — whether re-keyed here or already "app" going in (the merge's
+ * shared-purl promotion, merge.ts): the docker collector never sets
+ * isDevDependency itself, so a shared package's docker occurrence has no
+ * other route to the [[docker.development]] marking.
  *
- * Per-occurrence honesty: for a re-keyed application-ecosystem package, only
- * the docker occurrences whose container identity is in
- * `developmentContainers` are marked `isDevDependency: true` — a package
- * shipped in both a production and a development-marked container keeps its
- * production occurrence gating and its development occurrence downgradable,
- * independently.
+ * Per-occurrence honesty: only the docker occurrences whose container
+ * identity is in `developmentContainers` are marked `isDevDependency: true`
+ * — a package shipped in both a production and a development-marked
+ * container keeps its production occurrence gating and its development
+ * occurrence downgradable, independently.
  */
 export function applyContainerScopes(
   model: CanonicalDependencies,
@@ -56,20 +56,36 @@ export function applyContainerScopes(
   };
 }
 
-/** Re-key one package; returns the SAME reference when nothing changes. */
+/**
+ * Re-key one package; returns the SAME reference when nothing changes.
+ *
+ * A package already scope "app" still reaches the per-occurrence dev-mark
+ * below (never re-keyed, never skipped): the merge's shared-purl promotion
+ * (merge.ts, app wins over os) settles scope BEFORE this transform runs, so
+ * a package that is a real workspace dependency AND also baked into a
+ * development-marked image would otherwise keep its docker occurrence's
+ * isDevDependency at the docker collector's always-false default — the
+ * scope-level "it already gates" fact says nothing about THIS occurrence,
+ * which has no other source of truth for the [[docker.development]] marking.
+ */
 function rescoped(
   pkg: PackageEntry,
   developmentContainers: ReadonlySet<string>,
 ): PackageEntry {
-  if (pkg.scope !== "os") return pkg;
-  if (OS_PACKAGE_ECOSYSTEMS.has(purlEcosystem(pkg.purl))) return pkg;
-  return {
-    ...pkg,
-    scope: "app",
-    occurrences: pkg.occurrences.map((occurrence) =>
-      rescopedOccurrence(occurrence, developmentContainers),
-    ),
-  };
+  if (
+    pkg.scope === "os" &&
+    OS_PACKAGE_ECOSYSTEMS.has(purlEcosystem(pkg.purl))
+  ) {
+    return pkg;
+  }
+  const occurrences = pkg.occurrences.map((occurrence) =>
+    rescopedOccurrence(occurrence, developmentContainers),
+  );
+  const occurrencesChanged = occurrences.some(
+    (occurrence, index) => occurrence !== pkg.occurrences[index],
+  );
+  if (pkg.scope === "app" && !occurrencesChanged) return pkg;
+  return { ...pkg, scope: "app", occurrences };
 }
 
 /**
