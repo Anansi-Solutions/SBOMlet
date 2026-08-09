@@ -1,6 +1,6 @@
 /**
- * Mirrors docs/reference/report-placement.md's Path index 1:1: one test per
- * slug below, plus a structural test asserting the correspondence holds exactly.
+ * Mirrors dependency-classification.md's and report-placement.md's Path
+ * index tables 1:1: one test per slug, asserting classification then placement.
  */
 
 import { readFileSync } from "node:fs";
@@ -22,6 +22,14 @@ import { alignTables } from "../src/render/alignTables";
 import { renderMarkdown, type PolicyView } from "../src/render/markdown";
 import { globToRegExp } from "../src/targets/discover";
 
+const DEPENDENCY_CLASSIFICATION_DOC = join(
+  import.meta.dir,
+  "..",
+  "docs",
+  "reference",
+  "dependency-classification.md",
+);
+
 const REPORT_PLACEMENT_DOC = join(
   import.meta.dir,
   "..",
@@ -30,7 +38,7 @@ const REPORT_PLACEMENT_DOC = join(
   "report-placement.md",
 );
 
-/** Every path documented in the Path index, verified below one test each. */
+/** Every path documented in both Path index tables, verified below one test each. */
 const PLACEMENT_PATHS = [
   "workspace-prod-permissive",
   "workspace-dev-only",
@@ -60,12 +68,29 @@ const PLACEMENT_PATHS = [
 
 type PlacementPath = (typeof PLACEMENT_PATHS)[number];
 
+/** The closing sentence every classification failure message shares. */
+const CLASSIFICATION_RESOLUTION =
+  "If the code broke the documented classification, fix the code; if the classification changed intentionally, update the doc and this suite in the same commit.";
+
 /** The closing sentence every placement/structural failure message shares. */
-const RESOLUTION =
+const PLACEMENT_RESOLUTION =
   "If the code broke the documented placement, fix the code; if the placement changed intentionally, update the doc and this suite in the same commit.";
 
+function classificationDivergence(slug: string, expectation: string): string {
+  return `classification path "${slug}" diverged from docs/reference/dependency-classification.md — ${expectation}. ${CLASSIFICATION_RESOLUTION}`;
+}
+
 function placementDivergence(slug: string, expectation: string): string {
-  return `placement path "${slug}" diverged from docs/reference/report-placement.md — ${expectation}. ${RESOLUTION}`;
+  return `placement path "${slug}" diverged from docs/reference/report-placement.md — ${expectation}. ${PLACEMENT_RESOLUTION}`;
+}
+
+/** Throws a classificationDivergence message naming `slug` when `condition` is false. */
+function assertClassification(
+  condition: boolean,
+  slug: string,
+  expectation: string,
+): void {
+  if (!condition) throw new Error(classificationDivergence(slug, expectation));
 }
 
 /** Throws a placementDivergence message naming `slug` when `condition` is false. */
@@ -77,16 +102,33 @@ function assertPlacement(
   if (!condition) throw new Error(placementDivergence(slug, expectation));
 }
 
+/** Structural (cross-page) drift: names which two id sets disagree, and how. */
+function assertStructural(
+  condition: boolean,
+  subject: string,
+  expectation: string,
+): void {
+  if (!condition) {
+    throw new Error(
+      `structural drift: ${subject} — ${expectation}. If the code broke the documented classification or placement, fix the code; if the split changed intentionally, update the affected doc(s) and this suite in the same commit.`,
+    );
+  }
+}
+
+function readDependencyClassificationDoc(): string {
+  return readFileSync(DEPENDENCY_CLASSIFICATION_DOC, "utf-8");
+}
+
 function readReportPlacementDoc(): string {
   return readFileSync(REPORT_PLACEMENT_DOC, "utf-8");
 }
 
-/** The `id` column of the doc's "## Path index" table, in row order. */
-function parseDocPathIndexIds(doc: string): Set<string> {
+/** The `id` column of a doc's "## Path index" table, in row order. */
+function parseDocPathIndexIds(doc: string, docLabel: string): Set<string> {
   const heading = "## Path index (verified end to end)";
   const start = doc.indexOf(heading);
   if (start === -1) {
-    throw new Error(`report-placement.md is missing its "${heading}" section`);
+    throw new Error(`${docLabel} is missing its "${heading}" section`);
   }
   const ids = new Set<string>();
   for (const row of doc.slice(start).split(/\r?\n/)) {
@@ -94,6 +136,28 @@ function parseDocPathIndexIds(doc: string): Set<string> {
     if (match?.[1] !== undefined) ids.add(match[1]);
   }
   return ids;
+}
+
+/** Every id in `a` missing from `b`, or vice versa, reported together as one failure. */
+function assertSlugSetsMatch(
+  a: ReadonlySet<string>,
+  aLabel: string,
+  b: ReadonlySet<string>,
+  bLabel: string,
+): void {
+  const aOnly = [...a].filter((id) => !b.has(id));
+  const bOnly = [...b].filter((id) => !a.has(id));
+  const subject = `${aLabel} vs ${bLabel}`;
+  assertStructural(
+    aOnly.length === 0,
+    subject,
+    `every ${aLabel} id must appear in ${bLabel}; ${aLabel}-only ids: [${aOnly.join(", ")}]`,
+  );
+  assertStructural(
+    bOnly.length === 0,
+    subject,
+    `every ${bLabel} id must appear in ${aLabel}; ${bLabel}-only ids: [${bOnly.join(", ")}]`,
+  );
 }
 
 // ===========================================================================
@@ -152,6 +216,7 @@ interface ScenarioInput {
 interface ScenarioResult {
   doc: string;
   verdicts: ReadonlyArray<Verdict>;
+  scoped: CanonicalDependencies;
 }
 
 /**
@@ -210,7 +275,59 @@ function buildScenario(
     developmentContainers,
     acceptedContainerNotices: acceptedContainerNotices(scoped, verdicts),
   };
-  return { doc: alignTables(renderMarkdown(scoped, policyView)), verdicts };
+  return {
+    doc: alignTables(renderMarkdown(scoped, policyView)),
+    verdicts,
+    scoped,
+  };
+}
+
+/** The post-transform scope of the package carrying `purl`, or undefined if absent. */
+function findScope(
+  scoped: CanonicalDependencies,
+  purl: string,
+): string | undefined {
+  return scoped.packages.find((pkg) => pkg.purl === purl)?.scope;
+}
+
+/** The verdict for one (purl, occurrenceTarget) pair, or undefined if absent. */
+function findVerdict(
+  verdicts: ReadonlyArray<Verdict>,
+  purl: string,
+  occurrenceTarget: string,
+): Verdict | undefined {
+  return verdicts.find(
+    (v) => v.purl === purl && v.occurrenceTarget === occurrenceTarget,
+  );
+}
+
+/**
+ * The classification half of a path: the package's post-transform scope, and
+ * the verdict status + rule at one occurrence — the primary contract, checked
+ * before any placement assertion.
+ */
+function assertClassificationOutcome(
+  scoped: CanonicalDependencies,
+  verdicts: ReadonlyArray<Verdict>,
+  purl: string,
+  occurrenceTarget: string,
+  slug: string,
+  expectedScope: string,
+  expectedStatus: string,
+  expectedRule: string,
+): void {
+  const scope = findScope(scoped, purl);
+  assertClassification(
+    scope === expectedScope,
+    slug,
+    `the package's post-transform scope is "${expectedScope}" (found "${scope ?? "none"}")`,
+  );
+  const verdict = findVerdict(verdicts, purl, occurrenceTarget);
+  assertClassification(
+    verdict?.status === expectedStatus && verdict.rule === expectedRule,
+    slug,
+    `the verdict at "${occurrenceTarget}" is "${expectedStatus}" via "${expectedRule}" (found "${verdict?.status ?? "none"}"/"${verdict?.rule ?? "none"}")`,
+  );
 }
 
 /** Slice one "## Heading" section out of the document, up to the next "## ". */
@@ -269,22 +386,27 @@ const DEV_CONTAINER_POLICY = [
 
 const SCENARIOS: Record<PlacementPath, () => void> = {
   "workspace-prod-permissive": () => {
-    const { doc } = buildScenario(
+    const slug = "workspace-prod-permissive";
+    const purl = "pkg:npm/permissive-lib@1.0.0";
+    const { doc, verdicts, scoped } = buildScenario(
       [
         {
           targetIdentity: WORKSPACE,
-          components: [
-            {
-              name: "permissive-lib",
-              purl: "pkg:npm/permissive-lib@1.0.0",
-              license: "MIT",
-            },
-          ],
+          components: [{ name: "permissive-lib", purl, license: "MIT" }],
         },
       ],
       UNKNOWN_WARN,
     );
-    const slug = "workspace-prod-permissive";
+    assertClassificationOutcome(
+      scoped,
+      verdicts,
+      purl,
+      WORKSPACE,
+      slug,
+      "app",
+      "ok",
+      "default:ok",
+    );
     assertPlacement(
       appTableOnly(doc, "## Production dependencies").includes(
         "permissive-lib",
@@ -308,23 +430,29 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
   },
 
   "workspace-dev-only": () => {
-    const { doc } = buildScenario(
+    const slug = "workspace-dev-only";
+    const purl = "pkg:npm/dev-only-lib@1.0.0";
+    const { doc, verdicts, scoped } = buildScenario(
       [
         {
           targetIdentity: WORKSPACE,
           components: [
-            {
-              name: "dev-only-lib",
-              purl: "pkg:npm/dev-only-lib@1.0.0",
-              license: "MIT",
-              dev: true,
-            },
+            { name: "dev-only-lib", purl, license: "MIT", dev: true },
           ],
         },
       ],
       UNKNOWN_WARN,
     );
-    const slug = "workspace-dev-only";
+    assertClassificationOutcome(
+      scoped,
+      verdicts,
+      purl,
+      WORKSPACE,
+      slug,
+      "app",
+      "ok",
+      "default:ok",
+    );
     assertPlacement(
       appTableOnly(doc, "## Development-only dependencies").includes(
         "dev-only-lib",
@@ -346,8 +474,9 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
   },
 
   "shared-workspace-and-container": () => {
+    const slug = "shared-workspace-and-container";
     const purl = "pkg:npm/shared-lib@2.0.0";
-    const { doc } = buildScenario(
+    const { doc, verdicts, scoped } = buildScenario(
       [
         {
           targetIdentity: WORKSPACE,
@@ -365,7 +494,16 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
       ],
       UNKNOWN_WARN,
     );
-    const slug = "shared-workspace-and-container";
+    assertClassificationOutcome(
+      scoped,
+      verdicts,
+      purl,
+      WORKSPACE,
+      slug,
+      "app",
+      "ok",
+      "default:ok",
+    );
     assertPlacement(
       appTableOnly(doc, "## Production dependencies").includes("shared-lib"),
       slug,
@@ -382,23 +520,28 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
   },
 
   "container-only-system": () => {
-    const { doc } = buildScenario(
+    const slug = "container-only-system";
+    const purl = "pkg:apk/alpine/system-pkg@1.0.0";
+    const { doc, verdicts, scoped } = buildScenario(
       [
         {
           targetIdentity: PROD_CONTAINER,
           scope: "os",
-          components: [
-            {
-              name: "system-pkg",
-              purl: "pkg:apk/alpine/system-pkg@1.0.0",
-              license: "MIT",
-            },
-          ],
+          components: [{ name: "system-pkg", purl, license: "MIT" }],
         },
       ],
       UNKNOWN_WARN,
     );
-    const slug = "container-only-system";
+    assertClassificationOutcome(
+      scoped,
+      verdicts,
+      purl,
+      PROD_CONTAINER,
+      slug,
+      "os",
+      "ok",
+      "default:ok",
+    );
     const { system } = containerPartition(
       containerSubsection(doc, PROD_CONTAINER),
     );
@@ -418,23 +561,28 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
   },
 
   "container-only-app-ecosystem": () => {
-    const { doc } = buildScenario(
+    const slug = "container-only-app-ecosystem";
+    const purl = "pkg:npm/baked-npm-lib@1.0.0";
+    const { doc, verdicts, scoped } = buildScenario(
       [
         {
           targetIdentity: PROD_CONTAINER,
           scope: "os",
-          components: [
-            {
-              name: "baked-npm-lib",
-              purl: "pkg:npm/baked-npm-lib@1.0.0",
-              license: "MIT",
-            },
-          ],
+          components: [{ name: "baked-npm-lib", purl, license: "MIT" }],
         },
       ],
       UNKNOWN_WARN,
     );
-    const slug = "container-only-app-ecosystem";
+    assertClassificationOutcome(
+      scoped,
+      verdicts,
+      purl,
+      PROD_CONTAINER,
+      slug,
+      "app",
+      "ok",
+      "default:ok",
+    );
     const { application } = containerPartition(
       containerSubsection(doc, PROD_CONTAINER),
     );
@@ -456,23 +604,28 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
   },
 
   "unrecognized-ecosystem-gates": () => {
-    const { doc } = buildScenario(
+    const slug = "unrecognized-ecosystem-gates";
+    const purl = "pkg:mystery-eco/mystery-pkg@1.0.0";
+    const { doc, verdicts, scoped } = buildScenario(
       [
         {
           targetIdentity: PROD_CONTAINER,
           scope: "os",
-          components: [
-            {
-              name: "mystery-pkg",
-              purl: "pkg:mystery-eco/mystery-pkg@1.0.0",
-              license: "GPL-3.0-only",
-            },
-          ],
+          components: [{ name: "mystery-pkg", purl, license: "GPL-3.0-only" }],
         },
       ],
       UNKNOWN_WARN,
     );
-    const slug = "unrecognized-ecosystem-gates";
+    assertClassificationOutcome(
+      scoped,
+      verdicts,
+      purl,
+      PROD_CONTAINER,
+      slug,
+      "app",
+      "fail",
+      "default:copyleft",
+    );
     assertPlacement(
       section(doc, "## Problematic licenses").includes("mystery-pkg"),
       slug,
@@ -489,32 +642,27 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
   },
 
   "system-copyleft-os-warn": () => {
-    const { doc, verdicts } = buildScenario(
+    const slug = "system-copyleft-os-warn";
+    const purl = "pkg:apk/alpine/gpl-tool@1.0.0";
+    const { doc, verdicts, scoped } = buildScenario(
       [
         {
           targetIdentity: PROD_CONTAINER,
           scope: "os",
-          components: [
-            {
-              name: "gpl-tool",
-              purl: "pkg:apk/alpine/gpl-tool@1.0.0",
-              license: "GPL-2.0-only",
-            },
-          ],
+          components: [{ name: "gpl-tool", purl, license: "GPL-2.0-only" }],
         },
       ],
       [UNKNOWN_WARN, "[os_dependencies]", 'handling = "warn"', ""].join("\n"),
     );
-    const slug = "system-copyleft-os-warn";
-    assertPlacement(
-      verdicts.some(
-        (v) =>
-          v.purl.includes("gpl-tool") &&
-          v.status === "warn" &&
-          v.rule === "default:copyleft",
-      ),
+    assertClassificationOutcome(
+      scoped,
+      verdicts,
+      purl,
+      PROD_CONTAINER,
       slug,
-      'os_dependencies = "warn" downgrades the system package\'s copyleft fail to a warn',
+      "os",
+      "warn",
+      "default:copyleft",
     );
     assertPlacement(
       !section(doc, "## Problematic licenses").includes("gpl-tool"),
@@ -537,27 +685,27 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
   },
 
   "system-copyleft-os-fail": () => {
-    const { doc, verdicts } = buildScenario(
+    const slug = "system-copyleft-os-fail";
+    const purl = "pkg:apk/alpine/gpl-tool@1.0.0";
+    const { doc, verdicts, scoped } = buildScenario(
       [
         {
           targetIdentity: PROD_CONTAINER,
           scope: "os",
-          components: [
-            {
-              name: "gpl-tool",
-              purl: "pkg:apk/alpine/gpl-tool@1.0.0",
-              license: "GPL-2.0-only",
-            },
-          ],
+          components: [{ name: "gpl-tool", purl, license: "GPL-2.0-only" }],
         },
       ],
       [UNKNOWN_WARN, "[os_dependencies]", 'handling = "fail"', ""].join("\n"),
     );
-    const slug = "system-copyleft-os-fail";
-    assertPlacement(
-      verdicts.some((v) => v.purl.includes("gpl-tool") && v.status === "fail"),
+    assertClassificationOutcome(
+      scoped,
+      verdicts,
+      purl,
+      PROD_CONTAINER,
       slug,
-      'os_dependencies = "fail" keeps the system package\'s copyleft verdict a fail',
+      "os",
+      "fail",
+      "default:copyleft",
     );
     assertPlacement(
       section(doc, "## Problematic licenses").includes("gpl-tool"),
@@ -567,27 +715,27 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
   },
 
   "system-copyleft-os-ignore": () => {
-    const { doc, verdicts } = buildScenario(
+    const slug = "system-copyleft-os-ignore";
+    const purl = "pkg:apk/alpine/gpl-tool@1.0.0";
+    const { doc, verdicts, scoped } = buildScenario(
       [
         {
           targetIdentity: PROD_CONTAINER,
           scope: "os",
-          components: [
-            {
-              name: "gpl-tool",
-              purl: "pkg:apk/alpine/gpl-tool@1.0.0",
-              license: "GPL-2.0-only",
-            },
-          ],
+          components: [{ name: "gpl-tool", purl, license: "GPL-2.0-only" }],
         },
       ],
       [UNKNOWN_WARN, "[os_dependencies]", 'handling = "ignore"', ""].join("\n"),
     );
-    const slug = "system-copyleft-os-ignore";
-    assertPlacement(
-      verdicts.some((v) => v.purl.includes("gpl-tool") && v.status === "ok"),
+    assertClassificationOutcome(
+      scoped,
+      verdicts,
+      purl,
+      PROD_CONTAINER,
       slug,
-      'os_dependencies = "ignore" downgrades the system package\'s copyleft verdict to ok',
+      "os",
+      "ok",
+      "default:copyleft",
     );
     assertPlacement(
       !section(doc, "## Problematic licenses").includes("gpl-tool") &&
@@ -606,23 +754,28 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
   },
 
   "system-agpl-escalates": () => {
-    const { doc } = buildScenario(
+    const slug = "system-agpl-escalates";
+    const purl = "pkg:apk/alpine/agpl-daemon@1.0.0";
+    const { doc, verdicts, scoped } = buildScenario(
       [
         {
           targetIdentity: PROD_CONTAINER,
           scope: "os",
-          components: [
-            {
-              name: "agpl-daemon",
-              purl: "pkg:apk/alpine/agpl-daemon@1.0.0",
-              license: "AGPL-3.0-only",
-            },
-          ],
+          components: [{ name: "agpl-daemon", purl, license: "AGPL-3.0-only" }],
         },
       ],
       [UNKNOWN_WARN, "[os_dependencies]", 'handling = "warn"', ""].join("\n"),
     );
-    const slug = "system-agpl-escalates";
+    assertClassificationOutcome(
+      scoped,
+      verdicts,
+      purl,
+      PROD_CONTAINER,
+      slug,
+      "os",
+      "fail",
+      "default:agpl-container",
+    );
     assertPlacement(
       section(doc, "## Problematic licenses").includes("agpl-daemon"),
       slug,
@@ -631,6 +784,8 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
   },
 
   "system-agpl-accepted-notice": () => {
+    const slug = "system-agpl-accepted-notice";
+    const purl = "pkg:apk/alpine/agpl-daemon@1.0.0";
     const policy = [
       UNKNOWN_WARN,
       "[[compatible]]",
@@ -640,23 +795,26 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
       'reason = "reviewed and accepted for this image"',
       "",
     ].join("\n");
-    const { doc, verdicts } = buildScenario(
+    const { doc, verdicts, scoped } = buildScenario(
       [
         {
           targetIdentity: PROD_CONTAINER,
           scope: "os",
-          components: [
-            {
-              name: "agpl-daemon",
-              purl: "pkg:apk/alpine/agpl-daemon@1.0.0",
-              license: "AGPL-3.0-only",
-            },
-          ],
+          components: [{ name: "agpl-daemon", purl, license: "AGPL-3.0-only" }],
         },
       ],
       policy,
     );
-    const slug = "system-agpl-accepted-notice";
+    assertClassificationOutcome(
+      scoped,
+      verdicts,
+      purl,
+      PROD_CONTAINER,
+      slug,
+      "os",
+      "ok",
+      "compatible[0]",
+    );
     const copyleft = section(doc, "## Copyleft and special notices");
     assertPlacement(
       copyleft.includes("agpl-daemon") &&
@@ -677,7 +835,9 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
   },
 
   "system-agpl-imprecise-escalates": () => {
-    const { doc } = buildScenario(
+    const slug = "system-agpl-imprecise-escalates";
+    const purl = "pkg:apk/alpine/relay-imprecise@1.0.0";
+    const { doc, verdicts, scoped } = buildScenario(
       [
         {
           targetIdentity: PROD_CONTAINER,
@@ -685,7 +845,7 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
           components: [
             {
               name: "relay-imprecise",
-              purl: "pkg:apk/alpine/relay-imprecise@1.0.0",
+              purl,
               licenseName: "GNU Affero General Public License",
             },
           ],
@@ -693,7 +853,16 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
       ],
       UNKNOWN_WARN,
     );
-    const slug = "system-agpl-imprecise-escalates";
+    assertClassificationOutcome(
+      scoped,
+      verdicts,
+      purl,
+      PROD_CONTAINER,
+      slug,
+      "os",
+      "fail",
+      "default:agpl-container",
+    );
     assertPlacement(
       section(doc, "## Problematic licenses").includes("relay-imprecise"),
       slug,
@@ -709,6 +878,8 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
   },
 
   "system-agpl-imprecise-accepted": () => {
+    const slug = "system-agpl-imprecise-accepted";
+    const purl = "pkg:apk/alpine/relay-imprecise@1.0.0";
     const policy = [
       UNKNOWN_WARN,
       "[[compatible]]",
@@ -718,7 +889,7 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
       'reason = "reviewed and accepted for this image"',
       "",
     ].join("\n");
-    const { doc } = buildScenario(
+    const { doc, verdicts, scoped } = buildScenario(
       [
         {
           targetIdentity: PROD_CONTAINER,
@@ -726,7 +897,7 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
           components: [
             {
               name: "relay-imprecise",
-              purl: "pkg:apk/alpine/relay-imprecise@1.0.0",
+              purl,
               licenseName: "GNU Affero General Public License",
             },
           ],
@@ -734,7 +905,16 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
       ],
       policy,
     );
-    const slug = "system-agpl-imprecise-accepted";
+    assertClassificationOutcome(
+      scoped,
+      verdicts,
+      purl,
+      PROD_CONTAINER,
+      slug,
+      "os",
+      "ok",
+      "compatible[0]",
+    );
     const copyleft = section(doc, "## Copyleft and special notices");
     assertPlacement(
       copyleft.includes("relay-imprecise") &&
@@ -757,6 +937,7 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
   },
 
   "mixed-agpl-fail-and-accept": () => {
+    const slug = "mixed-agpl-fail-and-accept";
     const purl = "pkg:apk/alpine/shared-agpl-daemon@1.0.0";
     const policy = [
       UNKNOWN_WARN,
@@ -767,7 +948,7 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
       'reason = "reviewed and accepted for this image only"',
       "",
     ].join("\n");
-    const { doc } = buildScenario(
+    const { doc, verdicts, scoped } = buildScenario(
       [
         {
           targetIdentity: PROD_CONTAINER,
@@ -786,7 +967,16 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
       ],
       policy,
     );
-    const slug = "mixed-agpl-fail-and-accept";
+    assertClassificationOutcome(
+      scoped,
+      verdicts,
+      purl,
+      PROD_CONTAINER,
+      slug,
+      "os",
+      "fail",
+      "default:agpl-container",
+    );
     assertPlacement(
       section(doc, "## Problematic licenses").includes("shared-agpl-daemon"),
       slug,
@@ -802,23 +992,28 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
   },
 
   "app-copyleft-prod-container": () => {
-    const { doc } = buildScenario(
+    const slug = "app-copyleft-prod-container";
+    const purl = "pkg:golang/metrics-tool@1.0.0";
+    const { doc, verdicts, scoped } = buildScenario(
       [
         {
           targetIdentity: PROD_CONTAINER,
           scope: "os",
-          components: [
-            {
-              name: "metrics-tool",
-              purl: "pkg:golang/metrics-tool@1.0.0",
-              license: "GPL-3.0-only",
-            },
-          ],
+          components: [{ name: "metrics-tool", purl, license: "GPL-3.0-only" }],
         },
       ],
       UNKNOWN_WARN,
     );
-    const slug = "app-copyleft-prod-container";
+    assertClassificationOutcome(
+      scoped,
+      verdicts,
+      purl,
+      PROD_CONTAINER,
+      slug,
+      "app",
+      "fail",
+      "default:copyleft",
+    );
     assertPlacement(
       section(doc, "## Problematic licenses").includes("metrics-tool"),
       slug,
@@ -835,23 +1030,30 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
   },
 
   "app-copyleft-dev-container": () => {
-    const { doc } = buildScenario(
+    const slug = "app-copyleft-dev-container";
+    const purl = "pkg:npm/dev-tool-lib@1.0.0";
+    const { doc, verdicts, scoped } = buildScenario(
       [
         {
           targetIdentity: DEV_CONTAINER,
           scope: "os",
           components: [
-            {
-              name: "dev-tool-lib",
-              purl: "pkg:npm/dev-tool-lib@1.0.0",
-              license: "LGPL-2.1-or-later",
-            },
+            { name: "dev-tool-lib", purl, license: "LGPL-2.1-or-later" },
           ],
         },
       ],
       DEV_CONTAINER_POLICY,
     );
-    const slug = "app-copyleft-dev-container";
+    assertClassificationOutcome(
+      scoped,
+      verdicts,
+      purl,
+      DEV_CONTAINER,
+      slug,
+      "app",
+      "warn",
+      "default:copyleft",
+    );
     assertPlacement(
       section(doc, "## Copyleft and special notices").includes("dev-tool-lib"),
       slug,
@@ -867,14 +1069,16 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
   },
 
   "app-copyleft-workspace-dev": () => {
-    const { doc } = buildScenario(
+    const slug = "app-copyleft-workspace-dev";
+    const purl = "pkg:npm/doc-tool@1.0.0";
+    const { doc, verdicts, scoped } = buildScenario(
       [
         {
           targetIdentity: WORKSPACE,
           components: [
             {
               name: "doc-tool",
-              purl: "pkg:npm/doc-tool@1.0.0",
+              purl,
               license: "LGPL-2.1-or-later",
               dev: true,
             },
@@ -883,7 +1087,16 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
       ],
       UNKNOWN_WARN,
     );
-    const slug = "app-copyleft-workspace-dev";
+    assertClassificationOutcome(
+      scoped,
+      verdicts,
+      purl,
+      WORKSPACE,
+      slug,
+      "app",
+      "warn",
+      "default:copyleft",
+    );
     assertPlacement(
       section(doc, "## Copyleft and special notices").includes("doc-tool"),
       slug,
@@ -904,22 +1117,29 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
   },
 
   "problematic-dedup-keeps-inventory": () => {
-    const { doc } = buildScenario(
+    const slug = "problematic-dedup-keeps-inventory";
+    const purl = "pkg:npm/prod-copyleft@1.0.0";
+    const { doc, verdicts, scoped } = buildScenario(
       [
         {
           targetIdentity: WORKSPACE,
           components: [
-            {
-              name: "prod-copyleft",
-              purl: "pkg:npm/prod-copyleft@1.0.0",
-              license: "GPL-3.0-only",
-            },
+            { name: "prod-copyleft", purl, license: "GPL-3.0-only" },
           ],
         },
       ],
       UNKNOWN_WARN,
     );
-    const slug = "problematic-dedup-keeps-inventory";
+    assertClassificationOutcome(
+      scoped,
+      verdicts,
+      purl,
+      WORKSPACE,
+      slug,
+      "app",
+      "fail",
+      "default:copyleft",
+    );
     assertPlacement(
       section(doc, "## Problematic licenses").includes("prod-copyleft"),
       slug,
@@ -940,22 +1160,27 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
   },
 
   "imprecise-copyleft-family-only-imprecise": () => {
-    const { doc } = buildScenario(
+    const slug = "imprecise-copyleft-family-only-imprecise";
+    const purl = "pkg:npm/bare-gpl-lib@1.0.0";
+    const { doc, verdicts, scoped } = buildScenario(
       [
         {
           targetIdentity: WORKSPACE,
-          components: [
-            {
-              name: "bare-gpl-lib",
-              purl: "pkg:npm/bare-gpl-lib@1.0.0",
-              licenseName: "GPL",
-            },
-          ],
+          components: [{ name: "bare-gpl-lib", purl, licenseName: "GPL" }],
         },
       ],
       UNKNOWN_WARN,
     );
-    const slug = "imprecise-copyleft-family-only-imprecise";
+    assertClassificationOutcome(
+      scoped,
+      verdicts,
+      purl,
+      WORKSPACE,
+      slug,
+      "app",
+      "warn",
+      "default:imprecise-copyleft",
+    );
     assertPlacement(
       section(doc, "## Imprecise licenses (review / disambiguate)").includes(
         "bare-gpl-lib",
@@ -971,22 +1196,27 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
   },
 
   "imprecise-permissive-family": () => {
-    const { doc } = buildScenario(
+    const slug = "imprecise-permissive-family";
+    const purl = "pkg:npm/bare-bsd-lib@1.0.0";
+    const { doc, verdicts, scoped } = buildScenario(
       [
         {
           targetIdentity: WORKSPACE,
-          components: [
-            {
-              name: "bare-bsd-lib",
-              purl: "pkg:npm/bare-bsd-lib@1.0.0",
-              licenseName: "BSD",
-            },
-          ],
+          components: [{ name: "bare-bsd-lib", purl, licenseName: "BSD" }],
         },
       ],
       UNKNOWN_WARN,
     );
-    const slug = "imprecise-permissive-family";
+    assertClassificationOutcome(
+      scoped,
+      verdicts,
+      purl,
+      WORKSPACE,
+      slug,
+      "app",
+      "warn",
+      "default:imprecise",
+    );
     assertPlacement(
       section(doc, "## Imprecise licenses (review / disambiguate)").includes(
         "bare-bsd-lib",
@@ -1004,18 +1234,27 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
   },
 
   "unknown-license-counted": () => {
-    const { doc } = buildScenario(
+    const slug = "unknown-license-counted";
+    const purl = "pkg:npm/unknown-lib@1.0.0";
+    const { doc, verdicts, scoped } = buildScenario(
       [
         {
           targetIdentity: WORKSPACE,
-          components: [
-            { name: "unknown-lib", purl: "pkg:npm/unknown-lib@1.0.0" },
-          ],
+          components: [{ name: "unknown-lib", purl }],
         },
       ],
       UNKNOWN_WARN,
     );
-    const slug = "unknown-license-counted";
+    assertClassificationOutcome(
+      scoped,
+      verdicts,
+      purl,
+      WORKSPACE,
+      slug,
+      "app",
+      "warn",
+      "default:unknown",
+    );
     assertPlacement(
       doc.includes("- Unknown license: 1"),
       slug,
@@ -1029,6 +1268,8 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
   },
 
   "suppressed-workspace-copyleft": () => {
+    const slug = "suppressed-workspace-copyleft";
+    const purl = "pkg:npm/gpl-inside-agpl-workspace@1.0.0";
     const suppressedWorkspace = "libs/shared";
     const policy = [
       UNKNOWN_WARN,
@@ -1038,14 +1279,14 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
       'description = "the workspace itself is AGPL-3.0-only, absorbing its bundled GNU-family dependencies"',
       "",
     ].join("\n");
-    const { doc, verdicts } = buildScenario(
+    const { doc, verdicts, scoped } = buildScenario(
       [
         {
           targetIdentity: suppressedWorkspace,
           components: [
             {
               name: "gpl-inside-agpl-workspace",
-              purl: "pkg:npm/gpl-inside-agpl-workspace@1.0.0",
+              purl,
               license: "GPL-3.0-only",
             },
           ],
@@ -1053,15 +1294,15 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
       ],
       policy,
     );
-    const slug = "suppressed-workspace-copyleft";
-    assertPlacement(
-      verdicts.some(
-        (v) =>
-          v.purl.includes("gpl-inside-agpl-workspace") &&
-          v.status === "suppressed",
-      ),
+    assertClassificationOutcome(
+      scoped,
+      verdicts,
+      purl,
+      suppressedWorkspace,
       slug,
-      "a family-justified workspace copyleft suppression status is suppressed, not fail or warn",
+      "app",
+      "suppressed",
+      "workspace.copyleft_suppressed[0]",
     );
     const copyleft = section(doc, "## Copyleft and special notices");
     assertPlacement(
@@ -1078,6 +1319,8 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
   },
 
   "denied-license-terminal": () => {
+    const slug = "denied-license-terminal";
+    const purl = "pkg:npm/denied-pkg@1.0.0";
     const policy = [
       UNKNOWN_WARN,
       "[[deny]]",
@@ -1091,31 +1334,24 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
       'reason = "would otherwise accept it"',
       "",
     ].join("\n");
-    const { doc, verdicts } = buildScenario(
+    const { doc, verdicts, scoped } = buildScenario(
       [
         {
           targetIdentity: WORKSPACE,
-          components: [
-            {
-              name: "denied-pkg",
-              purl: "pkg:npm/denied-pkg@1.0.0",
-              license: "MIT",
-            },
-          ],
+          components: [{ name: "denied-pkg", purl, license: "MIT" }],
         },
       ],
       policy,
     );
-    const slug = "denied-license-terminal";
-    assertPlacement(
-      verdicts.some(
-        (v) =>
-          v.purl.includes("denied-pkg") &&
-          v.status === "fail" &&
-          v.rule.startsWith("denied["),
-      ),
+    assertClassificationOutcome(
+      scoped,
+      verdicts,
+      purl,
+      WORKSPACE,
       slug,
-      "a [[deny]] match fails even though a [[compatible]] rule would otherwise have accepted it (deny is terminal)",
+      "app",
+      "fail",
+      "denied[0]",
     );
     assertPlacement(
       section(doc, "## Problematic licenses").includes("denied-pkg"),
@@ -1125,23 +1361,28 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
   },
 
   "system-package-in-dev-container-counts-dev": () => {
-    const { doc } = buildScenario(
+    const slug = "system-package-in-dev-container-counts-dev";
+    const purl = "pkg:apk/alpine/sys-in-dev-container@1.0.0";
+    const { doc, verdicts, scoped } = buildScenario(
       [
         {
           targetIdentity: DEV_CONTAINER,
           scope: "os",
-          components: [
-            {
-              name: "sys-in-dev-container",
-              purl: "pkg:apk/alpine/sys-in-dev-container@1.0.0",
-              license: "MIT",
-            },
-          ],
+          components: [{ name: "sys-in-dev-container", purl, license: "MIT" }],
         },
       ],
       DEV_CONTAINER_POLICY,
     );
-    const slug = "system-package-in-dev-container-counts-dev";
+    assertClassificationOutcome(
+      scoped,
+      verdicts,
+      purl,
+      DEV_CONTAINER,
+      slug,
+      "os",
+      "ok",
+      "default:ok",
+    );
     assertPlacement(
       doc.includes("- Development-only packages: 1") &&
         doc.includes("- Production packages: 0"),
@@ -1158,26 +1399,54 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
   },
 };
 
-describe("report placement — Path index structural sync", () => {
-  test("PLACEMENT_PATHS and the doc's Path index table cover the exact same slugs", () => {
-    const docIds = parseDocPathIndexIds(readReportPlacementDoc());
-    const testIds = new Set<string>(PLACEMENT_PATHS);
-    const docOnly = [...docIds].filter((id) => !testIds.has(id));
-    const testOnly = [...testIds].filter((id) => !docIds.has(id));
-    assertPlacement(
-      docOnly.length === 0,
-      docOnly[0] ?? "(none)",
-      `every doc row must have a matching test; doc-only ids with no test: [${docOnly.join(", ")}]`,
+describe("dependency classification and report placement — Path index structural sync", () => {
+  test("dependency-classification.md's Path index matches the suite", () => {
+    const classificationIds = parseDocPathIndexIds(
+      readDependencyClassificationDoc(),
+      "dependency-classification.md",
     );
-    assertPlacement(
-      testOnly.length === 0,
-      testOnly[0] ?? "(none)",
-      `every test must have a matching doc row; test-only ids with no doc row: [${testOnly.join(", ")}]`,
+    const testIds = new Set<string>(PLACEMENT_PATHS);
+    assertSlugSetsMatch(
+      classificationIds,
+      "dependency-classification.md",
+      testIds,
+      "the suite (PLACEMENT_PATHS)",
+    );
+  });
+
+  test("report-placement.md's Path index matches the suite", () => {
+    const placementIds = parseDocPathIndexIds(
+      readReportPlacementDoc(),
+      "report-placement.md",
+    );
+    const testIds = new Set<string>(PLACEMENT_PATHS);
+    assertSlugSetsMatch(
+      placementIds,
+      "report-placement.md",
+      testIds,
+      "the suite (PLACEMENT_PATHS)",
+    );
+  });
+
+  test("dependency-classification.md and report-placement.md carry the same slug set", () => {
+    const classificationIds = parseDocPathIndexIds(
+      readDependencyClassificationDoc(),
+      "dependency-classification.md",
+    );
+    const placementIds = parseDocPathIndexIds(
+      readReportPlacementDoc(),
+      "report-placement.md",
+    );
+    assertSlugSetsMatch(
+      classificationIds,
+      "dependency-classification.md",
+      placementIds,
+      "report-placement.md",
     );
   });
 });
 
-describe("report placement — Path index E2E (1:1 with docs/reference/report-placement.md)", () => {
+describe("dependency classification and report placement — Path index E2E", () => {
   for (const path of PLACEMENT_PATHS) {
     test(path, () => {
       SCENARIOS[path]();

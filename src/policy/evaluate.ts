@@ -55,6 +55,9 @@
  * substring-matched), suppression paths match segment-aware
  * (`target === path || target.startsWith(path + "/")`), and every verdict
  * carries a machine-readable rule id plus a reason naming the deciding input.
+ *
+ * The normative decision tree is docs/reference/dependency-classification.md
+ * — update both together.
  */
 import parseSpdx from "spdx-expression-parse";
 import satisfies from "spdx-satisfies";

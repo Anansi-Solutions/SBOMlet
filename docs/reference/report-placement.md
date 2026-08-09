@@ -1,129 +1,30 @@
 # Report placement
 
-This page is for the renderer, the policy engine, and anyone changing either. It
-is the normative placement specification for `THIRD_PARTY_LICENSES.md` — for any
-[package entry](../glossary.md#package-entry), exactly where its row lands and
-why. `src/render/markdown.ts`, the policy engine's section-relevant routing, and
-the placement tests all follow it; a behavior change to any of them updates this
-page in the same commit. Each path in the Path index below is verified
-one-to-one by `test/reportPlacement.test.ts`; the page, the suite, and the
-implementation change together.
+This page is for the renderer and anyone changing it. It is the normative
+placement specification for `THIRD_PARTY_LICENSES.md` — for any
+[package entry](../glossary.md#package-entry), exactly where its row lands
+and why, given the scope and verdict
+[dependency-classification.md](./dependency-classification.md) already
+decided. `src/render/markdown.ts` and the placement tests follow it; a
+behavior change to it updates this page in the same commit. Each path in the
+Path index below is verified one-to-one by `test/reportPlacement.test.ts`,
+alongside its classification counterpart in
+[dependency-classification.md](./dependency-classification.md); the page,
+the suite, and the implementation change together.
 
-Placement is three questions, asked in order: what kind of package is this
-([scope](../glossary.md#scope-app-and-os)), what does policy say about it (a
-[verdict](../glossary.md#verdict)), and which section does that scope and
-verdict route it to. This page answers each in turn, then closes with the
-invariants that must hold regardless.
+These are the placement rules for the markdown report
+(`THIRD_PARTY_LICENSES.md`) only. Classification — a package's scope and its
+policy verdict — is decided upstream, in
+[dependency-classification.md](./dependency-classification.md); a future
+output format (a JSON export, say) would define its own placement page
+against that same classification tree, not this one.
 
-## Stage 1 — classification
+Placement is one question, asked after classification already answered scope
+and verdict: given a package's scope and verdict, which section does it land
+in? This page answers that, then closes with the invariants that must hold
+regardless.
 
-Every package gets a scope, `app` or `os`. Every docker occurrence
-independently gets a development marker. Two questions decide scope; a third,
-unrelated one decides the marker.
-
-- **Does the package have a workspace (non-`docker:`) occurrence?**
-  - Yes → scope `app`. If the same [purl](../glossary.md#purl) is *also* found
-    baked into an image, the merge promotes that docker occurrence to `app`
-    too, even though the docker collector stamps every docker input `os` at
-    intake — app always wins over os on a shared purl.
-  - No (every occurrence is a docker occurrence) → the purl's ecosystem
-    decides:
-    - Ecosystem on the OS allowlist (`deb`, `apk`, `rpm`, `alpm`) → scope
-      `os`, a system package.
-    - Any other ecosystem, recognized or not → scope `app`, an application
-      dependency an application layer installed into the image. An
-      unrecognized ecosystem lands here too: the allowlist fails safe.
-
-```mermaid
-flowchart TD
-    A["Package has a workspace<br/>(non-docker:) occurrence?"] -->|yes| B["scope: app<br/>(a shared docker occurrence is promoted too)"]
-    A -->|no, container-only| C{"purl ecosystem on the<br/>OS allowlist (deb/apk/rpm/alpm)?"}
-    C -->|yes| D["scope: os<br/>(system package)"]
-    C -->|no| E["scope: app<br/>(application dependency in the image)"]
-```
-
-- **Is a docker occurrence's container marked `[[docker.development]]`?** This
-  sets that occurrence's development marker (`isDevDependency: true`) — but
-  only on a package that ends up scope `app`: a re-scoped application-ecosystem
-  package, or a package shared with a workspace. A genuine system package
-  (stays `os`) is never development-marked, whatever its container's
-  classification; `[os_dependencies]` (Stage 2) is its only downgrade lever. A
-  workspace occurrence's development marker comes from its own lockfile or
-  manifest signal instead, unrelated to any container.
-
-The `docker:` occurrence-identity namespace is merge-reserved: a workspace
-target that would mint one fails the run instead of silently colliding with it.
-
-Source: `src/merge/merge.ts` (`mergeInto`, `assertNotReservedIdentity`),
-`src/pipeline/pipeline.ts` (`readCommittedDockerSbom`),
-`src/pipeline/containerScope.ts` (`applyContainerScopes`),
-`src/policy/osEcosystems.ts` (`OS_PACKAGE_ECOSYSTEMS`).
-
-## Stage 2 — verdict routing
-
-The policy engine decides one verdict per (package × occurrence). Precedence,
-highest to lowest:
-
-1. **Deny** — a `[[deny]]` match, or a shipped source-available default: fail,
-   unless the consumer exempted that exact license via
-   `[[allow_source_available]]` (then a warn instead). Terminal: nothing below
-   can license a denied finding back in.
-2. **A stale override** — an override's precondition no longer matches what's
-   observed: fail.
-3. **An assessment conflict** — the in-depth scan disagrees with the
-   declared/registry quick check: fail. This is the sole trigger for the
-   Assessment conflicts section below, independent of everything that follows.
-4. **A `[[compatible]]` package or license rule** — ok. (`[[clarify]]` isn't a
-   tier of its own here: it rewrites the finding *before* this precedence walk
-   runs, so a clarified package falls through the same lanes as any other
-   finding. One that clears every lane below cites `clarify[i]` at the
-   default-ok tier instead of a bare `default:ok`.)
-5. **The copyleft lane** — entered only when the elected SPDX branch is
-   copyleft. The tree below.
-6. **The imprecise-family lane** — entered when the finding names only a
-   family, with no elected expression.
-7. **The unknown lane** — entered when the finding has no expression and isn't
-   imprecise: follows `[unknown]` handling (`warn` or `fail`).
-8. **Default: ok.**
-
-### The copyleft lane
-
-- A family-justified workspace copyleft suppression (the occurrence sits under
-  the suppressed path, and the elected copyleft is absorbed by that
-  workspace's own declared license family) → `suppressed`. Checked *before*
-  the AGPL check below, ahead of every scope — in practice this only matters
-  for a workspace-identity occurrence, since a suppression path is authored
-  against workspace paths, not `docker:` ones.
-- Otherwise, scope `os` and the elected expression carries an AGPL leaf → fail
-  `default:agpl-container`, checked before the os downgrade so
-  `[os_dependencies]` can never soften it. The practical accept path is a
-  `[[compatible]]` rule (tier 4 above — it never even reaches this lane); that
-  acceptance records an accepted-container notice (Stage 3).
-- Otherwise, scope `os`, any other copyleft → would-be fail
-  `default:copyleft`, then `[os_dependencies]`: `fail` stays fail, `warn`
-  downgrades to warn with the rule id preserved, `ignore` downgrades to ok.
-- Otherwise, scope `app` → fail `default:copyleft`; a development occurrence
-  then downgrades per `[dev_dependencies]` (`warn`, `ignore`, or stays `fail`).
-
-### The imprecise-family lane
-
-- Scope `os` and the family is the bare `AGPL` token → fail
-  `default:agpl-container` (the same escalation as the precise case).
-- Family is a could-be-copyleft token (bare `GPL`, `AGPL`, `LGPL`) → warn
-  `default:imprecise-copyleft`.
-- Any other family (a known-permissive one like bare `BSD`) → warn
-  `default:imprecise`.
-
-### The unknown lane
-
-Follows `[unknown]` handling; a `fail` result applies the same os/development
-downgrades as the copyleft default does.
-
-Source: `src/policy/evaluate.ts` (`verdictFor`, `copyleftVerdict`,
-`impreciseVerdict`, `unknownVerdict`, `acceptedContainerNotices`),
-`src/policy/copyleft.ts` (`AGPL_IDS`).
-
-## Stage 3 — section placement
+## Section placement
 
 `renderMarkdown` places every package into two different kinds of section, in
 this fixed order: package counts, Problematic licenses (policy run only),
@@ -154,9 +55,11 @@ page states only where a package lands.
   excluded by scope alone, regardless of its verdict. Acceptance via
   `[[compatible]]` keeps a package out of the flagged rows for every
   ecosystem and scope, because an accepted occurrence never reaches the
-  copyleft lane at all (Stage 2, tier 4 decides first); the accepted-notice
-  mechanism above exists only for the one case that would otherwise fail
-  unconditionally, the container-system AGPL escalation.
+  copyleft lane at all
+  ([dependency-classification.md](./dependency-classification.md), tier 4
+  decides first); the accepted-notice mechanism above exists only for the one
+  case that would otherwise fail unconditionally, the container-system AGPL
+  escalation.
 - **Imprecise licenses** — every package whose finding is imprecise,
   unconditionally, independent of its verdict. This overlaps the sections
   above by design: a bare-`AGPL` system package that fails
@@ -196,8 +99,10 @@ page states only where a package lands.
   counts development-only when it has no occurrence in a production-classified
   container *and* is either a pure-container package or has every occurrence
   marked development. That second clause is what lets a system package —
-  never development-marked itself, per Stage 1 — still count development-only
-  when its only container is `[[docker.development]]`-marked.
+  never development-marked itself, per
+  [dependency-classification.md](./dependency-classification.md) — still
+  count development-only when its only container is
+  `[[docker.development]]`-marked.
 - Container packages (any docker occurrence) and Unknown license are
   cross-cutting subtotals, not a third slice of the partition — a package can
   be counted in either in addition to its Production or Development-only
@@ -216,13 +121,16 @@ helpers).
   absent.
 - Routine system copyleft (anything but AGPL) appears only under its
   container, never in the Copyleft section.
-- Deny is terminal.
-- An unrecognized purl ecosystem gates as an application dependency — the OS
-  allowlist fails safe.
 - The report is byte-deterministic: fixed section order, stable sorts
   throughout.
 
 ## Path index (verified end to end)
+
+The same 24 paths as
+[dependency-classification.md](./dependency-classification.md#path-index-verified-end-to-end),
+one row each, stating where the package lands in the markdown report instead
+of its Stage-1/Stage-2 outcome — the two tables share one slug set, verified
+by the same suite (`test/reportPlacement.test.ts`).
 
 | id | given | lands |
 | --- | --- | --- |

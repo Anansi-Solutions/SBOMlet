@@ -46,6 +46,9 @@ import { OS_PACKAGE_ECOSYSTEMS } from "../policy/osEcosystems";
  * — a package shipped in both a production and a development-marked
  * container keeps its production occurrence gating and its development
  * occurrence downgradable, independently.
+ *
+ * The normative decision tree is docs/reference/dependency-classification.md
+ * — update both together.
  */
 export function applyContainerScopes(
   model: CanonicalDependencies,

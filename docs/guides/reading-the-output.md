@@ -35,9 +35,10 @@ where to look. From the top:
 | `## Production dependencies` | The full inventory of everything you ship, including each production container's packages |
 | `## Development-only dependencies` | The full inventory of build- and test-time-only packages, including each development container's packages |
 
-For the exact decision tree behind where a package lands — which scope, which
-verdict, which section — see the normative
-[report-placement.md](../reference/report-placement.md) reference.
+For exactly where a package lands in this document, see the normative
+[report-placement.md](../reference/report-placement.md) reference; for why it
+got that verdict in the first place — its scope and policy routing — see
+[dependency-classification.md](../reference/dependency-classification.md).
 
 The header is a comment that names the regenerate command instead of a date.
 There is no timestamp anywhere in the file. A date would change on every run, and

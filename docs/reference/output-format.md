@@ -4,8 +4,10 @@ Reference for everything the tool writes. For an operator regenerating the
 inventory, for a policy author or compliance reviewer reading it, and for a
 contributor changing the renderers.
 
-For the section-by-section placement rules — which scope, which verdict,
-which section — see [report-placement.md](./report-placement.md).
+For how a package gets its scope and verdict, see
+[dependency-classification.md](./dependency-classification.md); for which
+section that scope and verdict route it to, see
+[report-placement.md](./report-placement.md).
 
 `check` writes nothing; it regenerates these artifacts in memory and compares
 them byte-for-byte against the committed files. `generate` writes them:
@@ -93,13 +95,10 @@ A bullet list: the total, then one line per ecosystem (`npm`, `pypi`, `deb`,
 - Unknown license: 502
 ```
 
-Production and Development-only partition the total: every package is one or
-the other. A package is
-[development-only](../glossary.md#development-only-and-production) when every
-[occurrence](../glossary.md#occurrence) is a dev dependency or is inside a
-development-marked container; any production occurrence — including one
-inside a container that isn't marked development — makes the whole package
-production. Container and Unknown license are cross-cutting subtotals, not a
+Production and Development-only partition the total exactly, every package
+one or the other; the exact partition predicate is placement, normatively
+defined in [report-placement.md](./report-placement.md#counts). Container and
+Unknown license are cross-cutting subtotals, not a
 third slice of that partition: a package can also be counted in either, in
 addition to its Production or Development-only bucket. Container counts every
 package with at least one occurrence inside a scanned container; which
@@ -136,14 +135,12 @@ variations:
   deduplicated raw [license claims](../glossary.md#license-claim) joined with
   commas.
 
-A package that comes only from a container's own image scan never rows in these
-two tables — it rows in its container's own subsection instead, see
-[Containers](#containers) below. An application package that also ships inside a
-scanned image keeps its row here AND rows again in that image's container
-subsection — the two views answer different questions (what does this
-workspace depend on, versus what does this image contain) and both stay
-complete. Lockfile-only scans that were never enriched will show `unknown` in
-the License column; that is correct pre-annotation behavior, not a defect.
+Which packages row in these two tables versus a container's own subsection —
+including a package that ships both ways — is placement, normatively defined
+in [report-placement.md](./report-placement.md#section-placement); see
+[Containers](#containers) below for the container-subsection shape. Lockfile-only
+scans that were never enriched will show `unknown` in the License column;
+that is correct pre-annotation behavior, not a defect.
 
 A container occurrence's target takes the form `docker:<source>`: the
 Dockerfile's repo-relative path for an image the tool built
@@ -167,10 +164,10 @@ regardless of whether the run used a policy. One row per analyzed container:
 A container classifies `development` when a policy [`[[docker.development]]`](policy.md#docker)
 entry's `source` glob matches its identity; every other container classifies
 `production`, the conservative default — a run with no policy, or with no
-`[[docker.development]]` entries, marks every container production. The
-classification decides only where a container's packages are listed, Production
-or Development-only, never a verdict: a container's licence obligations gate the
-same way regardless of this marking.
+`[[docker.development]]` entries, marks every container production. Whether,
+and how, this classification affects a package's verdict is classification,
+normatively defined in
+[dependency-classification.md](./dependency-classification.md).
 
 Each classified half then carries one `### Container: docker:<source>`
 subsection per container, right after that half's app table. A container's
@@ -189,11 +186,12 @@ with no Used-in column since every row is already scoped to that one image:
 | Name, Ecosystem, Version, License | as in the summary tables |
 
 A table with no rows is omitted entirely, so a base-image-only container shows
-just System packages and vice versa. A package present in several containers
-rows once per container, in each one's own subsection, on whichever side of
-the split its ecosystem puts it. There is no standalone Docker section any
-more: every container package is listed exactly once per container it occurs
-in, folded under Production or Development-only by that container's
+just System packages and vice versa. Which container subsection(s) a package
+rows in, including one present in several containers, is placement inventory
+completeness — see
+[report-placement.md](./report-placement.md#inventory-sections-placement-driven-complete-nothing-is-ever-dropped).
+There is no standalone Docker section any more: every container package is
+listed under Production or Development-only by that container's
 classification.
 
 ### Problematic licenses
@@ -220,23 +218,17 @@ them up by coarse category (copyleft, unknown, deny, other) with a count each,
 for example `_Non-blocking: 12 copyleft warning(s), 3 unknown warning(s) (dev/os-downgraded or suppressed). See the sections below._`
 The line is omitted when there are no warnings.
 
-A package listed here is never repeated in the Copyleft section below — a
-package is listed under Problematic OR Copyleft, never both. It keeps its row in
-its Production/Development-only inventory table, or its container subsection,
-and in Assessment conflicts when it also carries a conflict marker; the dedup
-applies to Copyleft membership only.
+Whether a package listed here also repeats in the Copyleft section below, and
+where else it keeps a row (its inventory table, its container subsection,
+Assessment conflicts), is the Problematic-over-Copyleft dedup, normatively
+defined in [report-placement.md](./report-placement.md#invariants).
 
-This table also carries the AGPL container exception, scoped to SYSTEM
-packages (the OS package-manager allowlist): one always fails here,
-`default:agpl-container`, even when
-[`[os_dependencies]`](policy.md#os_dependencies) would otherwise downgrade a
-routine base-image copyleft to a warning — AGPL's network-copyleft obligation
-(section 13) reaches server-side use, so it is never treated as routine noise
-the way an ordinary system GPL or LGPL package is. An application-ecosystem
-package baked into a container (npm, pypi, go, and the rest) is not part of
-this exception: it gates on its actual license like any other application
-dependency, so its AGPL fails here too, but via the ordinary
-`default:copyleft` rule.
+This table is also where the AGPL container escalation
+(`default:agpl-container`) always surfaces, scoped to SYSTEM packages — the
+verdict-level rule that keeps an AGPL obligation from being softened by
+[`[os_dependencies]`](policy.md#os_dependencies) is
+[dependency-classification.md](./dependency-classification.md)'s, not this
+document's.
 
 ### Copyleft and special notices
 
@@ -251,8 +243,9 @@ renders as `- <path> (<license>) — <description>`, sorted by path. With no
 suppressed workspaces the list is omitted.
 
 Then a table of every package carrying a copyleft or special obligation in at
-least one workspace that policy did not suppress. Membership is a `fail` or
-`warn` [verdict](../glossary.md#verdict) whose rule is exactly `default:copyleft`.
+least one workspace that policy did not suppress — membership is placement,
+normatively defined in
+[report-placement.md](./report-placement.md#narrative-sections-verdict--or-finding-driven-deduped).
 It uses the five summary columns plus a trailing **Why** column:
 
 | Column | Contents |
@@ -266,13 +259,10 @@ package is used. This is how an elected copyleft branch surfaces in the output:
 the leaking workspaces are named.
 
 A container's SYSTEM-package copyleft is routine base-image noise and stays
-out of this table, whatever its verdict — except AGPL, which fails into
-Problematic licenses above or, when accepted via
-[`[[compatible]]`](policy.md#compatible), appears here instead as a
-non-blocking special notice. An application-ecosystem package baked into a
-container isn't covered by that exclusion — its copyleft rows here normally.
-A package already listed in Problematic licenses is excluded here regardless
-of ecosystem, per the dedup described there.
+out of this table — except AGPL, which fails into Problematic licenses above
+or, when accepted via [`[[compatible]]`](policy.md#compatible), appears here
+instead as a non-blocking special notice. The exact exclusion and dedup
+rules are [report-placement.md](./report-placement.md#invariants)'s.
 
 ### The Why column
 
@@ -442,6 +432,10 @@ task sbomlet:generate DOCKER=1 IMAGES="postgres:18 nginx:stable-alpine"
 ## Related
 
 - [Getting started](../getting-started.md) — a first run that produces these files.
+- [Dependency classification](./dependency-classification.md) — how a package
+  gets its scope and verdict.
+- [Report placement](./report-placement.md) — which section a scope and
+  verdict route a package to.
 - [Glossary](../glossary.md) — the terms used throughout this page.
 - [Data model](../explanation/data-model.md) — the in-memory model these
   artifacts are rendered from.
