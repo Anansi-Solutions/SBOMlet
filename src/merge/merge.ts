@@ -70,12 +70,12 @@ export interface CollectedSbom {
    */
   scope?: ScopeTaxonomy;
   /**
-   * Per-purl dependency provenance for THIS target, keyed by purl. When
+   * Per-purl dependency provenance for this target, keyed by purl. When
    * present (the npm/yarn and python lanes), each component's occurrence gets the
    * matching introduction; a purl absent from the map gets none (the honest
    * residual). Absent entirely for graph-less sources (terraform / Docker OS /
    * bun) — every occurrence then carries no introduction and goldens stay
-   * byte-identical. Introduction is PER-TARGET, so it is attached at occurrence
+   * byte-identical. Introduction is per-target, so it is attached at occurrence
    * creation and rides through the merge unchanged (no cross-purl
    * reconciliation).
    */
@@ -357,24 +357,24 @@ function claimKey(claim: LicenseClaim): string {
 }
 
 /**
- * #7: deterministically reconcile two introductions for the SAME target+purl
+ * #7: deterministically reconcile two introductions for the same target+purl
  * (a same-target occurrence fold). Order-independent by construction:
  * - `direct` is ORed (a direct contributor wins — mirrors the prod-wins /
- *   "direct in ANY" posture);
- * - `introducedBy` is the sorted-unique UNION;
+ *   "direct in any" posture);
+ * - `introducedBy` is the sorted-unique union;
  * - `path` is taken from the contributor with the lexicographically-smallest
  *   path (compareCodeUnits over the joined chain), so neither input order nor
  *   which side arrived first decides the representative chain.
  * Absent on both sides → absent; present on one → that one (cloned).
  *
- * DIRECT-CONSISTENCY: when the reconciled result is `direct:true`,
- * `introducedBy` is cleared to [] and `path` is dropped. ORing `direct` while
- * UNIONing introducedBy / keeping a path produced the contradictory
- * {direct:true, introducedBy:[mid], path:[mid,leaf]} when a DIRECT intro folded
- * with a TRANSITIVE one; whyCellOf then rendered bare "direct" and HID the (now
- * meaningless) introducer. A direct dependency is introduced by the root itself
- * — it has no parent chain — so a direct reconciliation carries no introducer
- * and no path.
+ * Direct-consistency: when the reconciled result is `direct:true`,
+ * `introducedBy` is cleared to [] and `path` is dropped. Combining `direct`
+ * with OR while keeping introducedBy's union and a path produced the
+ * contradictory {direct:true, introducedBy:[mid], path:[mid,leaf]} when a
+ * direct intro folded with a transitive one; whyCellOf then rendered bare
+ * "direct" and hid the (now meaningless) introducer. A direct dependency is
+ * introduced by the root itself — it has no parent chain — so a direct
+ * reconciliation carries no introducer and no path.
  *
  * Optionality is descoped — there is no `optional` field to reconcile.
  */
@@ -416,10 +416,10 @@ function reconcileIntroductions(
 
 function mergeInto(existing: PackageEntry, incoming: PackageEntry): void {
   // Union occurrences by target, sorted. The same target seen twice for one
-  // purl (e.g. a bun transitive reached via BOTH a prod and a dev parent at the
+  // purl (e.g. a bun transitive reached via both a prod and a dev parent at the
   // same version, or a cdxgen document emitting the purl twice with divergent
-  // dev markers) folds the dev flags PROD-WINS: an occurrence is dev-only iff
-  // EVERY contributing component for that target is dev; a single production
+  // dev markers) folds the dev flags prod-wins: an occurrence is dev-only iff
+  // every contributing component for that target is dev; a single production
   // contribution forces the whole occurrence to production. This is the
   // safety-bearing direction — a shipped occurrence carries the distribution
   // obligation, so it must never be masked to dev. It matches the
@@ -433,7 +433,7 @@ function mergeInto(existing: PackageEntry, incoming: PackageEntry): void {
     } else {
       present.isDevDependency =
         present.isDevDependency && occurrence.isDevDependency;
-      // #7: reconcile `introduction` DETERMINISTICALLY on a same-target fold
+      // #7: reconcile `introduction` deterministically on a same-target fold
       // rather than first-wins (the only order-dependent path in the otherwise
       // sorted provenance code). Currently unreachable (target identities are
       // unique), but latent — a deterministic fold keeps the invariant airtight.
@@ -449,7 +449,7 @@ function mergeInto(existing: PackageEntry, incoming: PackageEntry): void {
   // Union claims, deduped structurally — the same purl listed twice (e.g.
   // once from yarn.lock, once from package.json) must not render "MIT, MIT".
   // First-seen order is preserved; provenance stays intact because the dedup
-  // key includes kind AND source, so a generator claim never swallows a
+  // key includes kind and source, so a generator claim never swallows a
   // curated/override claim with the same raw value.
   const seen = new Set(existing.licenseClaims.map(claimKey));
   for (const claim of incoming.licenseClaims) {
@@ -459,10 +459,10 @@ function mergeInto(existing: PackageEntry, incoming: PackageEntry): void {
       existing.licenseClaims.push(claim);
     }
   }
-  // Reconcile scope on a purl collision — the GATING "app" scope WINS over
+  // Reconcile scope on a purl collision — the gating "app" scope wins over
   // the non-gating "os" scope. Without this, a purl shared between an app input
   // and an os input is silently demoted to "os" purely by merge order (the os
-  // input arriving first), moving a real dependency OUT of the policy gate.
+  // input arriving first), moving a real dependency out of the policy gate.
   // Defense-in-depth: a shared dependency must never be demoted out of gating.
   if (existing.scope === "os" && incoming.scope === "app") {
     existing.scope = "app";
@@ -598,7 +598,7 @@ function packageEntryOf(
         : propertyDevMarker(component),
   };
   // Provenance: the per-target introduction for this purl, when the
-  // source supplied a graph. Attached at occurrence creation so it is PER-TARGET
+  // source supplied a graph. Attached at occurrence creation so it is per-target
   // and rides through mergeInto unchanged (no cross-purl reconciliation). A purl
   // absent from the map (or no map at all) leaves introduction undefined — the
   // honest residual — so goldens predating provenance stay byte-identical.

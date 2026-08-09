@@ -3,7 +3,7 @@
  * orchestrate-don't-parse (Conflict A, settled custom), because no upstream
  * tool resolves Terraform provider/module licenses: cdxgen `-t terraform`
  * emits components with zero licenses, and no generator reads the external
- * module set at its EXACT resolved versions. This collector parses two trusted
+ * module set at its exact resolved versions. This collector parses two trusted
  * artifacts the repo already commits/materializes and emits the same minimal
  * deterministic CycloneDX 1.6 document every other collector produces; license
  * resolution is deferred to the enrich-stage GitHub resolver.
@@ -11,52 +11,54 @@
  * Two inputs, two authorities:
  * - Providers come from `.terraform.lock.hcl` (always committed): a regex over
  *   the `provider "<host>/<ns>/<name>" { version = "<v>" ... }` blocks yields
- *   the EXACT lock-pinned version verbatim. No `.tf` constraint blocks are ever
+ *   the exact lock-pinned version verbatim. No `.tf` constraint blocks are ever
  *   parsed — the lock is the pin.
  * - External registry modules come from `.terraform/modules/modules.json`
  *   (`{"Modules":[{Key,Source,Version,Dir}]}`), the authoritative source of
- *   each module's EXACT resolved version. A module is external iff its Version
- *   is non-empty AND its Source parses as a registry address: an OPTIONAL
- *   leading `<host>/` where the host is ANY hostname-looking segment (contains
- *   a "." — the default `registry.opentofu.org`/`registry.terraform.io`, plus
- *   non-default HCP-private/self-hosted/partner registries; W#2), then
- *   `<ns>/<name>/<provider>`, then an OPTIONAL `//<submodule-path>` that is
+ *   each module's exact resolved version. A module is external when its
+ *   Version is non-empty and its Source parses as a registry address: an
+ *   optional leading `<host>/` where the host is any hostname-looking segment
+ *   (it contains a "." — the default
+ *   `registry.opentofu.org`/`registry.terraform.io`, plus non-default
+ *   HCP-private/self-hosted/partner registries; W#2), then
+ *   `<ns>/<name>/<provider>`, then an optional `//<submodule-path>` that is
  *   stripped. Local Sources (`./`/`../`, empty, or Version-less) are excluded as
- *   first-party. The Version is used
- *   VERBATIM. Two submodules of the same module at the same version
- *   (`ecs/aws//modules/cluster` + `ecs/aws//modules/service`) collapse to ONE
- *   component row because they share a purl.
+ *   first-party. The Version is used verbatim. Two submodules of the same
+ *   module at the same version (`ecs/aws//modules/cluster` +
+ *   `ecs/aws//modules/service`) collapse to one component row because they
+ *   share a purl.
  *
- * The "init has run" gate is a pure FILESYSTEM signal: the whole `.terraform/`
+ * The "init has run" gate is a pure filesystem signal: the whole `.terraform/`
  * dir is gitignored and absent until `tofu init`/`tofu get` materializes it.
  * When a `.terraform.lock.hcl` target is detected:
- *   - modules.json PRESENT (as a REGULAR FILE) → read external modules (the
- *     authoritative present-path). A directory-named modules.json is treated as
- *     ABSENT and routed to the gate below, never a raw EISDIR;
- *   - modules.json ABSENT + `.terraform/providers/` is a DIRECTORY AND
- *     `.terraform/modules/` does NOT exist → init ran but processed no module
+ *   - modules.json present, as a regular file → read external modules (the
+ *     authoritative present-path). A directory-named modules.json is treated
+ *     as absent and routed to the gate below, never a raw EISDIR;
+ *   - modules.json absent, `.terraform/providers/` is a directory, and
+ *     `.terraform/modules/` does not exist → init ran but processed no module
  *     calls (the providers-only github-actions-deployment shape) → collect
- *     providers from the committed lock; NEVER a throw;
- *   - any OTHER absent-modules.json shape → FAIL LOUD with a "run tofu init/tofu
- *     get first" error: no `.terraform/providers/` dir (empty/fabricated
- *     `.terraform/`), or a `.terraform/modules/` dir without a modules.json
- *     (stale/partial install). Conservative-safe: we collect providers-only only
- *     for the exact artifact shape a real providers-only init leaves.
+ *     providers from the committed lock; never a throw;
+ *   - any other absent-modules.json shape → fail loud with a "run tofu
+ *     init/tofu get first" error: no `.terraform/providers/` dir
+ *     (empty/fabricated `.terraform/`), or a `.terraform/modules/` dir without
+ *     a modules.json (stale/partial install). Conservative-safe: we collect
+ *     providers-only only for the exact artifact shape a real providers-only
+ *     init leaves.
  * No HCL is parsed to make this decision. Empirically, `tofu
- * init` writes `.terraform/modules/modules.json` as soon as it PROCESSES module
- * calls (local OR external) — even when the module download later fails, and
- * before the provider phase — so modules.json absence reliably means "no module
- * calls" WHENEVER init has run. A residual stale-edit window (a module added to
- * `.tf` without re-init) is delegated to `tofu plan`/`validate`/`get` in CI; see
- * {@link absentModulesJsonShouldFail}. Never a silent skip, never a constraint
- * fallback.
+ * init` writes `.terraform/modules/modules.json` as soon as it processes module
+ * calls (local or external) — even when the module download later fails, and
+ * before the provider phase — so modules.json absence reliably means "no
+ * module calls" whenever init has run. A residual stale-edit window (a module
+ * added to `.tf` without re-init) is delegated to `tofu plan`/`validate`/`get`
+ * in CI; see {@link absentModulesJsonShouldFail}. Never a silent skip, never a
+ * constraint fallback.
  *
- * Every emitted purl carries the component's EXACT version verbatim. Providers
- * and modules are distinguished by the purl's PATH-SEGMENT COUNT after the host
- * (not by host — OpenTofu rewrites BOTH to registry.opentofu.org):
+ * Every emitted purl carries the component's exact version verbatim. Providers
+ * and modules are distinguished by the purl's path-segment count after the
+ * host (not by host — OpenTofu rewrites both to registry.opentofu.org):
  *   provider: `pkg:terraform/<host>/<ns>/<name>@<v>`           (2 segments)
  *   module:   `pkg:terraform/<host>/<ns>/<name>/<provider>@<v>` (3 segments)
- * load-bearing for the enrich-stage version-tag LICENSE fetch and the
+ * load-bearing for the enrich-stage version-tag license fetch and the
  * purl@version cache.
  *
  * Fully in-process — no subprocess, no eval, no cwd change; an
@@ -145,17 +147,18 @@ export interface TerraformProvider {
  * `[^}]*?` lazily spans only the whitespace/`constraints` line between the
  * block header `{` and the `version` key — neither contains `}` — so the match
  * stops at `version` and never reaches the block's closing brace or the
- * `hashes = [ ... ]` array that follows. A block with NO constraints line
- * (version directly after `{`) matches identically. The brace-edge RED fixture
- * confirms this holds; if it had broken, a line-state tokenizer was the
- * fallback — it did not, so the regex stands.
+ * `hashes = [ ... ]` array that follows. A block with no constraints line
+ * (version directly after `{`) matches identically. A dedicated test fixture
+ * for the brace-edge case confirms this holds; if it had broken, a line-state
+ * tokenizer was the fallback — it did not, so the regex stands.
  *
- * The `version` capture is ANCHORED to the START OF A LINE (the `m` flag plus
- * `^[ \t]*`) so a COMMENTED pin (`# version = "9.9.9"`) before the real version
- * is NOT captured (I#3): a `#`-prefixed line has the `#` before `version`, so it
- * fails the `^[ \t]*version` anchor and the lazy span advances to the next line,
- * the real `version = "..."`. `[ \t]*` (horizontal whitespace only, never `\s`
- * which would cross newlines) keeps the anchor to a single line.
+ * The `version` capture is anchored to the start of a line (the `m` flag plus
+ * `^[ \t]*`) so a commented-out pin (`# version = "9.9.9"`) before the real
+ * version is not captured (I#3): a `#`-prefixed line has the `#` before
+ * `version`, so it fails the `^[ \t]*version` anchor and the lazy span
+ * advances to the next line, the real `version = "..."`. `[ \t]*` (horizontal
+ * whitespace only, never `\s` which would cross newlines) keeps the anchor to
+ * a single line.
  */
 const PROVIDER_BLOCK =
   /provider\s+"([^"]+)"\s*\{[^}]*?^[ \t]*version\s*=\s*"([^"]+)"/gms;
@@ -207,14 +210,14 @@ interface ParsedModuleSource {
 }
 
 /**
- * A leading Source segment is treated as a registry HOST when it looks like a
+ * A leading Source segment is treated as a registry host when it looks like a
  * hostname — it contains a "." (W#2). This admits the default OpenTofu/Terraform
- * registries AND non-default hosts (HCP private `app.terraform.io`, self-hosted
+ * registries and non-default hosts (HCP private `app.terraform.io`, self-hosted
  * and partner registries) that the old fixed-allowlist silently dropped. A
  * dot-less first segment is part of the bare `<ns>/<name>/<provider>` shorthand,
  * never a host — so `a/b/c/d` is not parsed as host=a (it stays a non-conforming
  * 4-tuple and is excluded). Local (`./`/`../`) and VCS Sources are rejected
- * BEFORE this check, so a leading "." in `./...` never reaches it.
+ * before this check, so a leading "." in `./...` never reaches it.
  */
 function looksLikeHost(segment: string): boolean {
   return segment.includes(".");
@@ -225,12 +228,12 @@ function looksLikeHost(segment: string): boolean {
  * when it is not a registry module. Accepts:
  *   - bare shorthand `<ns>/<name>/<provider>` (host defaults to
  *     DEFAULT_MODULE_HOST),
- *   - fully-qualified `<host>/<ns>/<name>/<provider>` for ANY hostname-looking
+ *   - fully-qualified `<host>/<ns>/<name>/<provider>` for any hostname-looking
  *     host (W#2 — not just the two default registries),
  *   - either form with a trailing `//<submodule-path>` (stripped).
  * Rejects relative (`./`/`../`/empty) and VCS/`git::` Sources. A VCS Source's
  * `::` marks it non-registry; the legitimate `//<submodule>` separator is the
- * ONLY `//` a registry Source carries, and it is split off before host parsing.
+ * only `//` a registry Source carries, and it is split off before host parsing.
  */
 function parseModuleSource(source: string): ParsedModuleSource | undefined {
   if (source === "") return undefined;
@@ -259,28 +262,29 @@ function parseModuleSource(source: string): ParsedModuleSource | undefined {
 }
 
 /**
- * Read the EXTERNAL registry modules from `.terraform/modules/modules.json`
+ * Read the external registry modules from `.terraform/modules/modules.json`
  * text. Pure function over the `{"Modules":[{Key,Source,Version,Dir}]}` JSON,
- * narrowed tolerantly. A module is external iff its Version is non-empty AND
+ * narrowed tolerantly. A module is external when its Version is non-empty and
  * its Source parses as a registry address (see {@link parseModuleSource}:
  * optional host, `<ns>/<name>/<provider>`, optional `//submodule` stripped);
- * local/Version-less/VCS entries are excluded. The Version is used VERBATIM
- * (the EXACT resolved pin). Two submodules of the same module at the same
+ * local/Version-less/VCS entries are excluded. The Version is used verbatim
+ * (the exact resolved pin). Two submodules of the same module at the same
  * version yield two entries here that collapse to one component downstream via
  * the shared purl.
  *
  * §Whole-file failure is symmetric with the absent-path's loud-fail.
  * The module docstring promises "a whole-file failure throws
- * loudly"; this honours it. The empty-string SENTINEL (the collector/coverage
+ * loudly"; this honours it. The empty-string sentinel (the collector/coverage
  * pass it on the providers-only path to mean "no modules.json present") stays a
  * tolerant `[]` — an absent file is never a scan failure; the filesystem gate
- * owns absence. For NON-empty text:
- *   - STRUCTURALLY-INVALID — JSON.parse throws, or a present `Modules` key is
+ * owns absence. For non-empty text:
+ *   - structurally invalid — JSON.parse throws, or a present `Modules` key is
  *     not an array — throws a loud scan-failure naming the modules.json path;
- *   - LEGIT-EMPTY — valid JSON `{}`, no `Modules` key, or `Modules: []` — keeps
- *     returning `[]` (zero modules), the genuine dependency-free shape.
- * Individual malformed ENTRIES inside the array are still tolerantly skipped (an
- * array with some bad rows keeps the good rows, never throws).
+ *   - legitimately empty — valid JSON `{}`, no `Modules` key, or
+ *     `Modules: []` — keeps returning `[]` (zero modules), the genuine
+ *     dependency-free shape.
+ * Individual malformed entries inside the array are still tolerantly skipped
+ * (an array with some bad rows keeps the good rows, never throws).
  */
 export function readExternalModules(
   modulesJsonText: string,
@@ -323,15 +327,15 @@ export function readExternalModules(
 }
 
 /**
- * §The absent-modules.json gate — a pure FILESYSTEM signal, no HCL parsing.
+ * §The absent-modules.json gate — a pure filesystem signal, no HCL parsing.
  *
- * Used ONLY to decide, when `.terraform/modules/modules.json` is ABSENT, whether
- * the loud "run tofu init/tofu get" error should fire. It is NOT a module
+ * Used only to decide, when `.terraform/modules/modules.json` is absent, whether
+ * the loud "run tofu init/tofu get" error should fire. It is not a module
  * inventory — modules.json remains the authoritative resolved-version source
  * when present (see {@link parseModuleSource}/{@link readExternalModules}, the
  * present-path, intentionally left untouched).
  *
- * §Why a filesystem signal, not an HCL lexer. The gate's REAL question is "did
+ * §Why a filesystem signal, not an HCL lexer. The gate's real question is "did
  * `tofu init` run?". Four consecutive reviews each found another
  * valid-HCL shape (a nested `source` decoy, `${...}` interpolation with nested
  * quotes, CR-only line endings, a comment between the `module` keyword and its
@@ -340,20 +344,21 @@ export function readExternalModules(
  * answer is on the filesystem.
  *
  * §Empirical basis. `tofu init`/`tofu get` materializes the gitignored
- * `.terraform/` dir. A PROVIDERS-ONLY dir (no module calls) gets
- * `.terraform/providers/` but NO `.terraform/modules/`. A module-bearing dir
- * (local OR external) gets `.terraform/modules/modules.json` as soon as tofu
- * PROCESSES the module calls — even when the module DOWNLOAD later fails — and
- * it writes modules.json (≥ the root entry) BEFORE the provider phase. So
- * modules.json absence reliably means "no module calls" WHENEVER init has run.
+ * `.terraform/` dir. A providers-only dir (no module calls) gets
+ * `.terraform/providers/` but no `.terraform/modules/`. A module-bearing dir
+ * (local or external) gets `.terraform/modules/modules.json` as soon as tofu
+ * processes the module calls — even when the module download later fails — and
+ * it writes modules.json (≥ the root entry) before the provider phase. So
+ * modules.json absence reliably means "no module calls" whenever init has run.
  *
  * §Strengthened signal (cheap no-HCL defense-in-depth).
- * Rather than treat ANY `<dir>/.terraform/` directory as proof of init, the gate
- * requires the artifacts a REAL providers-only init leaves and rejects the
+ * Rather than treat any `<dir>/.terraform/` directory as proof of init, the gate
+ * requires the artifacts a real providers-only init leaves and rejects the
  * incoherent shapes:
- *   - return false (collect providers-only) ONLY when `.terraform/providers/`
- *     exists as a DIRECTORY AND `.terraform/modules/` does NOT exist — the exact
- *     github-actions-deployment shape a real providers-only init produces;
+ *   - return false (collect providers-only) only when `.terraform/providers/`
+ *     exists as a directory and `.terraform/modules/` does not exist — the
+ *     exact github-actions-deployment shape a real providers-only init
+ *     produces;
  *   - else return true (fail loud):
  *       · no `.terraform/providers/` dir → an empty/fabricated `.terraform/`
  *         that no real init produced → cannot prove providers-only;
@@ -361,7 +366,7 @@ export function readExternalModules(
  *         module install (tofu writes modules.json the instant it processes
  *         module blocks) → incoherent.
  * `existsSync` + `statSync(...).isDirectory()` is used defensively throughout: a
- * stray `.terraform` FILE has no `providers/` dir under it, so it falls into the
+ * stray `.terraform` file has no `providers/` dir under it, so it falls into the
  * first fail-loud branch. This realigns with the module docstring's long-standing
  * observation that the whole `.terraform/` dir is gitignored and absent until
  * init materializes it.
@@ -369,13 +374,13 @@ export function readExternalModules(
  * §Residual stale-edit limitation (documented, accepted).
  * A window remains that this filesystem signal cannot close cheaply: a dir whose
  * providers-only init left `.terraform/providers/` (no `.terraform/modules/`) and
- * whose `.tf` is LATER edited to ADD a module WITHOUT re-init still presents the
+ * whose `.tf` is later edited to add a module without re-init still presents the
  * collect shape, so it collects providers-only and silently omits the new module.
  * This is delegated to `tofu plan`/`tofu validate`/`tofu get` in CI, which
  * hard-error "Module not installed; run tofu init" on exactly this stale state —
  * consistent with the tool's init-before-generate contract. An mtime freshness
- * check (`.tf` newer than `.terraform/`) is deliberately NOT added: it would
- * false-POSITIVE in CI, where `.terraform/` is commonly cache-RESTORED with an
+ * check (`.tf` newer than `.terraform/`) is deliberately not added: it would
+ * false-positive in CI, where `.terraform/` is commonly cache-restored with an
  * older mtime than freshly-checked-out `.tf`, turning every cached CI run into a
  * spurious loud failure. The init-before-generate contract owns this window.
  *
@@ -391,9 +396,9 @@ export function absentModulesJsonShouldFail(dir: string): boolean {
     // §Defense-in-depth signal: a real providers-only
     // `tofu init` writes `.terraform/providers/` (after the module phase); a
     // module-bearing init writes `.terraform/modules/modules.json` the instant
-    // it processes module blocks. So the ONLY shape that legitimately collects
+    // it processes module blocks. So the only shape that legitimately collects
     // providers-only (returns false) is: `.terraform/providers/` exists as a
-    // DIRECTORY AND `.terraform/modules/` does NOT exist. Otherwise fail loud:
+    // directory and `.terraform/modules/` does not exist. Otherwise fail loud:
     //   - no `.terraform/providers/` dir → an empty/fabricated `.terraform/`
     //     that no real init produced → cannot prove providers-only;
     //   - `.terraform/modules/` exists without a modules.json → a stale/partial
@@ -405,7 +410,7 @@ export function absentModulesJsonShouldFail(dir: string): boolean {
     }
     const modulesDir = join(dir, ".terraform", "modules");
     if (existsSync(modulesDir)) {
-      // A `.terraform/modules/` WITHOUT modules.json (the caller only reaches
+      // A `.terraform/modules/` without modules.json (the caller only reaches
       // here when modules.json is absent) is a stale/partial install.
       return true;
     }
@@ -416,9 +421,9 @@ export function absentModulesJsonShouldFail(dir: string): boolean {
 }
 
 /**
- * §The modules.json PRESENCE guard. The present-path is taken
- * ONLY when `modules.json` exists AND is a REGULAR FILE. A directory-named (or
- * other non-regular-file) `modules.json` is treated as ABSENT, routing to the
+ * §The modules.json presence guard. The present-path is taken
+ * only when `modules.json` exists and is a regular file. A directory-named (or
+ * other non-regular-file) `modules.json` is treated as absent, routing to the
  * filesystem-signal gate ({@link absentModulesJsonShouldFail}) which — seeing
  * `.terraform/modules/` exists with no modules.json file — fails loud with the
  * guided "run tofu init/tofu get" error, instead of a raw uncaught EISDIR from a
@@ -454,11 +459,11 @@ function providerComponent(provider: TerraformProvider): TerraformComponent {
 
 /**
  * Module → component: `pkg:terraform/<host>/<ns>/<name>/<provider>@<v>`, no
- * group. The provider segment is KEPT (3 path segments after the host) so a
+ * group. The provider segment is kept (3 path segments after the host) so a
  * module is structurally distinguishable from a 2-segment provider purl by
- * COUNT — the host alone cannot distinguish them (OpenTofu rewrites both to
- * registry.opentofu.org). The name is the canonical Terraform module address
- * `<ns>/<name>/<provider>`.
+ * segment count — the host alone cannot distinguish them (OpenTofu rewrites
+ * both to registry.opentofu.org). The name is the canonical Terraform module
+ * address `<ns>/<name>/<provider>`.
  */
 function moduleComponent(module: TerraformModule): TerraformComponent {
   const name = `${module.namespace}/${module.name}/${module.provider}`;
@@ -471,7 +476,7 @@ function moduleComponent(module: TerraformModule): TerraformComponent {
 }
 
 /**
- * Build the deterministic, purl-sorted, purl-DEDUPED component list from both
+ * Build the deterministic, purl-sorted, purl-deduped component list from both
  * inputs. Two submodules of the same module at the same version share a purl
  * (the `//submodule` suffix is stripped before purl construction) and collapse
  * to one row here.
@@ -495,11 +500,11 @@ function componentsOf(
 }
 
 /**
- * Component count for the coverage policy when modules.json IS present:
+ * Component count for the coverage policy when modules.json is present:
  * providers from the lock plus external modules from modules.json. Returns
- * undefined only when the lock text is unparseable (no providers AND the text
+ * undefined only when the lock text is unparseable (no providers and the text
  * is not a plausible lock) — but parseProviders is tolerant, so an empty lock
- * legitimately counts 0. The absent-modules.json case is NOT a count of 0; it
+ * legitimately counts 0. The absent-modules.json case is not a count of 0; it
  * is the loud-fail path the coverage arm routes to separately.
  */
 export function terraformComponentCount(
@@ -524,7 +529,7 @@ export interface TerraformCollectOptions {
  * Failure modes:
  * - missing .terraform.lock.hcl → loud error naming the path;
  * - either file over MAX_TERRAFORM_LOCK_BYTES → loud size error before parse;
- * - ABSENT (or directory-named) .terraform/modules/modules.json whose
+ * - absent (or directory-named) .terraform/modules/modules.json whose
  *   filesystem shape is not the exact providers-only artifact set →
  *   `tofu init`/`tofu get` never ran (or a stale/partial install) → loud "run
  *   tofu init/tofu get first" error (the strengthened filesystem-signal gate,
@@ -549,14 +554,14 @@ export async function collectWithTerraform(
         `expected ${lockPath}`,
     );
   }
-  // Size gate FIRST — before any read or parse (DoS bound).
+  // Size gate first — before any read or parse (DoS bound).
   assertTerraformLockSize(lockPath);
   const lockText = readFileSync(lockPath, "utf8");
 
-  // The init-has-run gate is a filesystem signal. When modules.json is ABSENT,
+  // The init-has-run gate is a filesystem signal. When modules.json is absent,
   // the existence of the `<dir>/.terraform/` directory decides: it exists → init
   // ran and processed no module calls (providers-only — tofu writes
-  // modules.json for ANY module call) → collect providers with an empty modules
+  // modules.json for any module call) → collect providers with an empty modules
   // document; it is absent → init never ran → we cannot prove providers-only →
   // loud fail. No `.tf`/HCL is parsed (see {@link absentModulesJsonShouldFail}).
   const modulesJsonPath = join(

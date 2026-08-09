@@ -1,11 +1,15 @@
 /**
- * SPDX expression AST walker: render, copyleft avoidance, OR-branch election.
+ * SPDX expression AST walker: render, copyleft avoidance, branch election.
  *
- * No library exposes "which OR branch passed" — spdx-satisfies cannot test
- * individual branches and throws on expression-valued allowlists — so branch
- * semantics over the parsed AST are owned here. Copyleft membership is an exact
- * Set lookup on parsed leaf ids only; no substring or prefix matching on
- * license ids anywhere.
+ * Election (see docs/glossary.md#election) is the OR operator's own meaning —
+ * it lets the consumer pick whichever branch they want to rely on. `elect()`
+ * below makes that pick deterministic; `isCopyleft` and the deny walk ask the
+ * mirror question, whether an electable branch avoids the obligation or the
+ * deny rule. No library exposes "which OR branch passed" — spdx-satisfies
+ * cannot test individual branches and throws on expression-valued allowlists —
+ * so branch semantics over the parsed AST are owned here. Copyleft membership
+ * is an exact Set lookup on parsed leaf ids only; no substring or prefix
+ * matching on license ids anywhere.
  *
  * Pure functions, no I/O, no logging — the CLI owns stderr. Inputs are
  * structurally-typed parse output (spdx-expression-parse internals are never

@@ -87,13 +87,13 @@ const DEPENDENCIES_BLOCK_RE = /^[ \t]+dependencies:$/;
  * `workspaces` fields (`"libs/*"` resolves to a literal relative path in the
  * lock — zero glob code needed here, ADR-0015 posture).
  *
- * `hasDependencies` is derived from the SAME entry block containing an
+ * `hasDependencies` is derived from the same entry block containing an
  * indented `dependencies:` line — the lockfile-authoritative signal for the
  * per-workspace zero-dependency skip (a member without one is the loud
  * warn+skip case upstream, never a silent drop or hard fail).
  *
- * Path containment is deliberately NOT this parser's job: relPath is
- * returned VERBATIM (including traversal or absolute forms a hostile lock
+ * Path containment is deliberately not this parser's job: relPath is
+ * returned verbatim (including traversal or absolute forms a hostile lock
  * could contain) — the collect loop enforces containment before any
  * subprocess spawn uses it as a cwd.
  *
@@ -107,7 +107,7 @@ export function yarnWorkspaceMembers(
   const members: { name: string; relPath: string; hasDependencies: boolean }[] =
     [];
   let candidate: { name: string; relPath: string } | undefined;
-  // Per-BLOCK flag, independent of whether the resolution: line has been
+  // Per-block flag, independent of whether the resolution: line has been
   // seen yet: key order within an entry is not this parser's assumption
   // (a YAML normalizer sorting keys alphabetically emits dependencies:
   // before resolution:), so the flag is recorded whenever the line appears
@@ -147,9 +147,9 @@ export function yarnWorkspaceMembers(
 }
 
 /**
- * Count the lockfile's THIRD-PARTY entry headers: entry headers (same
+ * Count the lockfile's third-party entry headers: entry headers (same
  * column-0/":"-terminated shape as firstPartyNames) whose descriptors are
- * all NON-workspace/portal, excluding the `__metadata:` block header.
+ * all non-workspace/portal, excluding the `__metadata:` block header.
  *
  * A legitimate zero-dependency Yarn-4 workspace has a non-empty yarn.lock
  * (always `__metadata:` plus the project's own `"proj@workspace:."`
@@ -166,7 +166,7 @@ export function thirdPartyEntryCount(lockfileText: string): number {
     if (line[0] === " " || line[0] === "\t") continue;
     if (!line.endsWith(":")) continue;
     if (/^"?__metadata"?:$/.test(line)) continue;
-    // A header containing ANY workspace:/portal: descriptor resolves to a
+    // A header containing any workspace:/portal: descriptor resolves to a
     // first-party member — it is not a third-party entry.
     if (
       line.split(", ").some((descriptor) => FIRST_PARTY_RE.test(descriptor))
@@ -327,16 +327,16 @@ export function npmFirstPartyNames(lockfileText: string): ReadonlySet<string> {
  * single-sourced with the collector (src/validate/nugetLock.ts) so the
  * counter and the collector can never disagree on the same lock. Entries
  * with `type === "Project"` (first-party project references) are excluded —
- * the collector's ONE exclusion, mirrored exactly; every other entry counts,
+ * the collector's one exclusion, mirrored exactly; every other entry counts,
  * including unknown future types and malformed entries (counting them errs
  * toward the scan, where a zero-component result hard-fails loudly — a
  * crafted lock can never flip the warn+skip branch to hide dependencies).
- * Entries are counted across ALL dependency sections (one per target
+ * Entries are counted across all dependency sections (one per target
  * framework, plus `<tfm>/<rid>` pairs), without dedup — only the strict
  * `=== 0` comparison downstream consumes the value.
  *
  * Returns `undefined` (unknown count) — not 0 — for non-JSON text, a failed
- * document narrow, an UNSUPPORTED lock format version (the collector throws
+ * document narrow, an unsupported lock format version (the collector throws
  * on those: a schema it refuses to interpret is one the counter must never
  * claim to have read), or a missing dependencies map: a garbage file proves
  * nothing. Unknown routes the target to the scan, so the collector's loud
@@ -359,8 +359,8 @@ export function nugetThirdPartyEntryCount(
   if (doc instanceof type.errors) {
     return undefined;
   }
-  // The collector accepts lock versions 1 and 2 ONLY (it throws on others).
-  // Mirror that acceptance: an unsupported version is UNKNOWN, so the target
+  // The collector accepts lock versions 1 and 2 only (it throws on others).
+  // Mirror that acceptance: an unsupported version is unknown, so the target
   // routes to the scan where the collector's loud version error fires —
   // a future-format lock can never take the silent warn+skip branch.
   if (doc.version !== undefined && doc.version !== 1 && doc.version !== 2) {
@@ -375,7 +375,7 @@ export function nugetThirdPartyEntryCount(
     const section = recordOf(rawSection);
     if (section === undefined) continue; // non-record section — nothing to count
     for (const rawEntry of Object.values(section)) {
-      // Exclusion by type === "Project" ONLY; a malformed (non-record) entry
+      // Exclusion by type === "Project" only; a malformed (non-record) entry
       // counts too — erring toward the scan, never toward a silent skip.
       if (recordOf(rawEntry)?.["type"] !== "Project") count += 1;
     }
@@ -467,16 +467,16 @@ export function pnpmImporterNames(lockfileText: string): ReadonlySet<string> {
  * always returns undefined here too — never a positively-determined zero
  * (the 15-05 counter/collector-disagreement finding class).
  *
- * The count excludes only the document's OWN root purl — the reactor
+ * The count excludes only the document's own root purl — the reactor
  * cross-target sibling set does not exist inside this pure per-doc counter
  * (that knowledge lives in the pipeline pre-pass, mavenRootPurlOf +
  * excludeMavenFirstParty). A sibling module's leaked component therefore
  * still counts here, erring toward the scan rather than a silent skip: the
- * one doc shape this counter DOES resolve to a positively-determined zero is
+ * one doc shape this counter does resolve to a positively-determined zero is
  * the reactor aggregator pom's own sidecar, whose components array is
  * genuinely empty.
  *
- * A document that passes those checks but has NO components key counts 0:
+ * A document that passes those checks but has no components key counts 0:
  * CycloneDX makes the array optional and cyclonedx-maven-plugin omits it
  * entirely for an aggregator pom's BOM (verified against 2.9.2 output), so
  * the absent-array shape must reach the same warn+skip branch as an empty

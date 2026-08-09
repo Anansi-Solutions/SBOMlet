@@ -44,6 +44,18 @@ dependency (build tools, test runners). It's a **production** dependency if it
 ships anywhere. The distinction matters because only what you ship carries a
 distribution obligation, so the policy can treat the two differently.
 
+### election
+
+What an OR expression does: it lets the consumer pick whichever branch they
+want to rely on. `elect()` (`src/normalize/expression.ts`) makes that pick
+deterministic — preferring a non-copyleft branch, then one without an opaque
+`LicenseRef-`/`DocumentRef-` leaf, then a stable tie-break — so the same
+finding always resolves to the same branch. Copyleft and deny walk the same
+tree asking the mirror question: is there an *electable* branch, one a
+consumer could legitimately choose, that avoids the obligation or the deny
+rule? A finding is copyleft only if every branch is; a finding is denied only
+if every branch matches a deny rule.
+
 ### enrichment and the enrichment cache
 
 Some lockfiles don't record a licence. **Enrichment** fills those gaps by asking
