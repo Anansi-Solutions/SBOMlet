@@ -35,6 +35,10 @@ where to look. From the top:
 | `## Production dependencies` | The full inventory of everything you ship, including each production container's packages |
 | `## Development-only dependencies` | The full inventory of build- and test-time-only packages, including each development container's packages |
 
+For the exact decision tree behind where a package lands — which scope, which
+verdict, which section — see the normative
+[report-placement.md](../reference/report-placement.md) reference.
+
 The header is a comment that names the regenerate command instead of a date.
 There is no timestamp anywhere in the file. A date would change on every run, and
 [`check`](../glossary.md#the-gate-check) could never tell a real change from the

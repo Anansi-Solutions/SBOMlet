@@ -4,6 +4,9 @@ Reference for everything the tool writes. For an operator regenerating the
 inventory, for a policy author or compliance reviewer reading it, and for a
 contributor changing the renderers.
 
+For the section-by-section placement rules — which scope, which verdict,
+which section — see [report-placement.md](./report-placement.md).
+
 `check` writes nothing; it regenerates these artifacts in memory and compares
 them byte-for-byte against the committed files. `generate` writes them:
 

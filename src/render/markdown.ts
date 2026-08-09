@@ -31,6 +31,8 @@
  * This module deliberately does not render the notices companion, emit
  * CycloneDX, or evaluate policy — verdicts and suppressed workspaces arrive
  * pre-computed in the PolicyView projection.
+ *
+ * The normative placement spec is docs/reference/report-placement.md — update both together.
  */
 
 import {
