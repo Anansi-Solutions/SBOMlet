@@ -5,7 +5,9 @@ is the normative placement specification for `THIRD_PARTY_LICENSES.md` — for a
 [package entry](../glossary.md#package-entry), exactly where its row lands and
 why. `src/render/markdown.ts`, the policy engine's section-relevant routing, and
 the placement tests all follow it; a behavior change to any of them updates this
-page in the same commit.
+page in the same commit. Each path in the Path index below is verified
+one-to-one by `test/reportPlacement.test.ts`; the page, the suite, and the
+implementation change together.
 
 Placement is three questions, asked in order: what kind of package is this
 ([scope](../glossary.md#scope-app-and-os)), what does policy say about it (a
@@ -219,3 +221,32 @@ helpers).
   allowlist fails safe.
 - The report is byte-deterministic: fixed section order, stable sorts
   throughout.
+
+## Path index (verified end to end)
+
+| id | given | lands |
+| --- | --- | --- |
+| `workspace-prod-permissive` | npm workspace prod dependency, permissive license | Production dependencies (app table) |
+| `workspace-dev-only` | npm workspace dependency, every occurrence dev | Development-only dependencies (app table) |
+| `shared-workspace-and-container` | npm dependency in a workspace AND baked into a prod container | Production dependencies (app table) AND that container's Application packages table |
+| `container-only-system` | apk/deb package, container-only | that container's System packages table only |
+| `container-only-app-ecosystem` | npm package baked into a prod container, permissive, container-only | that container's Application packages table only |
+| `unrecognized-ecosystem-gates` | unrecognized purl ecosystem, copyleft, in a prod container | Problematic licenses (fails `default:copyleft`, the allowlist fails safe) + that container's Application packages table |
+| `system-copyleft-os-warn` | apk GPL-2.0-only, `os_dependencies = "warn"` | that container's System packages table; not Problematic, not Copyleft |
+| `system-copyleft-os-fail` | same, `os_dependencies = "fail"` | Problematic licenses |
+| `system-copyleft-os-ignore` | same, `os_dependencies = "ignore"` | inventory only (that container's System packages table) |
+| `system-agpl-escalates` | apk AGPL-3.0-only, `os_dependencies = "warn"` | Problematic licenses (`default:agpl-container` — the warn knob cannot soften it) |
+| `system-agpl-accepted-notice` | same, accepted via `[[compatible]]` | accepted-AGPL notice in Copyleft and special notices; not Problematic |
+| `system-agpl-imprecise-escalates` | imprecise bare-`AGPL` system package | Problematic licenses AND Imprecise licenses (overlap by design) |
+| `system-agpl-imprecise-accepted` | same, accepted | accepted-AGPL notice in Copyleft and special notices AND Imprecise licenses |
+| `mixed-agpl-fail-and-accept` | one AGPL system purl, failing in one container, accepted in another | Problematic licenses only, no notice |
+| `app-copyleft-prod-container` | golang/npm copyleft baked into a prod container | Problematic licenses + that container's Application packages table |
+| `app-copyleft-dev-container` | app-ecosystem copyleft in a `[[docker.development]]` container | Copyleft and special notices (dev-downgraded warn); subsection under Development-only dependencies |
+| `app-copyleft-workspace-dev` | workspace dev-dependency copyleft | Copyleft and special notices (warn); Development-only dependencies (app table) |
+| `problematic-dedup-keeps-inventory` | workspace prod copyleft, fails | Problematic licenses only (never Copyleft); still in Production dependencies (app table) |
+| `imprecise-copyleft-family-only-imprecise` | bare `GPL` app package | Imprecise licenses only, never a Copyleft flagged row |
+| `imprecise-permissive-family` | bare `BSD` app package | Imprecise licenses only |
+| `unknown-license-counted` | [unknown] handling = "warn", no license | counted under Unknown license; inventory row (app table) |
+| `suppressed-workspace-copyleft` | family-justified `[[workspace.copyleft_suppressed]]` | suppressed-workspaces list in Copyleft and special notices; no flagged row |
+| `denied-license-terminal` | a `[[deny]]` match with a `[[compatible]]` rule that would otherwise accept it | Problematic licenses (deny is terminal) |
+| `system-package-in-dev-container-counts-dev` | apk permissive package whose only container is dev-marked | counted Development-only (via the container's classification); System packages table under the Development-only subsection |
