@@ -55,6 +55,9 @@
  * substring-matched), suppression paths match segment-aware
  * (`target === path || target.startsWith(path + "/")`), and every verdict
  * carries a machine-readable rule id plus a reason naming the deciding input.
+ *
+ * The normative decision tree is docs/reference/dependency-classification.md
+ * — update both together.
  */
 import parseSpdx from "spdx-expression-parse";
 import satisfies from "spdx-satisfies";
@@ -74,7 +77,7 @@ import {
   type ExpressionNode,
 } from "../normalize/expression";
 import { BUILTIN_DENY_RULE_ID } from "./builtinDenylist";
-import { COPYLEFT_FAMILY } from "./copyleft";
+import { AGPL_IDS, COPYLEFT_FAMILY } from "./copyleft";
 import {
   COULD_BE_COPYLEFT_FAMILIES,
   WORKSPACE_ABSORBS,
@@ -322,19 +325,36 @@ function clarifyIndexFor(entry: PackageEntry, policy: Policy): number {
  * the LITERAL COULD_BE_COPYLEFT_FAMILIES token set — NOT a COPYLEFT_FAMILY
  * lookup, which is keyed by exact SPDX ids and returns undefined for a bare
  * family token (silently mis-classifying it as permissive):
+ *   - os-scope (a container SYSTEM package, the OS-ecosystem allowlist) AND
+ *     family is the bare "AGPL" token → fail, rule "default:agpl-container"
+ *     (checked first — the imprecise mirror of the elected-AGPL escalation
+ *     in copyleftVerdict; a bare AGPL label could carry the same
+ *     network-copyleft obligation and must never be parked at a warn). An
+ *     application-ecosystem container package is scope "app" here (re-keyed
+ *     upstream) and falls through to the next branch instead.
  *   - family IN the set (bare GPL/AGPL/LGPL) → flagged-for-review, a warn that
  *     surfaces, rule "default:imprecise-copyleft". Conservative: an imprecise
  *     copyleft family is never silently passed.
  *   - family NOT in the set (a known-permissive family like BSD) → a non-gating
  *     warn, rule "default:imprecise". Surfaced for optional `[[clarify]]`
  *     disambiguation, but never a hard fail purely for being imprecise.
- * Both are status "warn": visible in the summary, non-gating by default.
+ * The latter two are status "warn": visible in the summary, non-gating by
+ * default.
  */
 function impreciseVerdict(
   base: { purl: string; occurrenceTarget: string },
   target: string,
   family: string,
+  scope: PackageEntry["scope"],
 ): Verdict {
+  if (scope === "os" && family === "AGPL") {
+    return {
+      ...base,
+      status: "fail",
+      rule: "default:agpl-container",
+      reason: `imprecise license family "AGPL" in container system package "${target}" could carry the AGPL network-copyleft obligation (section 13 reaches server-side use) — disambiguate via a [[clarify]] override, or add a scoped [[compatible]] rule if the container is accepted`,
+    };
+  }
   if (COULD_BE_COPYLEFT_FAMILIES.has(family)) {
     return {
       ...base,
@@ -494,9 +514,13 @@ function applyDevScope(
  * Package-level os-scope downgrade, applied ONLY to a verdict that
  * would otherwise be a default FAIL (default:copyleft, or default:unknown when
  * unknownHandling="fail"). Keyed STRICTLY on the PACKAGE-level entry.scope ===
- * "os" (distinct from applyDevScope's occurrence-level isDevDependency):
+ * "os" (distinct from applyDevScope's occurrence-level isDevDependency) —
+ * the container re-scope transform (pipeline.ts) keeps this "os" iff the
+ * package is on the OS-ecosystem allowlist, so this check is now
+ * ecosystem-accurate: a container SYSTEM package, never an application
+ * dependency baked into an image:
  *   - an APP-scope package → the fail is returned UNCHANGED (the os knob never
- *     touches app dependencies).
+ *     touches app dependencies, container or not).
  *   - an OS-scope package branches on policy.osDependencies:
  *       "fail"   → no downgrade (an os-scope copyleft gates like an app one).
  *       "warn"   → status "warn", reason appends the auditable os-scope cause,
@@ -695,8 +719,36 @@ function unknownVerdict(
 }
 
 /**
+ * Container AGPL escalation: an os-scope SYSTEM package (the OS-ecosystem
+ * allowlist — an application-ecosystem container package is re-keyed to
+ * scope "app" upstream and never reaches this branch) whose ELECTED
+ * expression carries an AGPL leaf is a REAL fail, never the routine
+ * os-downgraded warn — network copyleft (AGPL section 13) applies to
+ * server-side container use, so it must not be softened by
+ * os_dependencies="warn"/"ignore" the way ordinary base-image GPL/LGPL is.
+ * Bypasses applyScopeDowngrades entirely (both the os and dev lanes); the
+ * reason names the elected expression, the container target, the
+ * network-interaction rationale, and the scoped `[[compatible]]` remedy.
+ */
+function agplContainerVerdict(
+  base: { purl: string; occurrenceTarget: string },
+  target: string,
+  elected: string,
+): Verdict {
+  return {
+    ...base,
+    status: "fail",
+    rule: "default:agpl-container",
+    reason: `AGPL leaf in elected "${elected}" is a network-copyleft obligation (AGPL section 13 reaches server-side use) in container system package "${target}" — not routine base-image copyleft; add a scoped [[compatible]] rule if this container is accepted`,
+  };
+}
+
+/**
  * Copyleft lane: a copyleft elected branch is SUPPRESSED when its occurrence
- * sits in a family-justified suppressed workspace, otherwise it is a would-be
+ * sits in a family-justified suppressed workspace; otherwise an os-scope
+ * package whose elected expression carries an AGPL leaf escalates to a REAL
+ * fail (agplContainerVerdict, checked BEFORE the scope downgraders so
+ * os_dependencies can never soften it); otherwise it is a would-be
  * default:copyleft FAIL routed through the scope downgraders.
  * Split out of verdictFor to keep the precedence walk within the complexity
  * budget; the behavior is unchanged — it runs only when assessment.copyleft is
@@ -730,6 +782,14 @@ function copyleftVerdict(
         reason: `copyleft "${assessment.elected}" suppressed in "${target}": ${justification} — workspace "${rule.path}" (${rule.description})`,
       };
     }
+  }
+  if (
+    entry.scope === "os" &&
+    assessment.electedNode !== null &&
+    assessment.elected !== null &&
+    copyleftLeafIds(assessment.electedNode).some((id) => AGPL_IDS.has(id))
+  ) {
+    return agplContainerVerdict(base, target, assessment.elected);
   }
   return applyScopeDowngrades(
     {
@@ -802,7 +862,12 @@ function verdictFor(
   }
 
   if (assessment.impreciseFamily !== undefined) {
-    return impreciseVerdict(base, target, assessment.impreciseFamily);
+    return impreciseVerdict(
+      base,
+      target,
+      assessment.impreciseFamily,
+      entry.scope,
+    );
   }
 
   if (assessment.expression === null) {
@@ -889,6 +954,114 @@ export function evaluate(
       compareCodeUnits(a.purl, b.purl) ||
       compareCodeUnits(a.occurrenceTarget, b.occurrenceTarget),
   );
+}
+
+/**
+ * One accepted-AGPL container obligation: an os-scope (container SYSTEM
+ * package) occurrence whose elected license carries the AGPL network-copyleft
+ * obligation (precise: an AGPL_IDS leaf in the elected expression; imprecise:
+ * the bare "AGPL" family token, the SAME predicates agplContainerVerdict and
+ * impreciseVerdict already gate on) but whose verdict at that occurrence is an
+ * ACCEPTANCE — status "ok" via a `[[compatible]]` rule — rather than the
+ * default:agpl-container fail. Surfaced as a non-blocking special notice
+ * (render/markdown.ts) instead of vanishing: the obligation is accepted, not
+ * absent.
+ */
+export interface AcceptedContainerNotice {
+  readonly purl: string;
+  readonly name: string;
+  readonly version: string;
+  /** Elected SPDX id for a precise finding; the bare "AGPL" family token otherwise. */
+  readonly license: string;
+  /** Deduped, compareCodeUnits-sorted occurrence targets accepted at. */
+  readonly targets: ReadonlyArray<string>;
+  /** The accepting `compatible[i]` rule id (citation, mirrors Verdict.rule). */
+  readonly rule: string;
+  /** The accepting verdict's reason (citation, mirrors Verdict.reason). */
+  readonly reason: string;
+}
+
+/**
+ * An assessment carries the AGPL network-copyleft obligation — precise (an
+ * AGPL_IDS leaf in the elected expression) or imprecise (the bare "AGPL"
+ * family token) — the exact two predicates agplContainerVerdict and
+ * impreciseVerdict already gate os-scope escalation on, reused here so
+ * detection can never drift from the escalation itself.
+ */
+function carriesAgplObligation(assessment: Assessment): boolean {
+  if (
+    assessment.electedNode !== null &&
+    copyleftLeafIds(assessment.electedNode).some((id) => AGPL_IDS.has(id))
+  ) {
+    return true;
+  }
+  return assessment.impreciseFamily === "AGPL";
+}
+
+/**
+ * Accepted-AGPL container notices: one entry per os-scope package carrying
+ * the AGPL obligation with at least one occurrence whose verdict is an
+ * acceptance (status "ok", rule cites a `compatible[i]` entry — the ONLY
+ * lever above the AGPL-container escalation in the precedence walk). A
+ * package with no accepted occurrence contributes nothing; a package also
+ * carrying a fail elsewhere is still returned here — the render layer applies
+ * the Problematic dedup, matching how the flagged-copyleft rows dedup today.
+ * Sorted by purl (compareCodeUnits) for determinism; each notice's targets are
+ * deduped and sorted the same way.
+ */
+export function acceptedContainerNotices(
+  model: CanonicalDependencies,
+  verdicts: ReadonlyArray<Verdict>,
+): AcceptedContainerNotice[] {
+  const verdictByKey = new Map<string, Verdict>();
+  for (const verdict of verdicts) {
+    verdictByKey.set(
+      `${verdict.purl}\u0000${verdict.occurrenceTarget}`,
+      verdict,
+    );
+  }
+
+  const notices: AcceptedContainerNotice[] = [];
+  for (const entry of model.packages) {
+    if (entry.scope !== "os") continue;
+    const assessment = assessPackage(entry);
+    if (!carriesAgplObligation(assessment)) continue;
+
+    const targets: string[] = [];
+    let rule: string | undefined;
+    let reason: string | undefined;
+    for (const occurrence of entry.occurrences) {
+      const verdict = verdictByKey.get(
+        `${entry.purl}\u0000${occurrence.target}`,
+      );
+      if (
+        verdict === undefined ||
+        verdict.status !== "ok" ||
+        !verdict.rule.startsWith("compatible[")
+      ) {
+        continue;
+      }
+      targets.push(occurrence.target);
+      if (rule === undefined) {
+        rule = verdict.rule;
+        reason = verdict.reason;
+      }
+    }
+    if (targets.length === 0 || rule === undefined || reason === undefined) {
+      continue;
+    }
+
+    notices.push({
+      purl: entry.purl,
+      name: entry.name,
+      version: entry.version,
+      license: assessment.elected ?? "AGPL",
+      targets: [...new Set(targets)].sort(compareCodeUnits),
+      rule,
+      reason,
+    });
+  }
+  return notices.sort((a, b) => compareCodeUnits(a.purl, b.purl));
 }
 
 /**

@@ -8,8 +8,12 @@
 - npm: 8
 - Production packages: 8
 - Development-only packages: 0
-- Docker image packages: 0
+- Container packages: 0
 - Unknown license: 1
+
+## Containers
+
+✅ No containers are currently tracked.
 
 ## Production dependencies
 
@@ -27,7 +31,3 @@
 ## Development-only dependencies
 
 ✅ No development-only dependencies.
-
-## Docker image packages
-
-✅ No Docker images are currently tracked.

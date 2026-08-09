@@ -159,3 +159,22 @@ export const COPYLEFT_FAMILY: ReadonlyMap<string, string> = new Map(
 export const COPYLEFT_IDS: ReadonlySet<string> = new Set(
   COPYLEFT_FAMILY.keys(),
 );
+
+/**
+ * Exact-ID AGPL membership — the network-copyleft subset of the GNU family.
+ * The FAMILY_MEMBERS "GNU" token deliberately spans AGPL/GPL/LGPL (see the
+ * module doc above), too coarse for the container-copyleft exception: AGPL
+ * section 13 reaches server-side network use even without distribution, so an
+ * AGPL leaf in a container system package must escalate past the routine
+ * GPL/LGPL base-image tolerance while a GPL/LGPL sibling does not. A literal,
+ * reviewable subset — never derived from COPYLEFT_FAMILY by prefix at runtime
+ * — keeps the same auditability posture as the module above.
+ */
+export const AGPL_IDS: ReadonlySet<string> = new Set([
+  "AGPL-1.0",
+  "AGPL-1.0-only",
+  "AGPL-1.0-or-later",
+  "AGPL-3.0",
+  "AGPL-3.0-only",
+  "AGPL-3.0-or-later",
+]);

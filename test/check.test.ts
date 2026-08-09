@@ -689,15 +689,16 @@ describe("the committed docker.sbom.json as a scope:os merge input", () => {
       }),
     );
 
-    // The rendered document carries the dedicated OS section AND the deb/apk
-    // rows — proof the committed SBOM crossed into the merge as scope:os.
+    // The rendered document carries the container's own subsection AND the
+    // deb/apk rows — proof the committed SBOM crossed into the merge as
+    // scope:os. The occurrence identity is per-image (image lane → the ref).
     const md = outputs!.licensesMd;
-    expect(md.includes("## Docker image packages")).toBe(true);
-    const osSection = squish(md.slice(md.indexOf("## Docker image packages")));
-    expect(osSection.includes("| libc6 | deb | 2.36-9 |")).toBe(true);
-    expect(osSection.includes("| musl | apk | 1.2.4-r2 |")).toBe(true);
-    // The occurrence identity is per-image (image lane → the ref).
-    expect(osSection.includes("docker:postgres:18")).toBe(true);
+    expect(md.includes("### Container: docker:postgres:18")).toBe(true);
+    const containerSection = squish(
+      md.slice(md.indexOf("### Container: docker:postgres:18")),
+    );
+    expect(containerSection.includes("| libc6 | deb | 2.36-9 |")).toBe(true);
+    expect(containerSection.includes("| musl | apk | 1.2.4-r2 |")).toBe(true);
   });
 
   test("the committed docker.sbom.json is read from the REPO ROOT, not the base dir (the Action's divergent-dir case)", async () => {
@@ -725,12 +726,15 @@ describe("the committed docker.sbom.json as a scope:os merge input", () => {
       }),
     );
 
-    // Read from the repo root, so the OS section and deb/apk rows are present.
+    // Read from the repo root, so the container's subsection and deb/apk
+    // rows are present.
     const md = outputs!.licensesMd;
-    expect(md.includes("## Docker image packages")).toBe(true);
-    const osSection = squish(md.slice(md.indexOf("## Docker image packages")));
-    expect(osSection.includes("| libc6 | deb | 2.36-9 |")).toBe(true);
-    expect(osSection.includes("| musl | apk | 1.2.4-r2 |")).toBe(true);
+    expect(md.includes("### Container: docker:postgres:18")).toBe(true);
+    const containerSection = squish(
+      md.slice(md.indexOf("### Container: docker:postgres:18")),
+    );
+    expect(containerSection.includes("| libc6 | deb | 2.36-9 |")).toBe(true);
+    expect(containerSection.includes("| musl | apk | 1.2.4-r2 |")).toBe(true);
   });
 
   test("a docker.sbom.json beside the base dir is IGNORED when the base dir differs from the repo root (no base-dir leakage)", async () => {
@@ -758,12 +762,12 @@ describe("the committed docker.sbom.json as a scope:os merge input", () => {
     );
 
     const md = outputs!.licensesMd;
-    // The OS section heading still renders, but the base-dir SBOM did NOT leak
-    // in: none of its rows appear and the count is zero.
-    const osSection = squish(md.slice(md.indexOf("## Docker image packages")));
-    expect(osSection.includes("libc6")).toBe(false);
-    expect(osSection.includes("musl")).toBe(false);
-    expect(md.includes("- Docker image packages: 0")).toBe(true);
+    // The base-dir SBOM did NOT leak in: no container subsection renders at
+    // all (there is nothing to analyze), and the count is zero.
+    expect(md.includes("### Container:")).toBe(false);
+    expect(md.includes("libc6")).toBe(false);
+    expect(md.includes("musl")).toBe(false);
+    expect(md.includes("- Container packages: 0")).toBe(true);
   });
 
   test("NO committed file → NO os entries and NO docker/syft scan (offline, the cache-miss equivalent)", async () => {
@@ -784,14 +788,15 @@ describe("the committed docker.sbom.json as a scope:os merge input", () => {
     );
 
     const md = outputs!.licensesMd;
-    // The OS section heading still renders (stable shape) but carries NO rows.
-    const osSection = squish(md.slice(md.indexOf("## Docker image packages")));
-    expect(osSection.includes("libc6")).toBe(false);
-    expect(osSection.includes("musl")).toBe(false);
-    expect(osSection.includes("pkg:deb/")).toBe(false);
-    expect(osSection.includes("pkg:apk/")).toBe(false);
+    // No container was analyzed, so no "### Container:" subsection renders
+    // anywhere (there is nothing to group).
+    expect(md.includes("### Container:")).toBe(false);
+    expect(md.includes("libc6")).toBe(false);
+    expect(md.includes("musl")).toBe(false);
+    expect(md.includes("pkg:deb/")).toBe(false);
+    expect(md.includes("pkg:apk/")).toBe(false);
     // No docker base-image packages counted.
-    expect(md.includes("- Docker image packages: 0")).toBe(true);
+    expect(md.includes("- Container packages: 0")).toBe(true);
   });
 
   test("a LEGACY docker-os.sbom.json without the current file fails LOUDLY naming the remedy", async () => {
@@ -844,12 +849,12 @@ describe("the committed docker.sbom.json as a scope:os merge input", () => {
       }),
     );
 
-    const osSection = squish(
+    const containerSection = squish(
       outputs!.licensesMd.slice(
-        outputs!.licensesMd.indexOf("## Docker image packages"),
+        outputs!.licensesMd.indexOf("### Container: docker:postgres:18"),
       ),
     );
-    expect(osSection.includes("| libc6 | deb | 2.36-9 |")).toBe(true);
+    expect(containerSection.includes("| libc6 | deb | 2.36-9 |")).toBe(true);
   });
 
   test("an explicit --docker-sbom override reads that file only — no legacy-file guard", async () => {
@@ -878,12 +883,12 @@ describe("the committed docker.sbom.json as a scope:os merge input", () => {
       }),
     );
 
-    const osSection = squish(
+    const containerSection = squish(
       outputs!.licensesMd.slice(
-        outputs!.licensesMd.indexOf("## Docker image packages"),
+        outputs!.licensesMd.indexOf("### Container: docker:postgres:18"),
       ),
     );
-    expect(osSection.includes("| libc6 | deb | 2.36-9 |")).toBe(true);
+    expect(containerSection.includes("| libc6 | deb | 2.36-9 |")).toBe(true);
   });
 });
 
@@ -1001,33 +1006,31 @@ describe("sidecar fan-out and the malformed-sidecar failure", () => {
     mock.module("../src/collectors/cdxgen", () => REAL_CDXGEN);
   });
 
-  test("the sidecar fans out per image: a shared purl carries BOTH per-image identities, unique purls one each", async () => {
+  test("the sidecar fans out per image: a shared purl rows in EACH container's own subsection, unique purls one each", async () => {
     const { root } = makeScannableTree();
     writeSidecar(root, TWO_IMAGE_SIDECAR);
 
     const { outputs } = await buildAgainst(root);
 
     const md = outputs.licensesMd;
-    const osSection = squish(md.slice(md.indexOf("## Docker image packages")));
-    // The shared purl crossed the untouched merge as TWO occurrences whose
-    // targets are the sorted per-image identities.
-    expect(
-      osSection.includes(
-        "| shared-pkg | apk | 1.0.0 | MIT | docker:a/Dockerfile, docker:b/Dockerfile |",
-      ),
-    ).toBe(true);
-    expect(
-      osSection.includes(
-        "| only-a | apk | 1.0.0 | MIT | docker:a/Dockerfile |",
-      ),
-    ).toBe(true);
-    expect(
-      osSection.includes(
-        "| only-b | apk | 1.0.0 | MIT | docker:b/Dockerfile |",
-      ),
-    ).toBe(true);
-    // Still one ROW per purl (the fan-out multiplies occurrences, not rows).
-    expect(md.includes("- Docker image packages: 3")).toBe(true);
+    const aPos = md.indexOf("### Container: docker:a/Dockerfile");
+    const bPos = md.indexOf("### Container: docker:b/Dockerfile");
+    expect(aPos).toBeGreaterThan(-1);
+    expect(bPos).toBeGreaterThan(aPos);
+    const aSection = squish(md.slice(aPos, bPos));
+    const bSection = squish(md.slice(bPos));
+    // The shared purl crossed the untouched merge as TWO occurrences, and
+    // rows in EACH container's own subsection (no Used-in column here — the
+    // heading already scopes the row).
+    expect(aSection.includes("| shared-pkg | apk | 1.0.0 | MIT |")).toBe(true);
+    expect(bSection.includes("| shared-pkg | apk | 1.0.0 | MIT |")).toBe(true);
+    expect(aSection.includes("| only-a | apk | 1.0.0 | MIT |")).toBe(true);
+    expect(aSection.includes("only-b")).toBe(false);
+    expect(bSection.includes("| only-b | apk | 1.0.0 | MIT |")).toBe(true);
+    expect(bSection.includes("only-a")).toBe(false);
+    // Still one PACKAGE per purl (the fan-out multiplies occurrences/rows
+    // across containers, not distinct packages).
+    expect(md.includes("- Container packages: 3")).toBe(true);
   });
 
   const MALFORMED_VARIANTS: ReadonlyArray<{ label: string; doc: unknown }> = [
@@ -1254,27 +1257,38 @@ describe("the two-Dockerfile scenario end-to-end", () => {
       false,
     );
 
-    // Rendered warn surface: the copyleft section flags ONLY the B occurrence,
-    // and the non-blocking roll-up names the copyleft warning.
+    // Rendered warn surface: container system-package copyleft is routine and
+    // is never surfaced in the detailed Copyleft table (regardless of which
+    // occurrence carries the warn) — only the non-blocking roll-up names it.
     const md = outputs.licensesMd;
     const copyleft = squish(
       md.slice(
         md.indexOf("## Copyleft and special notices"),
-        md.indexOf("## Production dependencies"),
+        md.indexOf("## Containers"),
       ),
     );
-    expect(copyleft.includes("| busybox |")).toBe(true);
-    expect(copyleft.includes("docker:b/Dockerfile")).toBe(true);
-    expect(copyleft.includes("docker:a/Dockerfile")).toBe(false);
+    expect(copyleft.includes("| busybox |")).toBe(false);
+    expect(
+      copyleft.includes(
+        "✅ No package carries copyleft or special license obligations.",
+      ),
+    ).toBe(true);
     expect(md.includes("1 copyleft warning(s)")).toBe(true);
 
-    // The Docker section's Used-in still names BOTH occurrences (the flow
-    // sidecar → merge → Used-in is per-image; only the FLAGGED surface narrows).
-    const osSection = squish(md.slice(md.indexOf("## Docker image packages")));
+    // busybox still rows in BOTH containers' own subsections (the flow
+    // sidecar → merge → per-container placement; only the FLAGGED surface
+    // narrows).
+    const aSection = squish(
+      md.slice(md.indexOf("### Container: docker:a/Dockerfile")),
+    );
+    const bSection = squish(
+      md.slice(md.indexOf("### Container: docker:b/Dockerfile")),
+    );
     expect(
-      osSection.includes(
-        "| busybox | apk | 1.37.0-r19 | GPL-2.0-only | docker:a/Dockerfile, docker:b/Dockerfile |",
-      ),
+      aSection.includes("| busybox | apk | 1.37.0-r19 | GPL-2.0-only |"),
+    ).toBe(true);
+    expect(
+      bSection.includes("| busybox | apk | 1.37.0-r19 | GPL-2.0-only |"),
     ).toBe(true);
   });
 
@@ -1341,5 +1355,658 @@ describe("the two-Dockerfile scenario end-to-end", () => {
       ["docker:b/Dockerfile", "ok", "compatible[0]"],
     ]);
     expect(stderr.includes(`policy warn: ${BUSYBOX_PURL}`)).toBe(false);
+  });
+});
+
+// ===========================================================================
+// The container re-scope transform, end to end through buildOutputs: an
+// application-ecosystem package baked into an image gates like an
+// application dependency (fails in production, dev-downgrades in a
+// [[docker.development]]-marked container), while an OS-allowlist system
+// package keeps every routine Phase-18 behavior unchanged. The
+// [[docker.development]] glob resolution runs ONCE and feeds both the
+// re-scope transform and the render classification.
+// ===========================================================================
+
+const PROD_IMG = { image: "prod-img", digest: "", source: "prod/Dockerfile" };
+const DEV_IMG = { image: "dev-img", digest: "", source: "dev/Dockerfile" };
+
+/** One production container (pypi + deb) and one dev-marked container (golang). */
+const ECOSYSTEM_SIDECAR = sidecarDoc(
+  [
+    {
+      type: "library",
+      name: "pip-copyleft",
+      version: "1.0.0",
+      purl: "pkg:pypi/pip-copyleft@1.0.0",
+      licenses: [{ license: { id: "LGPL-3.0-or-later" } }],
+      images: [PROD_IMG.image, DEV_IMG.image],
+    },
+    {
+      type: "library",
+      name: "sys-gpl",
+      version: "1.0.0",
+      purl: "pkg:deb/debian/sys-gpl@1.0.0",
+      licenses: [{ license: { id: "GPL-2.0-only" } }],
+      images: [PROD_IMG.image],
+    },
+    {
+      type: "library",
+      name: "sys-agpl",
+      version: "1.0.0",
+      purl: "pkg:deb/debian/sys-agpl@1.0.0",
+      licenses: [{ license: { id: "AGPL-3.0-only" } }],
+      images: [PROD_IMG.image],
+    },
+    {
+      type: "library",
+      name: "go-agpl",
+      version: "1.0.0",
+      purl: "pkg:golang/go-agpl@1.0.0",
+      licenses: [{ license: { id: "AGPL-3.0-only" } }],
+      images: [PROD_IMG.image],
+    },
+  ],
+  [PROD_IMG, DEV_IMG],
+);
+
+/** Marks "dev/Dockerfile" development-only; [os_dependencies]/[dev_dependencies] vary by test. */
+function ecosystemPolicy(osHandling: string, devHandling: string): string {
+  return [
+    "[unknown]",
+    'handling = "warn"',
+    "",
+    "[os_dependencies]",
+    `handling = "${osHandling}"`,
+    "",
+    "[dev_dependencies]",
+    `handling = "${devHandling}"`,
+    "",
+    "[[docker.development]]",
+    'source = "dev/Dockerfile"',
+    'reason = "the dev image only runs local tooling"',
+    "",
+  ].join("\n");
+}
+
+describe("the container re-scope transform end to end (buildOutputs)", () => {
+  beforeAll(() => {
+    mock.module("../src/collectors/cdxgen", () => ({
+      ...REAL_CDXGEN,
+      collectWithCdxgen: fakeScanWithCdxgen,
+    }));
+  });
+  afterAll(() => {
+    mock.module("../src/collectors/cdxgen", () => REAL_CDXGEN);
+  });
+
+  test("an application-ecosystem copyleft package in a PRODUCTION container FAILS via default:copyleft", async () => {
+    const { root } = makeScannableTree();
+    writeSidecar(root, ECOSYSTEM_SIDECAR);
+    const policyPath = writePolicy(root, ecosystemPolicy("warn", "warn"));
+
+    const { outputs } = await buildAgainst(root, policyPath);
+
+    const verdict = outputs.verdicts!.find(
+      (v) =>
+        v.purl === "pkg:pypi/pip-copyleft@1.0.0" &&
+        v.occurrenceTarget === "docker:prod/Dockerfile",
+    );
+    expect(verdict?.status).toBe("fail");
+    expect(verdict?.rule).toBe("default:copyleft");
+  });
+
+  test("the SAME application-ecosystem package in a DEV-marked container dev-downgrades to warn (dev_dependencies=warn)", async () => {
+    const { root } = makeScannableTree();
+    writeSidecar(root, ECOSYSTEM_SIDECAR);
+    const policyPath = writePolicy(root, ecosystemPolicy("warn", "warn"));
+
+    const { outputs } = await buildAgainst(root, policyPath);
+
+    const verdict = outputs.verdicts!.find(
+      (v) =>
+        v.purl === "pkg:pypi/pip-copyleft@1.0.0" &&
+        v.occurrenceTarget === "docker:dev/Dockerfile",
+    );
+    expect(verdict?.status).toBe("warn");
+    expect(verdict?.rule).toBe("default:copyleft");
+  });
+
+  test("a deb (OS-allowlist) GPL package in a production container still os-downgrades to warn under os_dependencies=warn — routine behavior unchanged", async () => {
+    const { root } = makeScannableTree();
+    writeSidecar(root, ECOSYSTEM_SIDECAR);
+    const policyPath = writePolicy(root, ecosystemPolicy("warn", "warn"));
+
+    const { outputs } = await buildAgainst(root, policyPath);
+
+    const verdict = outputs.verdicts!.find(
+      (v) => v.purl === "pkg:deb/debian/sys-gpl@1.0.0",
+    );
+    expect(verdict?.status).toBe("warn");
+    expect(verdict?.rule).toBe("default:copyleft");
+  });
+
+  test("a deb (OS-allowlist) AGPL package FAILS via default:agpl-container under os_dependencies warn/fail/ignore — system-package escalation unchanged", async () => {
+    for (const osHandling of ["warn", "fail", "ignore"]) {
+      const { root } = makeScannableTree();
+      writeSidecar(root, ECOSYSTEM_SIDECAR);
+      const policyPath = writePolicy(root, ecosystemPolicy(osHandling, "warn"));
+
+      const { outputs } = await buildAgainst(root, policyPath);
+
+      const verdict = outputs.verdicts!.find(
+        (v) => v.purl === "pkg:deb/debian/sys-agpl@1.0.0",
+      );
+      expect(verdict?.status).toBe("fail");
+      expect(verdict?.rule).toBe("default:agpl-container");
+    }
+  });
+
+  test("a golang (application-ecosystem) AGPL package in a production container FAILS via the normal copyleft path (default:copyleft), not default:agpl-container", async () => {
+    const { root } = makeScannableTree();
+    writeSidecar(root, ECOSYSTEM_SIDECAR);
+    const policyPath = writePolicy(root, ecosystemPolicy("warn", "warn"));
+
+    const { outputs } = await buildAgainst(root, policyPath);
+
+    const verdict = outputs.verdicts!.find(
+      (v) => v.purl === "pkg:golang/go-agpl@1.0.0",
+    );
+    expect(verdict?.status).toBe("fail");
+    expect(verdict?.rule).toBe("default:copyleft");
+  });
+
+  test("the [[docker.development]] dead-pattern warning still fires per unmatched pattern; the resolved set drives BOTH the transform and the render from ONE resolution", async () => {
+    const { root } = makeScannableTree();
+    writeSidecar(root, ECOSYSTEM_SIDECAR);
+    const policyPath = writePolicy(
+      root,
+      [
+        "[unknown]",
+        'handling = "warn"',
+        "",
+        "[os_dependencies]",
+        'handling = "warn"',
+        "",
+        "[[docker.development]]",
+        'source = "dev/Dockerfile"',
+        'reason = "the dev image only runs local tooling"',
+        "",
+        "[[docker.development]]",
+        'source = "no/such/Dockerfile"',
+        'reason = "a typo — matches nothing"',
+        "",
+      ].join("\n"),
+    );
+
+    const { outputs, stderr } = await buildAgainst(root, policyPath);
+
+    expect(
+      stderr.includes(
+        'policy: [[docker.development]] "no/such/Dockerfile" matches no analyzed container image',
+      ),
+    ).toBe(true);
+
+    // The SAME resolved set dev-downgrades the transform's verdict AND
+    // classifies the render — one resolution, two consumers.
+    const devVerdict = outputs.verdicts!.find(
+      (v) =>
+        v.purl === "pkg:pypi/pip-copyleft@1.0.0" &&
+        v.occurrenceTarget === "docker:dev/Dockerfile",
+    );
+    expect(devVerdict?.status).toBe("warn");
+    expect(
+      squish(outputs.licensesMd).includes(
+        "| docker:dev/Dockerfile | development | 1 |",
+      ),
+    ).toBe(true);
+  });
+});
+
+// ===========================================================================
+// PolicyView.developmentContainers: the pipeline resolves each
+// [[docker.development]] glob against the analyzed container SOURCES using
+// the same globToRegExp matcher as [docker].ignore — anchored, `*` within a
+// segment, `**` across segments. Rendered classification lives in the
+// "## Containers" index.
+// ===========================================================================
+
+const TOOLS_IMG = {
+  image: "tools-img",
+  digest: "",
+  source: "tools/build/Dockerfile",
+};
+const A_IMG_2 = { image: "a-img-2", digest: "", source: "a/Dockerfile" };
+
+/** Two containers: a nested "tools/build/Dockerfile" and a top-level "a/Dockerfile". */
+const GLOB_SIDECAR = sidecarDoc(
+  [
+    sidecarComponent("pkg-in-tools", ["tools-img"]),
+    sidecarComponent("pkg-in-a", ["a-img-2"]),
+  ],
+  [TOOLS_IMG, A_IMG_2],
+);
+
+/** A minimal policy with a single [[docker.development]] entry. */
+function developmentGlobPolicy(source: string): string {
+  return [
+    "[unknown]",
+    'handling = "warn"',
+    "",
+    "[os_dependencies]",
+    'handling = "warn"',
+    "",
+    "[docker]",
+    "",
+    "[[docker.development]]",
+    `source = ${JSON.stringify(source)}`,
+    'reason = "test reason"',
+    "",
+  ].join("\n");
+}
+
+describe("PolicyView.developmentContainers — pipeline glob resolution", () => {
+  beforeAll(() => {
+    mock.module("../src/collectors/cdxgen", () => ({
+      ...REAL_CDXGEN,
+      collectWithCdxgen: fakeScanWithCdxgen,
+    }));
+  });
+  afterAll(() => {
+    mock.module("../src/collectors/cdxgen", () => REAL_CDXGEN);
+  });
+
+  test('a `**` glob matches ACROSS segments: "tools/**" marks the nested container development; the sibling stays production', async () => {
+    const { root } = makeScannableTree();
+    writeSidecar(root, GLOB_SIDECAR);
+    const policyPath = writePolicy(root, developmentGlobPolicy("tools/**"));
+
+    const { outputs } = await buildAgainst(root, policyPath);
+
+    const md = outputs.licensesMd;
+    const containers = squish(
+      md.slice(
+        md.indexOf("## Containers"),
+        md.indexOf("## Production dependencies"),
+      ),
+    );
+    expect(
+      containers.includes(
+        "| docker:tools/build/Dockerfile | development | 1 |",
+      ),
+    ).toBe(true);
+    expect(
+      containers.includes("| docker:a/Dockerfile | production | 1 |"),
+    ).toBe(true);
+  });
+
+  test('a `*` glob does NOT cross segments: "tools/*" leaves "tools/build/Dockerfile" production (the ignore matcher\'s documented semantics)', async () => {
+    const { root } = makeScannableTree();
+    writeSidecar(root, GLOB_SIDECAR);
+    const policyPath = writePolicy(root, developmentGlobPolicy("tools/*"));
+
+    const { outputs } = await buildAgainst(root, policyPath);
+
+    const md = outputs.licensesMd;
+    const containers = squish(
+      md.slice(
+        md.indexOf("## Containers"),
+        md.indexOf("## Production dependencies"),
+      ),
+    );
+    expect(
+      containers.includes("| docker:tools/build/Dockerfile | production | 1 |"),
+    ).toBe(true);
+    expect(
+      containers.includes("| docker:a/Dockerfile | production | 1 |"),
+    ).toBe(true);
+  });
+
+  test("a literal source matches exactly", async () => {
+    const { root } = makeScannableTree();
+    writeSidecar(root, GLOB_SIDECAR);
+    const policyPath = writePolicy(root, developmentGlobPolicy("a/Dockerfile"));
+
+    const { outputs } = await buildAgainst(root, policyPath);
+
+    const md = outputs.licensesMd;
+    const containers = squish(
+      md.slice(
+        md.indexOf("## Containers"),
+        md.indexOf("## Production dependencies"),
+      ),
+    );
+    expect(
+      containers.includes("| docker:a/Dockerfile | development | 1 |"),
+    ).toBe(true);
+    expect(
+      containers.includes("| docker:tools/build/Dockerfile | production | 1 |"),
+    ).toBe(true);
+  });
+
+  test("two patterns matching the SAME container mark it once (idempotent)", async () => {
+    const { root } = makeScannableTree();
+    writeSidecar(root, GLOB_SIDECAR);
+    const policyPath = writePolicy(
+      root,
+      [
+        "[unknown]",
+        'handling = "warn"',
+        "",
+        "[os_dependencies]",
+        'handling = "warn"',
+        "",
+        "[docker]",
+        "",
+        "[[docker.development]]",
+        'source = "tools/**"',
+        'reason = "matches via the double-star"',
+        "",
+        "[[docker.development]]",
+        'source = "tools/build/Dockerfile"',
+        'reason = "matches again via the literal path"',
+        "",
+      ].join("\n"),
+    );
+
+    const { outputs } = await buildAgainst(root, policyPath);
+
+    const md = outputs.licensesMd;
+    const containers = squish(
+      md.slice(
+        md.indexOf("## Containers"),
+        md.indexOf("## Production dependencies"),
+      ),
+    );
+    // Exactly ONE row for the doubly-matched container, still development.
+    expect(
+      (containers.match(/docker:tools\/build\/Dockerfile/g) ?? []).length,
+    ).toBe(1);
+    expect(
+      containers.includes(
+        "| docker:tools/build/Dockerfile | development | 1 |",
+      ),
+    ).toBe(true);
+  });
+
+  test("no [[docker.development]] entries → every container reads production", async () => {
+    const { root } = makeScannableTree();
+    writeSidecar(root, GLOB_SIDECAR);
+    const policyPath = writePolicy(
+      root,
+      [
+        "[unknown]",
+        'handling = "warn"',
+        "",
+        "[os_dependencies]",
+        'handling = "warn"',
+        "",
+      ].join("\n"),
+    );
+
+    const { outputs } = await buildAgainst(root, policyPath);
+
+    const md = outputs.licensesMd;
+    const containers = squish(
+      md.slice(
+        md.indexOf("## Containers"),
+        md.indexOf("## Production dependencies"),
+      ),
+    );
+    expect(
+      containers.includes("| docker:tools/build/Dockerfile | production | 1 |"),
+    ).toBe(true);
+    expect(
+      containers.includes("| docker:a/Dockerfile | production | 1 |"),
+    ).toBe(true);
+  });
+
+  test('glob metachars are literal: "a.c/Dockerfile" does NOT match container "abc/Dockerfile"; "?", "(", "$" match only themselves', async () => {
+    const { root } = makeScannableTree();
+    const sidecar = sidecarDoc(
+      [
+        sidecarComponent("pkg-in-dotc", ["dotc-img"]),
+        sidecarComponent("pkg-in-abc", ["abc-img"]),
+        sidecarComponent("pkg-in-special", ["special-img"]),
+      ],
+      [
+        { image: "dotc-img", digest: "", source: "a.c/Dockerfile" },
+        { image: "abc-img", digest: "", source: "abc/Dockerfile" },
+        { image: "special-img", digest: "", source: "b?(1)$c/Dockerfile" },
+      ],
+    );
+    writeSidecar(root, sidecar);
+    const policyPath = writePolicy(
+      root,
+      [
+        "[unknown]",
+        'handling = "warn"',
+        "",
+        "[os_dependencies]",
+        'handling = "warn"',
+        "",
+        "[docker]",
+        "",
+        "[[docker.development]]",
+        'source = "a.c/Dockerfile"',
+        'reason = "literal-dot pattern"',
+        "",
+        "[[docker.development]]",
+        'source = "b?(1)$c/Dockerfile"',
+        'reason = "literal regex-metachar pattern"',
+        "",
+      ].join("\n"),
+    );
+
+    const { outputs } = await buildAgainst(root, policyPath);
+
+    const md = outputs.licensesMd;
+    const containers = squish(
+      md.slice(
+        md.indexOf("## Containers"),
+        md.indexOf("## Production dependencies"),
+      ),
+    );
+    // "a.c" matches only its own literal source — the dot is escaped, never
+    // a regex any-char wildcard, so "abc" stays production.
+    expect(
+      containers.includes("| docker:a.c/Dockerfile | development | 1 |"),
+    ).toBe(true);
+    expect(
+      containers.includes("| docker:abc/Dockerfile | production | 1 |"),
+    ).toBe(true);
+    // "?", "(", "$" are escaped too — the pattern matches only the
+    // byte-identical source.
+    expect(
+      containers.includes("| docker:b?(1)$c/Dockerfile | development | 1 |"),
+    ).toBe(true);
+  });
+
+  test('case-insensitive match: "a/**" classifies BOTH docker:a/... and docker:A/... development; the Containers index still sorts code-unit ("A" before "a"), and a second build is byte-identical', async () => {
+    const { root } = makeScannableTree();
+    const sidecar = sidecarDoc(
+      [
+        sidecarComponent("pkg-in-upper", ["upper-img"]),
+        sidecarComponent("pkg-in-lower", ["lower-img"]),
+      ],
+      [
+        { image: "upper-img", digest: "", source: "A/Dockerfile" },
+        { image: "lower-img", digest: "", source: "a/Dockerfile" },
+      ],
+    );
+    writeSidecar(root, sidecar);
+    const policyPath = writePolicy(root, developmentGlobPolicy("a/**"));
+
+    const first = await buildAgainst(root, policyPath);
+    const second = await buildAgainst(root, policyPath);
+
+    const md = first.outputs.licensesMd;
+    const containersBlock = md.slice(
+      md.indexOf("## Containers"),
+      md.indexOf("## Production dependencies"),
+    );
+    const containers = squish(containersBlock);
+    expect(
+      containers.includes("| docker:A/Dockerfile | development | 1 |"),
+    ).toBe(true);
+    expect(
+      containers.includes("| docker:a/Dockerfile | development | 1 |"),
+    ).toBe(true);
+    // Code-unit order: uppercase "A" (0x41) sorts before lowercase "a"
+    // (0x61) — never a locale-aware case-insensitive order.
+    expect(
+      containersBlock.indexOf("docker:A/Dockerfile") <
+        containersBlock.indexOf("docker:a/Dockerfile"),
+    ).toBe(true);
+    expect(second.outputs.licensesMd).toBe(first.outputs.licensesMd);
+  });
+});
+
+// ===========================================================================
+// A [[docker.development]] pattern matching NO analyzed container source is a
+// dead entry (most likely a mistyped path) and warns once on stderr, per
+// pattern, via the SAME globToRegExp matcher that resolves classification —
+// a pattern can never be dead here and classifying above. The marking is
+// render-only: it must never change evaluate's verdict stream.
+// ===========================================================================
+
+describe("a dead [[docker.development]] pattern warns; the marking never touches verdicts", () => {
+  beforeAll(() => {
+    mock.module("../src/collectors/cdxgen", () => ({
+      ...REAL_CDXGEN,
+      collectWithCdxgen: fakeScanWithCdxgen,
+    }));
+  });
+  afterAll(() => {
+    mock.module("../src/collectors/cdxgen", () => REAL_CDXGEN);
+  });
+
+  test("a pattern matching no analyzed container warns; a matching pattern is silent", async () => {
+    const { root } = makeScannableTree();
+    writeSidecar(root, GLOB_SIDECAR);
+    const policyPath = writePolicy(
+      root,
+      developmentGlobPolicy("no/such/Dockerfile"),
+    );
+
+    const { stderr } = await buildAgainst(root, policyPath);
+
+    expect(
+      stderr.includes(
+        'policy: [[docker.development]] "no/such/Dockerfile" matches no analyzed container image',
+      ),
+    ).toBe(true);
+  });
+
+  test("a matching pattern prints no dead-entry warning", async () => {
+    const { root } = makeScannableTree();
+    writeSidecar(root, GLOB_SIDECAR);
+    const policyPath = writePolicy(root, developmentGlobPolicy("tools/**"));
+
+    const { stderr } = await buildAgainst(root, policyPath);
+
+    expect(stderr.includes("matches no analyzed container image")).toBe(false);
+  });
+
+  test("PER PATTERN: one matching + one dead pattern fires exactly ONE warning, naming the dead one", async () => {
+    const { root } = makeScannableTree();
+    writeSidecar(root, GLOB_SIDECAR);
+    const policyPath = writePolicy(
+      root,
+      [
+        "[unknown]",
+        'handling = "warn"',
+        "",
+        "[os_dependencies]",
+        'handling = "warn"',
+        "",
+        "[docker]",
+        "",
+        "[[docker.development]]",
+        'source = "tools/**"',
+        'reason = "matches the nested container"',
+        "",
+        "[[docker.development]]",
+        'source = "no/such/Dockerfile"',
+        'reason = "does not match anything"',
+        "",
+      ].join("\n"),
+    );
+
+    const { stderr } = await buildAgainst(root, policyPath);
+
+    const warnings = (
+      stderr.match(/policy: \[\[docker\.development\]\]/g) ?? []
+    ).length;
+    expect(warnings).toBe(1);
+    expect(
+      stderr.includes(
+        'policy: [[docker.development]] "no/such/Dockerfile" matches no analyzed container image',
+      ),
+    ).toBe(true);
+    expect(stderr.includes('policy: [[docker.development]] "tools/**"')).toBe(
+      false,
+    );
+  });
+
+  test("two DIFFERENT patterns matching the SAME container fire NO warning at all (idempotent dev marking is legal)", async () => {
+    const { root } = makeScannableTree();
+    writeSidecar(root, GLOB_SIDECAR);
+    const policyPath = writePolicy(
+      root,
+      [
+        "[unknown]",
+        'handling = "warn"',
+        "",
+        "[os_dependencies]",
+        'handling = "warn"',
+        "",
+        "[docker]",
+        "",
+        "[[docker.development]]",
+        'source = "tools/**"',
+        'reason = "matches via the double-star"',
+        "",
+        "[[docker.development]]",
+        'source = "tools/build/Dockerfile"',
+        'reason = "matches again via the literal path"',
+        "",
+      ].join("\n"),
+    );
+
+    const { stderr } = await buildAgainst(root, policyPath);
+
+    expect(stderr.includes("matches no analyzed container image")).toBe(false);
+  });
+
+  test("render-only contract: [[docker.development]] never changes evaluate's verdict stream", async () => {
+    const { root } = makeScannableTree();
+    writeSidecar(root, GLOB_SIDECAR);
+    const baselinePolicy = writePolicy(
+      root,
+      [
+        "[unknown]",
+        'handling = "warn"',
+        "",
+        "[os_dependencies]",
+        'handling = "warn"',
+        "",
+      ].join("\n"),
+    );
+    const { outputs: baseline } = await buildAgainst(root, baselinePolicy);
+
+    const { root: root2 } = makeScannableTree();
+    writeSidecar(root2, GLOB_SIDECAR);
+    const markedPolicy = writePolicy(root2, developmentGlobPolicy("a/**"));
+    const { outputs: marked } = await buildAgainst(root2, markedPolicy);
+
+    // The [[docker.development]] entry marks "a/Dockerfile" development-only
+    // in the RENDERED document, but the verdict stream — the gate-relevant
+    // half — is byte-for-byte identical either way.
+    expect(marked.verdicts).toEqual(baseline.verdicts);
+    // Sanity: the marking DID take effect in the render (placement-only).
+    expect(
+      marked.licensesMd.includes("### Container: docker:a/Dockerfile"),
+    ).toBe(true);
   });
 });

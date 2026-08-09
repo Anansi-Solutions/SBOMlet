@@ -8,8 +8,12 @@
 - npm: 6
 - Production packages: 1
 - Development-only packages: 5
-- Docker image packages: 0
+- Container packages: 0
 - Unknown license: 6
+
+## Containers
+
+✅ No containers are currently tracked.
 
 ## Production dependencies
 
@@ -26,7 +30,3 @@
 | ms | npm | 2.1.3 | unknown | libraries/iframe-rpc |
 | picocolors | npm | 1.0.0 | unknown | libraries/iframe-rpc |
 | typescript | npm | 5.9.3 | unknown | libraries/iframe-rpc |
-
-## Docker image packages
-
-✅ No Docker images are currently tracked.

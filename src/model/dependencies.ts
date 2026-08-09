@@ -194,7 +194,8 @@ export interface Verdict {
   /**
    * Machine-readable deciding rule: "compatible[1]", "clarify[0]",
    * "workspace.copyleft_suppressed[0]", "default:copyleft", "default:unknown",
-   * "default:imprecise", "default:imprecise-copyleft", "default:ok".
+   * "default:imprecise", "default:imprecise-copyleft", "default:agpl-container",
+   * "default:ok".
    */
   rule: string;
   reason: string;
@@ -202,6 +203,18 @@ export interface Verdict {
 
 /** "os" is reserved for Docker image scanning. */
 export type ScopeTaxonomy = "app" | "os";
+
+/**
+ * The prefix of every docker image occurrence identity ("docker:<source>").
+ * RESERVED for scope:"os" inputs — on a POSIX filesystem a directory can be
+ * literally named "docker:whatever", so without the reserved-namespace guard
+ * in merge.ts (assertNotReservedIdentity) a crafted workspace path could
+ * impersonate a docker image occurrence and inherit `where`-scoped
+ * acceptances reviewed for the image layer. Lives on the model hub — every
+ * other module imports from here — because the render layer needs it too
+ * (Containers section identities), not only merge/pipeline.
+ */
+export const DOCKER_IDENTITY_PREFIX = "docker:";
 
 /**
  * Dependency provenance — "why is this dependency here?" — derived per-target
@@ -351,6 +364,18 @@ export function comparePackages(a: PackageEntry, b: PackageEntry): number {
     compareCodeUnits(a.version, b.version) ||
     compareCodeUnits(a.purl, b.purl)
   );
+}
+
+/**
+ * The purl TYPE segment — everything between "pkg:" and the first "/". Shared
+ * hub helper: the render layer's ecosystem column and the container
+ * system-vs-application discriminator (the OS-package allowlist) both key on
+ * this exact extraction, so there is one purl-parsing rule, not two.
+ */
+export function purlEcosystem(purl: string): string {
+  const rest = purl.startsWith("pkg:") ? purl.slice(4) : purl;
+  const slash = rest.indexOf("/");
+  return slash === -1 ? rest : rest.slice(0, slash);
 }
 
 /**

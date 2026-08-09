@@ -614,10 +614,29 @@ describe("renderMarkdown — the full document", () => {
     );
   });
 
-  test("Test 5: copyleft membership — fail/warn default:copyleft only; Used-in lists only flagged targets", () => {
+  test("Test 5: copyleft membership + copyleft-only dedup — a fail verdict of ANY rule excludes the purl from Copyleft entirely; a warn-only default:copyleft package stays a member; Used-in lists only flagged targets", () => {
+    const warnOnlyCopyleft = entry({
+      purl: "pkg:npm/warn-only-copyleft@1.0.0",
+      name: "warn-only-copyleft",
+      version: "1.0.0",
+      occurrences: [
+        { target: "backend", isDevDependency: false },
+        { target: "frontend", isDevDependency: false },
+      ],
+      licenseClaims: [
+        { raw: "LGPL-3.0-or-later", kind: "spdx-id", source: "generator" },
+      ],
+      finding: {
+        expression: "LGPL-3.0-or-later",
+        elected: "LGPL-3.0-or-later",
+        source: "generator",
+        confidence: "exact",
+      },
+    });
     const model: CanonicalDependencies = {
       packages: [
         sharpEntry,
+        warnOnlyCopyleft,
         entry({
           purl: "pkg:npm/suppressed-only@1.0.0",
           name: "suppressed-only",
@@ -650,6 +669,10 @@ describe("renderMarkdown — the full document", () => {
       policyPath: "policy.toml",
       suppressedWorkspaces: [],
       verdicts: [
+        // sharp carries BOTH a fail (frontend) and a warn (backend) verdict for
+        // the SAME rule -- the observed duplication defect this dedup fixes:
+        // the purl has a fail verdict, so it is excluded from Copyleft
+        // entirely, even though a warn default:copyleft verdict also exists.
         {
           purl: "pkg:npm/sharp@0.33.0",
           occurrenceTarget: "frontend",
@@ -670,6 +693,22 @@ describe("renderMarkdown — the full document", () => {
           status: "suppressed",
           rule: "workspace.copyleft_suppressed[0]",
           reason: "suppressed by workspace rule",
+        },
+        // warn-only-copyleft carries ONLY warn default:copyleft verdicts, no
+        // fail anywhere -- it stays a Copyleft member.
+        {
+          purl: "pkg:npm/warn-only-copyleft@1.0.0",
+          occurrenceTarget: "backend",
+          status: "warn",
+          rule: "default:copyleft",
+          reason: 'copyleft license "LGPL-3.0-or-later"',
+        },
+        {
+          purl: "pkg:npm/warn-only-copyleft@1.0.0",
+          occurrenceTarget: "frontend",
+          status: "warn",
+          rule: "default:copyleft",
+          reason: 'copyleft license "LGPL-3.0-or-later"',
         },
         {
           purl: "pkg:npm/unknown-pkg@1.0.0",
@@ -693,22 +732,188 @@ describe("renderMarkdown — the full document", () => {
     expect(copyleftStart).toBeGreaterThan(-1);
     const copyleftSection = output.slice(copyleftStart, summaryStart);
 
-    // Membership: fail/warn verdicts with rule exactly "default:copyleft";
-    // Used-in lists ONLY the flagged targets, compareCodeUnits-sorted — the
-    // suppressed "docs" occurrence never appears.
+    // Dedup: sharp has a fail verdict for its purl, so it is excluded from
+    // Copyleft entirely -- the observed duplication defect is gone.
+    expect(copyleftSection.includes("sharp")).toBe(false);
+    // Membership stands for a warn-only default:copyleft package; Used-in
+    // lists ONLY the flagged targets, compareCodeUnits-sorted.
     expect(
       copyleftSection.includes(
-        "| sharp | npm | 0.33.0 | LGPL-3.0-or-later | backend, frontend | — |",
+        "| warn-only-copyleft | npm | 1.0.0 | LGPL-3.0-or-later | backend, frontend | — |",
       ),
     ).toBe(true);
-    expect(copyleftSection.includes("docs")).toBe(false);
     // default:unknown warns and suppressed-only packages are omitted.
     expect(copyleftSection.includes("unknown-pkg")).toBe(false);
     expect(copyleftSection.includes("suppressed-only")).toBe(false);
-    // ...but both still appear in the summary.
+    // Inventory completeness: sharp is EXCLUDED from Copyleft but STILL rows
+    // in its Production/Development table (the dedup never drops inventory).
     const summary = output.slice(summaryStart);
+    expect(summary.includes("| sharp | npm | 0.33.0 |")).toBe(true);
     expect(summary.includes("| unknown-pkg |")).toBe(true);
     expect(summary.includes("| suppressed-only |")).toBe(true);
+  });
+
+  test("Test 5b: container system-package copyleft is routine and never surfaces in Copyleft, whatever its verdict status; the same warn on an APP package still surfaces", () => {
+    const osCopyleft = entry({
+      purl: "pkg:deb/debian/libssl@3.0",
+      name: "libssl",
+      version: "3.0",
+      occurrences: [
+        { target: "docker:img/Dockerfile", isDevDependency: false },
+      ],
+      licenseClaims: [
+        { raw: "GPL-3.0-only", kind: "spdx-id", source: "generator" },
+      ],
+      finding: {
+        expression: "GPL-3.0-only",
+        elected: "GPL-3.0-only",
+        source: "generator",
+        confidence: "exact",
+      },
+      scope: "os",
+    });
+    const appCopyleft = entry({
+      purl: "pkg:npm/app-copyleft@1.0.0",
+      name: "app-copyleft",
+      version: "1.0.0",
+      occurrences: [{ target: "backend", isDevDependency: false }],
+      licenseClaims: [
+        { raw: "GPL-3.0-only", kind: "spdx-id", source: "generator" },
+      ],
+      finding: {
+        expression: "GPL-3.0-only",
+        elected: "GPL-3.0-only",
+        source: "generator",
+        confidence: "exact",
+      },
+    });
+    const model: CanonicalDependencies = {
+      packages: [osCopyleft, appCopyleft],
+    };
+    const view: PolicyView = {
+      policyPath: "policy.toml",
+      suppressedWorkspaces: [],
+      verdicts: [
+        {
+          purl: "pkg:deb/debian/libssl@3.0",
+          occurrenceTarget: "docker:img/Dockerfile",
+          status: "warn",
+          rule: "default:copyleft",
+          reason: "os-downgraded copyleft",
+        },
+        {
+          purl: "pkg:npm/app-copyleft@1.0.0",
+          occurrenceTarget: "backend",
+          status: "warn",
+          rule: "default:copyleft",
+          reason: 'copyleft license "GPL-3.0-only"',
+        },
+      ],
+    };
+    const output = renderMarkdown(model, view);
+    const copyleftStart = output.indexOf("## Copyleft and special notices");
+    const copyleftSection = output.slice(
+      copyleftStart,
+      output.indexOf("## Containers"),
+    );
+    // Container copyleft is routine — excluded from the detailed table
+    // regardless of its warn status.
+    expect(copyleftSection.includes("libssl")).toBe(false);
+    // The app copyleft obligation is never dropped.
+    expect(
+      copyleftSection.includes(
+        "| app-copyleft | npm | 1.0.0 | GPL-3.0-only | backend | — |",
+      ),
+    ).toBe(true);
+  });
+
+  test("Test 5c: an accepted-AGPL container notice (PolicyView.acceptedContainerNotices) renders as a special-notice bullet, distinct from the flagged copyleft table, and is deduped when the same purl also carries a fail verdict elsewhere", () => {
+    const model: CanonicalDependencies = { packages: [] };
+    const view: PolicyView = {
+      policyPath: "policy.toml",
+      suppressedWorkspaces: [],
+      verdicts: [
+        {
+          purl: "pkg:deb/debian/agpl-also-failing@2.0.0",
+          occurrenceTarget: "docker:img/Dockerfile",
+          status: "fail",
+          rule: "default:agpl-container",
+          reason: "fails elsewhere",
+        },
+      ],
+      acceptedContainerNotices: [
+        {
+          purl: "pkg:deb/debian/agpl-daemon@1.0.0",
+          name: "agpl-daemon",
+          version: "1.0.0",
+          license: "AGPL-3.0-only",
+          targets: ["docker:img/Dockerfile"],
+          rule: "compatible[0]",
+          reason:
+            'package "agpl-daemon" accepted by compatible package rule: reviewed',
+        },
+        // This purl ALSO carries a fail verdict above — must be excluded
+        // from the notice list (the same Problematic dedup the flagged
+        // copyleft rows already apply).
+        {
+          purl: "pkg:deb/debian/agpl-also-failing@2.0.0",
+          name: "agpl-also-failing",
+          version: "2.0.0",
+          license: "AGPL-3.0-only",
+          targets: ["docker:img/Dockerfile"],
+          rule: "compatible[1]",
+          reason:
+            'package "agpl-also-failing" accepted by compatible package rule: reviewed',
+        },
+      ],
+    };
+    const output = renderMarkdown(model, view);
+    const copyleftStart = output.indexOf("## Copyleft and special notices");
+    const copyleftSection = output.slice(
+      copyleftStart,
+      output.indexOf("## Containers"),
+    );
+    expect(copyleftSection.includes("agpl-daemon@1.0.0")).toBe(true);
+    expect(copyleftSection.includes("accepted via compatible\\[0\\]")).toBe(
+      true,
+    );
+    // Deduped: the purl with a fail verdict elsewhere never surfaces as a notice.
+    expect(copyleftSection.includes("agpl-also-failing")).toBe(false);
+    // Never a row in the flagged copyleft TABLE (that table is scoped to
+    // rule === "default:copyleft" fail/warn verdicts, not notices).
+    expect(copyleftSection.includes("| agpl-daemon | deb |")).toBe(false);
+  });
+
+  test("Test 5d: an accepted-AGPL notice alone (no flagged copyleft rows) makes the section non-empty — the ✅ empty-state line is suppressed", () => {
+    const model: CanonicalDependencies = { packages: [] };
+    const view: PolicyView = {
+      policyPath: "policy.toml",
+      suppressedWorkspaces: [],
+      verdicts: [],
+      acceptedContainerNotices: [
+        {
+          purl: "pkg:deb/debian/agpl-daemon@1.0.0",
+          name: "agpl-daemon",
+          version: "1.0.0",
+          license: "AGPL-3.0-only",
+          targets: ["docker:img/Dockerfile"],
+          rule: "compatible[0]",
+          reason: "accepted",
+        },
+      ],
+    };
+    const output = renderMarkdown(model, view);
+    const copyleftStart = output.indexOf("## Copyleft and special notices");
+    const copyleftSection = output.slice(
+      copyleftStart,
+      output.indexOf("## Containers"),
+    );
+    expect(copyleftSection.includes("agpl-daemon")).toBe(true);
+    expect(
+      copyleftSection.includes(
+        "✅ No package carries copyleft or special license obligations.",
+      ),
+    ).toBe(false);
   });
 
   test("Test 6: suppressed workspaces render path + license + description escaped", () => {
@@ -949,7 +1154,7 @@ describe("renderMarkdown — prod/dev document split", () => {
   });
 });
 
-describe("renderMarkdown — Docker image packages section", () => {
+describe("renderMarkdown — per-container Production/Development grouping", () => {
   const appProd = entry({
     purl: "pkg:npm/app-prod@1.0.0",
     name: "app-prod",
@@ -982,70 +1187,100 @@ describe("renderMarkdown — Docker image packages section", () => {
     scope: "os",
   });
 
-  const HEADING = "## Docker image packages";
+  const HEADING = "### Container: docker:img/Dockerfile";
+  const OLD_HEADING = "## Docker image packages";
 
-  test("OS packages render under the dedicated heading", () => {
+  test("the standalone Docker section never renders — with or without a policy view", () => {
     const model: CanonicalDependencies = { packages: [appProd, osDeb, osApk] };
-    const output = renderMarkdown(model);
-    expect(output.includes(HEADING)).toBe(true);
-    const osSection = output.slice(output.indexOf(HEADING));
-    expect(
-      osSection.includes("| libc6 | deb | 2.36-9 | LGPL-2.1-or-later |"),
-    ).toBe(true);
-    expect(osSection.includes("| musl | apk | 1.2.4-r2 | MIT |")).toBe(true);
+    expect(renderMarkdown(model).includes(OLD_HEADING)).toBe(false);
+    const view: PolicyView = {
+      policyPath: "policy.toml",
+      suppressedWorkspaces: [],
+      verdicts: [],
+    };
+    expect(renderMarkdown(model, view).includes(OLD_HEADING)).toBe(false);
   });
 
-  test("OS packages are EXCLUDED from the Production and Development-only app sections", () => {
-    const model: CanonicalDependencies = {
-      packages: [appProd, appDev, osDeb, osApk],
-    };
+  test("OS packages render under a per-container subsection, by default under Production", () => {
+    const model: CanonicalDependencies = { packages: [appProd, osDeb, osApk] };
     const output = renderMarkdown(model);
     const prod = output.slice(
       output.indexOf("## Production dependencies"),
       output.indexOf("## Development-only dependencies"),
     );
-    const dev = output.slice(
-      output.indexOf("## Development-only dependencies"),
+    expect(prod.includes(HEADING)).toBe(true);
+    const containerSection = output.slice(output.indexOf(HEADING));
+    expect(
+      containerSection.includes("| libc6 | deb | 2.36-9 | LGPL-2.1-or-later |"),
+    ).toBe(true);
+    expect(containerSection.includes("| musl | apk | 1.2.4-r2 | MIT |")).toBe(
+      true,
+    );
+    // No Used-in column: the container heading already scopes every row.
+    expect(
+      containerSection.includes("| Name | Ecosystem | Version | License |"),
+    ).toBe(true);
+  });
+
+  test("OS packages are EXCLUDED from the app Production and Development-only tables", () => {
+    const model: CanonicalDependencies = {
+      packages: [appProd, appDev, osDeb, osApk],
+    };
+    const output = renderMarkdown(model);
+    const prodTable = output.slice(
+      output.indexOf("## Production dependencies"),
       output.indexOf(HEADING),
     );
-    // OS rows never leak into the app sections.
-    expect(prod.includes("libc6")).toBe(false);
-    expect(prod.includes("musl")).toBe(false);
+    const dev = output.slice(
+      output.indexOf("## Development-only dependencies"),
+    );
+    // OS rows never leak into the app tables.
+    expect(prodTable.includes("libc6")).toBe(false);
+    expect(prodTable.includes("musl")).toBe(false);
     expect(dev.includes("libc6")).toBe(false);
     expect(dev.includes("musl")).toBe(false);
-    // The app packages stay in their app sections.
-    expect(prod.includes("| app-prod | npm | 1.0.0 |")).toBe(true);
+    // The app packages stay in their app tables.
+    expect(prodTable.includes("| app-prod | npm | 1.0.0 |")).toBe(true);
     expect(dev.includes("| app-dev | npm | 1.0.0 |")).toBe(true);
   });
 
-  test("the OS section renders heading + an empty-state line when there are NO OS packages (stable shape)", () => {
+  test("empty container set: Production/Development render exactly the app tables, no stray headings", () => {
     const model: CanonicalDependencies = { packages: [appProd] };
     const output = renderMarkdown(model);
-    const osSection = output.slice(output.indexOf(HEADING));
-    expect(output.includes(HEADING)).toBe(true);
-    expect(
-      osSection.includes("✅ No Docker images are currently tracked."),
-    ).toBe(true);
-    // The empty section shows the message in place of a bare table head.
-    expect(
-      osSection.includes("| Name | Ecosystem | Version | License | Used in |"),
-    ).toBe(false);
+    expect(output.includes("### Container:")).toBe(false);
+    expect(output.includes(OLD_HEADING)).toBe(false);
   });
 
-  test("section order is fixed/deterministic: Production, Development-only, then Docker image packages", () => {
+  test("section order is fixed/deterministic: Production (+ its containers), then Development-only (+ its containers)", () => {
     const model: CanonicalDependencies = {
       packages: [appProd, appDev, osDeb],
     };
     const output = renderMarkdown(model);
     const prodPos = output.indexOf("## Production dependencies");
     const devPos = output.indexOf("## Development-only dependencies");
-    const osPos = output.indexOf(HEADING);
+    const containerPos = output.indexOf(HEADING);
     expect(prodPos).toBeGreaterThan(-1);
-    expect(prodPos).toBeLessThan(devPos);
-    expect(devPos).toBeLessThan(osPos);
+    expect(prodPos).toBeLessThan(containerPos);
+    expect(containerPos).toBeLessThan(devPos);
   });
 
-  test("OS cells route through escapeCell (markdown-injection-safe via tableRow)", () => {
+  test("container heading text routes the identity through escapeCell", () => {
+    const evilOs = entry({
+      purl: "pkg:deb/debian/evil@1.0.0",
+      name: "evil-pkg",
+      version: "1.0.0",
+      occurrences: [
+        { target: "docker:evil|pkg`x/Dockerfile", isDevDependency: false },
+      ],
+      licenseClaims: [{ raw: "MIT", kind: "spdx-id", source: "generator" }],
+      scope: "os",
+    });
+    const output = renderMarkdown({ packages: [evilOs] });
+    expect(output.includes("docker:evil\\|pkg\\`x/Dockerfile")).toBe(true);
+    expect(output.includes("docker:evil|pkg`x/Dockerfile")).toBe(false);
+  });
+
+  test("OS row cells route through escapeCell (markdown-injection-safe)", () => {
     const evilOs = entry({
       purl: "pkg:deb/debian/evil@1.0.0",
       name: "evil|pkg`x",
@@ -1061,30 +1296,24 @@ describe("renderMarkdown — Docker image packages section", () => {
     expect(output.includes("evil|pkg`x")).toBe(false);
   });
 
-  test("the counts block carries a Docker image packages count", () => {
+  test("the counts block carries a Container packages count", () => {
     const model: CanonicalDependencies = {
       packages: [appProd, osDeb, osApk],
     };
     const output = renderMarkdown(model);
-    expect(output.includes("- Docker image packages: 2")).toBe(true);
+    expect(output.includes("- Container packages: 2")).toBe(true);
     // Total still counts every package across scopes.
     expect(output.includes("- Total packages: 3")).toBe(true);
   });
 
-  test("a shared OS package's Used-in cell joins its per-image identities, sorted", () => {
+  test("a package shared by two production containers rows in EACH container's own subsection", () => {
     const osShared = entry({
       purl: "pkg:apk/alpine/busybox@1.37.0-r19",
       name: "busybox",
       version: "1.37.0-r19",
       occurrences: [
-        {
-          target: "docker:a/Dockerfile",
-          isDevDependency: false,
-        },
-        {
-          target: "docker:b/Dockerfile",
-          isDevDependency: false,
-        },
+        { target: "docker:a/Dockerfile", isDevDependency: false },
+        { target: "docker:b/Dockerfile", isDevDependency: false },
       ],
       licenseClaims: [
         { raw: "GPL-2.0-only", kind: "spdx-id", source: "generator" },
@@ -1092,12 +1321,565 @@ describe("renderMarkdown — Docker image packages section", () => {
       scope: "os",
     });
     const output = renderMarkdown({ packages: [osShared] });
-    const osSection = output.slice(output.indexOf(HEADING));
+    // Deterministic container order: docker:a/Dockerfile before docker:b/Dockerfile.
+    const aPos = output.indexOf("### Container: docker:a/Dockerfile");
+    const bPos = output.indexOf("### Container: docker:b/Dockerfile");
+    expect(aPos).toBeGreaterThan(-1);
+    expect(bPos).toBeGreaterThan(aPos);
+    // ONE row of the 4-column shape in EACH container's own subsection — never
+    // a single row with a joined Used-in cell (there is no Used-in column).
+    const aSection = output.slice(aPos, bPos);
+    const bSection = output.slice(bPos);
     expect(
-      osSection.includes(
-        "| busybox | apk | 1.37.0-r19 | GPL-2.0-only | docker:a/Dockerfile, docker:b/Dockerfile |",
-      ),
+      aSection.includes("| busybox | apk | 1.37.0-r19 | GPL-2.0-only |"),
     ).toBe(true);
+    expect(
+      bSection.includes("| busybox | apk | 1.37.0-r19 | GPL-2.0-only |"),
+    ).toBe(true);
+  });
+
+  test("a container classified development renders its subsection under Development-only", () => {
+    const model: CanonicalDependencies = { packages: [appProd, osDeb] };
+    const view: PolicyView = {
+      policyPath: "policy.toml",
+      suppressedWorkspaces: [],
+      verdicts: [],
+      developmentContainers: new Set(["docker:img/Dockerfile"]),
+    };
+    const output = renderMarkdown(model, view);
+    const prod = output.slice(
+      output.indexOf("## Production dependencies"),
+      output.indexOf("## Development-only dependencies"),
+    );
+    const dev = output.slice(
+      output.indexOf("## Development-only dependencies"),
+    );
+    expect(prod.includes(HEADING)).toBe(false);
+    expect(dev.includes(HEADING)).toBe(true);
+    expect(dev.includes("| libc6 | deb | 2.36-9 | LGPL-2.1-or-later |")).toBe(
+      true,
+    );
+  });
+
+  test("leak target: a package shared by a production container and a development container stays visible under BOTH", () => {
+    const shared = entry({
+      purl: "pkg:apk/alpine/shared-lib@1.0.0",
+      name: "shared-lib",
+      version: "1.0.0",
+      occurrences: [
+        { target: "docker:a/Dockerfile", isDevDependency: false },
+        { target: "docker:b/Dockerfile", isDevDependency: false },
+      ],
+      licenseClaims: [{ raw: "MIT", kind: "spdx-id", source: "generator" }],
+      scope: "os",
+    });
+    const view: PolicyView = {
+      policyPath: "policy.toml",
+      suppressedWorkspaces: [],
+      verdicts: [],
+      developmentContainers: new Set(["docker:b/Dockerfile"]),
+    };
+    const output = renderMarkdown({ packages: [shared] }, view);
+    const prod = output.slice(
+      output.indexOf("## Production dependencies"),
+      output.indexOf("## Development-only dependencies"),
+    );
+    const dev = output.slice(
+      output.indexOf("## Development-only dependencies"),
+    );
+    // Container A (production) still shows the package — marking B development
+    // moved nothing of A's.
+    expect(prod.includes("### Container: docker:a/Dockerfile")).toBe(true);
+    expect(prod.includes("| shared-lib | apk | 1.0.0 | MIT |")).toBe(true);
+    // Container B (development) shows it too.
+    expect(dev.includes("### Container: docker:b/Dockerfile")).toBe(true);
+    expect(dev.includes("| shared-lib | apk | 1.0.0 | MIT |")).toBe(true);
+  });
+
+  test("a package whose ONLY occurrence targets a container lists in that container's subsection regardless of its scope field", () => {
+    // Grouping is occurrence-keyed, not scope-keyed: this package's scope
+    // defaults to "app", but its sole occurrence is a docker: target, so it
+    // is a Container package by inventory, not by scope.
+    const appAtDockerTarget = entry({
+      purl: "pkg:npm/app-at-docker-target@1.0.0",
+      name: "app-at-docker-target",
+      version: "1.0.0",
+      occurrences: [
+        { target: "docker:img/Dockerfile", isDevDependency: false },
+      ],
+      licenseClaims: [{ raw: "MIT", kind: "spdx-id", source: "generator" }],
+    });
+    const output = renderMarkdown({ packages: [appAtDockerTarget, osDeb] });
+    const containerSection = output.slice(output.indexOf(HEADING));
+    expect(containerSection.includes("app-at-docker-target")).toBe(true);
+    // It is EXCLUDED from the app Production table — it has no workspace
+    // occurrence of its own.
+    const prodTable = output.slice(
+      output.indexOf("## Production dependencies"),
+      output.indexOf(HEADING),
+    );
+    expect(prodTable.includes("app-at-docker-target")).toBe(false);
+    // Counted as a Container package (npm 1 + deb 1 = 2).
+    expect(output.includes("- Container packages: 2")).toBe(true);
+  });
+
+  test("a package with BOTH a workspace occurrence and a docker occurrence lists in BOTH its app table and the container subsection", () => {
+    const shared = entry({
+      purl: "pkg:npm/shared-app-and-container@1.0.0",
+      name: "shared-app-and-container",
+      version: "1.0.0",
+      occurrences: [
+        { target: "apps/a", isDevDependency: false },
+        { target: "docker:img/Dockerfile", isDevDependency: false },
+      ],
+      licenseClaims: [{ raw: "MIT", kind: "spdx-id", source: "generator" }],
+    });
+    const output = renderMarkdown({ packages: [shared, osDeb] });
+    const prodTable = output.slice(
+      output.indexOf("## Production dependencies"),
+      output.indexOf(HEADING),
+    );
+    expect(prodTable.includes("shared-app-and-container")).toBe(true);
+    const containerSection = output.slice(output.indexOf(HEADING));
+    expect(containerSection.includes("shared-app-and-container")).toBe(true);
+    // Container is the cross-cutting hasContainerOccurrence count, so a
+    // package with a non-docker occurrence still counts there once it also
+    // carries a docker occurrence: shared-app-and-container plus osDeb — 2.
+    expect(output.includes("- Container packages: 2")).toBe(true);
+  });
+
+  test("a package with ONLY workspace occurrences never appears in a container subsection and is never counted as Container", () => {
+    const workspaceOnly = entry({
+      purl: "pkg:npm/workspace-only@1.0.0",
+      name: "workspace-only",
+      version: "1.0.0",
+      licenseClaims: [{ raw: "MIT", kind: "spdx-id", source: "generator" }],
+    });
+    const output = renderMarkdown({ packages: [workspaceOnly, osDeb] });
+    const containerSection = output.slice(output.indexOf(HEADING));
+    expect(containerSection.includes("workspace-only")).toBe(false);
+    expect(output.includes("- Container packages: 1")).toBe(true);
+  });
+
+  test("counts partition invariant: Production + Development-only equals Total (Container is a cross-cutting subtotal, not summed in)", () => {
+    const containerOnly = entry({
+      purl: "pkg:pypi/container-only@1.0.0",
+      name: "container-only",
+      version: "1.0.0",
+      occurrences: [
+        { target: "docker:img/Dockerfile", isDevDependency: false },
+      ],
+      licenseClaims: [{ raw: "MIT", kind: "spdx-id", source: "generator" }],
+    });
+    const model: CanonicalDependencies = {
+      packages: [appProd, appDev, containerOnly, osDeb, osApk],
+    };
+    const output = renderMarkdown(model);
+    const total = Number(/- Total packages: (\d+)/.exec(output)![1]);
+    const prod = Number(/- Production packages: (\d+)/.exec(output)![1]);
+    const devOnly = Number(
+      /- Development-only packages: (\d+)/.exec(output)![1],
+    );
+    const container = Number(/- Container packages: (\d+)/.exec(output)![1]);
+    expect(prod + devOnly).toBe(total);
+    // Container is the cross-cutting hasContainerOccurrence count —
+    // containerOnly, osDeb, osApk — still 3, and every one of the three is
+    // ALSO folded into Production (no dev-marked container in this
+    // no-policy render, the conservative default): the subtotal overlaps
+    // the partition rather than being subtracted from it.
+    expect(container).toBe(3);
+    expect(container).toBeLessThanOrEqual(total);
+  });
+
+  describe("Production/Development-only counts match the container's OWN classification (the undercount regression)", () => {
+    const PROD_CONTAINER = "docker:prod-img/Dockerfile";
+    const DEV_CONTAINER = "docker:dev-img/Dockerfile";
+
+    /** A pure-container, application-ecosystem package (golang is not on the OS allowlist). */
+    const prodContainerAppPkg = entry({
+      purl: "pkg:golang/prod-container-app@1.0.0",
+      name: "prod-container-app",
+      version: "1.0.0",
+      occurrences: [{ target: PROD_CONTAINER, isDevDependency: false }],
+      licenseClaims: [
+        { raw: "AGPL-3.0-only", kind: "spdx-id", source: "generator" },
+      ],
+    });
+
+    const devContainerPkg = entry({
+      purl: "pkg:golang/dev-container-only@1.0.0",
+      name: "dev-container-only",
+      version: "1.0.0",
+      occurrences: [{ target: DEV_CONTAINER, isDevDependency: false }],
+      licenseClaims: [{ raw: "MIT", kind: "spdx-id", source: "generator" }],
+    });
+
+    test("an application-ecosystem package baked into a PRODUCTION container counts as Production, not siloed under Container", () => {
+      const view: PolicyView = {
+        policyPath: "policy.toml",
+        suppressedWorkspaces: [],
+        verdicts: [],
+        developmentContainers: new Set(),
+      };
+      const output = renderMarkdown({ packages: [prodContainerAppPkg] }, view);
+      expect(output.includes("- Production packages: 1")).toBe(true);
+      expect(output.includes("- Development-only packages: 0")).toBe(true);
+      // Still a cross-cutting Container subtotal — the fix does not remove
+      // it from that count, only stops subtracting it from Production.
+      expect(output.includes("- Container packages: 1")).toBe(true);
+      const prodSection = output.slice(
+        output.indexOf("## Production dependencies"),
+      );
+      expect(prodSection.includes("prod-container-app")).toBe(true);
+    });
+
+    test("a package whose ONLY occurrence targets a dev-marked container counts as Development-only", () => {
+      const view: PolicyView = {
+        policyPath: "policy.toml",
+        suppressedWorkspaces: [],
+        verdicts: [],
+        developmentContainers: new Set([DEV_CONTAINER]),
+      };
+      const output = renderMarkdown({ packages: [devContainerPkg] }, view);
+      expect(output.includes("- Production packages: 0")).toBe(true);
+      expect(output.includes("- Development-only packages: 1")).toBe(true);
+      expect(output.includes("- Container packages: 1")).toBe(true);
+      const devSection = output.slice(
+        output.indexOf("## Development-only dependencies"),
+      );
+      expect(devSection.includes("dev-container-only")).toBe(true);
+    });
+
+    test("count/section alignment: Production equals the distinct packages under Production (app table + its production container subsections), and likewise Development-only", () => {
+      const prodApp = entry({
+        purl: "pkg:npm/prod-app@1.0.0",
+        name: "prod-app",
+        version: "1.0.0",
+        licenseClaims: [{ raw: "MIT", kind: "spdx-id", source: "generator" }],
+      });
+      const devApp = entry({
+        purl: "pkg:npm/dev-app@1.0.0",
+        name: "dev-app",
+        version: "1.0.0",
+        occurrences: [{ target: "apps/a", isDevDependency: true }],
+        licenseClaims: [{ raw: "MIT", kind: "spdx-id", source: "generator" }],
+      });
+      // No package straddles both containers here, so every package renders
+      // under exactly one of Production/Development-only — the count and the
+      // distinct rendered package set line up exactly.
+      const model: CanonicalDependencies = {
+        packages: [prodApp, devApp, prodContainerAppPkg, devContainerPkg],
+      };
+      const view: PolicyView = {
+        policyPath: "policy.toml",
+        suppressedWorkspaces: [],
+        verdicts: [],
+        developmentContainers: new Set([DEV_CONTAINER]),
+      };
+      const output = renderMarkdown(model, view);
+      const prodCount = Number(/- Production packages: (\d+)/.exec(output)![1]);
+      const devOnlyCount = Number(
+        /- Development-only packages: (\d+)/.exec(output)![1],
+      );
+
+      const prodSection = output.slice(
+        output.indexOf("## Production dependencies"),
+        output.indexOf("## Development-only dependencies"),
+      );
+      const devSection = output.slice(
+        output.indexOf("## Development-only dependencies"),
+      );
+      const namesIn = (text: string, names: readonly string[]): number =>
+        names.filter((name) => text.includes(name)).length;
+
+      expect(prodCount).toBe(2);
+      expect(namesIn(prodSection, ["prod-app", "prod-container-app"])).toBe(
+        prodCount,
+      );
+      expect(devOnlyCount).toBe(2);
+      expect(namesIn(devSection, ["dev-app", "dev-container-only"])).toBe(
+        devOnlyCount,
+      );
+    });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Per-container System/Application table split: each "### Container:"
+// subsection partitions its rows into a System packages table (the
+// OS_PACKAGE_ECOSYSTEMS allowlist) and an Application packages table
+// (everything else), omitting an empty partition.
+// ---------------------------------------------------------------------------
+
+describe("renderMarkdown — per-container System/Application split", () => {
+  const HEADING = "### Container: docker:img/Dockerfile";
+
+  const systemPkg = entry({
+    purl: "pkg:deb/debian/libc6@2.36-9",
+    name: "libc6",
+    version: "2.36-9",
+    occurrences: [{ target: "docker:img/Dockerfile", isDevDependency: false }],
+    licenseClaims: [
+      { raw: "LGPL-2.1-or-later", kind: "spdx-id", source: "generator" },
+    ],
+    scope: "os",
+  });
+  const applicationPkg = entry({
+    purl: "pkg:npm/app-in-container@1.0.0",
+    name: "app-in-container",
+    version: "1.0.0",
+    occurrences: [{ target: "docker:img/Dockerfile", isDevDependency: false }],
+    licenseClaims: [{ raw: "MIT", kind: "spdx-id", source: "generator" }],
+  });
+
+  test("a container with both system and application rows emits System THEN Application, each labeled and 4-column", () => {
+    const output = renderMarkdown({ packages: [systemPkg, applicationPkg] });
+    const section = output.slice(output.indexOf(HEADING));
+    const systemPos = section.indexOf("**System packages**");
+    const applicationPos = section.indexOf("**Application packages**");
+    expect(systemPos).toBeGreaterThan(-1);
+    expect(applicationPos).toBeGreaterThan(systemPos);
+    // Every row is in exactly one partition (exhaustive, non-overlapping).
+    const systemBlock = section.slice(systemPos, applicationPos);
+    const applicationBlock = section.slice(applicationPos);
+    expect(systemBlock.includes("libc6")).toBe(true);
+    expect(systemBlock.includes("app-in-container")).toBe(false);
+    expect(applicationBlock.includes("app-in-container")).toBe(true);
+    expect(applicationBlock.includes("libc6")).toBe(false);
+    // Both labeled tables share the 4-column container head.
+    const headCount = section
+      .split("\n")
+      .filter(
+        (line) => line === "| Name | Ecosystem | Version | License |",
+      ).length;
+    expect(headCount).toBe(2);
+  });
+
+  test("a base-image-only container (system rows only) shows just the System table — no empty Application block", () => {
+    const output = renderMarkdown({ packages: [systemPkg] });
+    const section = output.slice(output.indexOf(HEADING));
+    expect(section.includes("**System packages**")).toBe(true);
+    expect(section.includes("**Application packages**")).toBe(false);
+  });
+
+  test("an all-application container shows just the Application table — no empty System block", () => {
+    const output = renderMarkdown({ packages: [applicationPkg] });
+    const section = output.slice(output.indexOf(HEADING));
+    expect(section.includes("**Application packages**")).toBe(true);
+    expect(section.includes("**System packages**")).toBe(false);
+  });
+
+  test("the partition is exhaustive: every row in the container's inventory appears in exactly one sub-table", () => {
+    const rpmPkg = entry({
+      purl: "pkg:rpm/fedora/glibc@2.38",
+      name: "glibc",
+      version: "2.38",
+      occurrences: [
+        { target: "docker:img/Dockerfile", isDevDependency: false },
+      ],
+      licenseClaims: [
+        { raw: "LGPL-2.1-only", kind: "spdx-id", source: "generator" },
+      ],
+      scope: "os",
+    });
+    const alpmPkg = entry({
+      purl: "pkg:alpm/arch/pacman@6.1.0",
+      name: "pacman",
+      version: "6.1.0",
+      occurrences: [
+        { target: "docker:img/Dockerfile", isDevDependency: false },
+      ],
+      licenseClaims: [
+        { raw: "GPL-2.0-only", kind: "spdx-id", source: "generator" },
+      ],
+      scope: "os",
+    });
+    const pypiPkg = entry({
+      purl: "pkg:pypi/app-py@1.0.0",
+      name: "app-py",
+      version: "1.0.0",
+      occurrences: [
+        { target: "docker:img/Dockerfile", isDevDependency: false },
+      ],
+      licenseClaims: [
+        { raw: "Apache-2.0", kind: "spdx-id", source: "generator" },
+      ],
+    });
+    const output = renderMarkdown({
+      packages: [systemPkg, rpmPkg, alpmPkg, applicationPkg, pypiPkg],
+    });
+    const section = output.slice(output.indexOf(HEADING));
+    const systemPos = section.indexOf("**System packages**");
+    const applicationPos = section.indexOf("**Application packages**");
+    const systemBlock = section.slice(systemPos, applicationPos);
+    const applicationBlock = section.slice(applicationPos);
+    for (const name of ["libc6", "glibc", "pacman"]) {
+      expect(systemBlock.includes(name)).toBe(true);
+      expect(applicationBlock.includes(name)).toBe(false);
+    }
+    for (const name of ["app-in-container", "app-py"]) {
+      expect(applicationBlock.includes(name)).toBe(true);
+      expect(systemBlock.includes(name)).toBe(false);
+    }
+  });
+
+  test("byte-neutrality of the grouping half: when scope==='os' exactly coincides with pure-container, the split changes only layout, never membership", () => {
+    // Every package here is either pure-app (never a container row) or
+    // pure-container with an OS-allowlist ecosystem — the pre-correction
+    // reality this task must not disturb.
+    const appOnly = entry({
+      purl: "pkg:npm/app-only@1.0.0",
+      name: "app-only",
+      version: "1.0.0",
+      licenseClaims: [{ raw: "MIT", kind: "spdx-id", source: "generator" }],
+    });
+    const output = renderMarkdown({ packages: [appOnly, systemPkg] });
+    const section = output.slice(output.indexOf(HEADING));
+    // Only System renders (both are OS-ecosystem-only here); no Application
+    // block and no leakage of the app-only package into the container.
+    expect(section.includes("**System packages**")).toBe(true);
+    expect(section.includes("**Application packages**")).toBe(false);
+    expect(section.includes("app-only")).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The Containers index: a thin, occurrence-derived section listing every
+// analyzed container's identity, prod/dev classification, and package count,
+// rendered immediately before Production regardless of policy.
+// ---------------------------------------------------------------------------
+
+describe("renderMarkdown — Containers index", () => {
+  const HEADING = "## Containers";
+
+  const osPkg = (
+    name: string,
+    purl: string,
+    targets: readonly string[],
+  ): PackageEntry =>
+    entry({
+      purl,
+      name,
+      version: "1.0.0",
+      occurrences: targets.map((target) => ({
+        target,
+        isDevDependency: false,
+      })),
+      licenseClaims: [{ raw: "MIT", kind: "spdx-id", source: "generator" }],
+      scope: "os",
+    });
+
+  test("two containers render a sorted 3-column index, placed immediately before Production", () => {
+    const model: CanonicalDependencies = {
+      packages: [
+        osPkg("busybox", "pkg:apk/alpine/busybox@1.0.0", [
+          "docker:b/Dockerfile",
+        ]),
+        osPkg("musl", "pkg:apk/alpine/musl@1.0.0", ["docker:a/Dockerfile"]),
+        osPkg("zlib", "pkg:apk/alpine/zlib@1.0.0", ["docker:a/Dockerfile"]),
+      ],
+    };
+    const output = renderMarkdown(model);
+    expect(output.includes(HEADING)).toBe(true);
+    const containersSection = output.slice(
+      output.indexOf(HEADING),
+      output.indexOf("## Production dependencies"),
+    );
+    expect(
+      containersSection.includes("| Container | Classification | Packages |"),
+    ).toBe(true);
+    // compareCodeUnits-sorted: "docker:a/Dockerfile" before "docker:b/Dockerfile".
+    expect(containersSection.indexOf("docker:a/Dockerfile")).toBeLessThan(
+      containersSection.indexOf("docker:b/Dockerfile"),
+    );
+    // Package counts are each container's full os-package inventory.
+    expect(
+      containersSection.includes("| docker:a/Dockerfile | production | 2 |"),
+    ).toBe(true);
+    expect(
+      containersSection.includes("| docker:b/Dockerfile | production | 1 |"),
+    ).toBe(true);
+    // Placed immediately before Production.
+    expect(output.indexOf(HEADING)).toBeLessThan(
+      output.indexOf("## Production dependencies"),
+    );
+  });
+
+  test("classification is development for identities in developmentContainers, else production", () => {
+    const model: CanonicalDependencies = {
+      packages: [
+        osPkg("musl", "pkg:apk/alpine/musl@1.0.0", ["docker:a/Dockerfile"]),
+        osPkg("zlib", "pkg:apk/alpine/zlib@1.0.0", ["docker:b/Dockerfile"]),
+      ],
+    };
+    const view: PolicyView = {
+      policyPath: "policy.toml",
+      suppressedWorkspaces: [],
+      verdicts: [],
+      developmentContainers: new Set(["docker:a/Dockerfile"]),
+    };
+    const output = renderMarkdown(model, view);
+    const containersSection = output.slice(
+      output.indexOf(HEADING),
+      output.indexOf("## Production dependencies"),
+    );
+    expect(
+      containersSection.includes("| docker:a/Dockerfile | development | 1 |"),
+    ).toBe(true);
+    expect(
+      containersSection.includes("| docker:b/Dockerfile | production | 1 |"),
+    ).toBe(true);
+  });
+
+  test("without a policy view every container classifies production", () => {
+    const model: CanonicalDependencies = {
+      packages: [
+        osPkg("musl", "pkg:apk/alpine/musl@1.0.0", ["docker:a/Dockerfile"]),
+      ],
+    };
+    const output = renderMarkdown(model);
+    const containersSection = output.slice(
+      output.indexOf(HEADING),
+      output.indexOf("## Production dependencies"),
+    );
+    expect(
+      containersSection.includes("| docker:a/Dockerfile | production | 1 |"),
+    ).toBe(true);
+  });
+
+  test("empty state renders the heading plus a stable message when there are no os packages", () => {
+    const model: CanonicalDependencies = {
+      packages: [
+        entry({
+          purl: "pkg:npm/app-only@1.0.0",
+          name: "app-only",
+          version: "1.0.0",
+          licenseClaims: [{ raw: "MIT", kind: "spdx-id", source: "generator" }],
+        }),
+      ],
+    };
+    const output = renderMarkdown(model);
+    expect(output.includes(HEADING)).toBe(true);
+    const containersSection = output.slice(output.indexOf(HEADING));
+    expect(
+      containersSection.includes("✅ No containers are currently tracked."),
+    ).toBe(true);
+    expect(
+      containersSection.includes("| Container | Classification | Packages |"),
+    ).toBe(false);
+  });
+
+  test("identity cells route through escapeCell", () => {
+    const model: CanonicalDependencies = {
+      packages: [
+        osPkg("evil", "pkg:apk/alpine/evil@1.0.0", [
+          "docker:evil|pkg`x/Dockerfile",
+        ]),
+      ],
+    };
+    const output = renderMarkdown(model);
+    expect(output.includes("docker:evil\\|pkg\\`x/Dockerfile")).toBe(true);
+    expect(output.includes("docker:evil|pkg`x/Dockerfile")).toBe(false);
   });
 });
 
@@ -1128,7 +1910,7 @@ describe("renderMarkdown — os-scope partial-license cell", () => {
     },
   });
 
-  const HEADING = "## Docker image packages";
+  const HEADING = "### Container: docker:img/Dockerfile";
 
   test("LOCKED FORMAT: expression (+ remainder) in the License cell", () => {
     const output = renderMarkdown({ packages: [osPartial] });
@@ -1332,16 +2114,23 @@ describe("renderMarkdown — Ecosystem column", () => {
 
   test("every table head carries the Ecosystem column after Name", () => {
     const output = renderMarkdown(mixed);
-    // Every rendered TABLE_HEAD carries the column. Non-empty summary sections
-    // render their head; an empty one shows a checkmark line instead, so the
-    // count is the non-empty sections (mixed: Production + Docker OS), not three.
+    // The 5-column app TABLE_HEAD renders once (Production; Development-only
+    // is empty here, so it shows a checkmark line instead), and the
+    // 4-column container-subsection head (no Used-in) renders once too.
     const headCount = output
       .split("\n")
       .filter(
         (line) => line === "| Name | Ecosystem | Version | License | Used in |",
       ).length;
-    expect(headCount).toBeGreaterThanOrEqual(2);
-    // The OLD 4-column head must never survive anywhere.
+    expect(headCount).toBe(1);
+    const containerHeadCount = output
+      .split("\n")
+      .filter(
+        (line) => line === "| Name | Ecosystem | Version | License |",
+      ).length;
+    expect(containerHeadCount).toBe(1);
+    // The OLD 4-column APP head (pre-Ecosystem-column) must never survive
+    // anywhere.
     expect(output.includes("| Name | Version | License | Used in |")).toBe(
       false,
     );
@@ -1349,8 +2138,8 @@ describe("renderMarkdown — Ecosystem column", () => {
 
   test("each row's Ecosystem cell is its own raw purl type", () => {
     const output = renderMarkdown(mixed);
-    // App-scope rows render in the Production section; os rows in the Docker
-    // section. Each carries its own purl type verbatim.
+    // App-scope rows render in the Production table; os rows in their
+    // container's own subsection. Each carries its own purl type verbatim.
     expect(output.includes("| npm-pkg | npm | 1.0.0 | MIT |")).toBe(true);
     expect(output.includes("| pypi-pkg | pypi | 2.0.0 | Apache-2.0 |")).toBe(
       true,
@@ -1736,7 +2525,7 @@ describe("renderMarkdown — Problematic licenses summary", () => {
     expect(section.includes("1 deny warning(s)")).toBe(true);
   });
 
-  test("(d) the summary sits ABOVE the detailed copyleft section and does not alter it", () => {
+  test("(d) the summary sits ABOVE the detailed copyleft section; a fail-flagged package is excluded from it by the copyleft-only dedup", () => {
     const model: CanonicalDependencies = { packages: [copyleftFail] };
     const view: PolicyView = {
       policyPath: "policy.toml",
@@ -1757,14 +2546,17 @@ describe("renderMarkdown — Problematic licenses summary", () => {
     const copyleftIdx = output.indexOf("## Copyleft and special notices");
     expect(countsIdx).toBeLessThan(problIdx);
     expect(problIdx).toBeLessThan(copyleftIdx);
-    // The detailed copyleft table still lists the flagged package unchanged.
+    // gpl-pkg carries a fail verdict, so the copyleft-only dedup excludes it
+    // from the detailed copyleft table entirely — it stays in Problematic
+    // (asserted above by the section ordering) and in its inventory row.
     const copyleftSection = output.slice(
       copyleftIdx,
       output.indexOf("## Production dependencies"),
     );
+    expect(copyleftSection.includes("gpl-pkg")).toBe(false);
     expect(
       copyleftSection.includes(
-        "| gpl-pkg | pypi | 2.0.0 | GPL-3.0-only | backend |",
+        "✅ No package carries copyleft or special license obligations.",
       ),
     ).toBe(true);
   });
@@ -1820,11 +2612,17 @@ describe("renderMarkdown — Problematic licenses summary", () => {
 // ---------------------------------------------------------------------------
 
 describe("renderMarkdown — provenance Why column", () => {
-  /** A copyleft-flagging verdict for a given purl + target. */
+  /**
+   * A copyleft-flagging verdict for a given purl + target. Status is "warn",
+   * never "fail": a fail verdict of ANY rule excludes its purl from Copyleft
+   * membership entirely (the copyleft-only dedup), which would defeat every
+   * Why-cell assertion in this block — these tests exercise Why-cell
+   * computation, not the dedup itself.
+   */
   const copyleftVerdict = (purl: string, target: string): Verdict => ({
     purl,
     occurrenceTarget: target,
-    status: "fail",
+    status: "warn",
     rule: "default:copyleft",
     reason: "copyleft",
   });
@@ -1958,14 +2756,17 @@ describe("renderMarkdown — provenance Why column", () => {
   });
 
   test("introduction absent → honest '—' (never fabricated)", () => {
+    // APP-scope, not os-scope: an os-scope package is excluded from Copyleft
+    // regardless of verdict (container copyleft is routine, not surfaced
+    // here), which would defeat this assertion — the test's real subject is
+    // the Why-cell honest-residual behavior, orthogonal to scope.
     const model: CanonicalDependencies = {
       packages: [
         entry({
-          purl: "pkg:deb/debian/libssl@3.0",
-          name: "libssl",
+          purl: "pkg:pypi/libssl-bindings@3.0",
+          name: "libssl-bindings",
           version: "3.0",
-          scope: "os",
-          occurrences: [{ target: "image:debian", isDevDependency: false }],
+          occurrences: [{ target: "apps/py", isDevDependency: false }],
           finding: {
             expression: "GPL-3.0-only",
             elected: "GPL-3.0-only",
@@ -1978,11 +2779,11 @@ describe("renderMarkdown — provenance Why column", () => {
     const view: PolicyView = {
       policyPath: "policy.toml",
       suppressedWorkspaces: [],
-      verdicts: [copyleftVerdict("pkg:deb/debian/libssl@3.0", "image:debian")],
+      verdicts: [copyleftVerdict("pkg:pypi/libssl-bindings@3.0", "apps/py")],
     };
     expect(
       copyleftSectionOf(model, view).includes(
-        "| libssl | deb | 3.0 | GPL-3.0-only | image:debian | — |",
+        "| libssl-bindings | pypi | 3.0 | GPL-3.0-only | apps/py | — |",
       ),
     ).toBe(true);
   });

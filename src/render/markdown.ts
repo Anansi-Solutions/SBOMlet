@@ -8,26 +8,46 @@
  * carries the regenerate command, never a date.
  *
  * Document order (locked): title, dateless auto-generated header, policy
- * pointer line (policy runs only), package-counts block, copyleft and special
- * notices (policy runs only), full summary table. The License column shows the
- * full normalized expression when a finding exists — never only the elected
- * branch; election surfaces through copyleft section membership instead.
- * Without a policy view there is no policy pointer and no copyleft section.
+ * pointer line (policy runs only), package-counts block, problematic
+ * licenses roll-up (policy runs only), copyleft and special notices (policy
+ * runs only — container system-package copyleft is excluded as routine, and a
+ * package already flagged Problematic never duplicates into this section),
+ * imprecise licenses, assessment conflicts, the Containers index
+ * (occurrence-derived, rendered with or without a policy view), then
+ * Production and Development-only dependencies. Each of those two sections is
+ * the app table followed by one "### Container: docker:<source>" subsection
+ * per container classified into that half — a container's complete package
+ * inventory lists there, grouped by the docker:<source> occurrence identity
+ * INDEPENDENT of scope (a package shared with an app workspace lists in both
+ * places), with no separate Docker section. Each subsection further splits
+ * into a "**System packages**" table (the OS-ecosystem allowlist) and an
+ * "**Application packages**" table (everything else), omitting an empty
+ * half. The License column shows the full normalized expression when a
+ * finding exists — never only the elected branch; election surfaces through
+ * copyleft section membership instead. Without a policy view there is no
+ * policy pointer and no problematic roll-up or copyleft section, and every
+ * container classifies production (the conservative default).
  *
  * This module deliberately does not render the notices companion, emit
  * CycloneDX, or evaluate policy — verdicts and suppressed workspaces arrive
  * pre-computed in the PolicyView projection.
+ *
+ * The normative placement spec is docs/reference/report-placement.md — update both together.
  */
 
 import {
   compareCodeUnits,
   comparePackages,
+  DOCKER_IDENTITY_PREFIX,
+  purlEcosystem,
   type CanonicalDependencies,
   type DependencyIntroduction,
   type Occurrence,
   type PackageEntry,
   type Verdict,
 } from "../model/dependencies";
+import { OS_PACKAGE_ECOSYSTEMS } from "../policy/osEcosystems";
+import type { AcceptedContainerNotice } from "../policy/evaluate";
 import type { SuppressedWorkspace } from "../policy/schema";
 
 const HEADER_LINE =
@@ -43,6 +63,26 @@ export interface PolicyView {
   policyPath: string;
   suppressedWorkspaces: ReadonlyArray<SuppressedWorkspace>;
   verdicts: ReadonlyArray<Verdict>;
+  /**
+   * Accepted container AGPL obligations (policy/evaluate.ts): an os-scope
+   * package whose AGPL network-copyleft obligation was accepted through a
+   * `[[compatible]]` rule rather than failing. Rendered as a non-blocking
+   * special notice in the copyleft section instead of vanishing — absent
+   * when the pipeline finds none (possibly empty); tests exercising other
+   * membership rules may omit the field entirely.
+   */
+  acceptedContainerNotices?: ReadonlyArray<AcceptedContainerNotice>;
+  /**
+   * docker:<source> identities marked development-only by a policy
+   * `[[docker.development]]` glob, resolved by the pipeline against the
+   * analyzed containers (via the same matcher as `[docker].ignore`). Drives
+   * the Containers index classification column; every identity absent from
+   * this set — including when the whole field is absent — renders
+   * "production", the conservative default. A real policy run always
+   * supplies it (possibly empty); tests exercising other membership rules
+   * may omit it.
+   */
+  developmentContainers?: ReadonlySet<string>;
   /**
    * Author-supplied document presentation (from the policy [document]
    * table). `title` replaces the default H1; `preamble` renders verbatim as a
@@ -248,13 +288,6 @@ function whyCellOf(
   return boundedJoin(union, ", ");
 }
 
-/** Ecosystem = the purl type segment between "pkg:" and the first "/". */
-function ecosystemOf(purl: string): string {
-  const rest = purl.startsWith("pkg:") ? purl.slice(4) : purl;
-  const slash = rest.indexOf("/");
-  return slash === -1 ? rest : rest.slice(0, slash);
-}
-
 /**
  * Unknown-license predicate for the counts block: a finding with a null
  * expression, or — pre-annotation — no finding and zero claims. An imprecise
@@ -288,14 +321,210 @@ function isDevelopmentOnly(pkg: PackageEntry): boolean {
 }
 
 /**
- * Package-level Docker image-package classification: an OS package is
- * one whose scope is "os" (a row threaded in from the committed docker.sbom.json,
- * now covering full generated-image contents, not only base-image OS packages).
- * OS packages render in their OWN section and are excluded from the prod/dev app
- * sections — the dev/prod split is an app-scope concept.
+ * A package carries at least one docker-image occurrence — the discriminator
+ * for "does this package belong under some container's subsection at all",
+ * independent of {@link PackageEntry.scope}. A package with BOTH a workspace
+ * occurrence and a docker occurrence (shared between an app lockfile and a
+ * container) satisfies this and rows in both its app table and the
+ * container's subsection — complete inventories, not an exclusive choice.
  */
-function isOsPackage(pkg: PackageEntry): boolean {
-  return pkg.scope === "os";
+function hasContainerOccurrence(pkg: PackageEntry): boolean {
+  return pkg.occurrences.some((occurrence) =>
+    occurrence.target.startsWith(DOCKER_IDENTITY_PREFIX),
+  );
+}
+
+/**
+ * Package-level Container classification: a package whose occurrences are
+ * ALL docker-image occurrences (non-empty, and none targets a non-docker
+ * workspace) — the discriminator for "this package lives ONLY in
+ * container(s)", which excludes it from the app Production/Development-only
+ * tables. A package present in both a workspace and a container is NOT a
+ * container package by this predicate (it stays in its app table too) even
+ * though {@link hasContainerOccurrence} is true for it — the two predicates
+ * answer different questions on purpose.
+ */
+function isContainerPackage(pkg: PackageEntry): boolean {
+  return (
+    pkg.occurrences.length > 0 &&
+    pkg.occurrences.every((occurrence) =>
+      occurrence.target.startsWith(DOCKER_IDENTITY_PREFIX),
+    )
+  );
+}
+
+/**
+ * The counts-block Development-only predicate — mirrors exactly where the
+ * renderer PLACES a package, so the count matches rendered section
+ * membership. A package renders development-only when it has no production
+ * placement: it is either app-classified development-only
+ * ({@link isDevelopmentOnly}) or a pure container package
+ * ({@link isContainerPackage}), AND none of its occurrences targets a
+ * production (non-dev-marked) container — a single production container
+ * occurrence is a production placement regardless of any other occurrence,
+ * matching the app-table split's own conservative-to-production rule.
+ */
+function rendersDevelopmentOnly(
+  pkg: PackageEntry,
+  developmentContainers: ReadonlySet<string>,
+): boolean {
+  return (
+    pkg.occurrences.length > 0 &&
+    (isContainerPackage(pkg) || isDevelopmentOnly(pkg)) &&
+    !pkg.occurrences.some(
+      (occurrence) =>
+        occurrence.target.startsWith(DOCKER_IDENTITY_PREFIX) &&
+        !developmentContainers.has(occurrence.target),
+    )
+  );
+}
+
+/** The resolved development-container set for a no-policy render. */
+const EMPTY_DEVELOPMENT_CONTAINERS: ReadonlySet<string> = new Set();
+
+const CONTAINERS_HEAD = [
+  "| Container | Classification | Packages |",
+  "| --- | --- | --- |",
+];
+
+/**
+ * The deduped, compareCodeUnits-sorted docker:<source> identities carried by
+ * ANY package's occurrences — the one source of truth for "which containers
+ * were analyzed", shared by the Containers index and the
+ * Production/Development-only container subsections so the two views can
+ * never drift apart. Occurrence-keyed, not scope-keyed: a container is
+ * discovered from any package that occurs there, regardless of whether that
+ * package also carries an app occurrence elsewhere.
+ */
+function analyzedContainerIdentities(
+  sorted: readonly PackageEntry[],
+): string[] {
+  const identities = new Set<string>();
+  for (const pkg of sorted) {
+    for (const occurrence of pkg.occurrences) {
+      if (occurrence.target.startsWith(DOCKER_IDENTITY_PREFIX)) {
+        identities.add(occurrence.target);
+      }
+    }
+  }
+  return [...identities].sort(compareCodeUnits);
+}
+
+/**
+ * The "## Containers" thin index, rendered immediately before Production
+ * regardless of policy (occurrence-derived, not policy-gated): one row per
+ * analyzed container ({@link analyzedContainerIdentities}) — its
+ * docker:<source> identity, production/development classification, and
+ * total package count (every package occurring there, system or
+ * application). Classification is "development" for an identity present in
+ * `developmentContainers`, else the conservative "production" default; a
+ * no-policy render passes an empty set, so every container reads
+ * "production".
+ */
+function containersSectionLines(
+  sorted: readonly PackageEntry[],
+  developmentContainers: ReadonlySet<string>,
+): string[] {
+  const counts = new Map<string, number>();
+  for (const pkg of sorted) {
+    for (const occurrence of pkg.occurrences) {
+      if (!occurrence.target.startsWith(DOCKER_IDENTITY_PREFIX)) continue;
+      counts.set(occurrence.target, (counts.get(occurrence.target) ?? 0) + 1);
+    }
+  }
+  const identities = analyzedContainerIdentities(sorted);
+  const heading = "## Containers";
+  if (identities.length === 0) {
+    return [heading, "", "✅ No containers are currently tracked."];
+  }
+  const lines: string[] = [heading, "", ...CONTAINERS_HEAD];
+  for (const identity of identities) {
+    const classification = developmentContainers.has(identity)
+      ? "development"
+      : "production";
+    lines.push(
+      `| ${escapeCell(identity)} | ${escapeCell(classification)} | ${counts.get(identity)} |`,
+    );
+  }
+  return lines;
+}
+
+/**
+ * The container-subsection table head: Name/Ecosystem/Version/License only —
+ * no "Used in" column, since a single-container table already scopes every
+ * row to that one identity (the column would be pure noise).
+ */
+const CONTAINER_TABLE_HEAD = [
+  "| Name | Ecosystem | Version | License |",
+  "| --- | --- | --- | --- |",
+];
+
+/** One container-subsection row: tableRow's four columns, no Used-in. */
+function containerTableRow(pkg: PackageEntry): string {
+  return `| ${escapeCell(pkg.name)} | ${escapeCell(purlEcosystem(pkg.purl))} | ${escapeCell(pkg.version)} | ${escapeCell(licenseCellOf(pkg))} |`;
+}
+
+/**
+ * One labeled sub-table block ("**System packages**" / "**Application
+ * packages**") inside a container subsection — the bold label mirrors the
+ * "**Package counts:**" idiom used elsewhere in the document. Returns []
+ * when `rows` is empty so an empty partition adds no stray heading or table.
+ */
+function containerPartitionLines(
+  label: string,
+  rows: readonly PackageEntry[],
+): string[] {
+  if (rows.length === 0) return [];
+  const lines: string[] = [`**${label}**`, "", ...CONTAINER_TABLE_HEAD];
+  for (const pkg of rows) lines.push(containerTableRow(pkg));
+  lines.push("");
+  return lines;
+}
+
+/**
+ * Per-container "### Container: docker:<source>" H3 subsections for ONE
+ * classification half (the caller passes either the production or the
+ * development-only identity subset of {@link analyzedContainerIdentities}).
+ * Each container's inventory is its COMPLETE package set for that identity —
+ * every package with an occurrence targeting it, drawn from `containerRows`
+ * (every package carrying a docker occurrence, per
+ * {@link hasContainerOccurrence} — including one shared with an app
+ * workspace) — with NO exclusion (the Copyleft-section dedup does not apply
+ * here; a Problematic-escalated container package still rows here). A
+ * package occurring in two containers therefore rows in EACH container's own
+ * subsection.
+ *
+ * Each subsection splits its rows into a **System packages** table (the
+ * {@link OS_PACKAGE_ECOSYSTEMS} allowlist) and an **Application packages**
+ * table (everything else), in that fixed order, so the base-image-vs-
+ * installed distinction is visible per container — an empty partition omits
+ * its label+table entirely (a base-image-only container shows only System).
+ * comparePackages order (the caller's sort) survives the partition filter.
+ *
+ * The heading text routes the identity through escapeCell so a bracketed
+ * path segment can never form a markdown link. Returns [] for an empty
+ * identity list — an empty classification adds no stray headings.
+ */
+function containerSubsectionLines(
+  identities: readonly string[],
+  containerRows: readonly PackageEntry[],
+): string[] {
+  const lines: string[] = [];
+  for (const identity of identities) {
+    const rows = containerRows.filter((pkg) =>
+      pkg.occurrences.some((occurrence) => occurrence.target === identity),
+    );
+    const system = rows.filter((pkg) =>
+      OS_PACKAGE_ECOSYSTEMS.has(purlEcosystem(pkg.purl)),
+    );
+    const application = rows.filter(
+      (pkg) => !OS_PACKAGE_ECOSYSTEMS.has(purlEcosystem(pkg.purl)),
+    );
+    lines.push(`### Container: ${escapeCell(identity)}`, "");
+    lines.push(...containerPartitionLines("System packages", system));
+    lines.push(...containerPartitionLines("Application packages", application));
+  }
+  return lines;
 }
 
 const TABLE_HEAD = [
@@ -324,7 +553,7 @@ function summarySection(
 }
 
 function tableRow(pkg: PackageEntry, usedIn: string): string {
-  return `| ${escapeCell(pkg.name)} | ${escapeCell(ecosystemOf(pkg.purl))} | ${escapeCell(pkg.version)} | ${escapeCell(licenseCellOf(pkg))} | ${escapeCell(usedIn)} |`;
+  return `| ${escapeCell(pkg.name)} | ${escapeCell(purlEcosystem(pkg.purl))} | ${escapeCell(pkg.version)} | ${escapeCell(licenseCellOf(pkg))} | ${escapeCell(usedIn)} |`;
 }
 
 /**
@@ -350,7 +579,7 @@ function copyleftRow(
 ): string {
   const usedIn = shownTargets.join(", ");
   const scope = new Set(shownTargets);
-  return `| ${escapeCell(pkg.name)} | ${escapeCell(ecosystemOf(pkg.purl))} | ${escapeCell(pkg.version)} | ${escapeCell(licenseCellOf(pkg))} | ${escapeCell(usedIn)} | ${escapeCell(whyCellOf(pkg, scope))} |`;
+  return `| ${escapeCell(pkg.name)} | ${escapeCell(purlEcosystem(pkg.purl))} | ${escapeCell(pkg.version)} | ${escapeCell(licenseCellOf(pkg))} | ${escapeCell(usedIn)} | ${escapeCell(whyCellOf(pkg, scope))} |`;
 }
 
 /**
@@ -413,25 +642,32 @@ function conflictSectionLines(sorted: readonly PackageEntry[]): string[] {
 
 /**
  * The package-counts block: total, per-ecosystem (compareCodeUnits-sorted),
- * production / development-only / Docker-OS / unknown-license counts. App-scope
- * packages feed the prod/dev split (an app concept); os-scope packages are
- * counted separately as Docker base-image packages so the three buckets
- * (production + development-only + Docker OS) partition the total. Input is the
- * already-sorted package list.
+ * production / development-only / container / unknown-license counts.
+ * Production and Development-only partition the total exactly — every
+ * package renders under one or the other, per
+ * {@link rendersDevelopmentOnly} — while Container and Unknown license are
+ * cross-cutting subtotals: a package can be counted under Container and/or
+ * Unknown in addition to its Production/Development-only bucket. Container
+ * counts every package with any container occurrence
+ * ({@link hasContainerOccurrence}), not only a pure-container package. Input
+ * is the already-sorted package list.
  */
-function packageCountsLines(sorted: readonly PackageEntry[]): string[] {
+function packageCountsLines(
+  sorted: readonly PackageEntry[],
+  developmentContainers: ReadonlySet<string>,
+): string[] {
   const ecosystemCounts = new Map<string, number>();
   let unknownCount = 0;
   let devOnlyCount = 0;
-  let osCount = 0;
+  let containerCount = 0;
   for (const pkg of sorted) {
-    const ecosystem = ecosystemOf(pkg.purl);
+    const ecosystem = purlEcosystem(pkg.purl);
     ecosystemCounts.set(ecosystem, (ecosystemCounts.get(ecosystem) ?? 0) + 1);
     if (isUnknownLicense(pkg)) unknownCount += 1;
-    if (isOsPackage(pkg)) osCount += 1;
-    else if (isDevelopmentOnly(pkg)) devOnlyCount += 1;
+    if (hasContainerOccurrence(pkg)) containerCount += 1;
+    if (rendersDevelopmentOnly(pkg, developmentContainers)) devOnlyCount += 1;
   }
-  const prodCount = sorted.length - devOnlyCount - osCount;
+  const prodCount = sorted.length - devOnlyCount;
   const lines: string[] = [
     "**Package counts:**",
     "",
@@ -445,7 +681,7 @@ function packageCountsLines(sorted: readonly PackageEntry[]): string[] {
   lines.push(
     `- Production packages: ${prodCount}`,
     `- Development-only packages: ${devOnlyCount}`,
-    `- Docker image packages: ${osCount}`,
+    `- Container packages: ${containerCount}`,
     `- Unknown license: ${unknownCount}`,
     "",
   );
@@ -513,7 +749,7 @@ function problematicRow(group: BlockingGroup, pkg: PackageEntry): string {
   // names — never over the package's out-of-scope occurrences.
   const shownTargets = new Set(group.targets);
   const targets = [...shownTargets].sort(compareCodeUnits).join(", ");
-  return `| ${escapeCell("fail")} | ${escapeCell(group.rule)} | ${escapeCell(pkg.name)} | ${escapeCell(ecosystemOf(pkg.purl))} | ${escapeCell(pkg.version)} | ${escapeCell(licenseCellOf(pkg))} | ${escapeCell(targets)} | ${escapeCell(whyCellOf(pkg, shownTargets))} | ${escapeCell(group.reason)} |`;
+  return `| ${escapeCell("fail")} | ${escapeCell(group.rule)} | ${escapeCell(pkg.name)} | ${escapeCell(purlEcosystem(pkg.purl))} | ${escapeCell(pkg.version)} | ${escapeCell(licenseCellOf(pkg))} | ${escapeCell(targets)} | ${escapeCell(whyCellOf(pkg, shownTargets))} | ${escapeCell(group.reason)} |`;
 }
 
 /**
@@ -538,7 +774,7 @@ function problematicSectionLines(
   for (const verdict of verdicts) {
     if (verdict.status !== "fail") continue;
     if (!byPurl.has(verdict.purl)) continue;
-    const key = `${verdict.purl} ${verdict.rule} ${verdict.reason}`;
+    const key = `${verdict.purl} ${verdict.rule} ${verdict.reason}`;
     const existing = groups.get(key);
     if (existing === undefined) {
       groups.set(key, {
@@ -611,6 +847,125 @@ function problematicSectionLines(
   return lines;
 }
 
+/**
+ * The "## Copyleft and special notices" section — policy runs only. Membership
+ * is at least one fail/warn verdict whose rule is exactly "default:copyleft"
+ * (the engine's only copyleft-flagging rule), on an APP-scope package not
+ * already carrying a fail verdict of any rule — the copyleft-only dedup: a
+ * package already named in the Problematic roll-up must never also duplicate
+ * into this section, though its inventory row, its Imprecise-review row, and
+ * its Assessment-conflicts row are untouched. Container system-package
+ * copyleft is routine base-image noise and is excluded here regardless of
+ * its verdict status, EXCEPT an accepted AGPL obligation
+ * (policyView.acceptedContainerNotices): a failing AGPL container package
+ * still escalates to Problematic through the same dedup, but an ACCEPTED one
+ * renders here as a non-blocking special notice instead of vanishing — it
+ * is neither counted in the warning roll-up above (its verdict status is
+ * "ok") nor duplicated when the same purl already carries a fail elsewhere.
+ * The Used-in cell lists only the flagged occurrence targets; the Why column
+ * carries the per-row provenance. Returns the full section (heading,
+ * suppressed-workspaces list, accepted-notices list, table or the ✅ empty
+ * state) for the caller to push.
+ */
+function copyleftSectionLines(
+  sorted: readonly PackageEntry[],
+  policyView: PolicyView,
+): string[] {
+  // Group verdicts by purl once — the renderer stays a pure function of its
+  // arguments.
+  const verdictsByPurl = new Map<string, Verdict[]>();
+  for (const verdict of policyView.verdicts) {
+    const list = verdictsByPurl.get(verdict.purl);
+    if (list === undefined) verdictsByPurl.set(verdict.purl, [verdict]);
+    else list.push(verdict);
+  }
+
+  // Purls carrying at least one fail verdict — excluded from Copyleft
+  // membership ONLY (the dedup is copyleft-scoped, not global).
+  const problematicPurls = new Set(
+    policyView.verdicts
+      .filter((verdict) => verdict.status === "fail")
+      .map((verdict) => verdict.purl),
+  );
+
+  // Collect the flagged rows first so the EMPTY state can be a ✅ line rather
+  // than a bare table head.
+  const copyleftRows: string[] = [];
+  for (const pkg of sorted) {
+    if (pkg.scope === "os") continue;
+    if (problematicPurls.has(pkg.purl)) continue;
+    const flagged = (verdictsByPurl.get(pkg.purl) ?? []).filter(
+      (verdict) =>
+        (verdict.status === "fail" || verdict.status === "warn") &&
+        verdict.rule === "default:copyleft",
+    );
+    if (flagged.length === 0) continue;
+    const targets = [
+      ...new Set(flagged.map((verdict) => verdict.occurrenceTarget)),
+    ].sort(compareCodeUnits);
+    copyleftRows.push(copyleftRow(pkg, targets));
+  }
+
+  const lines: string[] = ["## Copyleft and special notices", ""];
+
+  // Suppressed-workspaces list: every field is policy-authored and routes
+  // through escapeCell. Sorted by path (compareCodeUnits) for determinism
+  // regardless of policy-file order. Shown whenever configured — it explains
+  // the suppression even when nothing leaks.
+  const suppressed = [...policyView.suppressedWorkspaces].sort((a, b) =>
+    compareCodeUnits(a.path, b.path),
+  );
+  if (suppressed.length > 0) {
+    lines.push(
+      "Workspaces that are themselves distributed under a copyleft license are suppressed by policy:",
+      "",
+    );
+    for (const workspace of suppressed) {
+      lines.push(
+        `- ${escapeCell(workspace.path)} (${escapeCell(workspace.license)}) — ${escapeCell(workspace.description)}`,
+      );
+    }
+    lines.push("");
+  }
+
+  // Accepted-AGPL container notices: candidates from policy/evaluate.ts,
+  // deduped against the SAME problematicPurls set the flagged rows above use
+  // — a purl already failing anywhere is never also shown as an accepted
+  // notice. Sorted by purl already (acceptedContainerNotices' contract).
+  const notices = (policyView.acceptedContainerNotices ?? []).filter(
+    (notice) => !problematicPurls.has(notice.purl),
+  );
+  if (notices.length > 0) {
+    lines.push(
+      "A container system package's AGPL network-copyleft obligation was accepted by policy configuration — recorded here as a non-blocking notice, not counted toward the copyleft warning total:",
+      "",
+    );
+    for (const notice of notices) {
+      lines.push(
+        `- ${escapeCell(notice.name)}@${escapeCell(notice.version)} (${escapeCell(notice.license)}) in ${escapeCell(notice.targets.join(", "))} — accepted via ${escapeCell(notice.rule)}: ${escapeCell(notice.reason)}`,
+      );
+    }
+    lines.push("");
+  }
+
+  if (copyleftRows.length > 0) {
+    lines.push(
+      "The packages listed below carry copyleft or special license obligations in at least one non-suppressed workspace.",
+      "",
+      ...COPYLEFT_HEAD,
+      ...copyleftRows,
+      "",
+    );
+  } else if (notices.length === 0) {
+    lines.push(
+      "✅ No package carries copyleft or special license obligations.",
+      "",
+    );
+  }
+
+  return lines;
+}
+
 export function renderMarkdown(
   model: CanonicalDependencies,
   policyView?: PolicyView,
@@ -644,7 +999,15 @@ export function renderMarkdown(
     );
   }
 
-  lines.push(...packageCountsLines(sorted));
+  // Containers index — scope-derived, so it renders with or without a policy
+  // view (a no-policy render passes the empty set; every container reads
+  // "production"). Resolved once, above the counts block, so the
+  // Production/Development-only counts can classify a container package by
+  // the same set the Containers index and the container subsections use.
+  const developmentContainers =
+    policyView?.developmentContainers ?? EMPTY_DEVELOPMENT_CONTAINERS;
+
+  lines.push(...packageCountsLines(sorted, developmentContainers));
 
   // Problematic licenses roll-up — policy runs only. Rendered AFTER the
   // counts block and BEFORE the copyleft section so the gate-blocking findings
@@ -655,71 +1018,7 @@ export function renderMarkdown(
 
   // Copyleft and special notices — policy runs only.
   if (policyView !== undefined) {
-    // Group verdicts by purl once — the renderer stays a pure function of its
-    // arguments.
-    const verdictsByPurl = new Map<string, Verdict[]>();
-    for (const verdict of policyView.verdicts) {
-      const list = verdictsByPurl.get(verdict.purl);
-      if (list === undefined) verdictsByPurl.set(verdict.purl, [verdict]);
-      else list.push(verdict);
-    }
-
-    // Collect the flagged copyleft rows first so the EMPTY state can be a ✅ line
-    // rather than a bare table head. Membership = at least one fail/warn verdict
-    // whose rule is exactly "default:copyleft" (the engine's only copyleft-
-    // flagging rule). The Used-in cell lists only the flagged occurrence targets
-    // — how the elected branch surfaces: the non-suppressed leaking workspaces
-    // are named. The Why column carries the per-row provenance.
-    const copyleftRows: string[] = [];
-    for (const pkg of sorted) {
-      const flagged = (verdictsByPurl.get(pkg.purl) ?? []).filter(
-        (verdict) =>
-          (verdict.status === "fail" || verdict.status === "warn") &&
-          verdict.rule === "default:copyleft",
-      );
-      if (flagged.length === 0) continue;
-      const targets = [
-        ...new Set(flagged.map((verdict) => verdict.occurrenceTarget)),
-      ].sort(compareCodeUnits);
-      copyleftRows.push(copyleftRow(pkg, targets));
-    }
-
-    lines.push("## Copyleft and special notices", "");
-
-    // Suppressed-workspaces list: every field is policy-authored and routes
-    // through escapeCell. Sorted by path (compareCodeUnits) for determinism
-    // regardless of policy-file order. Shown whenever configured — it explains
-    // the suppression even when nothing leaks.
-    const suppressed = [...policyView.suppressedWorkspaces].sort((a, b) =>
-      compareCodeUnits(a.path, b.path),
-    );
-    if (suppressed.length > 0) {
-      lines.push(
-        "Workspaces that are themselves distributed under a copyleft license are suppressed by policy:",
-        "",
-      );
-      for (const workspace of suppressed) {
-        lines.push(
-          `- ${escapeCell(workspace.path)} (${escapeCell(workspace.license)}) — ${escapeCell(workspace.description)}`,
-        );
-      }
-      lines.push("");
-    }
-
-    if (copyleftRows.length > 0) {
-      lines.push(
-        "The packages listed below carry copyleft or special license obligations in at least one non-suppressed workspace.",
-        "",
-        ...COPYLEFT_HEAD,
-        ...copyleftRows,
-        "",
-      );
-    } else {
-      lines.push(
-        "✅ No package carries copyleft or special license obligations.",
-        "",
-      );
-    }
+    lines.push(...copyleftSectionLines(sorted, policyView));
   }
 
   // Imprecise-licenses review section — finding-level (rendered with or without
@@ -731,20 +1030,34 @@ export function renderMarkdown(
   // zero-conflict documents stay byte-identical.
   lines.push(...conflictSectionLines(sorted));
 
-  // Summary tables, split by package-level dev/prod classification for
-  // APP-scope packages, then a dedicated Docker image packages section.
+  // Containers index — resolved above, placed immediately before Production.
+  lines.push(...containersSectionLines(sorted, developmentContainers));
+  lines.push("");
 
-  // Fixed order — production, development-only, then Docker image packages — for
-  // determinism; each section always renders its heading (a ✅ line replaces the
-  // table when empty). The Used-in cell stays the full occurrence-target list; the split is
-  // by package classification, not per-occurrence. OS packages are excluded from
-  // both app sections (the dev/prod split is an app concept). Lockfile-only
-  // scans carry no licenses — "unknown" is correct pre-annotation behavior, not
-  // a rendering defect.
-  const appPackages = sorted.filter((pkg) => !isOsPackage(pkg));
-  const osPackages = sorted.filter(isOsPackage);
+  // Production and Development-only, each the app table plus its half's
+  // container subsections. Fixed order — production before development-only —
+  // for determinism; each app-table heading always renders (a ✅ line replaces
+  // the table when empty). The Used-in cell stays the full occurrence-target
+  // list; the split is by package classification, not per-occurrence. A
+  // container-only package ({@link isContainerPackage}) is excluded from both
+  // app tables (the dev/prod split is an app concept) — it renders in its
+  // container's own subsection instead (there is no standalone Docker
+  // section). A package shared with a workspace stays in its app table AND
+  // rows in the container subsection ({@link hasContainerOccurrence} feeds
+  // the subsection candidates, a strict superset of the excluded set).
+  // Lockfile-only scans carry no licenses — "unknown" is correct
+  // pre-annotation behavior, not a rendering defect.
+  const appPackages = sorted.filter((pkg) => !isContainerPackage(pkg));
+  const containerRows = sorted.filter(hasContainerOccurrence);
   const developmentOnly = appPackages.filter(isDevelopmentOnly);
   const production = appPackages.filter((pkg) => !isDevelopmentOnly(pkg));
+  const containerIdentities = analyzedContainerIdentities(sorted);
+  const productionContainers = containerIdentities.filter(
+    (identity) => !developmentContainers.has(identity),
+  );
+  const developmentContainerIds = containerIdentities.filter((identity) =>
+    developmentContainers.has(identity),
+  );
   lines.push(
     ...summarySection(
       "## Production dependencies",
@@ -753,6 +1066,7 @@ export function renderMarkdown(
     ),
   );
   lines.push("");
+  lines.push(...containerSubsectionLines(productionContainers, containerRows));
   lines.push(
     ...summarySection(
       "## Development-only dependencies",
@@ -762,12 +1076,15 @@ export function renderMarkdown(
   );
   lines.push("");
   lines.push(
-    ...summarySection(
-      "## Docker image packages",
-      osPackages,
-      "✅ No Docker images are currently tracked.",
-    ),
+    ...containerSubsectionLines(developmentContainerIds, containerRows),
   );
+
+  // Defensive trailing-blank trim: a non-empty final container subsection
+  // owns its own trailing separator (matching every other section-lines
+  // helper), which would otherwise leave a blank line at end-of-file. Strip
+  // it so the document keeps its single-trailing-LF convention regardless of
+  // which section renders last.
+  while (lines.length > 0 && lines[lines.length - 1] === "") lines.pop();
 
   return lines.join("\n") + "\n";
 }

@@ -42,6 +42,12 @@ redistributed in a shipped artifact, so no accept lever may override it. The
 category defaults are floors rather than lanes that match a specific package.
 They set what happens to a verdict that no override touched.
 
+The order matters whenever a package could match more than one lane. A
+package denied by `[[deny]]` fails even though a `[[compatible]]` rule would
+accept it, because deny is terminal. A copyleft dependency accepted by a
+`[[compatible]]` licence pattern never reaches workspace suppression, because
+compatible already decided it.
+
 ## Validation
 
 Validation is strict and rejects the whole file on the first run, reporting
@@ -72,6 +78,9 @@ The rules that hold across the file:
   or trailing slash. This confines each to its namespace — the repo for paths
   and globs, the occurrence identities for `where` — so a crafted value cannot
   suppress everything or escape it.
+- A `[[workspace.copyleft_suppressed]]` `path` must not start with `docker:` —
+  that prefix is the reserved occurrence-identity namespace for image targets,
+  and a container image is not a workspace.
 - Unknown top-level tables and unknown keys inside a known table are both
   errors. A misspelled `[[deney]]` or a stray field is not silently ignored.
 
@@ -116,6 +125,11 @@ rides alongside another licence (`MIT AND Commons-Clause`) and is not a
 parseable SPDX value, and a licence like RSAL has no registered id at all. Name
 mode matches the package by exact name, so it catches these even on a package
 whose finding is unknown.
+
+Deny also sees through an override: if a `[[clarify]]` rewrote a denied
+licence into something benign, deny still fires on the original, pre-override
+observed value, so a source-available licence can never be laundered clean by
+a clarify entry.
 
 ## `[[allow_source_available]]`
 
@@ -227,7 +241,10 @@ a copyleft licence. Absent: no suppressions.
 Suppression is per [occurrence](../glossary.md#occurrence) rather than per
 package, so the same dependency in a non-suppressed workspace still flags. The
 `path` match is segment-aware, so `apps/scratch` covers occurrences under it but
-never a sibling like `apps/scratch-helper`.
+never a sibling like `apps/scratch-helper`. `path` is also rejected outright if
+it starts with `docker:` — a container image is not a workspace, so accept a
+container's copyleft package with a scoped [`[[compatible]]`](#compatible) rule
+instead.
 
 It is also family-aware. A finding is suppressed only when it satisfies the
 workspace `license`, or when every copyleft obligation in it belongs to a family
@@ -272,11 +289,11 @@ deny still wins above this lane.
 
 ## `[os_dependencies]`
 
-A table governing what a would-be-fail does on an
-[OS-scope](../glossary.md#scope-app-and-os) package: a row from the committed
-`.sbomlet.cache/docker.sbom.json` that isn't also seen at the application level —
-usually `pkg:deb`/`pkg:apk` from the base layer, or any ecosystem the image scan
-found that the project doesn't also declare directly. Absent table: defaults to `warn`.
+A table governing what a would-be-fail does on a genuine
+[OS-scope](../glossary.md#scope-app-and-os) package: one from the committed
+`.sbomlet.cache/docker.sbom.json` whose ecosystem is on the OS package-manager
+allowlist (`deb`, `apk`, `rpm`, `alpm`) — base-image content, not something an
+application layer installed. Absent table: defaults to `warn`.
 
 | Field | Type | Required | Meaning |
 |-------|------|----------|---------|
@@ -285,14 +302,23 @@ found that the project doesn't also declare directly. Absent table: defaults to 
 The expected copyleft in a Debian or Alpine base image, such as glibc under LGPL
 or bash and coreutils under GPL, is the operating system the container ships on,
 not code your project authored. Those obligations are satisfied by shipping the
-image, so by default the gate lists the OS packages in their own section rather
-than failing your build on every standard base image. The same downgrade applies
-to an application package the image scan found that the project doesn't
-declare directly — it entered the inventory only because it ships inside the
-image, so it is judged as an image package, not app code. Use `fail` if you
-vendor or rebuild your base, or you want every image-sourced copyleft reviewed.
-As with `[dev_dependencies]`, deny still wins, so a source-available licence in
-an OS-scope package fails regardless of this knob.
+image, so by default the gate lists the OS packages under their container's own
+System-packages table (see `[docker.development]` below) rather than failing
+your build on every standard base image. This knob has no effect on an
+application-ecosystem package the image scan found — npm, pypi, go, and the
+rest — because installing something via an application package manager makes
+it an application dependency wherever it lives; it gates on
+[`[dev_dependencies]`](#dev_dependencies) and the normal copyleft rule
+instead, exactly like a lockfile dependency. Use `fail` if you vendor or
+rebuild your base, or you want every base-image copyleft reviewed. As with
+`[dev_dependencies]`, deny still wins, so a source-available licence in an
+OS-scope package fails regardless of this knob — and so does AGPL: an AGPL
+SYSTEM package always fails via the dedicated `default:agpl-container` rule,
+never downgraded by this knob, because network-copyleft (section 13) reaches
+server-side use and is not routine base-image noise the way an ordinary GPL
+or LGPL package is. An AGPL application-ecosystem package in a container
+fails too, but through the ordinary `default:copyleft` rule, since it was
+never OS-scope to begin with.
 
 The `.sbomlet.cache/docker.sbom.json` this lane reads is produced separately by the
 `generate-docker-sbom` subcommand — run by hand over named Dockerfiles or images,
@@ -321,10 +347,12 @@ Write the `preamble` as a multi-line string if it spans paragraphs.
 ## `[docker]`
 
 An optional table holding Dockerfile-discovery exclusion globs, consulted by the
-maintainer-only `generate-docker-sbom` subcommand. A Dockerfile whose
-repo-relative path matches an `ignore` glob is excluded entirely, so it is never
-built or scanned. Absent table: nothing is excluded. A present
-table without `ignore` is the same as an empty list.
+maintainer-only `generate-docker-sbom` subcommand, and `[[docker.development]]`,
+consulted by `generate`/`check` when rendering `THIRD_PARTY_LICENSES.md`. A
+Dockerfile whose repo-relative path matches an `ignore` glob is excluded
+entirely, so it is never built or scanned. Absent table: nothing is excluded and
+every container renders production. A present table without `ignore` is the
+same as an empty list.
 
 | Field | Type | Required | Meaning |
 |-------|------|----------|---------|
@@ -333,6 +361,43 @@ table without `ignore` is the same as an empty list.
 Each glob is validated like a suppression path, with forward slashes only, no
 `..` segment, and no leading or trailing slash, so a crafted glob cannot reach
 outside the repo.
+
+### `[[docker.development]]`
+
+An optional array of tables marking whole containers as development-only in the
+rendered report. Every analyzed container defaults to production; a container
+whose `docker:<source>` identity matches an entry's `source` glob is instead
+listed under `## Development-only dependencies` and its own `### Container:`
+subsection, rather than under `## Production dependencies`.
+
+| Field | Type | Required | Meaning |
+|-------|------|----------|---------|
+| `source` | string (glob) | yes | Repo-relative glob over the Dockerfile identity, without the `docker:` prefix. |
+| `reason` | string (non-empty) | yes | Mandatory documentation: why this container never ships. |
+
+`source` is matched against each analyzed container's bare identity with the
+EXACT same matcher and dialect as `[docker].ignore`: `*` matches within one path
+segment, `**` crosses segments, matching is case-insensitive and anchored to the
+whole identity, and a literal path is a valid glob that matches only itself. A
+`source` is validated like a suppression path (forward slashes only, no `..`
+segment, no leading or trailing slash) and must not start with `docker:` — the
+table already scopes the Dockerfile identity, so the prefix would double up and
+could never match. A `source` that matches no analyzed container prints one
+stderr warning naming it, the same dead-entry posture as an unused scoped rule;
+two entries matching the same container mark it development-only once,
+idempotently.
+
+This marking is placement-only for a SYSTEM package (the OS package-manager
+allowlist): a routine base-image copyleft package still downgrades or gates
+per `[os_dependencies]` regardless of which half it renders under, and an AGPL
+system package still fails via `default:agpl-container` either way. For an
+application-ecosystem package baked into the image, marking its container
+development is NOT placement-only — it moves the verdict too, exactly like
+marking a lockfile dependency a `devDependency`: a copyleft fail in a
+production image dev-downgrades to a warning once the container is marked.
+Use it for images that only run CI or local tooling and are never shipped to
+a user — see the [writing-policy guide](../guides/writing-policy.md) for a
+worked example.
 
 ## `[cache]`
 

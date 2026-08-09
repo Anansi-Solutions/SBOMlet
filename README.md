@@ -168,7 +168,7 @@ way it is.
 
 ## Good to know
 
-- **Docker image packages** aren't discovered from lockfiles. Run the docker
+- **Container packages** aren't discovered from lockfiles. Run the docker
   scan — `task sbomlet:generate DOCKER=1`, discovering and building the
   repository's Dockerfiles by default, or over named Dockerfiles or images — to
   produce a committed `.sbomlet.cache/docker.sbom.json`, and `generate`/`check`

@@ -11,24 +11,24 @@ import { assertSyftSbomSize } from "../collectors/dockerOs";
 import { assessPackages } from "../enrich/assess";
 import { enrichUnknowns } from "../enrich/enrich";
 import { type IntensiveOptions } from "../enrich/scancode";
+import { mergeSboms, type CollectedSbom } from "../merge/merge";
 import {
   DOCKER_IDENTITY_PREFIX,
-  mergeSboms,
-  type CollectedSbom,
-} from "../merge/merge";
-import {
   toSortedDependenciesJson,
+  type CanonicalDependencies,
   type EvaluatedDependencies,
   type Verdict,
 } from "../model/dependencies";
 import { annotateFindings } from "../normalize/normalize";
 import { BUILTIN_OVERRIDES } from "../policy/builtinOverrides";
-import { evaluate } from "../policy/evaluate";
+import { acceptedContainerNotices, evaluate } from "../policy/evaluate";
 import { parsePolicy, type Policy } from "../policy/schema";
 import { alignTables } from "../render/alignTables";
 import { renderCyclonedx } from "../render/cyclonedx";
 import { renderMarkdown, type PolicyView } from "../render/markdown";
 import { renderNotices } from "../render/notices";
+import { globToRegExp } from "../targets/discover";
+import { applyContainerScopes } from "./containerScope";
 import { resolveFrom } from "./paths";
 import { sanitizeForLog, writePolicySummary } from "./summary";
 import { collectTargets } from "./targets";
@@ -467,6 +467,72 @@ function intensiveOptionsFor(
 }
 
 /**
+ * The analyzed container SOURCES — the bare repo-relative identity of every
+ * docker:<source> occurrence target carried by ANY package, deduped. The
+ * bare form (prefix stripped) is what a `[[docker.development]]` glob
+ * matches against, mirroring `[docker].ignore`'s own bare-source patterns.
+ * Occurrence-keyed, not scope-keyed: this runs BEFORE {@link
+ * applyContainerScopes} re-keys application-ecosystem container packages to
+ * scope "app", and it must not lose an app-only container just because its
+ * packages already carry the gating scope.
+ */
+function analyzedContainerSources(
+  model: CanonicalDependencies,
+): ReadonlySet<string> {
+  const sources = new Set<string>();
+  for (const pkg of model.packages) {
+    for (const occurrence of pkg.occurrences) {
+      if (!occurrence.target.startsWith(DOCKER_IDENTITY_PREFIX)) continue;
+      sources.add(occurrence.target.slice(DOCKER_IDENTITY_PREFIX.length));
+    }
+  }
+  return sources;
+}
+
+/**
+ * Resolve PolicyView.developmentContainers: match each policy
+ * `[[docker.development]]` glob against the analyzed container sources via
+ * {@link globToRegExp} — the SAME matcher `[docker].ignore` uses, never a new
+ * dialect. Two patterns matching the same container fold into one entry (a
+ * Set), so resolution is idempotent regardless of overlapping globs. Absent
+ * [docker] table or an empty `development` array yields an empty set, the
+ * conservative default (every container reads "production").
+ *
+ * A pattern matching NO analyzed container source is a dead entry — most
+ * likely a mistyped source path — and prints one stderr warning naming it, mirroring
+ * the unused scoped-rule posture. The check reuses the SAME per-pattern match
+ * loop that resolves classification, so a pattern can never be dead here and
+ * classifying above (one matcher, one truth). Placement-only: this never
+ * touches verdicts or the exit code.
+ */
+function resolveDevelopmentContainers(
+  model: CanonicalDependencies,
+  policy: Policy | undefined,
+): ReadonlySet<string> {
+  const entries = policy?.docker?.development ?? [];
+  if (entries.length === 0) return new Set();
+  const sources = analyzedContainerSources(model);
+  const resolved = new Set<string>();
+  for (const entry of entries) {
+    const matcher = globToRegExp(entry.source);
+    let matched = false;
+    for (const source of sources) {
+      if (matcher.test(source)) {
+        resolved.add(`${DOCKER_IDENTITY_PREFIX}${source}`);
+        matched = true;
+      }
+    }
+    if (!matched) {
+      process.stderr.write(
+        `policy: [[docker.development]] "${sanitizeForLog(entry.source)}" ` +
+          `matches no analyzed container image\n`,
+      );
+    }
+  }
+  return resolved;
+}
+
+/**
  * Project the PolicyView the document renderer consumes. The policy pointer path
  * is repo-root-relative (policyPointerPath) so the committed bytes stay stable
  * across platforms. The author-supplied [document] title + preamble flow
@@ -476,12 +542,16 @@ function intensiveOptionsFor(
 function projectPolicyView(
   policy: Policy,
   policyPath: string,
+  model: CanonicalDependencies,
   verdicts: ReadonlyArray<Verdict>,
+  developmentContainers: ReadonlySet<string>,
 ): PolicyView {
   return {
     policyPath,
     suppressedWorkspaces: policy.suppressedWorkspaces,
     verdicts,
+    developmentContainers,
+    acceptedContainerNotices: acceptedContainerNotices(model, verdicts),
     ...(policy.document !== undefined ? { document: policy.document } : {}),
   };
 }
@@ -585,6 +655,16 @@ export async function buildOutputs(
     BUILTIN_OVERRIDES,
   );
 
+  // The container re-scope transform: resolve the development-container set
+  // ONCE — from the still-"os"-scoped annotated model, so an app-only
+  // container is never lost — and feed the SAME set to the scope transform
+  // AND the render classification below (one resolution, two consumers).
+  // Runs unconditionally (even without a policy): the transform only ever
+  // NARROWS which packages carry the gating "app" scope, so the annotated
+  // model stays the honest one everywhere downstream, dump-model included.
+  const developmentContainers = resolveDevelopmentContainers(annotated, policy);
+  const scoped = applyContainerScopes(annotated, developmentContainers);
+
   // Policy stage: pure engine calls — evaluate verdicts, surface the summary
   // on stderr, and project the PolicyView for the document renderer. Policy-
   // authored strings reaching the .md route through escapeCell inside the
@@ -592,29 +672,35 @@ export async function buildOutputs(
   let verdicts: Verdict[] | undefined;
   let policyView: PolicyView | undefined;
   if (policy !== undefined && opts.policyPath !== undefined) {
-    verdicts = evaluate(annotated, policy);
+    verdicts = evaluate(scoped, policy);
     writePolicySummary(policy, verdicts, usedClarifyIndices);
-    policyView = projectPolicyView(policy, policyPointerPath(opts), verdicts);
+    policyView = projectPolicyView(
+      policy,
+      policyPointerPath(opts),
+      scoped,
+      verdicts,
+      developmentContainers,
+    );
   }
 
   // Dump surface: with a policy run the dump is the EvaluatedDependencies
-  // (findings + verdicts); without one it is the annotated model.
+  // (findings + verdicts); without one it is the re-scoped model.
   const evaluated: EvaluatedDependencies | undefined =
     verdicts === undefined
       ? undefined
-      : { packages: annotated.packages, verdicts };
-  const dumpJson = toSortedDependenciesJson(evaluated ?? annotated);
+      : { packages: scoped.packages, verdicts };
+  const dumpJson = toSortedDependenciesJson(evaluated ?? scoped);
 
   return {
-    licensesMd: alignTables(renderMarkdown(annotated, policyView)),
-    noticesMd: renderNotices(annotated),
+    licensesMd: alignTables(renderMarkdown(scoped, policyView)),
+    noticesMd: renderNotices(scoped),
     ...(opts.cyclonedxPath !== undefined
-      ? { cyclonedxJson: renderCyclonedx(annotated, verdicts) }
+      ? { cyclonedxJson: renderCyclonedx(scoped, verdicts) }
       : {}),
     dumpJson,
     ...(verdicts !== undefined ? { verdicts } : {}),
     ...(policy !== undefined ? { policy } : {}),
-    packageCount: annotated.packages.length,
+    packageCount: scoped.packages.length,
     staleUnknowns,
   };
 }

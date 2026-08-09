@@ -9,9 +9,14 @@ import {
   normalizeRaw,
   type BuiltinOverrideInput,
 } from "../src/normalize/normalize";
-import { evaluate, unusedRuleIds } from "../src/policy/evaluate";
+import {
+  acceptedContainerNotices,
+  evaluate,
+  unusedRuleIds,
+} from "../src/policy/evaluate";
 import { BUILTIN_DENY_RULES } from "../src/policy/builtinDenylist";
 import { denyRuleFor } from "../src/policy/denylist";
+import { AGPL_IDS, COPYLEFT_IDS } from "../src/policy/copyleft";
 import {
   COULD_BE_COPYLEFT_FAMILIES,
   WORKSPACE_ABSORBS,
@@ -554,6 +559,15 @@ describe("parsePolicy — suppression path validation", () => {
     const error = expectPolicyError(suppressionFixture("."));
     expect(error.message).toContain("could never match");
   });
+
+  test('a "docker:"-prefixed path is rejected — a container image is not a workspace', () => {
+    const error = expectPolicyError(
+      suppressionFixture("docker:api/Dockerfile"),
+    );
+    expect(error.message).toContain("workspace.copyleft_suppressed[0]");
+    expect(error.message).toContain('"docker:"');
+    expect(error.message).toContain("not a workspace");
+  });
 });
 
 describe("parsePolicy — [unknown] handling knob", () => {
@@ -841,6 +855,7 @@ function runEngine(
   verdicts: Verdict[];
   usedClarifyIndices: ReadonlySet<number>;
   policy: Policy;
+  model: CanonicalDependencies;
 } {
   const policy = parsePolicy(policyText);
   const { model, usedClarifyIndices } = annotateFindings(
@@ -848,7 +863,12 @@ function runEngine(
     policy.clarify,
     builtins,
   );
-  return { verdicts: evaluate(model, policy), usedClarifyIndices, policy };
+  return {
+    verdicts: evaluate(model, policy),
+    usedClarifyIndices,
+    policy,
+    model,
+  };
 }
 
 /** Suppression-only fixture policy: apps/scratch absorbs copyleft. */
@@ -3434,6 +3454,413 @@ describe("evaluate — os-scope partial finding", () => {
   });
 });
 
+// ===========================================================================
+// AGPL in a container system package escalates to a REAL fail
+// (default:agpl-container), never the routine os-scope downgrade —
+// network copyleft (AGPL section 13) applies to server-side container use.
+// ===========================================================================
+
+describe("AGPL_IDS — literal set (copyleft.ts)", () => {
+  test("is exactly the six AGPL ids", () => {
+    expect([...AGPL_IDS].sort()).toEqual([
+      "AGPL-1.0",
+      "AGPL-1.0-only",
+      "AGPL-1.0-or-later",
+      "AGPL-3.0",
+      "AGPL-3.0-only",
+      "AGPL-3.0-or-later",
+    ]);
+  });
+
+  test("every member is in COPYLEFT_IDS", () => {
+    for (const id of AGPL_IDS) {
+      expect(COPYLEFT_IDS.has(id)).toBe(true);
+    }
+  });
+
+  test('drift tripwire: every COPYLEFT_IDS id with the "AGPL-" prefix is in AGPL_IDS', () => {
+    // TEST-only prefix scan — a future FAMILY_MEMBERS addition can never
+    // silently miss the escalation set. Runtime matching stays exact-ID
+    // (AGPL_IDS.has), never a prefix check.
+    for (const id of COPYLEFT_IDS) {
+      if (id.startsWith("AGPL-")) {
+        expect(AGPL_IDS.has(id)).toBe(true);
+      }
+    }
+  });
+});
+
+describe("evaluate — os-scope AGPL container escalation", () => {
+  const AGPL_TARGET = "docker:img/Dockerfile";
+
+  test("HEADLINE: os-scope AGPL-3.0-only under os_dependencies=warn escalates to a REAL fail, not the routine warn", () => {
+    const { verdicts } = runEngine(
+      [
+        osPkgSpec("pkg:deb/debian/agpl-os@1.0.0", "agpl-os", "AGPL-3.0-only", [
+          AGPL_TARGET,
+        ]),
+      ],
+      "",
+    );
+    expect(verdicts[0].status).toBe("fail");
+    expect(verdicts[0].rule).toBe("default:agpl-container");
+  });
+
+  test("os_dependencies=ignore does not license the AGPL container package back in (the loudest current escape)", () => {
+    const { verdicts } = runEngine(
+      [
+        osPkgSpec("pkg:deb/debian/agpl-os@1.0.0", "agpl-os", "AGPL-3.0-only", [
+          AGPL_TARGET,
+        ]),
+      ],
+      '[os_dependencies]\nhandling = "ignore"',
+    );
+    expect(verdicts[0].status).toBe("fail");
+    expect(verdicts[0].rule).toBe("default:agpl-container");
+  });
+
+  test("os_dependencies=fail also fails with the SAME distinct rule id (deterministic across every handling)", () => {
+    const { verdicts } = runEngine(
+      [
+        osPkgSpec("pkg:deb/debian/agpl-os@1.0.0", "agpl-os", "AGPL-3.0-only", [
+          AGPL_TARGET,
+        ]),
+      ],
+      '[os_dependencies]\nhandling = "fail"',
+    );
+    expect(verdicts[0].status).toBe("fail");
+    expect(verdicts[0].rule).toBe("default:agpl-container");
+  });
+
+  test("OR-election: AGPL-3.0-only OR MIT elects MIT and stays default:ok (election semantics preserved)", () => {
+    const { verdicts } = runEngine(
+      [
+        osPkgSpec(
+          "pkg:deb/debian/agpl-or-mit@1.0.0",
+          "agpl-or-mit",
+          "AGPL-3.0-only OR MIT",
+          [AGPL_TARGET],
+        ),
+      ],
+      "",
+    );
+    expect(verdicts[0].status).toBe("ok");
+    expect(verdicts[0].rule).toBe("default:ok");
+  });
+
+  test("AND-taint: GPL-2.0-only AND AGPL-3.0-or-later escalates (copyleftLeafIds sees both conjuncts)", () => {
+    const { verdicts } = runEngine(
+      [
+        osPkgSpec(
+          "pkg:deb/debian/gpl-and-agpl@1.0.0",
+          "gpl-and-agpl",
+          "GPL-2.0-only AND AGPL-3.0-or-later",
+          [AGPL_TARGET],
+        ),
+      ],
+      "",
+    );
+    expect(verdicts[0].status).toBe("fail");
+    expect(verdicts[0].rule).toBe("default:agpl-container");
+  });
+
+  test("app-scope precise AGPL stays default:copyleft UNCHANGED — the new rule id is container-only", () => {
+    const { verdicts } = runEngine(
+      [pkgSpec("agpl-app", "AGPL-3.0-only", ["apps/a"])],
+      "",
+    );
+    expect(verdicts[0].status).toBe("fail");
+    expect(verdicts[0].rule).toBe("default:copyleft");
+  });
+
+  test("defensive: an os-scope AGPL occurrence marked isDevDependency=true still fails (no dev softening)", () => {
+    const { verdicts } = runEngine(
+      [
+        osPkgSpec("pkg:deb/debian/agpl-os@1.0.0", "agpl-os", "AGPL-3.0-only", [
+          { target: AGPL_TARGET, dev: true },
+        ]),
+      ],
+      "",
+    );
+    expect(verdicts[0].status).toBe("fail");
+    expect(verdicts[0].rule).toBe("default:agpl-container");
+  });
+
+  test("a where-scoped [[compatible]] package rule still accepts an os AGPL package (the explicit escape hatch)", () => {
+    const policyText = [
+      "[[compatible]]",
+      'match = "package"',
+      'name = "agpl-os-accepted"',
+      'reason = "explicitly accepted for this container"',
+      `where = ${JSON.stringify([AGPL_TARGET])}`,
+    ].join("\n");
+    const { verdicts } = runEngine(
+      [
+        osPkgSpec(
+          "pkg:deb/debian/agpl-os-accepted@1.0.0",
+          "agpl-os-accepted",
+          "AGPL-3.0-only",
+          [AGPL_TARGET],
+        ),
+      ],
+      policyText,
+    );
+    expect(verdicts[0].status).toBe("ok");
+    expect(verdicts[0].rule).toBe("compatible[0]");
+  });
+
+  test("a [[deny]] license match still yields denied[..] (deny is terminal above the AGPL escalation too)", () => {
+    const { verdicts } = runEngine(
+      [
+        osPkgSpec(
+          "pkg:deb/debian/agpl-os-denied@1.0.0",
+          "agpl-os-denied",
+          "AGPL-3.0-only",
+          [AGPL_TARGET],
+        ),
+      ],
+      denyLicenseFixture("AGPL-3.0-only"),
+    );
+    expect(verdicts[0].status).toBe("fail");
+    expect(verdicts[0].rule).toBe("denied[0]");
+  });
+
+  test("regression: a docker:-prefixed suppression can no longer absorb the os-scope AGPL escalation — parsePolicy rejects the policy outright, so evaluate never even runs against it", () => {
+    const policyText = [
+      "[[workspace.copyleft_suppressed]]",
+      `path = ${JSON.stringify(AGPL_TARGET)}`,
+      'license = "AGPL-3.0-only"',
+      'description = "attempted absorption of the container image"',
+    ].join("\n");
+    expect(() => parsePolicy(policyText)).toThrow(PolicyError);
+
+    // With that suppression impossible to construct, the same os-scope AGPL
+    // package at the same target has only one reachable outcome: the
+    // container escalation fail — never suppressed.
+    const { verdicts } = runEngine(
+      [
+        osPkgSpec("pkg:deb/debian/agpl-os@1.0.0", "agpl-os", "AGPL-3.0-only", [
+          AGPL_TARGET,
+        ]),
+      ],
+      "",
+    );
+    expect(verdicts[0].status).toBe("fail");
+    expect(verdicts[0].rule).toBe("default:agpl-container");
+  });
+});
+
+describe("evaluate — imprecise AGPL container escalation (imprecise variant)", () => {
+  test("os-scope imprecise AGPL fails default:agpl-container (the imprecise escape lane is closed too, not just the precise-expression one)", () => {
+    const { verdicts } = runEngine(
+      [
+        osPkgSpec("pkg:apk/alpine/agpl-ish@1.0.0", "agpl-ish", "AGPL", [
+          "docker:img/Dockerfile",
+        ]),
+      ],
+      "",
+    );
+    expect(verdicts[0].status).toBe("fail");
+    expect(verdicts[0].rule).toBe("default:agpl-container");
+  });
+
+  test("app-scope imprecise AGPL stays warn default:imprecise-copyleft UNCHANGED", () => {
+    const { verdicts } = runEngine(
+      [pkgSpec("agpl-ish-app", "AGPL", ["apps/a"])],
+      "",
+    );
+    expect(verdicts[0].status).toBe("warn");
+    expect(verdicts[0].rule).toBe("default:imprecise-copyleft");
+  });
+
+  test("os-scope imprecise GPL (not AGPL) stays warn default:imprecise-copyleft UNCHANGED — only the literal AGPL token escalates", () => {
+    const { verdicts } = runEngine(
+      [
+        osPkgSpec("pkg:deb/debian/gpl-ish-os@1.0.0", "gpl-ish-os", "GPL", [
+          "docker:img/Dockerfile",
+        ]),
+      ],
+      "",
+    );
+    expect(verdicts[0].status).toBe("warn");
+    expect(verdicts[0].rule).toBe("default:imprecise-copyleft");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Accepted-AGPL container notices (evaluate.ts#acceptedContainerNotices): an
+// os-scope AGPL obligation that was ACCEPTED (status "ok" via a
+// `[[compatible]]` rule) rather than failing must still surface, as a
+// non-blocking notice, distinct from the Verdict[] the CycloneDX/summary
+// consumers read.
+// ---------------------------------------------------------------------------
+
+describe("evaluate — accepted-AGPL container notices (acceptedContainerNotices)", () => {
+  const NOTICE_TARGET = "docker:img/Dockerfile";
+
+  test("a precise AGPL system package accepted via a scoped [[compatible]] package rule surfaces as an accepted-container notice", () => {
+    const policyText = [
+      "[[compatible]]",
+      'match = "package"',
+      'name = "agpl-os-notice"',
+      'reason = "network-copyleft obligation reviewed and accepted for this image"',
+      `where = ${JSON.stringify([NOTICE_TARGET])}`,
+    ].join("\n");
+    const { verdicts, model } = runEngine(
+      [
+        osPkgSpec(
+          "pkg:deb/debian/agpl-os-notice@1.0.0",
+          "agpl-os-notice",
+          "AGPL-3.0-only",
+          [NOTICE_TARGET],
+        ),
+      ],
+      policyText,
+    );
+    expect(verdicts[0].status).toBe("ok");
+    expect(verdicts[0].rule).toBe("compatible[0]");
+
+    const notices = acceptedContainerNotices(model, verdicts);
+    expect(notices).toHaveLength(1);
+    expect(notices[0]).toMatchObject({
+      purl: "pkg:deb/debian/agpl-os-notice@1.0.0",
+      name: "agpl-os-notice",
+      version: "1.0.0",
+      license: "AGPL-3.0-only",
+      targets: [NOTICE_TARGET],
+      rule: "compatible[0]",
+    });
+  });
+
+  test('the imprecise "AGPL" family accepted via a scoped [[compatible]] package rule also surfaces as a notice', () => {
+    const policyText = [
+      "[[compatible]]",
+      'match = "package"',
+      'name = "agpl-ish-notice"',
+      'reason = "network-copyleft obligation reviewed and accepted for this image"',
+      `where = ${JSON.stringify([NOTICE_TARGET])}`,
+    ].join("\n");
+    const { verdicts, model } = runEngine(
+      [
+        osPkgSpec(
+          "pkg:apk/alpine/agpl-ish-notice@1.0.0",
+          "agpl-ish-notice",
+          "AGPL",
+          [NOTICE_TARGET],
+        ),
+      ],
+      policyText,
+    );
+    expect(verdicts[0].status).toBe("ok");
+    expect(verdicts[0].rule).toBe("compatible[0]");
+
+    const notices = acceptedContainerNotices(model, verdicts);
+    expect(notices).toHaveLength(1);
+    expect(notices[0]).toMatchObject({
+      purl: "pkg:apk/alpine/agpl-ish-notice@1.0.0",
+      license: "AGPL",
+      targets: [NOTICE_TARGET],
+      rule: "compatible[0]",
+    });
+  });
+
+  test("regression: a routine GPL/LGPL system package (accepted or os-downgraded) is never an accepted-container notice — the fix does not widen the net", () => {
+    const acceptPolicy = [
+      "[[compatible]]",
+      'match = "package"',
+      'name = "gpl-os-accepted"',
+      'reason = "reviewed base-image utility"',
+    ].join("\n");
+    const { verdicts: acceptedVerdicts, model: acceptedModel } = runEngine(
+      [
+        osPkgSpec(
+          "pkg:deb/debian/gpl-os-accepted@1.0.0",
+          "gpl-os-accepted",
+          "GPL-3.0-only",
+          [NOTICE_TARGET],
+        ),
+      ],
+      acceptPolicy,
+    );
+    expect(acceptedVerdicts[0].status).toBe("ok");
+    expect(
+      acceptedContainerNotices(acceptedModel, acceptedVerdicts),
+    ).toHaveLength(0);
+
+    const { verdicts: warnVerdicts, model: warnModel } = runEngine(
+      [
+        osPkgSpec(
+          "pkg:deb/debian/lgpl-os-warn@1.0.0",
+          "lgpl-os-warn",
+          "LGPL-2.1-or-later",
+          [NOTICE_TARGET],
+        ),
+      ],
+      "",
+    );
+    expect(warnVerdicts[0].status).toBe("warn");
+    expect(acceptedContainerNotices(warnModel, warnVerdicts)).toHaveLength(0);
+  });
+
+  test("a FAILING AGPL system package (not accepted) is not an accepted-container notice — Problematic only, never duplicated", () => {
+    const { verdicts, model } = runEngine(
+      [
+        osPkgSpec(
+          "pkg:deb/debian/agpl-os-failing@1.0.0",
+          "agpl-os-failing",
+          "AGPL-3.0-only",
+          [NOTICE_TARGET],
+        ),
+      ],
+      "",
+    );
+    expect(verdicts[0].status).toBe("fail");
+    expect(verdicts[0].rule).toBe("default:agpl-container");
+    expect(acceptedContainerNotices(model, verdicts)).toHaveLength(0);
+  });
+
+  test("determinism: notices sort by purl (compareCodeUnits), target lists dedupe+sort, and repeated calls are byte-identical", () => {
+    const TARGET_A = "docker:a/Dockerfile";
+    const TARGET_B = "docker:b/Dockerfile";
+    const policyText = [
+      "[[compatible]]",
+      'match = "package"',
+      'name = "zeta-agpl"',
+      'reason = "accepted"',
+      "",
+      "[[compatible]]",
+      'match = "package"',
+      'name = "alpha-agpl"',
+      'reason = "accepted"',
+    ].join("\n");
+    const { verdicts, model } = runEngine(
+      [
+        osPkgSpec(
+          "pkg:deb/debian/zeta-agpl@1.0.0",
+          "zeta-agpl",
+          "AGPL-3.0-only",
+          [TARGET_B, TARGET_A],
+        ),
+        osPkgSpec(
+          "pkg:deb/debian/alpha-agpl@1.0.0",
+          "alpha-agpl",
+          "AGPL-3.0-only",
+          [TARGET_A],
+        ),
+      ],
+      policyText,
+    );
+    const notices1 = acceptedContainerNotices(model, verdicts);
+    const notices2 = acceptedContainerNotices(model, verdicts);
+    expect(notices1).toEqual(notices2);
+    expect(notices1.map((n) => n.purl)).toEqual([
+      "pkg:deb/debian/alpha-agpl@1.0.0",
+      "pkg:deb/debian/zeta-agpl@1.0.0",
+    ]);
+    expect(notices1[1]!.targets).toEqual([TARGET_A, TARGET_B]);
+  });
+});
+
 // ---------------------------------------------------------------------------
 // [docker] ignore — Dockerfile-discovery exclusion globs.
 // ---------------------------------------------------------------------------
@@ -3450,12 +3877,13 @@ describe("[docker] ignore parsing", () => {
     );
     expect(policy.docker).toEqual({
       ignore: ["docker/dev/**", "legacy/Dockerfile"],
+      development: [],
     });
   });
 
   test("[docker] with no ignore key → ignore defaults to empty array", () => {
     const policy = parsePolicy("[docker]\n");
-    expect(policy.docker).toEqual({ ignore: [] });
+    expect(policy.docker).toEqual({ ignore: [], development: [] });
   });
 
   test("a non-table [docker] value is rejected", () => {
@@ -3491,6 +3919,191 @@ describe("[docker] ignore parsing", () => {
   test("an unknown key under [docker] is rejected", () => {
     const err = expectPolicyError('[docker]\nbogus = "x"\n');
     expect(err.problems.some((p) => p.includes("bogus"))).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// [[docker.development]] — per-container development marking (glob source).
+// ---------------------------------------------------------------------------
+
+/** Minimal [docker] table with one [[docker.development]] entry. */
+const developmentFixture = (source: string, reason = "test reason"): string =>
+  [
+    "[docker]",
+    "",
+    "[[docker.development]]",
+    `source = ${JSON.stringify(source)}`,
+    `reason = ${JSON.stringify(reason)}`,
+  ].join("\n");
+
+describe("[[docker.development]] schema parsing", () => {
+  test("a literal path source parses; policy.docker.development carries it verbatim", () => {
+    const policy = parsePolicy(
+      developmentFixture(
+        "examples/docker-scan/Dockerfile",
+        "spun up only for local scan smoke-tests, never shipped",
+      ),
+    );
+    expect(policy.docker).toEqual({
+      ignore: [],
+      development: [
+        {
+          source: "examples/docker-scan/Dockerfile",
+          reason: "spun up only for local scan smoke-tests, never shipped",
+        },
+      ],
+    });
+  });
+
+  test("a `**` glob source parses and is stored verbatim", () => {
+    const policy = parsePolicy(developmentFixture("tools/**"));
+    expect(policy.docker?.development).toEqual([
+      { source: "tools/**", reason: "test reason" },
+    ]);
+  });
+
+  test("a `*` glob source parses and is stored verbatim", () => {
+    const policy = parsePolicy(developmentFixture("examples/*/Dockerfile"));
+    expect(policy.docker?.development).toEqual([
+      { source: "examples/*/Dockerfile", reason: "test reason" },
+    ]);
+  });
+
+  test("[docker] present without the development key → development defaults to []", () => {
+    const policy = parsePolicy("[docker]\nignore = []\n");
+    expect(policy.docker).toEqual({ ignore: [], development: [] });
+  });
+
+  test("no [docker] table at all → docker stays undefined (unchanged)", () => {
+    const policy = parsePolicy("");
+    expect(policy.docker).toBeUndefined();
+  });
+
+  test("missing reason rejects naming docker.development[0]", () => {
+    const err = expectPolicyError(
+      ["[docker]", "", "[[docker.development]]", 'source = "tools/**"'].join(
+        "\n",
+      ),
+    );
+    expect(
+      err.problems.some(
+        (p) =>
+          p.includes("docker.development[0]") &&
+          p.includes('missing required key "reason"'),
+      ),
+    ).toBe(true);
+  });
+
+  test("an empty-string source rejects naming docker.development[0]", () => {
+    const err = expectPolicyError(developmentFixture(""));
+    expect(err.problems.some((p) => p.includes("docker.development[0]"))).toBe(
+      true,
+    );
+  });
+
+  test("a backslash source rejects (forward-slash posture, byte-identical to docker.ignore)", () => {
+    const err = expectPolicyError(developmentFixture("tools\\dev"));
+    expect(err.problems.some((p) => p.includes("forward slashes"))).toBe(true);
+  });
+
+  test('a ".." segment source rejects', () => {
+    const err = expectPolicyError(developmentFixture("../escape/**"));
+    expect(err.problems.some((p) => p.includes(".."))).toBe(true);
+  });
+
+  test("a leading-slash source rejects", () => {
+    const err = expectPolicyError(developmentFixture("/tools/**"));
+    expect(
+      err.problems.some((p) => p.includes("leading or trailing slash")),
+    ).toBe(true);
+  });
+
+  test('a "docker:"-prefixed source rejects with a pointed double-prefix message', () => {
+    const err = expectPolicyError(
+      developmentFixture("docker:tools/Dockerfile"),
+    );
+    expect(
+      err.problems.some(
+        (p) => p.includes("docker.development[0]") && p.includes('"docker:"'),
+      ),
+    ).toBe(true);
+  });
+
+  test("two entries with the SAME pattern string reject as a dead duplicate", () => {
+    const policyText = [
+      "[docker]",
+      "",
+      "[[docker.development]]",
+      'source = "tools/**"',
+      'reason = "first"',
+      "",
+      "[[docker.development]]",
+      'source = "tools/**"',
+      'reason = "second, duplicate pattern"',
+    ].join("\n");
+    const err = expectPolicyError(policyText);
+    expect(
+      err.problems.some(
+        (p) => p.includes("docker.development[1]") && p.includes("duplicate"),
+      ),
+    ).toBe(true);
+  });
+
+  test("two DIFFERENT patterns that could match the same container are legal", () => {
+    const policyText = [
+      "[docker]",
+      "",
+      "[[docker.development]]",
+      'source = "tools/**"',
+      'reason = "first"',
+      "",
+      "[[docker.development]]",
+      'source = "tools/nested/**"',
+      'reason = "second, different pattern"',
+    ].join("\n");
+    const policy = parsePolicy(policyText);
+    expect(policy.docker?.development).toEqual([
+      { source: "tools/**", reason: "first" },
+      { source: "tools/nested/**", reason: "second, different pattern" },
+    ]);
+  });
+
+  test("an unknown key inside a [[docker.development]] entry rejects via checkKeys", () => {
+    const policyText = [
+      "[docker]",
+      "",
+      "[[docker.development]]",
+      'source = "tools/**"',
+      'reason = "test reason"',
+      "bogus = 1",
+    ].join("\n");
+    const err = expectPolicyError(policyText);
+    expect(
+      err.problems.some(
+        (p) => p.includes("docker.development[0]") && p.includes("bogus"),
+      ),
+    ).toBe(true);
+  });
+
+  test("[docker] ignore and [[docker.development]] compose in one policy", () => {
+    const policyText = [
+      "[docker]",
+      'ignore = ["legacy/**"]',
+      "",
+      "[[docker.development]]",
+      'source = "tools/Dockerfile"',
+      'reason = "internal tooling image, never shipped"',
+    ].join("\n");
+    const policy = parsePolicy(policyText);
+    expect(policy.docker).toEqual({
+      ignore: ["legacy/**"],
+      development: [
+        {
+          source: "tools/Dockerfile",
+          reason: "internal tooling image, never shipped",
+        },
+      ],
+    });
   });
 });
 

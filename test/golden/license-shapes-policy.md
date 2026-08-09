@@ -10,7 +10,7 @@ Copyleft notice rules are configured in policy.toml.
 - npm: 8
 - Production packages: 8
 - Development-only packages: 0
-- Docker image packages: 0
+- Container packages: 0
 - Unknown license: 1
 
 ## Problematic licenses
@@ -25,11 +25,11 @@ Workspaces that are themselves distributed under a copyleft license are suppress
 
 - apps/scratch (AGPL-3.0-only) — Scratch fork is itself AGPL-distributed \| upstream \`scratch-gui\` \[GPL-compatible\]
 
-The packages listed below carry copyleft or special license obligations in at least one non-suppressed workspace.
+✅ No package carries copyleft or special license obligations.
 
-| Name | Ecosystem | Version | License | Used in | Why |
-| --- | --- | --- | --- | --- | --- |
-| pipe\|tick\`pkg | npm | 1.0.0 | ISC | apps/synthetic | — |
+## Containers
+
+✅ No containers are currently tracked.
 
 ## Production dependencies
 
@@ -47,7 +47,3 @@ The packages listed below carry copyleft or special license obligations in at le
 ## Development-only dependencies
 
 ✅ No development-only dependencies.
-
-## Docker image packages
-
-✅ No Docker images are currently tracked.
