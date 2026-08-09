@@ -392,6 +392,8 @@ absent default, production.
 The policy is one half of the loop; the other is reading what comes back. When
 `check` reports a `fail`, the verdict names the deciding rule and the reason, so
 you can tell which recipe above applies, whether a denied licence, an
-unsuppressed copyleft, or an unknown you've now identified. The
+unsuppressed copyleft, or an unknown you've now identified.
+[`reading-the-output.md`](./reading-the-output.md) routes each row in
+`THIRD_PARTY_LICENSES.md` to the recipe above it needs. The
 [getting-started guide](../getting-started.md) walks through a first run end to
 end, and the [glossary](../glossary.md) defines every term a verdict can use.
