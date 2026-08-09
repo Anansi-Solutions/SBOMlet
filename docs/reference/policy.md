@@ -78,6 +78,9 @@ The rules that hold across the file:
   or trailing slash. This confines each to its namespace — the repo for paths
   and globs, the occurrence identities for `where` — so a crafted value cannot
   suppress everything or escape it.
+- A `[[workspace.copyleft_suppressed]]` `path` must not start with `docker:` —
+  that prefix is the reserved occurrence-identity namespace for image targets,
+  and a container image is not a workspace.
 - Unknown top-level tables and unknown keys inside a known table are both
   errors. A misspelled `[[deney]]` or a stray field is not silently ignored.
 
@@ -238,7 +241,10 @@ a copyleft licence. Absent: no suppressions.
 Suppression is per [occurrence](../glossary.md#occurrence) rather than per
 package, so the same dependency in a non-suppressed workspace still flags. The
 `path` match is segment-aware, so `apps/scratch` covers occurrences under it but
-never a sibling like `apps/scratch-helper`.
+never a sibling like `apps/scratch-helper`. `path` is also rejected outright if
+it starts with `docker:` — a container image is not a workspace, so accept a
+container's copyleft package with a scoped [`[[compatible]]`](#compatible) rule
+instead.
 
 It is also family-aware. A finding is suppressed only when it satisfies the
 workspace `license`, or when every copyleft obligation in it belongs to a family
