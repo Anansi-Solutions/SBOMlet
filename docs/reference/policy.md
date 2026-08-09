@@ -42,6 +42,12 @@ redistributed in a shipped artifact, so no accept lever may override it. The
 category defaults are floors rather than lanes that match a specific package.
 They set what happens to a verdict that no override touched.
 
+The order matters whenever a package could match more than one lane. A
+package denied by `[[deny]]` fails even though a `[[compatible]]` rule would
+accept it, because deny is terminal. A copyleft dependency accepted by a
+`[[compatible]]` licence pattern never reaches workspace suppression, because
+compatible already decided it.
+
 ## Validation
 
 Validation is strict and rejects the whole file on the first run, reporting
@@ -116,6 +122,11 @@ rides alongside another licence (`MIT AND Commons-Clause`) and is not a
 parseable SPDX value, and a licence like RSAL has no registered id at all. Name
 mode matches the package by exact name, so it catches these even on a package
 whose finding is unknown.
+
+Deny also sees through an override: if a `[[clarify]]` rewrote a denied
+licence into something benign, deny still fires on the original, pre-override
+observed value, so a source-available licence can never be laundered clean by
+a clarify entry.
 
 ## `[[allow_source_available]]`
 
