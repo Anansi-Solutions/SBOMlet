@@ -1521,6 +1521,60 @@ describe("evaluate — LicenseRef acceptance for commercial clarifies (A4/P-05)"
   });
 });
 
+describe("evaluate — an unassessed LicenseRef never reaches default:ok (silent-pass fix)", () => {
+  test("a bare LicenseRef-AGPL-3.0-only expression is NOT ok — it routes to the unknown lane, not default:ok", () => {
+    const { verdicts } = runEngine(
+      [pkgSpec("agpl-named-ref-pkg", "LicenseRef-AGPL-3.0-only", ["backend"])],
+      "",
+    );
+    expect(verdicts[0].status).not.toBe("ok");
+    expect(verdicts[0].rule).toBe("default:unknown");
+    expect(verdicts[0].rule).not.toBe("default:ok");
+  });
+
+  test('the bare-ref package fails under [unknown] handling = "fail", exactly like a genuine unknown', () => {
+    const { verdicts } = runEngine(
+      [pkgSpec("agpl-named-ref-pkg", "LicenseRef-AGPL-3.0-only", ["backend"])],
+      '[unknown]\nhandling = "fail"',
+    );
+    expect(verdicts[0].status).toBe("fail");
+    expect(verdicts[0].rule).toBe("default:unknown");
+  });
+
+  test("(MIT OR LicenseRef-x) still elects MIT and stays default:ok — the OR election is not regressed", () => {
+    const { verdicts } = runEngine(
+      [pkgSpec("mit-or-ref-pkg", "(MIT OR LicenseRef-x)", ["backend"])],
+      "",
+    );
+    expect(verdicts[0].status).toBe("ok");
+    expect(verdicts[0].rule).toBe("default:ok");
+  });
+
+  test("(MIT AND LicenseRef-x) carries unassessed ref content alongside a known conjunct — NOT a silent default:ok", () => {
+    const { verdicts } = runEngine(
+      [pkgSpec("mit-and-ref-pkg", "(MIT AND LicenseRef-x)", ["backend"])],
+      "",
+    );
+    expect(verdicts[0].status).not.toBe("ok");
+    expect(verdicts[0].rule).toBe("default:unknown");
+  });
+
+  test("a copyleft leaf ANDed with a ref still fails default:copyleft — copyleft is a stronger signal than the ref-unknown lane", () => {
+    const { verdicts } = runEngine(
+      [
+        pkgSpec(
+          "agpl-and-ref-pkg",
+          "(AGPL-3.0-only AND LicenseRef-x)",
+          ["backend"],
+        ),
+      ],
+      "",
+    );
+    expect(verdicts[0].status).toBe("fail");
+    expect(verdicts[0].rule).toBe("default:copyleft");
+  });
+});
+
 describe("evaluate — staleness-guarded overrides", () => {
   test("a tool-level override that decides a verdict cites override:builtin[i], not default:ok", () => {
     const builtins: BuiltinOverrideInput[] = [
