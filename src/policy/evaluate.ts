@@ -43,8 +43,11 @@
  *      justification falls through to the normal default chain.
  *   4. Defaults: copyleft → fail (default:copyleft, reason names the elected
  *      expression and the occurrence target); unknown finding →
- *      policy.unknownHandling as warn or fail (default:unknown); otherwise ok
- *      (default:ok).
+ *      policy.unknownHandling as warn or fail (default:unknown); elected
+ *      content that still carries a LicenseRef-/DocumentRef- leaf after
+ *      election (a bare ref, or an AND that keeps one alongside a known
+ *      conjunct) → same default:unknown handling, never default:ok — its
+ *      content is unknowable to the tool; otherwise ok (default:ok).
  *   Clarify sits above all of these by having already replaced the finding in
  *   annotateFindings; a clarified package whose verdict falls through to
  *   default:ok cites clarify[i] instead, so usage stays visible.
@@ -72,6 +75,7 @@ import {
 import {
   copyleftLeafIds,
   elect,
+  hasRefLeaf,
   isCopyleft,
   renderNode,
   type ExpressionNode,
@@ -97,7 +101,10 @@ interface Assessment {
   expression: string | null;
   /** Rendered elected branch; null when unknown/imprecise. */
   elected: string | null;
-  /** Elected AST node (suppression walks its copyleft leaves). */
+  /**
+   * Elected AST node (suppression walks its copyleft leaves; the verdict
+   * walk also checks it for a surviving LicenseRef-/DocumentRef- leaf).
+   */
   electedNode: ExpressionNode | null;
   /** isCopyleft on the elected node — the elected branch decides. */
   copyleft: boolean;
@@ -697,6 +704,35 @@ function denyOrExemptVerdict(
 }
 
 /**
+ * Default:unknown verdict for elected content that still carries a
+ * LicenseRef-/DocumentRef- leaf after election. The OR tie-break in elect()
+ * already prefers a known assessable branch when one exists (an ordinary
+ * "MIT OR LicenseRef-x" elects MIT and never reaches this function) — a ref
+ * surviving election means either the finding IS the ref, or an AND kept it
+ * alongside a known conjunct. Reuses the "default:unknown" rule id and
+ * [unknown] handling verbatim: the reference's content is unknowable to the
+ * tool, so a confident default:ok would misrepresent an assessment that never
+ * happened. Same dev/os downgrade semantics as unknownVerdict.
+ */
+function refUnknownVerdict(
+  base: { purl: string; occurrenceTarget: string },
+  entry: PackageEntry,
+  occurrence: Occurrence,
+  assessment: Assessment,
+  policy: Policy,
+): Verdict {
+  const verdict: Verdict = {
+    ...base,
+    status: policy.unknownHandling,
+    rule: "default:unknown",
+    reason: `elected "${assessment.elected}" for "${entry.name}@${entry.version}" in "${occurrence.target}" carries an unassessed LicenseRef/DocumentRef reference whose content is unknowable to the tool ([unknown] handling = "${policy.unknownHandling}")`,
+  };
+  return policy.unknownHandling === "fail"
+    ? applyScopeDowngrades(verdict, entry, occurrence, policy)
+    : verdict;
+}
+
+/**
  * Default:unknown verdict for a null-expression finding. The dev-scope
  * downgrade applies ONLY to a would-be FAIL: a default:unknown already "warn"
  * (unknownHandling="warn") is non-gating and is never downgraded.
@@ -882,6 +918,16 @@ function verdictFor(
     policy,
   );
   if (citation !== undefined) return citation;
+
+  // A LicenseRef-/DocumentRef- leaf that survived election is unassessed
+  // content, not a clean permissive finding — route it through the same
+  // [unknown] handling as a genuine unknown rather than a confident
+  // default:ok. elect()'s OR tie-break already moved a known branch out from
+  // under a sibling ref when one was electable, so anything reaching here
+  // either IS the ref or is an AND that keeps one alongside a known conjunct.
+  if (assessment.electedNode !== null && hasRefLeaf(assessment.electedNode)) {
+    return refUnknownVerdict(base, entry, occurrence, assessment, policy);
+  }
 
   return {
     ...base,

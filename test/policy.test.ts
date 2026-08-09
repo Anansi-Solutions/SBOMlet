@@ -1562,11 +1562,9 @@ describe("evaluate — an unassessed LicenseRef never reaches default:ok (silent
   test("a copyleft leaf ANDed with a ref still fails default:copyleft — copyleft is a stronger signal than the ref-unknown lane", () => {
     const { verdicts } = runEngine(
       [
-        pkgSpec(
-          "agpl-and-ref-pkg",
-          "(AGPL-3.0-only AND LicenseRef-x)",
-          ["backend"],
-        ),
+        pkgSpec("agpl-and-ref-pkg", "(AGPL-3.0-only AND LicenseRef-x)", [
+          "backend",
+        ]),
       ],
       "",
     );

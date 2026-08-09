@@ -35,6 +35,8 @@
  * The normative placement spec is docs/reference/report-placement.md — update both together.
  */
 
+import parseSpdx from "spdx-expression-parse";
+
 import {
   compareCodeUnits,
   comparePackages,
@@ -46,6 +48,7 @@ import {
   type PackageEntry,
   type Verdict,
 } from "../model/dependencies";
+import { allLeavesAreRefs, type ExpressionNode } from "../normalize/expression";
 import { OS_PACKAGE_ECOSYSTEMS } from "../policy/osEcosystems";
 import type { AcceptedContainerNotice } from "../policy/evaluate";
 import type { SuppressedWorkspace } from "../policy/schema";
@@ -296,12 +299,29 @@ function whyCellOf(
  * dedicated review section).
  */
 function isUnknownLicense(pkg: PackageEntry): boolean {
-  if (pkg.finding !== undefined) {
-    return (
-      pkg.finding.confidence !== "imprecise" && pkg.finding.expression === null
-    );
+  const finding = pkg.finding;
+  if (finding !== undefined) {
+    if (finding.confidence === "imprecise") return false;
+    if (finding.expression === null) return true;
+    return electedIsRefOnly(finding.elected);
   }
   return pkg.licenseClaims.length === 0;
+}
+
+/**
+ * True when a finding's elected branch is composed ENTIRELY of
+ * LicenseRef-/DocumentRef- leaves — delegates to allLeavesAreRefs.
+ * Defensive: elected was rendered by renderNode(elect(...)) so it parses
+ * by construction; the catch mirrors the policy engine's never-throws
+ * posture rather than crashing report generation.
+ */
+function electedIsRefOnly(elected: string | null): boolean {
+  if (elected === null) return false;
+  try {
+    return allLeavesAreRefs(parseSpdx(elected) as ExpressionNode);
+  } catch {
+    return false;
+  }
 }
 
 /**

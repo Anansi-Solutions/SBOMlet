@@ -127,11 +127,16 @@ highest to lowest:
 ### The unknown lane
 
 Follows `[unknown]` handling; a `fail` result applies the same os/development
-downgrades as the copyleft default does.
+downgrades as the copyleft default does. Also entered when the elected
+expression still carries a `LicenseRef-`/`DocumentRef-` leaf after election (a
+bare ref, or an `AND` that keeps one alongside a known license) — an opaque
+reference's content is unknowable to the tool, so it is never silently
+`default:ok`; an `OR` with an electable known branch already resolves to that
+branch before this lane and never reaches it.
 
 Source: `src/policy/evaluate.ts` (`verdictFor`, `copyleftVerdict`,
-`impreciseVerdict`, `unknownVerdict`, `acceptedContainerNotices`),
-`src/policy/copyleft.ts` (`AGPL_IDS`).
+`impreciseVerdict`, `unknownVerdict`, `refUnknownVerdict`,
+`acceptedContainerNotices`), `src/policy/copyleft.ts` (`AGPL_IDS`).
 
 ## Invariants
 
@@ -145,7 +150,7 @@ Source: `src/policy/evaluate.ts` (`verdictFor`, `copyleftVerdict`,
 
 ## Path index (verified end to end)
 
-The same 24 paths as
+The same 25 paths as
 [report-placement.md](./report-placement.md#path-index-verified-end-to-end),
 one row each, stating the Stage-1/Stage-2 outcome (scope, verdict status,
 rule) instead of the markdown destination — the two tables share one slug
@@ -176,6 +181,7 @@ tables are about slug coverage, not about every classification being unique.
 | `imprecise-copyleft-family-only-imprecise` | bare `GPL` app package | `app · warn · default:imprecise-copyleft` |
 | `imprecise-permissive-family` | bare `BSD` app package | `app · warn · default:imprecise` |
 | `unknown-license-counted` | [unknown] handling = "warn", no license | `app · warn · default:unknown` |
+| `licenseref-only-unknown` | a package whose only license content is a LicenseRef | `app · warn · default:unknown` |
 | `suppressed-workspace-copyleft` | family-justified `[[workspace.copyleft_suppressed]]` | `app · suppressed · workspace.copyleft_suppressed[0]` |
 | `denied-license-terminal` | a `[[deny]]` match with a `[[compatible]]` rule that would otherwise accept it | `app · fail · denied[0]` |
 | `system-package-in-dev-container-counts-dev` | apk permissive package whose only container is dev-marked | `os · ok · default:ok` |

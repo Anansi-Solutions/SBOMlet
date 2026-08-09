@@ -126,7 +126,7 @@ helpers).
 
 ## Path index (verified end to end)
 
-The same 24 paths as
+The same 25 paths as
 [dependency-classification.md](./dependency-classification.md#path-index-verified-end-to-end),
 one row each, stating where the package lands in the markdown report instead
 of its Stage-1/Stage-2 outcome — the two tables share one slug set, verified
@@ -155,6 +155,7 @@ by the same suite (`test/reportPlacement.test.ts`).
 | `imprecise-copyleft-family-only-imprecise` | bare `GPL` app package | Imprecise licenses only, never a Copyleft flagged row |
 | `imprecise-permissive-family` | bare `BSD` app package | Imprecise licenses only |
 | `unknown-license-counted` | [unknown] handling = "warn", no license | counted under Unknown license; inventory row (app table) |
+| `licenseref-only-unknown` | a package whose only license content is a LicenseRef | counted under Unknown license; inventory row only |
 | `suppressed-workspace-copyleft` | family-justified `[[workspace.copyleft_suppressed]]` | suppressed-workspaces list in Copyleft and special notices; no flagged row |
 | `denied-license-terminal` | a `[[deny]]` match with a `[[compatible]]` rule that would otherwise accept it | Problematic licenses (deny is terminal) |
 | `system-package-in-dev-container-counts-dev` | apk permissive package whose only container is dev-marked | counted Development-only (via the container's classification); System packages table under the Development-only subsection |
