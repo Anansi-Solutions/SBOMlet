@@ -68,6 +68,7 @@ Sections appear in this order:
 | Problematic licenses | `## Problematic licenses` | policy run only |
 | Copyleft and special notices | `## Copyleft and special notices` | policy run only |
 | Imprecise licenses | `## Imprecise licenses (review / disambiguate)` | any [imprecise](../glossary.md#imprecise-family) package exists |
+| Assessment conflicts | `## Assessment conflicts (in-depth scan vs quick check)` | any conflict marker exists |
 | Containers | `## Containers` | always |
 | Production dependencies | `## Production dependencies` | always |
 | Development-only dependencies | `## Development-only dependencies` | always |
@@ -263,6 +264,35 @@ out of this table — except AGPL, which fails into Problematic licenses above
 or, when accepted via [`[[compatible]]`](policy.md#compatible), appears here
 instead as a non-blocking special notice. The exact exclusion and dedup
 rules are [report-placement.md](./report-placement.md#invariants)'s.
+
+### Assessment conflicts
+
+Rendered whenever any package carries a senior-assessment conflict marker: a
+disagreement between the in-depth ScanCode assessment and the declared or
+registry quick check. Finding-level, like Imprecise licenses in the section
+table above: it renders whether or not the run used a policy, unlike
+Problematic licenses and Copyleft and special notices. Omitted entirely, not
+rendered empty, when no package carries the marker.
+
+A row states, for one package:
+
+| Column | Contents |
+| --- | --- |
+| Package | the package name |
+| In-depth (ScanCode) | the ScanCode-elected value: a precise SPDX expression, or the bare family token when the assessment itself is imprecise |
+| Quick check | the disagreeing declared/registry signal member(s), comma-joined |
+| Used in | every target the package occurs in |
+
+Which packages carry the marker is placement, normatively defined in
+[report-placement.md](./report-placement.md#narrative-sections-verdict--or-finding-driven-deduped).
+On a policy run, a conflicted package also fails as a `conflict:scancode` row
+in [Problematic licenses](#problematic-licenses) above — the one case exempt
+from that section's usual dedup against the narrative sections, since a
+conflict is always a fail
+([report-placement.md](./report-placement.md#invariants)). The conflict
+clears, and the row disappears on the next run, once a
+[`[[clarify]]`](policy.md#clarify) override decides the finding; see
+[Correct a wrongly-detected or imprecise licence](../guides/writing-policy.md#correct-a-wrongly-detected-or-imprecise-licence).
 
 ### The Why column
 
