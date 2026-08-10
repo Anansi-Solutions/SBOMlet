@@ -10,7 +10,7 @@ import {
 
 const SRC_DIR = join(import.meta.dir, "..", "src");
 
-describe.skip("comment density budget", () => {
+describe("comment density budget", () => {
   const total = measureComments(SRC_DIR);
 
   test("comment lines stay under the line budget", () => {

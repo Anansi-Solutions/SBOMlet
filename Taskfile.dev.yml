@@ -64,8 +64,7 @@ tasks:
     cmds:
       - task: lint
       - task: typecheck
-      # temporarily disabled until we re-enable comment checks
-      # - task: metrics:comments:check
+      - task: metrics:comments:check
 
   test:
     # The label keys the fingerprint per CLI_ARGS value, so a filtered run
