@@ -67,9 +67,12 @@ priority over the declared and registry answer for that package. A `[[clarify]]`
 override still outranks it, since that is where you record a human decision. When
 ScanCode disagrees with the registry answer, neither is taken automatically — the
 package fails the gate as a distinct `conflict:scancode` finding, and the
-document grows an "Assessment conflicts (in-depth scan vs quick check)" section
-naming both readings. You resolve it with a `[[clarify]]` entry recording which
-to trust. For a package the registry calls `MIT` while ScanCode reads
+document grows an "Assessment conflicts" section, naming both readings in its
+"ScanCode assessment vs quick check" sub-table (a second, independent
+sub-table covers cross-image license-claim divergences — see
+[output-format.md](./output-format.md#assessment-conflicts)). You resolve it
+with a `[[clarify]]` entry recording which to trust. For a package the
+registry calls `MIT` while ScanCode reads
 `BSD-3-Clause`, trusting the scan:
 
 ```toml

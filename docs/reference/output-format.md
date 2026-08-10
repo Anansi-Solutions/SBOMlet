@@ -268,10 +268,10 @@ rules are [report-placement.md](./report-placement.md#invariants)'s.
 ### Assessment conflicts
 
 Rendered whenever any package carries a conflict marker, from either of two
-independent triggers: a senior-assessment disagreement between the in-depth
-ScanCode assessment and the declared or registry quick check, or a
-cross-image license-claim divergence — two or more docker occurrences of the
-same purl declaring different licenses. Finding-level, like Imprecise
+independent triggers: a disagreement between the in-depth ScanCode assessment
+and the declared or registry quick check, or a cross-image license-claim
+divergence — two or more docker occurrences of the same purl declaring
+different licenses. Finding-level, like Imprecise
 licenses in the section table above: it renders whether or not the run used a
 policy, unlike Problematic licenses and Copyleft and special notices. The
 section, and each trigger's own sub-table below, is omitted entirely, not
