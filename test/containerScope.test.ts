@@ -177,3 +177,47 @@ describe("applyContainerScopes — determinism", () => {
     expect(second).toEqual(first);
   });
 });
+
+describe("applyContainerScopes — os-scope-implies-docker-only invariant", () => {
+  test("a hand-built os-scope package with a non-docker occurrence THROWS, naming the purl and the offending target", () => {
+    const pkg = entry({
+      purl: "pkg:apk/alpine/musl@1.2.4-r2",
+      name: "musl",
+      version: "1.2.4-r2",
+      occurrences: [{ target: "apps/web", isDevDependency: false }],
+    });
+    const model: CanonicalDependencies = { packages: [pkg] };
+    expect(() => applyContainerScopes(model, new Set())).toThrow(
+      /pkg:apk\/alpine\/musl@1\.2\.4-r2/,
+    );
+    expect(() => applyContainerScopes(model, new Set())).toThrow(/apps\/web/);
+  });
+
+  test("a mix of one valid docker occurrence and one offending workspace occurrence on the SAME os-scope package still throws, naming the offending target specifically", () => {
+    const pkg = entry({
+      purl: "pkg:deb/debian/bash@5.2-6",
+      name: "bash",
+      version: "5.2-6",
+      occurrences: [
+        { target: API_CONTAINER, isDevDependency: false },
+        { target: "apps/web", isDevDependency: false },
+      ],
+    });
+    const model: CanonicalDependencies = { packages: [pkg] };
+    expect(() => applyContainerScopes(model, new Set())).toThrow(/apps\/web/);
+  });
+
+  test("the real pipeline never trips it: every os-scope package here carries only docker: occurrences, by construction", () => {
+    // Every fixture above is either scope "os" with a docker: occurrence (the
+    // default `entry()` shape) or scope "app". None throws - proven by every
+    // OTHER test in this file passing. This test documents that guarantee
+    // explicitly rather than leaving it implicit in "the suite is green".
+    const pkg = entry({
+      purl: "pkg:apk/alpine/musl@1.2.4-r2",
+      name: "musl",
+      version: "1.2.4-r2",
+    });
+    const model: CanonicalDependencies = { packages: [pkg] };
+    expect(() => applyContainerScopes(model, new Set())).not.toThrow();
+  });
+});
