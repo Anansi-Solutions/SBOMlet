@@ -309,10 +309,11 @@ export function dockerSbomOptionsFrom(
     ...(values["list-dockerfiles"] === true ? { listDockerfiles: true } : {}),
     ...(values.exclude !== undefined ? { excludes: values.exclude } : {}),
     ...(policyPath !== undefined ? { policyPath } : {}),
-    // The tool's OWN directory, so Dockerfile discovery prunes it from the walk exactly as lockfile
-    // discovery does (targets.ts). cli.ts lives in src/,
-
-    // so one level up is the tool root. Computed with zero hardcoded paths.
+    /**
+     * The tool's OWN directory, so Dockerfile discovery prunes it from the walk exactly as lockfile
+     * discovery does (targets.ts). cli.ts lives in src/, so one level up is the tool root. Computed
+     * with zero hardcoded paths.
+     */
     toolDir: join(import.meta.dir, ".."),
     dockerSbomPath: values["docker-sbom"],
     baseDir: values["base-dir"],

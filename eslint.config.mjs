@@ -173,10 +173,7 @@ export default tseslint.config(
       // Off: short trailing clarifiers ("// malformed entry — tolerant
       // skip") are a deliberate house idiom, longer than this rule allows.
       "no-comment-slop/no-trailing-comment": "off",
-      // Off: this only sees // runs before object-literal properties, one
-      // idiom among sibling // annotations it can't reach; converting a
-      // subset alone would fragment a single house idiom into two forms.
-      "no-comment-slop/prefer-jsdoc-for-members": "off",
+      "no-comment-slop/prefer-jsdoc-for-members": "error",
       // Off: floods interface-heavy modules with dozens of partially
       // documented interfaces; backfilling those is a deliberate project,
       // not a lint default.

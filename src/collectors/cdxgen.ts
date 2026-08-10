@@ -217,8 +217,10 @@ export async function collectWithCdxgen(
 
   return {
     sbomPath: outFile,
-    // Sentinel-normalized argv: identical inputs hash to the same key across runs, machines, and
-    // checkout locations.
+    /**
+     * Sentinel-normalized argv: identical inputs hash to the same key across runs, machines, and
+     * checkout locations.
+     */
     cacheKey: computeCacheKey(
       target,
       CDXGEN_TOOL,

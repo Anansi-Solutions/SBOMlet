@@ -14,9 +14,11 @@ import { type } from "arktype";
  */
 export const SbomDocument = type({
   "components?": "unknown[]",
-  // The CycloneDX dependency graph (provenance input). Tolerant: a non-array (or a
-  // present-but-malformed) value is simply absent - never a document drop. Per-edge narrowing
-  // happens entry-by-entry via SbomDependencyEdge.
+  /**
+   * The CycloneDX dependency graph (provenance input). Tolerant: a non-array (or a
+   * present-but-malformed) value is simply absent - never a document drop. Per-edge narrowing
+   * happens entry-by-entry via SbomDependencyEdge.
+   */
   "dependencies?": "unknown[]",
 });
 
@@ -89,9 +91,11 @@ export const SbomComponent = type({
   "purl?": "string",
   "name?": "string",
   "version?": "string",
-  // CycloneDX bom-ref (provenance input): the graph edges key on bom-ref, so the collector builds a
-  // bomRef→purl join from this. Tolerant - a mistyped/absent bom-ref is simply absent, never a
-  // package drop.
+  /**
+   * CycloneDX bom-ref (provenance input): the graph edges key on bom-ref, so the collector builds a
+   * bomRef→purl join from this. Tolerant - a mistyped/absent bom-ref is simply absent, never a
+   * package drop.
+   */
   "bom-ref?": StringOrAbsent,
   "group?": StringOrAbsent,
   "scope?": StringOrAbsent,

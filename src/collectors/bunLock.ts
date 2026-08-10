@@ -420,7 +420,7 @@ export async function collectWithBunLock(
 
   return {
     sbomPath,
-    // Shared cache-key framing contract - reused, never duplicated.
+    /** Shared cache-key framing contract - reused, never duplicated. */
     cacheKey: computeCacheKey(
       target,
       BUN_COLLECTOR_TOOL,

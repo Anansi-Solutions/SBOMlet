@@ -562,8 +562,10 @@ function packageEntryOf(
   }
   const occurrence: Occurrence = {
     target: input.targetIdentity,
-    // Per-target scope source: when the dual-run prod purl set exists (plugin targets), it is
-    // authoritative; otherwise the generator's own property markers apply.
+    /**
+     * Per-target scope source: when the dual-run prod purl set exists (plugin targets), it is
+     * authoritative; otherwise the generator's own property markers apply.
+     */
     isDevDependency:
       input.prodPurlSet !== undefined
         ? !input.prodPurlSet.has(purl)

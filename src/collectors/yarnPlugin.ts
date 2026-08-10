@@ -197,12 +197,14 @@ export async function collectWithYarnPlugin(
   return {
     sbomPath: fullPath,
     prodSbomPath: prodPath,
-    // Reuses the shared cache-key framing contract; hashes both argv arrays (sentinel-normalized)
-    // so a flag change in either run invalidates the cached pair while per-run temp paths never
-    // enter the key. A unit-shaped target (workspace expansion, target.lockfileDir set) hashes the
-    // ROOT yarn.lock + the WORKSPACE package.json + the ROOT package.json (root
-    // resolutions/overrides can change the resolved tree even when the workspace's own manifest is
-    // untouched); every other target keeps the exact pair, resolved from target.dir.
+    /**
+     * Reuses the shared cache-key framing contract; hashes both argv arrays (sentinel-normalized)
+     * so a flag change in either run invalidates the cached pair while per-run temp paths never
+     * enter the key. A unit-shaped target (workspace expansion, target.lockfileDir set) hashes the
+     * ROOT yarn.lock + the WORKSPACE package.json + the ROOT package.json (root
+     * resolutions/overrides can change the resolved tree even when the workspace's own manifest is
+     * untouched); every other target keeps the exact pair, resolved from target.dir.
+     */
     cacheKey: computeCacheKey(
       target,
       YARN_PLUGIN_TOOL,

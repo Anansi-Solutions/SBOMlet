@@ -160,8 +160,10 @@ const yarnCollector: Collector = {
     return {
       sbom,
       targetIdentity: target.identity,
-      // The --production run exists solely for this purl set: occurrence dev = not in the prod set,
-      // authoritative over property markers.
+      /**
+       * The --production run exists solely for this purl set: occurrence dev = not in the prod set,
+       * authoritative over property markers.
+       */
       prodPurlSet: purlSetOf(readSbom(result.prodSbomPath)),
       firstPartyNames: firstPartyNames(lockfileText),
       introductions: npmIntroductions(sbom),
@@ -208,9 +210,11 @@ const poetryCollector: Collector = {
       sbom: readSbom(result.sbomPath),
       targetIdentity: target.identity,
       prodPurlSet: poetryProdPurlSet(lockfileText),
-      // Provenance derived from poetry.lock dep tables + pyproject roots - NOT cdxgen, which emits
-      // no usable poetry graph. Keyed by the same pkg:pypi/<pep503>@<version> purls cdxgen emits,
-      // so the map joins onto the cdxgen components by purl.
+      /**
+       * Provenance derived from poetry.lock dep tables + pyproject roots - NOT cdxgen, which emits
+       * no usable poetry graph. Keyed by the same pkg:pypi/<pep503>@<version> purls cdxgen emits,
+       * so the map joins onto the cdxgen components by purl.
+       */
       introductions: poetryIntroductions(
         lockfileText,
         readPyprojectText(target),

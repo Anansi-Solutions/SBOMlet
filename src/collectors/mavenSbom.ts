@@ -326,7 +326,7 @@ export async function collectWithMavenSbom(
 
   return {
     sbomPath: outPath,
-    // Shared cache-key framing contract - reused, never duplicated.
+    /** Shared cache-key framing contract - reused, never duplicated. */
     cacheKey: computeCacheKey(
       target,
       MAVEN_COLLECTOR_TOOL,

@@ -62,8 +62,10 @@ function resolveTargets(opts: GenerateOptions): DiscoveredTarget[] {
   const { targets: discovered, warnings } = discoverTargetsWithWarnings(root, {
     toolDir,
     excludes: opts.excludes,
-    // Warning-format detail only (the aggregated csproj-no-lock warning expands to per-directory
-    // lines under --verbose) - never the target set.
+    /**
+     * Warning-format detail only (the aggregated csproj-no-lock warning expands to per-directory
+     * lines under --verbose) - never the target set.
+     */
     verbose: opts.verbose,
   });
   // Discovery warnings print here, before the scan loop - discover stays pure and returns them as

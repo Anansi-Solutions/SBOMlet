@@ -61,8 +61,10 @@ export function execTool(
       cwd: opts.cwd,
       env: opts.env,
       stdio: ["ignore", "pipe", "pipe"],
-      // POSIX: own process group so the timeout can kill the whole tree.
-      // win32: detached would allocate a new console; taskkill /T covers it.
+      /**
+       * POSIX: own process group so the timeout can kill the whole tree.
+       * win32: detached would allocate a new console; taskkill /T covers it.
+       */
       detached: process.platform !== "win32",
     });
 
