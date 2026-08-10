@@ -5,6 +5,7 @@ import tsdoc from "eslint-plugin-tsdoc";
 import commentLength from "eslint-plugin-comment-length";
 import writeGoodComments from "eslint-plugin-write-good-comments-2";
 import eslintPluginPrettierRecommended from "eslint-plugin-prettier/recommended";
+import commentRefill from "./tools/eslint-plugin-comment-refill/index.mjs";
 
 /**
  * Vocabulary banned from src/ comments: process/workflow shorthand that means
@@ -109,16 +110,24 @@ export default tseslint.config(
       sbomlet: { rules: { "no-comment-jargon": noCommentJargon } },
       tsdoc,
       "comment-length": commentLength,
+      "comment-refill": commentRefill,
       "write-good-comments": writeGoodComments,
     },
     rules: {
       "sbomlet/no-comment-jargon": "error",
       "tsdoc/syntax": "warn",
-      // Auto-wrap comment lines that exceed 100 cols — the hard ceiling for
-      // comment width (~80 stays the prose target by convention). Default
-      // mode reflows only the overflowing line and skips URLs and
-      // code-bearing comments, enforcing the ceiling without rewriting
-      // legitimate content.
+      // 100 is the comment width: paragraphs fill toward it and wrap at it.
+      // comment-refill/refill owns reflow for the shapes it understands
+      // (prose, markdown lists, // runs) — it wraps overlong lines and
+      // refills under-filled ones, list markers and bullet continuations
+      // intact. comment-length is kept alongside it, in its default
+      // overflow-only mode, purely as a ceiling backstop for the shapes
+      // refill deliberately skips (TSDoc @tag bodies, aligned tables,
+      // fenced/commented-out code, irregular blocks): overflow-only only
+      // ever wraps a single overlong line, never merges paragraphs, so it
+      // cannot fight refill's canonical reflow on the lines refill does
+      // touch. Both target the same maxLength.
+      "comment-refill/refill": ["error", { maxLength: 100 }],
       "comment-length/limit-single-line-comments": [
         "error",
         { maxLength: 100 },
