@@ -99,7 +99,12 @@ a fixture in `rules/refill.test.ts`.
    closing paren, most often) stays glued to it in the output too.
 5. **Aligned layout.** A line with three or more consecutive interior
    spaces (for example an arrow-aligned mapping table) is treated as
-   layout, not prose, and is excluded from reflow entirely.
+   layout, not prose, and is excluded from reflow entirely — unless that
+   whitespace run sits right after a bare `-` and is immediately followed
+   by `//` or `*` (a neighboring comment's own marker, swallowed into this
+   line by an upstream join that forgot to strip it). That shape is never
+   a deliberately aligned column in this codebase, so it is forced back
+   into reflow instead of being permanently hidden; see point 11.
 6. **Commented-out code.** A conservative, deliberately narrow heuristic —
    a line ending in `;`, `{`, or `}`, opening with `}`, `)`, or `]`, or
    opening with a common statement keyword (`const`, `return`, `if (`, and
@@ -159,6 +164,35 @@ more `* ` lines, `*/`) — but a multi-line block is never collapsed back down
 to a single line purely because it has become short enough to fit on one;
 the author's choice of block shape is preserved, only its interior content
 is rewrapped.
+
+## Hardening against a bad join: the em-dash sweep incident
+
+A prior mechanical find/replace across this codebase (swapping em dashes for
+plain hyphens, then re-wrapping by hand in a few spots) manually joined
+physical comment lines without stripping the joined-in line's own `* ` or
+`// ` marker first. The leftover marker rode along as ordinary text and
+landed wherever the greedy line-packer happened to put it: doubled against
+the real prefix (`* *`), trailing a swapped hyphen (`- *`), or — for
+single-line `//` comments — never re-wrapped at all, left merged mid-line
+(`// one // two`) and permanently invisible to this rule because the
+swallowed marker's surrounding whitespace looked exactly like an aligned
+table column (point 5).
+
+`refill` now guards all three failure modes structurally, so it can never
+reproduce them and self-heals the first two on the next `--fix` pass:
+
+11. **Doubled markers self-heal.** Parsing a block or line-comment's
+    physical lines strips one accidentally-doubled leading marker (a bare
+    `* ` or `// ` immediately following the line's own real prefix) before
+    the text ever reaches paragraph-group splitting, so it can never be
+    misread as a fresh bullet.
+12. **A lone `*` bullet never stacks onto the structural prefix.** A
+    bulleted group whose marker has no rest and no continuation renders as
+    a plain blank continuation line instead of a bare trailing asterisk.
+13. **A standalone `-`, `*`, or `//` token never ends a wrapped line.** The
+    greedy packer treats each of these as glued to the token immediately
+    after it, so a join can never leave one stranded at a line boundary
+    for a later corruption to land beside.
 
 ## Determinism
 

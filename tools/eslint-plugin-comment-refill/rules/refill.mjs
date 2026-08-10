@@ -51,6 +51,25 @@ function isAlignedTable(text) {
 }
 
 /**
+ * True for a line whose swapped-em-dash `-` is immediately followed by an
+ * interior run of 2+ spaces and then `//` or `*`: a neighboring comment's
+ * own marker, accidentally swallowed into this line by a join that forgot
+ * to strip it (the em-dash sweep incident this rule guards against).
+ * `isAlignedTable` alone would otherwise misread the same whitespace run
+ * as a deliberately aligned column and mark the whole line `no-touch`,
+ * permanently hiding the corruption from every future reflow pass.
+ * Anchored on the preceding `-` (rather than any non-space character) so a
+ * genuinely aligned code example — e.g. a JSON literal followed by a
+ * right-padded `// comment` column — is never misread as this artifact:
+ * real alignment tables in this codebase never happen to end their
+ * left-hand column in a bare hyphen. Checked ahead of `isAlignedTable` so
+ * this shape always wins and reaches reflow instead.
+ */
+function hasSwallowedCommentPrefix(text) {
+  return /-\s{2,}(\/\/|\*)(?:\s|$)/.test(text);
+}
+
+/**
  * Conservative, documented heuristic for a commented-out code line: it ends
  * in a statement terminator/brace, or opens with a code keyword/token.
  */
@@ -140,7 +159,7 @@ function splitParagraphGroups(lines) {
 
     if (
       hasUnbalancedBacktick(text) ||
-      isAlignedTable(text) ||
+      (isAlignedTable(text) && !hasSwallowedCommentPrefix(text)) ||
       looksLikeCode(text)
     ) {
       groups.push({ type: "no-touch", reflow: false, lines: [line] });
@@ -252,21 +271,40 @@ function tokenizeLines(lineTexts) {
   return words;
 }
 
+/**
+ * A bare `-`, `*`, or `//` token is never wrapped onto a line by itself: a
+ * `-` is a spaced separator whose word belongs at the START of what
+ * follows (never a trailing artifact of a line-final em-dash swap gone
+ * wrong, see refill's README point on the em-dash sweep incident); a lone
+ * `*` or `//` is never legitimate prose content and, left as a line's sole
+ * leftover token, would be misread as a bullet marker (`*`) on the next
+ * reflow, or silently mask a swallowed neighboring comment (`//`). All
+ * three travel with the token immediately after them as one unbreakable
+ * unit.
+ */
+const STICKY_SEPARATOR_RE = /^(?:[-*]|\/\/)$/;
+
 /** Greedy fill: packs words onto lines no wider than `width`, one overlong word per line. */
 function wrapWords(words, width) {
   const lines = [];
   let current = [];
   let length = 0;
-  for (const word of words) {
+  for (let i = 0; i < words.length; i++) {
+    const word = words[i];
+    const glueNext =
+      STICKY_SEPARATOR_RE.test(word) && i + 1 < words.length
+        ? words[i + 1]
+        : null;
+    const unit = glueNext === null ? word : `${word} ${glueNext}`;
     const nextLength =
-      current.length === 0 ? word.length : length + 1 + word.length;
+      current.length === 0 ? unit.length : length + 1 + unit.length;
     if (current.length > 0 && nextLength > width) {
       lines.push(current.join(" "));
       current = [word];
       length = word.length;
     } else {
       current.push(word);
-      length = nextLength;
+      length = current.length === 1 ? word.length : length + 1 + word.length;
     }
   }
   if (current.length > 0) lines.push(current.join(" "));
@@ -303,6 +341,12 @@ function renderProseGroup(group, prefix, maxLength) {
   ]);
 
   if (words.length === 0) {
+    // A lone "*" (or "-"/"+") bullet marker with no list content at all would
+    // otherwise render as a bare trailing asterisk stacked on the structural
+    // prefix (e.g. " * *"), indistinguishable from the doubled-marker
+    // corruption this rule guards against elsewhere. Fall back to the plain
+    // structural prefix instead of emitting that degenerate shape.
+    if (marker === "*") return [linePrefix.replace(/\s+$/, "")];
     return [(linePrefix + markerLiteral).replace(/\s+$/, "")];
   }
 
@@ -348,6 +392,24 @@ function checkGroup(context, sourceCode, group, canonical) {
   });
 }
 
+/**
+ * Strips an accidentally-doubled structural marker from the start of a
+ * line's content, once its own real prefix has already been removed: a
+ * bare leading `* ` for a block line, or `// ` for a line comment. A join
+ * that forgets to strip a joined-in physical line's own marker before
+ * folding it into flat paragraph text leaves that marker as a literal
+ * leading token; left alone, `splitParagraphGroups` then misreads it as a
+ * fresh bullet (`matchListMarker` matches a leading `*` or `-`) instead of
+ * the corruption artifact it is. Content legitimately starting with a bare
+ * marker character immediately followed by whitespace is vanishingly rare
+ * in house prose, so this normalization is applied unconditionally.
+ */
+function stripDoubledMarker(text, kind) {
+  const re = kind === "block" ? /^\s*\*\s+/ : /^\s*\/\/\s*/;
+  const match = re.exec(text);
+  return match ? text.slice(match[0].length) : text;
+}
+
 /** Extracts `{ sourceLine, content }` for each line of a run of own-line `//` comments. */
 function lineRunToPhysical(sourceCode, tokens) {
   return tokens.map((token) => {
@@ -355,6 +417,7 @@ function lineRunToPhysical(sourceCode, tokens) {
     const indentLength = /^\s*/.exec(lineText)[0].length;
     let rest = lineText.slice(indentLength + 2);
     if (rest.startsWith(" ")) rest = rest.slice(1);
+    rest = stripDoubledMarker(rest, "line");
     return {
       sourceLine: token.loc.start.line,
       content: rest.replace(/\s+$/, ""),
@@ -380,6 +443,7 @@ function parseBlockLines(sourceCode, token) {
     if (starMatch) {
       let rest = starMatch[2];
       if (rest.startsWith(" ")) rest = rest.slice(1);
+      rest = stripDoubledMarker(rest, "block");
       middleLines.push({ sourceLine: ln, content: rest.replace(/\s+$/, "") });
     } else {
       const raw = /^\s*([\s\S]*)$/.exec(text);
@@ -566,9 +630,11 @@ export {
   tokenizeLines,
   matchListMarker,
   isAlignedTable,
+  hasSwallowedCommentPrefix,
   hasUnbalancedBacktick,
   looksLikeCode,
   isTagLine,
   isLabelLine,
   isStructuralDirective,
+  stripDoubledMarker,
 };

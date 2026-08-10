@@ -178,6 +178,49 @@ ruleTester.run("refill", refillRule, {
       code: "// Walk the whole tree - the whole thing must be considered.\n",
       options: [{ maxLength: 100 }],
     },
+    {
+      // Regression fixture for the em-dash sweep incident (see the
+      // README's mechanism note): a joined-in continuation line's own `* `
+      // marker, left unstripped, doubled up against the block's real
+      // prefix and rendered as a stray `*` word. Verbatim (post-heal) text
+      // from src/validate/registry.ts.
+      name: "doubled-block-marker-self-heals-real-registry-example (idempotent on its own output)",
+      code: "/**\n * npm packument. Registry responses are third-party, volatile, and may be malformed or oversized\n * - this is the ASVS V5 input-validation control for a brand-new network surface.\n */\n",
+      options: [{ maxLength: 100 }],
+    },
+    {
+      name: "line-run-doubled-marker-self-heals (idempotent on its own output)",
+      code: "// word one two three - word four five.\n",
+      options: [{ maxLength: 100 }],
+    },
+    {
+      // Regression fixture modeled on src/collectors/bunLock.ts: two `//`
+      // lines merged onto one physical line by a join that never split
+      // them back apart. isAlignedTable's 3+-space heuristic used to treat
+      // the swallowed `// ` prefix as a deliberately aligned column and
+      // mark the whole line no-touch, hiding the merge from every
+      // subsequent reflow pass; hasSwallowedCommentPrefix now overrides
+      // that and forces it back into reflow.
+      name: "swallowed-comment-prefix-no-longer-hidden-from-reflow (idempotent on its own output)",
+      code: "// alpha beta gamma - // delta\n// epsilon zeta\n",
+      options: [{ maxLength: 30 }],
+    },
+    {
+      // A standalone `-` separator must never be left dangling as the
+      // last word on a wrapped line: it travels with the word after it.
+      name: "standalone-hyphen-separator-never-ends-a-line (idempotent on its own output)",
+      code: "// Configured value\n// - fallback\n",
+      options: [{ maxLength: 23 }],
+    },
+    {
+      // A bulleted group whose marker has no rest and no continuation
+      // (content is literally the bare marker character) collapses to a
+      // plain blank continuation line instead of stacking a second `*` on
+      // the structural prefix.
+      name: "bare-asterisk-bullet-collapses-to-blank-continuation (idempotent on its own output)",
+      code: "/**\n * intro text.\n *\n *\n */\n",
+      options: [{ maxLength: 60 }],
+    },
   ],
   invalid: [
     {
@@ -314,6 +357,62 @@ ruleTester.run("refill", refillRule, {
       code: "// Walk the whole tree -\n// the whole thing must be considered.\n",
       options: [{ maxLength: 100 }],
       output: "// Walk the whole tree - the whole thing must be considered.\n",
+      errors: 1,
+    },
+    {
+      // Regression fixture for the em-dash sweep incident: a joined-in
+      // continuation line's own `* ` marker, left unstripped by the swap
+      // script, doubled up against the block's real prefix. Verbatim
+      // (pre-heal) text from src/validate/registry.ts.
+      name: "doubled-block-marker-self-heals-real-registry-example",
+      code: "/**\n * npm packument. Registry responses are third-party, volatile, and may be malformed or oversized -\n *  * this is the ASVS V5 input-validation control for a brand-new network surface.\n */\n",
+      options: [{ maxLength: 100 }],
+      output:
+        "/**\n * npm packument. Registry responses are third-party, volatile, and may be malformed or oversized\n * - this is the ASVS V5 input-validation control for a brand-new network surface.\n */\n",
+      errors: 1,
+    },
+    {
+      // A `//` run whose second physical line's own marker was joined in
+      // as literal content instead of being stripped: `// // word`.
+      name: "line-run-doubled-marker-self-heals",
+      code: "// word one two three -\n// // word four five.\n",
+      options: [{ maxLength: 100 }],
+      output: "// word one two three - word four five.\n",
+      errors: 1,
+    },
+    {
+      // Regression fixture modeled on src/collectors/bunLock.ts: two `//`
+      // lines merged onto one physical line, the second line's marker
+      // surviving as literal mid-line text. isAlignedTable's 3+-space
+      // heuristic used to treat the swallowed prefix as a deliberately
+      // aligned column and mark the whole line no-touch, hiding the
+      // corruption from every subsequent reflow pass.
+      name: "swallowed-comment-prefix-no-longer-hidden-from-reflow",
+      code: "// alpha beta gamma -   // delta epsilon zeta\n",
+      options: [{ maxLength: 30 }],
+      output: "// alpha beta gamma - // delta\n// epsilon zeta\n",
+      errors: 1,
+    },
+    {
+      // A standalone `-` separator must never be left dangling as the last
+      // word on a wrapped line: it travels with the word after it instead
+      // of leaving room for an accidentally-joined-in stray token to land
+      // beside it (the em-dash sweep incident's actual failure mode).
+      name: "standalone-hyphen-separator-never-ends-a-line",
+      code: "// Configured value - fallback\n",
+      options: [{ maxLength: 23 }],
+      output: "// Configured value\n// - fallback\n",
+      errors: 1,
+    },
+    {
+      // A bulleted group whose marker has no rest and no continuation
+      // (content is literally the bare marker character) must not stack a
+      // second `*` on the structural prefix; it collapses to a plain
+      // blank continuation line instead.
+      name: "bare-asterisk-bullet-collapses-to-blank-continuation",
+      code: "/**\n * intro text.\n *\n * *\n */\n",
+      options: [{ maxLength: 60 }],
+      output: "/**\n * intro text.\n *\n *\n */\n",
       errors: 1,
     },
   ],
