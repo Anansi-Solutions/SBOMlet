@@ -1,25 +1,22 @@
 /**
  * Committed purl-keyed enrichment cache: deterministic read/write.
  *
- * The cache is a JSON file committed to the repo (NOT gitignored) so `check`
- * regenerates fully offline. Generate reads it, fetches on miss, and writes
- * results back (including negative entries); check only reads it. The key is
- * the verbatim purl (URL-encoding intact, e.g. `pkg:npm/%40babel/core@7.27.7`)
- * — name@version is immutable upstream, so a hit is valid until the lockfile
- * changes the purl. No hashing, no TTL.
+ * The cache is a JSON file committed to the repo (NOT gitignored) so `check` regenerates fully
+ * offline. Generate reads it, fetches on miss, and writes results back (including negative
+ * entries); check only reads it. The key is the verbatim purl (URL-encoding intact, e.g.
+ * `pkg:npm/%40babel/core@7.27.7`) — name@version is immutable upstream, so a hit is valid until the
+ * lockfile changes the purl. No hashing, no TTL.
  *
- * Serialization reuses the tool-wide determinism contract (`toSortedJson`):
- * sorted keys, indent 2, LF-only, trailing newline, no timestamp — there is one
- * sorter, not two, so the cache diffs cleanly and the staleness gate stays
- * honest.
+ * Serialization reuses the tool-wide determinism contract (`toSortedJson`): sorted keys, indent 2,
+ * LF-only, trailing newline, no timestamp — there is one sorter, not two, so the cache diffs
+ * cleanly and the staleness gate stays honest.
  *
- * The cache stores only what it is given. It does NOT decide `resolvable:false`
- * on a fetch failure — the clean-200-empty-only policy lives in the
- * orchestrator, so a transient outage can never become a false negative here.
- * A malformed envelope throws loudly (a poisoned/garbage cache is a
- * config error, distinct from a benign missing file which is empty). The
- * envelope reader is generic ({@link readEnvelope}) so the dedicated ScanCode
- * memo reuses the identical loud-on-malformed posture — one reader, not two.
+ * The cache stores only what it is given. It does NOT decide `resolvable:false` on a fetch failure
+ * — the clean-200-empty-only policy lives in the orchestrator, so a transient outage can never
+ * become a false negative here. A malformed envelope throws loudly (a poisoned/garbage cache is a
+ * config error, distinct from a benign missing file which is empty). The envelope reader is generic
+ * ({@link readEnvelope}) so the dedicated ScanCode memo reuses the identical loud-on-malformed
+ * posture — one reader, not two.
  */
 import { existsSync, readFileSync } from "node:fs";
 
@@ -29,27 +26,23 @@ import { toSortedJson } from "../model/dependencies";
 const CACHE_VERSION = 1;
 
 /**
- * One cached resolution, keyed by purl. `license` is the RAW string (resolution
- * to SPDX happens downstream via normalizeRaw), or null for a negative entry.
- * A READONLY ARRAY is the ONE exception: deps.dev's maven arm can answer a
- * single GAV with SEVERAL distinct license entries in one fetch, and each
- * stays a SEPARATE raw claim rather than being joined into a synthesized
- * compound expression it never asserted (17-04) — a single-entry answer
- * still stores the plain string, so every other ecosystem's committed bytes
- * are unaffected. Every entry is produced by a PyPI/npm/GitHub/NuGet/deps.dev
- * lookup — this is the registry enrichment lane and the only lane this file
- * serves. `fetchedFrom` records which registry answered; `via` records which
- * resolver layer won (audit/debug); `resolvable:false` marks a negative
- * entry that must never be re-fetched.
+ * One cached resolution, keyed by purl. `license` is the RAW string (resolution to SPDX happens
+ * downstream via normalizeRaw), or null for a negative entry. A READONLY ARRAY is the ONE
+ * exception: deps.dev's maven arm can answer a single GAV with SEVERAL distinct license entries in
+ * one fetch, and each stays a SEPARATE raw claim rather than being joined into a synthesized
+ * compound expression it never asserted (17-04) — a single-entry answer still stores the plain
+ * string, so every other ecosystem's committed bytes are unaffected. Every entry is produced by a
+ * PyPI/npm/GitHub/NuGet/deps.dev lookup — this is the registry enrichment lane and the only lane
+ * this file serves. `fetchedFrom` records which registry answered; `via` records which resolver
+ * layer won (audit/debug); `resolvable:false` marks a negative entry that must never be re-fetched.
  *
- * `fetchedAt` is an OPTIONAL ISO timestamp stamped (via an injectable clock)
- * ONLY on a NEW `fetchedFrom:"github"` entry on first resolve — it is the
- * audit record for the version-tag license read. It is NEVER written for
- * pypi/npm entries (no backfill, no churn of the existing entries), NEVER for
- * nuget/deps-dev entries (their documents are stable versioned CDN/registry
- * content like the pypi/npm documents — zero churn on warm generates), and
- * NEVER rewritten on a cache hit, so a warm double-generate is byte-identical.
- * It lives ONLY here — never in any output (the determinism control).
+ * `fetchedAt` is an OPTIONAL ISO timestamp stamped (via an injectable clock) ONLY on a NEW
+ * `fetchedFrom:"github"` entry on first resolve — it is the audit record for the version-tag
+ * license read. It is NEVER written for pypi/npm entries (no backfill, no churn of the existing
+ * entries), NEVER for nuget/deps-dev entries (their documents are stable versioned CDN/registry
+ * content like the pypi/npm documents — zero churn on warm generates), and NEVER rewritten on a
+ * cache hit, so a warm double-generate is byte-identical. It lives ONLY here — never in any output
+ * (the determinism control).
  */
 export interface CacheEntry {
   license: string | ReadonlyArray<string> | null;
@@ -67,25 +60,23 @@ interface CacheFile {
 }
 
 /**
- * Read a committed cache file into a purl→entry Map. A missing/unreadable file
- * yields an empty Map (never an error — generate populates it). A malformed
- * envelope (bad JSON, missing/ill-typed `entries`) throws loudly with the path.
+ * Read a committed cache file into a purl→entry Map. A missing/unreadable file yields an empty Map
+ * (never an error — generate populates it). A malformed envelope (bad JSON, missing/ill-typed
+ * `entries`) throws loudly with the path.
  */
 export function readCache(path: string): Map<string, CacheEntry> {
   return readEnvelope<CacheEntry>(path, "enrichment cache");
 }
 
 /**
- * Read a committed {version,entries} envelope file into a purl→entry Map,
- * generic over the entry type. A missing/unreadable file yields an empty Map
- * (never an error). A malformed envelope (bad JSON, missing/ill-typed
- * `entries`) throws loudly, naming the path and the given `label` so the
- * enrichment cache and the ScanCode memo each name themselves in the error. An
- * optional `expectedVersion`, when given, rejects any OTHER schema version
- * loudly — the ScanCode memo opts into that strictness; the registry
- * cache passes none, preserving its historical version-agnostic read. This is
- * the single envelope reader — the memo reuses it rather than hand-rolling a
- * second loud-on-malformed parser.
+ * Read a committed {version,entries} envelope file into a purl→entry Map, generic over the entry
+ * type. A missing/unreadable file yields an empty Map (never an error). A malformed envelope (bad
+ * JSON, missing/ill-typed `entries`) throws loudly, naming the path and the given `label` so the
+ * enrichment cache and the ScanCode memo each name themselves in the error. An optional
+ * `expectedVersion`, when given, rejects any OTHER schema version loudly — the ScanCode memo opts
+ * into that strictness; the registry cache passes none, preserving its historical version-agnostic
+ * read. This is the single envelope reader — the memo reuses it rather than hand-rolling a second
+ * loud-on-malformed parser.
  */
 export function readEnvelope<T>(
   path: string,
@@ -144,9 +135,9 @@ function envelopeEntries<T>(
 }
 
 /**
- * Serialize a cache Map to its deterministic on-disk bytes. Reuses
- * {@link toSortedJson} so the bytes follow the identical tool-wide
- * sorted-key/LF/indent-2 contract; double-serialize is byte-identical.
+ * Serialize a cache Map to its deterministic on-disk bytes. Reuses {@link toSortedJson} so the
+ * bytes follow the identical tool-wide sorted-key/LF/indent-2 contract; double-serialize is
+ * byte-identical.
  */
 export function serializeCache(cache: Map<string, CacheEntry>): string {
   const file: CacheFile = {

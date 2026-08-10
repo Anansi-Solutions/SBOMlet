@@ -1,30 +1,26 @@
 /**
  * Deterministic CanonicalDependencies -> CycloneDX 1.6 JSON emitter.
  *
- * Pure function: model (plus optional verdicts) in, exact LF bytes out.
- * Hand-rolled against the official bom-1.6.schema.json: the only required
- * top-level fields are `bomFormat` and `specVersion` — `serialNumber`,
- * `version`, and all of `metadata` (including `timestamp`) are optional, so the
- * no-serial/no-timestamp document emitted here is schema-valid by construction.
- * Components require only `type` + `name`; the expression form of licenseChoice
- * is a single-item tuple whose object is `additionalProperties: false` (only
- * `expression`/`acknowledgement`/`bom-ref` allowed — a stray id/name key
- * invalidates the document); property objects are `{name, value}` where
- * duplicate names are explicitly spec-legal, which carries one
- * `licenses-tool:used-in` property per occurrence cleanly.
+ * Pure function: model (plus optional verdicts) in, exact LF bytes out. Hand-rolled against the
+ * official bom-1.6.schema.json: the only required top-level fields are `bomFormat` and
+ * `specVersion` — `serialNumber`, `version`, and all of `metadata` (including `timestamp`) are
+ * optional, so the no-serial/no-timestamp document emitted here is schema-valid by construction.
+ * Components require only `type` + `name`; the expression form of licenseChoice is a single-item
+ * tuple whose object is `additionalProperties: false` (only
+ * `expression`/`acknowledgement`/`bom-ref` allowed — a stray id/name key invalidates the document);
+ * property objects are `{name, value}` where duplicate names are explicitly spec-legal, which
+ * carries one `licenses-tool:used-in` property per occurrence cleanly.
  *
- * Determinism: the document object is built with keys already in the intended
- * emission order and serialized with a single JSON.stringify — deliberately not
- * via sortedKeyReplacer, which would reorder bomFormat after specVersion
- * alphabetically. Components are defensively sorted by purl via
+ * Determinism: the document object is built with keys already in the intended emission order and
+ * serialized with a single JSON.stringify — deliberately not via sortedKeyReplacer, which would
+ * reorder bomFormat after specVersion alphabetically. Components are defensively sorted by purl via
  * compareCodeUnits; JSON.stringify never emits CR, so the output is LF-only by
  * construction; JSON.stringify is also the only encoder — no string
  * concatenation ever builds a JSON fragment.
  *
- * This module deliberately does not validate against a schema library
- * (structural tests only), embed attribution or evidence texts (verbatim texts
- * are the notices file's job; embedding here would add ~5-7 MB), or evaluate
- * policy (verdicts arrive pre-computed and pre-sorted).
+ * This module deliberately does not validate against a schema library (structural tests only),
+ * embed attribution or evidence texts (verbatim texts are the notices file's job; embedding here
+ * would add ~5-7 MB), or evaluate policy (verdicts arrive pre-computed and pre-sorted).
  */
 
 import {
@@ -52,10 +48,9 @@ interface CdxComponent {
 }
 
 /**
- * #9: os-scope partial unrecognized tokens as named license entries. The
- * tokens arrive deduped + sorted from normalize; each becomes a spec-legal
- * {license:{name}} entry so the machine-readable inventory matches the Markdown
- * render (which surfaces them in the "(+ ...)" suffix). Empty → [].
+ * #9: os-scope partial unrecognized tokens as named license entries. The tokens arrive deduped +
+ * sorted from normalize; each becomes a spec-legal {license:{name}} entry so the machine-readable
+ * inventory matches the Markdown render (which surfaces them in the "(+ ...)" suffix). Empty → [].
  */
 function unrecognizedLicenses(pkg: PackageEntry): CdxLicense[] {
   const tokens = pkg.finding?.unrecognizedTokens;
@@ -64,16 +59,14 @@ function unrecognizedLicenses(pkg: PackageEntry): CdxLicense[] {
 }
 
 /**
- * License dispatch: a normalized expression wins and emits the single-item
- * expression tuple carrying only the expression key; otherwise non-empty raw
- * claims emit named entries deduped by raw in first-seen order; otherwise the
- * licenses key is omitted entirely (valid per schema — components require only
- * type + name).
+ * License dispatch: a normalized expression wins and emits the single-item expression tuple
+ * carrying only the expression key; otherwise non-empty raw claims emit named entries deduped by
+ * raw in first-seen order; otherwise the licenses key is omitted entirely (valid per schema —
+ * components require only type + name).
  *
- * #9: os-scope partial unrecognizedTokens are appended as additional named
- * entries in EVERY branch (after the expression tuple, or alongside the imprecise
- * null-expression finding) so the CycloneDX inventory never silently drops what
- * the Markdown render shows.
+ * #9: os-scope partial unrecognizedTokens are appended as additional named entries in EVERY branch
+ * (after the expression tuple, or alongside the imprecise null-expression finding) so the CycloneDX
+ * inventory never silently drops what the Markdown render shows.
  */
 function licensesOf(pkg: PackageEntry): CdxLicense[] | undefined {
   const extra = unrecognizedLicenses(pkg);
@@ -84,18 +77,16 @@ function licensesOf(pkg: PackageEntry): CdxLicense[] | undefined {
     const raws = [...new Set(pkg.licenseClaims.map((claim) => claim.raw))];
     return [...raws.map((raw) => ({ license: { name: raw } })), ...extra];
   }
-  // No expression and no raw claims: an imprecise os-partial may still carry
-  // surfaced tokens (expression null, claims empty after connective filtering).
+  // No expression and no raw claims: an imprecise os-partial may still carry surfaced tokens
+  // (expression null, claims empty after connective filtering).
   return extra.length > 0 ? extra : undefined;
 }
 
 /**
- * Provenance + verdict properties, deterministic order: one
- * `licenses-tool:used-in` per occurrence (stored order is already
- * target-sorted), then one `licenses-tool:scope:<target>` per occurrence, then
- * — only when verdicts are provided — per matching verdict in given (already
- * sorted) order the `licenses-tool:verdict:` and `licenses-tool:rule:` pair.
- * Empty arrays are omitted, never emitted.
+ * Provenance + verdict properties, deterministic order: one `licenses-tool:used-in` per occurrence
+ * (stored order is already target-sorted), then one `licenses-tool:scope:<target>` per occurrence,
+ * then — only when verdicts are provided — per matching verdict in given (already sorted) order the
+ * `licenses-tool:verdict:` and `licenses-tool:rule:` pair. Empty arrays are omitted, never emitted.
  */
 function propertiesOf(
   pkg: PackageEntry,
@@ -136,8 +127,8 @@ function toComponent(
 ): CdxComponent {
   const licenses = licensesOf(pkg);
   const properties = propertiesOf(pkg, verdicts);
-  // Keys in the intended emission order; optional keys spread in
-  // conditionally so absent values OMIT the key rather than emit null.
+  // Keys in the intended emission order; optional keys spread in conditionally so absent values
+  // OMIT the key rather than emit null.
   return {
     type: "library",
     name: pkg.name,
@@ -150,9 +141,9 @@ function toComponent(
 }
 
 /**
- * Emit the merged, policy-annotated inventory as deterministic CycloneDX 1.6
- * JSON. No serialNumber, no timestamp, components purl-sorted (defensive — the
- * emitter never trusts input order), indent 2, exactly one trailing LF.
+ * Emit the merged, policy-annotated inventory as deterministic CycloneDX 1.6 JSON. No serialNumber,
+ * no timestamp, components purl-sorted (defensive — the emitter never trusts input order), indent
+ * 2, exactly one trailing LF.
  */
 export function renderCyclonedx(
   model: CanonicalDependencies,

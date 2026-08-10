@@ -1,15 +1,13 @@
 /**
- * arktype boundary for the two NEW untrusted registry JSON shapes: the PyPI
- * `info` block and the npm packument. Registry responses are third-party,
- * volatile, and may be malformed or oversized — this is the ASVS V5 input-
- * validation control for a brand-new network surface.
+ * arktype boundary for the two NEW untrusted registry JSON shapes: the PyPI `info` block and the
+ * npm packument. Registry responses are third-party, volatile, and may be malformed or oversized —
+ * this is the ASVS V5 input- validation control for a brand-new network surface.
  *
- * Posture mirrors validate/sbom.ts exactly: undeclared keys are ignored
- * (arktype default), and any present-but-wrong-typed field coerces to undefined
- * (skip-don't-throw). A malformed response NEVER throws and NEVER feeds a bad
- * shape to a resolver — the resolver simply sees absent fields and falls
- * through. The narrows do NOT resolve licenses; resolvers return raw strings
- * and normalizeRaw owns SPDX resolution downstream.
+ * Posture mirrors validate/sbom.ts exactly: undeclared keys are ignored (arktype default), and any
+ * present-but-wrong-typed field coerces to undefined (skip-don't-throw). A malformed response NEVER
+ * throws and NEVER feeds a bad shape to a resolver — the resolver simply sees absent fields and
+ * falls through. The narrows do NOT resolve licenses; resolvers return raw strings and normalizeRaw
+ * owns SPDX resolution downstream.
  */
 import { type } from "arktype";
 
@@ -30,10 +28,10 @@ const PypiResponse = type({ "info?": "unknown" });
 export type PypiResponseShape = typeof PypiResponse.infer;
 
 /**
- * Narrow a raw PyPI JSON response to {@link PypiInfo}. A non-object top-level
- * value (null/number/string) yields undefined; an `info` that is absent or
- * non-object yields a PypiInfo with every field absent. Every leaf field is
- * walked tolerantly: wrong-typed values coerce to undefined.
+ * Narrow a raw PyPI JSON response to {@link PypiInfo}. A non-object top-level value
+ * (null/number/string) yields undefined; an `info` that is absent or non-object yields a PypiInfo
+ * with every field absent. Every leaf field is walked tolerantly: wrong-typed values coerce to
+ * undefined.
  */
 export function narrowPypiResponse(value: unknown): PypiInfo | undefined {
   if (recordOf(value) === undefined) return undefined;
@@ -76,10 +74,9 @@ const NpmDocument = type({
 });
 
 /**
- * Narrow a raw npm packument to {@link NpmPackument}. Tolerates: a top-level
- * `license` string, a legacy `{ type }` object, a `licenses: [{ type }]` array,
- * and a `versions` map of `{ license }`. A non-object top-level value or
- * `versions: null` yields the field absent — never a throw.
+ * Narrow a raw npm packument to {@link NpmPackument}. Tolerates: a top-level `license` string, a
+ * legacy `{ type }` object, a `licenses: [{ type }]` array, and a `versions` map of `{ license }`.
+ * A non-object top-level value or `versions: null` yields the field absent — never a throw.
  */
 export function narrowNpmPackument(value: unknown): NpmPackument | undefined {
   if (recordOf(value) === undefined) return undefined;
@@ -107,10 +104,10 @@ const GithubLicenseDocument = type({
 });
 
 /**
- * Narrow a raw GitHub License API response to {@link GithubLicense}. A non-object
- * top-level value yields undefined; an absent/non-object `license` yields a
- * GithubLicense with `spdxId` absent. Every leaf is walked tolerantly:
- * wrong-typed values coerce to undefined (skip-don't-throw, ASVS V5).
+ * Narrow a raw GitHub License API response to {@link GithubLicense}. A non-object top-level value
+ * yields undefined; an absent/non-object `license` yields a GithubLicense with `spdxId` absent.
+ * Every leaf is walked tolerantly: wrong-typed values coerce to undefined (skip-don't-throw, ASVS
+ * V5).
  */
 export function narrowGithubLicense(value: unknown): GithubLicense | undefined {
   if (recordOf(value) === undefined) return undefined;
@@ -132,10 +129,9 @@ export interface NugetLeaf {
 const NugetLeafDocument = type({ "catalogEntry?": "unknown" });
 
 /**
- * Narrow a raw NuGet registration leaf to {@link NugetLeaf}. A non-object
- * top-level value yields undefined; a missing or wrong-typed `catalogEntry`
- * coerces to absent (skip-don't-throw, ASVS V5). The host pin on the URL
- * itself lives in the enrichment module — this narrow only shapes.
+ * Narrow a raw NuGet registration leaf to {@link NugetLeaf}. A non-object top-level value yields
+ * undefined; a missing or wrong-typed `catalogEntry` coerces to absent (skip-don't-throw, ASVS V5).
+ * The host pin on the URL itself lives in the enrichment module — this narrow only shapes.
  */
 export function narrowNugetLeaf(value: unknown): NugetLeaf | undefined {
   if (recordOf(value) === undefined) return undefined;
@@ -161,10 +157,9 @@ const NugetCatalogDocument = type({
 });
 
 /**
- * Narrow a raw NuGet catalogEntry document to {@link NugetCatalogEntry}. A
- * non-object top-level value yields undefined; every field is optional and a
- * wrong-typed value coerces to undefined — the resolver simply sees absent
- * fields and falls through its ladder (skip-don't-throw, ASVS V5).
+ * Narrow a raw NuGet catalogEntry document to {@link NugetCatalogEntry}. A non-object top-level
+ * value yields undefined; every field is optional and a wrong-typed value coerces to undefined —
+ * the resolver simply sees absent fields and falls through its ladder (skip-don't-throw, ASVS V5).
  */
 export function narrowNugetCatalogEntry(
   value: unknown,
@@ -188,11 +183,10 @@ export interface DepsDevVersion {
 const DepsDevVersionDocument = type({ "licenses?": "unknown" });
 
 /**
- * Narrow a raw deps.dev v3 version-lookup response to {@link DepsDevVersion}.
- * A non-object top-level value yields undefined; a missing or wrong-typed
- * `licenses` coerces to absent, and non-string array entries are dropped
- * (skip-don't-throw, ASVS V5) — the resolver simply sees an absent/shorter
- * array and falls through its own empty-result handling.
+ * Narrow a raw deps.dev v3 version-lookup response to {@link DepsDevVersion}. A non-object
+ * top-level value yields undefined; a missing or wrong-typed `licenses` coerces to absent, and
+ * non-string array entries are dropped (skip-don't-throw, ASVS V5) — the resolver simply sees an
+ * absent/shorter array and falls through its own empty-result handling.
  */
 export function narrowDepsDevVersion(
   value: unknown,
@@ -223,13 +217,11 @@ function licensesArrayOf(value: unknown): Array<{ type?: string }> | undefined {
 }
 
 /**
- * A `versions` map: each entry tolerated to the same license trio as the
- * top-level packument — a `license` string, a legacy `license: { type }`
- * object, and a legacy `licenses: [{ type }]` array. Older packages publish
- * their license ONLY in the version-level legacy array (e.g. compute-gcd,
- * memorystream, svg-tags, the validate.io-* family all carry MIT there with no
- * top-level field), so dropping it produced false negatives. A non-object
- * top-level value → undefined.
+ * A `versions` map: each entry tolerated to the same license trio as the top-level packument — a
+ * `license` string, a legacy `license: { type }` object, and a legacy `licenses: [{ type }]` array.
+ * Older packages publish their license ONLY in the version-level legacy array (e.g. compute-gcd,
+ * memorystream, svg-tags, the validate.io-* family all carry MIT there with no top-level field), so
+ * dropping it produced false negatives. A non-object top-level value → undefined.
  */
 function versionsOf(value: unknown): Record<string, NpmVersion> | undefined {
   const record = recordOf(value);

@@ -1,37 +1,32 @@
 /**
- * ScanCode-toolkit collector — the syft-parity composite (07/dockerOs.ts) for
- * deep source-level license + copyright detection, orchestrated behind the
- * `--intensive` lane. Two responsibilities live in this module:
+ * ScanCode-toolkit collector — the syft-parity composite (07/dockerOs.ts) for deep source-level
+ * license + copyright detection, orchestrated behind the `--intensive` lane. Two responsibilities
+ * live in this module:
  *
- *  1. `sourceDirsFor` — a purl → ordered locally-present scan-candidate
- *     mapper (no registry/collector analog exists for this). npm: the decoded package name under
- *     `<targetDir>/node_modules`, with the installed `package.json` version
- *     MANDATORILY equal to the purl's version (a stale
- *     node_modules must never poison the cache with the wrong version's
- *     license). pypi: an in-project `.venv`'s site-packages, keyed by the
- *     PEP-503 structural fold of the dist-info dir name (ADR-0015: the dir
- *     name IS the signal, no PEP-440/508 parsing) — the dist-info dir itself
- *     is the first candidate (a wheel's METADATA and legal files live there,
- *     not in the import package), the top_level.txt import package dir the
- *     second. Everything else, or any structural mismatch, returns [] — an
- *     honest skip, never a fabricated guess. A `..`-shaped or
- *     absolute-path-shaped decoded name (or top_level.txt line) can never
- *     escape the target's containment root (resolve + strict prefix-check).
+ * 1. `sourceDirsFor` — a purl → ordered locally-present scan-candidate mapper (no
+ *    registry/collector analog exists for this). npm: the decoded package name under
+ *    `<targetDir>/node_modules`, with the installed `package.json` version MANDATORILY equal to the
+ *    purl's version (a stale node_modules must never poison the cache with the wrong version's
+ *    license). pypi: an in-project `.venv`'s site-packages, keyed by the PEP-503 structural fold of
+ *    the dist-info dir name (ADR-0015: the dir name IS the signal, no PEP-440/508 parsing) — the
+ *    dist-info dir itself is the first candidate (a wheel's METADATA and legal files live there,
+ *    not in the import package), the top_level.txt import package dir the second. Everything else,
+ *    or any structural mismatch, returns [] — an honest skip, never a fabricated guess. A
+ *    `..`-shaped or absolute-path-shaped decoded name (or top_level.txt line) can never escape the
+ *    target's containment root (resolve + strict prefix-check).
  *
- *  2. `scanPackageSources` — orchestrates the pinned `scancode-toolkit` CLI
- *     through `execTool` (the tool's only child_process seam; dockerOs.ts
- *     idiom): spawn → exists-check → size-gate BEFORE read → parse → runtime
- *     version-assert against {@link SCANCODE_TOOL} from the output's own
- *     headers (a substituted/drifted binary is caught). Expression election
- *     is two-lane; see {@link electExpression} for the legal-file/manifest
- *     precedence and the ADR-0007 no-fabrication rejection.
+ * 2. `scanPackageSources` — orchestrates the pinned `scancode-toolkit` CLI through `execTool` (the
+ *    tool's only child_process seam; dockerOs.ts idiom): spawn → exists-check → size-gate BEFORE
+ *    read → parse → runtime version-assert against {@link SCANCODE_TOOL} from the output's own
+ *    headers (a substituted/drifted binary is caught). Expression election is two-lane; see {@link
+ *    electExpression} for the legal-file/manifest precedence and the ADR-0007 no-fabrication
+ *    rejection.
  *
- * This module NEVER performs SPDX correction or interpretation — the raw
- * expression string is returned verbatim (`{raw, via, copyrights} | null`,
- * the same shape the registry resolvers return at enrich.ts's
- * resolveFromDocument), and `normalizeRaw` stays the single SPDX authority
- * downstream. It never spawns outside `execTool`, and it never writes the
- * cache itself — the single write site stays in enrich.ts.
+ * This module NEVER performs SPDX correction or interpretation — the raw expression string is
+ * returned verbatim (`{raw, via, copyrights} | null`, the same shape the registry resolvers return
+ * at enrich.ts's resolveFromDocument), and `normalizeRaw` stays the single SPDX authority
+ * downstream. It never spawns outside `execTool`, and it never writes the cache itself — the single
+ * write site stays in enrich.ts.
  */
 import {
   existsSync,
@@ -50,12 +45,11 @@ import { compareCodeUnits } from "../model/dependencies";
 import { parsePurl } from "./enrich";
 
 /**
- * Collector tool identity. The literal version is the pin — it lives in
- * mise.toml (`"pipx:scancode-toolkit[full]" = "32.5.0"`) like every other
- * tool this project depends on, and is asserted at runtime from the scan
- * output's own `headers[0].tool_version` (the SYFT_TOOL comment voice,
- * dockerOs.ts) so a version bump — or a substituted binary — must be
- * conscious, never silent.
+ * Collector tool identity. The literal version is the pin — it lives in mise.toml
+ * (`"pipx:scancode-toolkit[full]" = "32.5.0"`) like every other tool this project depends on, and
+ * is asserted at runtime from the scan output's own `headers[0].tool_version` (the SYFT_TOOL
+ * comment voice, dockerOs.ts) so a version bump — or a substituted binary — must be conscious,
+ * never silent.
  */
 export const SCANCODE_TOOL = {
   name: "scancode-toolkit",
@@ -63,31 +57,27 @@ export const SCANCODE_TOOL = {
 } as const;
 
 /**
- * DoS bound: real scancode `--json-pp` output for a single npm package tree is
- * well under a MiB even for large packages; 64 MiB is generous headroom,
- * matching MAX_SYFT_SBOM_BYTES's stat-gate-before-read posture. The gate
- * fires before any read/parse.
+ * DoS bound: real scancode `--json-pp` output for a single npm package tree is well under a MiB
+ * even for large packages; 64 MiB is generous headroom, matching MAX_SYFT_SBOM_BYTES's
+ * stat-gate-before-read posture. The gate fires before any read/parse.
  */
 export const MAX_SCANCODE_OUTPUT_BYTES = 64 * 1024 * 1024;
 
 /**
- * Wall-clock timeout per package scan. ScanCode's
- * OWN per-file `--timeout` stays at its 120s default — deliberately not
- * passed here, since it bounds a single file's matching, not the whole run.
- * 10 minutes is generous headroom for even a large vendored bundle.
+ * Wall-clock timeout per package scan. ScanCode's OWN per-file `--timeout` stays at its 120s
+ * default — deliberately not passed here, since it bounds a single file's matching, not the whole
+ * run. 10 minutes is generous headroom for even a large vendored bundle.
  */
 export const DEFAULT_SCAN_TIMEOUT_MS = 10 * 60 * 1000;
 
 /**
- * The verified scancode-toolkit 32.5.0 argv. Options first, then a `--`
- * END-OF-OPTIONS separator, then the scanned directory OPERAND last — the
- * dockerOs.ts syftArgs idiom: the source dir is always an argv
- * operand, never a shell string, so command injection is impossible by
+ * The verified scancode-toolkit 32.5.0 argv. Options first, then a `--` END-OF-OPTIONS separator,
+ * then the scanned directory OPERAND last — the dockerOs.ts syftArgs idiom: the source dir is
+ * always an argv operand, never a shell string, so command injection is impossible by
  * construction, and the `--` is defense-in-depth against a dash-prefixed
- * path being parsed as a flag. `--license --copyright` requests both
- * detection families; `--json-pp <outFile>` writes deterministic
- * pretty-printed JSON to the per-run temp file. Locked byte-for-byte by an
- * exact-array test — any flag change must consciously break that test.
+ * path being parsed as a flag. `--license --copyright` requests both detection families;
+ * `--json-pp <outFile>` writes deterministic pretty-printed JSON to the per-run temp file. Locked
+ * byte-for-byte by an exact-array test — any flag change must consciously break that test.
  */
 export function scancodeArgs(outFile: string, sourceDir: string): string[] {
   return ["--license", "--copyright", "--json-pp", outFile, "--", sourceDir];
@@ -101,10 +91,9 @@ interface EcosystemPurl {
 }
 
 /**
- * decodeURIComponent wrapped so a malformed percent-encoding (e.g. "%ZZ" in
- * a crafted SBOM purl — SBOM documents are an untrusted shape) is an honest
- * undefined, never a URIError that would kill the whole intensive run
- * (the mapper contract: undefined on ANY structural mismatch).
+ * decodeURIComponent wrapped so a malformed percent-encoding (e.g. "%ZZ" in a crafted SBOM purl —
+ * SBOM documents are an untrusted shape) is an honest undefined, never a URIError that would kill
+ * the whole intensive run (the mapper contract: undefined on ANY structural mismatch).
  */
 function safeDecode(encoded: string): string | undefined {
   try {
@@ -115,31 +104,28 @@ function safeDecode(encoded: string): string | undefined {
 }
 
 /**
- * Decode + validate an npm purl's encoded name against a candidate
- * `node_modules` root, requiring the installed package.json `version` field
- * to equal the purl version (mandatory — never optional). Returns
- * the resolved source dir, or undefined on ANY structural mismatch: dir
- * absent, package.json absent/unparseable (a garbage node_modules must never
- * throw and kill the run — honest skip), version mismatch, or a decoded name
- * that would escape the node_modules root (resolve + strict prefix-check,
- * never best-effort).
+ * Decode + validate an npm purl's encoded name against a candidate `node_modules` root, requiring
+ * the installed package.json `version` field to equal the purl version (mandatory — never
+ * optional). Returns the resolved source dir, or undefined on ANY structural mismatch: dir absent,
+ * package.json absent/unparseable (a garbage node_modules must never throw and kill the run —
+ * honest skip), version mismatch, or a decoded name that would escape the node_modules root
+ * (resolve + strict prefix-check, never best-effort).
  */
 function npmSourceDir(
   purl: EcosystemPurl,
   targetDir: string,
 ): string | undefined {
-  // The decode exactly mirrors npmPackumentUrl's scoped-name decode
-  // (enrich.ts npmPackumentUrl): "%40scope/pkg" -> "@scope/pkg".
+  // The decode exactly mirrors npmPackumentUrl's scoped-name decode (enrich.ts npmPackumentUrl):
+  // "%40scope/pkg" -> "@scope/pkg".
   const name = safeDecode(purl.encodedName);
   if (name === undefined) return undefined;
 
   const nodeModulesRoot = resolve(targetDir, "node_modules");
   const candidate = resolve(nodeModulesRoot, name);
 
-  // Strict prefix-check under the RESOLVED node_modules root: a ".."-shaped
-  // or absolute-path-shaped decoded name can never produce a non-null result
-  // outside it. A path-separator-suffixed prefix guards against a
-  // sibling-directory false-positive (e.g. "node_modules-evil").
+  // Strict prefix-check under the RESOLVED node_modules root: a ".."-shaped or absolute-path-shaped
+  // decoded name can never produce a non-null result outside it. A path-separator-suffixed prefix
+  // guards against a sibling-directory false-positive (e.g. "node_modules-evil").
   const rootWithSep = nodeModulesRoot.endsWith(sep)
     ? nodeModulesRoot
     : `${nodeModulesRoot}${sep}`;
@@ -154,8 +140,8 @@ function npmSourceDir(
   try {
     parsed = JSON.parse(readFileSync(packageJsonPath, "utf8"));
   } catch {
-    // Unparseable package.json -> honest skip, never a throw (a garbage
-    // node_modules must not kill the run).
+    // Unparseable package.json -> honest skip, never a throw (a garbage node_modules must not kill
+    // the run).
     return undefined;
   }
   const version = (parsed as { version?: unknown }).version;
@@ -167,9 +153,8 @@ function npmSourceDir(
 }
 
 /**
- * readdirSync wrapped so a missing/unreadable directory is an honest empty
- * list rather than a throw (a garbage or absent venv/node_modules tree must
- * never kill the run).
+ * readdirSync wrapped so a missing/unreadable directory is an honest empty list rather than a throw
+ * (a garbage or absent venv/node_modules tree must never kill the run).
  */
 function safeReaddir(dir: string): string[] {
   try {
@@ -180,10 +165,9 @@ function safeReaddir(dir: string): string[] {
 }
 
 /**
- * The PEP-503 structural fold used ONLY to match a dist-info directory name —
- * literal lower-case + every run of `-`/`_`/`.` collapsed to a single `_`
- * (ADR-0015: abstain over fragile PEP-440/508 parsing; the dist-info dir name
- * IS the structural signal, nothing is parsed out of it).
+ * The PEP-503 structural fold used ONLY to match a dist-info directory name — literal lower-case +
+ * every run of `-`/`_`/`.` collapsed to a single `_` (ADR-0015: abstain over fragile PEP-440/508
+ * parsing; the dist-info dir name IS the structural signal, nothing is parsed out of it).
  */
 function pep503Fold(value: string): string {
   return value.toLowerCase().replace(/[-_.]+/g, "_");
@@ -212,24 +196,21 @@ function sitePackagesDir(venvDir: string): string {
 }
 
 /**
- * Resolve a pypi purl to its ordered locally-present scan candidates via an
- * in-project `.venv`'s site-packages. The dist-info dir name is the PEP-503
- * structural fold of `<name>-<version>` (literal lower-case + `-`/`_`/`.`
- * folded); the matched dist-info dir itself is ALWAYS the first candidate —
- * a wheel install puts `METADATA` and the `LICENSE`/`licenses/` legal files
- * there, not inside the import package, so it is where the election lanes'
- * evidence actually lives. The `top_level.txt`-named import package dir
- * (sorted, first entry that exists as a sibling dir) follows as the second
- * candidate when present. Absent venv or absent dist-info -> [] (honest
- * skip, never a fabricated guess). top_level.txt content is fully
- * controlled by the installed package, so a `..`-shaped or
- * absolute-path-shaped line can never name a directory outside
- * site-packages (resolve + strict prefix-check, the npmSourceDir guard).
+ * Resolve a pypi purl to its ordered locally-present scan candidates via an in-project `.venv`'s
+ * site-packages. The dist-info dir name is the PEP-503 structural fold of `<name>-<version>`
+ * (literal lower-case + `-`/`_`/`.` folded); the matched dist-info dir itself is ALWAYS the first
+ * candidate — a wheel install puts `METADATA` and the `LICENSE`/`licenses/` legal files there, not
+ * inside the import package, so it is where the election lanes' evidence actually lives. The
+ * `top_level.txt`-named import package dir (sorted, first entry that exists as a sibling dir)
+ * follows as the second candidate when present. Absent venv or absent dist-info -> [] (honest skip,
+ * never a fabricated guess). top_level.txt content is fully controlled by the installed package, so
+ * a `..`-shaped or absolute-path-shaped line can never name a directory outside site-packages
+ * (resolve + strict prefix-check, the npmSourceDir guard).
  */
 function pypiSourceDirs(purl: EcosystemPurl, targetDir: string): string[] {
   const venvDir = join(targetDir, ".venv");
-  // Resolved once up front so both sides of the containment check below
-  // compare canonical absolute paths.
+  // Resolved once up front so both sides of the containment check below compare canonical absolute
+  // paths.
   const sitePackages = resolve(sitePackagesDir(venvDir));
   if (!existsSync(sitePackages)) return [];
 
@@ -251,8 +232,8 @@ function pypiSourceDirs(purl: EcosystemPurl, targetDir: string): string[] {
 }
 
 /**
- * The `top_level.txt`-named import package dir inside site-packages, or
- * undefined when absent/unreadable/empty or when no named sibling exists.
+ * The `top_level.txt`-named import package dir inside site-packages, or undefined when
+ * absent/unreadable/empty or when no named sibling exists.
  */
 function topLevelPackageDir(
   sitePackages: string,
@@ -273,10 +254,9 @@ function topLevelPackageDir(
     .filter((line) => line.length > 0)
     .sort(compareCodeUnits);
 
-  // Strict prefix-check under the RESOLVED site-packages root: an
-  // attacker-controlled top_level.txt line can never produce a non-null
-  // result outside it (or site-packages itself). The separator-suffixed
-  // prefix guards against a sibling false-positive ("site-packages-evil").
+  // Strict prefix-check under the RESOLVED site-packages root: an attacker-controlled top_level.txt
+  // line can never produce a non-null result outside it (or site-packages itself). The
+  // separator-suffixed prefix guards against a sibling false-positive ("site-packages-evil").
   const rootWithSep = sitePackages.endsWith(sep)
     ? sitePackages
     : `${sitePackages}${sep}`;
@@ -289,14 +269,12 @@ function topLevelPackageDir(
 }
 
 /**
- * Map a purl to its ordered locally-present scan candidates across a set of
- * candidate target dirs (probed in {@link compareCodeUnits}-sorted order,
- * first target dir with a structural match wins — determinism regardless of
- * caller-supplied order). npm yields at most one dir; pypi yields the
- * matched dist-info dir first and the top_level.txt import package dir
- * second (the caller scans in order until the first positive answer). npm
- * and pypi are the only supported ecosystems (Pattern 4); every other type —
- * including an unparseable purl — returns [] with zero fs probes beyond the
+ * Map a purl to its ordered locally-present scan candidates across a set of candidate target dirs
+ * (probed in {@link compareCodeUnits}-sorted order, first target dir with a structural match wins —
+ * determinism regardless of caller-supplied order). npm yields at most one dir; pypi yields the
+ * matched dist-info dir first and the top_level.txt import package dir second (the caller scans in
+ * order until the first positive answer). npm and pypi are the only supported ecosystems (Pattern
+ * 4); every other type — including an unparseable purl — returns [] with zero fs probes beyond the
  * initial parse.
  */
 export function sourceDirsFor(purl: string, targetDirs: string[]): string[] {
@@ -320,12 +298,11 @@ export function sourceDirsFor(purl: string, targetDirs: string[]): string[] {
 // --- Invocation lane -------------------------------------------------------
 
 /**
- * Options threading the `--intensive` lane through enrichUnknowns.
- * Present ONLY on `generate --intensive`: check never receives it, and a
- * default generate call never constructs it (the intensive lane is
- * additionally gated on this field's mere presence — enrich.ts). Mirrors the
- * default-to-production/override-in-tests idiom used throughout this tool
- * (EnrichOptions.now?, ScancodeScanOptions.scancodeBin?).
+ * Options threading the `--intensive` lane through enrichUnknowns. Present ONLY on
+ * `generate --intensive`: check never receives it, and a default generate call never constructs it
+ * (the intensive lane is additionally gated on this field's mere presence — enrich.ts). Mirrors the
+ * default-to-production/override-in-tests idiom used throughout this tool (EnrichOptions.now?,
+ * ScancodeScanOptions.scancodeBin?).
  */
 export interface IntensiveOptions {
   /**
@@ -441,22 +418,17 @@ function isRawScancodeFile(raw: unknown): raw is RawScancodeFile {
 }
 
 /**
- * True iff a scancode `files[].path` sits directly inside the scanned
- * tree's own root — never a nested/vendored/bundled subdirectory. ScanCode's
- * `--json-pp` paths are forward-slash-separated and always prefixed with
- * the scanned directory's OWN basename (verified live:
- * `ajv/LICENSE`, `ajv/dist/ajv.bundle.js`), so a root-level file has
- * EXACTLY two `/`-segments: `<scanRootBasename>/<filename>`.
- * Backslash-separated paths are defensively rejected too (scancode never
- * emits them; fail closed rather than trust an unexpected separator as
- * root-level).
+ * True iff a scancode `files[].path` sits directly inside the scanned tree's own root — never a
+ * nested/vendored/bundled subdirectory. ScanCode's `--json-pp` paths are forward-slash-separated
+ * and always prefixed with the scanned directory's OWN basename (verified live: `ajv/LICENSE`,
+ * `ajv/dist/ajv.bundle.js`), so a root-level file has EXACTLY two `/`-segments:
+ * `<scanRootBasename>/<filename>`. Backslash-separated paths are defensively rejected too (scancode
+ * never emits them; fail closed rather than trust an unexpected separator as root-level).
  *
- * A review found election previously matched on
- * `basename(path)` alone with no depth check, so a deeply-nested
- * vendored/bundled dependency's LICENSE — carrying a DIFFERENT, potentially
- * copyleft license — could silently outrank the scanned package's own root
- * license purely by `files[]` array order (scancode's own walk order is
- * not guaranteed root-first). This closes that gap.
+ * A review found election previously matched on `basename(path)` alone with no depth check, so a
+ * deeply-nested vendored/bundled dependency's LICENSE — carrying a DIFFERENT, potentially copyleft
+ * license — could silently outrank the scanned package's own root license purely by `files[]` array
+ * order (scancode's own walk order is not guaranteed root-first). This closes that gap.
  */
 function isRootLevelPath(path: string): boolean {
   if (path.includes("\\")) return false;
@@ -489,15 +461,14 @@ function electFromPattern(
 }
 
 /**
- * Elect ONE raw SPDX expression from the scanned files: a root-level legal
- * file (basename matches {@link LEGAL_FILE_PATTERN}) with a non-null,
- * non-noise expression wins; else the first package-manifest entry
+ * Elect ONE raw SPDX expression from the scanned files: a root-level legal file (basename matches
+ * {@link LEGAL_FILE_PATTERN}) with a non-null, non-noise expression wins; else the first
+ * package-manifest entry
  * ({@link MANIFEST_FILE_PATTERN}) with a non-null, non-noise expression;
  * else undefined (never an AND-combine across files). An
- * elected expression containing `LicenseRef-scancode-` is rejected within
- * each lane (treated as no answer there, ADR-0007) rather than
- * accepted as noise — the caller falls through to the next lane, or to a
- * clean no-answer if both lanes reject.
+ * elected expression containing `LicenseRef-scancode-` is rejected within each lane (treated as no
+ * answer there, ADR-0007) rather than accepted as noise — the caller falls through to the next
+ * lane, or to a clean no-answer if both lanes reject.
  */
 export function electExpression(
   files: unknown,
@@ -517,11 +488,10 @@ interface RawCopyrightEntry {
 }
 
 /**
- * Collect the union of all `copyrights[].copyright` strings across every
- * scanned file, sanitized via the same control-char intake rule evidence
- * text uses ({@link sanitizeEvidenceText}, merge.ts), deduped,
- * {@link compareCodeUnits}-sorted, and capped at
- * {@link MAX_SCANCODE_COPYRIGHT_LINES}.
+ * Collect the union of all `copyrights[].copyright` strings across every scanned file, sanitized
+ * via the same control-char intake rule evidence text uses ({@link sanitizeEvidenceText},
+ * merge.ts), deduped, {@link compareCodeUnits}-sorted, and capped at {@link
+ * MAX_SCANCODE_COPYRIGHT_LINES}.
  */
 export function electCopyrights(files: unknown): string[] {
   if (!Array.isArray(files)) return [];
@@ -531,8 +501,8 @@ export function electCopyrights(files: unknown): string[] {
     const copyrights = (raw as { copyrights?: unknown }).copyrights;
     if (!Array.isArray(copyrights)) continue;
     for (const entry of copyrights) {
-      // Tolerant narrowing, matching the rest of this parse path: a null or
-      // mistyped element is skipped, never a TypeError mid-scan.
+      // Tolerant narrowing, matching the rest of this parse path: a null or mistyped element is
+      // skipped, never a TypeError mid-scan.
       if (typeof entry !== "object" || entry === null) continue;
       const text = (entry as RawCopyrightEntry).copyright;
       if (typeof text !== "string" || text.length === 0) continue;
@@ -553,10 +523,9 @@ function isEnoentError(error: unknown): boolean {
 }
 
 /**
- * Run the pinned scancode binary against one source dir, returning the
- * parsed + version-asserted output. Extracted from scanPackageSources to
- * keep that orchestrator under the complexity bound (dockerOs.ts's
- * scanImage/parseSyftOutput split).
+ * Run the pinned scancode binary against one source dir, returning the parsed + version-asserted
+ * output. Extracted from scanPackageSources to keep that orchestrator under the complexity bound
+ * (dockerOs.ts's scanImage/parseSyftOutput split).
  */
 async function runScancode(
   sourceDir: string,
@@ -576,16 +545,15 @@ async function runScancode(
         { cause: error },
       );
     }
-    // ScanCode exits NON-ZERO when SOME files fail to scan — an undecodable or
-    // oversized bundled data file (a vendored full license-list JSON, say) —
+    // ScanCode exits NON-ZERO when SOME files fail to scan — an undecodable or oversized bundled
+    // data file (a vendored full license-list JSON, say) —
     // yet still writes a COMPLETE, well-formed result for the rest of the tree;
-    // the file that failed carries no detected expression and is inert to
-    // election. Tolerate that ONLY when an output file was produced: the
-    // exists-check, the size gate, and the tool_version assertion below are the
-    // integrity gate, so a substituted/wrong binary, a truncated write, or a
-    // catastrophic failure that left no parseable, correctly-versioned output
-    // still throws. With NO output file the failure is real — rethrow the
-    // original error unchanged (its stderr tail is the diagnostic).
+    // the file that failed carries no detected expression and is inert to election. Tolerate that
+    // ONLY when an output file was produced: the exists-check, the size gate, and the tool_version
+    // assertion below are the integrity gate, so a substituted/wrong binary, a truncated write, or
+    // a catastrophic failure that left no parseable, correctly-versioned output still throws. With
+    // NO output file the failure is real — rethrow the original error unchanged (its stderr tail is
+    // the diagnostic).
     if (!existsSync(outFile)) throw error;
   }
 
@@ -597,28 +565,26 @@ async function runScancode(
   // Size gate BEFORE read (DoS bound).
   assertScancodeOutputSize(outFile);
 
-  // Read outside the parse try: an I/O failure must surface as itself, not
-  // as a misleading "not valid JSON" message (dockerOs.ts idiom).
+  // Read outside the parse try: an I/O failure must surface as itself, not as a misleading "not
+  // valid JSON" message (dockerOs.ts idiom).
   const rawOutput = readFileSync(outFile, "utf8");
   return parseScancodeOutput(rawOutput, outFile, invocation);
 }
 
 /**
- * Scan one locally-present source dir with the pinned scancode-toolkit CLI
- * and return its elected result, or null on a clean no-answer. Mirrors
- * dockerOs.ts's scanImage/parseSyftOutput skeleton: spawn via execTool (the
- * tool's only child_process seam) -> exists-check -> size-gate BEFORE
- * read -> read -> parse + version-assert -> election. A spawn ENOENT
- * (missing tool) is mapped to the loud install-command error; any other
+ * Scan one locally-present source dir with the pinned scancode-toolkit CLI and return its elected
+ * result, or null on a clean no-answer. Mirrors dockerOs.ts's scanImage/parseSyftOutput skeleton:
+ * spawn via execTool (the tool's only child_process seam) -> exists-check -> size-gate BEFORE read
+ * -> read -> parse + version-assert -> election. A spawn ENOENT (missing tool) is mapped to the
+ * loud install-command error; any other
 
  * rejection (non-zero exit, timeout) propagates as-is.
  *
- * Output-file hygiene: any stale out file is removed BEFORE the spawn, so
- * with a caller-shared tempDir a PREVIOUS scan's output can never masquerade
- * as this scan's result (the exists-check really proves scancode wrote
- * output). Afterwards the out file is removed again — and when this function
- * created the temp dir itself, the whole dir is removed, never leaked one
- * per scanned package per run.
+ * Output-file hygiene: any stale out file is removed BEFORE the spawn, so with a caller-shared
+ * tempDir a PREVIOUS scan's output can never masquerade as this scan's result (the exists-check
+ * really proves scancode wrote output). Afterwards the out file is removed again — and when this
+ * function created the temp dir itself, the whole dir is removed, never leaked one per scanned
+ * package per run.
  */
 export async function scanPackageSources(
   sourceDir: string,

@@ -1,23 +1,20 @@
 /**
- * Cache-integrity audit: re-resolve every re-resolvable committed
- * enrichment-cache entry against its registry and compare the stored raw
- * license.
+ * Cache-integrity audit: re-resolve every re-resolvable committed enrichment-cache entry against
+ * its registry and compare the stored raw license.
  *
- * The committed cache is what `check` trusts OFFLINE, so a hand-edited entry —
- * a flipped license, a fabricated package, or a `resolvable:false` hiding a real
- * copyleft license — would pass the gate silently. `verify-cache` is the ONLINE
- * counterpart: for every registry-sourced entry it re-derives the registry's
- * current answer with the SAME resolvers `generate` uses (enrich.ts) and flags
- * any divergence. A divergence is either tampering or a genuine upstream
- * license change; both warrant a human look before a release or audit.
+ * The committed cache is what `check` trusts OFFLINE, so a hand-edited entry — a flipped license, a
+ * fabricated package, or a `resolvable:false` hiding a real copyleft license — would pass the gate
+ * silently. `verify-cache` is the ONLINE counterpart: for every registry-sourced entry it
+ * re-derives the registry's current answer with the SAME resolvers `generate` uses (enrich.ts) and
+ * flags any divergence. A divergence is either tampering or a genuine upstream license change; both
+ * warrant a human look before a release or audit.
  *
- * The comparison is a single equality on the raw license string: a cached value
- * (string for a positive entry, null for a negative one) versus the freshly
- * resolved value. That one check covers every tamper shape — a changed string, a
- * fabricated entry the registry now 404s (→ null), and a negative entry the
- * registry contradicts with a real license. A registry/network FAILURE is a loud
- * inability to verify (it propagates and the CLI exits 3), NEVER silently treated
- * as agreement — exactly the reliability posture `generate` already takes.
+ * The comparison is a single equality on the raw license string: a cached value (string for a
+ * positive entry, null for a negative one) versus the freshly resolved value. That one check covers
+ * every tamper shape — a changed string, a fabricated entry the registry now 404s (→ null), and a
+ * negative entry the registry contradicts with a real license. A registry/network FAILURE is a loud
+ * inability to verify (it propagates and the CLI exits 3), NEVER silently treated as agreement —
+ * exactly the reliability posture `generate` already takes.
  */
 import { compareCodeUnits } from "../model/dependencies";
 import {
@@ -89,11 +86,11 @@ export interface VerifyResult {
 type FetchDoc = (url: string) => Promise<unknown>;
 
 /**
- * The registry's CURRENT raw license for a parsed purl, or null for a definitive
- * no-license answer. This is exactly `generate`'s per-package resolution
- * (enrich.ts) with the cache-write and claim-append stripped out: pypi/npm read
- * one registry document; terraform walks the ordered version-tag refs and takes
- * the first resolvable one. A transient fetch failure throws (loud), never null.
+ * The registry's CURRENT raw license for a parsed purl, or null for a definitive no-license answer.
+ * This is exactly `generate`'s per-package resolution (enrich.ts) with the cache-write and
+ * claim-append stripped out: pypi/npm read one registry document; terraform walks the ordered
+ * version-tag refs and takes the first resolvable one. A transient fetch failure throws (loud),
+ * never null.
  */
 async function currentRegistryLicense(
   parsed: ParsedPurl,
@@ -110,8 +107,8 @@ async function currentRegistryLicense(
   }
   if (parsed.type === "nuget") return currentNugetLicense(parsed, fetchOpts);
   if (parsed.type === "maven") return currentMavenLicense(parsed, fetchOpts);
-  // terraform → GitHub License API at the version tag (same ordered-ref walk as
-  // generate: v<version> then <version>; first resolvable wins, 404 advances).
+  // terraform → GitHub License API at the version tag (same ordered-ref walk as generate:
+  // v<version> then <version>; first resolvable wins, 404 advances).
   const repo = githubRepoFor(parsed);
   if (repo === null) return null;
   for (const ref of githubLicenseRefsFor(parsed.version)) {
@@ -128,13 +125,12 @@ async function currentRegistryLicense(
 }
 
 /**
- * The nuget re-resolution: registration leaf → host-pinned catalogEntry →
- * {@link resolveNugetCatalogLicense} — the SAME resolver, host pin, and
- * 404→null classification `generate` uses (enrich.ts). The two-step goes
- * DIRECT rather than through the memoized fetchDoc: that memo is single-URL
- * and the cache holds one entry per purl, so memoization buys nothing here.
- * A clean 404 (either hop) and a malformed/foreign-host catalogEntry map to
- * null — the definitive no-answer — while a transient failure throws (loud).
+ * The nuget re-resolution: registration leaf → host-pinned catalogEntry → {@link
+ * resolveNugetCatalogLicense} — the SAME resolver, host pin, and 404→null classification `generate`
+ * uses (enrich.ts). The two-step goes DIRECT rather than through the memoized fetchDoc: that memo
+ * is single-URL and the cache holds one entry per purl, so memoization buys nothing here. A clean
+ * 404 (either hop) and a malformed/foreign-host catalogEntry map to null — the definitive no-answer
+ * — while a transient failure throws (loud).
  */
 async function currentNugetLicense(
   parsed: ParsedPurl,
@@ -154,10 +150,9 @@ async function currentNugetLicense(
 }
 
 /**
- * The deps.dev re-resolution: ONE fetch (no two-step hop) using the SAME
- * fixed-host URL builder and honest-sentinel resolver `generate` uses
- * (maven.ts). A clean 404 and an all-non-standard/empty answer both map to
- * null — the definitive no-answer — while a transient failure throws (loud).
+ * The deps.dev re-resolution: ONE fetch (no two-step hop) using the SAME fixed-host URL builder and
+ * honest-sentinel resolver `generate` uses (maven.ts). A clean 404 and an all-non-standard/empty
+ * answer both map to null — the definitive no-answer — while a transient failure throws (loud).
  */
 async function currentMavenLicense(
   parsed: ParsedPurl,
@@ -174,10 +169,9 @@ async function currentMavenLicense(
 }
 
 /**
- * Order/shape-independent equality for a cache-license value: a plain string
- * and a single-element array of the same string compare equal, and two
- * arrays compare equal regardless of entry order (deps.dev's `licenses[]`
- * carries no ordering guarantee). Both null → equal (no divergence).
+ * Order/shape-independent equality for a cache-license value: a plain string and a single-element
+ * array of the same string compare equal, and two arrays compare equal regardless of entry order
+ * (deps.dev's `licenses[]` carries no ordering guarantee). Both null → equal (no divergence).
  */
 function licenseValuesEqual(
   a: string | ReadonlyArray<string> | null,
@@ -206,10 +200,10 @@ function reasonFor(
 }
 
 /**
- * Audit one entry: re-resolve and compare. Returns a mismatch, or null when the
- * committed license still matches the registry. An entry whose key is not a
- * re-resolvable purl is itself a finding — `generate` only ever writes
- * pypi/npm/terraform entries, so anything else was not written by this tool.
+ * Audit one entry: re-resolve and compare. Returns a mismatch, or null when the committed license
+ * still matches the registry. An entry whose key is not a re-resolvable purl is itself a finding —
+ * `generate` only ever writes pypi/npm/terraform entries, so anything else was not written by this
+ * tool.
  */
 async function auditEntry(
   purl: string,
@@ -237,11 +231,10 @@ async function auditEntry(
 }
 
 /**
- * Re-verify every committed cache entry against its registry. Reads the cache
- * (a malformed envelope throws loudly, as in `check`), re-resolves each entry
- * with bounded concurrency and per-URL fetch de-duplication, and returns the
- * divergences sorted by purl. A network failure propagates (the caller maps it
- * to a tool error), so an unreachable registry never reads as "all clean".
+ * Re-verify every committed cache entry against its registry. Reads the cache (a malformed envelope
+ * throws loudly, as in `check`), re-resolves each entry with bounded concurrency and per-URL fetch
+ * de-duplication, and returns the divergences sorted by purl. A network failure propagates (the
+ * caller maps it to a tool error), so an unreachable registry never reads as "all clean".
  */
 export async function verifyCache(opts: VerifyOptions): Promise<VerifyResult> {
   const cache = readCache(opts.cachePath);
@@ -250,8 +243,8 @@ export async function verifyCache(opts: VerifyOptions): Promise<VerifyResult> {
       ? {}
       : { backoffBaseMs: opts.backoffBaseMs };
 
-  // One network call per distinct URL: many npm versions share a packument, and
-  // a repeated URL reuses the in-flight promise (dedup survives concurrency).
+  // One network call per distinct URL: many npm versions share a packument, and a repeated URL
+  // reuses the in-flight promise (dedup survives concurrency).
   const documents = new Map<string, Promise<unknown>>();
   const fetchDoc: FetchDoc = (url) => {
     let pending = documents.get(url);

@@ -1,26 +1,24 @@
 /**
  * Dockerfile discovery — a listing-only repo walk.
  *
- * This module answers one narrow question: which Dockerfiles live in a repo
- * tree? It walks the repo root, matches Dockerfile basenames, applies the shared
- * lockfile-discovery exclusion set (node_modules, .git, every dotfile dir incl.
- * .terraform), then the CLI `--exclude` globs, then the `[docker] ignore` globs,
- * and returns the surviving identities deterministically sorted by repo-relative
- * forward-slash path. It reads NO file contents: a Dockerfile is a BUILD INPUT,
- * never an object of analysis — the build-and-analyze lanes hand each discovered
- * identity to the in-tool build step and scan the built image. Zero new
- * dependencies: pure node:fs + the shared glob/exclusion helpers.
+ * This module answers one narrow question: which Dockerfiles live in a repo tree? It walks the repo
+ * root, matches Dockerfile basenames, applies the shared lockfile-discovery exclusion set
+ * (node_modules, .git, every dotfile dir incl. .terraform), then the CLI `--exclude` globs, then
+ * the `[docker] ignore` globs, and returns the surviving identities deterministically sorted by
+ * repo-relative forward-slash path. It reads NO file contents: a Dockerfile is a BUILD INPUT, never
+ * an object of analysis — the build-and-analyze lanes hand each discovered identity to the in-tool
+ * build step and scan the built image. Zero new dependencies: pure node:fs + the shared
+ * glob/exclusion helpers.
  *
- * Name matching is pattern-only, deliberately with no extension blocklist —
- * see {@link isDockerfileName} for the accepted shapes and why.
+ * Name matching is pattern-only, deliberately with no extension blocklist — see {@link
+ * isDockerfileName} for the accepted shapes and why.
  *
- * KNOWN LIMITATIONS (DELIBERATE tradeoffs, documented not changed). The walk
- * does NOT auto-exclude the generic build-output dir names
- * `build`/`out`/`target`/`vendor` (too generic — re-adding them recreates a
- * prior under-coverage finding where real source Dockerfiles were dropped); it
- * does NOT prune nested INDEPENDENT git repos whose `.git` is a DIRECTORY (only
- * the gitlink-FILE submodule case is pruned); and it SKIPS symlinked Dockerfiles
- * (anti-cycle / no escape from repoRoot). A consumer that vends non-submodule
+ * KNOWN LIMITATIONS (DELIBERATE tradeoffs, documented not changed). The walk does NOT auto-exclude
+ * the generic build-output dir names `build`/`out`/`target`/`vendor` (too generic — re-adding them
+ * recreates a prior under-coverage finding where real source Dockerfiles were dropped); it does NOT
+ * prune nested INDEPENDENT git repos whose `.git` is a DIRECTORY (only the gitlink-FILE submodule
+ * case is pruned); and it SKIPS symlinked Dockerfiles (anti-cycle / no escape from repoRoot). A
+ * consumer that vends non-submodule
  * third-party trees under such dirs excludes them explicitly via the `[docker]
  * ignore` policy globs or the CLI `--exclude` flag.
  */
@@ -56,11 +54,10 @@ export interface DiscoverDockerfilesOptions {
 export interface DiscoverDockerfilesResult {
   dockerfiles: DiscoveredDockerfile[];
   /**
-   * Repo-relative identities of Dockerfiles EXCLUDED by a `[docker] ignore`
-   * glob — deterministically sorted. (Files excluded by the shared descent
-   * predicate or by `--exclude` are NOT listed here; only the policy-driven
-   * ignores, which are the user-meaningful "I deliberately excluded this"
-   * signal the summary surfaces.)
+   * Repo-relative identities of Dockerfiles EXCLUDED by a `[docker] ignore` glob —
+   * deterministically sorted. (Files excluded by the shared descent predicate or by `--exclude` are
+   * NOT listed here; only the policy-driven ignores, which are the user-meaningful "I deliberately
+   * excluded this" signal the summary surfaces.)
    */
   ignored: string[];
 }
@@ -68,18 +65,17 @@ export interface DiscoverDockerfilesResult {
 /**
  * True iff `name` is a Dockerfile basename. Accepts (case-insensitive on the
  * `Dockerfile`/`dockerfile` stem):
- *   - exactly `Dockerfile`
- *   - `<prefix>.Dockerfile`  (e.g. nginx.Dockerfile)
- *   - `Dockerfile.<suffix>`  (e.g. Dockerfile.prod, Dockerfile.go) — ANY suffix
- *   - `<prefix>.dockerfile`  (e.g. build.dockerfile)
+ * - exactly `Dockerfile`
+ * - `<prefix>.Dockerfile` (e.g. nginx.Dockerfile)
+ * - `Dockerfile.<suffix>` (e.g. Dockerfile.prod, Dockerfile.go) — ANY suffix
+ * - `<prefix>.dockerfile` (e.g. build.dockerfile)
  * A file merely CONTAINING "dockerfile" (e.g. notADockerfile.txt) is NOT matched.
  *
- * NAME-PATTERN ONLY: there is no extension blocklist. A blocklist silently DROPS
- * real variants (`Dockerfile.go`/`.py`/`.rs`/`.sh`/`.bak`) while inconsistently
- * admitting others. Instead, EVERY name-pattern match is LISTED and handed to
- * the build lane; a stray non-Dockerfile fails the build loudly or is
- * `[docker]`-ignored, never silently dropped. The tool's OWN directory is kept
- * out of the walk by the toolDir descent prune, not by a name rule.
+ * NAME-PATTERN ONLY: there is no extension blocklist. A blocklist silently DROPS real variants
+ * (`Dockerfile.go`/`.py`/`.rs`/`.sh`/`.bak`) while inconsistently admitting others. Instead, EVERY
+ * name-pattern match is LISTED and handed to the build lane; a stray non-Dockerfile fails the build
+ * loudly or is `[docker]`-ignored, never silently dropped. The tool's OWN directory is kept out of
+ * the walk by the toolDir descent prune, not by a name rule.
  */
 export function isDockerfileName(name: string): boolean {
   const lower = name.toLowerCase();
@@ -90,14 +86,13 @@ export function isDockerfileName(name: string): boolean {
 }
 
 /**
- * Walk `repoRoot` and return every non-excluded Dockerfile, deterministically
- * sorted by repo-relative forward-slash identity. NO file contents are read.
+ * Walk `repoRoot` and return every non-excluded Dockerfile, deterministically sorted by
+ * repo-relative forward-slash identity. NO file contents are read.
  *
- * Exclusion order (each step strictly narrows): the SHARED descent predicate
- * (shouldDescendDir — node_modules/.git/dotfile dirs incl. .terraform/the tool
+ * Exclusion order (each step strictly narrows): the SHARED descent predicate (shouldDescendDir —
+ * node_modules/.git/dotfile dirs incl. .terraform/the tool
  * dir) prunes whole subtrees during the walk; then the CLI `--exclude` globs;
- * then the `[docker] ignore` globs. A Dockerfile under any excluded path is
- * never listed.
+ * then the `[docker] ignore` globs. A Dockerfile under any excluded path is never listed.
  */
 export function discoverDockerfiles(
   repoRoot: string,
@@ -114,14 +109,14 @@ export function discoverDockerfiles(
   const ignored: string[] = [];
 
   const walk = (dir: string): void => {
-    // Symlinks report isDirectory()/isFile() === false on Dirent entries, so
-    // they are never followed/read — no cycle traversal, no escape from repoRoot.
+    // Symlinks report isDirectory()/isFile() === false on Dirent entries, so they are never
+    // followed/read — no cycle traversal, no escape from repoRoot.
     for (const entry of readdirSync(dir, { withFileTypes: true })) {
       const sub = join(dir, entry.name);
       if (entry.isDirectory()) {
-        // Dockerfile lane: pass the dot-dir allowlist so .docker/.devcontainer
-        // (conventional Dockerfile homes) are descended while .git/.terraform and
-        // every other dot-dir stay pruned.
+        // Dockerfile lane: pass the dot-dir allowlist so .docker/.devcontainer (conventional
+        // Dockerfile homes) are descended while .git/.terraform and every other dot-dir stay
+        // pruned.
         if (
           shouldDescendDir(
             sub,
@@ -136,8 +131,8 @@ export function discoverDockerfiles(
       }
       if (!entry.isFile() || !isDockerfileName(entry.name)) continue;
       const identity = identityOf(sub);
-      // --exclude prunes silently (a generic walk filter); a [docker] ignore is
-      // a deliberate user exclusion the summary surfaces by name.
+      // --exclude prunes silently (a generic walk filter); a [docker] ignore is a deliberate user
+      // exclusion the summary surfaces by name.
       if (isExcluded(identity, excludeMatchers)) continue;
       if (isExcluded(identity, ignoreMatchers)) {
         ignored.push(identity);

@@ -1,37 +1,34 @@
 /**
  * npm/yarn dependency provenance — "why is this dependency here?".
  *
- * The yarn-plugin-cyclonedx BOM carries a COMPLETE root-anchored `dependencies`
- * graph (research-verified: root bom-ref = the `@workspace:.` metadata.component,
- * 100% of components reachable, cycles bounded). This module derives, PER
- * COMPONENT PURL: direct-vs-transitive and the introducer SET in PURL-SPACE, so
- * peer-resolution `[hash]` bom-ref variants that share one purl collapse to a
- * single node (the union is correct for direct-detection and `introducedBy`).
+ * The yarn-plugin-cyclonedx BOM carries a COMPLETE root-anchored `dependencies` graph
+ * (research-verified: root bom-ref = the `@workspace:.` metadata.component, 100% of components
+ * reachable, cycles bounded). This module derives, PER COMPONENT PURL: direct-vs-transitive and the
+ * introducer SET in PURL-SPACE, so peer-resolution `[hash]` bom-ref variants that share one purl
+ * collapse to a single node (the union is correct for direct-detection and `introducedBy`).
  *
- * The representative `path`, however, is computed on the REAL bom-ref graph and
- * mapped ref-chain→purl-chain: a path found on the purl-space union could
- * enter a dup-purl node via one variant's subtree and leave via a DIFFERENT
+ * The representative `path`, however, is computed on the REAL bom-ref graph and mapped
+ * ref-chain→purl-chain: a path found on the purl-space union could enter a dup-purl node via one
+ * variant's subtree and leave via a DIFFERENT
  * variant's out-edge, fabricating a chain that exists on no single concrete
- * instance. The bom-ref BFS uses the same per-level tie-break (frontier sorted
- * by purl-chain then bom-ref). When a target is unreachable on the real graph,
- * `path` is dropped AND `introducedBy` is dropped too — its
- * purl-space parents are themselves root-disconnected, so the node becomes a
- * true orphan rather than naming a fabricated introducer. NOTE: the tie-break
- * is a per-level smallest-purl representative, NOT a whole-path lexicographic
- * minimum (see provenanceGraph.shortestPath).
+ * instance. The bom-ref BFS uses the same per-level tie-break (frontier sorted by purl-chain then
+ * bom-ref). When a target is unreachable on the real graph, `path` is dropped AND `introducedBy` is
+ * dropped too — its purl-space parents are themselves root-disconnected, so the node becomes a true
+ * orphan rather than naming a fabricated introducer. NOTE: the tie-break is a per-level
+ * smallest-purl representative, NOT a whole-path lexicographic minimum (see
+ * provenanceGraph.shortestPath).
  *
- * The BOM keys its graph on bom-ref, never purl, so the first step is a
- * bomRef→purl join from components[]; the root bom-ref
- * (metadata.component['bom-ref']) is NOT in components[] and is treated as the
- * synthetic graph root — its purl, when present, anchors the purl-space root so
- * the root never appears as an introducer of itself.
+ * The BOM keys its graph on bom-ref, never purl, so the first step is a bomRef→purl join from
+ * components[]; the root bom-ref (metadata.component['bom-ref']) is NOT in components[] and is
+ * treated as the synthetic graph root — its purl, when present, anchors the purl-space root so the
+ * root never appears as an introducer of itself.
  *
- * Optional/peer is NOT available in this BOM and is therefore never set (the
- * model field stays omitted) — provenance never fabricates a value.
+ * Optional/peer is NOT available in this BOM and is therefore never set (the model field stays
+ * omitted) — provenance never fabricates a value.
  *
- * Determinism + tolerance are inherited from the shared provenanceGraph: the
- * result derives from the edge SET (not BOM order), and a graph-less or
- * malformed BOM yields an empty map, never throws.
+ * Determinism + tolerance are inherited from the shared provenanceGraph: the result derives from
+ * the edge SET (not BOM order), and a graph-less or malformed BOM yields an empty map, never
+ * throws.
  */
 
 import { type } from "arktype";
@@ -73,9 +70,9 @@ function rootPurlOf(sbom: unknown): string | undefined {
 }
 
 /**
- * bom-ref → purl join over components, plus the component-purl universe. The
- * root bom-ref (NOT in components[]) is registered to its purl when both are
- * present so root edges translate to the root purl.
+ * bom-ref → purl join over components, plus the component-purl universe. The root bom-ref (NOT in
+ * components[]) is registered to its purl when both are present so root edges translate to the root
+ * purl.
  */
 function buildBomRefJoin(
   components: readonly unknown[],
@@ -90,12 +87,10 @@ function buildBomRefJoin(
     const bomRef = component["bom-ref"];
     const purl = component.purl;
     if (bomRef === undefined || purl === undefined) continue;
-    // MALFORMED dup bom-ref with a DIFFERENT purl: last-wins would
-    // make the join — and every direct/introducedBy edge that translates
-    // through it — depend on components[] order. Resolve deterministically:
-    // keep the compareCodeUnits-smaller purl so the output is order-independent.
-    // Real generators never emit dup bom-refs; the tolerant posture stays
-    // deterministic regardless.
+    // MALFORMED dup bom-ref with a DIFFERENT purl: last-wins would make the join — and every
+    // direct/introducedBy edge that translates through it — depend on components[] order. Resolve
+    // deterministically: keep the compareCodeUnits-smaller purl so the output is order-independent.
+    // Real generators never emit dup bom-refs; the tolerant posture stays deterministic regardless.
     const existing = bomRefToPurl.get(bomRef);
     if (existing === undefined || compareCodeUnits(purl, existing) < 0) {
       bomRefToPurl.set(bomRef, purl);
@@ -114,21 +109,19 @@ interface EdgeAccumulator {
   parentSets: Map<string, Set<string>>;
   rootChildren: Set<string>;
   /**
-   * #4: the REAL bom-ref adjacency — parent bom-ref → sorted-unique child
-   * bom-refs (root bom-ref included as a key). Every edge here exists on a
-   * single concrete variant, so a path computed on THIS graph is a real
-   * single-instance chain (unlike the purl-space union, where a path can hop
+   * #4: the REAL bom-ref adjacency — parent bom-ref → sorted-unique child bom-refs (root bom-ref
+   * included as a key). Every edge here exists on a single concrete variant, so a path computed on
+   * THIS graph is a real single-instance chain (unlike the purl-space union, where a path can hop
    * between dup-purl variants through edges that do not co-exist on any one).
    */
   refEdges: Map<string, Set<string>>;
 }
 
 /**
- * Fold one bom-ref dependency edge into the purl-space accumulators AND the real
- * bom-ref adjacency. A root edge contributes to rootChildren (the declared-direct
- * set); every other edge contributes a forward + reverse purl edge, dropping
- * self-edges (dup-purl twins) and edges whose endpoints fail the bom-ref→purl
- * join. The real bom-ref edge is always recorded when both endpoints join.
+ * Fold one bom-ref dependency edge into the purl-space accumulators AND the real bom-ref adjacency.
+ * A root edge contributes to rootChildren (the declared-direct set); every other edge contributes a
+ * forward + reverse purl edge, dropping self-edges (dup-purl twins) and edges whose endpoints fail
+ * the bom-ref→purl join. The real bom-ref edge is always recorded when both endpoints join.
  */
 function ingestEdge(
   acc: EdgeAccumulator,
@@ -144,8 +137,8 @@ function ingestEdge(
     if (typeof rawTarget !== "string") continue;
     const childPurl = bomRefToPurl.get(rawTarget);
     if (childPurl === undefined) continue;
-    // Real bom-ref edge: recorded for every join-resolvable edge, including
-    // the root edge, so the bom-ref BFS can start at the root.
+    // Real bom-ref edge: recorded for every join-resolvable edge, including the root edge, so the
+    // bom-ref BFS can start at the root.
     addToSetMap(acc.refEdges, ref, rawTarget);
     if (isRootEdge) {
       // Root's declared-direct set; the root purl itself is never a child.
@@ -169,10 +162,9 @@ interface NpmGraph {
 }
 
 /**
- * Does any `dependencies` edge anchor the root — i.e. is there an edge whose
- * `ref` equals the root bom-ref? If not, the root's declared-direct set is
- * absent from the graph and direct-detection would mark every real direct as
- * transitive. The caller abstains in that case.
+ * Does any `dependencies` edge anchor the root — i.e. is there an edge whose `ref` equals the root
+ * bom-ref? If not, the root's declared-direct set is absent from the graph and direct-detection
+ * would mark every real direct as transitive. The caller abstains in that case.
  */
 function hasRootAnchorEdge(
   dependencies: readonly unknown[],
@@ -187,23 +179,20 @@ function hasRootAnchorEdge(
 }
 
 /**
- * Translate the bom-ref graph into a purl-space PurlGraph plus the real bom-ref
- * adjacency for #4 path realization. Returns undefined when the BOM carries no
- * usable graph — the caller then emits no provenance.
+ * Translate the bom-ref graph into a purl-space PurlGraph plus the real bom-ref adjacency for #4
+ * path realization. Returns undefined when the BOM carries no usable graph — the caller then emits
+ * no provenance.
  *
- * ABSTAIN contract: the lane MUST abstain (return undefined → empty map →
- * render "—") rather than silently mislabel when the root cannot be located or
- * anchored. Two added guards beyond the prior no-array / no-purls checks:
- *  (a) rootBomRef is undefined — no locatable root bom-ref. Without it
- *      isRootEdge can never be true, rootChildren stays empty, and EVERY true
- *      direct dep would be derived as direct:false (a silent mislabel).
- *  (b) no `dependencies` edge has ref === rootBomRef — the root is named but not
- *      actually anchored in the graph, so its declared-direct set is unknown and
- *      the same mislabel results.
- * Today the pinned yarn-plugin always emits both, so neither guard fires on real
- * input; they harden the lane against an npm-graph BOM or a future generator
- * that omits the root bom-ref. This mirrors the honest-residual / abstain-on-
- * ambiguity posture the rest of the provenance code follows.
+ * ABSTAIN contract: the lane MUST abstain (return undefined → empty map → render "—") rather than
+ * silently mislabel when the root cannot be located or anchored. Two added guards beyond the prior
+ * no-array / no-purls checks: (a) rootBomRef is undefined — no locatable root bom-ref. Without it
+ * isRootEdge can never be true, rootChildren stays empty, and EVERY true direct dep would be
+ * derived as direct:false (a silent mislabel). (b) no `dependencies` edge has ref === rootBomRef —
+ * the root is named but not actually anchored in the graph, so its declared-direct set is unknown
+ * and the same mislabel results. Today the pinned yarn-plugin always emits both, so neither guard
+ * fires on real input; they harden the lane against an npm-graph BOM or a future generator that
+ * omits the root bom-ref. This mirrors the honest-residual / abstain-on- ambiguity posture the rest
+ * of the provenance code follows.
  */
 function buildNpmGraph(sbom: unknown): NpmGraph | undefined {
   const doc = SbomDocument(sbom);
@@ -275,9 +264,9 @@ function sortRefFrontier(nodes: RefBfsNode[]): RefBfsNode[] {
 }
 
 /**
- * Expand one bom-ref BFS level into the next, marking visited (cycle bound) and
- * dropping children whose bom-ref fails the purl join. Result is sorted by the
- * #4 tie-break so the representative chain is stable regardless of parent order.
+ * Expand one bom-ref BFS level into the next, marking visited (cycle bound) and dropping children
+ * whose bom-ref fails the purl join. Result is sorted by the #4 tie-break so the representative
+ * chain is stable regardless of parent order.
  */
 function expandRefLevel(
   npm: NpmGraph,
@@ -298,12 +287,11 @@ function expandRefLevel(
 }
 
 /**
- * The SET of bom-refs reachable from the root on the REAL bom-ref graph. A
- * multi-source BFS bounded by `reachable` (cycle-safe, order-independent). The
- * root bom-ref seeds the walk and is itself a member; only join-resolvable refs
- * are traversed. This is the same machinery `realShortestPath` walks, surfaced
- * as a SET so introducedBy can honor real root-reachability the way
- * `path` already does.
+ * The SET of bom-refs reachable from the root on the REAL bom-ref graph. A multi-source BFS bounded
+ * by `reachable` (cycle-safe, order-independent). The root bom-ref seeds the walk and is itself a
+ * member; only join-resolvable refs are traversed. This is the same machinery `realShortestPath`
+ * walks, surfaced as a SET so introducedBy can honor real root-reachability the way `path` already
+ * does.
  */
 function expandReachableRefs(
   npm: NpmGraph,
@@ -333,8 +321,8 @@ function reachableRefsFromRoot(npm: NpmGraph): Set<string> {
 }
 
 /**
- * Does any child bom-ref of `children` that is itself root-reachable map to
- * `targetPurl`? Extracted from {@link realIntroducerPurls} to keep nesting shallow.
+ * Does any child bom-ref of `children` that is itself root-reachable map to `targetPurl`? Extracted
+ * from {@link realIntroducerPurls} to keep nesting shallow.
  */
 function hasReachableChildPurl(
   bomRefToPurl: Map<string, string>,
@@ -350,18 +338,17 @@ function hasReachableChildPurl(
 }
 
 /**
- * The REAL-graph introducer purls of `targetPurl` — the purls of parent
- * bom-refs that (a) are themselves root-reachable on the real bom-ref graph AND
- * (b) have a real edge into a root-reachable bom-ref whose purl == targetPurl.
+ * The REAL-graph introducer purls of `targetPurl` — the purls of parent bom-refs that (a) are
+ * themselves root-reachable on the real bom-ref graph AND (b) have a real edge into a
+ * root-reachable bom-ref whose purl == targetPurl.
  *
  * This closes the 7th-review WARNING: `introducedBy` was derived in purl-space
- * (deriveIntroductions), where a dup-purl variant can make a parent purl appear
- * reachable even when its only real edge into the target sits on a
- * root-disconnected variant. Computing introducers directly on the real,
- * root-reachable bom-ref graph makes introducedBy honor the same reachability
- * `path` (realShortestPath) already does — consistent for BOTH the rendered cell
- * and --dump-model. Returns a sorted-unique purl set (root purl excluded — the
- * root is never an introducer; the declared-direct set carries root children).
+ * (deriveIntroductions), where a dup-purl variant can make a parent purl appear reachable even when
+ * its only real edge into the target sits on a root-disconnected variant. Computing introducers
+ * directly on the real, root-reachable bom-ref graph makes introducedBy honor the same reachability
+ * `path` (realShortestPath) already does — consistent for BOTH the rendered cell and --dump-model.
+ * Returns a sorted-unique purl set (root purl excluded — the root is never an introducer; the
+ * declared-direct set carries root children).
  */
 function realIntroducerPurls(
   npm: NpmGraph,
@@ -384,13 +371,12 @@ function realIntroducerPurls(
 }
 
 /**
- * #4: the REAL single-instance shortest path to `targetPurl`, computed on the
- * bom-ref graph (where every edge exists on a concrete variant) and mapped to
- * purls. BFS seeds the root bom-ref's children; the FIRST bom-ref whose purl ==
- * targetPurl yields the chain. Determinism mirrors the purl-space BFS: each
- * frontier is sorted by the PURL-chain (then bom-ref) so two byte-different
- * serializations of the same graph pick the identical representative chain.
- * Returns undefined when the target purl is unreachable on the real graph.
+ * #4: the REAL single-instance shortest path to `targetPurl`, computed on the bom-ref graph (where
+ * every edge exists on a concrete variant) and mapped to purls. BFS seeds the root bom-ref's
+ * children; the FIRST bom-ref whose purl == targetPurl yields the chain. Determinism mirrors the
+ * purl-space BFS: each frontier is sorted by the PURL-chain (then bom-ref) so two byte-different
+ * serializations of the same graph pick the identical representative chain. Returns undefined when
+ * the target purl is unreachable on the real graph.
  */
 function realShortestPath(
   npm: NpmGraph,
@@ -415,24 +401,21 @@ function realShortestPath(
  * carries no usable graph. The result is keyed by purl (the merge dedup key);
  * the caller threads each entry onto the matching occurrence.
  *
- * #4: direct detection + the introducedBy SET are derived in purl-space (the
- * dup-purl union is correct for those), but `path` is REPLACED with the real
- * single-instance bom-ref-graph chain so the emitted chain never hops between
- * dup-purl variants through edges that do not co-exist on one concrete variant.
+ * #4: direct detection + the introducedBy SET are derived in purl-space (the dup-purl union is
+ * correct for those), but `path` is REPLACED with the real single-instance bom-ref-graph chain so
+ * the emitted chain never hops between dup-purl variants through edges that do not co-exist on one
+ * concrete variant.
  *
- * When the target is UNREACHABLE on the real graph (its
- * only purl-space parents are themselves disconnected from the root — an
- * artifact of trimmed/partial BOMs), `realShortestPath` returns undefined. The
- * shared `deriveIntroductions` now ALREADY guarantees introducedBy ⊆
- * root-reachable (the central reachability invariant), so a fully
- * root-disconnected node's
- * introducedBy is [] before this loop runs and a partially-disconnected node has
- * only its reachable parents. This local guard (drop both path and introducedBy
- * when realShortestPath is undefined) is therefore REDUNDANT for the
- * fully-disconnected case; it is RETAINED as harmless belt-and-braces and to
- * keep the npm `path` and `introducedBy` consistent at this seam. On a
- * 100%-reachable BOM (yarn-plugin output) neither the shared filter nor this
- * branch changes anything, so the common case is unchanged.
+ * When the target is UNREACHABLE on the real graph (its only purl-space parents are themselves
+ * disconnected from the root — an artifact of trimmed/partial BOMs), `realShortestPath` returns
+ * undefined. The shared `deriveIntroductions` now ALREADY guarantees introducedBy ⊆ root-reachable
+ * (the central reachability invariant), so a fully root-disconnected node's introducedBy is []
+ * before this loop runs and a partially-disconnected node has only its reachable parents. This
+ * local guard (drop both path and introducedBy when realShortestPath is undefined) is therefore
+ * REDUNDANT for the fully-disconnected case; it is RETAINED as harmless belt-and-braces and to keep
+ * the npm `path` and `introducedBy` consistent at this seam. On a 100%-reachable BOM (yarn-plugin
+ * output) neither the shared filter nor this branch changes anything, so the common case is
+ * unchanged.
  */
 export function npmIntroductions(
   sbom: unknown,
@@ -445,21 +428,20 @@ export function npmIntroductions(
     if (introduction.direct) continue;
     const realPath = realShortestPath(npm, purl);
     if (realPath === undefined) {
-      // No real root-reachable chain → the purl-space introducedBy names
-      // only disconnected parents. Drop BOTH so the node is a true orphan, never
-      // a fabricated introducer.
+      // No real root-reachable chain → the purl-space introducedBy names only disconnected parents.
+      // Drop BOTH so the node is a true orphan, never a fabricated introducer.
       delete introduction.path;
       introduction.introducedBy = [];
       continue;
     }
     introduction.path = realPath;
-    // Tighten the all-or-nothing orphan guard above into a PER-PARENT real
-    // root-reachability filter. The purl-space introducedBy (deriveIntroductions)
-    // can name a parent whose only edge into this node exists on a dup-purl
+    // Tighten the all-or-nothing orphan guard above into a PER-PARENT real root-reachability
+    // filter. The purl-space introducedBy (deriveIntroductions) can name a parent whose only edge
+    // into this node exists on a dup-purl
     // variant that is itself root-disconnected — purl-reachable but not REAL-
-    // reachable. Re-derive introducedBy from the real, root-reachable bom-ref
-    // graph so it honors the same reachability `path` (realShortestPath) does,
-    // making the two consistent for BOTH the rendered cell and --dump-model.
+    // reachable. Re-derive introducedBy from the real, root-reachable bom-ref graph so it honors
+    // the same reachability `path` (realShortestPath) does, making the two consistent for BOTH the
+    // rendered cell and --dump-model.
     introduction.introducedBy = realIntroducerPurls(npm, purl, reachableRefs);
   }
   return introductions;

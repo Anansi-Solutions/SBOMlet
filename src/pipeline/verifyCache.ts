@@ -1,10 +1,9 @@
 /**
- * The verify-cache run wrapper. Resolves the committed enrichment-cache path
- * EXACTLY as generate/check do: ENRICHMENT_CACHE_FILE inside the resolved cache
- * dir (the policy `[cache] dir`, or the default, anchored to the scanned repo), so
- * the audit targets the same committed file the gate trusts offline. An explicit
- * --enrichment-cache overrides it. The audit itself — re-resolve every entry and
- * compare — lives in enrich/verify.ts; this layer owns only the path rule.
+ * The verify-cache run wrapper. Resolves the committed enrichment-cache path EXACTLY as
+ * generate/check do: ENRICHMENT_CACHE_FILE inside the resolved cache dir (the policy `[cache] dir`,
+ * or the default, anchored to the scanned repo), so the audit targets the same committed file the
+ * gate trusts offline. An explicit --enrichment-cache overrides it. The audit itself — re-resolve
+ * every entry and compare — lives in enrich/verify.ts; this layer owns only the path rule.
  */
 import { verifyCache, type VerifyResult } from "../enrich/verify";
 import { resolveFrom } from "./paths";

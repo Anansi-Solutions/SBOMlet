@@ -1,28 +1,24 @@
 /**
- * Deterministic CanonicalDependencies -> THIRD_PARTY_NOTICES.md renderer — the
- * companion bundle.
+ * Deterministic CanonicalDependencies -> THIRD_PARTY_NOTICES.md renderer — the companion bundle.
  *
- * Pure function: model in, exact LF bytes out. Layout: per-package attribution
- * sections (extracted copyright lines, Author fallback, NOTICE contents,
- * verbatim texts for the non-SPDX population) followed by a canonical
- * license-text appendix carrying one text per SPDX id referenced by any
- * normalized expression — the grouping bounds the file to ~0.5–1 MB at repo
- * scale instead of ~7 MB of repeated verbatim texts.
+ * Pure function: model in, exact LF bytes out. Layout: per-package attribution sections (extracted
+ * copyright lines, Author fallback, NOTICE contents, verbatim texts for the non-SPDX population)
+ * followed by a canonical license-text appendix carrying one text per SPDX id referenced by any
+ * normalized expression — the grouping bounds the file to ~0.5–1 MB at repo scale instead of ~7 MB
+ * of repeated verbatim texts.
  *
- * Honesty rules: every canonical appendix entry carries the exact marker
- * "(canonical SPDX text — package-specific copyright not located)" so fallback
- * gaps are auditable, never silent; unknown-license packages are listed with
- * no text and flagged; an author is rendered as "Author:" attribution, never
- * as a fabricated copyright claim.
+ * Honesty rules: every canonical appendix entry carries the exact marker "(canonical SPDX text —
+ * package-specific copyright not located)" so fallback gaps are auditable, never silent;
+ * unknown-license packages are listed with no text and flagged; an author is rendered as "Author:"
+ * attribution, never as a fabricated copyright claim.
  *
- * Injection posture: every multi-line untrusted block (NOTICE contents,
- * verbatim texts, canonical texts) renders inside a fenced block whose fence is
- * computed longer than the longest backtick run in the content; every inline
- * position routes through escapeCell.
+ * Injection posture: every multi-line untrusted block (NOTICE contents, verbatim texts, canonical
+ * texts) renders inside a fenced block whose fence is computed longer than the longest backtick run
+ * in the content; every inline position routes through escapeCell.
  *
- * This module deliberately does not fetch anything (the only data source
- * beyond the model is the pinned spdx-license-list data package, imported once
- * at module scope), fabricate copyright lines, or evaluate policy.
+ * This module deliberately does not fetch anything (the only data source beyond the model is the
+ * pinned spdx-license-list data package, imported once at module scope), fabricate copyright lines,
+ * or evaluate policy.
  */
 
 import parse from "spdx-expression-parse";
@@ -61,16 +57,15 @@ interface SpdxListEntry {
   licenseText: string;
 }
 
-// Canonical texts from the pinned, zero-dependency data package — imported
-// statically so bundlers can embed the JSON; renderNotices itself performs
-// no I/O.
+// Canonical texts from the pinned, zero-dependency data package — imported statically so bundlers
+// can embed the JSON; renderNotices itself performs no I/O.
 const SPDX_FULL = spdxFullData as Record<string, SpdxListEntry>;
 
 /**
- * Fenced block for untrusted multi-line content: the fence is max(3, longest
- * backtick run + 1) backticks, so the content can never close the fence early
- * and forge document structure. CR normalization is defensive only — intake
- * sanitization and the LF-only canonical texts mean no CR should arrive here.
+ * Fenced block for untrusted multi-line content: the fence is max(3, longest backtick run + 1)
+ * backticks, so the content can never close the fence early and forge document structure. CR
+ * normalization is defensive only — intake sanitization and the LF-only canonical texts mean no CR
+ * should arrive here.
  */
 function fencedBlock(content: string): string[] {
   const normalized = content.replace(/\r\n|\r/g, "\n").replace(/\n+$/, "");
@@ -83,11 +78,10 @@ function fencedBlock(content: string): string[] {
 }
 
 /**
- * License label for the section's "License:" line: the full normalized
- * expression when a finding exists; an imprecise finding renders "<family>
- * (imprecise)" (the honest family, never a fabricated id); "unknown" on a
- * null non-imprecise expression; pre-annotation tolerance falls back to the
- * raw-claims dedup join (the markdown.ts licenseCellOf rule).
+ * License label for the section's "License:" line: the full normalized expression when a finding
+ * exists; an imprecise finding renders "<family> (imprecise)" (the honest family, never a
+ * fabricated id); "unknown" on a null non-imprecise expression; pre-annotation tolerance falls back
+ * to the raw-claims dedup join (the markdown.ts licenseCellOf rule).
  */
 function licenseLabelOf(pkg: PackageEntry): string {
   if (pkg.finding !== undefined) {
@@ -102,11 +96,10 @@ function licenseLabelOf(pkg: PackageEntry): string {
 }
 
 /**
- * A package gets a per-package attribution section only when it carries
- * something concrete to attribute: copyright lines, NOTICE texts, an author
- * fallback, or non-standard verbatim texts. Template-only attribution
- * (hasVerbatimText with nothing extracted) renders nothing — honest empty,
- * never fabricated.
+ * A package gets a per-package attribution section only when it carries something concrete to
+ * attribute: copyright lines, NOTICE texts, an author fallback, or non-standard verbatim texts.
+ * Template-only attribution (hasVerbatimText with nothing extracted) renders nothing — honest
+ * empty, never fabricated.
  */
 function qualifiesForSection(pkg: PackageEntry): boolean {
   const attribution = pkg.attribution;
@@ -121,10 +114,10 @@ function qualifiesForSection(pkg: PackageEntry): boolean {
 }
 
 /**
- * Attribution body for one qualifying package — copyright/author/notice/
- * verbatim. The already-narrowed attribution is passed in by the sole caller
- * (which guards with qualifiesForSection first), so the invariant lives with
- * the guard instead of a cross-function type assertion.
+ * Attribution body for one qualifying package — copyright/author/notice/ verbatim. The
+ * already-narrowed attribution is passed in by the sole caller (which guards with
+ * qualifiesForSection first), so the invariant lives with the guard instead of a cross-function
+ * type assertion.
  */
 function packageAttributionLines(
   pkg: PackageEntry,
@@ -142,8 +135,8 @@ function packageAttributionLines(
     }
     lines.push("");
   } else if (attribution.author !== undefined) {
-    // Author fallback only when no copyright line was located — and it is
-    // attribution, never a copyright claim we did not find.
+    // Author fallback only when no copyright line was located — and it is attribution, never a
+    // copyright claim we did not find.
     lines.push(`Author: ${escapeCell(attribution.author)}`, "");
   }
   for (const notice of attribution.noticeTexts) {
@@ -167,8 +160,8 @@ function renderPackageSections(sorted: readonly PackageEntry[]): string[] {
 }
 
 /**
- * Unknown-license packages — listed with no text, flagged; the section is
- * omitted entirely when empty.
+ * Unknown-license packages — listed with no text, flagged; the section is omitted entirely when
+ * empty.
  */
 function renderUnknownSection(sorted: readonly PackageEntry[]): string[] {
   const unknown = sorted.filter(isUnknownLicense);
@@ -202,8 +195,7 @@ function collectReferencedLicenses(sorted: readonly PackageEntry[]): {
     try {
       node = parse(expression) as ExpressionNode;
     } catch {
-      // Normalized expressions always parse; skip-don't-throw on the tolerance
-      // path.
+      // Normalized expressions always parse; skip-don't-throw on the tolerance path.
       continue;
     }
     const leaves = leafIds(node);
@@ -214,9 +206,9 @@ function collectReferencedLicenses(sorted: readonly PackageEntry[]): {
 }
 
 /**
- * Canonical license-text appendix: one text per SPDX id referenced by any
- * parsed normalized expression (decomposed via leafIds), sorted
- * compareCodeUnits. WITH exceptions are flagged separately.
+ * Canonical license-text appendix: one text per SPDX id referenced by any parsed normalized
+ * expression (decomposed via leafIds), sorted compareCodeUnits. WITH exceptions are flagged
+ * separately.
  */
 function renderLicenseTextsSection(sorted: readonly PackageEntry[]): string[] {
   const { ids, exceptions } = collectReferencedLicenses(sorted);
@@ -258,8 +250,8 @@ export function renderNotices(model: CanonicalDependencies): string {
     ...renderLicenseTextsSection(sorted),
   ];
 
-  // Single trailing LF: drop trailing blank lines, then join with "\n"
-  // literals only (never the platform EOL constant).
+  // Single trailing LF: drop trailing blank lines, then join with "\n" literals only (never the
+  // platform EOL constant).
   while (lines.length > 0 && lines[lines.length - 1] === "") lines.pop();
   return lines.join("\n") + "\n";
 }
