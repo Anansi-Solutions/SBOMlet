@@ -27,8 +27,8 @@
  * an added schema- version check, so a poisoned/garbage/wrong-version memo is a config error, never
  * a silent empty.
  */
-import { toSortedJson } from "../model/dependencies";
-import { readEnvelope } from "./cache";
+import { toSortedJson } from "../../model/dependencies";
+import { readEnvelope } from "../cache";
 
 /** Schema version — bump for a clean future invalidation of the whole memo. */
 const MEMO_VERSION = 1;

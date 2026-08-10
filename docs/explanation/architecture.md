@@ -384,7 +384,7 @@ with the declared or registry claims its expression becomes the finding, and
 where it disagrees the package fails the gate as a `conflict:scancode` verdict,
 resolvable with a [`[[clarify]]`](../glossary.md#policy-lanes) override.
 
-Source: `src/enrich/assess.ts`, `src/enrich/scancode.ts`.
+Source: `src/enrich/assess.ts`, `src/enrich/scancode/`.
 
 ### The policy engine
 

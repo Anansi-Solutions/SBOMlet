@@ -5,7 +5,7 @@
  * ScanCode is an in-depth, source-level license assessment — far more accurate than reading a
  * registry or a declared manifest field — so it stands as its OWN pipeline stage rather than a
  * gap-filler nested inside registry enrichment. It owns a dedicated committed memo (see
- * scancode-cache.ts) and runs AFTER registry enrichment so that, for the same package, both a
+ * scancode/cache.ts) and runs AFTER registry enrichment so that, for the same package, both a
  * quick-check answer and the in-depth answer exist: agreement lets the assessment become the
  * finding, disagreement surfaces as a conflict a human must resolve (annotateFindings owns that
  * comparison downstream — this stage only appends the assessment as a claim).
@@ -34,8 +34,8 @@
  * generate and a later offline check produce byte-identical outputs, conflict verdicts included. A
  * missing memo file replays to a no-op, so a repository without ScanCode results is untouched and
  * byte-identical. The scan mechanics (source mapping, traversal/size guards, version assertion,
- * expression election) live in scancode.ts and are used verbatim; this stage only decides WHICH
- * packages to analyze and how their results flow.
+ * expression election) live in the scancode/ module (sources.ts, invocation.ts, election.ts) and
+ * are used verbatim; this stage only decides WHICH packages to analyze and how their results flow.
  */
 import {
   type CanonicalDependencies,
@@ -48,14 +48,12 @@ import {
   getMemoEntry,
   putMemoEntry,
   readScancodeMemo,
-  serializeScancodeMemo,
-  type ScancodeMemoEntry,
-} from "./scancode-cache";
-import {
   scanPackageSources,
+  serializeScancodeMemo,
   SCANCODE_TOOL,
   sourceDirsFor,
   type IntensiveOptions,
+  type ScancodeMemoEntry,
   type ScancodeResolution,
   type ScancodeScanOptions,
 } from "./scancode";

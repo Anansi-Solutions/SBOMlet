@@ -260,7 +260,7 @@ assessment becomes the finding; where it disagrees the package fails the gate as
 `conflict:scancode` verdict a `[[clarify]]` can resolve.
 
 Source: `enrich/assess.ts` (`assessPackages`, `scanFullSet`, `replayMemo`),
-`enrich/scancode.ts`.
+`enrich/scancode/`.
 
 ### Normalize
 

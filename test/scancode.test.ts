@@ -1,5 +1,5 @@
 /**
- * Subprocess-free tests for src/enrich/scancode.ts.
+ * Subprocess-free tests for the src/enrich/scancode/ module.
  *
  * This file starts with the PURE fs-based mapper tests (sourceDirsFor and its
  * npm/pypi helpers) — no exec mock needed. The invocation-lane recorder
@@ -35,8 +35,12 @@ import * as execModule from "../src/collectors/exec";
 import {
   electCopyrights,
   electExpression,
+  getMemoEntry,
+  putMemoEntry,
+  readScancodeMemo,
   scancodeArgs,
   scanPackageSources,
+  serializeScancodeMemo,
   sourceDirsFor,
   SCANCODE_TOOL,
 } from "../src/enrich/scancode";
@@ -44,12 +48,6 @@ import { serializeCache } from "../src/enrich/cache";
 import { annotateFindings } from "../src/normalize/normalize";
 import { runGenerate } from "../src/pipeline/pipeline";
 import { assessPackages } from "../src/enrich/assess";
-import {
-  getMemoEntry,
-  putMemoEntry,
-  readScancodeMemo,
-  serializeScancodeMemo,
-} from "../src/enrich/scancode-cache";
 import {
   toSortedDependenciesJson,
   type LicenseClaim,
@@ -938,13 +936,13 @@ describe("assessPackages — ScanCode peer assessment stage", () => {
   /** Seed a committed memo file with the given purl→entry map, returning the path. */
   function seedMemo(
     entries: Array<
-      [string, import("../src/enrich/scancode-cache").ScancodeMemoEntry]
+      [string, import("../src/enrich/scancode").ScancodeMemoEntry]
     >,
   ): string {
     const path = newMemoPath();
     const memo = new Map<
       string,
-      import("../src/enrich/scancode-cache").ScancodeMemoEntry
+      import("../src/enrich/scancode").ScancodeMemoEntry
     >();
     for (const [purl, entry] of entries) {
       putMemoEntry(

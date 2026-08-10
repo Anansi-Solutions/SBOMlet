@@ -36,8 +36,8 @@ the quality gates never touch either. The syft and scancode pins must stay equal
 to the versions the tool's collectors read, and the comments in `mise.toml`
 record that invariant.
 
-Source: `collectors/dockerOs.ts` (`SYFT_TOOL.version`), `enrich/scancode.ts`
-(`SCANCODE_TOOL.version`), `mise.toml`.
+Source: `collectors/dockerOs.ts` (`SYFT_TOOL.version`),
+`enrich/scancode/invocation.ts` (`SCANCODE_TOOL.version`), `mise.toml`.
 
 ## Install
 
