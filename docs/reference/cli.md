@@ -258,7 +258,9 @@ one diverges, `3` the audit could not complete (an unreachable registry or a
 malformed cache). Set `GITHUB_TOKEN` to lift the GitHub License API rate limit for
 Terraform entries; the audit works without it, just slower.
 
-The report always closes with one more line naming the committed ScanCode memo's entry count and why it is excluded from the audit: local scan results have no upstream registry to re-verify against.
+The report always closes with one more line naming the committed ScanCode memo's
+entry count and why it is excluded from the audit: local scan results have no
+upstream registry to re-verify against.
 
 ## generate-docker-sbom
 
