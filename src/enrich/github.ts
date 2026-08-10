@@ -8,16 +8,8 @@
  *
  * Provider vs module is distinguished by the purl's encodedName SEGMENT COUNT,
  * NOT by host — OpenTofu rewrites BOTH provider and module Sources to
- * registry.opentofu.org, so a host-based branch is invalid:
- *
- *   - provider `<host>/<ns>/<name>` (3 segments)
- *       → `github.com/<ns>/terraform-provider-<name>`
- *       (hashicorp/aws → hashicorp/terraform-provider-aws)
- *   - module   `<host>/<ns>/<name>/<provider>` (4 segments)
- *       → `github.com/<ns>/terraform-<provider>-<name>` from the EXPLICIT
- *       segments (terraform-aws-modules/alb/aws → terraform-aws-modules/terraform-aws-alb).
- *       No namespace heuristic is used — the provider is the explicit 4th
- *       segment, mirroring the collector's 3-path-segment module purl.
+ * registry.opentofu.org, so a host-based branch is invalid. See
+ * {@link githubRepoFor} for the segment-count mapping.
  *
  * Like pypi.ts/npm.ts the resolver returns ONLY the RAW string (+ a `via` tag and
  * the raw-LICENSE `downloadUrl`) — it NEVER parses/corrects; normalizeRaw is the

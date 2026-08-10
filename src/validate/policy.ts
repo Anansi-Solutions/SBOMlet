@@ -31,9 +31,8 @@ export const TOP_LEVEL_KEYS = [
 ] as const;
 
 /**
- * Top-level table presence derived from TOP_LEVEL_KEYS; "+": "reject" flags
- * unknown keys. Built programmatically so the key list lives in exactly one
- * place.
+ * Top-level table presence, built programmatically from TOP_LEVEL_KEYS so
+ * the key list lives in exactly one place.
  */
 export const PolicyRoot = type(
   Object.fromEntries(TOP_LEVEL_KEYS.map((key) => [`${key}?`, "unknown"])),

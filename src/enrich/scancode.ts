@@ -22,13 +22,9 @@
  *     through `execTool` (the tool's only child_process seam; dockerOs.ts
  *     idiom): spawn → exists-check → size-gate BEFORE read → parse → runtime
  *     version-assert against {@link SCANCODE_TOOL} from the output's own
- *     headers (a substituted/drifted binary is caught). Expression
- *     election is two-lane — ScanCode's own root-level
- *     legal-file detection wins, the package manifest is the fallback,
- *     anything else (or an unparseable multi-file AND-combine) is an honest
- *     no-answer; any expression containing a `LicenseRef-scancode-` id is
- *     rejected outright (ADR-0007 no-fabrication) because it cannot
- *     resolve to an SPDX id downstream and would only add cache noise.
+ *     headers (a substituted/drifted binary is caught). Expression election
+ *     is two-lane; see {@link electExpression} for the legal-file/manifest
+ *     precedence and the ADR-0007 no-fabrication rejection.
  *
  * This module NEVER performs SPDX correction or interpretation — the raw
  * expression string is returned verbatim (`{raw, via, copyrights} | null`,

@@ -12,17 +12,9 @@
  *
  * Pure function: no I/O, no logging (the caller reads the file).
  *
- * This module also hosts the lockfile entry counters the coverage policy
- * consumes: thirdPartyEntryCount (yarn), pythonThirdPartyEntryCount
- * (poetry/uv), npmThirdPartyEntryCount / npmFirstPartyNames
- * (package-lock.json v2/v3, plain JSON), pnpmThirdPartyEntryCount /
- * pnpmImporterNames (pnpm-lock.yaml v6/v9, stateful line scan),
- * nugetThirdPartyEntryCount (packages.lock.json, plain JSON), and
- * mavenThirdPartyEntryCount (maven.sbom.json, plain JSON, sharing the
- * collector's own document narrow). It also hosts yarnWorkspaceMembers, the
- * root-lockfile workspace enumeration primitive (resolution-body-line scan,
- * lockfile-authoritative). All keep the same contract: pure text in, data
- * out, never throw on garbage.
+ * Also hosts the per-ecosystem lockfile entry counters the coverage policy
+ * consumes, and yarnWorkspaceMembers; same contract throughout: pure text in,
+ * data out, never throw on garbage.
  */
 
 import { type } from "arktype";

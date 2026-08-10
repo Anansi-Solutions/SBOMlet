@@ -11,14 +11,8 @@
  * identity to the in-tool build step and scan the built image. Zero new
  * dependencies: pure node:fs + the shared glob/exclusion helpers.
  *
- * NAME-PATTERN ONLY: there is no extension blocklist. A blocklist silently DROPS
- * real variants (`Dockerfile.go`/`.py`/`.rs`/`.sh`/`.bak`) — an under-coverage
- * bug — while inconsistently admitting others. EVERY name-pattern match is
- * LISTED: a genuine Dockerfile builds; a stray non-Dockerfile (the tool's own
- * `dockerfile.ts`, a consumer's `dockerfile.md`) is never silently dropped — it
- * either fails the build loudly or is `[docker]`-ignored by policy. The tool's
- * OWN directory is kept out of the walk by the toolDir descent prune
- * (shouldDescendDir), not by a name rule.
+ * Name matching is pattern-only, deliberately with no extension blocklist —
+ * see {@link isDockerfileName} for the accepted shapes and why.
  *
  * KNOWN LIMITATIONS (DELIBERATE tradeoffs, documented not changed). The walk
  * does NOT auto-exclude the generic build-output dir names
