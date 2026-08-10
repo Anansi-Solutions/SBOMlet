@@ -128,7 +128,7 @@ interface EdgeAccumulator {
  * bom-ref adjacency. A root edge contributes to rootChildren (the declared-direct
  * set); every other edge contributes a forward + reverse purl edge, dropping
  * self-edges (dup-purl twins) and edges whose endpoints fail the bom-ref→purl
- * join. The real bom-ref edge is always recorded (#4) when both endpoints join.
+ * join. The real bom-ref edge is always recorded when both endpoints join.
  */
 function ingestEdge(
   acc: EdgeAccumulator,
@@ -144,7 +144,7 @@ function ingestEdge(
     if (typeof rawTarget !== "string") continue;
     const childPurl = bomRefToPurl.get(rawTarget);
     if (childPurl === undefined) continue;
-    // Real bom-ref edge (#4): recorded for every join-resolvable edge, including
+    // Real bom-ref edge: recorded for every join-resolvable edge, including
     // the root edge, so the bom-ref BFS can start at the root.
     addToSetMap(acc.refEdges, ref, rawTarget);
     if (isRootEdge) {

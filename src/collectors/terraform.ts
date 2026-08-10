@@ -20,7 +20,7 @@
  *   optional leading `<host>/` where the host is any hostname-looking segment
  *   (it contains a "." — the default
  *   `registry.opentofu.org`/`registry.terraform.io`, plus non-default
- *   HCP-private/self-hosted/partner registries; W#2), then
+ *   HCP-private/self-hosted/partner registries), then
  *   `<ns>/<name>/<provider>`, then an optional `//<submodule-path>` that is
  *   stripped. Local Sources (`./`/`../`, empty, or Version-less) are excluded as
  *   first-party. The Version is used verbatim. Two submodules of the same
@@ -154,7 +154,7 @@ export interface TerraformProvider {
  *
  * The `version` capture is anchored to the start of a line (the `m` flag plus
  * `^[ \t]*`) so a commented-out pin (`# version = "9.9.9"`) before the real
- * version is not captured (I#3): a `#`-prefixed line has the `#` before
+ * version is not captured: a `#`-prefixed line has the `#` before
  * `version`, so it fails the `^[ \t]*version` anchor and the lazy span
  * advances to the next line, the real `version = "..."`. `[ \t]*` (horizontal
  * whitespace only, never `\s` which would cross newlines) keeps the anchor to
@@ -211,7 +211,7 @@ interface ParsedModuleSource {
 
 /**
  * A leading Source segment is treated as a registry host when it looks like a
- * hostname — it contains a "." (W#2). This admits the default OpenTofu/Terraform
+ * hostname — it contains a ".". This admits the default OpenTofu/Terraform
  * registries and non-default hosts (HCP private `app.terraform.io`, self-hosted
  * and partner registries) that the old fixed-allowlist silently dropped. A
  * dot-less first segment is part of the bare `<ns>/<name>/<provider>` shorthand,
@@ -229,7 +229,7 @@ function looksLikeHost(segment: string): boolean {
  *   - bare shorthand `<ns>/<name>/<provider>` (host defaults to
  *     DEFAULT_MODULE_HOST),
  *   - fully-qualified `<host>/<ns>/<name>/<provider>` for any hostname-looking
- *     host (W#2 — not just the two default registries),
+ *     host (not just the two default registries),
  *   - either form with a trailing `//<submodule-path>` (stripped).
  * Rejects relative (`./`/`../`/empty) and VCS/`git::` Sources. A VCS Source's
  * `::` marks it non-registry; the legitimate `//<submodule>` separator is the

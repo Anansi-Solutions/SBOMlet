@@ -139,7 +139,7 @@ function leafDenied(leaf: string, allowlist: ReadonlyArray<string>): boolean {
 
 /**
  * Dual of isCopyleft over the parsed finding AST: OR is denied only when both
- * branches are denied (an electable branch defeats the denial — W1); AND is
+ * branches are denied (an electable branch defeats the denial); AND is
  * denied when either conjunct is denied (no conjunct can be elected away).
  */
 function nodeDenied(
@@ -179,7 +179,7 @@ function anyLeafDenied(
 }
 
 /**
- * License-mode union election (C#6): build the combined allowlist of every
+ * License-mode union election: build the combined allowlist of every
  * match="license" rule (policy + shipped defaults) once and ask nodeDenied
  * against it. When denied, attribute to the first license rule that
  * contributes a denied leaf, so the rule-id/reason names a real rule — policy
@@ -222,7 +222,7 @@ function unionLicenseDeny(
  * the exact package `name` per-rule (nothing to elect) and does not need a
  * parseable expression. License-mode matches against the finding's
  * already-normalized `expression`, electing over the union of all license
- * deny allowlists (C#6); a null expression (unknown/imprecise) can never be
+ * deny allowlists; a null expression (unknown/imprecise) can never be
  * license-denied.
  *
  * Name-mode and license-mode are reconciled by effective order, so the

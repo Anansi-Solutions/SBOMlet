@@ -81,7 +81,7 @@ const AMBIGUOUS_FAMILY: ReadonlyMap<string, string> = new Map([
   ["gnu lesser general public licence", "LGPL"],
   ["gnu affero general public license", "AGPL"],
   ["gnu affero general public licence", "AGPL"],
-  // Bare EUPL (W1 correction): EUPL is STRONG copyleft, but spdx-correct
+  // Bare EUPL: EUPL is STRONG copyleft, but spdx-correct
   // cross-maps the bare label to the PERMISSIVE "UPL-1.0" (Universal Permissive
   // License) — a copyleft→permissive mis-guess that would silently pass the
   // gate (default:ok). Intercept it as the imprecise copyleft family so it
@@ -164,7 +164,7 @@ const DEBIAN_SHORTHAND: ReadonlyMap<string, string> = new Map([
 ]);
 
 /**
- * Bare SPDX CONNECTIVE tokens (#3/#10). syft tokenizes a compound license
+ * Bare SPDX CONNECTIVE tokens. syft tokenizes a compound license
  * ("GPL-2.0-only AND MIT") into SEPARATE component license entries — INCLUDING
  * the bare connective words "AND"/"OR"/"WITH". Those are SYNTAX artifacts, not
  * licenses: they neither normalize nor identify anything, so they must be
@@ -176,7 +176,7 @@ const DEBIAN_SHORTHAND: ReadonlyMap<string, string> = new Map([
  */
 const SPDX_CONNECTIVES: ReadonlySet<string> = new Set(["and", "or", "with"]);
 
-/** True when a raw claim is a bare connective syntax artifact (#3/#10). */
+/** True when a raw claim is a bare connective syntax artifact. */
 function isBareConnective(raw: string): boolean {
   return SPDX_CONNECTIVES.has(raw.trim().toLowerCase());
 }
@@ -304,7 +304,7 @@ function findingFromClaims(
   const seen = new Set<string>();
   const distinct: LicenseClaim[] = [];
   for (const c of claims) {
-    // #3/#10: drop bare connective syntax artifacts ("AND"/"OR"/"WITH") — they
+    // Drop bare connective syntax artifacts ("AND"/"OR"/"WITH") — they
     // are syft compound-license tokenization noise, never a license claim.
     if (isBareConnective(c.raw)) continue;
     const key = `${c.kind}\0${c.raw}`; // NUL-joined: no concatenation ambiguity
@@ -331,7 +331,7 @@ function findingFromClaims(
     const hasNormalizable = results.some((r) => r.expression !== null);
     const hasImprecise = results.some((r) => r.imprecise === true);
     // os-scope partial: build the KNOWN signal (precise OR imprecise) and surface
-    // the rest. Requires ≥1 KNOWN member — a precise license OR (#2) an imprecise
+    // the rest. Requires ≥1 KNOWN member — a precise license OR an imprecise
     // copyleft/permissive family, so the could-be-copyleft review hint survives
     // rather than flattening to plain unknown. An os package with ZERO known
     // members (only public-domain/custom/hash) stays unknown (nothing to stand
@@ -351,7 +351,7 @@ function findingFromClaims(
 
 /**
  * Combine the KNOWN (normalizable + imprecise) signal of a result set into one
- * finding, applying copyleft dominance (C2/W2). Genuinely-unknown results
+ * finding, applying copyleft dominance. Genuinely-unknown results
  * (expression null AND not imprecise) are inert here — they are filtered out of
  * `preciseResults` and ignored by electImpreciseFamily — so this is safe to call
  * with a result set that still contains the os-partial surfaced tokens.
@@ -362,11 +362,11 @@ function findingFromClaims(
  * claim-order-dependent):
  *   1. If a PRECISE copyleft id is present, AND-combine ALL precise claims into a
  *      copyleft finding (the precise copyleft survives; permissive imprecise
- *      siblings are dropped — they cannot weaken a known copyleft obligation). C2.
+ *      siblings are dropped — they cannot weaken a known copyleft obligation).
  *   2. Else if any imprecise family is present, the finding is imprecise —
  *      preferring a COULD_BE_COPYLEFT family over a permissive one regardless of
  *      claim order, so the could-be-copyleft review lane is reached
- *      order-independently. W2.
+ *      order-independently.
  *   3. Else AND-combine the (all-permissive) precise claims.
  */
 function combineKnown(results: ReadonlyArray<NormalizeResult>): LicenseFinding {
@@ -401,7 +401,7 @@ function expressionIsCopyleft(expression: string): boolean {
 
 /**
  * Pick the dominant imprecise family across results: a COULD_BE_COPYLEFT family
- * (GPL/AGPL/LGPL) wins over a permissive one regardless of claim order (W2), so
+ * (GPL/AGPL/LGPL) wins over a permissive one regardless of claim order, so
  * two conflicting imprecise families route to the could-be-copyleft review lane
  * deterministically. Returns undefined when no imprecise family is present.
  */
@@ -511,7 +511,7 @@ function observedSignal(
 }
 
 /**
- * Every observed per-claim normalized PRECISE expression (#1/#5/#11). Runs
+ * Every observed per-claim normalized PRECISE expression. Runs
  * normalizeRaw over each claim and collects the non-null precise results,
  * deduped and sorted by compareCodeUnits. Genuinely-unknown and imprecise-family
  * claims contribute nothing (no precise license to deny). The deny terminal
@@ -635,7 +635,7 @@ function withStaleOverride(
  *
  *   IF expects ∈ S (signalMatches):
  *     IF a non-`expects` precise member contradicts E (signalContradicts)
- *        → STALE → fail closed [C1 — the relicense-metadata-lag mask].
+ *        → STALE → fail closed [the relicense-metadata-lag mask].
  *     ELSE → APPLY E [normal disambiguation].
  *   ELSE (expects ∉ S):
  *     IF the observed finding already carries a precise expression that
@@ -943,7 +943,7 @@ export function annotateFindings(
       usedClarifyIndices,
     );
     const finding = overridden ?? base;
-    // C#1 — deny terminal over overrides: preserve the PRE-OVERRIDE observed
+    // Deny terminal over overrides: preserve the PRE-OVERRIDE observed
     // expression whenever an override REWROTE it (overridden has a different
     // expression than the un-overridden base). The deny terminal in evaluate
     // consults this so a denied observed license can never be licensed back in.
@@ -951,10 +951,11 @@ export function annotateFindings(
       overridden !== undefined &&
       base.expression !== null &&
       overridden.expression !== base.expression;
-    // #1/#5/#11 — deny sees EVERY observed claim: carry every per-claim precise
+    // Deny sees EVERY observed claim: carry every per-claim precise
     // expression so the deny terminal fires on a denied member combineKnown
     // dropped (imprecise-family election / unknown collapse). Independent of the
-    // C#1 single observedExpression (override-rewrite) above — both feed deny.
+    // Independent of the single observedExpression (override-rewrite) above —
+    // both feed deny.
     const observed = observedExpressions(entry.licenseClaims);
     return {
       ...entry,

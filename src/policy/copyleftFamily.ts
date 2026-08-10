@@ -18,7 +18,7 @@
  *
  * MEMBERSHIP: the strong-copyleft GNU-family tokens (GPL/AGPL/LGPL) plus EUPL.
  * A bare "GPL" could be any GPL variant (all copyleft); likewise "AGPL"/"LGPL".
- * "EUPL" (W1 correction) is strong copyleft but spdx-correct cross-maps the bare
+ * "EUPL" is strong copyleft but spdx-correct cross-maps the bare
  * label to a PERMISSIVE id, so it MUST be intercepted here rather than left on
  * the precise path. An imprecise finding with one of these families is
  * flagged-for-review (a warn, never a silent pass) so a maintainer disambiguates
@@ -44,7 +44,7 @@ export const COULD_BE_COPYLEFT_FAMILIES: ReadonlySet<string> = new Set([
   "GPL",
   "AGPL",
   "LGPL",
-  // EUPL (W1 correction): the EUPL is STRONG copyleft, but spdx-correct
+  // EUPL: the EUPL is STRONG copyleft, but spdx-correct
   // cross-maps the bare "EUPL" label to the PERMISSIVE "UPL-1.0" — a
   // copyleft→permissive mis-guess that silently passed the gate. normalize.ts
   // AMBIGUOUS_FAMILY now intercepts bare EUPL as this imprecise family token so

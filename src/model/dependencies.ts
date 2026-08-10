@@ -109,9 +109,9 @@ export interface LicenseFinding {
    */
   conflict?: AssessmentConflict;
   /**
-   * The PRE-OVERRIDE observed SPDX expression (C#1: deny terminal over
-   * overrides). Set by annotateFindings from the un-overridden base finding
-   * BEFORE an override may rewrite `expression`. The deny terminal consults
+   * The PRE-OVERRIDE observed SPDX expression. Set by annotateFindings from
+   * the un-overridden base finding BEFORE an override may rewrite
+   * `expression`. The deny terminal consults
    * BOTH this observed expression AND the (possibly-overridden) `expression`:
    * if EITHER is denied, deny fires — a denied OBSERVED license can never be
    * licensed back in by any override (deny is terminal over overrides). Absent
@@ -120,8 +120,8 @@ export interface LicenseFinding {
    */
   observedExpression?: string;
   /**
-   * The SET of EVERY observed per-claim normalized PRECISE expression (#1/#5/#11:
-   * deny must see every observed claim, not only the lossy COMBINED expression).
+   * The SET of EVERY observed per-claim normalized PRECISE expression (deny must
+   * see every observed claim, not only the lossy COMBINED expression).
    * Produced by annotateFindings by running normalizeRaw over each license claim
    * and collecting the non-null precise results (deduped, sorted by
    * {@link compareCodeUnits}). Genuinely-unknown and imprecise-family claims

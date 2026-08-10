@@ -86,7 +86,7 @@ export function assertSyftSbomSize(path: string): void {
  * output target so syft writes deterministic JSON to the per-run temp file),
  * then a `--` END-OF-OPTIONS separator, then the image OPERAND last. The image
  * ref is always an argv operand (never a shell string — command injection is
- * impossible by construction); the `--` is DEFENSE-IN-DEPTH (#7/#8) so that even
+ * impossible by construction); the `--` is DEFENSE-IN-DEPTH so that even
  * a defensively dash-prefixed ref can never be parsed by syft as a flag. syft
  * accepts `syft -o <fmt>=<file> -- <image>` (verified against syft 1.45.1). The
  * literal `cyclonedx-json` format is grep-detectable and locked byte-for-byte by

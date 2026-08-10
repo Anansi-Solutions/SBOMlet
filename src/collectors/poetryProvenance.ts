@@ -221,7 +221,7 @@ function ingestPackageEdges(
  * different-version case and produced two defects:
  *   - FABRICATION: `black` requires `click >=8`; a lock with click@7.1.2 +
  *     click@8.1.7 fabricated `black → click@7.1.2` (a chain in no real relation).
- *   - MISLABEL (#1): a declared-root NAME `foo` with foo@1.0.0 (real direct) +
+ *   - MISLABEL: a declared-root NAME `foo` with foo@1.0.0 (real direct) +
  *     foo@2.0.0 (transitive via `bar`) marked BOTH versions `direct`.
  * The honest fix partitions the name→purl index by VERSION-MULTIPLICITY: a name
  * mapping to EXACTLY ONE lock purl is PRECISE (it resolves edges and, if a

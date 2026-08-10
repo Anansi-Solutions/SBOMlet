@@ -85,7 +85,7 @@ export function githubRepoFor(
 }
 
 /**
- * The ORDERED candidate refs for the version-tag fetch (W#4): the `v<version>`
+ * The ORDERED candidate refs for the version-tag fetch: the `v<version>`
  * tag first, then the bare `<version>` tag. There is NO default-branch fallback:
  * the `undefined` (no `?ref`) sentinel is DELIBERATELY OMITTED. GitHub answers a
  * no-`?ref` request from the DEFAULT BRANCH (HEAD) — a DIFFERENT version's

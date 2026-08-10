@@ -129,7 +129,7 @@ function npmSourceDir(
   targetDir: string,
 ): string | undefined {
   // The decode exactly mirrors npmPackumentUrl's scoped-name decode
-  // (enrich.ts npmPackumentUrl): "%40scope/pkg" -> "@scope/pkg" (A6 locked).
+  // (enrich.ts npmPackumentUrl): "%40scope/pkg" -> "@scope/pkg".
   const name = safeDecode(purl.encodedName);
   if (name === undefined) return undefined;
 

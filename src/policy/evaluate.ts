@@ -567,7 +567,7 @@ function applyOsScope(
  * lane runs on the result, but the two never interact: an os-scope package is
  * never a dev occurrence in the app sense, and an app package never routes
  * through the os lane. Applying os-then-dev keeps an os-scope copyleft at warn
- * even under dev_dependencies=fail (W1): once os downgrades the fail to warn,
+ * even under dev_dependencies=fail: once os downgrades the fail to warn,
  * applyDevScope's "fail" branch returns that warn unchanged.
  */
 function applyScopeDowngrades(
