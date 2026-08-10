@@ -21,6 +21,8 @@ tasks:
       - 'src/**/*.ts'
       - 'test/**/*.ts'
       - 'scripts/**/*.ts'
+      - 'tools/**/*.mjs'
+      - 'tools/**/*.ts'
       - '.github/scripts/**/*.cjs'
       - eslint.config.mjs
       - .prettierrc
@@ -79,6 +81,7 @@ tasks:
       - 'src/**'
       - 'test/**'
       - 'scripts/**'
+      - 'tools/**'
       - '.github/**'
       - Taskfile.yml
       - Taskfile.dev.yml
