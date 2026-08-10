@@ -11,8 +11,20 @@
 
 const LIST_MARKER_RE = /^([-*+\u2022]|\d+[.)])(?:(\s+)(.*))?$/;
 const TAG_LINE_RE = /^@[A-Za-z]/;
-const SEMANTIC_RE =
-  /^(eslint-[A-Za-z-]+|@ts-[A-Za-z-]+|prettier-ignore|#!|TODO:|FIXME:)/;
+/**
+ * Structural directives read by a tool other than a human: ESLint's own
+ * `eslint-*` comments, TypeScript's `@ts-*` comments, `prettier-ignore`, and
+ * a shebang. These are never reflowed, not even wrapped or refilled with a
+ * neighbor: ESLint parses `eslint-disable(-next-line)?`/`eslint-enable`
+ * comments as single-line directives, and moving their `-- justification`
+ * text onto a second physical line was observed to corrupt unrelated code
+ * when combined with ESLint's own "unused directive" autofix. Isolating the
+ * whole line is the only reflow-safe choice.
+ */
+const STRUCTURAL_DIRECTIVE_RE =
+  /^(eslint-[A-Za-z-]+|@ts-[A-Za-z-]+|prettier-ignore|#!)/;
+/** Non-structural markers: they start a new group but do reflow within it. */
+const SOFT_SEMANTIC_RE = /^(TODO:|FIXME:)/;
 const FENCE_RE = /^```/;
 
 /** Splits leading whitespace from a content string. */
@@ -54,9 +66,14 @@ function isTagLine(text) {
   return TAG_LINE_RE.test(text);
 }
 
+/** True for a structural tool directive: isolated, never reflowed at all. */
+function isStructuralDirective(text) {
+  return STRUCTURAL_DIRECTIVE_RE.test(text);
+}
+
 /** True for lines that must start a fresh group but still reflow within it. */
 function isSemanticLine(text) {
-  return SEMANTIC_RE.test(text);
+  return SOFT_SEMANTIC_RE.test(text);
 }
 
 /** Matches a markdown list marker at the start of a line's text. */
@@ -132,6 +149,12 @@ function splitParagraphGroups(lines) {
       continue;
     }
 
+    if (isStructuralDirective(text)) {
+      groups.push({ type: "no-touch", reflow: false, lines: [line] });
+      current = null;
+      continue;
+    }
+
     const marker = matchListMarker(text);
     const semantic = !marker && isSemanticLine(text);
 
@@ -165,9 +188,15 @@ function splitParagraphGroups(lines) {
   return groups;
 }
 
-/** Tokenizes text into words, keeping a balanced inline code span as one unit. */
+/**
+ * Tokenizes text into words, keeping a balanced inline code span as one
+ * unit. Punctuation glued directly onto a span, with no space in between
+ * (a trailing colon or closing paren, most often), stays glued to it: the
+ * span match also consumes any immediately-following non-space characters,
+ * so it round-trips exactly instead of gaining a space where none was.
+ */
 function tokenize(text) {
-  const matches = text.match(/`[^`]*`|\S+/g);
+  const matches = text.match(/`[^`]*`[^\s]*|\S+/g);
   return matches ?? [];
 }
 
@@ -485,4 +514,5 @@ export {
   looksLikeCode,
   isTagLine,
   isSemanticLine,
+  isStructuralDirective,
 };

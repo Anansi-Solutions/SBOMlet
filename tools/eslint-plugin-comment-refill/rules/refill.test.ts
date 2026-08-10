@@ -24,6 +24,11 @@ const ruleTester = new RuleTester({
 ruleTester.run("refill", refillRule, {
   valid: [
     {
+      name: "code-span-glued-to-trailing-punctuation (idempotent on its own output)",
+      code: "// The cache dir (e.g. `.sbomlet.cache/`) need not exist on the first generate, and writeFileSync\n// does not create parents.\n",
+      options: [{ maxLength: 100 }],
+    },
+    {
       name: "plain-prose-refill (idempotent on its own output)",
       code: "// This is one. This is two. This is\n// three.\n",
       options: [{ maxLength: 40 }],
@@ -191,6 +196,17 @@ ruleTester.run("refill", refillRule, {
         "/**\n * Ceiling for comment lines as a share\n * of non-blank lines in src.\n */\n",
       errors: 1,
     },
+    {
+      // Regression: a code span glued to trailing punctuation, with no
+      // space in between, used to gain a space when a wrap merged its
+      // line with a neighbor. The span and its punctuation must stay glued.
+      name: "code-span-glued-to-trailing-punctuation",
+      code: "// The cache dir (e.g. `.sbomlet.cache/`) need not exist on the first\n// generate, and writeFileSync does not create parents.\n",
+      options: [{ maxLength: 100 }],
+      output:
+        "// The cache dir (e.g. `.sbomlet.cache/`) need not exist on the first generate, and writeFileSync\n// does not create parents.\n",
+      errors: 1,
+    },
   ],
 });
 
@@ -243,6 +259,44 @@ describe("comment-refill/refill option schema", () => {
     const fatal = messages.find((m) => m.fatal);
     if (fatal) {
       throw new Error(`did not expect a fatal error, got: ${fatal.message}`);
+    }
+  });
+});
+
+describe("comment-refill/refill leaves structural tool directives alone", () => {
+  it("never rewrites an eslint-disable-next-line comment, even when it overflows maxLength", () => {
+    const linter = new Linter();
+    const code =
+      "function decodeSpdxPath(path) {\n" +
+      "  let decoded;\n" +
+      "  try {\n" +
+      "    decoded = decodeURIComponent(path);\n" +
+      "  } catch {\n" +
+      "    return undefined;\n" +
+      "  }\n" +
+      "\n" +
+      "  // eslint-disable-next-line no-control-regex -- deliberate control-character class: reject, never resolve\n" +
+      "  if (/[\u0000-\u001f\u007f-\u009f]/.test(decoded)) return undefined;\n" +
+      "  return decoded.trim();\n" +
+      "}\n";
+    const configs = {
+      languageOptions: { ecmaVersion: 2022, sourceType: "module" },
+      plugins: { refill: { rules: { refill: refillRule } } },
+      rules: {
+        "refill/refill": ["error", { maxLength: 100 }],
+        "no-control-regex": "error",
+      },
+    };
+    const out = linter.verifyAndFix(code, configs, "test.js");
+    if (out.output !== code) {
+      throw new Error(
+        `expected the eslint-disable comment and the code around it to be byte-identical, got:\n${out.output}`,
+      );
+    }
+    if (out.messages.length !== 0) {
+      throw new Error(
+        `expected zero remaining messages, got: ${JSON.stringify(out.messages)}`,
+      );
     }
   });
 });

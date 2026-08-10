@@ -94,7 +94,9 @@ a fixture in `rules/refill.test.ts`.
    is isolated into its own untouched group and never merges with a
    neighbor. A line with balanced backticks reflows normally, but a wrap
    point is never placed inside a `` `code span` `` — a span with an
-   internal space is kept on one line as a single unit.
+   internal space is kept on one line as a single unit. Punctuation glued
+   directly onto a span with no space in between (a trailing colon or a
+   closing paren, most often) stays glued to it in the output too.
 5. **Aligned layout.** A line with three or more consecutive interior
    spaces (for example an arrow-aligned mapping table) is treated as
    layout, not prose, and is excluded from reflow entirely.
@@ -103,19 +105,29 @@ a fixture in `rules/refill.test.ts`.
    opening with a common statement keyword (`const`, `return`, `if (`, and
    so on) — excludes that line from reflow. It is isolated the same way an
    aligned-layout line is.
-7. **Semantic prefixes.** A line opening with `eslint-`, `@ts-`,
-   `prettier-ignore`, a shebang, `TODO:`, or `FIXME:` always starts a new
-   group — it can never be swallowed into the preceding paragraph — but it
-   does reflow normally within that group together with its own
-   continuation lines.
-8. **A single word longer than `maxLength`.** Most commonly a URL. It is
+7. **Structural tool directives.** A line opening with `eslint-` (covering
+   `eslint-disable`, `eslint-disable-next-line`, and `eslint-enable`),
+   `@ts-` (`@ts-ignore`, `@ts-expect-error`), `prettier-ignore`, or a
+   shebang is isolated exactly like an aligned-layout line: left untouched,
+   never merged with a neighbor, never wrapped even past `maxLength`. These
+   are read structurally by another tool, not by a person, and reflowing
+   one — specifically, wrapping an `eslint-disable-next-line` comment's `--`
+   justification onto a second physical line — was observed to corrupt
+   unrelated code a few lines later, by way of a fix conflict with ESLint's
+   own "unused disable directive" cleanup. Isolating the whole line is the
+   only reflow-safe choice.
+8. **Soft semantic prefixes.** A line opening with `TODO:` or `FIXME:` — a
+   note for a person, not a directive read by a tool — always starts a new
+   group, exactly like a structural directive, but does reflow normally
+   within that group together with its own continuation lines.
+9. **A single word longer than `maxLength`.** Most commonly a URL. It is
    never split, sits alone on its own line, and is accepted as-is: a group
    whose canonical form contains such a line is not reported for exceeding
    `maxLength`, because there is nothing shorter to reflow it to.
-9. **An indentation change.** For plain prose, any change in the line's own
-   indent starts a new group. For a bulleted group, the equivalent rule is
-   the continuation depth described in point 2: a line back at, or shallower
-   than, the marker's own indent leaves the bullet's group.
+10. **An indentation change.** For plain prose, any change in the line's own
+    indent starts a new group. For a bulleted group, the equivalent rule is
+    the continuation depth described in point 2: a line back at, or
+    shallower than, the marker's own indent leaves the bullet's group.
 
 ## Block-comment structural limits
 
