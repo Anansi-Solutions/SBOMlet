@@ -340,13 +340,13 @@ function findingFromClaims(
  * A copyleft signal — precise OR imprecise — must dominate a permissive sibling, never be discarded
  * by a "first imprecise wins" short-circuit (which downgraded a hard copyleft gate to a non-gating
  * warn and made the could-be-copyleft lane claim-order-dependent):
- * 1. If a PRECISE copyleft id is present, AND-combine ALL precise claims into a copyleft finding
- *    (the precise copyleft survives; permissive imprecise siblings are dropped — they cannot weaken
- *    a known copyleft obligation).
- * 2. Else if any imprecise family is present, the finding is imprecise — preferring a
- *    COULD_BE_COPYLEFT family over a permissive one regardless of claim order, so the
- *    could-be-copyleft review lane is reached order-independently.
- * 3. Else AND-combine the (all-permissive) precise claims.
+ *   1. If a PRECISE copyleft id is present, AND-combine ALL precise claims into a copyleft finding
+ *      (the precise copyleft survives; permissive imprecise siblings are dropped — they cannot
+ *      weaken a known copyleft obligation).
+ *   2. Else if any imprecise family is present, the finding is imprecise — preferring a
+ *      COULD_BE_COPYLEFT family over a permissive one regardless of claim order, so the
+ *      could-be-copyleft review lane is reached order-independently.
+ *   3. Else AND-combine the (all-permissive) precise claims.
  */
 function combineKnown(results: ReadonlyArray<NormalizeResult>): LicenseFinding {
   const preciseResults = results.filter((r) => r.expression !== null);
@@ -603,13 +603,17 @@ function withStaleOverride(
  * `expects` undefined → blind apply (backward-compat). `expects` present → decision tree on the
  * observed signal S and the asserted expression E:
  *
- * IF expects ∈ S (signalMatches): IF a non-`expects` precise member contradicts E
- * (signalContradicts) → STALE → fail closed [the relicense-metadata-lag mask]. ELSE → APPLY E
- * [normal disambiguation]. ELSE (expects ∉ S): IF the observed finding already carries a precise
- * expression that SATISFIES E → REDUNDANT: do NOT apply, do NOT fail — let the precise observed
- * finding stand unchanged [GAP FIX — the registry upgraded the imprecise label to the exact license
- * the override asserts]. ELSE → STALE → fail closed [genuine drift: relicensed to a different or
- * non-satisfying license, or still ambiguous-but-different].
+ *   IF expects ∈ S (signalMatches):
+ *     IF a non-`expects` precise member contradicts E (signalContradicts)
+ *        → STALE → fail closed [the relicense-metadata-lag mask].
+ *     ELSE → APPLY E [normal disambiguation].
+ *   ELSE (expects ∉ S):
+ *     IF the observed finding already carries a precise expression that
+ *        SATISFIES E → REDUNDANT: do NOT apply, do NOT fail — let the precise observed finding
+ *        stand unchanged [GAP FIX — the registry upgraded the imprecise label to the exact license
+ *        the override asserts].
+ *     ELSE → STALE → fail closed [genuine drift: relicensed to a different or
+ *        non-satisfying license, or still ambiguous-but-different].
  *
  * Fail-safe: the ONLY non-failing path added is the co-equal/satisfying precise observation. A
  * relicense to anything that does not satisfy E still fails.
@@ -832,12 +836,12 @@ function assessImprecise(family: string, base: LicenseFinding): LicenseFinding {
  * because the marker lives on the base finding only.
  *
  * Steps:
- * 1. No scancode claim → base returned unchanged (same reference): a repository with no ScanCode
- *    results behaves byte-identically to one where this function does not exist.
- * 2. The scancode raw normalizes PRECISE → {@link assessPrecise}.
- * 3. The scancode raw normalizes IMPRECISE → {@link assessImprecise}.
- * 4. The scancode raw is genuinely unknown (the election rejects these before a claim exists) →
- *    base unchanged, defensively.
+ *   1. No scancode claim → base returned unchanged (same reference): a repository with no ScanCode
+ *      results behaves byte-identically to one where this function does not exist.
+ *   2. The scancode raw normalizes PRECISE → {@link assessPrecise}.
+ *   3. The scancode raw normalizes IMPRECISE → {@link assessImprecise}.
+ *   4. The scancode raw is genuinely unknown (the election rejects these before a claim exists) →
+ *      base unchanged, defensively.
  *
  * Pure function of (claims, base finding) ONLY — no mode flag, no cache handle, no clock: an
  * offline check run replays the identical claims from the committed cache and reproduces the

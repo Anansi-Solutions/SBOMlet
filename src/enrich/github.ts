@@ -59,7 +59,7 @@ function target(owner: string, repo: string): GithubTarget {
  * guess.
  *
  *   3-segment `<host>/<ns>/<name>`            → <ns>/terraform-provider-<name>
- * 4-segment `<host>/<ns>/<name>/<provider>` → <ns>/terraform-<provider>-<name>
+ *   4-segment `<host>/<ns>/<name>/<provider>` → <ns>/terraform-<provider>-<name>
  */
 export function githubRepoFor(
   parsed: ParsedTerraformPurl,

@@ -7,12 +7,12 @@
  * BEFORE the top-level block, and within each block: string → legacy `{ type }` object → legacy
  * `licenses: [{ type }]` array (OR-joined):
  *
- * 1. `versions[version].license` (string)
- * 2. `versions[version].license` legacy `{ type }` object → its `type`
- * 3. `versions[version].licenses` legacy array → OR-joined expression
- * 4. top-level `license` (string)
- * 5. top-level legacy `{ type }` object
- * 6. top-level legacy `licenses` array → OR-joined expression
+ *   1. `versions[version].license` (string)
+ *   2. `versions[version].license` legacy `{ type }` object → its `type`
+ *   3. `versions[version].licenses` legacy array → OR-joined expression
+ *   4. top-level `license` (string)
+ *   5. top-level legacy `{ type }` object
+ *   6. top-level legacy `licenses` array → OR-joined expression
  *
  * Many older packages publish their license ONLY in the version-level legacy `licenses` array
  * (compute-gcd, memorystream, svg-tags, the validate.io-* family — all MIT there, nothing at the

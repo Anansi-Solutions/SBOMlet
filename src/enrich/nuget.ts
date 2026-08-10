@@ -62,18 +62,18 @@ export interface NugetResolution {
  * (the pypi.ts shape: narrow-first, null never throw). Each class maps to an HONEST outcome; this
  * module never guesses, and normalizeRaw downstream stays the single SPDX resolution authority:
  *
- * 1. `licenseExpression` non-empty → the expression verbatim, HIGH.
- * 2. `licenseFile` present (embedded file) → NULL. The license TEXT lives inside the nupkg, out of
- *    reach here — an honest unknown, never a guess. Checked BEFORE `licenseUrl` so the
- *    `aka.ms/deprecateLicenseUrl` sentinel that accompanies embedded files can never be misread as
- *    a real URL.
- * 3. `licenseUrl` beginning `https://licenses.nuget.org/` → the URL PATH IS the SPDX expression,
- *    URL-encoded: strip the prefix, decode, and trim, HIGH
- *    (`https://licenses.nuget.org/MIT%20OR%20Apache-2.0` → `MIT OR Apache-2.0`). A blank,
- *    undecodable, or control-character remainder → null (licenseUrl is package-author-controlled;
- * an SPDX expression is plain printable text, so anything else is never a license).
- * 4. Any other `licenseUrl` (the pre-2019 url-only class) or no license fields at all → NULL —
- *    honest unknown.
+ *   1. `licenseExpression` non-empty → the expression verbatim, HIGH.
+ *   2. `licenseFile` present (embedded file) → NULL. The license TEXT lives inside the nupkg, out
+ *      of reach here — an honest unknown, never a guess. Checked BEFORE `licenseUrl` so the
+ *      `aka.ms/deprecateLicenseUrl` sentinel that accompanies embedded files can never be misread
+ *      as a real URL.
+ *   3. `licenseUrl` beginning `https://licenses.nuget.org/` → the URL PATH IS the SPDX expression,
+ *      URL-encoded: strip the prefix, decode, and trim, HIGH
+ *      (`https://licenses.nuget.org/MIT%20OR%20Apache-2.0` → `MIT OR Apache-2.0`). A blank,
+ *      undecodable, or control-character remainder → null (licenseUrl is package-author-controlled;
+ *      an SPDX expression is plain printable text, so anything else is never a license).
+ *   4. Any other `licenseUrl` (the pre-2019 url-only class) or no license fields at all → NULL —
+ *      honest unknown.
  */
 export function resolveNugetCatalogLicense(
   doc: unknown,

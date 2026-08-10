@@ -126,10 +126,10 @@ export type GithubLicenseFetch =
  *
  *   - 200            → `{ status: 200, body }` (resolve downstream).
  *   - 404            → `{ status: 404 }` (a DEFINITIVE missing-tag/no-license
- * signal — NOT a throw; the caller advances to the next ref).
+ *                      signal — NOT a throw; the caller advances to the next ref).
  *   - 429/5xx        → retried with backoff; persistent → {@link GithubTransientError}.
- * - 403/other 4xx → {@link GithubTransientError} (rate-limit/unreachable; hard-fail).
- * - network/timeout→ retried; persistent → {@link GithubTransientError}.
+ *   - 403/other 4xx → {@link GithubTransientError} (rate-limit/unreachable; hard-fail).
+ *   - network/timeout→ retried; persistent → {@link GithubTransientError}.
  *
  * An optional `GITHUB_TOKEN` is honored as a Bearer header (5000/hr vs 60/hr unauth); when unset
  * the request carries no Authorization header. The URL is

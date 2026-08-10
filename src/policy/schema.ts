@@ -98,8 +98,9 @@ export interface ClarifyRule {
  * prod occurrence.
  *   "warn"   — a dev would-be-fail downgrades to warn (the default).
  *   "fail"   — NO downgrade; dev gates exactly like prod (strict).
- * "ignore" — a dev would-be-fail becomes ok (an EXPLICIT, documented opt-out). A PRODUCTION
- * occurrence ALWAYS fails under "warn"/"ignore" — a shipped copyleft can never be dev-downgraded.
+ *   "ignore" — a dev would-be-fail becomes ok (an EXPLICIT, documented opt-out).
+ * A PRODUCTION occurrence ALWAYS fails under "warn"/"ignore" — a shipped copyleft can never be
+ * dev-downgraded.
  */
 export type DevDependencyHandling = "warn" | "fail" | "ignore";
 
@@ -107,11 +108,12 @@ export type DevDependencyHandling = "warn" | "fail" | "ignore";
  * The [os_dependencies] knob, mirroring DevDependencyHandling. It governs a would-be-FAIL on a
  * PACKAGE-level os-scope dependency (a pkg:deb / pkg:apk row from the Docker base image):
  *   "warn"   — an os would-be-fail downgrades to warn (the default): expected
- * base-image copyleft (glibc/bash GPL/LGPL, satisfied by shipping the image) LISTS, not fails.
+ *              base-image copyleft (glibc/bash GPL/LGPL, satisfied by shipping the image) LISTS,
+ *              not fails.
  *   "fail"   — NO downgrade; an os-scope copyleft gates exactly like an app one.
- * "ignore" — an os would-be-fail becomes ok (an EXPLICIT, documented opt-out). A DENIED
- * (source-available) license in an OS package STILL FAILS regardless — deny is terminal-0 above the
- * os downgrade.
+ *   "ignore" — an os would-be-fail becomes ok (an EXPLICIT, documented opt-out).
+ * A DENIED (source-available) license in an OS package STILL FAILS regardless — deny is terminal-0
+ * above the os downgrade.
  */
 export type OsDependencyHandling = "warn" | "fail" | "ignore";
 

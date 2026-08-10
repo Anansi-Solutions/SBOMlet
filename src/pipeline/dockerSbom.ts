@@ -6,7 +6,7 @@
  * resolved output path.
  *
  * THE THREE LANES (pairwise mutually exclusive):
- * 1. --dockerfile <path>... build each explicitly named Dockerfile to a
+ *   1. --dockerfile <path>... build each explicitly named Dockerfile to a
  *      deterministic tag, then scan the built image;
  *   2. --repo-root <dir>       discover the repo's Dockerfiles, build each,
  *      then scan;

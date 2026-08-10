@@ -117,7 +117,7 @@ function specOf(value: unknown): string | undefined {
  * registry semvers ("@types/bun@1.3.14") and for non-registry resolutions whose version part embeds
  * further "@"s, which a last-"@" split silently corrupts:
  *
- * "pkg@git+ssh://git@github.com/owner/repo#abc" → name "pkg"
+ *   "pkg@git+ssh://git@github.com/owner/repo#abc" → name "pkg"
  *   "alias@npm:@scope/real@1.2.3"                 → name "alias"
  *
  * Returns undefined for specs without a version separator (malformed → tolerant skip).
@@ -146,7 +146,7 @@ function purlOf(name: string, version: string): string {
  * - a number when the grammar positively determines it (entries whose value[0]
  *   is a string lacking "@workspace:"; malformed entries contribute nothing);
  * - undefined when the text is unparseable or carries no packages record (unknown → route to scan;
- * the collector itself then throws loudly and zero components hard-fail, never a silent skip).
+ *   the collector itself then throws loudly and zero components hard-fail, never a silent skip).
  */
 export function bunThirdPartyEntryCount(
   lockfileText: string,

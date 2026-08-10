@@ -18,7 +18,7 @@
  * - Binary bun.lockb is observed during the walk but never becomes a target: a
  *   bun.lockb without a surviving bun.lock target warns naming `bun install
  *   --save-text-lockfile`; beside a bun.lock it is silent (the text lockfile is
- * authoritative).
+ *   authoritative).
  * - `*.csproj` files are likewise observed during the walk but never become targets: a directory
  *   with a csproj sighting and no surviving nuget target feeds one AGGREGATED warning naming the
  *   RestorePackagesWithLockFile=true + `dotnet restore` migration (per-directory detail under the

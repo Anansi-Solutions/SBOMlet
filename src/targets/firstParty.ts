@@ -210,8 +210,8 @@ export function pythonThirdPartyEntryCount(lockfileText: string): number {
  * package-lock.json is plain JSON, so JSON.parse is exact. The v2/v3 `packages` map keys the
  * verified shapes:
  *
- * "node_modules/express": { "version": "5.2.1", "license": "MIT" } // third-party
- * "node_modules/liba": { "resolved": "packages/liba", "link": true } // workspace link
+ *   "node_modules/express": { "version": "5.2.1", "license": "MIT" } // third-party
+ *   "node_modules/liba": { "resolved": "packages/liba", "link": true } // workspace link
  *   "packages/liba": { "version": "0.1.0" }                            // local dir entry
  *   "": { ... }                                                        // the root project
  *
@@ -362,7 +362,7 @@ export function nugetThirdPartyEntryCount(
  * count. Verified key shapes:
  *
  *   v9: "  smol-toml@1.6.1:"          v6: "  /smol-toml@1.6.1:"
- * quoted: " '@types/node@1.0.0':" (single or double quotes)
+ *   quoted: " '@types/node@1.0.0':" (single or double quotes)
  *
  * Deeper-indented property lines (resolution:, dependencies:, ...) never match the two-space
  * anchor. An importers-only lockfile (workspace with no external deps — no packages: section)

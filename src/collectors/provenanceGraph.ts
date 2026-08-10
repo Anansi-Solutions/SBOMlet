@@ -171,13 +171,13 @@ function reachableFromRoots(graph: PurlGraph): Set<string> {
  * reachable from a declared root. The reachable set is computed once ({@link reachableFromRoots})
  * and every node's parent set is intersected with it. Consequences (now guaranteed for BOTH the npm
  * and poetry lanes, which both route through this shared function):
- * - a transitive whose parents are ALL root-disconnected → introducedBy [] → a true orphan
- *   (whyCellOf renders the honest "—", never a fabricated
+ *  - a transitive whose parents are ALL root-disconnected → introducedBy [] → a true orphan
+ *    (whyCellOf renders the honest "—", never a fabricated
  *    introducer);
- * - a transitive with a MIX of reachable + disconnected parents keeps ONLY the
+ *  - a transitive with a MIX of reachable + disconnected parents keeps ONLY the
  *    reachable parents;
- * - `path` stays gated on shortestPath (root-reachability), so introducedBy and path are now
- *   consistent — both honor root-reachability.
+ *  - `path` stays gated on shortestPath (root-reachability), so introducedBy and path are now
+ *    consistent — both honor root-reachability.
  * This makes the npm lane's local Fix-3 introducedBy=[] guard (npmProvenance) redundant; it is
  * retained as a harmless belt-and-braces.
  *

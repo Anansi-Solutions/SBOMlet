@@ -20,12 +20,15 @@
  * memory; runGenerate holds the only file-write calls in the cli/pipeline/gate trio); the check
  * comparison and its exit mapping live in src/gate/check.ts.
  *
- * Exit-code taxonomy: 0 success / check clean 1 check: at least one policy fail verdict (priority
- * over stale). Warn verdicts and unused-policy-entry warnings print but never gate — only fail
- * verdicts reach this code. 2 check: at least one stale or missing committed output 3 tool/config
- * error (>2): unknown subcommand, conflicting flags, pipeline failure, coverage assertion, invalid
- * policy file (TomlError/PolicyError messages printed verbatim), --dump-model on check. Codes 1 and
- * 2 come only from check's structured-result mapping — exceptions can never surface as 0/1/2.
+ * Exit-code taxonomy:
+ *   0 success / check clean 1 check: at least one policy fail verdict (priority over stale). Warn
+ *      verdicts and unused-policy-entry warnings print but never gate — only fail verdicts reach
+ *      this code.
+ *   2 check: at least one stale or missing committed output 3 tool/config error (>2): unknown
+ *   subcommand, conflicting flags, pipeline
+ *      failure, coverage assertion, invalid policy file (TomlError/PolicyError messages printed
+ *      verbatim), --dump-model on check. Codes 1 and 2 come only from check's structured-result
+ *      mapping — exceptions can never surface as 0/1/2.
  */
 
 import { existsSync } from "node:fs";

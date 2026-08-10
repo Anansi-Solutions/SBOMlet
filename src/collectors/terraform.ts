@@ -24,17 +24,17 @@
  * The "init has run" gate is a pure filesystem signal: the whole `.terraform/` dir is gitignored
  * and absent until `tofu init`/`tofu get` materializes it. When a `.terraform.lock.hcl` target is
  * detected:
- * - modules.json present, as a regular file → read external modules (the authoritative
- *   present-path). A directory-named modules.json is treated
+ *   - modules.json present, as a regular file → read external modules (the authoritative
+ *     present-path). A directory-named modules.json is treated
  *     as absent and routed to the gate below, never a raw EISDIR;
- * - modules.json absent, `.terraform/providers/` is a directory, and `.terraform/modules/` does not
- *   exist → init ran but processed no module calls (the providers-only github-actions-deployment
- *   shape) → collect
+ *   - modules.json absent, `.terraform/providers/` is a directory, and `.terraform/modules/` does
+ *     not exist → init ran but processed no module calls (the providers-only
+ *     github-actions-deployment shape) → collect
  *     providers from the committed lock; never a throw;
- * - any other absent-modules.json shape → fail loud with a "run tofu init/tofu get first" error: no
- *   `.terraform/providers/` dir (empty/fabricated `.terraform/`), or a `.terraform/modules/` dir
- *   without a modules.json (stale/partial install). Conservative-safe: we collect providers-only
- *   only for the exact artifact shape a real providers-only init leaves.
+ *   - any other absent-modules.json shape → fail loud with a "run tofu init/tofu get first" error:
+ *     no `.terraform/providers/` dir (empty/fabricated `.terraform/`), or a `.terraform/modules/`
+ *     dir without a modules.json (stale/partial install). Conservative-safe: we collect
+ *     providers-only only for the exact artifact shape a real providers-only init leaves.
  * No HCL is parsed to make this decision. Empirically, `tofu
  * init` writes `.terraform/modules/modules.json` as soon as it processes module
  * calls (local or external) — even when the module download later fails, and before the provider
@@ -209,10 +209,10 @@ function looksLikeHost(segment: string): boolean {
 /**
  * Parse a modules.json `Source` into a registry-module address, or undefined when it is not a
  * registry module. Accepts:
- * - bare shorthand `<ns>/<name>/<provider>` (host defaults to DEFAULT_MODULE_HOST),
- * - fully-qualified `<host>/<ns>/<name>/<provider>` for any hostname-looking host (not just the two
- *   default registries),
- * - either form with a trailing `//<submodule-path>` (stripped).
+ *   - bare shorthand `<ns>/<name>/<provider>` (host defaults to DEFAULT_MODULE_HOST),
+ *   - fully-qualified `<host>/<ns>/<name>/<provider>` for any hostname-looking host (not just the
+ *     two default registries),
+ *   - either form with a trailing `//<submodule-path>` (stripped).
  * Rejects relative (`./`/`../`/empty) and VCS/`git::` Sources. A VCS Source's `::` marks it
  * non-registry; the legitimate `//<submodule>` separator is the only `//` a registry Source
  * carries, and it is split off before host parsing.
@@ -258,10 +258,10 @@ function parseModuleSource(source: string): ParsedModuleSource | undefined {
  * collector/coverage pass it on the providers-only path to mean "no modules.json present") stays a
  * tolerant `[]` — an absent file is never a scan failure; the filesystem gate owns absence. For
  * non-empty text:
- * - structurally invalid — JSON.parse throws, or a present `Modules` key is
+ *   - structurally invalid — JSON.parse throws, or a present `Modules` key is
  *     not an array — throws a loud scan-failure naming the modules.json path;
- * - legitimately empty — valid JSON `{}`, no `Modules` key, or `Modules: []` — keeps returning `[]`
- *   (zero modules), the genuine dependency-free shape.
+ *   - legitimately empty — valid JSON `{}`, no `Modules` key, or `Modules: []` — keeps returning
+ *     `[]` (zero modules), the genuine dependency-free shape.
  * Individual malformed entries inside the array are still tolerantly skipped (an array with some
  * bad rows keeps the good rows, never throws).
  */
@@ -329,19 +329,20 @@ export function readExternalModules(
  * §Strengthened signal (cheap no-HCL defense-in-depth). Rather than treat any `<dir>/.terraform/`
  * directory as proof of init, the gate requires the artifacts a real providers-only init leaves and
  * rejects the incoherent shapes:
- * - return false (collect providers-only) only when `.terraform/providers/` exists as a directory
- *   and `.terraform/modules/` does not exist — the exact github-actions-deployment shape a real
- *   providers-only init
+ *   - return false (collect providers-only) only when `.terraform/providers/` exists as a directory
+ *     and `.terraform/modules/` does not exist — the exact github-actions-deployment shape a real
+ *     providers-only init
  *     produces;
- * - else return true (fail loud): · no `.terraform/providers/` dir → an empty/fabricated
- *   `.terraform/`
+ *   - else return true (fail loud): · no `.terraform/providers/` dir → an empty/fabricated
+ *     `.terraform/`
  *         that no real init produced → cannot prove providers-only;
- * · `.terraform/modules/` exists without a modules.json → a stale/partial module install (tofu
- * writes modules.json the instant it processes module blocks) → incoherent. `existsSync` +
- * `statSync(...).isDirectory()` is used defensively throughout: a stray `.terraform` file has no
- * `providers/` dir under it, so it falls into the first fail-loud branch. This realigns with the
- * module docstring's long-standing observation that the whole `.terraform/` dir is gitignored and
- * absent until init materializes it.
+ *       · `.terraform/modules/` exists without a modules.json → a stale/partial
+ *         module install (tofu writes modules.json the instant it processes module blocks) →
+ *         incoherent.
+ * `existsSync` + `statSync(...).isDirectory()` is used defensively throughout: a stray `.terraform`
+ * file has no `providers/` dir under it, so it falls into the first fail-loud branch. This realigns
+ * with the module docstring's long-standing observation that the whole `.terraform/` dir is
+ * gitignored and absent until init materializes it.
  *
  * §Residual stale-edit limitation (documented, accepted). A window remains that this filesystem
  * signal cannot close cheaply: a dir whose providers-only init left `.terraform/providers/` (no
@@ -368,10 +369,11 @@ export function absentModulesJsonShouldFail(dir: string): boolean {
     // instant it processes module blocks. So the only shape that legitimately collects
     // providers-only (returns false) is: `.terraform/providers/` exists as a directory and
     // `.terraform/modules/` does not exist. Otherwise fail loud:
-    // - no `.terraform/providers/` dir → an empty/fabricated `.terraform/`
+    //   - no `.terraform/providers/` dir → an empty/fabricated `.terraform/`
     //     that no real init produced → cannot prove providers-only;
-    // - `.terraform/modules/` exists without a modules.json → a stale/partial module install (tofu
-    //   writes modules.json the instant it processes module blocks) → incoherent, fail loud.
+    //   - `.terraform/modules/` exists without a modules.json → a stale/partial module install
+    //     (tofu writes modules.json the instant it processes module blocks) → incoherent, fail
+    //     loud.
     const providersDir = join(dir, ".terraform", "providers");
     if (!existsSync(providersDir) || !statSync(providersDir).isDirectory()) {
       return true; // no real providers artifact → init not proven → fail loud

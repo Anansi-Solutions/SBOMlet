@@ -185,14 +185,16 @@ function hasRootAnchorEdge(
  *
  * ABSTAIN contract: the lane MUST abstain (return undefined → empty map → render "—") rather than
  * silently mislabel when the root cannot be located or anchored. Two added guards beyond the prior
- * no-array / no-purls checks: (a) rootBomRef is undefined — no locatable root bom-ref. Without it
- * isRootEdge can never be true, rootChildren stays empty, and EVERY true direct dep would be
- * derived as direct:false (a silent mislabel). (b) no `dependencies` edge has ref === rootBomRef —
- * the root is named but not actually anchored in the graph, so its declared-direct set is unknown
- * and the same mislabel results. Today the pinned yarn-plugin always emits both, so neither guard
- * fires on real input; they harden the lane against an npm-graph BOM or a future generator that
- * omits the root bom-ref. This mirrors the honest-residual / abstain-on- ambiguity posture the rest
- * of the provenance code follows.
+ * no-array / no-purls checks:
+ *  (a) rootBomRef is undefined — no locatable root bom-ref. Without it
+ *      isRootEdge can never be true, rootChildren stays empty, and EVERY true direct dep would be
+ *      derived as direct:false (a silent mislabel).
+ *  (b) no `dependencies` edge has ref === rootBomRef — the root is named but not
+ *      actually anchored in the graph, so its declared-direct set is unknown and the same mislabel
+ *      results.
+ * Today the pinned yarn-plugin always emits both, so neither guard fires on real input; they harden
+ * the lane against an npm-graph BOM or a future generator that omits the root bom-ref. This mirrors
+ * the honest-residual / abstain-on- ambiguity posture the rest of the provenance code follows.
  */
 function buildNpmGraph(sbom: unknown): NpmGraph | undefined {
   const doc = SbomDocument(sbom);

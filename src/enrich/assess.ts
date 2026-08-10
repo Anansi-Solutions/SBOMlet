@@ -12,21 +12,23 @@
  *
  * Two responsibilities, in order:
  *
- * 1. Scan pass (generate --intensive ONLY): the analysis set is EVERY package not already in the
- *    memo — a package with a precise declared or registry answer is analyzed too, because a second,
- *    deeper opinion is exactly the point. A memo hit (a positive result OR a recorded no-result) is
- *    skipped and never re-analyzed, so a repeat run over unchanged inputs analyzes nothing and
- *    leaves the committed memo byte-identical. A package whose sources are not locally present
- *    (unsupported ecosystem, or an absent / version-mismatched install tree) is reported and NEVER
- *    memoized: a memo entry provably means "this tree was analyzed", never "it wasn't installed
- *    that day". A fresh positive is memoized with its elected expression and provenance; a fresh
- *    no-result is memoized as `license: null` so it is skipped next run rather than re-analyzed.
+ *  1. Scan pass (generate --intensive ONLY): the analysis set is EVERY package not already in the
+ *     memo — a package with a precise declared or registry answer is analyzed too, because a
+ *     second, deeper opinion is exactly the point. A memo hit (a positive result OR a recorded
+ *     no-result) is skipped and never re-analyzed, so a repeat run over unchanged inputs analyzes
+ *     nothing and leaves the committed memo byte-identical. A package whose sources are not locally
+ *     present (unsupported ecosystem, or an absent / version-mismatched install tree) is reported
+ *     and NEVER memoized: a memo entry provably means "this tree was analyzed", never "it wasn't
+ *     installed that day". A fresh positive is memoized with its elected expression and provenance;
+ *     a fresh no-result is memoized as `license: null` so it is skipped next run rather than
+ *     re-analyzed.
  *
- * 2. Replay pass (BOTH modes, unconditional, over EVERY package): each package with a positive memo
- *    entry gains a ScanCode claim (and, when it carries no attribution yet, the memo's copyright
- *    lines). This must touch every package — a memoized answer has to land on a precisely-declared
- *    package too, or the downstream precedence and conflict detection are blind to it. A no-result
- *    entry appends nothing: it is a scan-skip marker, never a disagreement with a positive answer.
+ *  2. Replay pass (BOTH modes, unconditional, over EVERY package): each package with a positive
+ *     memo entry gains a ScanCode claim (and, when it carries no attribution yet, the memo's
+ *     copyright lines). This must touch every package — a memoized answer has to land on a
+ *     precisely-declared package too, or the downstream precedence and conflict detection are blind
+ *     to it. A no-result entry appends nothing: it is a scan-skip marker, never a disagreement with
+ *     a positive answer.
  *
  * `check` replays the committed memo exactly like generate and never analyzes, so an intensive
  * generate and a later offline check produce byte-identical outputs, conflict verdicts included. A

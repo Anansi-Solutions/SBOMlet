@@ -54,10 +54,11 @@ export function sanitizeForLog(value: string): string {
 
 /**
  * The stderr verdict summary — the CLI owns stderr; the pure engine modules stay silent. Shape
- * (locked by test/cli.test.ts): policy: N fail, N warn, N suppressed, N ok (M verdicts) policy: N
- * imprecise (review / disambiguate via [[clarify]]) (only when N>0)
+ * (locked by test/cli.test.ts):
+ *   policy: N fail, N warn, N suppressed, N ok (M verdicts) policy: N imprecise (review /
+ *   disambiguate via [[clarify]]) (only when N>0)
  *   policy fail: <purl> in <target> — <rule>: <reason>   (per fail/warn,
- * verdict order)
+ *                                                          verdict order)
  *   policy warning: unused entry <ruleId> — <reason>      (per unused rule)
  * Reasons are policy-authored text printed as plain text — no shell interpolation exists anywhere
  * (argv-array exec only). Every interpolated untrusted field (purl, occurrence target, rule id,

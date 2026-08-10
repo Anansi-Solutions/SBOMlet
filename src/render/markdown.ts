@@ -184,13 +184,13 @@ function boundedJoin(items: readonly string[], separator: string): string {
  *   Orphans are EXCLUDED from the direct/transitive decision. Without this, a genuine DIRECT
  *   occurrence plus an orphan co-occurrence made `every(direct)` false, then the union was empty →
  *   "—", HIDING the real direct. With genuine (non-orphan) introductions:
- * - if the package is DIRECT in EVERY genuine in-scope occurrence → "direct" (bare "direct" ONLY
- *   when nothing transitive is being hidden — a package direct in one flagged occurrence AND
- *   transitive in another must
+ *     - if the package is DIRECT in EVERY genuine in-scope occurrence → "direct" (bare "direct"
+ *       ONLY when nothing transitive is being hidden — a package direct in one flagged occurrence
+ *       AND transitive in another must
  *       surface the transitive introducer);
- * - else (transitive in ≥1 genuine in-scope occurrence) → the introducer: the representative `path`
- *   of the smallest-target occurrence carrying one, or — when none carries a path — the
- *   sorted-union of every in-scope
+ *     - else (transitive in ≥1 genuine in-scope occurrence) → the introducer: the representative
+ *       `path` of the smallest-target occurrence carrying one, or — when none carries a path — the
+ *       sorted-union of every in-scope
  *       occurrence's `introducedBy` set;
  * - if ALL in-scope introductions are orphans (no genuine direct, no introducer evidence anywhere)
  *   → the honest "—" residual.

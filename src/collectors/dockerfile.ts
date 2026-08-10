@@ -65,10 +65,10 @@ export interface DiscoverDockerfilesResult {
 /**
  * True iff `name` is a Dockerfile basename. Accepts (case-insensitive on the
  * `Dockerfile`/`dockerfile` stem):
- * - exactly `Dockerfile`
- * - `<prefix>.Dockerfile` (e.g. nginx.Dockerfile)
- * - `Dockerfile.<suffix>` (e.g. Dockerfile.prod, Dockerfile.go) — ANY suffix
- * - `<prefix>.dockerfile` (e.g. build.dockerfile)
+ *   - exactly `Dockerfile`
+ *   - `<prefix>.Dockerfile` (e.g. nginx.Dockerfile)
+ *   - `Dockerfile.<suffix>` (e.g. Dockerfile.prod, Dockerfile.go) — ANY suffix
+ *   - `<prefix>.dockerfile` (e.g. build.dockerfile)
  * A file merely CONTAINING "dockerfile" (e.g. notADockerfile.txt) is NOT matched.
  *
  * NAME-PATTERN ONLY: there is no extension blocklist. A blocklist silently DROPS real variants

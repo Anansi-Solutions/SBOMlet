@@ -10,19 +10,19 @@
  * hard part of this collector.
  *
  * Flow per image (ONE posture — every scan reads the image's FULL contents):
- * 1. Probe local presence with `docker inspect`; if the image is absent (nonzero exit)
- *    `docker pull` it first. A locally present ref is scanned as-is and never re-pulled, so a stale
- *    local tag is never silently refreshed and the network is never raced into the determinism
- *    contract.
- * 2. `syft <image> -o cyclonedx-json=<tmp>` via execTool (argv array ONLY — the image ref is an
- *    operand, never a shell string: command injection is impossible by construction).
- * 3. assertSyftSbomSize stat-gates the output before any read (DoS bound), then parse and assert
- *    specVersion === "1.6" (pin verification).
- * 4. filterOsComponents keeps EVERY component carrying name+version+purl, across ecosystems
- *    (deb/apk/npm/pypi/...) — syft's purl-less file/operating-system/generic entries are dropped.
- * 5. `docker inspect --format '{{json .RepoDigests}}' <image>` records the PLATFORM RepoDigest
- *    actually scanned (NOT `buildx imagetools inspect`, which returns the manifest-LIST digest); an
- *    image with no RepoDigests (a local-only / never-pushed build) records digest "".
+ *  1. Probe local presence with `docker inspect`; if the image is absent (nonzero exit)
+ *     `docker pull` it first. A locally present ref is scanned as-is and never re-pulled, so a
+ *     stale local tag is never silently refreshed and the network is never raced into the
+ *     determinism contract.
+ *  2. `syft <image> -o cyclonedx-json=<tmp>` via execTool (argv array ONLY — the image ref is an
+ *     operand, never a shell string: command injection is impossible by construction).
+ *  3. assertSyftSbomSize stat-gates the output before any read (DoS bound), then parse and assert
+ *     specVersion === "1.6" (pin verification).
+ *  4. filterOsComponents keeps EVERY component carrying name+version+purl, across ecosystems
+ *     (deb/apk/npm/pypi/...) — syft's purl-less file/operating-system/generic entries are dropped.
+ *  5. `docker inspect --format '{{json .RepoDigests}}' <image>` records the PLATFORM RepoDigest
+ *     actually scanned (NOT `buildx imagetools inspect`, which returns the manifest-LIST digest);
+ *     an image with no RepoDigests (a local-only / never-pushed build) records digest "".
  *
  * Emit: a minimal deterministic `{ bomFormat, specVersion:"1.6", components,
  * dockerImages }` doc and nothing else (no serialNumber, no metadata,
@@ -456,10 +456,10 @@ async function resolveDigest(
  * varies by machine. Selecting `digests[0]` therefore makes the committed docker.sbom.json
  * machine-dependent, breaking byte-determinism (the check would flag a stale artifact). This
  * selects a pure function of the digest SET, never of emission order:
- * 1. PREFER the digest whose repository (the part before `@sha256:`) matches the requested image
- *    ref's repository — that is the registry the user
+ *   1. PREFER the digest whose repository (the part before `@sha256:`) matches the requested image
+ *      ref's repository — that is the registry the user
  *      asked about, the most meaningful identity;
- * 2. FALL BACK to the compareCodeUnits-SMALLEST digest (a deterministic
+ *   2. FALL BACK to the compareCodeUnits-SMALLEST digest (a deterministic
  *      function of the set) when no repository matches.
  * The common single-element case returns that one element either way — behavior identical to the
  * prior `digests[0]`. Returns undefined for an empty set (the caller throws).

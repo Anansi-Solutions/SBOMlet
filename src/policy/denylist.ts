@@ -18,20 +18,21 @@
  *
  * Two match modes, exactly one per entry, mirroring the `[[compatible]]` shape:
  *
- * match = "license": `pattern` is an SPDX id or an OR of ids, pre-decomposed at validation time
- * (orLeaves) into a spdx-satisfies allowlist — identical to the compatible license path. The
- * matcher walks the finding's parsed expression and asks, per node, "is this branch unavoidably
- * denied?" Never substring, never re-parsed at evaluate time. RSAL has no registered SPDX id, so it
- * ships in name-mode, not here.
+ *   match = "license": `pattern` is an SPDX id or an OR of ids, pre-decomposed
+ *     at validation time (orLeaves) into a spdx-satisfies allowlist — identical to the compatible
+ *     license path. The matcher walks the finding's parsed expression and asks, per node, "is this
+ *     branch unavoidably denied?" Never substring, never re-parsed at evaluate time. RSAL has no
+ *     registered SPDX id, so it ships in name-mode, not here.
  *
- * match = "name": `pattern` is a verbatim, case-sensitive package-name compare. This is the escape
- * hatch for non-SPDX use-restriction riders like Commons-Clause, which is not a registered SPDX
- * license and rides alongside another license (e.g. "MIT AND Commons-Clause" — not SPDX-parseable).
- * The spdx-satisfies path cannot catch it; an exact name compare can. Name-mode deliberately does
- * not require a parseable license expression — a package with an unknown (null) finding can still
- * be name-denied. The compare is exact, never a broad regex or substring, so a typo'd or unrelated
- * name can never be denied. The shipped defaults are license-mode only — a name-mode default would
- * have to guess encumbered package names.
+ *   match = "name": `pattern` is a verbatim, case-sensitive package-name
+ *     compare. This is the escape hatch for non-SPDX use-restriction riders like Commons-Clause,
+ *     which is not a registered SPDX license and rides alongside another license (e.g. "MIT AND
+ *     Commons-Clause" — not SPDX-parseable). The spdx-satisfies path cannot catch it; an exact name
+ *     compare can. Name-mode deliberately does not require a parseable license expression — a
+ *     package with an unknown (null) finding can still be name-denied. The compare is exact, never
+ *     a broad regex or substring, so a typo'd or unrelated name can never be denied. The shipped
+ *     defaults are license-mode only — a name-mode default would have to guess encumbered package
+ *     names.
  *
  * Election applies to deny too, not just to compatible (load-bearing): spdx-satisfies(finding,
  * allowlist) is the wrong primitive for deny — it treats the allowlist as "available licenses" and
@@ -40,15 +41,15 @@
  * correct rule is the dual of isCopyleft's recursion: a finding is denied only when it has no
  * branch left to elect out of the deny set.
  *   - leaf       → denied iff the leaf satisfies the deny allowlist;
- * - OR (l, r) → denied iff both sides are denied (one electable branch
+ *   - OR (l, r) → denied iff both sides are denied (one electable branch
  *                  defeats the denial);
- * - AND (l, r) → denied iff either side is denied (an AND conjunct cannot be elected away — every
- *   obligation applies).
+ *   - AND (l, r) → denied iff either side is denied (an AND conjunct cannot be elected away — every
+ *     obligation applies).
  * Concretely, with BUSL-1.1 in the deny set:
  *   - "MIT OR BUSL-1.1"      → not denied (MIT is an electable branch — the
- * same election compatible relies on).
- * - "GPL-3.0 OR BUSL-1.1" → denied only when the deny set covers both branches, i.e. no branch is
- *   electable out.
+ *                              same election compatible relies on).
+ *   - "GPL-3.0 OR BUSL-1.1" → denied only when the deny set covers both branches, i.e. no branch is
+ *     electable out.
  * This keeps deny exactly consistent with the compatible election path while preventing over-denial
  * of a finding that has an acceptable branch.
  *

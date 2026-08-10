@@ -3,24 +3,24 @@
  * license + copyright detection, orchestrated behind the `--intensive` lane. Two responsibilities
  * live in this module:
  *
- * 1. `sourceDirsFor` — a purl → ordered locally-present scan-candidate mapper (no
- *    registry/collector analog exists for this). npm: the decoded package name under
- *    `<targetDir>/node_modules`, with the installed `package.json` version MANDATORILY equal to the
- *    purl's version (a stale node_modules must never poison the cache with the wrong version's
- *    license). pypi: an in-project `.venv`'s site-packages, keyed by the PEP-503 structural fold of
- *    the dist-info dir name (ADR-0015: the dir name IS the signal, no PEP-440/508 parsing) — the
- *    dist-info dir itself is the first candidate (a wheel's METADATA and legal files live there,
- *    not in the import package), the top_level.txt import package dir the second. Everything else,
- *    or any structural mismatch, returns [] — an honest skip, never a fabricated guess. A
- *    `..`-shaped or absolute-path-shaped decoded name (or top_level.txt line) can never escape the
- *    target's containment root (resolve + strict prefix-check).
+ *  1. `sourceDirsFor` — a purl → ordered locally-present scan-candidate mapper (no
+ *     registry/collector analog exists for this). npm: the decoded package name under
+ *     `<targetDir>/node_modules`, with the installed `package.json` version MANDATORILY equal to
+ *     the purl's version (a stale node_modules must never poison the cache with the wrong version's
+ *     license). pypi: an in-project `.venv`'s site-packages, keyed by the PEP-503 structural fold
+ *     of the dist-info dir name (ADR-0015: the dir name IS the signal, no PEP-440/508 parsing) —
+ *     the dist-info dir itself is the first candidate (a wheel's METADATA and legal files live
+ *     there, not in the import package), the top_level.txt import package dir the second.
+ *     Everything else, or any structural mismatch, returns [] — an honest skip, never a fabricated
+ *     guess. A `..`-shaped or absolute-path-shaped decoded name (or top_level.txt line) can never
+ *     escape the target's containment root (resolve + strict prefix-check).
  *
- * 2. `scanPackageSources` — orchestrates the pinned `scancode-toolkit` CLI through `execTool` (the
- *    tool's only child_process seam; dockerOs.ts idiom): spawn → exists-check → size-gate BEFORE
- *    read → parse → runtime version-assert against {@link SCANCODE_TOOL} from the output's own
- *    headers (a substituted/drifted binary is caught). Expression election is two-lane; see {@link
- *    electExpression} for the legal-file/manifest precedence and the ADR-0007 no-fabrication
- *    rejection.
+ *  2. `scanPackageSources` — orchestrates the pinned `scancode-toolkit` CLI through `execTool` (the
+ *     tool's only child_process seam; dockerOs.ts idiom): spawn → exists-check → size-gate BEFORE
+ *     read → parse → runtime version-assert against {@link SCANCODE_TOOL} from the output's own
+ *     headers (a substituted/drifted binary is caught). Expression election is two-lane; see {@link
+ *     electExpression} for the legal-file/manifest precedence and the ADR-0007 no-fabrication
+ *     rejection.
  *
  * This module NEVER performs SPDX correction or interpretation — the raw expression string is
  * returned verbatim (`{raw, via, copyrights} | null`, the same shape the registry resolvers return

@@ -214,10 +214,10 @@ function ingestPackageEdges(
  * earlier draft unioned a name→constraint edge to EVERY purl sharing the name; that conflated the
  * npm same-purl peer-resolution case with the poetry different-version case and produced two
  * defects:
- * - FABRICATION: `black` requires `click >=8`; a lock with click@7.1.2 + click@8.1.7 fabricated
- *   `black → click@7.1.2` (a chain in no real relation).
- * - MISLABEL: a declared-root NAME `foo` with foo@1.0.0 (real direct) + foo@2.0.0 (transitive via
- *   `bar`) marked BOTH versions `direct`.
+ *   - FABRICATION: `black` requires `click >=8`; a lock with click@7.1.2 + click@8.1.7 fabricated
+ *     `black → click@7.1.2` (a chain in no real relation).
+ *   - MISLABEL: a declared-root NAME `foo` with foo@1.0.0 (real direct) + foo@2.0.0 (transitive via
+ *     `bar`) marked BOTH versions `direct`.
  * The honest fix partitions the name→purl index by VERSION-MULTIPLICITY: a name mapping to EXACTLY
  * ONE lock purl is PRECISE (it resolves edges and, if a declared root, marks that one purl direct);
  * a name mapping to TWO OR MORE lock purls (multi-version, or a genuine PEP-503 name-origin

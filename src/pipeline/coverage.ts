@@ -102,7 +102,7 @@ function terraformSkipReason(
  *   whose packages map holds only the root/workspace-link entries, an importers-only
  *   pnpm-lock.yaml, a bun.lock whose packages are all @workspace: members. The npm and bun counters
  *   return undefined for v1/garbage text (unknown count) — the strict `=== 0`
- * comparison below lets undefined fall through, so unknown routes to the
+ *   comparison below lets undefined fall through, so unknown routes to the
  *   scan and a zero-component result hard-fails loudly, never a silent skip;
  * - nuget: a packages.lock.json whose every dependency section is empty or holds only type=Project
  *   entries (first-party project references) counts a positively-determined zero → warn+skip. The
