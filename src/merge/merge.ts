@@ -440,7 +440,8 @@ function mergeInto(existing: PackageEntry, incoming: PackageEntry): void {
   // Reconcile scope on a purl collision — the gating "app" scope wins over the non-gating "os"
   // scope. Without this, a purl shared between an app input and an os input is silently demoted to
   // "os" purely by merge order (the os input arriving first), moving a real dependency out of the
-  // policy gate. Defense-in-depth: a shared dependency must never be demoted out of gating.
+  // policy gate.
+  // Defense-in-depth: a shared dependency must never be demoted out of gating.
   if (existing.scope === "os" && incoming.scope === "app") {
     existing.scope = "app";
   }

@@ -23,8 +23,14 @@ const TAG_LINE_RE = /^@[A-Za-z]/;
  */
 const STRUCTURAL_DIRECTIVE_RE =
   /^(eslint-[A-Za-z-]+|@ts-[A-Za-z-]+|prettier-ignore|#!)/;
-/** Non-structural markers: they start a new group but do reflow within it. */
-const SOFT_SEMANTIC_RE = /^(TODO:|FIXME:)/;
+/**
+ * A short label followed by a colon and a space: `TODO:`, `FIXME:`, a
+ * platform/ecosystem name in a parallel clause list (`POSIX:`, `win32:`,
+ * `npm:`), or any other one-to-sixteen-character word doing the same job.
+ * Non-structural: it starts a new group but does reflow within it, just
+ * like the semantic prefixes it generalizes.
+ */
+const LABEL_RE = /^[A-Za-z@][\w./+-]{0,15}:\s/;
 const FENCE_RE = /^```/;
 
 /** Splits leading whitespace from a content string. */
@@ -72,8 +78,8 @@ function isStructuralDirective(text) {
 }
 
 /** True for lines that must start a fresh group but still reflow within it. */
-function isSemanticLine(text) {
-  return SOFT_SEMANTIC_RE.test(text);
+function isLabelLine(text) {
+  return LABEL_RE.test(text);
 }
 
 /** Matches a markdown list marker at the start of a line's text. */
@@ -156,16 +162,16 @@ function splitParagraphGroups(lines) {
     }
 
     const marker = matchListMarker(text);
-    const semantic = !marker && isSemanticLine(text);
+    const label = !marker && isLabelLine(text);
 
     let canContinue = false;
     if (current && current.type === "prose") {
       if (current.bulleted) {
         canContinue =
-          !marker && !semantic && indent.length > current.baseIndent.length;
+          !marker && !label && indent.length > current.baseIndent.length;
       } else {
         canContinue =
-          !marker && !semantic && indent.length === current.baseIndent.length;
+          !marker && !label && indent.length === current.baseIndent.length;
       }
     }
 
@@ -517,6 +523,6 @@ export {
   hasUnbalancedBacktick,
   looksLikeCode,
   isTagLine,
-  isSemanticLine,
+  isLabelLine,
   isStructuralDirective,
 };

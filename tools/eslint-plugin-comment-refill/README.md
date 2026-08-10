@@ -122,10 +122,15 @@ a fixture in `rules/refill.test.ts`.
    unrelated code a few lines later, by way of a fix conflict with ESLint's
    own "unused disable directive" cleanup. Isolating the whole line is the
    only reflow-safe choice.
-8. **Soft semantic prefixes.** A line opening with `TODO:` or `FIXME:` — a
-   note for a person, not a directive read by a tool — always starts a new
-   group, exactly like a structural directive, but does reflow normally
-   within that group together with its own continuation lines.
+8. **Labeled clauses.** A line opening with a short label — one to sixteen
+   word characters (letters, digits, `_`, `.`, `/`, `+`, `-`), starting with
+   a letter or `@`, followed by `:` and a space — always starts a new group,
+   exactly like a structural directive, but does reflow normally within that
+   group together with its own continuation lines. `TODO:` and `FIXME:` are
+   the single-word case of this; the same rule covers a run of parallel
+   clauses (`POSIX:` / `win32:`, or `npm:` / `pypi:` / `maven:`), each on its
+   own line, so reflow can never fold a later clause up into an earlier
+   one's line even when the combined length would fit `maxLength`.
 9. **A single word longer than `maxLength`.** Most commonly a URL. It is
    never split, sits alone on its own line, and is accepted as-is: a group
    whose canonical form contains such a line is not reported for exceeding

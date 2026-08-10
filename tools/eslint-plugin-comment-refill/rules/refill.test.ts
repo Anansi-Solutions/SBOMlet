@@ -137,6 +137,32 @@ ruleTester.run("refill", refillRule, {
       code: "// Plain prose line here.\n// TODO: fix this rough edge soon.\n",
       options: [{ maxLength: 100 }],
     },
+    {
+      // Regression: a run of parallel `Label:` clauses, each already on its
+      // own line, must never be folded together even when the combined
+      // length would fit maxLength. This is the user's own example.
+      name: "labeled-clause-pair-preserved (idempotent on its own output)",
+      code: "// POSIX: own process group so the timeout can kill the whole tree.\n// win32: detached would allocate a new console; taskkill /T covers it.\n",
+      options: [{ maxLength: 100 }],
+    },
+    {
+      name: "labeled-clause-three-way-run-preserved (idempotent on its own output)",
+      code: "// npm: the decoded package name under `<targetDir>/node_modules`.\n// pypi: an in-project `.venv`'s site-packages directory.\n// maven: the local repository cache under `~/.m2`.\n",
+      options: [{ maxLength: 100 }],
+    },
+    {
+      name: "labeled-clause-continuation-wraps-within-group (idempotent on its own output)",
+      code: "// npm: This is one. This is two. This\n// is three.\n",
+      options: [{ maxLength: 40 }],
+    },
+    {
+      // Negative control: a word that could pass for a label lacks the
+      // trailing colon, so it never starts a group and ordinary refill
+      // still merges it with its neighbor.
+      name: "label-lookalike-without-colon-still-merges (idempotent on its own output)",
+      code: "// win32 without a colon here still merges normally into one single line.\n",
+      options: [{ maxLength: 100 }],
+    },
   ],
   invalid: [
     {
@@ -230,6 +256,16 @@ ruleTester.run("refill", refillRule, {
       options: [{ maxLength: 60 }],
       output:
         "/**\n * Two match modes:\n *\n *   - license: pattern is an SPDX id.\n */\n",
+      errors: 1,
+    },
+    {
+      // Same regression as the valid pair above, but starting from the
+      // damaged (pre-fix) shape: the label used to be foldable into the
+      // previous group's continuation lines; it no longer is.
+      name: "labeled-clause-continuation-wraps-within-group",
+      code: "// npm: This is one.\n// This is two.\n// This is three.\n",
+      options: [{ maxLength: 40 }],
+      output: "// npm: This is one. This is two. This\n// is three.\n",
       errors: 1,
     },
   ],
