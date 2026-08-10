@@ -24,6 +24,11 @@ const ruleTester = new RuleTester({
 ruleTester.run("refill", refillRule, {
   valid: [
     {
+      name: "indented-bulleted-paragraph-keeps-its-indent (idempotent on its own output)",
+      code: "/**\n * Two match modes:\n *\n *   - license: pattern is an SPDX id.\n */\n",
+      options: [{ maxLength: 60 }],
+    },
+    {
       name: "code-span-glued-to-trailing-punctuation (idempotent on its own output)",
       code: "// The cache dir (e.g. `.sbomlet.cache/`) need not exist on the first generate, and writeFileSync\n// does not create parents.\n",
       options: [{ maxLength: 100 }],
@@ -205,6 +210,17 @@ ruleTester.run("refill", refillRule, {
       options: [{ maxLength: 100 }],
       output:
         "// The cache dir (e.g. `.sbomlet.cache/`) need not exist on the first generate, and writeFileSync\n// does not create parents.\n",
+      errors: 1,
+    },
+    {
+      // Regression: an indented, non-bulleted paragraph (a hanging or
+      // definition-list-style block under a colon line) used to lose its
+      // indent entirely on reflow, collapsing to the comment's flat prefix.
+      name: "indented-bulleted-paragraph-keeps-its-indent",
+      code: "/**\n * Two match modes:\n *\n *   - license: pattern is\n *     an SPDX id.\n */\n",
+      options: [{ maxLength: 60 }],
+      output:
+        "/**\n * Two match modes:\n *\n *   - license: pattern is an SPDX id.\n */\n",
       errors: 1,
     },
   ],

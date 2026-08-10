@@ -223,17 +223,21 @@ function wrapWords(words, width) {
 
 /**
  * Renders a `prose` group to its canonical physical lines, given the fixed
- * per-line prefix (indent + marker, e.g. `"// "` or `" * "`).
+ * structural prefix (indent + marker, e.g. `"// "` or `" * "`). The group's
+ * own `baseIndent` — extra indentation relative to that structural prefix,
+ * for a hanging or definition-list-style paragraph that is not itself a
+ * bullet — is preserved on every line of the group, not just its first.
  */
 function renderProseGroup(group, prefix, maxLength) {
-  const availableWidth = Math.max(1, maxLength - prefix.length);
+  const linePrefix = prefix + group.baseIndent;
+  const availableWidth = Math.max(1, maxLength - linePrefix.length);
 
   if (!group.bulleted) {
     const words = group.lines.flatMap((line) =>
       tokenize(splitIndent(line.content).text),
     );
-    if (words.length === 0) return [prefix.replace(/\s+$/, "")];
-    return wrapWords(words, availableWidth).map((text) => prefix + text);
+    if (words.length === 0) return [linePrefix.replace(/\s+$/, "")];
+    return wrapWords(words, availableWidth).map((text) => linePrefix + text);
   }
 
   const { marker, rest } = group.marker;
@@ -248,12 +252,12 @@ function renderProseGroup(group, prefix, maxLength) {
   const words = [...firstLineWords, ...restWords];
 
   if (words.length === 0) {
-    return [(prefix + markerLiteral).replace(/\s+$/, "")];
+    return [(linePrefix + markerLiteral).replace(/\s+$/, "")];
   }
 
   const wrapped = wrapWords(words, hangWidth);
   return wrapped.map((text, index) =>
-    index === 0 ? prefix + markerLiteral + text : prefix + hang + text,
+    index === 0 ? linePrefix + markerLiteral + text : linePrefix + hang + text,
   );
 }
 
