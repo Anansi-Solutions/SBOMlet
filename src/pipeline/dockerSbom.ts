@@ -49,7 +49,7 @@ function isSafeImageRef(ref: string): boolean {
 
 /**
  * Filter an image-lane ref set through {@link isSafeImageRef} before it reaches syft/docker as an
- * operand. Order-stable; an empty/whitespace-only/dash- prefixed ref is dropped rather than handed
+ * operand. Order-stable; an empty/whitespace-only/dash-prefixed ref is dropped rather than handed
  * to syft as a token it could parse as a flag.
  */
 export function safeLiveScanImages(images: readonly string[]): string[] {

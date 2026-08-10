@@ -163,6 +163,21 @@ ruleTester.run("refill", refillRule, {
       code: "// win32 without a colon here still merges normally into one single line.\n",
       options: [{ maxLength: 100 }],
     },
+    {
+      name: "hyphen-wrap-compound-roundtrip (idempotent on its own output)",
+      code: "// The input-validation step runs first.\n",
+      options: [{ maxLength: 100 }],
+    },
+    {
+      name: "spaced-hyphen-separator-untouched (idempotent on its own output)",
+      code: "// Walk the whole tree - the whole thing must be considered\n// for license classification.\n",
+      options: [{ maxLength: 60 }],
+    },
+    {
+      name: "line-ending-with-spaced-hyphen-not-coalesced (idempotent on its own output)",
+      code: "// Walk the whole tree - the whole thing must be considered.\n",
+      options: [{ maxLength: 100 }],
+    },
   ],
   invalid: [
     {
@@ -266,6 +281,39 @@ ruleTester.run("refill", refillRule, {
       code: "// npm: This is one.\n// This is two.\n// This is three.\n",
       options: [{ maxLength: 40 }],
       output: "// npm: This is one. This is two. This\n// is three.\n",
+      errors: 1,
+    },
+    {
+      // Regression: a paragraph wrapped at a hyphen inside a compound word
+      // (`input-` on one line, `validation` on the next) used to reflow
+      // with a space inserted at the join, turning `input-validation` into
+      // `input- validation`. The two tokens must recombine into one word.
+      name: "hyphen-wrap-compound-roundtrip",
+      code: "// The input-\n// validation step runs first.\n",
+      options: [{ maxLength: 100 }],
+      output: "// The input-validation step runs first.\n",
+      errors: 1,
+    },
+    {
+      // A deliberate ` - ` separator must never gain the hyphen-wrap
+      // rejoin treatment: rewrapping this sentence across the width still
+      // keeps its spaces on both sides of the hyphen.
+      name: "spaced-hyphen-separator-untouched",
+      code: "// Walk the whole tree - the whole thing must be considered for license classification.\n",
+      options: [{ maxLength: 60 }],
+      output:
+        "// Walk the whole tree - the whole thing must be considered\n// for license classification.\n",
+      errors: 1,
+    },
+    {
+      // A line ending in a spaced hyphen separator, with the continuation
+      // on the next source line, must not coalesce: the hyphen tokenizes
+      // alone (nothing precedes it directly), so its stem is empty and
+      // never passes the word-ish check.
+      name: "line-ending-with-spaced-hyphen-not-coalesced",
+      code: "// Walk the whole tree -\n// the whole thing must be considered.\n",
+      options: [{ maxLength: 100 }],
+      output: "// Walk the whole tree - the whole thing must be considered.\n",
       errors: 1,
     },
   ],

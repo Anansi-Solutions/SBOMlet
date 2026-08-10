@@ -436,7 +436,7 @@ function containerPartitionLines(
  *
  * Each subsection splits its rows into a **System packages** table (the {@link
  * OS_PACKAGE_ECOSYSTEMS} allowlist) and an **Application packages** table (everything else), in
- * that fixed order, so the base-image-vs- installed distinction is visible per container - an empty
+ * that fixed order, so the base-image-vs-installed distinction is visible per container - an empty
  * partition omits its label+table entirely (a base-image-only container shows only System).
  * comparePackages order (the caller's sort) survives the partition filter.
  *

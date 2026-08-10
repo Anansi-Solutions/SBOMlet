@@ -24,7 +24,7 @@
  * Serialization reuses the one tool-wide sorter ({@link toSortedJson}): sorted keys, indent 2,
  * LF-only, trailing newline, no timestamp - the memo diffs cleanly and the byte-exact gate stays
  * honest. The loud-on-malformed envelope read is the enrichment cache's ({@link readEnvelope}) with
- * an added schema- version check, so a poisoned/garbage/wrong-version memo is a config error, never
+ * an added schema-version check, so a poisoned/garbage/wrong-version memo is a config error, never
  * a silent empty.
  */
 import { toSortedJson } from "../../model/dependencies";
@@ -66,7 +66,7 @@ export function readScancodeMemo(path: string): Map<string, ScancodeMemoEntry> {
 /**
  * Serialize a memo Map to its deterministic on-disk bytes via {@link toSortedJson} (sorted keys,
  * indent 2, LF, trailing newline, no timestamp) - double-serialize is byte-identical. There is one
- * sorter tool- wide, never a second JSON writer.
+ * sorter tool-wide, never a second JSON writer.
  */
 export function serializeScancodeMemo(
   memo: Map<string, ScancodeMemoEntry>,

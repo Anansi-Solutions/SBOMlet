@@ -551,7 +551,7 @@ export async function buildOutputs(
   let policy: Policy | undefined;
   if (opts.policyPath !== undefined) {
     // Read from the base-dir-resolved path and name the resolved absolute path on failure - a
-    // relative path in the error would read as repo-root- relative while the file was searched
+    // relative path in the error would read as repo-root-relative while the file was searched
     // elsewhere.
     const policyFile = resolveFrom(opts.baseDir, opts.policyPath);
     let policyText: string;
@@ -635,7 +635,7 @@ export async function buildOutputs(
   const scoped = applyContainerScopes(annotated, developmentContainers);
 
   // Policy stage: pure engine calls - evaluate verdicts, surface the summary on stderr, and project
-  // the PolicyView for the document renderer. Policy- authored strings reaching the .md route
+  // the PolicyView for the document renderer. Policy-authored strings reaching the .md route
   // through escapeCell inside the renderers.
   let verdicts: Verdict[] | undefined;
   let policyView: PolicyView | undefined;

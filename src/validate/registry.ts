@@ -1,7 +1,7 @@
 /**
  * arktype boundary for the two NEW untrusted registry JSON shapes: the PyPI `info` block and the
  * npm packument. Registry responses are third-party, volatile, and may be malformed or oversized -
- *  * this is the ASVS V5 input- validation control for a brand-new network surface.
+ *  * this is the ASVS V5 input-validation control for a brand-new network surface.
  *
  * Posture mirrors validate/sbom.ts exactly: undeclared keys are ignored (arktype default), and any
  * present-but-wrong-typed field coerces to undefined (skip-don't-throw). A malformed response NEVER

@@ -29,8 +29,8 @@ export type ExecFn = (
 ) => Promise<{ stdout: string; stderr: string }>;
 
 /**
- * Wall-clock limit for one `docker buildx build` spawn. A build is workload- shaped and can be
- * slow; CI additionally bounds the whole job with timeout-minutes. Callers override via {@link
+ * Wall-clock limit for one `docker buildx build` spawn. A build is workload-shaped and can be slow;
+ * CI additionally bounds the whole job with timeout-minutes. Callers override via {@link
  * BuildImageOptions.timeoutMs}.
  */
 const DEFAULT_BUILD_TIMEOUT_MS = 20 * 60 * 1000;

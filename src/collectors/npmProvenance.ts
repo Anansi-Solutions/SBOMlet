@@ -194,7 +194,7 @@ function hasRootAnchorEdge(
  *      results.
  * Today the pinned yarn-plugin always emits both, so neither guard fires on real input; they harden
  * the lane against an npm-graph BOM or a future generator that omits the root bom-ref. This mirrors
- * the honest-residual / abstain-on- ambiguity posture the rest of the provenance code follows.
+ * the honest-residual / abstain-on-ambiguity posture the rest of the provenance code follows.
  */
 function buildNpmGraph(sbom: unknown): NpmGraph | undefined {
   const doc = SbomDocument(sbom);

@@ -206,6 +206,52 @@ function tokenize(text) {
   return matches ?? [];
 }
 
+const WORD_ISH_RE = /^[A-Za-z0-9]+$/;
+
+/**
+ * True when `left` is a source line's final token from a genuine mid-word
+ * hyphenated line-break, wrapping into `right` as the next line's first
+ * token — `schema-` followed by `version`, from a paragraph that was
+ * originally wrapped at the hyphen inside `schema-version`. Both the stem
+ * before `left`'s trailing hyphen and all of `right` must be plain word-ish
+ * (letters/digits), so a deliberate ` - ` separator never qualifies: its
+ * hyphen is tokenized on its own (nothing precedes it directly), leaving an
+ * empty, non-word-ish stem.
+ */
+function isHyphenWrapJoin(left, right) {
+  if (!left.endsWith("-")) return false;
+  return WORD_ISH_RE.test(left.slice(0, -1)) && WORD_ISH_RE.test(right);
+}
+
+/**
+ * Tokenizes a paragraph's physical lines, rejoining a hyphenated line-break
+ * split across two of them back into the single token it started as.
+ * Without this, `tokenize` runs per line and never sees that a trailing
+ * `schema-` and a following `version` were one word before the paragraph
+ * wrapped; flattening them as separate tokens then re-joining with a space
+ * (see `wrapWords`) turns `schema-version` into `schema- version`. Only the
+ * boundary between one line's last token and the next line's first token is
+ * ever a merge candidate — same-line adjacency (`pre-` and `and` in
+ * "pre- and post-processing") is left alone, so a suffix enumeration is
+ * never mistaken for a wrapped compound.
+ */
+function tokenizeLines(lineTexts) {
+  const words = [];
+  for (const lineText of lineTexts) {
+    const lineWords = tokenize(lineText);
+    if (lineWords.length === 0) continue;
+    const [first, ...rest] = lineWords;
+    const prev = words[words.length - 1];
+    if (prev !== undefined && isHyphenWrapJoin(prev, first)) {
+      words[words.length - 1] = prev + first;
+    } else {
+      words.push(first);
+    }
+    words.push(...rest);
+  }
+  return words;
+}
+
 /** Greedy fill: packs words onto lines no wider than `width`, one overlong word per line. */
 function wrapWords(words, width) {
   const lines = [];
@@ -239,8 +285,8 @@ function renderProseGroup(group, prefix, maxLength) {
   const availableWidth = Math.max(1, maxLength - linePrefix.length);
 
   if (!group.bulleted) {
-    const words = group.lines.flatMap((line) =>
-      tokenize(splitIndent(line.content).text),
+    const words = tokenizeLines(
+      group.lines.map((line) => splitIndent(line.content).text),
     );
     if (words.length === 0) return [linePrefix.replace(/\s+$/, "")];
     return wrapWords(words, availableWidth).map((text) => linePrefix + text);
@@ -251,11 +297,10 @@ function renderProseGroup(group, prefix, maxLength) {
   const hang = " ".repeat(markerLiteral.length);
   const hangWidth = Math.max(1, availableWidth - markerLiteral.length);
 
-  const firstLineWords = tokenize(rest);
-  const restWords = group.lines
-    .slice(1)
-    .flatMap((line) => tokenize(splitIndent(line.content).text));
-  const words = [...firstLineWords, ...restWords];
+  const words = tokenizeLines([
+    rest,
+    ...group.lines.slice(1).map((line) => splitIndent(line.content).text),
+  ]);
 
   if (words.length === 0) {
     return [(linePrefix + markerLiteral).replace(/\s+$/, "")];
@@ -518,6 +563,7 @@ export {
   splitParagraphGroups,
   wrapWords,
   tokenize,
+  tokenizeLines,
   matchListMarker,
   isAlignedTable,
   hasUnbalancedBacktick,

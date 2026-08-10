@@ -42,8 +42,8 @@ export function mavenVersionWithoutQualifiers(version: string): string {
  * parts are decoded from their purl encoding, qualifiers are stripped from the version first, and
  * the WHOLE `group:artifact` pair is re-encoded as a SINGLE path segment - so a decoded "/" (or any
  * other purl-embedded separator) can never introduce a real path boundary. The host is a literal;
- * an attacker-shaped purl (extra slashes, "@", odd percent- escapes) can change neither the host
- * nor the path root - SSRF impossible by
+ * an attacker-shaped purl (extra slashes, "@", odd percent-escapes) can change neither the host nor
+ * the path root - SSRF impossible by
  * construction, the nuget.ts idiom.
  */
 export function depsDevVersionUrl(
