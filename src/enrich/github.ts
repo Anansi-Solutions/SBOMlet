@@ -6,15 +6,15 @@
  * the registry-enforced naming convention and the license read from the GitHub License API at the
  * component's VERSION TAG.
  *
- * Provider vs module is distinguished by the purl's encodedName SEGMENT COUNT, NOT by host - *
- * OpenTofu rewrites BOTH provider and module Sources to registry.opentofu.org, so a host-based
+ * Provider vs module is distinguished by the purl's encodedName SEGMENT COUNT, NOT by host
+ * - OpenTofu rewrites BOTH provider and module Sources to registry.opentofu.org, so a host-based
  * branch is invalid. See {@link githubRepoFor} for the segment-count mapping.
  *
  * Like pypi.ts/npm.ts the resolver returns ONLY the RAW string (+ a `via` tag and the raw-LICENSE
  * `downloadUrl`) - it NEVER parses/corrects; normalizeRaw is the single SPDX authority downstream.
  * A NOASSERTION/null spdx_id or a malformed body → null (a DEFINITIVE no-license answer, distinct
- * from a retrieval failure, which the orchestrator surfaces loudly). The resolver does NOT fetch -
- *  * it consumes an already-fetched body (the pypi/npm contract); fetch wiring + ordered-ref
+ * from a retrieval failure, which the orchestrator surfaces loudly). The resolver does NOT fetch
+ * - it consumes an already-fetched body (the pypi/npm contract); fetch wiring + ordered-ref
  * fallback live in enrich.ts.
  */
 import { narrowGithubLicense } from "../validate/registry";
@@ -24,8 +24,8 @@ interface ParsedTerraformPurl {
   type: string;
   /**
    * The host-prefixed name: `<host>/<ns>/<name>` (3 segments = provider) or
-   * `<host>/<ns>/<name>/<provider>` (4 segments = module). The SEGMENT COUNT - not the host -    *
-   * distinguishes the two.
+   * `<host>/<ns>/<name>/<provider>` (4 segments = module). The SEGMENT COUNT - not the host
+   * - distinguishes the two.
    */
   encodedName: string;
   version: string;

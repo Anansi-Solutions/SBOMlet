@@ -26,8 +26,8 @@ export interface CheckResult {
  * call - the in-memory string is what generate would write - so there is no regenerate/compare
  * TOCTOU window and nothing fresh is ever round-tripped through disk.
  *
- * A missing/unreadable committed file is stale (a never-generated output is stale by definition) -
- *  * consciously diverging from the policy-file read idiom, which throws: a missing policy is a
+ * A missing/unreadable committed file is stale (a never-generated output is stale by definition)
+ * - consciously diverging from the policy-file read idiom, which throws: a missing policy is a
  * config error (3), a missing output is exactly what exit 2 reports.
  *
  * runCheck never writes files: --dump-model is rejected as a config error, so the gate cannot

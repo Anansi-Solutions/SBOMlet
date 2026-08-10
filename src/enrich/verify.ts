@@ -13,8 +13,8 @@
  * positive entry, null for a negative one) versus the freshly resolved value. That one check covers
  * every tamper shape - a changed string, a fabricated entry the registry now 404s (→ null), and a
  * negative entry the registry contradicts with a real license. A registry/network FAILURE is a loud
- * inability to verify (it propagates and the CLI exits 3), NEVER silently treated as agreement - *
- * exactly the reliability posture `generate` already takes.
+ * inability to verify (it propagates and the CLI exits 3), NEVER silently treated as agreement
+ * - exactly the reliability posture `generate` already takes.
  */
 import { compareCodeUnits } from "../model/dependencies";
 import {
@@ -201,8 +201,8 @@ function reasonFor(
 
 /**
  * Audit one entry: re-resolve and compare. Returns a mismatch, or null when the committed license
- * still matches the registry. An entry whose key is not a re-resolvable purl is itself a finding -
- *  * `generate` only ever writes pypi/npm/terraform entries, so anything else was not written by
+ * still matches the registry. An entry whose key is not a re-resolvable purl is itself a finding
+ * - `generate` only ever writes pypi/npm/terraform entries, so anything else was not written by
  * this tool.
  */
 async function auditEntry(

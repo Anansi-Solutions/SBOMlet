@@ -54,10 +54,10 @@ export interface DiscoverDockerfilesOptions {
 export interface DiscoverDockerfilesResult {
   dockerfiles: DiscoveredDockerfile[];
   /**
-   * Repo-relative identities of Dockerfiles EXCLUDED by a `[docker] ignore` glob -    *
-   * deterministically sorted. (Files excluded by the shared descent predicate or by `--exclude` are
-   * NOT listed here; only the policy-driven ignores, which are the user-meaningful "I deliberately
-   * excluded this" signal the summary surfaces.)
+   * Repo-relative identities of Dockerfiles EXCLUDED by a `[docker] ignore` glob
+   * - deterministically sorted. (Files excluded by the shared descent predicate or by `--exclude`
+   * are NOT listed here; only the policy-driven ignores, which are the user-meaningful "I
+   * deliberately excluded this" signal the summary surfaces.)
    */
   ignored: string[];
 }
@@ -89,8 +89,8 @@ export function isDockerfileName(name: string): boolean {
  * Walk `repoRoot` and return every non-excluded Dockerfile, deterministically sorted by
  * repo-relative forward-slash identity. NO file contents are read.
  *
- * Exclusion order (each step strictly narrows): the SHARED descent predicate (shouldDescendDir - *
- * node_modules/.git/dotfile dirs incl. .terraform/the tool
+ * Exclusion order (each step strictly narrows): the SHARED descent predicate (shouldDescendDir
+ * - node_modules/.git/dotfile dirs incl. .terraform/the tool
  * dir) prunes whole subtrees during the walk; then the CLI `--exclude` globs;
  * then the `[docker] ignore` globs. A Dockerfile under any excluded path is never listed.
  */

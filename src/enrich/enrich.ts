@@ -443,11 +443,11 @@ async function fetchTerraformMisses(
 /**
  * The nuget registration path: TWO sequential fetches per miss (leaf → host-pinned catalogEntry)
  * inside one bounded worker - modest concurrency plus the existing backoff, no new throttling
- * machinery. The transient-vs-definitive line: ONLY fetchJsonOr404's 404 VALUE (not on nuget.org -
- * * the common, legitimate private-feed reality), a malformed or foreign-host catalogEntry (no
+ * machinery. The transient-vs-definitive line: ONLY fetchJsonOr404's 404 VALUE (not on nuget.org
+ * - the common, legitimate private-feed reality), a malformed or foreign-host catalogEntry (no
  * request is ever made to it), and the resolver's clean null record governed NEGATIVE entries;
- * every throw (429/5xx/network/timeout) propagates loudly out of mapLimit and writes NOTHING - *
- * negative-poison impossible. The cache key stays the VERBATIM purl; only the URLs are lowercased
+ * every throw (429/5xx/network/timeout) propagates loudly out of mapLimit and writes NOTHING
+ * - negative-poison impossible. The cache key stays the VERBATIM purl; only the URLs are lowercased
  * (the builder owns that). Nuget entries never carry fetchedAt: registration/catalog blobs are
  * stable versioned CDN content, the pypi/npm no-timestamp rule.
  */

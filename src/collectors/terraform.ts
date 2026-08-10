@@ -132,8 +132,8 @@ export interface TerraformProvider {
 
 /**
  * §Pattern 1: match each provider block's address and its `version` field. `[^}]*?` lazily spans
- * only the whitespace/`constraints` line between the block header `{` and the `version` key - *
- * neither contains `}` - so the match stops at `version` and never reaches the block's closing
+ * only the whitespace/`constraints` line between the block header `{` and the `version` key
+ * - neither contains `}` - so the match stops at `version` and never reaches the block's closing
  * brace or the `hashes = [ ... ]` array that follows. A block with no constraints line (version
  * directly after `{`) matches identically. A dedicated test fixture for the brace-edge case
  * confirms this holds; if it had broken, a line-state tokenizer was the fallback - it did not, so
@@ -393,8 +393,8 @@ export function absentModulesJsonShouldFail(dir: string): boolean {
 /**
  * §The modules.json presence guard. The present-path is taken only when `modules.json` exists and
  * is a regular file. A directory-named (or other non-regular-file) `modules.json` is treated as
- * absent, routing to the filesystem-signal gate ({@link absentModulesJsonShouldFail}) which - *
- * seeing `.terraform/modules/` exists with no modules.json file - fails loud with the guided "run
+ * absent, routing to the filesystem-signal gate ({@link absentModulesJsonShouldFail}) which
+ * - seeing `.terraform/modules/` exists with no modules.json file - fails loud with the guided "run
  * tofu init/tofu get" error, instead of a raw uncaught EISDIR from a `readFileSync` on a directory.
  * No silent drop; a guided error. Shared by the collector and the coverage arm so the two cannot
  * diverge.

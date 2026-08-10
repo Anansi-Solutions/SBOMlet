@@ -96,9 +96,9 @@ export interface ClarifyRule {
  * How a would-be default-FAIL verdict is treated on a DEV-only occurrence. Per-occurrence, never
  * package-level - a package that is dev in one workspace and prod in another still FAILS on the
  * prod occurrence.
- *   "warn" - a dev would-be-fail downgrades to warn (the default). "fail" - NO downgrade; dev gates
- *   exactly like prod (strict). "ignore" - a dev would-be-fail becomes ok (an EXPLICIT, documented
- *   opt-out).
+ *   "warn"   - a dev would-be-fail downgrades to warn (the default).
+ *   "fail"   - NO downgrade; dev gates exactly like prod (strict).
+ *   "ignore" - a dev would-be-fail becomes ok (an EXPLICIT, documented opt-out).
  * A PRODUCTION occurrence ALWAYS fails under "warn"/"ignore" - a shipped copyleft can never be
  * dev-downgraded.
  */
@@ -107,11 +107,11 @@ export type DevDependencyHandling = "warn" | "fail" | "ignore";
 /**
  * The [os_dependencies] knob, mirroring DevDependencyHandling. It governs a would-be-FAIL on a
  * PACKAGE-level os-scope dependency (a pkg:deb / pkg:apk row from the Docker base image):
- *   "warn" - an os would-be-fail downgrades to warn (the default): expected
+ *   "warn"   - an os would-be-fail downgrades to warn (the default): expected
  *              base-image copyleft (glibc/bash GPL/LGPL, satisfied by shipping the image) LISTS,
  *              not fails.
- *   "fail" - NO downgrade; an os-scope copyleft gates exactly like an app one. "ignore" - an os
- *   would-be-fail becomes ok (an EXPLICIT, documented opt-out).
+ *   "fail"   - NO downgrade; an os-scope copyleft gates exactly like an app one.
+ *   "ignore" - an os would-be-fail becomes ok (an EXPLICIT, documented opt-out).
  * A DENIED (source-available) license in an OS package STILL FAILS regardless - deny is terminal-0
  * above the os downgrade.
  */
@@ -121,7 +121,7 @@ export type OsDependencyHandling = "warn" | "fail" | "ignore";
  * The optional [document] table: author-supplied presentation prose for the LICENSES document only
  * (never the notices companion). Both keys are OPTIONAL; when present each must be a non-empty
  * string. The render layer treats `title` as a heading and `preamble` as verbatim author markdown
- * - * both at the policy-file trust boundary, so neither is escapeCell'd.
+ * - both at the policy-file trust boundary, so neither is escapeCell'd.
  */
 export interface DocumentConfig {
   /** Replaces the default "Third-Party Licenses" H1 when present. */
@@ -140,8 +140,8 @@ export interface DockerDevelopmentEntry {
    * (globToRegExp in targets/discover.ts: `*` within a segment, `**` across segments,
    * case-insensitive, anchored - a literal path is a valid glob). Here the pattern is only
    * validated and stored verbatim; matching against discovered containers happens where the report
-   * is rendered. A matching container's packages are listed under Development-only in the report -
-   *    * placement only, it never affects a verdict.
+   * is rendered. A matching container's packages are listed under Development-only in the report
+   * - placement only, it never affects a verdict.
    */
   source: string;
   /** Mandatory documentation: why this container never ships. */

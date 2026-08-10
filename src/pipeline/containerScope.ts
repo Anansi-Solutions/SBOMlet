@@ -13,8 +13,8 @@
  * before: os-downgrade, copyleft de-noise, and the AGPL escalation apply unchanged. An
  * application-ecosystem package baked into the image is an application dependency wherever it
  * lives: re-keyed to scope "app", it gates like any other application dependency in a production
- * container, and - reusing the existing dev/prod lever rather than inventing a new scope value -
- * * dev-downgrades to warn when its container occurrence is marked development, exactly like a
+ * container, and - reusing the existing dev/prod lever rather than inventing a new scope value
+ * - dev-downgrades to warn when its container occurrence is marked development, exactly like a
  * devDependency.
  *
  * Pure: returns a NEW model, cloning only the touched entries and occurrences; a package the

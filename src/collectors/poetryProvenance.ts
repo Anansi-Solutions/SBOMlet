@@ -252,7 +252,8 @@ function buildPurlGraph(
   };
   const rootChildren = new Set<string>();
   for (const pkg of packages) {
-    // A declared-root NAME marks a purl direct ONLY when that name maps to exactly one lock purl -     // a multi-version root name cannot identify WHICH version is the real direct without PEP-440,
+    // A declared-root NAME marks a purl direct ONLY when that name maps to exactly one lock purl
+    // - a multi-version root name cannot identify WHICH version is the real direct without PEP-440,
     // so none is blanket-marked.
     if (
       rootNames.has(pkg.normalizedName) &&

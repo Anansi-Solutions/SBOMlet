@@ -109,7 +109,8 @@ export function execTool(
     child.on("close", (code, signal) => {
       clearTimeout(timer);
       if (timedOut) {
-        // Already rejected with the timeout error; this close is the kill landing (code === null) -         // never report "exited with code null".
+        // Already rejected with the timeout error; this close is the kill landing (code === null)
+        // - never report "exited with code null".
         return;
       }
       if (code === 0) {

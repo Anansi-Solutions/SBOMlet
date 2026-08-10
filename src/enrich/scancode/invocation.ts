@@ -178,7 +178,8 @@ async function runScancode(
       );
     }
     // ScanCode exits NON-ZERO when SOME files fail to scan - an undecodable or oversized bundled
-    // data file (a vendored full license-list JSON, say) -     // yet still writes a COMPLETE, well-formed result for the rest of the tree;
+    // data file (a vendored full license-list JSON, say) -
+    // yet still writes a COMPLETE, well-formed result for the rest of the tree;
     // the file that failed carries no detected expression and is inert to election. Tolerate that
     // ONLY when an output file was produced: the exists-check, the size gate, and the tool_version
     // assertion below are the integrity gate, so a substituted/wrong binary, a truncated write, or

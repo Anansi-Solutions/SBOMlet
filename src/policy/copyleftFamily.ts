@@ -23,7 +23,7 @@
  *
  * DELIBERATE EXCLUSIONS:
  * - Permissive families ("BSD", "Apache", "MIT") are the explicitly NON-gating lane and are absent
- * - they get a non-gating default:imprecise status.
+ *   - they get a non-gating default:imprecise status.
  * - The weak-copyleft family tokens ("MPL", "EPL", "CDDL") are NOT included in this plan: no
  *   producing path emits a bare MPL/EPL/CDDL imprecise token (the imprecise findings this phase
  *   produces are the BSD/Apache permissive labels and the bare GPL-family copyleft labels), so

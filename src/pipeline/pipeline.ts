@@ -117,7 +117,7 @@ export interface GenerateOptions {
    * invocation directory ({{.USER_WORKING_DIR}}): tasks run inside tools/sbomlet (the include
    * `dir`, mandated by the mise bun pin), so without this anchor a
    * `task generate POLICY=.sbomlet.policy.toml` would look for tools/sbomlet/.sbomlet.policy.toml
-   * -    * and a relative CYCLONEDX would silently write (then "verify") the export inside
+   * - and a relative CYCLONEDX would silently write (then "verify") the export inside
    * tools/sbomlet. Display surfaces keep the raw path: the policy pointer line in the rendered
    * document must stay deterministic across machines, never embedding an absolute machine-specific
    * path.
@@ -275,11 +275,11 @@ function narrowAttributedSidecar(
 /**
  * Read the committed docker SBOM as scope:"os" merge inputs, or undefined when it does not exist
  * (the offline cache-miss equivalent - no os entries, never a live scan). The default path is
- * {@link DOCKER_SBOM_FILE} inside the resolved cache `dir` (repo-root-anchored), so the Action -
- * * running from its own directory - reads the consumer repo's committed SBOM, not a stray file
+ * {@link DOCKER_SBOM_FILE} inside the resolved cache `dir` (repo-root-anchored), so the Action
+ * - running from its own directory - reads the consumer repo's committed SBOM, not a stray file
  * beside the action; an explicit CLI path overrides it. The file is size-gated before any read (a
  * committed artifact must never balloon a run), then parsed; a non-JSON file throws on JSON.parse
- * - * the correct loud failure for a tampered committed artifact.
+ * - the correct loud failure for a tampered committed artifact.
  *
  * The sidecar FANS OUT to one input per image with targetIdentity "docker:" + source, so a purl
  * shared across images gets one occurrence per image through the untouched mergeSboms - exactly

@@ -14,9 +14,9 @@
  *
  * What this module deliberately does not do:
  * - No `yarn plugin import` / `yarn add` (would write into the scanned repo).
- * - No network license enrichment (the enrichment env toggle stays unset everywhere - *
- * nondeterministic). - No per-component dev marker parsing: the plugin emits none; dev scope is
- * derived downstream as
+ * - No network license enrichment (the enrichment env toggle stays unset everywhere
+ *   - nondeterministic).
+ * - No per-component dev marker parsing: the plugin emits none; dev scope is derived downstream as
  *   full-set minus prod-set from the two SBOMs this adapter returns.
  */
 

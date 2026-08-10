@@ -347,8 +347,8 @@ export async function collectWithMavenSbom(
  *
  * Tolerant by design: garbage, non-JSON, non-CycloneDX, and purl-less text all yield undefined
  * rather than throwing. The pre-pass must never abort the whole run over one target's bad sidecar
- * - * that target's OWN collect call fails loud later, on its own turn, via
- * collectWithMavenSbom's ladder.
+ * - that target's OWN collect call fails loud later, on its own turn, via collectWithMavenSbom's
+ * ladder.
  *
  * @returns The root purl, or undefined when the text cannot be read as a
  * CycloneDX document with one.

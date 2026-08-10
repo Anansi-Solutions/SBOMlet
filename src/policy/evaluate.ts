@@ -121,8 +121,8 @@ const UNKNOWN_ASSESSMENT: Assessment = {
  *
  * An imprecise finding (confidence "imprecise", expression null) branches out before the
  * null-expression unknown fallback so its family is carried to the present-but-needs-clarify lane
- * - * it must never be conflated with genuine unknown and never reach satisfies() (it has no
- * valid expression).
+ * - it must never be conflated with genuine unknown and never reach satisfies() (it has no valid
+ * expression).
  */
 function assessPackage(entry: PackageEntry): Assessment {
   const finding = entry.finding;
@@ -248,10 +248,10 @@ function suppressionFor(
  *       is in a finding-family the workspace's license family absorbs, per the literal
  *       WORKSPACE_ABSORBS relation (COPYLEFT_FAMILY exact-ID lookups, never substring). A workspace
  *       re-released under strong copyleft absorbs the inbound-compatible weaker copyleft it bundles
- * - an AGPL-3.0-only (GNU-family) workspace absorbs GNU (GPL/LGPL/AGPL) and MPL findings, but the
- *   safety floor (absence from the absorbed set) still excludes SSPL and CC-BY-SA. Absorption is
- *   directional/declared, not symmetric: a non-AGPL workspace family absorbs only what
- *   WORKSPACE_ABSORBS declares for it.
+ *       - an AGPL-3.0-only (GNU-family) workspace absorbs GNU (GPL/LGPL/AGPL) and MPL findings, but
+ *       the safety floor (absence from the absorbed set) still excludes SSPL and CC-BY-SA.
+ *       Absorption is directional/declared, not symmetric: a non-AGPL workspace family absorbs only
+ *       what WORKSPACE_ABSORBS declares for it.
  * The catches are defensive (never-throws posture); rule.license was validated as a single SPDX ID
  * by the schema.
  */
@@ -461,9 +461,9 @@ function overrideCitation(
  * Per-occurrence dev-scope downgrade, applied only to a verdict that would otherwise be a default
  * fail (default:copyleft, or default:unknown when unknownHandling="fail"). Keyed strictly on
  * occurrence.isDevDependency:
- *   - a production occurrence → the fail is returned unchanged (the load-bearing safety property -
- *    *     a shipped copyleft/unknown can never be dev-downgraded). - a dev occurrence branches on
- *   policy.devDependencies:
+ *   - a production occurrence → the fail is returned unchanged (the load-bearing safety property
+ *     - a shipped copyleft/unknown can never be dev-downgraded).
+ *   - a dev occurrence branches on policy.devDependencies:
  *       "fail"   → no downgrade (gate dev exactly like prod).
  *       "warn"   → status "warn", reason appends the auditable dev-only cause,
  *                  rule id preserved so the origin stays traceable.
@@ -555,9 +555,9 @@ function applyScopeDowngrades(
 
 /**
  * Terminal-0 deny resolution. Returns the first matching deny rule, checking, in order:
- *   1. the combined assessment expression (name-mode also matches entry.name) -  *      electing
- *   over the union of license deny allowlists; 2. the pre-override observedExpression - a denied
- *   observed license an
+ *   1. the combined assessment expression (name-mode also matches entry.name) -
+ *      electing over the union of license deny allowlists;
+ *   2. the pre-override observedExpression - a denied observed license an
  *      override rewrote can never be licensed back in;
  *   3. every observed per-claim precise expression - a denied member combineKnown dropped via
  *      imprecise-family election / unknown collapse is still seen, in every scope.
@@ -923,7 +923,8 @@ export function evaluate(
     // over overrides).
     //
     // Deny sees every observed claim: combineKnown elects an imprecise family, or collapses to
-    // unknown, before a precise non-copyleft denied member (BUSL-1.1, Elastic-2.0 -     // source-available) when an imprecise family token or an unknown token co-exists, so the
+    // unknown, before a precise non-copyleft denied member (BUSL-1.1, Elastic-2.0
+    // - source-available) when an imprecise family token or an unknown token co-exists, so the
     // combined expression is null/imprecise and the two checks above never see the denied member.
     // Deny therefore also consults the set of every observed per-claim precise expression
     // (finding.observedExpressions): if any observed expression is denied, deny fires - regardless
@@ -1064,11 +1065,12 @@ export function acceptedContainerNotices(
 }
 
 /**
- * Rule ids of compatible/clarify entries that never decided anything - * stale-policy hygiene.
- * Compatible usage is read from cited verdict rules; clarify usage comes from annotateFindings'
- * usedClarifyIndices (a clarify rule is "used" when it replaced a finding, even if a
- * higher-precedence compatible rule decided the final verdict). Suppression entries are never
- * reported. Returned in TOML array order: compatible first, then clarify.
+ * Rule ids of compatible/clarify entries that never decided anything -
+ * stale-policy hygiene. Compatible usage is read from cited verdict rules;
+ * clarify usage comes from annotateFindings' usedClarifyIndices (a clarify rule is "used" when it
+ * replaced a finding, even if a higher-precedence compatible rule decided the final verdict).
+ * Suppression entries are never reported. Returned in TOML array order: compatible first, then
+ * clarify.
  */
 export function unusedRuleIds(
   policy: Policy,

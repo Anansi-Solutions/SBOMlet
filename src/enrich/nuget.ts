@@ -8,8 +8,8 @@
  * and the version are lowercased - while the purl (the cache key) stays VERBATIM, so lowercasing
  * happens ONLY inside the URL builder here, never upstream.
  *
- * A clean 404 on the leaf means "not on nuget.org" - a common, legitimate private-feed reality -
- * * and the orchestrator (enrich.ts) classifies it as a definitive negative: the package stays
+ * A clean 404 on the leaf means "not on nuget.org" - a common, legitimate private-feed reality
+ * - and the orchestrator (enrich.ts) classifies it as a definitive negative: the package stays
  * honestly unknown, generate never hard-fails on it, and no guess is ever recorded.
  */
 import { narrowNugetCatalogEntry, narrowNugetLeaf } from "../validate/registry";
@@ -72,8 +72,8 @@ export interface NugetResolution {
  *      (`https://licenses.nuget.org/MIT%20OR%20Apache-2.0` → `MIT OR Apache-2.0`). A blank,
  *      undecodable, or control-character remainder → null (licenseUrl is package-author-controlled;
  *      an SPDX expression is plain printable text, so anything else is never a license).
- *   4. Any other `licenseUrl` (the pre-2019 url-only class) or no license fields at all → NULL -
- *   *      honest unknown.
+ *   4. Any other `licenseUrl` (the pre-2019 url-only class) or no license fields at all → NULL
+ *      - honest unknown.
  */
 export function resolveNugetCatalogLicense(
   doc: unknown,

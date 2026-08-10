@@ -158,8 +158,8 @@ const DEBIAN_SHORTHAND: ReadonlyMap<string, string> = new Map([
  * SEPARATE component license entries - INCLUDING the bare connective words "AND"/"OR"/"WITH". Those
  * are SYNTAX artifacts, not licenses: they neither normalize nor identify anything, so they must be
  * dropped before claim processing (never an unrecognized token, never forcing the all-or-nothing
- * unknown collapse). Case-insensitive, exact-token only (a real license like "AND-1.0" - *
- * hypothetical - would not be a bare "AND"). (Full OR/AND expression RECONSTRUCTION is out of
+ * unknown collapse). Case-insensitive, exact-token only (a real license like "AND-1.0"
+ * - hypothetical - would not be a bare "AND"). (Full OR/AND expression RECONSTRUCTION is out of
  * scope; we only drop the bare connectives so they stop polluting the OS render.)
  */
 const SPDX_CONNECTIVES: ReadonlySet<string> = new Set(["and", "or", "with"]);
@@ -739,10 +739,10 @@ function quickCheckClaims(claims: ReadonlyArray<LicenseClaim>): LicenseClaim[] {
 
 /**
  * True when one quick-check claim AGREES with the precise in-depth expression. A precise member P
- * agrees iff P === S (normalized exact equality, cheap first check) or satisfies(P, [S]) holds -
- * * satisfies is wrapped defensively for the spdx-satisfies allowlist edge (a compound S throws
- * for the AND/OR operators alike): ANY throw = disagree, fail closed, so a compound assessment can
- * only agree via exact equality. An imprecise family agrees iff every leaf of S is in the family. A
+ * agrees iff P === S (normalized exact equality, cheap first check) or satisfies(P, [S]) holds
+ * - satisfies is wrapped defensively for the spdx-satisfies allowlist edge (a compound S throws for
+ * the AND/OR operators alike): ANY throw = disagree, fail closed, so a compound assessment can only
+ * agree via exact equality. An imprecise family agrees iff every leaf of S is in the family. A
  * genuinely-unknown claim with a non-empty raw DISAGREES: a garbage/proprietary declaration
  * contradicted by a precise assessment must become a visible conflict, never be silently decided in
  * either direction.
@@ -906,7 +906,8 @@ export function annotateFindings(
       overridden.expression !== base.expression;
     // Deny sees EVERY observed claim: carry every per-claim precise expression so the deny terminal
     // fires on a denied member combineKnown dropped (imprecise-family election / unknown collapse).
-    // Independent of the Independent of the single observedExpression (override-rewrite) above -     // both feed deny.
+    // Independent of the Independent of the single observedExpression (override-rewrite) above
+    // - both feed deny.
     const observed = observedExpressions(entry.licenseClaims);
     return {
       ...entry,

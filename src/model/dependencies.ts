@@ -74,19 +74,19 @@ export interface LicenseFinding {
   impreciseFamily?: string;
   /**
    * Distinct audit citation for a TOOL-LEVEL builtin override that decided this finding. Present
-   * ONLY when a shipped BUILTIN_OVERRIDES entry (not a project [[clarify]]) replaced the finding -
-   *    * e.g. "override:builtin[3]". A project clarify keeps its existing "clarify[i]" citation
-   * via the policy engine's clarifyIndexFor lookup, so this field is absent for those. The engine
-   * cites this instead of plain "default:ok" so a tool-level disambiguation stays auditable (closes
-   * the default:ok-fallthrough gap).
+   * ONLY when a shipped BUILTIN_OVERRIDES entry (not a project [[clarify]]) replaced the finding
+   * - e.g. "override:builtin[3]". A project clarify keeps its existing "clarify[i]" citation via
+   * the policy engine's clarifyIndexFor lookup, so this field is absent for those. The engine cites
+   * this instead of plain "default:ok" so a tool-level disambiguation stays auditable (closes the
+   * default:ok-fallthrough gap).
    */
   overrideRule?: string;
   /**
    * A STALE override: an override (project clarify or tool-level builtin) carried an `expects`
    * precondition that NO LONGER matches the package's pre-override observed signal. The asserted
    * expression is NOT applied (this finding keeps its un-overridden value); instead the engine
-   * emits a loud fail verdict naming the package, the expected value, and the now-observed value -
-   *    * a stale override must never silently mask a relicense.
+   * emits a loud fail verdict naming the package, the expected value, and the now-observed value
+   * - a stale override must never silently mask a relicense.
    */
   staleOverride?: StaleOverride;
   /**

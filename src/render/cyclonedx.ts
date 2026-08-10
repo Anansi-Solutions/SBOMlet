@@ -61,8 +61,8 @@ function unrecognizedLicenses(pkg: PackageEntry): CdxLicense[] {
 /**
  * License dispatch: a normalized expression wins and emits the single-item expression tuple
  * carrying only the expression key; otherwise non-empty raw claims emit named entries deduped by
- * raw in first-seen order; otherwise the licenses key is omitted entirely (valid per schema - *
- * components require only type + name).
+ * raw in first-seen order; otherwise the licenses key is omitted entirely (valid per schema
+ * - components require only type + name).
  *
  * #9: os-scope partial unrecognizedTokens are appended as additional named entries in EVERY branch
  * (after the expression tuple, or alongside the imprecise null-expression finding) so the CycloneDX

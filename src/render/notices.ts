@@ -8,7 +8,7 @@
  * of repeated verbatim texts.
  *
  * Honesty rules: every canonical appendix entry carries the exact marker "(canonical SPDX text -
- * * package-specific copyright not located)" so fallback gaps are auditable, never silent;
+ * package-specific copyright not located)" so fallback gaps are auditable, never silent;
  * unknown-license packages are listed with no text and flagged; an author is rendered as "Author:"
  * attribution, never as a fabricated copyright claim.
  *

@@ -114,8 +114,8 @@ export function cdxgenCacheArgs(ecosystem: Ecosystem): string[] {
 export type ManifestEntry = string | { file: string; dir: string };
 
 /**
- * Content-hash cache key. Hashes the raw bytes of the target's manifest files (no text decoding -
- * * immune to EOL differences) plus the tool identity and the full argv (callers pass the
+ * Content-hash cache key. Hashes the raw bytes of the target's manifest files (no text decoding
+ * - immune to EOL differences) plus the tool identity and the full argv (callers pass the
  * sentinel-normalized cache argv - never an argv carrying per-run temp paths).
  *
  * Every segment is domain-tagged and length-prefixed (files) or NUL-terminated (strings) so

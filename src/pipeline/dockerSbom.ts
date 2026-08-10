@@ -475,7 +475,8 @@ async function runImageLane(
 export async function runGenerateDockerSbom(
   opts: GenerateDockerSbomOptions,
 ): Promise<void> {
-  // LISTING PATH (--list-dockerfiles): returns BEFORE any outputPath resolution or artifact write -   // this mode scans nothing and writes nothing, it only prints the tool's own policy-aware
+  // LISTING PATH (--list-dockerfiles): returns BEFORE any outputPath resolution or artifact write
+  // - this mode scans nothing and writes nothing, it only prints the tool's own policy-aware
   // Dockerfile walk to stdout (the machine channel) for the CI workflow's build loop to consume.
   if (opts.listDockerfiles === true) {
     // The CLI conflict table pairs --list-dockerfiles with --repo-root at the flag surface; hold

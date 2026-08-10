@@ -215,8 +215,8 @@ export function optionsFrom(values: CliValues): GenerateOptions {
  * lane combination is valid. THE THREE LANES ARE PAIRWISE MUTUALLY EXCLUSIVE: exactly one of
  * --dockerfile (build named Dockerfiles) / --repo-root (discover + build) / --image (scan
  * pre-existing images). --list-dockerfiles is discovery-listing support: it never combines with a
- * build/scan lane and REQUIRES --repo-root (the walk root the listing reads). A bare invocation -
- * * no lane, no listing - is a usage error naming the three lanes: there is no default image set.
+ * build/scan lane and REQUIRES --repo-root (the walk root the listing reads). A bare invocation
+ * - no lane, no listing - is a usage error naming the three lanes: there is no default image set.
  * Pair checks are walked as a table rather than an if-ladder to keep this function under the
  * complexity bound. Extracted from dockerSbomOptionsFrom to keep that function under the complexity
  * bound.

@@ -24,9 +24,9 @@ interface EcosystemPurl {
 }
 
 /**
- * decodeURIComponent wrapped so a malformed percent-encoding (e.g. "%ZZ" in a crafted SBOM purl -
- * * SBOM documents are an untrusted shape) is an honest undefined, never a URIError that would
- * kill the whole intensive run (the mapper contract: undefined on ANY structural mismatch).
+ * decodeURIComponent wrapped so a malformed percent-encoding (e.g. "%ZZ" in a crafted SBOM purl
+ * - SBOM documents are an untrusted shape) is an honest undefined, never a URIError that would kill
+ * the whole intensive run (the mapper contract: undefined on ANY structural mismatch).
  */
 function safeDecode(encoded: string): string | undefined {
   try {
@@ -40,8 +40,8 @@ function safeDecode(encoded: string): string | undefined {
  * Decode + validate an npm purl's encoded name against a candidate `node_modules` root, requiring
  * the installed package.json `version` field to equal the purl version (mandatory - never
  * optional). Returns the resolved source dir, or undefined on ANY structural mismatch: dir absent,
- * package.json absent/unparseable (a garbage node_modules must never throw and kill the run - *
- * honest skip), version mismatch, or a decoded name that would escape the node_modules root
+ * package.json absent/unparseable (a garbage node_modules must never throw and kill the run
+ * - honest skip), version mismatch, or a decoded name that would escape the node_modules root
  * (resolve + strict prefix-check, never best-effort).
  */
 function npmSourceDir(
@@ -204,11 +204,11 @@ function topLevelPackageDir(
 /**
  * Map a purl to its ordered locally-present scan candidates across a set of candidate target dirs
  * (probed in {@link compareCodeUnits}-sorted order, first target dir with a structural match wins
- * - * determinism regardless of caller-supplied order). npm yields at most one dir; pypi yields
- * the matched dist-info dir first and the top_level.txt import package dir second (the caller scans
- * in order until the first positive answer). npm and pypi are the only supported ecosystems
- * (Pattern 4); every other type - including an unparseable purl - returns [] with zero fs probes
- * beyond the initial parse.
+ * - determinism regardless of caller-supplied order). npm yields at most one dir; pypi yields the
+ * matched dist-info dir first and the top_level.txt import package dir second (the caller scans in
+ * order until the first positive answer). npm and pypi are the only supported ecosystems (Pattern
+ * 4); every other type - including an unparseable purl - returns [] with zero fs probes beyond the
+ * initial parse.
  */
 export function sourceDirsFor(purl: string, targetDirs: string[]): string[] {
   const parsed = parsePurl(purl);

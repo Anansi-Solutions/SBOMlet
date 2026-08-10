@@ -220,8 +220,10 @@ function transitiveDevKeys(
   packages: Record<string, unknown>,
   workspaces: Record<string, unknown>,
 ): ReadonlySet<string> {
-  // Hoisting lookup: candidate keys are rebuilt from the parent's chain of whole package names -   // "<chain>/<depName>" with the chain truncated one name (which may itself contain "/" for scoped
-  // packages) per step, down to the bare top-level "<depName>". Never substring or path-segment
+  // Hoisting lookup: candidate keys are rebuilt from the parent's chain of whole package names
+  // - "<chain>/<depName>" with the chain truncated one name (which may itself contain "/" for
+  // scoped packages) per step, down to the bare top-level "<depName>". Never substring or
+  // path-segment
   // prefixes: those can cross a scope boundary.
   const resolveChain = (
     parentChain: readonly string[],

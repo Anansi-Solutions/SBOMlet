@@ -33,8 +33,8 @@ const MAX_LOG_FIELD = 500;
 /**
  * Sanitize one untrusted string at the stderr print boundary.
  *
- * TOML basic strings decode \n, \r, and \uXXXX escapes, so policy-authored reasons/descriptions -
- * * and SBOM-derived names, versions, and purls baked into engine reasons - can carry control
+ * TOML basic strings decode \n, \r, and \uXXXX escapes, so policy-authored reasons/descriptions
+ * - and SBOM-derived names, versions, and purls baked into engine reasons - can carry control
  * characters. Unsanitized, a crafted reason forges summary lines (newline injection) or erases real
  * fail lines in ANSI-aware terminals (ESC[2K / ESC[1A). Every C0 control character (incl. \n, \r,
  * \t, and ESC 0x1B), DEL (0x7F), and the C1 range (0x80-0x9F) is replaced with a space, then the

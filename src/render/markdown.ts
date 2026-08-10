@@ -237,7 +237,8 @@ function whyCellOf(
   if (genuine.every((i) => i.direct)) return "direct";
 
   // Transitive in at least one genuine in-scope occurrence. Surface the representative path of the
-  // smallest-target occurrence carrying a REAL (defined AND non-empty) chain - deterministic -   // falling back to the sorted-union of introducer sets. A defined-but-empty path is no chain and
+  // smallest-target occurrence carrying a REAL (defined AND non-empty) chain - deterministic
+  // - falling back to the sorted-union of introducer sets. A defined-but-empty path is no chain and
   // is skipped here so it never joins to "".
   const withPath = scoped
     .filter(
@@ -276,8 +277,8 @@ function isDevelopmentOnly(pkg: PackageEntry): boolean {
  * A package carries at least one docker-image occurrence - the discriminator for "does this package
  * belong under some container's subsection at all", independent of {@link PackageEntry.scope}. A
  * package with BOTH a workspace occurrence and a docker occurrence (shared between an app lockfile
- * and a container) satisfies this and rows in both its app table and the container's subsection - *
- * complete inventories, not an exclusive choice.
+ * and a container) satisfies this and rows in both its app table and the container's subsection
+ * - complete inventories, not an exclusive choice.
  */
 function hasContainerOccurrence(pkg: PackageEntry): boolean {
   return pkg.occurrences.some((occurrence) =>
@@ -959,7 +960,8 @@ export function renderMarkdown(
   // dev/prod split is an app concept) - it renders in its container's own subsection instead (there
   // is no standalone Docker section). A package shared with a workspace stays in its app table AND
   // rows in the container subsection ({@link hasContainerOccurrence} feeds the subsection
-  // candidates, a strict superset of the excluded set). Lockfile-only scans carry no licenses -   // "unknown" is correct pre-annotation behavior, not a rendering defect.
+  // candidates, a strict superset of the excluded set). Lockfile-only scans carry no licenses
+  // - "unknown" is correct pre-annotation behavior, not a rendering defect.
   const appPackages = sorted.filter((pkg) => !isContainerPackage(pkg));
   const containerRows = sorted.filter(hasContainerOccurrence);
   const developmentOnly = appPackages.filter(isDevelopmentOnly);

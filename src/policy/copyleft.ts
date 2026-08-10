@@ -88,7 +88,8 @@ const FAMILY_MEMBERS: ReadonlyArray<
   ],
   ["SSPL", ["SSPL-1.0"]],
   [
-    // CC ShareAlike family (ShareAlike = copyleft for adaptations), incl. the jurisdiction ports -     // CC-BY-* (no SA) is NOT copyleft and stays out.
+    // CC ShareAlike family (ShareAlike = copyleft for adaptations), incl. the jurisdiction ports
+    // - CC-BY-* (no SA) is NOT copyleft and stays out.
     "CC-BY-SA",
     [
       "CC-BY-SA-1.0",
@@ -159,8 +160,8 @@ export const COPYLEFT_IDS: ReadonlySet<string> = new Set(
  * "GNU" token deliberately spans AGPL/GPL/LGPL (see the module doc above), too coarse for the
  * container-copyleft exception: AGPL section 13 reaches server-side network use even without
  * distribution, so an AGPL leaf in a container system package must escalate past the routine
- * GPL/LGPL base-image tolerance while a GPL/LGPL sibling does not. A literal, reviewable subset -
- * * never derived from COPYLEFT_FAMILY by prefix at runtime - keeps the same auditability posture
+ * GPL/LGPL base-image tolerance while a GPL/LGPL sibling does not. A literal, reviewable subset
+ * - never derived from COPYLEFT_FAMILY by prefix at runtime - keeps the same auditability posture
  * as the module above.
  */
 export const AGPL_IDS: ReadonlySet<string> = new Set([
