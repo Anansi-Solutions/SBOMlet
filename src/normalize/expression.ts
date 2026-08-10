@@ -10,7 +10,8 @@
  * only; no substring or prefix matching on license ids anywhere.
  *
  * Pure functions, no I/O, no logging - the CLI owns stderr. Inputs are structurally-typed parse
- * output (spdx-expression-parse internals are never imported).
+ * output; the only spdx-expression-parse import here is the parser itself (isCompoundClaim), cast
+ * straight to this file's own ExpressionNode shape - the library's internal types stay unused.
  */
 import parseSpdx from "spdx-expression-parse";
 

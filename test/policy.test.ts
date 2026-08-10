@@ -1551,17 +1551,22 @@ describe("evaluate — staleness-guarded overrides", () => {
     expect(verdicts[0].rule).toContain("override:stale");
   });
 
-  test("regression: a SIMPLE single-id expects still takes the signal/satisfies path — the redundancy gap-fix still applies (proves the compound classifier does not misfire on a plain leaf)", () => {
+  test("a SIMPLE single-id expects paired with an OR-only expression still takes the normal signal/satisfies decision tree, not the compound literal fallback (proves the classifier's finer AND-vs-OR boundary on the expression side)", () => {
     const builtins: BuiltinOverrideInput[] = [
-      { name: "ipython", expects: "BSD", expression: "BSD-3-Clause" },
+      {
+        name: "or-expression-pkg",
+        expects: "MIT",
+        expression: "MIT OR Apache-2.0",
+      },
     ];
     const { verdicts } = runEngine(
-      [pkgSpec("ipython", "BSD-3-Clause", ["backend"])],
+      [pkgSpec("or-expression-pkg", "MIT", ["backend"])],
       "",
       builtins,
     );
-    expect(verdicts[0].status).not.toBe("fail");
-    expect(verdicts[0].rule).not.toContain("override:stale");
+    expect(verdicts[0].status).toBe("ok");
+    expect(verdicts[0].rule).toBe("override:builtin[0]");
+    expect(verdicts[0].reason).toContain("MIT OR Apache-2.0");
   });
 });
 
