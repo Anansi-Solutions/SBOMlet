@@ -78,9 +78,13 @@ highest to lowest:
    can license a denied finding back in.
 2. **A stale override** — an override's precondition no longer matches what's
    observed: fail.
-3. **An assessment conflict** — the in-depth scan disagrees with the
-   declared/registry quick check: fail. This is the sole trigger for the
-   assessment-conflicts surface, independent of everything that follows.
+3. **An assessment conflict** — fail, via one of two independent triggers for
+   the assessment-conflicts surface, either one independent of everything that
+   follows: the in-depth scan disagreeing with the declared/registry quick
+   check, or two-or-more docker occurrences of the same purl declaring
+   different license claims (a cross-image divergence, detected at merge
+   time, claim-SET comparison so listing the same claims in a different order
+   is never a divergence).
 4. **A `[[compatible]]` package or license rule** — ok. (`[[clarify]]` isn't a
    tier of its own here: it rewrites the finding *before* this precedence walk
    runs, so a clarified package falls through the same lanes as any other
@@ -136,7 +140,10 @@ branch before this lane and never reaches it.
 
 Source: `src/policy/evaluate.ts` (`verdictFor`, `copyleftVerdict`,
 `impreciseVerdict`, `unknownVerdict`, `refUnknownVerdict`,
-`acceptedContainerNotices`), `src/policy/copyleft.ts` (`AGPL_IDS`).
+`acceptedContainerNotices`), `src/policy/copyleft.ts` (`AGPL_IDS`),
+`src/merge/merge.ts` (`crossImageClaimDivergence`, detecting the divergence),
+`src/normalize/normalize.ts` (`withCrossImageConflict`, surfacing it on the
+finding).
 
 ## Invariants
 
@@ -150,7 +157,7 @@ Source: `src/policy/evaluate.ts` (`verdictFor`, `copyleftVerdict`,
 
 ## Path index (verified end to end)
 
-The same 25 paths as
+The same 26 paths as
 [report-placement.md](./report-placement.md#path-index-verified-end-to-end),
 one row each, stating the Stage-1/Stage-2 outcome (scope, verdict status,
 rule) instead of the markdown destination — the two tables share one slug
@@ -185,3 +192,4 @@ tables are about slug coverage, not about every classification being unique.
 | `suppressed-workspace-copyleft` | family-justified `[[workspace.copyleft_suppressed]]` | `app · suppressed · workspace.copyleft_suppressed[0]` |
 | `denied-license-terminal` | a `[[deny]]` match with a `[[compatible]]` rule that would otherwise accept it | `app · fail · denied[0]` |
 | `system-package-in-dev-container-counts-dev` | apk permissive package whose only container is dev-marked | `os · ok · default:ok` |
+| `cross-image-claim-divergence` | apk purl baked into two prod containers with different declared licenses | `os · fail · conflict:cross-image-claims` |

@@ -68,7 +68,7 @@ Sections appear in this order:
 | Problematic licenses | `## Problematic licenses` | policy run only |
 | Copyleft and special notices | `## Copyleft and special notices` | policy run only |
 | Imprecise licenses | `## Imprecise licenses (review / disambiguate)` | any [imprecise](../glossary.md#imprecise-family) package exists |
-| Assessment conflicts | `## Assessment conflicts (in-depth scan vs quick check)` | any conflict marker exists |
+| Assessment conflicts | `## Assessment conflicts` | any conflict marker exists |
 | Containers | `## Containers` | always |
 | Production dependencies | `## Production dependencies` | always |
 | Development-only dependencies | `## Development-only dependencies` | always |
@@ -267,14 +267,17 @@ rules are [report-placement.md](./report-placement.md#invariants)'s.
 
 ### Assessment conflicts
 
-Rendered whenever any package carries a senior-assessment conflict marker: a
-disagreement between the in-depth ScanCode assessment and the declared or
-registry quick check. Finding-level, like Imprecise licenses in the section
-table above: it renders whether or not the run used a policy, unlike
-Problematic licenses and Copyleft and special notices. Omitted entirely, not
-rendered empty, when no package carries the marker.
+Rendered whenever any package carries a conflict marker, from either of two
+independent triggers: a senior-assessment disagreement between the in-depth
+ScanCode assessment and the declared or registry quick check, or a
+cross-image license-claim divergence — two or more docker occurrences of the
+same purl declaring different licenses. Finding-level, like Imprecise
+licenses in the section table above: it renders whether or not the run used a
+policy, unlike Problematic licenses and Copyleft and special notices. The
+section, and each trigger's own sub-table below, is omitted entirely, not
+rendered empty, when no package carries that kind of marker.
 
-A row states, for one package:
+**ScanCode assessment vs quick check** — a row states, for one package:
 
 | Column | Contents |
 | --- | --- |
@@ -283,10 +286,19 @@ A row states, for one package:
 | Quick check | the disagreeing declared/registry signal member(s), comma-joined |
 | Used in | every target the package occurs in |
 
-Which packages carry the marker is placement, normatively defined in
+**Cross-image license claims** — a row states, for one package, every
+diverging docker occurrence and that image's own declared claims:
+
+| Column | Contents |
+| --- | --- |
+| Package | the package name |
+| Claims by image | every docker occurrence, semicolon-joined as `<target>: <claims>`; an occurrence that declared no claim at all reads `(no declared license)` |
+
+Which packages carry a marker is placement, normatively defined in
 [report-placement.md](./report-placement.md#narrative-sections-verdict--or-finding-driven-deduped).
-On a policy run, a conflicted package also fails as a `conflict:scancode` row
-in [Problematic licenses](#problematic-licenses) above — the one case exempt
+On a policy run, a conflicted package also fails — as a `conflict:scancode`
+or `conflict:cross-image-claims` row depending on the trigger — in
+[Problematic licenses](#problematic-licenses) above — the one case exempt
 from that section's usual dedup against the narrative sections, since a
 conflict is always a fail
 ([report-placement.md](./report-placement.md#invariants)). The conflict

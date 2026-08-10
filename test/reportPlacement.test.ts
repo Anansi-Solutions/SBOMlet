@@ -66,6 +66,7 @@ const PLACEMENT_PATHS = [
   "suppressed-workspace-copyleft",
   "denied-license-terminal",
   "system-package-in-dev-container-counts-dev",
+  "cross-image-claim-divergence",
 ] as const;
 
 type PlacementPath = (typeof PLACEMENT_PATHS)[number];
@@ -1330,6 +1331,54 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
         devSection.includes("sys-in-dev-container"),
       slug,
       "its container's System packages table sits under the Development-only subsection",
+    );
+  },
+
+  "cross-image-claim-divergence": () => {
+    const slug = "cross-image-claim-divergence";
+    const purl = "pkg:apk/alpine/shared-daemon@1.0.0";
+    const { doc, verdicts, scoped } = buildScenario(
+      [
+        {
+          targetIdentity: PROD_CONTAINER,
+          scope: "os",
+          components: [{ name: "shared-daemon", purl, license: "MIT" }],
+        },
+        {
+          targetIdentity: OTHER_CONTAINER,
+          scope: "os",
+          components: [{ name: "shared-daemon", purl, license: "Apache-2.0" }],
+        },
+      ],
+      UNKNOWN_WARN,
+    );
+    assertClassificationOutcome(
+      scoped,
+      verdicts,
+      purl,
+      PROD_CONTAINER,
+      slug,
+      "os",
+      "fail",
+      "conflict:cross-image-claims",
+    );
+    assertPlacement(
+      section(doc, "## Problematic licenses").includes("shared-daemon"),
+      slug,
+      "a cross-image claim divergence is a fail verdict, so it rows in Problematic licenses like any other fail",
+    );
+    const conflicts = section(doc, "## Assessment conflicts");
+    assertPlacement(
+      conflicts.includes("### Cross-image license claims") && conflicts.includes("shared-daemon"),
+      slug,
+      "the divergence rows in the Assessment conflicts section's Cross-image license claims sub-table",
+    );
+    const prodSystem = containerPartition(containerSubsection(doc, PROD_CONTAINER)).system;
+    const otherSystem = containerPartition(containerSubsection(doc, OTHER_CONTAINER)).system;
+    assertPlacement(
+      prodSystem.includes("shared-daemon") && otherSystem.includes("shared-daemon"),
+      slug,
+      "both diverging containers keep their complete inventory row in their own System packages table (inventory is never dropped by a conflict)",
     );
   },
 };

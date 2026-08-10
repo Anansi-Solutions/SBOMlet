@@ -65,9 +65,12 @@ acceptances reviewed for an image.
 - **Bad / cost:** consumers regenerate once — every docker row's Used-in cell
   and every docker-scoped `where` entry changes — and until they do, generate
   and check fail with the remedy rather than proceed without docker rows.
-- **Neutral:** the cross-image licence posture is unchanged: a package in two
-  images shows one row whose licences come from whichever image sorts first.
-  Workspace suppression is not extended to image identities.
+- **Good:** the per-image identity this record establishes is exactly what
+  makes a cross-image licence disagreement expressible: a package baked into
+  two images with different declared licenses is a visible conflict, failing
+  the gate as `conflict:cross-image-claims` until a `[[clarify]]` records the
+  decision — the same model as the ScanCode assessment conflict. Workspace
+  suppression is not extended to image identities.
 
 ## See also
 
