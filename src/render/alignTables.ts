@@ -4,7 +4,7 @@
  *
  * Runs AFTER renderMarkdown, on the pipeline's single output-production point, so generate and
  * check both align identically and the byte-compare gate stays consistent. The renderer itself
- * stays unaligned — its golden and inline tests are unaffected.
+ * stays unaligned - its golden and inline tests are unaffected.
  *
  * Bounded, NOT a general markdown parser: it only re-pads blocks that are unambiguously GFM tables
  * (a row immediately followed by a `| --- | --- |` separator), leaves fenced code blocks untouched,

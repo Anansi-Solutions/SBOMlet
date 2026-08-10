@@ -11,10 +11,10 @@
  * dependency license value the override disambiguates FROM; at evaluation the engine applies the
  * asserted `expression` ONLY when the dependency's pre-override observed signal still matches
  * `expects` (see normalize.ts / evaluate.ts). A MISMATCH is a STALE override that FAILS the gate
- * loudly rather than silently masking a relicense — the staleness guard is the whole point of the
+ * loudly rather than silently masking a relicense - the staleness guard is the whole point of the
  * shipped set.
  *
- * The data is a literal, reviewable list — never computed at runtime and never read from disk
+ * The data is a literal, reviewable list - never computed at runtime and never read from disk
  * inside the pure engine (it is imported like other config; no eval, no fs). Mirrors the
  * copyleft.ts / trove.ts vendored-static-data idiom: every `expression` is validated against
  * spdx-license-ids in the tests so a typo cannot silently ship.
@@ -24,13 +24,13 @@
  * version.
  *
  * DELIBERATE SCOPE: a project-specific copier / jinja2-ansible-filters GPL-3.0 judgment is DEFERRED
- * to the Phase-6 dogfood .sbomlet.policy.toml — it is a project-specific call, not a general
+ * to the Phase-6 dogfood .sbomlet.policy.toml - it is a project-specific call, not a general
  * well-known disambiguation, so it does NOT belong here.
  */
 
 /** One shipped tool-level disambiguation override. */
 export interface BuiltinOverride {
-  /** Package name (matched verbatim; version-agnostic — overrides survive bumps). */
+  /** Package name (matched verbatim; version-agnostic - overrides survive bumps). */
   name: string;
   /** Reserved: an override never pins a version (kept for shape parity with clarify). */
   version?: string;
@@ -50,7 +50,7 @@ export interface BuiltinOverride {
  * The well-known Jupyter/IPython projects PyPI reports under the imprecise "BSD"/"BSD License"
  * classifier. The stack is uniformly BSD-3-Clause; the override disambiguates the imprecise BSD
  * signal (the impreciseFamily "BSD") to the precise id. Curated to the canonical,
- * broadly-depended-on projects — any repo using Jupyter benefits, and the list stays reviewable.
+ * broadly-depended-on projects - any repo using Jupyter benefits, and the list stays reviewable.
  */
 const JUPYTER_BSD_PROJECTS: ReadonlyArray<string> = [
   "ipython",

@@ -1,14 +1,14 @@
 /**
- * Deterministic CanonicalDependencies -> THIRD_PARTY_NOTICES.md renderer — the companion bundle.
+ * Deterministic CanonicalDependencies -> THIRD_PARTY_NOTICES.md renderer - the companion bundle.
  *
  * Pure function: model in, exact LF bytes out. Layout: per-package attribution sections (extracted
  * copyright lines, Author fallback, NOTICE contents, verbatim texts for the non-SPDX population)
  * followed by a canonical license-text appendix carrying one text per SPDX id referenced by any
- * normalized expression — the grouping bounds the file to ~0.5–1 MB at repo scale instead of ~7 MB
+ * normalized expression - the grouping bounds the file to ~0.5–1 MB at repo scale instead of ~7 MB
  * of repeated verbatim texts.
  *
- * Honesty rules: every canonical appendix entry carries the exact marker "(canonical SPDX text —
- * package-specific copyright not located)" so fallback gaps are auditable, never silent;
+ * Honesty rules: every canonical appendix entry carries the exact marker "(canonical SPDX text -
+ * * package-specific copyright not located)" so fallback gaps are auditable, never silent;
  * unknown-license packages are listed with no text and flagged; an author is rendered as "Author:"
  * attribution, never as a fabricated copyright claim.
  *
@@ -57,14 +57,14 @@ interface SpdxListEntry {
   licenseText: string;
 }
 
-// Canonical texts from the pinned, zero-dependency data package — imported statically so bundlers
+// Canonical texts from the pinned, zero-dependency data package - imported statically so bundlers
 // can embed the JSON; renderNotices itself performs no I/O.
 const SPDX_FULL = spdxFullData as Record<string, SpdxListEntry>;
 
 /**
  * Fenced block for untrusted multi-line content: the fence is max(3, longest backtick run + 1)
  * backticks, so the content can never close the fence early and forge document structure. CR
- * normalization is defensive only — intake sanitization and the LF-only canonical texts mean no CR
+ * normalization is defensive only - intake sanitization and the LF-only canonical texts mean no CR
  * should arrive here.
  */
 function fencedBlock(content: string): string[] {
@@ -98,7 +98,7 @@ function licenseLabelOf(pkg: PackageEntry): string {
 /**
  * A package gets a per-package attribution section only when it carries something concrete to
  * attribute: copyright lines, NOTICE texts, an author fallback, or non-standard verbatim texts.
- * Template-only attribution (hasVerbatimText with nothing extracted) renders nothing — honest
+ * Template-only attribution (hasVerbatimText with nothing extracted) renders nothing - honest
  * empty, never fabricated.
  */
 function qualifiesForSection(pkg: PackageEntry): boolean {
@@ -114,7 +114,7 @@ function qualifiesForSection(pkg: PackageEntry): boolean {
 }
 
 /**
- * Attribution body for one qualifying package — copyright/author/notice/ verbatim. The
+ * Attribution body for one qualifying package - copyright/author/notice/ verbatim. The
  * already-narrowed attribution is passed in by the sole caller (which guards with
  * qualifiesForSection first), so the invariant lives with the guard instead of a cross-function
  * type assertion.
@@ -135,7 +135,7 @@ function packageAttributionLines(
     }
     lines.push("");
   } else if (attribution.author !== undefined) {
-    // Author fallback only when no copyright line was located — and it is attribution, never a
+    // Author fallback only when no copyright line was located - and it is attribution, never a
     // copyright claim we did not find.
     lines.push(`Author: ${escapeCell(attribution.author)}`, "");
   }
@@ -160,7 +160,7 @@ function renderPackageSections(sorted: readonly PackageEntry[]): string[] {
 }
 
 /**
- * Unknown-license packages — listed with no text, flagged; the section is omitted entirely when
+ * Unknown-license packages - listed with no text, flagged; the section is omitted entirely when
  * empty.
  */
 function renderUnknownSection(sorted: readonly PackageEntry[]): string[] {

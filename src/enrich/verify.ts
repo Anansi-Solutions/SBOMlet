@@ -2,8 +2,8 @@
  * Cache-integrity audit: re-resolve every re-resolvable committed enrichment-cache entry against
  * its registry and compare the stored raw license.
  *
- * The committed cache is what `check` trusts OFFLINE, so a hand-edited entry — a flipped license, a
- * fabricated package, or a `resolvable:false` hiding a real copyleft license — would pass the gate
+ * The committed cache is what `check` trusts OFFLINE, so a hand-edited entry - a flipped license, a
+ * fabricated package, or a `resolvable:false` hiding a real copyleft license - would pass the gate
  * silently. `verify-cache` is the ONLINE counterpart: for every registry-sourced entry it
  * re-derives the registry's current answer with the SAME resolvers `generate` uses (enrich.ts) and
  * flags any divergence. A divergence is either tampering or a genuine upstream license change; both
@@ -11,9 +11,9 @@
  *
  * The comparison is a single equality on the raw license string: a cached value (string for a
  * positive entry, null for a negative one) versus the freshly resolved value. That one check covers
- * every tamper shape — a changed string, a fabricated entry the registry now 404s (→ null), and a
+ * every tamper shape - a changed string, a fabricated entry the registry now 404s (→ null), and a
  * negative entry the registry contradicts with a real license. A registry/network FAILURE is a loud
- * inability to verify (it propagates and the CLI exits 3), NEVER silently treated as agreement —
+ * inability to verify (it propagates and the CLI exits 3), NEVER silently treated as agreement - *
  * exactly the reliability posture `generate` already takes.
  */
 import { compareCodeUnits } from "../model/dependencies";
@@ -126,11 +126,11 @@ async function currentRegistryLicense(
 
 /**
  * The nuget re-resolution: registration leaf → host-pinned catalogEntry → {@link
- * resolveNugetCatalogLicense} — the SAME resolver, host pin, and 404→null classification `generate`
+ * resolveNugetCatalogLicense} - the SAME resolver, host pin, and 404→null classification `generate`
  * uses (enrich.ts). The two-step goes DIRECT rather than through the memoized fetchDoc: that memo
  * is single-URL and the cache holds one entry per purl, so memoization buys nothing here. A clean
- * 404 (either hop) and a malformed/foreign-host catalogEntry map to null — the definitive no-answer
- * — while a transient failure throws (loud).
+ * 404 (either hop) and a malformed/foreign-host catalogEntry map to null - the definitive no-answer
+ * - while a transient failure throws (loud).
  */
 async function currentNugetLicense(
   parsed: ParsedPurl,
@@ -152,7 +152,7 @@ async function currentNugetLicense(
 /**
  * The deps.dev re-resolution: ONE fetch (no two-step hop) using the SAME fixed-host URL builder and
  * honest-sentinel resolver `generate` uses (maven.ts). A clean 404 and an all-non-standard/empty
- * answer both map to null — the definitive no-answer — while a transient failure throws (loud).
+ * answer both map to null - the definitive no-answer - while a transient failure throws (loud).
  */
 async function currentMavenLicense(
   parsed: ParsedPurl,
@@ -201,9 +201,9 @@ function reasonFor(
 
 /**
  * Audit one entry: re-resolve and compare. Returns a mismatch, or null when the committed license
- * still matches the registry. An entry whose key is not a re-resolvable purl is itself a finding —
- * `generate` only ever writes pypi/npm/terraform entries, so anything else was not written by this
- * tool.
+ * still matches the registry. An entry whose key is not a re-resolvable purl is itself a finding -
+ *  * `generate` only ever writes pypi/npm/terraform entries, so anything else was not written by
+ * this tool.
  */
 async function auditEntry(
   purl: string,

@@ -6,15 +6,15 @@
  * (PyPI JSON for `pkg:pypi`, the npm packument for `pkg:npm`, the NuGet registration leaf →
  * catalogEntry pair for `pkg:nuget`, the deps.dev v3 version lookup for `pkg:maven`), resolves a
  * RAW license string (or, for maven, one-or-more) via the per-ecosystem resolvers, appends
- * `source:"registry"` LicenseClaim(s), and records the result in the committed cache — a positive
+ * `source:"registry"` LicenseClaim(s), and records the result in the committed cache - a positive
  * entry with the raw(s), OR a negative entry on a clean 200-empty answer (the resolver returned
- * null on a successful fetch) OR a clean 404 (the package is not on the public registry — a
+ * null on a successful fetch) OR a clean 404 (the package is not on the public registry - a
  * code-generated or private-registry artifact, the SAME definitive classification the nuget and
  * deps.dev resolvers already use). A transient fetch FAILURE propagates loudly and writes NO entry,
  * so an outage can never become a false negative.
  *
  * In CHECK mode it NEVER fetches and NEVER writes: a cache miss for an unknown package needing
- * enrichment is a stale condition — the purl is returned in `staleUnknowns` so the gate can map it
+ * enrichment is a stale condition - the purl is returned in `staleUnknowns` so the gate can map it
  * to exit 2. A fetch stubbed to throw proves check is hermetic against the committed cache.
  *
  * The appended claim flows through the SAME normalizeRaw as a generator claim (it is just another
@@ -71,7 +71,7 @@ export interface EnrichOptions {
   /**
    * Injectable now-source for the `fetchedAt` stamp on NEW github cache entries. Defaults to the
    * real clock; tests pass a fixed source so the stamped value is deterministic. Mirrors
-   * fetchJson's `backoffBaseMs` idiom (default-to-production, override-in-tests) — NEVER a bare
+   * fetchJson's `backoffBaseMs` idiom (default-to-production, override-in-tests) - NEVER a bare
    * inline `new Date()`.
    */
   now?: () => Date;
@@ -113,7 +113,7 @@ export function parsePurl(purl: string): ParsedPurl | undefined {
 }
 
 /**
- * True when a package's current claims resolve to unknown — mirrors findingFromClaims: zero
+ * True when a package's current claims resolve to unknown - mirrors findingFromClaims: zero
  * distinct (kind,raw) claims, or any claim that does not normalize. A package with a usable claim
  * is left untouched.
  */
@@ -167,10 +167,10 @@ export function resolveFromDocument(
 
 /**
  * Append one or more cache-sourced claims to a package via spread (input never mutated). `source`
- * flows from the caller — a registry resolution appends "registry", a cache hit appends whatever
+ * flows from the caller - a registry resolution appends "registry", a cache hit appends whatever
  * provenance the entry carries (replay is exact in every mode, never hardcoded). `raw` is USUALLY a
  * single string; the maven/deps.dev arm can pass several DISTINCT raws from one multi-entry
- * `licenses[]` answer — each becomes its own claim, never a synthesized compound (17-04).
+ * `licenses[]` answer - each becomes its own claim, never a synthesized compound (17-04).
  */
 export function withCacheClaim(
   entry: PackageEntry,
@@ -188,10 +188,10 @@ export function withCacheClaim(
 
 /**
  * Attach ScanCode-derived copyright lines as attribution on replay, ONLY when the package has NO
- * existing attribution (absent-not-empty invariant, dependencies.ts:274-279 — an evidence-derived
+ * existing attribution (absent-not-empty invariant, dependencies.ts:274-279 - an evidence-derived
  * attribution is never overwritten). Lines are sanitized via the same control-char intake rule
  * evidence text uses (merge.ts's sanitizeEvidenceText), deduped, sorted by {@link
- * compareCodeUnits}, and capped — idempotent by construction, so a second replay of the same cache
+ * compareCodeUnits}, and capped - idempotent by construction, so a second replay of the same cache
  * entry produces byte-identical output.
  */
 export function withReplayAttribution(
@@ -225,9 +225,9 @@ interface Unknown {
  * Enrich every unknown package. In generate mode a cache miss fetches (bounded, loud on failure),
  * appends the resolved registry claim, and records the result (positive, or negative ONLY on a
  * clean 200-empty answer); the updated cache is written unconditionally at the end (the only
- * enrichment write site, gated on generate mode) — generate always materializes the committed
+ * enrichment write site, gated on generate mode) - generate always materializes the committed
  * artifact, and an empty envelope is a valid answer when nothing needed enrichment. In check mode a
- * miss is a stale unknown — no fetch, no write.
+ * miss is a stale unknown - no fetch, no write.
  */
 export async function enrichUnknowns(
   model: CanonicalDependencies,
@@ -235,7 +235,7 @@ export async function enrichUnknowns(
 ): Promise<EnrichResult> {
   const cache = readCache(opts.cachePath);
 
-  // Identify the unknown set up front (parse skips a malformed/unsupported purl — it simply stays
+  // Identify the unknown set up front (parse skips a malformed/unsupported purl - it simply stays
   // unknown, never a crash).
   const unknowns: Unknown[] = [];
   model.packages.forEach((entry, index) => {
@@ -292,7 +292,7 @@ export async function enrichUnknowns(
   return { model: { packages }, staleUnknowns };
 }
 
-/** The GitHub License API base — a FIXED host (the SSRF control). */
+/** The GitHub License API base - a FIXED host (the SSRF control). */
 const GITHUB_API_HOST = "https://api.github.com";
 
 /** Build the GitHub License API URL for a repo at an optional ref (URL-encoded). */
@@ -308,7 +308,7 @@ export function githubLicenseUrl(
 /**
  * Fetch each missing unknown (bounded), append a claim on a resolution, and record the cache entry.
  * pypi/npm misses share one document per distinct registry URL (a fetchJson failure propagates
- * LOUDLY and writes NO entry — unchanged). terraform misses take the version-ref GitHub path with
+ * LOUDLY and writes NO entry - unchanged). terraform misses take the version-ref GitHub path with
  * the revision-E transient-hard-fail-vs-definitive-negative classification. nuget misses take the
  * two-step registration path with the 404-as-definitive private-feed classification.
  */
@@ -339,8 +339,8 @@ async function fetchMisses(
 }
 
 /**
- * The pypi/npm path: one fetch per distinct registry URL via {@link fetchJsonOr404} — the
- * nuget/deps.dev posture. A clean 404 (the package is not on the public registry — a code-generated
+ * The pypi/npm path: one fetch per distinct registry URL via {@link fetchJsonOr404} - the
+ * nuget/deps.dev posture. A clean 404 (the package is not on the public registry - a code-generated
  * or private-registry artifact) is a DEFINITIVE negative for every miss sharing that URL, recorded
  * the same way a resolver's clean-empty 200 answer is. Every transient/persistent non-404 failure
  * still throws loudly and writes NO entry.
@@ -410,7 +410,7 @@ async function fetchTerraformMisses(
     }
 
     // Try the ordered refs; the first resolvable 200 wins. A GithubTransientError here propagates
-    // out of mapLimit/enrichUnknowns — the LOUD hard-fail (no entry written for this purl, no
+    // out of mapLimit/enrichUnknowns - the LOUD hard-fail (no entry written for this purl, no
     // negative poison).
     for (const ref of githubLicenseRefsFor(miss.parsed.version)) {
       const url = githubLicenseUrl(repo.owner, repo.repo, ref);
@@ -442,11 +442,11 @@ async function fetchTerraformMisses(
 
 /**
  * The nuget registration path: TWO sequential fetches per miss (leaf → host-pinned catalogEntry)
- * inside one bounded worker — modest concurrency plus the existing backoff, no new throttling
- * machinery. The transient-vs-definitive line: ONLY fetchJsonOr404's 404 VALUE (not on nuget.org —
- * the common, legitimate private-feed reality), a malformed or foreign-host catalogEntry (no
+ * inside one bounded worker - modest concurrency plus the existing backoff, no new throttling
+ * machinery. The transient-vs-definitive line: ONLY fetchJsonOr404's 404 VALUE (not on nuget.org -
+ * * the common, legitimate private-feed reality), a malformed or foreign-host catalogEntry (no
  * request is ever made to it), and the resolver's clean null record governed NEGATIVE entries;
- * every throw (429/5xx/network/timeout) propagates loudly out of mapLimit and writes NOTHING —
+ * every throw (429/5xx/network/timeout) propagates loudly out of mapLimit and writes NOTHING - *
  * negative-poison impossible. The cache key stays the VERBATIM purl; only the URLs are lowercased
  * (the builder owns that). Nuget entries never carry fetchedAt: registration/catalog blobs are
  * stable versioned CDN content, the pypi/npm no-timestamp rule.
@@ -463,12 +463,12 @@ async function fetchNugetMisses(
       fetchOpts,
     );
     if (leaf.status === 404) {
-      recordNegative(miss, cache, "nuget"); // not on nuget.org — definitive
+      recordNegative(miss, cache, "nuget"); // not on nuget.org - definitive
       return;
     }
     const catalogUrl = catalogEntryUrlOf(leaf.body);
     if (catalogUrl === undefined) {
-      recordNegative(miss, cache, "nuget"); // malformed/foreign host — clean no-answer, NO fetch
+      recordNegative(miss, cache, "nuget"); // malformed/foreign host - clean no-answer, NO fetch
       return;
     }
     const catalog = await fetchJsonOr404(catalogUrl, fetchOpts);
@@ -478,7 +478,7 @@ async function fetchNugetMisses(
     }
     const resolved = resolveNugetCatalogLicense(catalog.body);
     if (resolved === null) {
-      recordNegative(miss, cache, "nuget"); // embedded-file / url-only / none — honest unknown
+      recordNegative(miss, cache, "nuget"); // embedded-file / url-only / none - honest unknown
       return;
     }
     packages[miss.index] = withCacheClaim(miss.entry, resolved.raw, "registry");
@@ -492,12 +492,12 @@ async function fetchNugetMisses(
 }
 
 /**
- * The deps.dev path: ONE fetch per miss (fixed host, GAV path, qualifiers stripped) — the smallest
+ * The deps.dev path: ONE fetch per miss (fixed host, GAV path, qualifiers stripped) - the smallest
  * honest fetcher in the existing npm/pypi/nuget shape. A clean 404 is DEFINITIVE (no registry
  * presence, the nuget private-feed classification); a clean 200 whose `licenses` are ALL
  * non-standard/empty is the SAME governed negative. A resolved answer may carry SEVERAL raw claims
  * (never joined into a guessed compound). Every throw (429/5xx/network) propagates loudly out of
- * mapLimit and writes NOTHING — negative-poison impossible, identical to every other arm.
+ * mapLimit and writes NOTHING - negative-poison impossible, identical to every other arm.
  */
 async function fetchMavenMisses(
   misses: Unknown[],
@@ -511,12 +511,12 @@ async function fetchMavenMisses(
       fetchOpts,
     );
     if (result.status === 404) {
-      recordNegative(miss, cache, "deps-dev"); // no registry presence — definitive
+      recordNegative(miss, cache, "deps-dev"); // no registry presence - definitive
       return;
     }
     const resolved = resolveMavenLicenses(result.body);
     if (resolved === null) {
-      recordNegative(miss, cache, "deps-dev"); // non-standard/empty — honest unknown
+      recordNegative(miss, cache, "deps-dev"); // non-standard/empty - honest unknown
       return;
     }
     const license =
@@ -573,6 +573,6 @@ function applyResolution(
     return;
   }
   // A clean 200 with a genuinely empty license → a negative cache entry; the package stays unknown.
-  // (A fetch FAILURE never reaches here — fetchJson threw — so a transient outage is never cached.)
+  // (A fetch FAILURE never reaches here - fetchJson threw - so a transient outage is never cached.)
   recordNegative(miss, cache, miss.parsed.type === "pypi" ? "pypi" : "npm");
 }

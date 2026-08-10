@@ -1,16 +1,16 @@
 /**
  * Sole copyleft data module.
  *
- * The data is a literal, reviewable list — never computed from spdx-license-ids at runtime.
+ * The data is a literal, reviewable list - never computed from spdx-license-ids at runtime.
  * Verdict-affecting data must not drift when a transitive data package updates, and runtime
  * family/prefix expansion would re-introduce the GPL-substring collision class (LGPLLR, NGPL,
- * SMAIL-GPL, CNRI-Python-GPL-Compatible are all not copyleft) — exact-ID membership on parsed
+ * SMAIL-GPL, CNRI-Python-GPL-Compatible are all not copyleft) - exact-ID membership on parsed
  * expression leaves is the only matching allowed.
  *
  * Deprecated SPDX forms (GPL-2.0, AGPL-3.0, the -with-exception compounds) are included because
  * spdx-expression-parse accepts them; a `plus` leaf (GPL-2.0+) is covered via its base id.
  * Exception forms stay copyleft: an exception narrows obligations but the base license remains
- * copyleft — `[[compatible]]` is the policy escape hatch.
+ * copyleft - `[[compatible]]` is the policy escape hatch.
  *
  * Membership bar: weak copyleft counts (MPL/EPL/CDDL set the bar), so every reciprocal/ShareAlike
  * license meeting it is listed: the CC-BY-SA family (incl. jurisdiction ports), Sleepycat,
@@ -22,7 +22,7 @@
  * Family grouping: every id carries a family token so workspace suppression can verify that a
  * finding's copyleft obligations are compatible with the workspace's own declared license. The GNU
  * family deliberately spans AGPL/GPL/LGPL (an AGPL-distributed workspace's obligations envelope its
- * GPL/LGPL dependencies); every other family is its own island — an AGPL workspace never
+ * GPL/LGPL dependencies); every other family is its own island - an AGPL workspace never
  * auto-suppresses SSPL or CC-BY-SA findings. Grouping is deliberately coarse: `[[compatible]]` is
  * the precise per-license/per-package escape hatch.
  */
@@ -88,8 +88,7 @@ const FAMILY_MEMBERS: ReadonlyArray<
   ],
   ["SSPL", ["SSPL-1.0"]],
   [
-    // CC ShareAlike family (ShareAlike = copyleft for adaptations), incl. the jurisdiction ports —
-    // CC-BY-* (no SA) is NOT copyleft and stays out.
+    // CC ShareAlike family (ShareAlike = copyleft for adaptations), incl. the jurisdiction ports -     // CC-BY-* (no SA) is NOT copyleft and stays out.
     "CC-BY-SA",
     [
       "CC-BY-SA-1.0",
@@ -141,7 +140,7 @@ const FAMILY_MEMBERS: ReadonlyArray<
 ];
 
 /**
- * Exact-ID → family token. Derived from the literal groups above — one source, no drift between
+ * Exact-ID → family token. Derived from the literal groups above - one source, no drift between
  * membership and family data.
  */
 export const COPYLEFT_FAMILY: ReadonlyMap<string, string> = new Map(
@@ -150,19 +149,19 @@ export const COPYLEFT_FAMILY: ReadonlyMap<string, string> = new Map(
   ),
 );
 
-/** Exact-ID copyleft membership — the keys of the family map. */
+/** Exact-ID copyleft membership - the keys of the family map. */
 export const COPYLEFT_IDS: ReadonlySet<string> = new Set(
   COPYLEFT_FAMILY.keys(),
 );
 
 /**
- * Exact-ID AGPL membership — the network-copyleft subset of the GNU family. The FAMILY_MEMBERS
+ * Exact-ID AGPL membership - the network-copyleft subset of the GNU family. The FAMILY_MEMBERS
  * "GNU" token deliberately spans AGPL/GPL/LGPL (see the module doc above), too coarse for the
  * container-copyleft exception: AGPL section 13 reaches server-side network use even without
  * distribution, so an AGPL leaf in a container system package must escalate past the routine
- * GPL/LGPL base-image tolerance while a GPL/LGPL sibling does not. A literal, reviewable subset —
- * never derived from COPYLEFT_FAMILY by prefix at runtime — keeps the same auditability posture as
- * the module above.
+ * GPL/LGPL base-image tolerance while a GPL/LGPL sibling does not. A literal, reviewable subset -
+ * * never derived from COPYLEFT_FAMILY by prefix at runtime - keeps the same auditability posture
+ * as the module above.
  */
 export const AGPL_IDS: ReadonlySet<string> = new Set([
   "AGPL-1.0",

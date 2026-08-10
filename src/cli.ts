@@ -1,20 +1,20 @@
 /**
- * Single CLI entry point: `generate` and `check` subcommands parsed with node:util parseArgs — no
+ * Single CLI entry point: `generate` and `check` subcommands parsed with node:util parseArgs - no
  * CLI framework (dependency-footprint constraint). This module is the only place that owns process
  * exit codes.
  *
  * Generate modes:
- * - `--repo-root <path>` (default: cwd) — discovery mode: every lockfile target under the root is
+ * - `--repo-root <path>` (default: cwd) - discovery mode: every lockfile target under the root is
  *   scanned sequentially in sorted identity order and folded into one merged document.
- * - `--target <path>` — single-target debugging; flows through the same dispatch loop, so a Yarn-4
+ * - `--target <path>` - single-target debugging; flows through the same dispatch loop, so a Yarn-4
  *   target produces identical rows either way.
- * - `--exclude <glob>` — repeatable; matched against target identities.
- * - `--policy <path>` — optional TOML policy: validated before any scan (fail-fast), verdicts
+ * - `--exclude <glob>` - repeatable; matched against target identities.
+ * - `--policy <path>` - optional TOML policy: validated before any scan (fail-fast), verdicts
  *   surfaced on stderr, in the dump-model output, and in the rendered PolicyView document; the
- *   document is always written whatever the verdicts say — the CI gate is check, never generate.
- * - `--notices <path>` — the THIRD_PARTY_NOTICES.md companion is always written; defaults to
+ *   document is always written whatever the verdicts say - the CI gate is check, never generate.
+ * - `--notices <path>` - the THIRD_PARTY_NOTICES.md companion is always written; defaults to
  *   THIRD_PARTY_NOTICES.md beside the output.
- * - `--cyclonedx <path>` — optional CycloneDX 1.6 export.
+ * - `--cyclonedx <path>` - optional CycloneDX 1.6 export.
  *
  * Architecture: the write-free pipeline core lives in src/pipeline/ (buildOutputs renders in
  * memory; runGenerate holds the only file-write calls in the cli/pipeline/gate trio); the check
@@ -22,13 +22,13 @@
  *
  * Exit-code taxonomy:
  *   0 success / check clean 1 check: at least one policy fail verdict (priority over stale). Warn
- *      verdicts and unused-policy-entry warnings print but never gate — only fail verdicts reach
+ *      verdicts and unused-policy-entry warnings print but never gate - only fail verdicts reach
  *      this code.
  *   2 check: at least one stale or missing committed output 3 tool/config error (>2): unknown
  *   subcommand, conflicting flags, pipeline
  *      failure, coverage assertion, invalid policy file (TomlError/PolicyError messages printed
  *      verbatim), --dump-model on check. Codes 1 and 2 come only from check's structured-result
- *      mapping — exceptions can never surface as 0/1/2.
+ *      mapping - exceptions can never surface as 0/1/2.
  */
 
 import { existsSync } from "node:fs";
@@ -156,9 +156,9 @@ interface CliValues {
    */
   "list-dockerfiles"?: boolean;
   /**
-   * generate --intensive: opt-in ScanCode assessment over the FULL package set — the in-depth
+   * generate --intensive: opt-in ScanCode assessment over the FULL package set - the in-depth
    * source scan that outranks the registry answer where present, memo-gated so an already-analysed
-   * version is never re-scanned. GENERATE-ONLY — check rejects it outright (gate/check.ts). No
+   * version is never re-scanned. GENERATE-ONLY - check rejects it outright (gate/check.ts). No
    * `default` here: absent must stay absent, never coerced to false, so optionsFrom's own-property
    * spread can gate the intensive lane on mere presence.
    */
@@ -181,7 +181,7 @@ function discoverDefaultPolicy(values: CliValues): string | undefined {
 }
 
 /**
- * Validate the shared flag constraints and assemble the pipeline options — generate and check parse
+ * Validate the shared flag constraints and assemble the pipeline options - generate and check parse
  * the same flags, so the comparison set is exactly the configured output set.
  */
 export function optionsFrom(values: CliValues): GenerateOptions {
@@ -215,8 +215,8 @@ export function optionsFrom(values: CliValues): GenerateOptions {
  * lane combination is valid. THE THREE LANES ARE PAIRWISE MUTUALLY EXCLUSIVE: exactly one of
  * --dockerfile (build named Dockerfiles) / --repo-root (discover + build) / --image (scan
  * pre-existing images). --list-dockerfiles is discovery-listing support: it never combines with a
- * build/scan lane and REQUIRES --repo-root (the walk root the listing reads). A bare invocation —
- * no lane, no listing — is a usage error naming the three lanes: there is no default image set.
+ * build/scan lane and REQUIRES --repo-root (the walk root the listing reads). A bare invocation -
+ * * no lane, no listing - is a usage error naming the three lanes: there is no default image set.
  * Pair checks are walked as a table rather than an if-ladder to keep this function under the
  * complexity bound. Extracted from dockerSbomOptionsFrom to keep that function under the complexity
  * bound.
@@ -240,7 +240,7 @@ export function dockerSbomModeConflict(values: CliValues): string | undefined {
       hasDockerfile,
       "--list-dockerfiles and --dockerfile are mutually exclusive",
     ],
-    // The three lanes are pairwise mutually exclusive — choose one way in.
+    // The three lanes are pairwise mutually exclusive - choose one way in.
     [
       hasDockerfile,
       hasRepoRoot,
@@ -266,7 +266,7 @@ export function dockerSbomModeConflict(values: CliValues): string | undefined {
   if (hasListDockerfiles && !hasRepoRoot) {
     return "--list-dockerfiles requires --repo-root <dir>";
   }
-  // No lane and no listing — there is no default image set, so a bare invocation is a usage error
+  // No lane and no listing - there is no default image set, so a bare invocation is a usage error
   // naming the three ways in.
   if (!hasImage && !hasRepoRoot && !hasDockerfile && !hasListDockerfiles) {
     return (
@@ -343,7 +343,7 @@ async function runGenerateDockerSbomCommand(values: CliValues): Promise<void> {
 
 /**
  * Run `check`, the CI gate. Exit codes 1 and 2 come ONLY from the structured result via exitCodeFor
- * — never from a throw (an exception stays on 3+).
+ * - never from a throw (an exception stays on 3+).
  */
 async function runCheckCommand(values: CliValues): Promise<never> {
   let result: CheckResult;

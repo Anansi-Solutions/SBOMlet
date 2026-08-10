@@ -1,6 +1,6 @@
 /**
- * Unknown-license predicate shared by both rendered documents — THIRD_PARTY_LICENSES.md's counts
- * block and THIRD_PARTY_NOTICES.md's unknown-packages section — so the two can never disagree on
+ * Unknown-license predicate shared by both rendered documents - THIRD_PARTY_LICENSES.md's counts
+ * block and THIRD_PARTY_NOTICES.md's unknown-packages section - so the two can never disagree on
  * which packages count as unknown.
  */
 
@@ -11,7 +11,7 @@ import type { PackageEntry } from "../model/dependencies";
 
 /**
  * Unknown-license predicate: a finding with a null expression, an elected branch composed entirely
- * of LicenseRef-/DocumentRef- leaves, or — pre-annotation — no finding and zero claims. An
+ * of LicenseRef-/DocumentRef- leaves, or - pre-annotation - no finding and zero claims. An
  * imprecise finding is present, not unknown, so it is excluded.
  */
 export function isUnknownLicense(pkg: PackageEntry): boolean {

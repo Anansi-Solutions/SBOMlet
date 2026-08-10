@@ -1,5 +1,5 @@
 /**
- * Canonical model — the hub module.
+ * Canonical model - the hub module.
  *
  * Every other module imports types from here and never from each other. The model deliberately
  * reserves fields so later work is purely additive: provenance layers, scope taxonomy for Docker,
@@ -11,7 +11,7 @@
  * is appended by the enrichment stage when a registry (PyPI/npm) JSON response supplies a license
  * for an otherwise-unknown package, so a registry-sourced finding is auditable in the dump and
  * rendered output. "scancode" is appended by the enrichment stage when the intensive ScanCode
- * collector supplies a license the registry could not (or only imprecisely) — see Phase 10; it
+ * collector supplies a license the registry could not (or only imprecisely) - see Phase 10; it
  * replays from the committed cache exactly like "registry" does, so it is auditable the same way.
  * "corrected" / "curated" / "override" are reserved.
  */
@@ -37,13 +37,13 @@ export interface LicenseClaim {
  * - "exact": the raw value parsed as a valid SPDX expression verbatim.
  * - "corrected": spdx-correct fixed a sloppy-but-precise value (e.g. "Apache License, Version 2.0"
  *   → Apache-2.0).
- * - "none": genuinely unknown — no license could be determined (expression null, impreciseFamily
+ * - "none": genuinely unknown - no license could be determined (expression null, impreciseFamily
  *   absent).
  * - "imprecise": an ambiguous license FAMILY label was observed ("BSD", "BSD License", "Apache
  *   Software License") that carries no clause/version, so it is NOT guessed to a precise SPDX id.
  *   It is present-but-needs-clarify: `expression` stays null because a bare family is not a valid
  *   SPDX expression, and the faithful family string is carried on {@link
- *   LicenseFinding.impreciseFamily}. Distinct from "none" — an imprecise finding IS a license, just
+ *   LicenseFinding.impreciseFamily}. Distinct from "none" - an imprecise finding IS a license, just
  *   an under-specified one a `[[clarify]]` override can disambiguate.
  */
 export type FindingConfidence = "exact" | "corrected" | "none" | "imprecise";
@@ -55,7 +55,7 @@ export type FindingConfidence = "exact" | "corrected" | "none" | "imprecise";
 export interface LicenseFinding {
   /**
    * Full normalized SPDX expression; null = unknown OR imprecise (an imprecise family is not a
-   * valid SPDX expression and must never be emitted as one — see {@link FindingConfidence}).
+   * valid SPDX expression and must never be emitted as one - see {@link FindingConfidence}).
    */
   expression: string | null;
   /** Elected branch as rendered canonical string; null = unknown or imprecise. */
@@ -67,33 +67,33 @@ export interface LicenseFinding {
   source: LicenseClaimSource;
   confidence: FindingConfidence;
   /**
-   * The faithful ambiguous family label (e.g. "BSD", "Apache") — present ONLY when confidence is
+   * The faithful ambiguous family label (e.g. "BSD", "Apache") - present ONLY when confidence is
    * "imprecise". It is what the render layer surfaces and what the policy could-be-copyleft check
    * matches against the literal COULD_BE_COPYLEFT_FAMILIES token set.
    */
   impreciseFamily?: string;
   /**
    * Distinct audit citation for a TOOL-LEVEL builtin override that decided this finding. Present
-   * ONLY when a shipped BUILTIN_OVERRIDES entry (not a project [[clarify]]) replaced the finding —
-   * e.g. "override:builtin[3]". A project clarify keeps its existing "clarify[i]" citation via the
-   * policy engine's clarifyIndexFor lookup, so this field is absent for those. The engine cites
-   * this instead of plain "default:ok" so a tool-level disambiguation stays auditable (closes the
-   * default:ok-fallthrough gap).
+   * ONLY when a shipped BUILTIN_OVERRIDES entry (not a project [[clarify]]) replaced the finding -
+   *    * e.g. "override:builtin[3]". A project clarify keeps its existing "clarify[i]" citation
+   * via the policy engine's clarifyIndexFor lookup, so this field is absent for those. The engine
+   * cites this instead of plain "default:ok" so a tool-level disambiguation stays auditable (closes
+   * the default:ok-fallthrough gap).
    */
   overrideRule?: string;
   /**
    * A STALE override: an override (project clarify or tool-level builtin) carried an `expects`
    * precondition that NO LONGER matches the package's pre-override observed signal. The asserted
    * expression is NOT applied (this finding keeps its un-overridden value); instead the engine
-   * emits a loud fail verdict naming the package, the expected value, and the now-observed value —
-   * a stale override must never silently mask a relicense.
+   * emits a loud fail verdict naming the package, the expected value, and the now-observed value -
+   *    * a stale override must never silently mask a relicense.
    */
   staleOverride?: StaleOverride;
   /**
    * A senior-assessment disagreement: the in-depth ScanCode answer conflicts with at least one
    * quick-check claim (declared metadata or a registry answer). Set by applyScancodeAssessment on
-   * the UN-OVERRIDDEN base finding — the base stands in full and the disagreement is surfaced,
-   * never absorbed in either direction — and cleared when an override (project clarify or
+   * the UN-OVERRIDDEN base finding - the base stands in full and the disagreement is surfaced,
+   * never absorbed in either direction - and cleared when an override (project clarify or
    * tool-level builtin) DECIDES the finding: an applied override is the human resolution, so it
    * never carries the marker. Absent when no scancode claim exists or the assessment agrees
    * (absent-not-empty for golden stability).
@@ -103,7 +103,7 @@ export interface LicenseFinding {
    * The PRE-OVERRIDE observed SPDX expression. Set by annotateFindings from the un-overridden base
    * finding BEFORE an override may rewrite `expression`. The deny terminal consults BOTH this
    * observed expression AND the (possibly-overridden) `expression`: if EITHER is denied, deny fires
-   * — a denied OBSERVED license can never be licensed back in by any override (deny is terminal
+   * - a denied OBSERVED license can never be licensed back in by any override (deny is terminal
    * over overrides). Absent when no override ran (the un-overridden finding's `expression` already
    * IS the observed value) or when the base finding had no parseable expression.
    */
@@ -116,9 +116,9 @@ export interface LicenseFinding {
    * nothing (they carry no precise license to deny).
    *
    * WHY: combineKnown elects an imprecise family / collapses to unknown BEFORE a precise
-   * non-copyleft DENIED member (BUSL-1.1, Elastic-2.0 — source-available, NOT copyleft) when an
+   * non-copyleft DENIED member (BUSL-1.1, Elastic-2.0 - source-available, NOT copyleft) when an
    * imprecise family token ("GPL") or an unknown token co-exists, so the combined `expression` is
-   * null/imprecise and the deny terminal — reading only the combined expression — never sees the
+   * null/imprecise and the deny terminal - reading only the combined expression - never sees the
    * denied member. The deny terminal also consults THIS set: if ANY observed precise expression is
    * denied, deny fires regardless of how combine rendered the finding (precise / imprecise /
    * unknown), in every scope. Deny stays terminal-0; this only changes what deny CAN SEE, never
@@ -132,8 +132,8 @@ export interface LicenseFinding {
    * ONLY when an os-scope package's claim set mixes ≥1 normalizable SPDX member with ≥1
    * genuinely-unknown ("none") token: the finding is built from the normalizable members (so the
    * KNOWN GPL/BSD obligations are not hidden by the all-or-nothing → unknown rule) AND the
-   * remaining unparseable tokens are surfaced here — deduped, sorted by {@link compareCodeUnits},
-   * raw-but-trimmed — for review and rendering rather than silently dropped.
+   * remaining unparseable tokens are surfaced here - deduped, sorted by {@link compareCodeUnits},
+   * raw-but-trimmed - for review and rendering rather than silently dropped.
    *
    * SAFETY: this is os-scope ONLY. App/dev/prod (gating) scopes keep the strict all-or-nothing →
    * unknown invariant and NEVER carry this field. The surfaced tokens are advisory: they never
@@ -145,7 +145,7 @@ export interface LicenseFinding {
 
 /** A stale-override condition surfaced to the policy engine. */
 export interface StaleOverride {
-  /** "clarify" (project) or "builtin" (shipped tool-level) — for the message. */
+  /** "clarify" (project) or "builtin" (shipped tool-level) - for the message. */
   level: "clarify" | "builtin";
   /** The value the override expected to still observe. */
   expected: string;
@@ -161,8 +161,8 @@ export interface AssessmentConflict {
    */
   assessed: string;
   /**
-   * The disagreeing quick-check signal members — normalized where precise, the family token /
-   * trimmed raw otherwise — deduped and sorted.
+   * The disagreeing quick-check signal members - normalized where precise, the family token /
+   * trimmed raw otherwise - deduped and sorted.
    */
   disagreeing: ReadonlyArray<string>;
 }
@@ -188,16 +188,16 @@ export type ScopeTaxonomy = "app" | "os";
 
 /**
  * The prefix of every docker image occurrence identity ("docker:<source>"). RESERVED for scope:"os"
- * inputs — on a POSIX filesystem a directory can be literally named "docker:whatever", so without
+ * inputs - on a POSIX filesystem a directory can be literally named "docker:whatever", so without
  * the reserved-namespace guard in merge.ts (assertNotReservedIdentity) a crafted workspace path
  * could impersonate a docker image occurrence and inherit `where`-scoped acceptances reviewed for
- * the image layer. Lives on the model hub — every other module imports from here — because the
+ * the image layer. Lives on the model hub - every other module imports from here - because the
  * render layer needs it too (Containers section identities), not only merge/pipeline.
  */
 export const DOCKER_IDENTITY_PREFIX = "docker:";
 
 /**
- * Dependency provenance — "why is this dependency here?" — derived per-target at collect time from
+ * Dependency provenance - "why is this dependency here?" - derived per-target at collect time from
  * the lockfile/BOM dependency graph. Introduction is PER-TARGET (per BOM): the same purl can be a
  * direct dependency in one workspace and a transitive one in another, so this rides on the
  * Occurrence, not the package.
@@ -209,7 +209,7 @@ export const DOCKER_IDENTITY_PREFIX = "docker:";
  *   roots give `direct`/`introducedBy`/`path`.
  *
  * Every OTHER source (terraform, Docker image packages, bun, any npm BOM lacking a graph) leaves
- * `introduction` ABSENT — the render layer shows an honest "—" rather than a fabricated value.
+ * `introduction` ABSENT - the render layer shows an honest " - " rather than a fabricated value.
  *
  * OPTIONALITY IS OUT OF SCOPE: no `optional` field is defined, intentionally. The npm lane never
  * carried optional (the BOM has no optional/peer information); the python lane formerly derived it
@@ -249,7 +249,7 @@ export interface Occurrence {
   /** Scope of this package in this target (dev in docs, prod in frontend is legal). */
   isDevDependency: boolean;
   /**
-   * Dependency provenance for this target — direct-vs-transitive plus the introducer path. Absent
+   * Dependency provenance for this target - direct-vs-transitive plus the introducer path. Absent
    * when the source carries no usable dependency graph (terraform / Docker OS / bun / graph-less
    * npm), so goldens that predate provenance stay byte-identical where it is absent.
    */
@@ -258,7 +258,7 @@ export interface Occurrence {
 
 /**
  * Per-package attribution extracted from CycloneDX evidence at merge time. Holds extracted
- * artifacts only: raw decoded license texts never enter the model — except `verbatimTexts`,
+ * artifacts only: raw decoded license texts never enter the model - except `verbatimTexts`,
  * retained exclusively for packages with no spdx-id/expression-kind claim, where the verbatim file
  * is the only license statement we have. All stored text is control-character-sanitized at intake.
  */
@@ -271,12 +271,12 @@ export interface PackageAttribution {
   /** Decoded NOTICE file contents (Apache section 4(d) input), sanitized verbatim. */
   noticeTexts: string[];
   /**
-   * component.author when string-typed — secondary "Author:" attribution, never a copyright claim.
+   * component.author when string-typed - secondary "Author:" attribution, never a copyright claim.
    */
   author?: string;
   /** True when at least one non-NOTICE license file was decoded for this package. */
   hasVerbatimText: boolean;
-  /** Decoded license-file texts — only for packages with zero spdx-id/expression claims. */
+  /** Decoded license-file texts - only for packages with zero spdx-id/expression claims. */
   verbatimTexts?: string[];
 }
 
@@ -293,12 +293,12 @@ export interface PackageEntry {
   /** Raw generator scope (e.g. cdxgen's unreliable yarn scope), recorded verbatim. */
   rawScope?: string;
   /**
-   * Normalized license conclusion — set only by a policy run. Absent without `--policy`, so
+   * Normalized license conclusion - set only by a policy run. Absent without `--policy`, so
    * existing dump-model goldens stay byte-identical.
    */
   finding?: LicenseFinding;
   /**
-   * Evidence-derived attribution — set only when the component carried at least one usable evidence
+   * Evidence-derived attribution - set only when the component carried at least one usable evidence
    * entry. Absent (never empty) for evidence-less packages, so existing dump-model and render
    * goldens stay byte-identical.
    */
@@ -316,7 +316,7 @@ export interface EvaluatedDependencies extends CanonicalDependencies {
 }
 
 /**
- * UTF-16 code-unit comparison — the only string comparator in this tool. The
+ * UTF-16 code-unit comparison - the only string comparator in this tool. The
  * `<`/`>` operators order strings by UTF-16 code unit (not Unicode codepoint;
  * the surrogate-pair edge differs), which is platform-invariant.
  *
@@ -338,7 +338,7 @@ export function comparePackages(a: PackageEntry, b: PackageEntry): number {
 }
 
 /**
- * The purl TYPE segment — everything between "pkg:" and the first "/". Shared hub helper: the
+ * The purl TYPE segment - everything between "pkg:" and the first "/". Shared hub helper: the
  * render layer's ecosystem column and the container system-vs-application discriminator (the
  * OS-package allowlist) both key on this exact extraction, so there is one purl-parsing rule, not
  * two.
@@ -352,7 +352,7 @@ export function purlEcosystem(purl: string): string {
 /**
  * JSON.stringify replacer that sorts object keys (arrays untouched) by {@link compareCodeUnits}.
  * Exported so the committed enrichment cache shares the exact tool-wide sorted-key serialization
- * contract — there must be one sorter, not two.
+ * contract - there must be one sorter, not two.
  */
 export function sortedKeyReplacer(_key: string, value: unknown): unknown {
   if (value !== null && typeof value === "object" && !Array.isArray(value)) {
@@ -376,7 +376,7 @@ export function toSortedJson(value: unknown): string {
 }
 
 /**
- * Deterministic JSON dump of the canonical model. Delegates to {@link toSortedJson} — same
+ * Deterministic JSON dump of the canonical model. Delegates to {@link toSortedJson} - same
  * sorted-key/LF/indent-2 bytes. Used by `--dump-model` and golden-file tests.
  */
 export function toSortedDependenciesJson(model: CanonicalDependencies): string {

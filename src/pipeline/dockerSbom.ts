@@ -12,9 +12,9 @@
  *      then scan;
  *   3. --image <ref>...        scan pre-existing image refs (pull when absent).
  * NO default image is set: a bare invocation is a usage error (the CLI names the lanes).
- * Dockerfiles are BUILD INPUTS, never objects of analysis — their contents are never read here.
+ * Dockerfiles are BUILD INPUTS, never objects of analysis - their contents are never read here.
  *
- * This is deliberately a SEPARATE subcommand, not a `--scan-docker` flag on `generate` — the
+ * This is deliberately a SEPARATE subcommand, not a `--scan-docker` flag on `generate` - the
  * everyday generate/check stay daemon-free and fully offline, reading the committed bytes this
  * command produces as a scope:"os" merge input. The blast radius of the docker/network side-effect
  * is confined to this one path.
@@ -88,10 +88,10 @@ export interface ResolveDiscoveredImagesResult {
 
 /**
  * PURE discovery-lane resolution (NO docker, NO syft, NO file reads): walk `repoRoot` for
- * Dockerfiles and build the set to build+scan. Discovery is LISTING-ONLY — no Dockerfile is read;
+ * Dockerfiles and build the set to build+scan. Discovery is LISTING-ONLY - no Dockerfile is read;
  * every discovered (non-ignored, non-excluded) Dockerfile is a build input whose deterministic tag
  * is imageTag(identity). The build tag is a pure function of the DISCOVERY IDENTITY STRING, which
- * is exactly what produces today's committed sidecar identity — any path-shape change would churn
+ * is exactly what produces today's committed sidecar identity - any path-shape change would churn
  * the committed artifact.
  *
  * The summary names, in sorted order, every discovered Dockerfile and its build tag, plus the
@@ -148,7 +148,7 @@ export interface DockerfileListingOptions {
  * every discovered Dockerfile's repo-relative identity, sorted (discoverDockerfiles already sorts
  * the walk). This is the CI workflow's discovery surface, so the build set is the tool's own
  * policy-aware walk, never a shell find. Ignored (by `[docker] ignore`) identities are deliberately
- * excluded — a policy-ignored Dockerfile must never be built by CI.
+ * excluded - a policy-ignored Dockerfile must never be built by CI.
  */
 export function dockerfileListing(
   repoRoot: string,
@@ -164,7 +164,7 @@ export function dockerfileListing(
 
 /** One explicitly targeted Dockerfile: its display identity + absolute path. */
 export interface TargetedDockerfile {
-  /** The path as the caller gave it — used (sanitized) in the stderr summary. */
+  /** The path as the caller gave it - used (sanitized) in the stderr summary. */
   identity: string;
   /** Absolute, base-dir-resolved path. */
   path: string;
@@ -183,7 +183,7 @@ export interface ResolveTargetedDockerfilesResult {
  * Dockerfile list, sort + dedup by identity, and build the set to build+scan. Each Dockerfile's
  * deterministic tag is imageTag(identity), where the identity is the caller's path string verbatim.
  *
- * A MISSING/unreadable named path THROWS before any build runs — an explicitly named path that is
+ * A MISSING/unreadable named path THROWS before any build runs - an explicitly named path that is
  * absent is a caller typo, so we fail fast rather than silently drop the image it stands for
  * (unlike a walked-and-therefore-present discovery file). The summary names, in sorted order, every
  * targeted Dockerfile and its build tag; identities are routed through sanitizeForLog because they
@@ -196,7 +196,7 @@ export function resolveTargetedDockerfiles(
     compareCodeUnits(a.identity, b.identity),
   );
 
-  // Fail-fast on a missing/unreadable named path — a caller typo must surface loudly BEFORE any
+  // Fail-fast on a missing/unreadable named path - a caller typo must surface loudly BEFORE any
   // build argv is spawned, never silently drop an image.
   for (const df of sorted) {
     try {
@@ -249,7 +249,7 @@ function dockerIgnoreFromPolicy(
       `policy file is missing or unreadable: expected ${policyFile}`,
     );
   }
-  // parsePolicy throws TomlError/PolicyError verbatim — same fail-fast posture as the generate
+  // parsePolicy throws TomlError/PolicyError verbatim - same fail-fast posture as the generate
   // path; an invalid policy aborts before any scan.
   return parsePolicy(policyText).docker?.ignore ?? [];
 }
@@ -263,7 +263,7 @@ export interface GenerateDockerSbomOptions {
   images?: string[];
   /**
    * DISCOVERY BUILD LANE (--repo-root): walk this repo root for Dockerfiles, build each to its
-   * deterministic tag, and scan the built images. Discovery reads no Dockerfile contents — every
+   * deterministic tag, and scan the built images. Discovery reads no Dockerfile contents - every
    * discovered (non-ignored, non-excluded) Dockerfile is a build input. Base-dir-resolved; mutually
    * exclusive with the other lanes.
    */
@@ -278,7 +278,7 @@ export interface GenerateDockerSbomOptions {
   excludes?: string[];
   /**
    * Policy file to read the `[docker] ignore` globs from (discovery lane only). Validated via
-   * parsePolicy — an invalid policy aborts before any build. Base-dir-resolved.
+   * parsePolicy - an invalid policy aborts before any build. Base-dir-resolved.
    */
   policyPath?: string;
   /**
@@ -288,7 +288,7 @@ export interface GenerateDockerSbomOptions {
    */
   dockerSbomPath?: string;
   /**
-   * Base directory for resolving relative paths — same anchoring as runGenerate. The default output
+   * Base directory for resolving relative paths - same anchoring as runGenerate. The default output
    * lands in the resolved cache dir (repo-root-anchored) alongside the other committed artifacts.
    */
   baseDir?: string;
@@ -313,7 +313,7 @@ export interface GenerateDockerSbomOptions {
 /**
  * Build a set of Dockerfiles (by identity string) to their deterministic tags via the injected exec
  * seam, returning the built tags in order. The identity string is passed to buildImage verbatim so
- * imageTag(identity) — the committed sidecar identity — is stable (the discovery/targeted lanes
+ * imageTag(identity) - the committed sidecar identity - is stable (the discovery/targeted lanes
  * hand this the exact string the listing prints).
  *
  * `cwd` is the buildx working directory: buildImageArgs is repo-relative, so the `-f` value and
@@ -339,7 +339,7 @@ export async function buildImages(
  * Scan an already-resolved image set with the single-posture collector, write the committed doc,
  * and narrate to stderr. Shared by all three lanes so the output-path resolution and byte-identity
  * contract are identical whatever the lane. Each entry pairs the image ref with its SOURCE identity
- * — the Dockerfile identity for the build lanes, the requested ref verbatim for the image lane — so
+ * - the Dockerfile identity for the build lanes, the requested ref verbatim for the image lane - so
  * the emitted sidecar records where every image came from.
  */
 async function scanAndWrite(
@@ -377,7 +377,7 @@ async function runTargetedBuildLane(
     build.map((b) => b.identity),
     opts.verbose ?? false,
   );
-  // Each built tag is scanned with its Dockerfile identity as the source — the DockerfileBuild
+  // Each built tag is scanned with its Dockerfile identity as the source - the DockerfileBuild
   // records already hold the identity→tag mapping.
   await scanAndWrite(
     build.map((b) => ({ image: b.tag, source: b.identity })),
@@ -425,7 +425,7 @@ async function runDiscoveryBuildLane(
     opts.verbose ?? false,
     repoRoot,
   );
-  // Each built tag is scanned with its repo-relative discovery identity as the source — the exact
+  // Each built tag is scanned with its repo-relative discovery identity as the source - the exact
   // string --list-dockerfiles prints.
   await scanAndWrite(
     build.map((b) => ({ image: b.tag, source: b.identity })),
@@ -456,7 +456,7 @@ async function runImageLane(
   process.stderr.write(
     `scanning ${requested.length} image(s): ${requested.map(sanitizeForLog).join(", ")}\n`,
   );
-  // Image lane: the source identity is the requested ref VERBATIM (source === image) — the pinned
+  // Image lane: the source identity is the requested ref VERBATIM (source === image) - the pinned
   // digest stays in dockerImages[].digest, never in a source, so a re-pin can never churn an
   // identity.
   await scanAndWrite(
@@ -469,14 +469,13 @@ async function runImageLane(
 /**
  * Resolve ONE of the three lanes, build when the lane calls for it, scan, and write the committed
  * Docker OS-SBOM. Kept to the listing short-circuit + outputPath resolution + a three-lane dispatch
- * ladder — each lane's logic lives in its own extracted helper so this orchestrator stays under the
+ * ladder - each lane's logic lives in its own extracted helper so this orchestrator stays under the
  * complexity bound.
  */
 export async function runGenerateDockerSbom(
   opts: GenerateDockerSbomOptions,
 ): Promise<void> {
-  // LISTING PATH (--list-dockerfiles): returns BEFORE any outputPath resolution or artifact write —
-  // this mode scans nothing and writes nothing, it only prints the tool's own policy-aware
+  // LISTING PATH (--list-dockerfiles): returns BEFORE any outputPath resolution or artifact write -   // this mode scans nothing and writes nothing, it only prints the tool's own policy-aware
   // Dockerfile walk to stdout (the machine channel) for the CI workflow's build loop to consume.
   if (opts.listDockerfiles === true) {
     // The CLI conflict table pairs --list-dockerfiles with --repo-root at the flag surface; hold
@@ -517,23 +516,23 @@ export async function runGenerateDockerSbom(
           DOCKER_SBOM_FILE,
         );
 
-  // LANE 1 — targeted build (--dockerfile).
+  // LANE 1 - targeted build (--dockerfile).
   if (opts.dockerfilePaths !== undefined && opts.dockerfilePaths.length > 0) {
     return runTargetedBuildLane(opts, outputPath);
   }
 
-  // LANE 2 — discovery build (--repo-root).
+  // LANE 2 - discovery build (--repo-root).
   if (opts.repoRoot !== undefined) {
     return runDiscoveryBuildLane(opts, outputPath, opts.repoRoot);
   }
 
-  // LANE 3 — image scan (--image).
+  // LANE 3 - image scan (--image).
   if (opts.images !== undefined && opts.images.length > 0) {
     return runImageLane(opts, outputPath);
   }
 
   // No lane selected. The CLI already guards this at the flag surface, but the public API holds the
-  // same invariant — there is no default image set, so a bare invocation is never a silent scan.
+  // same invariant - there is no default image set, so a bare invocation is never a silent scan.
   throw new Error(
     "generate-docker-sbom requires one lane: --dockerfile <path>... (build " +
       "named Dockerfiles), --repo-root <dir> (discover + build), or --image " +

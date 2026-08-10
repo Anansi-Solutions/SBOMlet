@@ -1,7 +1,7 @@
 /**
  * Purl-keyed merge of CycloneDX documents into the canonical model.
  *
- * The consumed subset is narrowed by the shared arktype boundary in src/validate/sbom.ts — the
+ * The consumed subset is narrowed by the shared arktype boundary in src/validate/sbom.ts - the
  * official JS library is serialize-only and cannot
  * deserialize CycloneDX JSON. Every unknown field is tolerated and ignored;
  * the volatile document-level fields are never declared, so they can never leak into compared
@@ -52,7 +52,7 @@ export interface CollectedSbom {
    * First-party names from the target's own lockfile (firstPartyNames() / npmFirstPartyNames()).
    * Components matching by display name and carrying a second first-party signal are skipped. Two
    * second signals are accepted: the yarn/plugin local-version marker (version ===
-   * "0.0.0-use.local") or the cdxgen npm workspace property (cdx:npm:isWorkspace === "true") — npm
+   * "0.0.0-use.local") or the cdxgen npm workspace property (cdx:npm:isWorkspace === "true") - npm
    * members carry their real versions, so the yarn version guard must never be reused for them.
    * Both conditions are always required: a name collision alone can never drop a third-party
    * package, and a crafted marker alone can never drop one either.
@@ -69,7 +69,7 @@ export interface CollectedSbom {
    * Per-purl dependency provenance for this target, keyed by purl. When present (the npm/yarn and
    * python lanes), each component's occurrence gets the matching introduction; a purl absent from
    * the map gets none (the honest residual). Absent entirely for graph-less sources (terraform /
-   * Docker OS / bun) — every occurrence then carries no introduction and goldens stay
+   * Docker OS / bun) - every occurrence then carries no introduction and goldens stay
    * byte-identical. Introduction is per-target, so it is attached at occurrence creation and rides
    * through the merge unchanged (no cross-purl reconciliation).
    */
@@ -132,15 +132,15 @@ const MAX_COPYRIGHT_LINES = 20;
 
 /**
  * Replace every C0 control character except \n and \t, plus DEL (0x7F) and the C1 range
- * (0x80-0x9F), with a space — the sanitizeForLog class minus the \n/\t exemption, applied at intake
+ * (0x80-0x9F), with a space - the sanitizeForLog class minus the \n/\t exemption, applied at intake
  * so no renderer downstream ever sees raw control bytes (ANSI erase sequences and header forgeries
  * die here). Line endings are normalized first (\r\n and bare \r become \n): without that pass, \r
  * (0x0D, inside the control class) would become a space, so every CRLF-origin "verbatim"
- * license/NOTICE text would gain a trailing space per line — a quiet mutation of text the document
+ * license/NOTICE text would gain a trailing space per line - a quiet mutation of text the document
  * presents as verbatim.
  *
  * Contract: stored evidence text is byte-faithful modulo line endings (normalized to LF) and
- * control characters (flattened to spaces) — the model, the dump goldens, and the rendered notices
+ * control characters (flattened to spaces) - the model, the dump goldens, and the rendered notices
  * all carry LF-only text.
  */
 export function sanitizeEvidenceText(value: string): string {
@@ -158,7 +158,7 @@ interface EvidenceAttachment {
 }
 
 /**
- * Evidence attachment extraction — the licenseClaimsOf tolerant walk applied to
+ * Evidence attachment extraction - the licenseClaimsOf tolerant walk applied to
  * `component.evidence.licenses[]`. Evidence entries are never folded into licenseClaims: their
  * `name` is "file: <basename>" and would corrupt normalization.
  *
@@ -173,7 +173,7 @@ function evidenceAttachmentsOf(
   const out: EvidenceAttachment[] = [];
   for (const raw of licenses) {
     if (out.length >= MAX_EVIDENCE_ENTRIES) break;
-    // Any deviation from the exact verified shape skips the entry — the same continue every failed
+    // Any deviation from the exact verified shape skips the entry - the same continue every failed
     // step of the old guard chain took.
     const entry = SbomEvidenceEntry(raw);
     if (entry instanceof type.errors) continue;
@@ -182,7 +182,7 @@ function evidenceAttachmentsOf(
       ? name.slice("file: ".length)
       : name;
     const content = text.content;
-    // Decoded byte count from the base64 length (3 bytes per 4 chars, minus padding) — over-cap
+    // Decoded byte count from the base64 length (3 bytes per 4 chars, minus padding) - over-cap
     // entries are skipped without decoding.
     const padding = content.endsWith("==") ? 2 : content.endsWith("=") ? 1 : 0;
     const decodedBytes = Math.floor((content.length * 3) / 4) - padding;
@@ -195,17 +195,17 @@ function evidenceAttachmentsOf(
 
 /**
  * NOTICE-file classifier: stem "notice" plus an optional single extension,
- * case-insensitive — NOTICE, NOTICE.txt, NOTICE.md, NOTICE.markdown all
+ * case-insensitive - NOTICE, NOTICE.txt, NOTICE.md, NOTICE.markdown all
  * classify as NOTICE files. This mirrors the yarn plugin's own gather semantics (it collects by
  * ^NOTICE filename prefix and emits the basename verbatim), so an extension variant can never fall
- * into the license-text branch — where, for any package with a parseable claim, its body would be
+ * into the license-text branch - where, for any package with a parseable claim, its body would be
  * dropped from the legal document entirely (Apache-2.0 §4(d) requires reproducing NOTICE contents).
  */
 const NOTICE_FILE_RE = /^notice(\.[a-z0-9]+)?$/i;
 
 /**
- * Fold decoded attachments into the per-package attribution: extracted artifacts only — copyright
- * lines, NOTICE contents, the hasVerbatimText flag — with full verbatim texts retained only when
+ * Fold decoded attachments into the per-package attribution: extracted artifacts only - copyright
+ * lines, NOTICE contents, the hasVerbatimText flag - with full verbatim texts retained only when
  * the component has zero spdx-id/expression-kind claims (the non-SPDX case where the file is the
  * license statement). NOTICE contents are never claims-gated: they reach the rendered notices for
  * packages with parseable claims too. Returns undefined when there is nothing to attribute, so
@@ -252,17 +252,17 @@ function attributionOf(
 }
 
 /**
- * Dev marker from cdxgen properties — not from scope (empirically unreliable).
+ * Dev marker from cdxgen properties - not from scope (empirically unreliable).
  *
  * JS: dev iff development === "true" and not optional === "true". The optional guard exists because
  * cdxgen marks optional-prod dependencies with development=true too; without the guard their prod
  * license obligations are silently understated. The guard is order-independent (both properties are
- * collected before deciding) and applies to every property-marked kind — npm/pnpm/bun by symmetry,
+ * collected before deciding) and applies to every property-marked kind - npm/pnpm/bun by symmetry,
  * since the bun collector emits the same cdx:npm:package:development property. cdxgen only ever
  * pairs optional with development.
  *
- * Python: cdx:pyproject:group === "dev" — an independent branch, untouched by the JS guard. Plugin
- * targets never reach this function — they carry no properties at all and use the dual-run prod
+ * Python: cdx:pyproject:group === "dev" - an independent branch, untouched by the JS guard. Plugin
+ * targets never reach this function - they carry no properties at all and use the dual-run prod
  * diff instead (prodPurlSet).
  */
 function propertyDevMarker(component: SbomComponentShape): boolean {
@@ -294,7 +294,7 @@ function propertyDevMarker(component: SbomComponentShape): boolean {
 /**
  * Property name cdxgen sets on npm workspace members. The member is emitted at its real version
  * (never 0.0.0-use.local), so this property is the npm-side second signal for the first-party skip
- * — always paired with the lockfile-derived name set, never authoritative alone.
+ * - always paired with the lockfile-derived name set, never authoritative alone.
  */
 const IS_WORKSPACE_PROPERTY = "cdx:npm:isWorkspace";
 
@@ -342,7 +342,7 @@ function claimKey(claim: LicenseClaim): string {
 /**
  * #7: deterministically reconcile two introductions for the same target+purl (a same-target
  * occurrence fold). Order-independent by construction:
- * - `direct` is ORed (a direct contributor wins — mirrors the prod-wins /
+ * - `direct` is ORed (a direct contributor wins - mirrors the prod-wins /
  *   "direct in any" posture);
  * - `introducedBy` is the sorted-unique union;
  * - `path` is taken from the contributor with the lexicographically-smallest path (compareCodeUnits
@@ -354,10 +354,10 @@ function claimKey(claim: LicenseClaim): string {
  * and `path` is dropped. Combining `direct` with OR while keeping introducedBy's union and a path
  * produced the contradictory {direct:true, introducedBy:[mid], path:[mid,leaf]} when a direct intro
  * folded with a transitive one; whyCellOf then rendered bare "direct" and hid the (now meaningless)
- * introducer. A direct dependency is introduced by the root itself — it has no parent chain — so a
+ * introducer. A direct dependency is introduced by the root itself - it has no parent chain - so a
  * direct reconciliation carries no introducer and no path.
  *
- * Optionality is descoped — there is no `optional` field to reconcile.
+ * Optionality is descoped - there is no `optional` field to reconcile.
  */
 function reconcileIntroductions(
   a: DependencyIntroduction | undefined,
@@ -366,7 +366,7 @@ function reconcileIntroductions(
   if (a === undefined) return b === undefined ? undefined : { ...b };
   if (b === undefined) return { ...a };
 
-  // A direct dep has no introducer chain — clear introducedBy + drop path.
+  // A direct dep has no introducer chain - clear introducedBy + drop path.
   if (a.direct || b.direct) {
     return { direct: true, introducedBy: [] };
   }
@@ -401,7 +401,7 @@ function mergeInto(existing: PackageEntry, incoming: PackageEntry): void {
   // emitting the purl twice with divergent dev markers) folds the dev flags prod-wins: an
   // occurrence is dev-only iff every contributing component for that target is dev; a single
   // production contribution forces the whole occurrence to production. This is the safety-bearing
-  // direction — a shipped occurrence carries the distribution obligation, so it must never be
+  // direction - a shipped occurrence carries the distribution obligation, so it must never be
   // masked to dev. It matches the package-level rule in render/markdown.ts isDevelopmentOnly.
   // Distinct targets keep their flags independently.
   const byTarget = new Map<string, Occurrence>();
@@ -414,7 +414,7 @@ function mergeInto(existing: PackageEntry, incoming: PackageEntry): void {
         present.isDevDependency && occurrence.isDevDependency;
       // #7: reconcile `introduction` deterministically on a same-target fold rather than first-wins
       // (the only order-dependent path in the otherwise sorted provenance code). Currently
-      // unreachable (target identities are unique), but latent — a deterministic fold keeps the
+      // unreachable (target identities are unique), but latent - a deterministic fold keeps the
       // invariant airtight.
       present.introduction = reconcileIntroductions(
         present.introduction,
@@ -425,7 +425,7 @@ function mergeInto(existing: PackageEntry, incoming: PackageEntry): void {
   existing.occurrences = [...byTarget.values()].sort((a, b) =>
     compareCodeUnits(a.target, b.target),
   );
-  // Union claims, deduped structurally — the same purl listed twice (e.g. once from yarn.lock, once
+  // Union claims, deduped structurally - the same purl listed twice (e.g. once from yarn.lock, once
   // from package.json) must not render "MIT, MIT". First-seen order is preserved; provenance stays
   // intact because the dedup key includes kind and source, so a generator claim never swallows a
   // curated/override claim with the same raw value.
@@ -437,7 +437,7 @@ function mergeInto(existing: PackageEntry, incoming: PackageEntry): void {
       existing.licenseClaims.push(claim);
     }
   }
-  // Reconcile scope on a purl collision — the gating "app" scope wins over the non-gating "os"
+  // Reconcile scope on a purl collision - the gating "app" scope wins over the non-gating "os"
   // scope. Without this, a purl shared between an app input and an os input is silently demoted to
   // "os" purely by merge order (the os input arriving first), moving a real dependency out of the
   // policy gate.
@@ -462,7 +462,7 @@ function mergeInto(existing: PackageEntry, incoming: PackageEntry): void {
 /**
  * Throw when a non-os input mints an identity in the reserved namespace. Identity strings are
  * tool-minted (repo-relative discovery paths), not document content, so a collision is a crafted
- * layout — refused loudly, never a tolerant skip.
+ * layout - refused loudly, never a tolerant skip.
  */
 function assertNotReservedIdentity(input: CollectedSbom): void {
   if ((input.scope ?? "app") === "os") return;
@@ -486,7 +486,7 @@ export function mergeSboms(
 ): CanonicalDependencies {
   const byPurl = new Map<string, PackageEntry>();
 
-  // Reserved-namespace integrity before any component walks (see assertNotReservedIdentity — a loud
+  // Reserved-namespace integrity before any component walks (see assertNotReservedIdentity - a loud
   // throw, never a skip).
   for (const input of inputs) assertNotReservedIdentity(input);
 
@@ -494,7 +494,7 @@ export function mergeSboms(
     // A malformed document is skipped, never thrown on.
     const doc = SbomDocument(input.sbom);
     if (doc instanceof type.errors) continue;
-    // The scanned root's purl excludes first-party leaks — read via an independent tolerant narrow,
+    // The scanned root's purl excludes first-party leaks - read via an independent tolerant narrow,
     // so malformed metadata leaves the root simply absent (every component still walks and emits).
     const rootPurl = rootPurlOf(input.sbom);
     const components = doc.components;
@@ -519,7 +519,7 @@ export function mergeSboms(
 }
 
 /**
- * First-party workspace/portal members never reach the inventory. Both conditions required — the
+ * First-party workspace/portal members never reach the inventory. Both conditions required - the
  * name must be in the target's own lockfile member set and the component must carry a second
  * first-party signal: the yarn/plugin local-version marker, or the cdxgen npm isWorkspace property
  * (npm members carry real versions). A name collision, a crafted version, or a crafted marker alone
@@ -544,7 +544,7 @@ function packageEntryOf(
   rootPurl: string | undefined,
 ): PackageEntry | undefined {
   const { purl, name, version } = component;
-  // Malformed entries are skipped, never thrown on — the required purl/name/version triple gate
+  // Malformed entries are skipped, never thrown on - the required purl/name/version triple gate
   // stays explicit.
   if (purl === undefined || name === undefined || version === undefined) {
     return undefined;
@@ -572,7 +572,7 @@ function packageEntryOf(
   // Provenance: the per-target introduction for this purl, when the source supplied a graph.
   // Attached at occurrence creation so it is per-target and rides through mergeInto unchanged (no
   // cross-purl reconciliation). A purl absent from the map (or no map at all) leaves introduction
-  // undefined — the honest residual — so goldens predating provenance stay byte-identical.
+  // undefined - the honest residual - so goldens predating provenance stay byte-identical.
   const introduction = input.introductions?.get(purl);
   if (introduction !== undefined) occurrence.introduction = introduction;
   const entry: PackageEntry = {
@@ -585,7 +585,7 @@ function packageEntryOf(
   };
   const rawScope = component.scope;
   if (rawScope !== undefined) entry.rawScope = rawScope;
-  // Evidence-derived attribution — set only when at least one usable evidence entry survived the
+  // Evidence-derived attribution - set only when at least one usable evidence entry survived the
   // caps (absent, never empty).
   const attribution = attributionOf(component, entry.licenseClaims);
   if (attribution !== undefined) entry.attribution = attribution;

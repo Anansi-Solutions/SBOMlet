@@ -2,18 +2,18 @@
  * ScanCode peer assessment stage: replay every memoized answer and, under `generate --intensive`,
  * analyze the full package set.
  *
- * ScanCode is an in-depth, source-level license assessment — far more accurate than reading a
- * registry or a declared manifest field — so it stands as its OWN pipeline stage rather than a
+ * ScanCode is an in-depth, source-level license assessment - far more accurate than reading a
+ * registry or a declared manifest field - so it stands as its OWN pipeline stage rather than a
  * gap-filler nested inside registry enrichment. It owns a dedicated committed memo (see
  * scancode/cache.ts) and runs AFTER registry enrichment so that, for the same package, both a
  * quick-check answer and the in-depth answer exist: agreement lets the assessment become the
  * finding, disagreement surfaces as a conflict a human must resolve (annotateFindings owns that
- * comparison downstream — this stage only appends the assessment as a claim).
+ * comparison downstream - this stage only appends the assessment as a claim).
  *
  * Two responsibilities, in order:
  *
  *  1. Scan pass (generate --intensive ONLY): the analysis set is EVERY package not already in the
- *     memo — a package with a precise declared or registry answer is analyzed too, because a
+ *     memo - a package with a precise declared or registry answer is analyzed too, because a
  *     second, deeper opinion is exactly the point. A memo hit (a positive result OR a recorded
  *     no-result) is skipped and never re-analyzed, so a repeat run over unchanged inputs analyzes
  *     nothing and leaves the committed memo byte-identical. A package whose sources are not locally
@@ -25,7 +25,7 @@
  *
  *  2. Replay pass (BOTH modes, unconditional, over EVERY package): each package with a positive
  *     memo entry gains a ScanCode claim (and, when it carries no attribution yet, the memo's
- *     copyright lines). This must touch every package — a memoized answer has to land on a
+ *     copyright lines). This must touch every package - a memoized answer has to land on a
  *     precisely-declared package too, or the downstream precedence and conflict detection are blind
  *     to it. A no-result entry appends nothing: it is a scan-skip marker, never a disagreement with
  *     a positive answer.
@@ -72,7 +72,7 @@ export interface AssessOptions {
   intensive?: IntensiveOptions;
   /**
    * Injectable now-source for the memo's creation-only `scannedAt` stamp. Defaults to the real
-   * clock; tests pass a fixed source. Mirrors the memo module's own injectable clock — never a bare
+   * clock; tests pass a fixed source. Mirrors the memo module's own injectable clock - never a bare
    * inline `new Date()`.
    */
   now?: () => Date;
@@ -120,7 +120,7 @@ function replayMemo(
 ): void {
   packages.forEach((entry, index) => {
     const memoEntry = getMemoEntry(memo, entry.purl);
-    // A no-result entry (license null) appends nothing — a scan-skip marker, never a disagreement
+    // A no-result entry (license null) appends nothing - a scan-skip marker, never a disagreement
     // with a positive registry answer.
     if (memoEntry === undefined || memoEntry.license === null) return;
     const withClaim = withCacheClaim(entry, memoEntry.license, "scancode");
@@ -147,7 +147,7 @@ interface ScanContext {
 }
 
 /**
- * Analyze every package not already in the memo (the full set — a precisely answered package is
+ * Analyze every package not already in the memo (the full set - a precisely answered package is
  * analyzed too when unmemoized). Populates the memo in place and reports the partition on stderr.
  */
 async function scanFullSet(

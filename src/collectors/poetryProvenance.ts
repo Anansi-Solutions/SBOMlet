@@ -6,7 +6,7 @@
  *
  * The lockfile's `[package.dependencies]` tables are the edges;
  * pyproject declares the roots. Optionality is out of scope by
- * decision — poetry marker semantics were a recurring mislabeling
+ * decision - poetry marker semantics were a recurring mislabeling
  * bug source (see docs/explanation/adr/0014-dependency-provenance.md).
  *
  * - Each poetry.lock `[[package]]` carries a `[package.dependencies]` table
@@ -34,7 +34,7 @@ import {
 import type { DependencyIntroduction } from "../model/dependencies";
 
 /**
- * PEP 503 name normalization — the exact transform cdxgen applies before emitting a
+ * PEP 503 name normalization - the exact transform cdxgen applies before emitting a
  * `pkg:pypi/<name>` purl: lowercase, and replace every run of `[-_.]+` with a single hyphen. Shared
  * contract with poetryLock.ts.
  */
@@ -44,7 +44,7 @@ function normalizePep503(name: string): string {
 
 /**
  * Add every name key of a poetry dependency TABLE (keyed by name) to the root set, PEP-503
- * normalized. The conventional `python` key is skipped — it is the interpreter constraint, not a
+ * normalized. The conventional `python` key is skipped - it is the interpreter constraint, not a
  * package. Shared by the legacy main table and every dependency-group table.
  */
 function addTableNames(
@@ -67,7 +67,7 @@ function addTableNames(
  * `[project].dependencies` is ABSENT (legacy-only poetry). Reading both unconditionally let a
  * transitive listed in the legacy table render "direct".
  *
- * GROUP deps: EVERY `[tool.poetry.group.<name>.dependencies]` table contributes roots — a package
+ * GROUP deps: EVERY `[tool.poetry.group.<name>.dependencies]` table contributes roots - a package
  * declared direct in a group (e.g. the conventional dev group) is genuinely direct. Groups are read
  * in BOTH PEP 621 and legacy modes (they live under `[tool.poetry.group.*]` regardless of where the
  * main deps come from), independent of the main-deps precedence above.
@@ -101,7 +101,7 @@ function declaredRootNames(pyprojectText: string): Set<string> {
   const poetry = recordOf(recordOf(doc["tool"])?.["poetry"]);
 
   // The legacy MAIN [tool.poetry.dependencies] table is a root source ONLY when
-  // [project].dependencies is ABSENT — when present, PEP 621 is authoritative and the legacy table
+  // [project].dependencies is ABSENT - when present, PEP 621 is authoritative and the legacy table
   // is mere constraint/source metadata.
   if (!hasPep621Main) {
     addTableNames(roots, recordOf(poetry?.["dependencies"]));
@@ -180,10 +180,10 @@ interface EdgeAccumulators {
 /**
  * Fold one lock package's `[package.dependencies]` edges into the accumulators. A dep NAME (PEP-503
  * normalized) resolves to a purl ONLY when that name maps to EXACTLY ONE lock purl (the honest
- * residual); a dep naming a multi-version name, or a name absent from the lock, is dropped — no
+ * residual); a dep naming a multi-version name, or a name absent from the lock, is dropped - no
  * edge fabricated.
  *
- * Optionality is descoped — the dep VALUE (a spec string, a spec object with
+ * Optionality is descoped - the dep VALUE (a spec string, a spec object with
  * markers/optional/extras, or an array of conditional variants) is never inspected. Every resolved
  * dependency is just an edge.
  */
@@ -195,7 +195,7 @@ function ingestPackageEdges(
   for (const depName of Object.keys(pkg.dependencies)) {
     const childPurl = precisePurlByName.get(normalizePep503(depName));
     // A name resolving to no purl (absent) OR to MORE THAN ONE purl (multi-version / collision) is
-    // ambiguous — fabricate no edge.
+    // ambiguous - fabricate no edge.
     if (childPurl === undefined) continue;
     if (childPurl === pkg.purl) continue;
     addToSetMap(edges.edgeSets, pkg.purl, childPurl);
@@ -210,7 +210,7 @@ function ingestPackageEdges(
  *
  * HONEST RESIDUAL ON VERSION AMBIGUITY: version is part of the purl, so a dependency NAME alone
  * cannot identify WHICH version of a multi-version package an edge resolved to without PEP-440
- * constraint matching (deliberately out of scope — no new dependency). An
+ * constraint matching (deliberately out of scope - no new dependency). An
  * earlier draft unioned a name→constraint edge to EVERY purl sharing the name; that conflated the
  * npm same-purl peer-resolution case with the poetry different-version case and produced two
  * defects:
@@ -221,12 +221,12 @@ function ingestPackageEdges(
  * The honest fix partitions the name→purl index by VERSION-MULTIPLICITY: a name mapping to EXACTLY
  * ONE lock purl is PRECISE (it resolves edges and, if a declared root, marks that one purl direct);
  * a name mapping to TWO OR MORE lock purls (multi-version, or a genuine PEP-503 name-origin
- * collision) is AMBIGUOUS — it fabricates no edge and blanket-marks no version direct. A
+ * collision) is AMBIGUOUS - it fabricates no edge and blanket-marks no version direct. A
  * multi-version purl still receives precise introducers from a single-version parent whose own
  * resolution is unambiguous; one with neither a precise introducer nor a precise direct is the
- * honest "—" residual.
+ * honest " - " residual.
  *
- * Optionality is descoped — there is no required/optional edge partition and no
+ * Optionality is descoped - there is no required/optional edge partition and no
  * required-reachability. Every resolved dependency is a plain edge.
  */
 function buildPurlGraph(
@@ -252,8 +252,7 @@ function buildPurlGraph(
   };
   const rootChildren = new Set<string>();
   for (const pkg of packages) {
-    // A declared-root NAME marks a purl direct ONLY when that name maps to exactly one lock purl —
-    // a multi-version root name cannot identify WHICH version is the real direct without PEP-440,
+    // A declared-root NAME marks a purl direct ONLY when that name maps to exactly one lock purl -     // a multi-version root name cannot identify WHICH version is the real direct without PEP-440,
     // so none is blanket-marked.
     if (
       rootNames.has(pkg.normalizedName) &&

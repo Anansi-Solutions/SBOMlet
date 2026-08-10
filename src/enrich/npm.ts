@@ -2,8 +2,8 @@
  * npm packument raw-license resolver.
  *
  * Consumes the full packument (`https://registry.npmjs.org/<name>`, fetched once per name by the
- * orchestrator) — NOT the per-version endpoint, which returned false nulls and 404s on `*-cjs`
- * alias purls in the measured run. Resolution order — the version-level block is tried in full
+ * orchestrator) - NOT the per-version endpoint, which returned false nulls and 404s on `*-cjs`
+ * alias purls in the measured run. Resolution order - the version-level block is tried in full
  * BEFORE the top-level block, and within each block: string → legacy `{ type }` object → legacy
  * `licenses: [{ type }]` array (OR-joined):
  *
@@ -15,10 +15,10 @@
  *   6. top-level legacy `licenses` array → OR-joined expression
  *
  * Many older packages publish their license ONLY in the version-level legacy `licenses` array
- * (compute-gcd, memorystream, svg-tags, the validate.io-* family — all MIT there, nothing at the
+ * (compute-gcd, memorystream, svg-tags, the validate.io-* family - all MIT there, nothing at the
  * top level), so the version block must cover the legacy shapes too or they become false negatives.
  *
- * Returns ONLY the RAW string + a `via` tag — never parse/correct (normalizeRaw is the single SPDX
+ * Returns ONLY the RAW string + a `via` tag - never parse/correct (normalizeRaw is the single SPDX
  * resolution authority downstream). Returns null when no license is found anywhere. A malformed
  * packument narrows to null, never a throw (ASVS V5 boundary).
  */

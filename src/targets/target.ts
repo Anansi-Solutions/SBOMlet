@@ -21,7 +21,7 @@ export interface Target {
   /**
    * Present ONLY on a yarn workspace scan unit (a collect-loop expansion): the absolute directory
    * holding the governing root yarn.lock and root package.json. Absent means the target itself
-   * governs both — every non-yarn-workspace target and every existing constructor leaves this
+   * governs both - every non-yarn-workspace target and every existing constructor leaves this
    * unset, so the cache-key and collector paths they exercise stay byte-unchanged.
    */
   lockfileDir?: string;
@@ -61,7 +61,7 @@ export function resolveTarget(targetArg: string, cwd?: string): Target {
   }
 
   // Single-target mode is yarn-only debug mode: a poetry/uv project must fail fast here with the
-  // expectation named — not with a misleading missing-manifest message or a downstream ENOENT.
+  // expectation named - not with a misleading missing-manifest message or a downstream ENOENT.
   // Discovery mode (--repo-root) handles poetry/uv targets.
   if (!existsSync(join(dir, "yarn.lock"))) {
     throw new Error(
@@ -77,7 +77,7 @@ export function resolveTarget(targetArg: string, cwd?: string): Target {
   }
 
   const repoRoot = findRepoRoot(dir);
-  // Identity must be forward-slash on every platform — raw path.relative output contains
+  // Identity must be forward-slash on every platform - raw path.relative output contains
   // backslashes on Windows.
   const identity =
     repoRoot === undefined || repoRoot === dir

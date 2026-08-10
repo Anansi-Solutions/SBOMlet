@@ -1,9 +1,9 @@
 /**
  * Pure generator dispatch + empty-lockfile classification.
  *
- * Decides which JS generator scans a yarn target from the lockfile content alone — never from the
+ * Decides which JS generator scans a yarn target from the lockfile content alone - never from the
  * package-manager pin field in package.json: `__metadata.version >= 8` (Yarn 4+ lockfiles) routes
- * to the yarn-plugin adapter; version 6 (Yarn 3 — the plugin hard-fails: "expected yarn version >=
+ * to the yarn-plugin adapter; version 6 (Yarn 3 - the plugin hard-fails: "expected yarn version >=
  * 4"), empty, or unparseable lockfiles route to cdxgen. Dispatch never throws.
  *
  * poetry.lock and uv.lock both map to the python cdxgen path.
@@ -13,7 +13,7 @@
  * cache-key framing.
  *
  * Pure functions, no I/O: the caller reads the lockfile text once and passes it in. Parsing is
- * regex over text lines — no YAML parser, no eval — so malicious lockfile content can at worst
+ * regex over text lines - no YAML parser, no eval - so malicious lockfile content can at worst
  * select the wrong (still sandbox-equivalent) generator, never execute.
  */
 
@@ -28,7 +28,7 @@ const HEAD_LINES = 20;
  * Select the JS generator from raw yarn.lock text.
  *
  * Scans only the first ~20 lines for a top-level `__metadata:` line (optionally quoted), then reads
- * `version: <int>` inside its indented block. Only the `__metadata` block is consulted — an
+ * `version: <int>` inside its indented block. Only the `__metadata` block is consulted - an
  * indented `version: 8` line inside a package entry can never trigger plugin dispatch. Anything
  * unparseable degrades to "cdxgen".
  */
@@ -59,7 +59,7 @@ export function selectJsGenerator(lockfileText: string): JsGenerator {
 /**
  * A lockfile is "empty" when it contains no non-whitespace bytes (e.g. a 0-byte yarn.lock
  * placeholder). Empty lockfiles are the warn+skip case (wired by the CLI). A non-empty lockfile
- * whose scan yields zero components is instead the hard-error case — that distinction is decided by
+ * whose scan yields zero components is instead the hard-error case - that distinction is decided by
  * the CLI, not here.
  */
 export function isLockfileEmpty(lockfileText: string): boolean {
@@ -67,7 +67,7 @@ export function isLockfileEmpty(lockfileText: string): boolean {
 }
 
 /**
- * Lockfile kind → ecosystem. The Ecosystem RETURN type stays inline on purpose — this module must
+ * Lockfile kind → ecosystem. The Ecosystem RETURN type stays inline on purpose - this module must
  * not import it from cdxgen.ts; TypeScript structural typing connects them at the CLI. The
  * parameter, however, is exactly LockfileKind, so it is imported rather than re-spelled.
  */
@@ -82,7 +82,7 @@ export function ecosystemFor(kind: LockfileKind): "js" | "python" {
     case "uv":
       return "python";
     case "terraform":
-      // Terraform targets never route through the cdxgen ecosystem dispatch — the in-process
+      // Terraform targets never route through the cdxgen ecosystem dispatch - the in-process
       // terraform collector computes its own cache key directly (the bun.lock precedent).
       // ecosystemFor stays js|python; reaching here is a wiring bug, not a normal path.
       throw new Error(
@@ -96,7 +96,7 @@ export function ecosystemFor(kind: LockfileKind): "js" | "python" {
         "nuget targets are collected in-process and have no cdxgen ecosystem",
       );
     case "maven":
-      // maven targets are collected in-process from a committed CycloneDX sidecar — no build tool
+      // maven targets are collected in-process from a committed CycloneDX sidecar - no build tool
       // runs, so there is no cdxgen ecosystem to select. Reaching here is a wiring bug.
       throw new Error(
         "maven targets are collected in-process and have no cdxgen ecosystem",
@@ -115,7 +115,7 @@ export function manifestFilesFor(kind: LockfileKind): readonly string[] {
     case "npm":
       return ["package-lock.json", "package.json"];
     case "pnpm":
-      // pnpm-workspace.yaml is deliberately not hashed into the cache key — the file is optional in
+      // pnpm-workspace.yaml is deliberately not hashed into the cache key - the file is optional in
       // pnpm projects and computeCacheKey throws on missing manifests. Components are
       // lockfile-determined; only workspace-attribution properties could shift, and a
       // pnpm-workspace.yaml edit without a lockfile change cannot alter the emitted component set.
@@ -141,7 +141,7 @@ export function manifestFilesFor(kind: LockfileKind): readonly string[] {
       return ["packages.lock.json"];
     case "maven":
       // The committed artifact IS the manifest (the terraform single-file precedent):
-      // maven.sbom.json is the whole cache-key input — a regenerated sidecar changes its own bytes,
+      // maven.sbom.json is the whole cache-key input - a regenerated sidecar changes its own bytes,
       // so nothing else needs hashing.
       return ["maven.sbom.json"];
   }

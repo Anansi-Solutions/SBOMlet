@@ -1,13 +1,13 @@
 /**
- * Poetry prod-purl-set derivation — the python counterpart of the yarn dual-run prod diff.
+ * Poetry prod-purl-set derivation - the python counterpart of the yarn dual-run prod diff.
  *
  * cdxgen invoked with --no-install-deps emits NO group marker on poetry components (no
  * cdx:pyproject:group property), so merge.ts's property-based dev marker can never fire for poetry
- * — every poetry dep classifies prod. This module reads the authoritative source instead:
+ * - every poetry dep classifies prod. This module reads the authoritative source instead:
  * poetry.lock records each
  * package's `groups` array. A package is PROD iff its groups include "main";
  * otherwise it is dev-only. poetryProdPurlSet returns the `pkg:pypi/<pep503-name>@<version>` purl
- * set of all PROD packages, which the collector threads into CollectedSbom.prodPurlSet — merge.ts
+ * set of all PROD packages, which the collector threads into CollectedSbom.prodPurlSet - merge.ts
  * then derives occurrence dev = not in the set, authoritative over the absent markers, and
  * prod-wins for a package in both main and a dev group (it lands in the set).
  *
@@ -21,7 +21,7 @@ import { parse as parseToml } from "smol-toml";
 import { recordOf, stringOf } from "../validate/record";
 
 /**
- * PEP 503 name normalization — the exact transform cdxgen applies before emitting a
+ * PEP 503 name normalization - the exact transform cdxgen applies before emitting a
  * `pkg:pypi/<name>` purl: lowercase, and replace every run of `[-_.]+` with a single hyphen.
  * Verified against the dogfood run: every one of the 114 poetry.lock package names maps 1:1 to a
  * cdxgen pypi purl under this rule (e.g. jinja2-ansible-filters, argon2-cffi-bindings).
@@ -33,7 +33,7 @@ function normalizePep503(name: string): string {
 /**
  * True iff the package's `groups` value marks it as a production dependency. poetry.lock's `groups`
  * is an array of strings; a package belongs to prod iff the array includes "main". An absent or
- * non-array `groups` defaults to ["main"] (prod) — matching poetry's own default group and the
+ * non-array `groups` defaults to ["main"] (prod) - matching poetry's own default group and the
  * conservative "unknown → prod" posture (a shipped dep must never be silently dev-dropped).
  */
 function isProdGroups(groups: unknown): boolean {

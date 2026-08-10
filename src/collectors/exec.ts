@@ -1,7 +1,7 @@
 /**
  * Shared subprocess helper: the only place this tool touches node:child_process. Commands are
  * spawned as explicit argv arrays with no command interpreter, so paths and arguments can never be
- * interpolated into a command string — injection is impossible by construction.
+ * interpolated into a command string - injection is impossible by construction.
  */
 
 import { spawn, type ChildProcess } from "node:child_process";
@@ -35,7 +35,7 @@ function killProcessTree(child: ChildProcess): void {
   if (pid === undefined) return; // spawn failed; nothing to kill
   if (process.platform === "win32") {
     // An unspawnable taskkill (PATH without System32 in a stripped container) emits 'error' with
-    // zero listeners — an uncaught exception that would kill the whole CLI with a confusing ENOENT
+    // zero listeners - an uncaught exception that would kill the whole CLI with a confusing ENOENT
     // instead of the already-constructed timeout rejection. Handle it and fall back to a direct
     // kill: the tree is orphaned but the run survives and the timeout error still surfaces.
     spawn("taskkill", ["/pid", String(pid), "/T", "/F"], {
@@ -107,8 +107,7 @@ export function execTool(
     child.on("close", (code, signal) => {
       clearTimeout(timer);
       if (timedOut) {
-        // Already rejected with the timeout error; this close is the kill landing (code === null) —
-        // never report "exited with code null".
+        // Already rejected with the timeout error; this close is the kill landing (code === null) -         // never report "exited with code null".
         return;
       }
       if (code === 0) {

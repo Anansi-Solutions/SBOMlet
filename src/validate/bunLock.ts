@@ -10,7 +10,7 @@ import { UnknownRecord } from "./record";
 /**
  * Narrowed exactly like the npm sibling's NpmLockDocument (src/validate/npmLock.ts).
  * `lockfileVersion` is consumed nowhere, and `workspaces` is read independently with recordOf in
- * the collector — declaring either here would narrow them atomically, so a string lockfileVersion
+ * the collector - declaring either here would narrow them atomically, so a string lockfileVersion
  * or an array workspaces would fail the whole-document narrow and zero a valid packages map (a
  * clean run → fatal exit 3).
  */

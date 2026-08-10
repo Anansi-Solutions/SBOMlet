@@ -9,7 +9,7 @@
  * byte-different serializations of the same graph yield identical provenance.
  *
  * The `path` is a deterministic REPRESENTATIVE shortest chain tie-broken by the smallest child purl
- * at each BFS level (see {@link shortestPath}) — NOT a whole-path lexicographic minimum. The npm
+ * at each BFS level (see {@link shortestPath}) - NOT a whole-path lexicographic minimum. The npm
  * lane recomputes its representative `path` on the REAL bom-ref graph rather than this purl-space
  * union (the union can fabricate a chain across dup-purl variants), but uses the same per-level
  * sorted tie-break; see npmProvenance. `introducedBy` carries the COMPLETE introducer set, so the
@@ -91,7 +91,7 @@ function expandLevel(
  * reached yields a stable representative chain.
  *
  * Tie-break is NOT a whole-path lexicographic minimum: among the shortest paths it picks the one
- * reached first by this per-level purl-sorted expansion — i.e. tie-broken by the smallest child
+ * reached first by this per-level purl-sorted expansion - i.e. tie-broken by the smallest child
  * purl at each BFS frontier (the smallest-introducer-at-each-level order). This is fully
  * deterministic (derived from the edge SET, never source order) but a different chain than a global
  * lexicographically-smallest-path comparison would select. Returns undefined when unreachable from
@@ -124,7 +124,7 @@ export function shortestPath(
  * the edge SET, not source order). The root itself is not a member; only package purls are.
  *
  * Central reachability invariant: `introducedBy` is intersected with this set in {@link
- * deriveIntroductions}, so a node may name ONLY parents that are themselves root-reachable — making
+ * deriveIntroductions}, so a node may name ONLY parents that are themselves root-reachable - making
  * a root-disconnected fabricated introducer unrepresentable for BOTH lanes.
  */
 /**
@@ -172,16 +172,16 @@ function reachableFromRoots(graph: PurlGraph): Set<string> {
  * and every node's parent set is intersected with it. Consequences (now guaranteed for BOTH the npm
  * and poetry lanes, which both route through this shared function):
  *  - a transitive whose parents are ALL root-disconnected → introducedBy [] → a true orphan
- *    (whyCellOf renders the honest "—", never a fabricated
+ *    (whyCellOf renders the honest " - ", never a fabricated
  *    introducer);
  *  - a transitive with a MIX of reachable + disconnected parents keeps ONLY the
  *    reachable parents;
  *  - `path` stays gated on shortestPath (root-reachability), so introducedBy and path are now
- *    consistent — both honor root-reachability.
+ *    consistent - both honor root-reachability.
  * This makes the npm lane's local Fix-3 introducedBy=[] guard (npmProvenance) redundant; it is
  * retained as a harmless belt-and-braces.
  *
- * Optionality is descoped — no `optional` field is ever emitted.
+ * Optionality is descoped - no `optional` field is ever emitted.
  */
 export function deriveIntroductions(
   graph: PurlGraph,

@@ -1,15 +1,15 @@
 /**
  * SPDX expression AST walker: render, copyleft avoidance, branch election.
  *
- * Election (see docs/glossary.md#election) is the OR operator's own meaning — it lets the consumer
+ * Election (see docs/glossary.md#election) is the OR operator's own meaning - it lets the consumer
  * pick whichever branch they want to rely on. `elect()` below makes that pick deterministic;
  * `isCopyleft` and the deny walk ask the mirror question, whether an electable branch avoids the
- * obligation or the deny rule. No library exposes "which OR branch passed" — spdx-satisfies cannot
- * test individual branches and throws on expression-valued allowlists — so branch semantics over
+ * obligation or the deny rule. No library exposes "which OR branch passed" - spdx-satisfies cannot
+ * test individual branches and throws on expression-valued allowlists - so branch semantics over
  * the parsed AST are owned here. Copyleft membership is an exact Set lookup on parsed leaf ids
  * only; no substring or prefix matching on license ids anywhere.
  *
- * Pure functions, no I/O, no logging — the CLI owns stderr. Inputs are structurally-typed parse
+ * Pure functions, no I/O, no logging - the CLI owns stderr. Inputs are structurally-typed parse
  * output (spdx-expression-parse internals are never imported).
  */
 import { compareCodeUnits } from "../model/dependencies";
@@ -50,7 +50,7 @@ export function isCopyleft(node: ExpressionNode): boolean {
 
 /**
  * License ids of every copyleft leaf in the tree: the obligations a suppression decision must
- * verify against the workspace's own license. Exact COPYLEFT_IDS membership per leaf — a `plus`
+ * verify against the workspace's own license. Exact COPYLEFT_IDS membership per leaf - a `plus`
  * leaf reports its base id (same convention as isCopyleft); non-copyleft leaves are omitted.
  */
 export function copyleftLeafIds(node: ExpressionNode): string[] {
@@ -62,9 +62,9 @@ export function copyleftLeafIds(node: ExpressionNode): string[] {
 
 /**
  * Every leaf of the tree, decomposed for the notices appendix: `ids` collects each leaf's base
- * license id (a `plus` leaf reports its base id — the copyleftLeafIds convention); `exceptions`
+ * license id (a `plus` leaf reports its base id - the copyleftLeafIds convention); `exceptions`
  * collects WITH exception names separately, because spdx-license-list covers licenses, not
- * exceptions — the renderer flags them. No dedup, no sort: callers own set semantics and ordering.
+ * exceptions - the renderer flags them. No dedup, no sort: callers own set semantics and ordering.
  */
 export function leafIds(node: ExpressionNode): {
   ids: string[];
@@ -98,7 +98,7 @@ export function hasRefLeaf(node: ExpressionNode): boolean {
 }
 
 /**
- * True when EVERY leaf is a LicenseRef-/DocumentRef- reference — distinct from hasRefLeaf's
+ * True when EVERY leaf is a LicenseRef-/DocumentRef- reference - distinct from hasRefLeaf's
  * ANY-leaf check.
  */
 export function allLeavesAreRefs(node: ExpressionNode): boolean {
@@ -110,7 +110,7 @@ export function allLeavesAreRefs(node: ExpressionNode): boolean {
  * Deterministic elected branch: AND keeps both sides (all obligations apply);
  * OR prefers, in order: (a) the non-copyleft branch, (b) among equals the branch with no
  * LicenseRef-/DocumentRef- leaves, (c) code-unit-lexicographic rendered string. WITH leaves are
- * elected as a unit — the exception is never stripped. Order-independent by construction.
+ * elected as a unit - the exception is never stripped. Order-independent by construction.
  */
 export function elect(node: ExpressionNode): ExpressionNode {
   if ("license" in node) return node;
@@ -129,7 +129,7 @@ export function elect(node: ExpressionNode): ExpressionNode {
 }
 
 /**
- * Rendered leaves of a pure-OR tree, sorted compareCodeUnits — the decomposition primitive for
+ * Rendered leaves of a pure-OR tree, sorted compareCodeUnits - the decomposition primitive for
  * spdx-satisfies allowlists (its entries must be single ids, optionally WITH). Returns null the
  * moment ANY "and" conjunction appears anywhere in the tree.
  */

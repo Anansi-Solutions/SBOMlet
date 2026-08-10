@@ -1,20 +1,20 @@
 /**
- * Dockerfile discovery — a listing-only repo walk.
+ * Dockerfile discovery - a listing-only repo walk.
  *
  * This module answers one narrow question: which Dockerfiles live in a repo tree? It walks the repo
  * root, matches Dockerfile basenames, applies the shared lockfile-discovery exclusion set
  * (node_modules, .git, every dotfile dir incl. .terraform), then the CLI `--exclude` globs, then
  * the `[docker] ignore` globs, and returns the surviving identities deterministically sorted by
  * repo-relative forward-slash path. It reads NO file contents: a Dockerfile is a BUILD INPUT, never
- * an object of analysis — the build-and-analyze lanes hand each discovered identity to the in-tool
+ * an object of analysis - the build-and-analyze lanes hand each discovered identity to the in-tool
  * build step and scan the built image. Zero new dependencies: pure node:fs + the shared
  * glob/exclusion helpers.
  *
- * Name matching is pattern-only, deliberately with no extension blocklist — see {@link
+ * Name matching is pattern-only, deliberately with no extension blocklist - see {@link
  * isDockerfileName} for the accepted shapes and why.
  *
  * KNOWN LIMITATIONS (DELIBERATE tradeoffs, documented not changed). The walk does NOT auto-exclude
- * the generic build-output dir names `build`/`out`/`target`/`vendor` (too generic — re-adding them
+ * the generic build-output dir names `build`/`out`/`target`/`vendor` (too generic - re-adding them
  * recreates a prior under-coverage finding where real source Dockerfiles were dropped); it does NOT
  * prune nested INDEPENDENT git repos whose `.git` is a DIRECTORY (only the gitlink-FILE submodule
  * case is pruned); and it SKIPS symlinked Dockerfiles (anti-cycle / no escape from repoRoot). A
@@ -54,7 +54,7 @@ export interface DiscoverDockerfilesOptions {
 export interface DiscoverDockerfilesResult {
   dockerfiles: DiscoveredDockerfile[];
   /**
-   * Repo-relative identities of Dockerfiles EXCLUDED by a `[docker] ignore` glob —
+   * Repo-relative identities of Dockerfiles EXCLUDED by a `[docker] ignore` glob -    *
    * deterministically sorted. (Files excluded by the shared descent predicate or by `--exclude` are
    * NOT listed here; only the policy-driven ignores, which are the user-meaningful "I deliberately
    * excluded this" signal the summary surfaces.)
@@ -67,7 +67,7 @@ export interface DiscoverDockerfilesResult {
  * `Dockerfile`/`dockerfile` stem):
  *   - exactly `Dockerfile`
  *   - `<prefix>.Dockerfile` (e.g. nginx.Dockerfile)
- *   - `Dockerfile.<suffix>` (e.g. Dockerfile.prod, Dockerfile.go) — ANY suffix
+ *   - `Dockerfile.<suffix>` (e.g. Dockerfile.prod, Dockerfile.go) - ANY suffix
  *   - `<prefix>.dockerfile` (e.g. build.dockerfile)
  * A file merely CONTAINING "dockerfile" (e.g. notADockerfile.txt) is NOT matched.
  *
@@ -89,7 +89,7 @@ export function isDockerfileName(name: string): boolean {
  * Walk `repoRoot` and return every non-excluded Dockerfile, deterministically sorted by
  * repo-relative forward-slash identity. NO file contents are read.
  *
- * Exclusion order (each step strictly narrows): the SHARED descent predicate (shouldDescendDir —
+ * Exclusion order (each step strictly narrows): the SHARED descent predicate (shouldDescendDir - *
  * node_modules/.git/dotfile dirs incl. .terraform/the tool
  * dir) prunes whole subtrees during the walk; then the CLI `--exclude` globs;
  * then the `[docker] ignore` globs. A Dockerfile under any excluded path is never listed.
@@ -110,7 +110,7 @@ export function discoverDockerfiles(
 
   const walk = (dir: string): void => {
     // Symlinks report isDirectory()/isFile() === false on Dirent entries, so they are never
-    // followed/read — no cycle traversal, no escape from repoRoot.
+    // followed/read - no cycle traversal, no escape from repoRoot.
     for (const entry of readdirSync(dir, { withFileTypes: true })) {
       const sub = join(dir, entry.name);
       if (entry.isDirectory()) {

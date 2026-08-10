@@ -1,13 +1,13 @@
 /**
  * First-party member-name set from a target's own yarn lockfile.
  *
- * The exclusion set is built from the lockfile's resolution descriptors — the target's own
- * workspace-member declarations — never from name heuristics. This repo links first-party libraries
+ * The exclusion set is built from the lockfile's resolution descriptors - the target's own
+ * workspace-member declarations - never from name heuristics. This repo links first-party libraries
  * via the `portal:` protocol, so both `@workspace:` and `@portal:` descriptors count as
  * first-party.
  *
  * The merge layer additionally requires version === "0.0.0-use.local" (the marker both generators
- * emit identically for workspace/portal components) before skipping — belt-and-braces.
+ * emit identically for workspace/portal components) before skipping - belt-and-braces.
  *
  * Pure function: no I/O, no logging (the caller reads the file).
  *
@@ -24,7 +24,7 @@ import { recordOf } from "../validate/record";
 
 /**
  * Matches one lockfile descriptor whose protocol is workspace: or portal:, capturing the package
- * name (which may itself contain "@", e.g. "@scratch/foo" — the lazy quantifier extends past the
+ * name (which may itself contain "@", e.g. "@scratch/foo" - the lazy quantifier extends past the
  * leading scope "@"). Linear-time on lockfile lines: the lazy quantifier is bounded by the line and
  * the pattern has no nested quantifiers (ReDoS-resistant).
  */
@@ -55,7 +55,7 @@ export function firstPartyNames(lockfileText: string): Set<string> {
 
 /**
  * Matches one indented `resolution:` body line for a `@workspace:` entry, capturing the member name
- * (lazy quantifier, same scoped-name posture as FIRST_PARTY_RE — extends past a leading "@") and
+ * (lazy quantifier, same scoped-name posture as FIRST_PARTY_RE - extends past a leading "@") and
  * the literal relative
  * path Yarn already resolved (verified Yarn-Berry shape: `resolution:
  * "backend@workspace:backend"`, root as `"proj@workspace:."`). Line-bounded,
@@ -67,19 +67,19 @@ const WORKSPACE_RESOLUTION_RE = /^[ \t]+resolution: "(.+?)@workspace:([^"]+)"$/;
 const DEPENDENCIES_BLOCK_RE = /^[ \t]+dependencies:$/;
 
 /**
- * Enumerate a root Yarn-Berry lockfile's workspace members from `resolution:` body lines — NOT
+ * Enumerate a root Yarn-Berry lockfile's workspace members from `resolution:` body lines - NOT
  * entry headers. Headers can carry `workspace:^` / `workspace:*` range descriptors when workspaces
  * depend on each other (those are ranges, not paths); only the resolution line inside an entry's
  * body is the literal path Yarn itself resolved, including glob-form `workspaces` fields
- * (`"libs/*"` resolves to a literal relative path in the lock — zero glob code needed here,
+ * (`"libs/*"` resolves to a literal relative path in the lock - zero glob code needed here,
  * ADR-0015 posture).
  *
  * `hasDependencies` is derived from the same entry block containing an indented `dependencies:`
- * line — the lockfile-authoritative signal for the per-workspace zero-dependency skip (a member
+ * line - the lockfile-authoritative signal for the per-workspace zero-dependency skip (a member
  * without one is the loud warn+skip case upstream, never a silent drop or hard fail).
  *
  * Path containment is deliberately not this parser's job: relPath is returned verbatim (including
- * traversal or absolute forms a hostile lock could contain) — the collect loop enforces containment
+ * traversal or absolute forms a hostile lock could contain) - the collect loop enforces containment
  * before any subprocess spawn uses it as a cwd.
  *
  * Stateful single-pass line scan (the pnpmThirdPartyEntryCount idiom): column-0 lines flush the
@@ -109,7 +109,7 @@ export function yarnWorkspaceMembers(
     const line = rawLine.trimEnd(); // tolerate CRLF lockfiles
     if (line.length === 0) continue;
     if (line[0] !== " " && line[0] !== "\t") {
-      // Column-0 line: a new entry header — flush the previous candidate.
+      // Column-0 line: a new entry header - flush the previous candidate.
       flush();
       continue;
     }
@@ -135,7 +135,7 @@ export function yarnWorkspaceMembers(
  * block header.
  *
  * A legitimate zero-dependency Yarn-4 workspace has a non-empty yarn.lock (always `__metadata:`
- * plus the project's own `"proj@workspace:."` self-entry) that scans to zero components — a count
+ * plus the project's own `"proj@workspace:."` self-entry) that scans to zero components - a count
  * of 0 here lets the coverage policy take the loud warn+skip branch instead of hard-failing the
  * whole run. Comment-only Yarn-1 placeholder lockfiles also count 0 (they genuinely have zero
  * entries).
@@ -148,7 +148,7 @@ export function thirdPartyEntryCount(lockfileText: string): number {
     if (line[0] === " " || line[0] === "\t") continue;
     if (!line.endsWith(":")) continue;
     if (/^"?__metadata"?:$/.test(line)) continue;
-    // A header containing any workspace:/portal: descriptor resolves to a first-party member — it
+    // A header containing any workspace:/portal: descriptor resolves to a first-party member - it
     // is not a third-party entry.
     if (
       line.split(", ").some((descriptor) => FIRST_PARTY_RE.test(descriptor))
@@ -161,12 +161,12 @@ export function thirdPartyEntryCount(lockfileText: string): number {
 }
 
 /**
- * Count the third-party `[[package]]` tables of a python lockfile (poetry.lock or uv.lock) — the
+ * Count the third-party `[[package]]` tables of a python lockfile (poetry.lock or uv.lock) - the
  * python counterpart of thirdPartyEntryCount.
  *
  * poetry.lock never lists the root project, so every `[[package]]` table counts. uv.lock always
  * lists the root project (and any workspace members) as `[[package]]` entries whose source is local
- * — `source = { virtual = "." }` / `source = { editable = "..." }` — those are first-party and
+ * - `source = { virtual = "." }` / `source = { editable = "..." }` - those are first-party and
  * excluded, mirroring the workspace:/portal: rule above.
  *
  * A legitimate dependency-free python target therefore counts 0 here (poetry: metadata block only;
@@ -204,7 +204,7 @@ export function pythonThirdPartyEntryCount(lockfileText: string): number {
 }
 
 /**
- * Count the third-party entries of a package-lock.json (v2/v3) — the npm counterpart of
+ * Count the third-party entries of a package-lock.json (v2/v3) - the npm counterpart of
  * thirdPartyEntryCount.
  *
  * package-lock.json is plain JSON, so JSON.parse is exact. The v2/v3 `packages` map keys the
@@ -217,7 +217,7 @@ export function pythonThirdPartyEntryCount(lockfileText: string): number {
  *
  * Third-party = keys containing "node_modules" whose entry link !== true.
  *
- * Returns `undefined` (unknown count) — not 0 — when the text is not JSON or there is no
+ * Returns `undefined` (unknown count) - not 0 - when the text is not JSON or there is no
  * object-shaped `packages` key: lockfileVersion 1 has no `packages` map, and a garbage file proves
  * nothing. Unknown routes the target to the scan, so a zero-component result still hard-fails
  * loudly; only a positively-determined zero (a `packages` map with no third-party keys) takes the
@@ -232,7 +232,7 @@ export function npmThirdPartyEntryCount(
   } catch {
     return undefined;
   }
-  // A failed document narrow is the unknown path — same as no packages map.
+  // A failed document narrow is the unknown path - same as no packages map.
   const doc = NpmLockDocument(parsed);
   const packages = doc instanceof type.errors ? undefined : doc.packages;
   if (packages === undefined) {
@@ -252,11 +252,11 @@ export function npmThirdPartyEntryCount(
 }
 
 /**
- * First-party member-name set from a package-lock.json (v2/v3) — the npm counterpart of
+ * First-party member-name set from a package-lock.json (v2/v3) - the npm counterpart of
  * firstPartyNames.
  *
  * Two verified lockfile shapes contribute (npm workspace members carry real versions, never
- * 0.0.0-use.local — the yarn-era version guard does not apply):
+ * 0.0.0-use.local - the yarn-era version guard does not apply):
  *
  * - link entries: keys "node_modules/<name>" with link === true → <name> (the leading
  *   "node_modules/" prefix is stripped, preserving scoped names like "@scope/liba")
@@ -264,7 +264,7 @@ export function npmThirdPartyEntryCount(
  *   falling back to the path basename
  *
  * The merge layer additionally requires the cdx:npm:isWorkspace="true" component property before
- * skipping (belt-and-braces) — a name collision alone must never drop a third-party package.
+ * skipping (belt-and-braces) - a name collision alone must never drop a third-party package.
  *
  * Garbage or shape-less JSON yields an empty set; never throws.
  */
@@ -296,19 +296,19 @@ export function npmFirstPartyNames(lockfileText: string): ReadonlySet<string> {
 }
 
 /**
- * Count the third-party entries of a packages.lock.json — the nuget counterpart of
+ * Count the third-party entries of a packages.lock.json - the nuget counterpart of
  * npmThirdPartyEntryCount.
  *
  * packages.lock.json is plain strict JSON; the document narrow is single-sourced with the collector
  * (src/validate/nugetLock.ts) so the counter and the collector can never disagree on the same lock.
- * Entries with `type === "Project"` (first-party project references) are excluded — the collector's
+ * Entries with `type === "Project"` (first-party project references) are excluded - the collector's
  * one exclusion, mirrored exactly; every other entry counts, including unknown future types and
  * malformed entries (counting them errs toward the scan, where a zero-component result hard-fails
- * loudly — a crafted lock can never flip the warn+skip branch to hide dependencies). Entries are
+ * loudly - a crafted lock can never flip the warn+skip branch to hide dependencies). Entries are
  * counted across all dependency sections (one per target framework, plus `<tfm>/<rid>` pairs),
- * without dedup — only the strict `=== 0` comparison downstream consumes the value.
+ * without dedup - only the strict `=== 0` comparison downstream consumes the value.
  *
- * Returns `undefined` (unknown count) — not 0 — for non-JSON text, a failed document narrow, an
+ * Returns `undefined` (unknown count) - not 0 - for non-JSON text, a failed document narrow, an
  * unsupported lock format version (the collector throws on those: a schema it refuses to interpret
  * is one the counter must never claim to have read), or a missing dependencies map: a garbage file
  * proves nothing. Unknown routes the target to the scan, so the collector's loud throw or the
@@ -324,7 +324,7 @@ export function nugetThirdPartyEntryCount(
   } catch {
     return undefined;
   }
-  // A failed document narrow is the unknown path — same as no dependencies map (the
+  // A failed document narrow is the unknown path - same as no dependencies map (the
   // npmThirdPartyEntryCount posture).
   const doc = NugetLockDocument(parsed);
   if (doc instanceof type.errors) {
@@ -332,7 +332,7 @@ export function nugetThirdPartyEntryCount(
   }
   // The collector accepts lock versions 1 and 2 only (it throws on others). Mirror that acceptance:
   // an unsupported version is unknown, so the target routes to the scan where the collector's loud
-  // version error fires — a future-format lock can never take the silent warn+skip branch.
+  // version error fires - a future-format lock can never take the silent warn+skip branch.
   if (doc.version !== undefined && doc.version !== 1 && doc.version !== 2) {
     return undefined;
   }
@@ -343,9 +343,9 @@ export function nugetThirdPartyEntryCount(
   let count = 0;
   for (const rawSection of Object.values(dependencies)) {
     const section = recordOf(rawSection);
-    if (section === undefined) continue; // non-record section — nothing to count
+    if (section === undefined) continue; // non-record section - nothing to count
     for (const rawEntry of Object.values(section)) {
-      // Exclusion by type === "Project" only; a malformed (non-record) entry counts too — erring
+      // Exclusion by type === "Project" only; a malformed (non-record) entry counts too - erring
       // toward the scan, never toward a silent skip.
       if (recordOf(rawEntry)?.["type"] !== "Project") count += 1;
     }
@@ -354,9 +354,9 @@ export function nugetThirdPartyEntryCount(
 }
 
 /**
- * Count the third-party entries of a pnpm-lock.yaml — the pnpm counterpart of thirdPartyEntryCount.
+ * Count the third-party entries of a pnpm-lock.yaml - the pnpm counterpart of thirdPartyEntryCount.
  *
- * Stateful line scan in the pythonThirdPartyEntryCount idiom — no YAML parser (zero-dep
+ * Stateful line scan in the pythonThirdPartyEntryCount idiom - no YAML parser (zero-dep
  * constraint), trimEnd tolerates CRLF checkouts. The current top-level section is tracked via
  * column-0 `header:` lines; inside `packages:`, exactly-two-space-indented key lines ending ":"
  * count. Verified key shapes:
@@ -365,7 +365,7 @@ export function nugetThirdPartyEntryCount(
  *   quoted: " '@types/node@1.0.0':" (single or double quotes)
  *
  * Deeper-indented property lines (resolution:, dependencies:, ...) never match the two-space
- * anchor. An importers-only lockfile (workspace with no external deps — no packages: section)
+ * anchor. An importers-only lockfile (workspace with no external deps - no packages: section)
  * counts 0, the positively-determined zero-third-party warn+skip branch. Malformed lines contribute
  * nothing; never throws (linear-time regexes).
  */
@@ -425,14 +425,14 @@ export function pnpmImporterNames(lockfileText: string): ReadonlySet<string> {
 }
 
 /**
- * Count the third-party components of a maven.sbom.json sidecar — the maven counterpart of
+ * Count the third-party components of a maven.sbom.json sidecar - the maven counterpart of
  * nugetThirdPartyEntryCount. Shares the document narrow with the collector
  * (src/validate/mavenSbom.ts) so the two can never disagree about what parses: a document
  * collectWithMavenSbom would throw on (missing bomFormat, a non-CycloneDX bomFormat, or a root purl
- * outside `pkg:maven/`) always returns undefined here too — never a positively-determined zero (the
+ * outside `pkg:maven/`) always returns undefined here too - never a positively-determined zero (the
  * 15-05 counter/collector-disagreement finding class).
  *
- * The count excludes only the document's own root purl — the reactor cross-target sibling set does
+ * The count excludes only the document's own root purl - the reactor cross-target sibling set does
  * not exist inside this pure per-doc counter (that knowledge lives in the pipeline pre-pass,
  * mavenRootPurlOf + excludeMavenFirstParty). A sibling module's leaked component therefore still
  * counts here, erring toward the scan rather than a silent skip: the one doc shape this counter
@@ -442,10 +442,10 @@ export function pnpmImporterNames(lockfileText: string): ReadonlySet<string> {
  * A document that passes those checks but has no components key counts 0: CycloneDX makes the array
  * optional and cyclonedx-maven-plugin omits it entirely for an aggregator pom's BOM (verified
  * against 2.9.2 output), so the absent-array shape must reach the same warn+skip branch as an empty
- * one — never the zero-component hard fail. A crafted sidecar gains nothing: an empty array already
+ * one - never the zero-component hard fail. A crafted sidecar gains nothing: an empty array already
  * takes the skip branch.
  *
- * Returns undefined (unknown count) for non-JSON text or a failed document narrow — a doc that
+ * Returns undefined (unknown count) for non-JSON text or a failed document narrow - a doc that
  * proves nothing routes the target to the scan, never to the warn+skip branch. Never throws.
  */
 export function mavenThirdPartyEntryCount(

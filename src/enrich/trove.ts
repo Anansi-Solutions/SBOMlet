@@ -1,7 +1,7 @@
 /**
  * Vendored "License :: OSI Approved :: X" trove classifier → SPDX id map.
  *
- * The data is a literal, reviewable table — never fetched at runtime. The `trove-classifiers`
+ * The data is a literal, reviewable table - never fetched at runtime. The `trove-classifiers`
  * package is PyPI-only (404 on npm) and a runtime fetch would be non-deterministic, so under the
  * supply-chain gate this stays a small vendored static map. It only covers the cases `spdx-correct`
  * MISSES: the "Python Software Foundation License" label, the "ISC License (ISCL)" label, and the
@@ -11,7 +11,7 @@
  *
  * This map is the PyPI resolver's Layer 3, consulted only after `info.license_expression` and
  * `info.license` fail. Resolvers return the RAW SPDX string from this map; they never call
- * parse/correct — normalizeRaw owns resolution downstream (the single SPDX resolution path).
+ * parse/correct - normalizeRaw owns resolution downstream (the single SPDX resolution path).
  *
  * AMBIGUITY: the broad "BSD License" / "Apache Software License" classifiers do NOT carry a precise
  * SPDX id ("BSD License" could be 2- or 3-Clause). They are
@@ -53,7 +53,7 @@ export const TROVE_TO_SPDX: ReadonlyArray<
 const TROVE_MAP: ReadonlyMap<string, string> = new Map(TROVE_TO_SPDX);
 
 /**
- * Broad classifiers whose SPDX id is genuinely ambiguous — the SPDX id cannot
+ * Broad classifiers whose SPDX id is genuinely ambiguous - the SPDX id cannot
  * be determined from the classifier alone ("BSD License" is 2- or 3-Clause;
  * "Apache Software License" omits the version). A resolver that falls back to one of these must tag
  * the result LOW confidence.

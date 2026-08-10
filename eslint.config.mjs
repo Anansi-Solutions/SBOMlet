@@ -183,8 +183,7 @@ export default tseslint.config(
       "no-comment-slop/require-member-docs": "off",
       // Off: house comments are full sentences and end with a period.
       "no-comment-slop/no-trailing-period": "off",
-      // Off: house prose uses em dashes.
-      "no-comment-slop/no-em-dash": "off",
+      "no-comment-slop/no-em-dash": "error",
     },
   },
   {

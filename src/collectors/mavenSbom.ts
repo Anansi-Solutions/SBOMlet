@@ -1,8 +1,8 @@
 /**
- * In-process maven.sbom.json collector — a conscious exception to orchestrate-don't-parse, because
+ * In-process maven.sbom.json collector - a conscious exception to orchestrate-don't-parse, because
  * Maven has no native lockfile: `pom.xml` declares directs only, and only a build-side plugin can
  * resolve the real closure (parent BOMs, dependencyManagement, conflict mediation). Every scan-time
- * candidate that avoids running Maven inside the target fails the reliability bar instead — cdxgen
+ * candidate that avoids running Maven inside the target fails the reliability bar instead - cdxgen
  * either shells out to `mvn` in the scanned repo (the exact side effect this tool forbids) or,
  * without Maven on PATH, silently emits an 8% fraction with version-less purls; syft sees pom
  * directs only and fabricates identity from stale local jars.
@@ -12,21 +12,21 @@
  * per-module CycloneDX output under the fixed name `maven.sbom.json`; this reader consumes those
  * committed bytes offline, no subprocess, no Maven toolchain anywhere in SBOMlet.
  *
- * The committed document is already canonical — components, purls, and license claims are the
+ * The committed document is already canonical - components, purls, and license claims are the
  * effective-model truth the plugin resolved inside the build. When no test-inclusive sidecar sits
  * beside it, this reader rewrites NOTHING: it validates the document's shape (bomFormat, a
  * components array, a `pkg:maven/` metadata.component.purl) and then copies the exact committed
- * bytes into the per-run temp dir, never re-serializing them — a rewrite risks silently reordering
+ * bytes into the per-run temp dir, never re-serializing them - a rewrite risks silently reordering
  * or dropping fields this reader does not even declare. Purl casing (groupId/artifactId) is never
  * touched: Maven coordinates are case-sensitive and the plugin already emits registry-canonical
  * casing.
  */
 /**
- * A consumer MAY additionally commit `maven.test.sbom.json` — the same module built with
+ * A consumer MAY additionally commit `maven.test.sbom.json` - the same module built with
  * `-DincludeTestScope=true` (a superset that also carries test-only dependencies, indistinguishable
- * from production ones by any field the plugin emits — ADR-0023). When present, this reader
+ * from production ones by any field the plugin emits - ADR-0023). When present, this reader
  * composes the inventory from the test doc (the superset) plus any default-doc component whose purl
- * the test doc dropped — a mediation residual, never a hand-rebuilt document — and derives
+ * the test doc dropped - a mediation residual, never a hand-rebuilt document - and derives
  * `prodPurlSet` from the default doc's own purls via merge.ts's `purlSetOf`. The merge then
  * classifies any inventory purl outside that set as dev (the yarn dual-run / poetry precedent).
  * Without the test doc, behavior is unchanged: no `prodPurlSet`, every component classifies prod.
@@ -35,9 +35,9 @@
  * in a dependent module's BOM) is cross-target knowledge that belongs to the collect loop, not this
  * reader; each document's OWN root purl is already excluded by the merge.
  *
- * Fully in-process — no subprocess, no eval, no cwd change; a MAX_MAVEN_SBOM_BYTES stat gate bounds
+ * Fully in-process - no subprocess, no eval, no cwd change; a MAX_MAVEN_SBOM_BYTES stat gate bounds
  * memory before any read/parse; a missing file, an oversized file, non-JSON text, a non-CycloneDX
- * document, and a document whose root purl is not `pkg:maven/` all throw loudly — a committed
+ * document, and a document whose root purl is not `pkg:maven/` all throw loudly - a committed
  * artifact under either fixed name must never silently misparse.
  */
 
@@ -63,7 +63,7 @@ import type { Target } from "../targets/target";
 
 /**
  * Collector identity (the CLI prints `${name}@${version}`). Version bumps when the parse or
- * validation semantics change — it is hashed into the cache key, so a bump invalidates cache
+ * validation semantics change - it is hashed into the cache key, so a bump invalidates cache
  * entries on purpose. Bumped to "2" for the dual-document composed inventory: the emission
  * semantics changed (a maven.test.sbom.json sidecar, when present, now changes what a target emits)
  * even though a target without one still emits byte-identical bytes.
@@ -76,7 +76,7 @@ export const MAVEN_COLLECTOR_TOOL = {
 /**
  * DoS bound: the research fixture's real per-module BOM is ~1.5 MB; 32 MiB is generous headroom.
  * The stat gate fires before any read or parse so a hostile file can never balloon memory. Shared
- * by both the default and the test-inclusive sidecar — a committed artifact under either fixed name
+ * by both the default and the test-inclusive sidecar - a committed artifact under either fixed name
  * must clear the same bound before anything touches its bytes.
  */
 export const MAX_MAVEN_SBOM_BYTES = 32 * 1024 * 1024;
@@ -84,7 +84,7 @@ export const MAX_MAVEN_SBOM_BYTES = 32 * 1024 * 1024;
 /**
  * Stat-gate a maven sidecar path against MAX_MAVEN_SBOM_BYTES before any read or parse. Shared by
  * collectWithMavenSbom (for both the default and the optional test-inclusive sidecar), the pipeline
- * pre-pass, and the CLI loop — every entry point that touches either file must honor the same
+ * pre-pass, and the CLI loop - every entry point that touches either file must honor the same
  * single-sourced cap and loud message.
  */
 export function assertMavenSbomSize(sbomPath: string): void {
@@ -100,16 +100,16 @@ export function assertMavenSbomSize(sbomPath: string): void {
 
 /**
  * The constant pseudo-argv hashed into the cache key. There is no real subprocess invocation to
- * hash — this sentinel plays the role cdxgenCacheArgs plays for cdxgen targets, and changes only
+ * hash - this sentinel plays the role cdxgenCacheArgs plays for cdxgen targets, and changes only
  * when the collector's observable behavior changes (alongside the tool version). A present
  * maven.test.sbom.json appends one more domain-tagged entry (its own content hash) so a changed
- * test doc invalidates the key while an absent one leaves this base array — and therefore the key
- * framing for a default-doc-only target — untouched.
+ * test doc invalidates the key while an absent one leaves this base array - and therefore the key
+ * framing for a default-doc-only target - untouched.
  */
 const MAVEN_CACHE_ARGS = ["maven-sbom-reader-v1"];
 
 /**
- * Manifest files hashed into the cache key — derived from the single source (dispatch.ts) so the
+ * Manifest files hashed into the cache key - derived from the single source (dispatch.ts) so the
  * collector's cache-key framing can never drift from the dispatch table's maven entry. Deliberately
  * NEVER includes maven.test.sbom.json: computeCacheKey throws on a missing manifest, and the test
  * doc is optional-additive (manifestFilesFor("maven") stays the single source of truth for the
@@ -131,17 +131,17 @@ export interface MavenCollectOptions {
  */
 export interface MavenCollectResult extends CollectorSbomFile {
   /**
-   * Purl set of the DEFAULT doc's components — set ONLY when a maven.test.sbom.json sidecar is also
+   * Purl set of the DEFAULT doc's components - set ONLY when a maven.test.sbom.json sidecar is also
    * present. Threaded into CollectedSbom.prodPurlSet by the registry; merge.ts then derives
    * occurrence dev = not in this set (the yarn dual-run / poetry precedent). Absent when only
-   * maven.sbom.json exists — every component classifies prod and the committed bytes pass through
+   * maven.sbom.json exists - every component classifies prod and the committed bytes pass through
    * unchanged.
    */
   prodPurlSet?: ReadonlySet<string>;
 }
 
 /**
- * sha256 hex digest of a sidecar's raw text — the cache-key ingredient for a present
+ * sha256 hex digest of a sidecar's raw text - the cache-key ingredient for a present
  * maven.test.sbom.json.
  */
 function sha256Hex(text: string): string {
@@ -149,7 +149,7 @@ function sha256Hex(text: string): string {
 }
 
 /**
- * Parse and validate one committed Maven CycloneDX sidecar — the loud ladder shared by the default
+ * Parse and validate one committed Maven CycloneDX sidecar - the loud ladder shared by the default
  * and the optional test-inclusive doc: JSON parse, the MavenSbomDocument narrow, bomFormat, and a
  * `pkg:maven/` root purl. A
  * committed artifact under either fixed name has exactly one honest shape;
@@ -197,11 +197,11 @@ function readAndNarrowMavenSbom(
 
 /**
  * Compose the dual-document inventory: the test doc's own components PLUS any default-doc component
- * whose purl is absent from the test doc's purl set (the mediation residual — guarantees a version
+ * whose purl is absent from the test doc's purl set (the mediation residual - guarantees a version
  * Maven mediated differently between the two builds is never silently dropped). Every other
  * envelope field is taken from the test doc; every surviving component, from either source, passes
- * through completely untouched. A shallow spread over the test doc — the excludeMavenFirstParty
- * new-doc pattern — never a hand-rebuilt document that could drop a field neither narrow declares.
+ * through completely untouched. A shallow spread over the test doc - the excludeMavenFirstParty
+ * new-doc pattern - never a hand-rebuilt document that could drop a field neither narrow declares.
  */
 function composeMavenInventory(
   testParsed: unknown,
@@ -240,7 +240,7 @@ function composeMavenInventory(
  *
  * Async for interface symmetry with collectWithCdxgen (keeps a future generator swap cheap).
  *
- * Failure modes (all loud — a committed artifact under either fixed name must never silently
+ * Failure modes (all loud - a committed artifact under either fixed name must never silently
  * misparse):
  * - missing maven.sbom.json → target.ts-shaped error;
  * - either sidecar over MAX_MAVEN_SBOM_BYTES → loud error naming path,
@@ -268,7 +268,7 @@ export async function collectWithMavenSbom(
     );
   }
 
-  // Size gate FIRST — before read, before parse (the DoS bound above).
+  // Size gate FIRST - before read, before parse (the DoS bound above).
   assertMavenSbomSize(sbomPath);
   const {
     text,
@@ -303,8 +303,8 @@ export async function collectWithMavenSbom(
       );
     }
 
-    // Composing builds a NEW document object (the shallow-spread pattern above), so — unlike the
-    // default-doc-only verbatim path — this is a deliberate re-serialization: JSON.stringify over
+    // Composing builds a NEW document object (the shallow-spread pattern above), so - unlike the
+    // default-doc-only verbatim path - this is a deliberate re-serialization: JSON.stringify over
     // that new object.
     outputText = JSON.stringify(
       composeMavenInventory(testParsed, defaultParsed),
@@ -317,7 +317,7 @@ export async function collectWithMavenSbom(
   }
 
   // Verbatim pass-through in the common (no test doc) case: the committed bytes are copied
-  // UNCHANGED into the per-run temp dir — never JSON.stringify(parsed), which would re-serialize
+  // UNCHANGED into the per-run temp dir - never JSON.stringify(parsed), which would re-serialize
   // and risk silently reordering or dropping fields this reader does not even declare. The
   // committed artifact is already canonical; rewriting it here would only risk data loss.
   const tempDir = opts.tempDir ?? mkdtempSync(join(tmpdir(), "licenses-"));
@@ -326,7 +326,7 @@ export async function collectWithMavenSbom(
 
   return {
     sbomPath: outPath,
-    // Shared cache-key framing contract — reused, never duplicated.
+    // Shared cache-key framing contract - reused, never duplicated.
     cacheKey: computeCacheKey(
       target,
       MAVEN_COLLECTOR_TOOL,
@@ -340,15 +340,15 @@ export async function collectWithMavenSbom(
 
 /**
  * Extract a maven.sbom.json sidecar's own root purl (metadata.component.purl) without validating
- * anything else about the document — the pre-pass primitive behind the reactor first-party purl
+ * anything else about the document - the pre-pass primitive behind the reactor first-party purl
  * set. Only the pipeline sees every discovered target, so cross-target sibling knowledge is
  * gathered HERE, before any target is collected, and threaded into {@link excludeMavenFirstParty}
  * at the post-collect step.
  *
  * Tolerant by design: garbage, non-JSON, non-CycloneDX, and purl-less text all yield undefined
- * rather than throwing. The pre-pass must never abort the whole run over one target's bad sidecar —
- * that target's OWN collect call fails loud later, on its own turn, via collectWithMavenSbom's
- * ladder.
+ * rather than throwing. The pre-pass must never abort the whole run over one target's bad sidecar
+ * - * that target's OWN collect call fails loud later, on its own turn, via
+ * collectWithMavenSbom's ladder.
  *
  * @returns The root purl, or undefined when the text cannot be read as a
  * CycloneDX document with one.
@@ -368,15 +368,15 @@ export function mavenRootPurlOf(text: string): string | undefined {
 
 /**
  * Filter a maven.sbom.json document's components by an exact-purl-match first-party set, returning
- * a NEW document — the input is never mutated. Purl-string equality is the only comparison: both
+ * a NEW document - the input is never mutated. Purl-string equality is the only comparison: both
  * sides come from the same cyclonedx-maven-plugin producer with the same `?type=jar` qualifier
  * shape, so a version-qualified exact match is safe.
  *
  * A STALE sibling reference (the module bumped its version, the sibling's sidecar was not
- * regenerated) deliberately does NOT match — it surfaces as an ordinary third-party component
+ * regenerated) deliberately does NOT match - it surfaces as an ordinary third-party component
  * instead of silently vanishing, the loud direction a mismatched exclusion should take (Pitfall 8).
  *
- * Every field other than `components` — and every field of a surviving component — passes through
+ * Every field other than `components` - and every field of a surviving component - passes through
  * completely untouched. A document this function cannot recognize as a record with a components
  * array is returned as-is: the collector's own loud ladder owns malformed-sidecar failures, not
  * this pure filter.

@@ -10,7 +10,7 @@ const MAX_SCANCODE_COPYRIGHT_LINES = 20;
 /** A root-level legal file basename ScanCode's election treats as authoritative. */
 const LEGAL_FILE_PATTERN = /^(LICENSE|LICENCE|COPYING|NOTICE)(\..*)?$/i;
 
-/** A package-manifest basename — the election fallback. */
+/** A package-manifest basename - the election fallback. */
 const MANIFEST_FILE_PATTERN = /^(package\.json|METADATA)$/i;
 
 /** True when an elected SPDX expression is ScanCode's own unresolvable-noise id. */
@@ -31,7 +31,7 @@ function isRawScancodeFile(raw: unknown): raw is RawScancodeFile {
 }
 
 /**
- * True iff a scancode `files[].path` sits directly inside the scanned tree's own root — never a
+ * True iff a scancode `files[].path` sits directly inside the scanned tree's own root - never a
  * nested/vendored/bundled subdirectory. ScanCode's `--json-pp` paths are forward-slash-separated
  * and always prefixed with the scanned directory's OWN basename (verified live: `ajv/LICENSE`,
  * `ajv/dist/ajv.bundle.js`), so a root-level file has EXACTLY two `/`-segments:
@@ -39,8 +39,8 @@ function isRawScancodeFile(raw: unknown): raw is RawScancodeFile {
  * never emits them; fail closed rather than trust an unexpected separator as root-level).
  *
  * A review found election previously matched on `basename(path)` alone with no depth check, so a
- * deeply-nested vendored/bundled dependency's LICENSE — carrying a DIFFERENT, potentially copyleft
- * license — could silently outrank the scanned package's own root license purely by `files[]` array
+ * deeply-nested vendored/bundled dependency's LICENSE - carrying a DIFFERENT, potentially copyleft
+ * license - could silently outrank the scanned package's own root license purely by `files[]` array
  * order (scancode's own walk order is not guaranteed root-first). This closes that gap.
  */
 function isRootLevelPath(path: string): boolean {
@@ -80,7 +80,7 @@ function electFromPattern(
  * ({@link MANIFEST_FILE_PATTERN}) with a non-null, non-noise expression;
  * else undefined (never an AND-combine across files). An
  * elected expression containing `LicenseRef-scancode-` is rejected within each lane (treated as no
- * answer there, ADR-0007) rather than accepted as noise — the caller falls through to the next
+ * answer there, ADR-0007) rather than accepted as noise - the caller falls through to the next
  * lane, or to a clean no-answer if both lanes reject.
  */
 export function electExpression(

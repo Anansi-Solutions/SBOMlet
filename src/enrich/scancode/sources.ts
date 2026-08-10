@@ -4,9 +4,9 @@
  * `package.json` version MANDATORILY equal to the purl's version (a stale node_modules must never
  * poison the cache with the wrong version's license). pypi: an in-project `.venv`'s site-packages,
  * keyed by the PEP-503 structural fold of the dist-info dir name (ADR-0015: the dir name IS the
- * signal, no PEP-440/508 parsing) — the dist-info dir itself is the first candidate (a wheel's
+ * signal, no PEP-440/508 parsing) - the dist-info dir itself is the first candidate (a wheel's
  * METADATA and legal files live there, not in the import package), the top_level.txt import package
- * dir the second. Everything else, or any structural mismatch, returns [] — an honest skip, never a
+ * dir the second. Everything else, or any structural mismatch, returns [] - an honest skip, never a
  * fabricated guess. A `..`-shaped or absolute-path-shaped decoded name (or top_level.txt line) can
  * never escape the target's containment root (resolve + strict prefix-check).
  */
@@ -24,9 +24,9 @@ interface EcosystemPurl {
 }
 
 /**
- * decodeURIComponent wrapped so a malformed percent-encoding (e.g. "%ZZ" in a crafted SBOM purl —
- * SBOM documents are an untrusted shape) is an honest undefined, never a URIError that would kill
- * the whole intensive run (the mapper contract: undefined on ANY structural mismatch).
+ * decodeURIComponent wrapped so a malformed percent-encoding (e.g. "%ZZ" in a crafted SBOM purl -
+ * * SBOM documents are an untrusted shape) is an honest undefined, never a URIError that would
+ * kill the whole intensive run (the mapper contract: undefined on ANY structural mismatch).
  */
 function safeDecode(encoded: string): string | undefined {
   try {
@@ -38,9 +38,9 @@ function safeDecode(encoded: string): string | undefined {
 
 /**
  * Decode + validate an npm purl's encoded name against a candidate `node_modules` root, requiring
- * the installed package.json `version` field to equal the purl version (mandatory — never
+ * the installed package.json `version` field to equal the purl version (mandatory - never
  * optional). Returns the resolved source dir, or undefined on ANY structural mismatch: dir absent,
- * package.json absent/unparseable (a garbage node_modules must never throw and kill the run —
+ * package.json absent/unparseable (a garbage node_modules must never throw and kill the run - *
  * honest skip), version mismatch, or a decoded name that would escape the node_modules root
  * (resolve + strict prefix-check, never best-effort).
  */
@@ -98,7 +98,7 @@ function safeReaddir(dir: string): string[] {
 }
 
 /**
- * The PEP-503 structural fold used ONLY to match a dist-info directory name — literal lower-case +
+ * The PEP-503 structural fold used ONLY to match a dist-info directory name - literal lower-case +
  * every run of `-`/`_`/`.` collapsed to a single `_` (ADR-0015: abstain over fragile PEP-440/508
  * parsing; the dist-info dir name IS the structural signal, nothing is parsed out of it).
  */
@@ -132,7 +132,7 @@ function sitePackagesDir(venvDir: string): string {
  * Resolve a pypi purl to its ordered locally-present scan candidates via an in-project `.venv`'s
  * site-packages. The dist-info dir name is the PEP-503 structural fold of `<name>-<version>`
  * (literal lower-case + `-`/`_`/`.` folded); the matched dist-info dir itself is ALWAYS the first
- * candidate — a wheel install puts `METADATA` and the `LICENSE`/`licenses/` legal files there, not
+ * candidate - a wheel install puts `METADATA` and the `LICENSE`/`licenses/` legal files there, not
  * inside the import package, so it is where the election lanes' evidence actually lives. The
  * `top_level.txt`-named import package dir (sorted, first entry that exists as a sibling dir)
  * follows as the second candidate when present. Absent venv or absent dist-info -> [] (honest skip,
@@ -203,12 +203,12 @@ function topLevelPackageDir(
 
 /**
  * Map a purl to its ordered locally-present scan candidates across a set of candidate target dirs
- * (probed in {@link compareCodeUnits}-sorted order, first target dir with a structural match wins —
- * determinism regardless of caller-supplied order). npm yields at most one dir; pypi yields the
- * matched dist-info dir first and the top_level.txt import package dir second (the caller scans in
- * order until the first positive answer). npm and pypi are the only supported ecosystems (Pattern
- * 4); every other type — including an unparseable purl — returns [] with zero fs probes beyond the
- * initial parse.
+ * (probed in {@link compareCodeUnits}-sorted order, first target dir with a structural match wins
+ * - * determinism regardless of caller-supplied order). npm yields at most one dir; pypi yields
+ * the matched dist-info dir first and the top_level.txt import package dir second (the caller scans
+ * in order until the first positive answer). npm and pypi are the only supported ecosystems
+ * (Pattern 4); every other type - including an unparseable purl - returns [] with zero fs probes
+ * beyond the initial parse.
  */
 export function sourceDirsFor(purl: string, targetDirs: string[]): string[] {
   const parsed = parsePurl(purl);

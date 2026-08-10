@@ -34,13 +34,13 @@ import { sanitizeForLog, writePolicySummary } from "./summary";
 import { collectTargets } from "./targets";
 
 /**
- * The default directory for tool-generated committed artifacts — the enrichment
+ * The default directory for tool-generated committed artifacts - the enrichment
  * cache and the Docker OS SBOM. It resolves against the SCANNED repo (--repo-root;
  * --base-dir only in single-target mode), so the generated state binds to the repo being scanned,
  * never the invocation dir: the CLI, in-process callers, and the GitHub Action all read the same
  * committed files. A policy `[cache] dir` overrides the subdirectory (validated repo-relative, so
  * it can never escape); the anchor stays the repo root. Collecting the artifacts in one hidden dir
- * — instead of scattering dotfiles across the repo root — is the whole point of the [cache] table.
+ * - instead of scattering dotfiles across the repo root - is the whole point of the [cache] table.
  */
 export const DEFAULT_CACHE_DIR = ".sbomlet.cache";
 
@@ -49,7 +49,7 @@ export const ENRICHMENT_CACHE_FILE = "licenses.cache.json";
 
 /**
  * The dedicated ScanCode analysis memo filename inside the resolved cache dir : a COMMITTED cache
- * with a lifecycle separate from the registry enrichment cache — the intensive ScanCode lane
+ * with a lifecycle separate from the registry enrichment cache - the intensive ScanCode lane
  * results live here, not in {@link ENRICHMENT_CACHE_FILE}, so the two caches version and invalidate
  * independently. Resolved via the same {@link cacheDir}, so a policy `[cache]
  * dir` steers both to the same directory.
@@ -59,7 +59,7 @@ export const SCANCODE_CACHE_FILE = "scancode.cache.json";
 /**
  * The committed docker image SBOM filename inside the cache dir: a deterministic emitter's output,
  * committed and consumed as a scope:"os" merge input, never scanned per-run. A missing file means
- * no os entries — no docker, no syft, fully offline. The generate-docker-sbom subcommand populates
+ * no os entries - no docker, no syft, fully offline. The generate-docker-sbom subcommand populates
  * it by building or pulling a real image and scanning its full contents; generate and check read
  * the same committed bytes.
  */
@@ -98,15 +98,15 @@ export interface GenerateOptions {
    * locally-present sources not already in the analysis memo). Absent-not-false (own-property gated
    * at the assessPackages call site below) so a default generate never constructs {@link
    * IntensiveOptions} and stays structurally scan-free. check REJECTS this flag outright
-   * (gate/check.ts, the dump-model precedent) — the shared optionsFrom parses it, but only
+   * (gate/check.ts, the dump-model precedent) - the shared optionsFrom parses it, but only
    * runGenerate ever threads it through as true.
    */
   intensive?: boolean;
   /**
    * Optional TOML policy file: loaded + validated before any scan; verdicts evaluated after the
-   * merge and rendered into the PolicyView document. Findings are annotated unconditionally — the
+   * merge and rendered into the PolicyView document. Findings are annotated unconditionally - the
    * absent flag only removes the policy-gated surfaces (pointer line, copyleft section, verdicts).
-   * The document is always written even with failing verdicts — the CI gate is check mode, not
+   * The document is always written even with failing verdicts - the CI gate is check mode, not
    * generate.
    */
   policyPath?: string;
@@ -116,10 +116,11 @@ export interface GenerateOptions {
    * directory, so direct CLI invocations resolve relative to cwd. The Taskfile passes the task
    * invocation directory ({{.USER_WORKING_DIR}}): tasks run inside tools/sbomlet (the include
    * `dir`, mandated by the mise bun pin), so without this anchor a
-   * `task generate POLICY=.sbomlet.policy.toml` would look for tools/sbomlet/.sbomlet.policy.toml —
-   * and a relative CYCLONEDX would silently write (then "verify") the export inside tools/sbomlet.
-   * Display surfaces keep the raw path: the policy pointer line in the rendered document must stay
-   * deterministic across machines, never embedding an absolute machine-specific path.
+   * `task generate POLICY=.sbomlet.policy.toml` would look for tools/sbomlet/.sbomlet.policy.toml
+   * -    * and a relative CYCLONEDX would silently write (then "verify") the export inside
+   * tools/sbomlet. Display surfaces keep the raw path: the policy pointer line in the rendered
+   * document must stay deterministic across machines, never embedding an absolute machine-specific
+   * path.
    */
   baseDir?: string;
   /**
@@ -143,7 +144,7 @@ export interface GenerateOptions {
    */
   dockerSbomPath?: string;
   /**
-   * generate may fetch+write the enrichment cache; check NEVER fetches or writes — a
+   * generate may fetch+write the enrichment cache; check NEVER fetches or writes - a
    * miss-needing-enrichment is a stale condition (exit 2), never a network call. buildOutputs stays
    * write-free regardless: the cache write lives inside enrichUnknowns gated on generate mode.
    * runGenerate forces "generate"; runCheck forces "check". Absent defaults to the hermetic "check"
@@ -156,23 +157,23 @@ export interface GenerateOptions {
 /**
  * Everything buildOutputs renders in memory, plus the data check needs to gate on. Optional keys
  * are present only when their input was configured (cyclonedxPath) or loaded (policy), via
- * conditional spread — "absent" stays observable, never undefined-but-present.
+ * conditional spread - "absent" stays observable, never undefined-but-present.
  */
 export interface BuiltOutputs {
-  /** Rendered THIRD_PARTY_LICENSES.md — renderer-owned bytes. */
+  /** Rendered THIRD_PARTY_LICENSES.md - renderer-owned bytes. */
   licensesMd: string;
-  /** Rendered THIRD_PARTY_NOTICES.md companion — always built. */
+  /** Rendered THIRD_PARTY_NOTICES.md companion - always built. */
   noticesMd: string;
-  /** CycloneDX 1.6 export — present only when cyclonedxPath is set. */
+  /** CycloneDX 1.6 export - present only when cyclonedxPath is set. */
   cyclonedxJson?: string;
   /**
    * Sorted-key dump JSON: the EvaluatedDependencies (findings + verdicts) on a policy run, the
    * annotated model otherwise.
    */
   dumpJson: string;
-  /** Verdict stream — present ONLY when a policy was loaded. */
+  /** Verdict stream - present ONLY when a policy was loaded. */
   verdicts?: Verdict[];
-  /** The parsed policy — present ONLY when policyPath was given. */
+  /** The parsed policy - present ONLY when policyPath was given. */
   policy?: Policy;
   /** Merged package count, for the generate progress line. */
   packageCount: number;
@@ -225,7 +226,7 @@ function narrowSidecarImages(
 /**
  * components → attributed components, or undefined on any flaw: a non-array, a non-object entry, a
  * missing/empty/non-string-array `images`, or a membership naming an image absent from
- * dockerImages. An EMPTY membership is a flaw too — it would drop the component from every fan-out
+ * dockerImages. An EMPTY membership is a flaw too - it would drop the component from every fan-out
  * input, and dropped inventory is the one failure the degradation path exists to prevent.
  */
 function narrowSidecarComponents(
@@ -253,7 +254,7 @@ function narrowSidecarComponents(
 
 /**
  * All-or-nothing narrowing: the typed sidecar when EVERY component and EVERY dockerImages entry
- * narrows cleanly, undefined otherwise — the caller then fails the whole run, never building a
+ * narrows cleanly, undefined otherwise - the caller then fails the whole run, never building a
  * partial per-image model.
  */
 function narrowAttributedSidecar(
@@ -273,15 +274,15 @@ function narrowAttributedSidecar(
 
 /**
  * Read the committed docker SBOM as scope:"os" merge inputs, or undefined when it does not exist
- * (the offline cache-miss equivalent — no os entries, never a live scan). The default path is
- * {@link DOCKER_SBOM_FILE} inside the resolved cache `dir` (repo-root-anchored), so the Action —
- * running from its own directory — reads the consumer repo's committed SBOM, not a stray file
+ * (the offline cache-miss equivalent - no os entries, never a live scan). The default path is
+ * {@link DOCKER_SBOM_FILE} inside the resolved cache `dir` (repo-root-anchored), so the Action -
+ * * running from its own directory - reads the consumer repo's committed SBOM, not a stray file
  * beside the action; an explicit CLI path overrides it. The file is size-gated before any read (a
- * committed artifact must never balloon a run), then parsed; a non-JSON file throws on JSON.parse —
- * the correct loud failure for a tampered committed artifact.
+ * committed artifact must never balloon a run), then parsed; a non-JSON file throws on JSON.parse
+ * - * the correct loud failure for a tampered committed artifact.
  *
  * The sidecar FANS OUT to one input per image with targetIdentity "docker:" + source, so a purl
- * shared across images gets one occurrence per image through the untouched mergeSboms — exactly
+ * shared across images gets one occurrence per image through the untouched mergeSboms - exactly
  * like a package shared across two workspaces. A sidecar missing any attribution (a component
  * without `images`, an image entry without `source`) is malformed and fails the run loudly:
  * silently dropping docker inventory is the one failure this reader must never allow. The fan-out
@@ -297,7 +298,7 @@ function readCommittedDockerSbom(
       ? resolveFrom(resolvedRepoRoot(opts) ?? opts.baseDir, opts.dockerSbomPath)
       : resolveFrom(dir, DOCKER_SBOM_FILE);
   if (!existsSync(osSbomPath)) {
-    // Not a compatibility read — the legacy file's CONTENT is never used. Its presence without the
+    // Not a compatibility read - the legacy file's CONTENT is never used. Its presence without the
     // current file means the repo predates the rename, and returning undefined here would silently
     // drop the docker inventory.
     if (
@@ -337,7 +338,7 @@ function readCommittedDockerSbom(
 /**
  * The policy path as it lands in the committed document's pointer line: repo-root-relative and
  * forward-slash, so the bytes are identical on every checkout and never leak an absolute machine
- * path. (Using the raw --policy value broke determinism when an absolute path was passed — e.g.
+ * path. (Using the raw --policy value broke determinism when an absolute path was passed - e.g.
  * from the GitHub Action, which must run from its own directory, not the repo root.)
  */
 function policyPointerPath(opts: GenerateOptions): string {
@@ -349,7 +350,7 @@ function policyPointerPath(opts: GenerateOptions): string {
 
 /**
  * The scanned repo's absolute root, or undefined in single-target mode (no --repo-root). Committed
- * artifacts — the cache dir and the policy pointer line — anchor here so they bind to the repo
+ * artifacts - the cache dir and the policy pointer line - anchor here so they bind to the repo
  * being scanned, not the invocation directory (--base-dir), which diverges for in-process callers
  * and the Action.
  */
@@ -362,7 +363,7 @@ function resolvedRepoRoot(opts: GenerateOptions): string | undefined {
 /**
  * The resolved cache directory: where tool-generated committed artifacts live (the enrichment
  * cache, the Docker OS SBOM). It anchors to the SCANNED repo (--repo-root; --base-dir in
- * single-target mode), so it binds to the repo being scanned, not the invocation dir — which
+ * single-target mode), so it binds to the repo being scanned, not the invocation dir - which
  * diverges for in-process callers and the GitHub Action. A policy `[cache] dir` overrides the
  * subdirectory (validated repo-relative, so it can never escape); DEFAULT_CACHE_DIR otherwise.
  */
@@ -375,7 +376,7 @@ function cacheDir(opts: GenerateOptions, policy: Policy | undefined): string {
 
 /**
  * Resolve the cache directory for a caller that has NOT already parsed the policy (verify-cache,
- * generate-docker-sbom). Reads the policy file — when given and present — for its `[cache] dir`,
+ * generate-docker-sbom). Reads the policy file - when given and present - for its `[cache] dir`,
  * then anchors to the scanned repo exactly as the in-process {@link cacheDir} does. A malformed
  * policy throws PolicyError, the same exit-3 config error the gate raises, so the audit never runs
  * against a half-read policy.
@@ -416,7 +417,7 @@ function enrichmentCachePath(opts: GenerateOptions, dir: string): string {
 /**
  * The committed ScanCode memo path: {@link SCANCODE_CACHE_FILE} inside the cache `dir`, unless
  * --scancode-cache overrides it (resolved against the repo root, symmetric with the enrichment
- * cache path). Exported for direct testing and for the ScanCode replay stage — buildOutputs threads
+ * cache path). Exported for direct testing and for the ScanCode replay stage - buildOutputs threads
  * it into assessPackages.
  */
 export function scancodeCachePath(opts: GenerateOptions, dir: string): string {
@@ -429,12 +430,12 @@ export function scancodeCachePath(opts: GenerateOptions, dir: string): string {
 }
 
 /**
- * Construct {@link IntensiveOptions} for the enrichUnknowns call — ONLY when mode is "generate" AND
- * opts.intensive is true — an opt-in boundary: check never reaches this function with mode
+ * Construct {@link IntensiveOptions} for the enrichUnknowns call - ONLY when mode is "generate" AND
+ * opts.intensive is true - an opt-in boundary: check never reaches this function with mode
  * "generate" (runCheck forces "check"), and a default generate call has opts.intensive absent, so
  * the common case returns undefined and the intensive lane is never even
  * constructed, let alone invoked. targetDirs comes from the SAME collect loop
- * this run already walked — never a fresh discovery — so the assessment scan's candidate roots can
+ * this run already walked - never a fresh discovery - so the assessment scan's candidate roots can
  * never drift from what generate actually scanned.
  */
 function intensiveOptionsFor(
@@ -447,7 +448,7 @@ function intensiveOptionsFor(
 }
 
 /**
- * The analyzed container SOURCES — the bare repo-relative identity of every docker:<source>
+ * The analyzed container SOURCES - the bare repo-relative identity of every docker:<source>
  * occurrence target carried by ANY package, deduped. The bare form (prefix stripped) is what a
  * `[[docker.development]]` glob matches against, mirroring `[docker].ignore`'s own bare-source
  * patterns. Occurrence-keyed, not scope-keyed: this runs BEFORE {@link applyContainerScopes}
@@ -469,14 +470,14 @@ function analyzedContainerSources(
 
 /**
  * Resolve PolicyView.developmentContainers: match each policy `[[docker.development]]` glob against
- * the analyzed container sources via {@link globToRegExp} — the SAME matcher `[docker].ignore`
+ * the analyzed container sources via {@link globToRegExp} - the SAME matcher `[docker].ignore`
  * uses, never a new dialect. Two patterns matching the same container fold into one entry (a Set),
  * so resolution is idempotent regardless of overlapping globs. Absent [docker] table or an empty
  * `development` array yields an empty set, the conservative default (every container reads
  * "production").
  *
- * A pattern matching NO analyzed container source is a dead entry — most likely a mistyped source
- * path — and prints one stderr warning naming it, mirroring the unused scoped-rule posture. The
+ * A pattern matching NO analyzed container source is a dead entry - most likely a mistyped source
+ * path - and prints one stderr warning naming it, mirroring the unused scoped-rule posture. The
  * check reuses the SAME per-pattern match loop that resolves classification, so a pattern can never
  * be dead here and classifying above (one matcher, one truth). Placement-only: this never touches
  * verdicts or the exit code.
@@ -536,7 +537,7 @@ function projectPolicyView(
  * resolve/discover targets -> per-target dispatch+scan -> one merged model -> unconditional
  * annotation -> evaluate + stderr summary (when a policy is loaded) -> render every configured
  * output in memory. This
- * function never calls writeFileSync — generate writes the returned strings,
+ * function never calls writeFileSync - generate writes the returned strings,
  * check byte-compares them against the committed files, so check can never overwrite the files it
  * is gating on.
  */
@@ -549,7 +550,7 @@ export async function buildOutputs(
   // verbatim to main()'s catch → fail().
   let policy: Policy | undefined;
   if (opts.policyPath !== undefined) {
-    // Read from the base-dir-resolved path and name the resolved absolute path on failure — a
+    // Read from the base-dir-resolved path and name the resolved absolute path on failure - a
     // relative path in the error would read as repo-root- relative while the file was searched
     // elsewhere.
     const policyFile = resolveFrom(opts.baseDir, opts.policyPath);
@@ -576,8 +577,8 @@ export async function buildOutputs(
     process.stderr.write(`${line}\n`);
   });
 
-  // Thread the committed docker SBOM into the merge when it exists — one scope:"os" input per
-  // attributed image. A missing file is the offline cache-miss equivalent — no os entries, no
+  // Thread the committed docker SBOM into the merge when it exists - one scope:"os" input per
+  // attributed image. A missing file is the offline cache-miss equivalent - no os entries, no
   // docker, no syft.
   const osInputs = readCommittedDockerSbom(opts, dir);
   if (osInputs !== undefined) inputs.push(...osInputs);
@@ -586,10 +587,10 @@ export async function buildOutputs(
   // occurrences.
   const model = mergeSboms(inputs);
 
-  // ENRICH stage — runs BEFORE annotate so an appended source:"registry" claim flows through the
+  // ENRICH stage - runs BEFORE annotate so an appended source:"registry" claim flows through the
   // SAME normalizeRaw as a generator claim (one SPDX path), and clarify > registry > generator
   // precedence holds for free. generate may fetch on a cache miss and write the committed cache;
-  // check NEVER fetches or writes — a miss-needing-enrichment surfaces as a stale unknown (exit 2).
+  // check NEVER fetches or writes - a miss-needing-enrichment surfaces as a stale unknown (exit 2).
   const mode = opts.mode ?? "check";
   const intensive = intensiveOptionsFor(mode, opts, targetDirs);
   const { model: enriched, staleUnknowns } = await enrichUnknowns(model, {
@@ -598,13 +599,13 @@ export async function buildOutputs(
     verbose: opts.verbose,
   });
 
-  // ScanCode ASSESSMENT stage — a peer stage, not a subordinate lane inside enrichUnknowns. It runs
+  // ScanCode ASSESSMENT stage - a peer stage, not a subordinate lane inside enrichUnknowns. It runs
   // AFTER registry enrichment so that, for each package, both the quick-check answer and the
   // in-depth answer exist: the registry lane keeps its own cache/negative semantics untouched, and
   // conflicts stay detectable downstream. It replays the committed ScanCode memo for EVERY package
   // in both modes and, under generate --intensive only, analyzes the full package set. Consciously
   // accepted: a package whose ONLY answer is a memoized ScanCode claim is still registry-fetched on
-  // the next generate (it is zero-claim entering this stage) — desired, because both assessments
+  // the next generate (it is zero-claim entering this stage) - desired, because both assessments
   // must exist for a disagreement to surface.
   const { model: assessed } = await assessPackages(enriched, {
     mode,
@@ -616,7 +617,7 @@ export async function buildOutputs(
   // Normalization runs unconditionally: annotateFindings with an empty clarify list when no policy
   // is loaded, so the License column shows normalized expressions and the notices appendix can
   // decompose them without --policy. The no-policy dump equals the annotated model. The shipped
-  // tool-level BUILTIN_OVERRIDES set is always threaded in: it is imported config (pure — no I/O in
+  // tool-level BUILTIN_OVERRIDES set is always threaded in: it is imported config (pure - no I/O in
   // the engine), staleness-guarded, and project [[clarify]] wins over it on conflict.
   const { model: annotated, usedClarifyIndices } = annotateFindings(
     assessed,
@@ -624,8 +625,8 @@ export async function buildOutputs(
     BUILTIN_OVERRIDES,
   );
 
-  // The container re-scope transform: resolve the development-container set ONCE — from the
-  // still-"os"-scoped annotated model, so an app-only container is never lost — and feed the SAME
+  // The container re-scope transform: resolve the development-container set ONCE - from the
+  // still-"os"-scoped annotated model, so an app-only container is never lost - and feed the SAME
   // set to the scope transform AND the render classification below (one resolution, two consumers).
   // Runs unconditionally (even without a policy): the transform only ever NARROWS which packages
   // carry the gating "app" scope, so the annotated model stays the honest one everywhere
@@ -633,7 +634,7 @@ export async function buildOutputs(
   const developmentContainers = resolveDevelopmentContainers(annotated, policy);
   const scoped = applyContainerScopes(annotated, developmentContainers);
 
-  // Policy stage: pure engine calls — evaluate verdicts, surface the summary on stderr, and project
+  // Policy stage: pure engine calls - evaluate verdicts, surface the summary on stderr, and project
   // the PolicyView for the document renderer. Policy- authored strings reaching the .md route
   // through escapeCell inside the renderers.
   let verdicts: Verdict[] | undefined;
@@ -693,7 +694,7 @@ export async function runGenerate(opts: GenerateOptions): Promise<string> {
     );
   }
 
-  // Write the exact rendered strings — the renderers own the bytes.
+  // Write the exact rendered strings - the renderers own the bytes.
   const outputPath = resolveFrom(opts.baseDir, opts.outputPath);
   writeFileSync(outputPath, outputs.licensesMd);
   process.stderr.write(

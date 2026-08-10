@@ -1,6 +1,6 @@
 /**
  * Per-lockfile-kind collector registry: the CLI's target loop resolves
- * `collectors.get(target.lockfile)` and awaits collect() — adding a target kind means one
+ * `collectors.get(target.lockfile)` and awaits collect() - adding a target kind means one
  * registration here, never a new dispatch branch.
  *
  * Collectors NEVER write to stderr. The loop owns the "collecting <id> via <name>@<version>" line
@@ -39,7 +39,7 @@ export interface ToolIdentity {
 /** Per-target context a collector receives from the CLI loop. */
 export interface CollectContext {
   /**
-   * Full lockfile text — present for lockfile-dir targets (all current kinds); future non-lockfile
+   * Full lockfile text - present for lockfile-dir targets (all current kinds); future non-lockfile
    * target kinds (Phase 6 Docker/Terraform) simply won't receive it. Optional so the type expresses
    * that flexibility the kind-agnostic registry promises.
    */
@@ -47,13 +47,13 @@ export interface CollectContext {
   /** Generator wall-clock budget per scan; in-process collectors ignore it. */
   timeoutMs: number;
   verbose: boolean;
-  /** CLI-owned stderr sink — collectors must never write stderr directly. */
+  /** CLI-owned stderr sink - collectors must never write stderr directly. */
   log: (line: string) => void;
 }
 
 /**
  * Read the lockfile text a lockfile-dir collector requires. Throws (the scan failure path) if a
- * collector that needs it is somehow invoked without it — unreachable for all current kinds, but it
+ * collector that needs it is somehow invoked without it - unreachable for all current kinds, but it
  * keeps the now-optional field type-safe at the read sites.
  */
 function requireLockfileText(ctx: CollectContext): string {
@@ -89,7 +89,7 @@ function readSbom(path: string): unknown {
 
 /**
  * Read a target's pyproject.toml text for python provenance roots. Tolerant: a missing or
- * unreadable file yields an empty string — provenance then derives no declared-direct roots (every
+ * unreadable file yields an empty string - provenance then derives no declared-direct roots (every
  * package classifies transitive), which is honest, never a scan failure.
  */
 function readPyprojectText(target: DiscoveredTarget): string {
@@ -136,8 +136,8 @@ const yarnCdxgenCollector = cdxgenCollector("yarn", firstPartyNames);
 
 /**
  * Yarn targets select their generator from the LOCKFILE CONTENT: Yarn 4+ (`__metadata.version >=
- * 8`) routes to the dual-run plugin adapter — full + prod SBOMs, dev scope derived downstream as
- * full minus prod — while pre-4, empty, or unparseable lockfiles fall back to cdxgen.
+ * 8`) routes to the dual-run plugin adapter - full + prod SBOMs, dev scope derived downstream as
+ * full minus prod - while pre-4, empty, or unparseable lockfiles fall back to cdxgen.
  */
 const yarnCollector: Collector = {
   tool: (lockfileText): ToolIdentity =>
@@ -191,7 +191,7 @@ const bunCollector: Collector = {
  * not from cdxgen properties: cdxgen --no-install-deps emits NO cdx:pyproject:group marker, so
  * every poetry dep would otherwise classify prod. poetryProdPurlSet parses the lock's per-package
  * `groups` arrays into the `pkg:pypi/<pep503>@<version>` prod set, threaded into prodPurlSet
- * exactly like the yarn dual-run path — merge.ts then derives occurrence dev = not in the set,
+ * exactly like the yarn dual-run path - merge.ts then derives occurrence dev = not in the set,
  * authoritative over the absent markers and prod-wins for a package in both main and a dev group.
  */
 const poetryCollector: Collector = {
@@ -208,7 +208,7 @@ const poetryCollector: Collector = {
       sbom: readSbom(result.sbomPath),
       targetIdentity: target.identity,
       prodPurlSet: poetryProdPurlSet(lockfileText),
-      // Provenance derived from poetry.lock dep tables + pyproject roots — NOT cdxgen, which emits
+      // Provenance derived from poetry.lock dep tables + pyproject roots - NOT cdxgen, which emits
       // no usable poetry graph. Keyed by the same pkg:pypi/<pep503>@<version> purls cdxgen emits,
       // so the map joins onto the cdxgen components by purl.
       introductions: poetryIntroductions(
@@ -241,10 +241,10 @@ const terraformCollector: Collector = {
 
 /**
  * nuget targets use the in-process packages.lock.json collector (no upstream generator earns the
- * subprocess — see nugetLock.ts). No subprocess, so timeoutMs is ignored; the lockfile size gate
+ * subprocess - see nugetLock.ts). No subprocess, so timeoutMs is ignored; the lockfile size gate
  * fires inside collectWithNugetLock as well as in the CLI loop. NO firstPartyNames: the collector
  * excludes `type === "Project"` entries by type itself, so a name collision can never drop a
- * third-party package. NO prodPurlSet: the lock carries no dev marker — every occurrence classifies
+ * third-party package. NO prodPurlSet: the lock carries no dev marker - every occurrence classifies
  * prod (the safe, always-gating default).
  */
 const nugetCollector: Collector = {
@@ -260,9 +260,9 @@ const nugetCollector: Collector = {
 
 /**
  * maven targets use the in-process maven.sbom.json collector: no upstream generator can produce a
- * correct closure at scan time (cdxgen either runs `mvn` inside the target — forbidden — or
+ * correct closure at scan time (cdxgen either runs `mvn` inside the target - forbidden - or
  * silently emits an 8% fraction with version-less purls; syft sees pom directs only and fabricates
- * identity from stale local jars) — only the consumer's own build can resolve Maven, so their CI
+ * identity from stale local jars) - only the consumer's own build can resolve Maven, so their CI
  * commits the standard cyclonedx-maven-plugin output and this reader consumes it (ADR-0023). No
  * subprocess, so timeoutMs is ignored; the sidecar size gate fires inside collectWithMavenSbom as
  * well as in the CLI loop. NO firstPartyNames: the collector carries no per-component Maven scope,
@@ -288,7 +288,7 @@ const mavenCollector: Collector = {
 
 /**
  * The dispatch table, exhaustive over LockfileKind. npm members are emitted by cdxgen at their REAL
- * versions with cdx:npm:isWorkspace=true — the merge pairs that marker with the npm
+ * versions with cdx:npm:isWorkspace=true - the merge pairs that marker with the npm
  * lockfile-derived name set. The pnpm importer-name set is defensive only: cdxgen omits pnpm
  * workspace members from components entirely, so the merge's marker condition stays load-bearing.
  */

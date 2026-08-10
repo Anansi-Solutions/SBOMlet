@@ -1,5 +1,5 @@
 /**
- * ScanCode-toolkit collector — the syft-parity composite (dockerOs.ts) for deep source-level
+ * ScanCode-toolkit collector - the syft-parity composite (dockerOs.ts) for deep source-level
  * license + copyright detection, orchestrated behind the `--intensive` lane: locate a package's
  * sources ({@link sourceDirsFor}), run the pinned tool and elect a result ({@link
  * scanPackageSources}), memoize the answer in the committed cache. The detail behind each step

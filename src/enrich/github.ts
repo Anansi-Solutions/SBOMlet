@@ -1,21 +1,21 @@
 /**
  * GitHub-LICENSE raw-license resolver for `pkg:terraform` providers + modules.
  *
- * Terraform/OpenTofu registries expose NO license field (verified — neither the OpenTofu
+ * Terraform/OpenTofu registries expose NO license field (verified - neither the OpenTofu
  * `registry/docs` JSON nor the Terraform `/v1` API returns one), so the source repo is DERIVED from
  * the registry-enforced naming convention and the license read from the GitHub License API at the
  * component's VERSION TAG.
  *
- * Provider vs module is distinguished by the purl's encodedName SEGMENT COUNT, NOT by host —
+ * Provider vs module is distinguished by the purl's encodedName SEGMENT COUNT, NOT by host - *
  * OpenTofu rewrites BOTH provider and module Sources to registry.opentofu.org, so a host-based
  * branch is invalid. See {@link githubRepoFor} for the segment-count mapping.
  *
  * Like pypi.ts/npm.ts the resolver returns ONLY the RAW string (+ a `via` tag and the raw-LICENSE
- * `downloadUrl`) — it NEVER parses/corrects; normalizeRaw is the single SPDX authority downstream.
+ * `downloadUrl`) - it NEVER parses/corrects; normalizeRaw is the single SPDX authority downstream.
  * A NOASSERTION/null spdx_id or a malformed body → null (a DEFINITIVE no-license answer, distinct
- * from a retrieval failure, which the orchestrator surfaces loudly). The resolver does NOT fetch —
- * it consumes an already-fetched body (the pypi/npm contract); fetch wiring + ordered-ref fallback
- * live in enrich.ts.
+ * from a retrieval failure, which the orchestrator surfaces loudly). The resolver does NOT fetch -
+ *  * it consumes an already-fetched body (the pypi/npm contract); fetch wiring + ordered-ref
+ * fallback live in enrich.ts.
  */
 import { narrowGithubLicense } from "../validate/registry";
 
@@ -24,7 +24,7 @@ interface ParsedTerraformPurl {
   type: string;
   /**
    * The host-prefixed name: `<host>/<ns>/<name>` (3 segments = provider) or
-   * `<host>/<ns>/<name>/<provider>` (4 segments = module). The SEGMENT COUNT — not the host —
+   * `<host>/<ns>/<name>/<provider>` (4 segments = module). The SEGMENT COUNT - not the host -    *
    * distinguishes the two.
    */
   encodedName: string;
@@ -43,7 +43,7 @@ export interface GithubTarget {
 export interface GithubResolution {
   raw: string;
   via: "github-license";
-  /** download_url to the raw LICENSE text — reused for OUT-02 notices later. */
+  /** download_url to the raw LICENSE text - reused for OUT-02 notices later. */
   downloadUrl?: string;
 }
 
@@ -55,7 +55,7 @@ function target(owner: string, repo: string): GithubTarget {
 /**
  * Derive the GitHub source repo from the parsed terraform purl by the registry naming convention,
  * distinguishing provider from module by the encodedName's SEGMENT COUNT (3 = provider, 4 = module)
- * rather than by host. Returns null for a malformed name (any other segment count) — never a wrong
+ * rather than by host. Returns null for a malformed name (any other segment count) - never a wrong
  * guess.
  *
  *   3-segment `<host>/<ns>/<name>`            → <ns>/terraform-provider-<name>
@@ -85,8 +85,8 @@ export function githubRepoFor(
 /**
  * The ORDERED candidate refs for the version-tag fetch: the `v<version>` tag first, then the bare
  * `<version>` tag. NO default-branch fallback exists: the `undefined` (no `?ref`) sentinel is
- * DELIBERATELY OMITTED. GitHub answers a no-`?ref` request from the DEFAULT BRANCH (HEAD) — a
- * DIFFERENT version's license than the pin — which would be cached as the component's license,
+ * DELIBERATELY OMITTED. GitHub answers a no-`?ref` request from the DEFAULT BRANCH (HEAD) - a
+ * DIFFERENT version's license than the pin - which would be cached as the component's license,
  * silently wrong. Dropping it makes a missing version tag a DEFINITIVE negative → unknown → an
  * honest warn, never a confident wrong-version license. The first ref returning a resolvable
  * license wins; a missing tag (404) advances to the next, and exhausting both candidates is a clean

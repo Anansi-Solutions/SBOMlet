@@ -1,5 +1,5 @@
 /**
- * The coverage policy: the one place that decides a lockfile has nothing to inventory — a silent
+ * The coverage policy: the one place that decides a lockfile has nothing to inventory - a silent
  * incomplete inventory is the failure mode this tool exists to prevent, so anything else either
  * scans or fails loudly.
  */
@@ -34,7 +34,7 @@ import { SbomDocument } from "../validate/sbom";
  * absentModulesJsonShouldFail} / {@link modulesJsonIsPresentFile} verbs so the two cannot diverge.
  * - modules.json ABSENT (or directory-named) and the shape is not the exact providers-only artifact
  *   set → undefined: route to the collect path so the collector's loud "run tofu init/tofu get
- *   first" throw fires. NEVER a skip-to-zero — a silent incomplete inventory is exactly the failure
+ *   first" throw fires. NEVER a skip-to-zero - a silent incomplete inventory is exactly the failure
  *   this tool prevents.
  * - modules.json ABSENT and the providers-only shape holds (`.terraform/providers/` present,
  *   `.terraform/modules/` absent) → init ran with no module calls. Mirror the collector: route to
@@ -63,7 +63,7 @@ function terraformSkipReason(
     // Mirror the collector's filesystem-signal gate. No real init artifact → route to the loud-fail
     // collect path. The gate returns false only for the providers-only shape
     // (`.terraform/providers/` present, `.terraform/modules/` absent): scan it. A providers-empty
-    // such dir scans to zero — skip-classify it rather than hard-fail, the same as the
+    // such dir scans to zero - skip-classify it rather than hard-fail, the same as the
     // present-but-empty modules.json case below.
     if (absentModulesJsonShouldFail(lockfileDir)) return undefined;
     if (terraformComponentCount(lockfileText, "") === 0) {
@@ -71,7 +71,7 @@ function terraformSkipReason(
     }
     return undefined;
   }
-  // Size gate FIRST — before the read, mirroring the collector at terraform.ts and the bun.lock
+  // Size gate FIRST - before the read, mirroring the collector at terraform.ts and the bun.lock
   // precedent so the "size gate fires before any read, both files, every entry point" invariant is
   // exact.
   assertTerraformLockSize(modulesJsonPath);
@@ -89,36 +89,36 @@ function terraformSkipReason(
  *
  * - empty/whitespace-only lockfile → skip;
  * - yarn lockfile whose only entries are workspace:/portal: members (the legitimate zero-dependency
- *   Yarn-4 workspace: `__metadata:` plus the project's own self-entry) → skip — its scan yields
+ *   Yarn-4 workspace: `__metadata:` plus the project's own self-entry) → skip - its scan yields
  *   zero components[],
  *   which must not hard-fail the run;
  * - poetry/uv lockfile with zero third-party [[package]] tables: a dependency-free poetry project
  *   still has a non-empty poetry.lock (metadata block, no packages) and a dependency-free uv
- *   project's uv.lock carries only the project's own local self entry — both scan to zero
+ *   project's uv.lock carries only the project's own local self entry - both scan to zero
  *   components and must take the same loud warn+skip branch, never hard-fail the whole run. A
  *   python lockfile with third-party entries that scans to
  *   zero components still hard-fails (classifyCoverage);
  * - npm/pnpm/bun lockfiles with a positively-determined zero third-party count: package-lock.json
  *   whose packages map holds only the root/workspace-link entries, an importers-only
  *   pnpm-lock.yaml, a bun.lock whose packages are all @workspace: members. The npm and bun counters
- *   return undefined for v1/garbage text (unknown count) — the strict `=== 0`
+ *   return undefined for v1/garbage text (unknown count) - the strict `=== 0`
  *   comparison below lets undefined fall through, so unknown routes to the
  *   scan and a zero-component result hard-fails loudly, never a silent skip;
  * - nuget: a packages.lock.json whose every dependency section is empty or holds only type=Project
  *   entries (first-party project references) counts a positively-determined zero → warn+skip. The
- *   counter returns undefined for garbage/failed-narrow/no-dependencies-map text — the same strict
+ *   counter returns undefined for garbage/failed-narrow/no-dependencies-map text - the same strict
  *   `=== 0` fall-through, so an unreadable lock routes to the scan where the collector's loud parse
  *   throw or the zero-component hard-fail fires.
  *
  * - maven: a maven.sbom.json whose components hold nothing but its own root purl counts a
  *   positively-determined zero → warn+skip (the reactor aggregator pom's sidecar is the case that
  *   matters). The counter shares its document narrow with the collector, so a sidecar the collector
- *   would throw on returns undefined here too — the scan routes there and the collector's loud
+ *   would throw on returns undefined here too - the scan routes there and the collector's loud
  *   throw fires, never a silent skip.
  *
  * - terraform: a `.terraform.lock.hcl` whose sibling `.terraform/modules/modules.json` is ABSENT
  *   AND whose `<dir>/.terraform/` directory is also ABSENT (init never ran) is NOT skip-classified
- *   and NOT a zero — it routes to the collect path (returns undefined) so the collector's loud "run
+ *   and NOT a zero - it routes to the collect path (returns undefined) so the collector's loud "run
  *   tofu init/tofu get first" throw fires. When `<dir>/.terraform/` exists (init ran,
  *   providers-only) it is scanned. With modules.json present, terraformComponentCount(lock,
  *   modules) === 0 (a zero-provider lock with a local-only modules.json) → skip; a positive count →
@@ -140,7 +140,7 @@ export function coverageSkipReason(
   if (lockfileName === ".terraform.lock.hcl") {
     return terraformSkipReason(lockfileName, lockfileText, lockfileDir);
   }
-  // Strict === 0 on a number|undefined counter: undefined (v1/garbage — unknown count) falls
+  // Strict === 0 on a number|undefined counter: undefined (v1/garbage - unknown count) falls
   // through to the scan, where the collector's loud throw or the zero-component hard-fail fires.
   const arm = ZERO_THIRD_PARTY_ARMS.get(lockfileName);
   if (arm !== undefined && arm.count(lockfileText) === 0) {
@@ -152,7 +152,7 @@ export function coverageSkipReason(
 /**
  * The text-only zero-third-party arms of {@link coverageSkipReason}: one counter and one
  * positively-determined-zero reason per lockfile kind. The counters that return number|undefined
- * (npm/bun/nuget) keep the strict `=== 0` fall-through above — undefined (unknown) is never a skip.
+ * (npm/bun/nuget) keep the strict `=== 0` fall-through above - undefined (unknown) is never a skip.
  */
 const ZERO_THIRD_PARTY_ARMS = new Map<
   string,

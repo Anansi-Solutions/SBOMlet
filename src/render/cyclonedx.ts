@@ -3,19 +3,19 @@
  *
  * Pure function: model (plus optional verdicts) in, exact LF bytes out. Hand-rolled against the
  * official bom-1.6.schema.json: the only required top-level fields are `bomFormat` and
- * `specVersion` — `serialNumber`, `version`, and all of `metadata` (including `timestamp`) are
+ * `specVersion` - `serialNumber`, `version`, and all of `metadata` (including `timestamp`) are
  * optional, so the no-serial/no-timestamp document emitted here is schema-valid by construction.
  * Components require only `type` + `name`; the expression form of licenseChoice is a single-item
  * tuple whose object is `additionalProperties: false` (only
- * `expression`/`acknowledgement`/`bom-ref` allowed — a stray id/name key invalidates the document);
+ * `expression`/`acknowledgement`/`bom-ref` allowed - a stray id/name key invalidates the document);
  * property objects are `{name, value}` where duplicate names are explicitly spec-legal, which
  * carries one `licenses-tool:used-in` property per occurrence cleanly.
  *
  * Determinism: the document object is built with keys already in the intended emission order and
- * serialized with a single JSON.stringify — deliberately not via sortedKeyReplacer, which would
+ * serialized with a single JSON.stringify - deliberately not via sortedKeyReplacer, which would
  * reorder bomFormat after specVersion alphabetically. Components are defensively sorted by purl via
  * compareCodeUnits; JSON.stringify never emits CR, so the output is LF-only by
- * construction; JSON.stringify is also the only encoder — no string
+ * construction; JSON.stringify is also the only encoder - no string
  * concatenation ever builds a JSON fragment.
  *
  * This module deliberately does not validate against a schema library (structural tests only),
@@ -61,7 +61,7 @@ function unrecognizedLicenses(pkg: PackageEntry): CdxLicense[] {
 /**
  * License dispatch: a normalized expression wins and emits the single-item expression tuple
  * carrying only the expression key; otherwise non-empty raw claims emit named entries deduped by
- * raw in first-seen order; otherwise the licenses key is omitted entirely (valid per schema —
+ * raw in first-seen order; otherwise the licenses key is omitted entirely (valid per schema - *
  * components require only type + name).
  *
  * #9: os-scope partial unrecognizedTokens are appended as additional named entries in EVERY branch
@@ -85,7 +85,7 @@ function licensesOf(pkg: PackageEntry): CdxLicense[] | undefined {
 /**
  * Provenance + verdict properties, deterministic order: one `licenses-tool:used-in` per occurrence
  * (stored order is already target-sorted), then one `licenses-tool:scope:<target>` per occurrence,
- * then — only when verdicts are provided — per matching verdict in given (already sorted) order the
+ * then - only when verdicts are provided - per matching verdict in given (already sorted) order the
  * `licenses-tool:verdict:` and `licenses-tool:rule:` pair. Empty arrays are omitted, never emitted.
  */
 function propertiesOf(
@@ -142,7 +142,7 @@ function toComponent(
 
 /**
  * Emit the merged, policy-annotated inventory as deterministic CycloneDX 1.6 JSON. No serialNumber,
- * no timestamp, components purl-sorted (defensive — the emitter never trusts input order), indent
+ * no timestamp, components purl-sorted (defensive - the emitter never trusts input order), indent
  * 2, exactly one trailing LF.
  */
 export function renderCyclonedx(

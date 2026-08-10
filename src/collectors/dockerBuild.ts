@@ -1,7 +1,7 @@
 /**
  * The in-tool docker build step for the build-and-analyze lanes: turn a Dockerfile path into a
  * locally built, never-pushed image tag, then scan the built image. It is the counterpart of the
- * syft scan seam in dockerOs.ts — argv arrays through an injected exec function, never a shell
+ * syft scan seam in dockerOs.ts - argv arrays through an injected exec function, never a shell
  * string, so a user-controlled Dockerfile path can never be interpolated into a command (injection
  * is impossible by construction).
  *
@@ -38,8 +38,8 @@ const DEFAULT_BUILD_TIMEOUT_MS = 20 * 60 * 1000;
 /**
  * The stable image tag for a Dockerfile path.
  *
- * The sanitized name ALONE is not injective — `a/b/Dockerfile` and `a-b/Dockerfile` sanitize
- * identically, as do case-folded paths — and a collision would let the second build silently
+ * The sanitized name ALONE is not injective - `a/b/Dockerfile` and `a-b/Dockerfile` sanitize
+ * identically, as do case-folded paths - and a collision would let the second build silently
  * overwrite the first image and drop it from the committed inventory. Suffixing a short hash of the
  * ORIGINAL (pre-sanitization) path makes distinct Dockerfiles always get distinct tags,
  * deterministic per path, so the committed sidecar identity is stable across runs and machines.
@@ -56,7 +56,7 @@ export function imageTag(dockerfilePath: string): string {
 }
 
 /**
- * The exact `docker buildx build` argv (operands only — the `docker` binary is the exec cmd,
+ * The exact `docker buildx build` argv (operands only - the `docker` binary is the exec cmd,
  * mirroring syftArgs/dockerInspectArgs). `--load` imports the
  * built image into the local daemon so the scan step can inspect it;
  * `--provenance=false` keeps the build a single-image, no-attestation artifact. The Dockerfile is
@@ -91,7 +91,7 @@ export interface BuildImageOptions {
    * resolves both against THIS directory. The discovery lane anchors it to the repo root; when
    * unset the child inherits the tool's process cwd (the explicit `--dockerfile` lane, where the
    * caller's paths are relative to their own cwd). Threaded through to the exec seam untouched, so
-   * the argv — and therefore {@link imageTag} — stays a pure function of the path.
+   * the argv - and therefore {@link imageTag} - stays a pure function of the path.
    */
   cwd?: string;
 }
@@ -99,7 +99,7 @@ export interface BuildImageOptions {
 /**
  * Build one Dockerfile to its {@link imageTag} via the injected exec seam and
  * return the tag. A nonzero buildx exit throws LOUDLY, naming the Dockerfile
- * (routed through sanitizeForLog because the path is user-controlled), and no tag is returned — no
+ * (routed through sanitizeForLog because the path is user-controlled), and no tag is returned - no
  * partial result exists to mistake for success.
  */
 export async function buildImage(

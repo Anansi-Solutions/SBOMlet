@@ -5,10 +5,10 @@
  * binary is caught). Expression election is two-lane; see {@link electExpression} for the
  * legal-file/manifest precedence and the ADR-0007 no-fabrication rejection.
  *
- * This module NEVER performs SPDX correction or interpretation — the raw expression string is
+ * This module NEVER performs SPDX correction or interpretation - the raw expression string is
  * returned verbatim (`{raw, via, copyrights} | null`, the same shape the registry resolvers return
  * at enrich.ts's resolveFromDocument), and `normalizeRaw` stays the single SPDX authority
- * downstream. It never spawns outside `execTool`, and it never writes the cache itself — the single
+ * downstream. It never spawns outside `execTool`, and it never writes the cache itself - the single
  * write site stays in enrich.ts.
  */
 import {
@@ -34,19 +34,19 @@ export const MAX_SCANCODE_OUTPUT_BYTES = 64 * 1024 * 1024;
 
 /**
  * Wall-clock timeout per package scan. ScanCode's OWN per-file `--timeout` stays at its 120s
- * default — deliberately not passed here, since it bounds a single file's matching, not the whole
+ * default - deliberately not passed here, since it bounds a single file's matching, not the whole
  * run. 10 minutes is generous headroom for even a large vendored bundle.
  */
 export const DEFAULT_SCAN_TIMEOUT_MS = 10 * 60 * 1000;
 
 /**
  * The verified scancode-toolkit 32.5.0 argv. Options first, then a `--` END-OF-OPTIONS separator,
- * then the scanned directory OPERAND last — the dockerOs.ts syftArgs idiom: the source dir is
+ * then the scanned directory OPERAND last - the dockerOs.ts syftArgs idiom: the source dir is
  * always an argv operand, never a shell string, so command injection is impossible by
  * construction, and the `--` is defense-in-depth against a dash-prefixed
  * path being parsed as a flag. `--license --copyright` requests both detection families;
  * `--json-pp <outFile>` writes deterministic pretty-printed JSON to the per-run temp file. Locked
- * byte-for-byte by an exact-array test — any flag change must consciously break that test.
+ * byte-for-byte by an exact-array test - any flag change must consciously break that test.
  */
 export function scancodeArgs(outFile: string, sourceDir: string): string[] {
   return ["--license", "--copyright", "--json-pp", outFile, "--", sourceDir];
@@ -55,7 +55,7 @@ export function scancodeArgs(outFile: string, sourceDir: string): string[] {
 /**
  * Options threading the `--intensive` lane through enrichUnknowns. Present ONLY on
  * `generate --intensive`: check never receives it, and a default generate call never constructs it
- * (the intensive lane is additionally gated on this field's mere presence — enrich.ts). Mirrors the
+ * (the intensive lane is additionally gated on this field's mere presence - enrich.ts). Mirrors the
  * default-to-production/override-in-tests idiom used throughout this tool (EnrichOptions.now?,
  * ScancodeScanOptions.scancodeBin?).
  */
@@ -90,7 +90,7 @@ export interface ScancodeResolution {
   copyrights: string[];
 }
 
-/** A narrowed scancode output — only the fields this module reads. */
+/** A narrowed scancode output - only the fields this module reads. */
 interface RawScancodeOutput {
   headers?: unknown;
   files?: unknown;
@@ -177,14 +177,13 @@ async function runScancode(
         { cause: error },
       );
     }
-    // ScanCode exits NON-ZERO when SOME files fail to scan — an undecodable or oversized bundled
-    // data file (a vendored full license-list JSON, say) —
-    // yet still writes a COMPLETE, well-formed result for the rest of the tree;
+    // ScanCode exits NON-ZERO when SOME files fail to scan - an undecodable or oversized bundled
+    // data file (a vendored full license-list JSON, say) -     // yet still writes a COMPLETE, well-formed result for the rest of the tree;
     // the file that failed carries no detected expression and is inert to election. Tolerate that
     // ONLY when an output file was produced: the exists-check, the size gate, and the tool_version
     // assertion below are the integrity gate, so a substituted/wrong binary, a truncated write, or
     // a catastrophic failure that left no parseable, correctly-versioned output still throws. With
-    // NO output file the failure is real — rethrow the original error unchanged (its stderr tail is
+    // NO output file the failure is real - rethrow the original error unchanged (its stderr tail is
     // the diagnostic).
     if (!existsSync(outFile)) throw error;
   }
@@ -214,7 +213,7 @@ async function runScancode(
  *
  * Output-file hygiene: any stale out file is removed BEFORE the spawn, so with a caller-shared
  * tempDir a PREVIOUS scan's output can never masquerade as this scan's result (the exists-check
- * really proves scancode wrote output). Afterwards the out file is removed again — and when this
+ * really proves scancode wrote output). Afterwards the out file is removed again - and when this
  * function created the temp dir itself, the whole dir is removed, never leaked one per scanned
  * package per run.
  */

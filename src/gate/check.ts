@@ -10,7 +10,7 @@ import { resolveFrom } from "../pipeline/paths";
 import { buildOutputs, type GenerateOptions } from "../pipeline/pipeline";
 import { sanitizeForLog } from "../pipeline/summary";
 
-/** Structured check outcome — the only source of exit codes 1 and 2. */
+/** Structured check outcome - the only source of exit codes 1 and 2. */
 export interface CheckResult {
   /** Count of fail verdicts (zero when no policy was loaded). */
   violations: number;
@@ -23,12 +23,12 @@ export interface CheckResult {
  * renders every configured output in memory, then each committed file is read once, defensively
  * CRLF->LF normalized (unpinned consumer checkouts with core.autocrlf=true hand us CRLF on read),
  * and byte-compared against the in-memory render. Both comparison sides come from one buildOutputs
- * call — the in-memory string is what generate would write — so there is no regenerate/compare
+ * call - the in-memory string is what generate would write - so there is no regenerate/compare
  * TOCTOU window and nothing fresh is ever round-tripped through disk.
  *
- * A missing/unreadable committed file is stale (a never-generated output is stale by definition) —
- * consciously diverging from the policy-file read idiom, which throws: a missing policy is a config
- * error (3), a missing output is exactly what exit 2 reports.
+ * A missing/unreadable committed file is stale (a never-generated output is stale by definition) -
+ *  * consciously diverging from the policy-file read idiom, which throws: a missing policy is a
+ * config error (3), a missing output is exactly what exit 2 reports.
  *
  * runCheck never writes files: --dump-model is rejected as a config error, so the gate cannot
  * overwrite the files it verifies. --intensive is rejected alongside it: the parseArgs option table
@@ -47,7 +47,7 @@ export async function runCheck(opts: GenerateOptions): Promise<CheckResult> {
     );
   }
   // Force check mode so the ENRICH stage NEVER fetches or writes: a miss that needs enrichment is a
-  // stale condition (exit 2), never a network call. This is the zero-network clause — buildOutputs
+  // stale condition (exit 2), never a network call. This is the zero-network clause - buildOutputs
   // stays hermetic against the committed cache. (runGenerate forces generate; the shared
   // optionsFrom stays mode-neutral, so the subcommand decides.)
   const outputs = await buildOutputs({ ...opts, mode: "check" });
@@ -113,7 +113,7 @@ export async function runCheck(opts: GenerateOptions): Promise<CheckResult> {
 
 /**
  * The only mapping from a check outcome to exit codes 1 and 2: any fail verdict beats stale;
- * exceptions never reach this function — they propagate to main's catch -> fail() -> 3.
+ * exceptions never reach this function - they propagate to main's catch -> fail() -> 3.
  */
 export function exitCodeFor(result: CheckResult): number {
   if (result.violations > 0) return 1;

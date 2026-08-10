@@ -1,11 +1,11 @@
 /**
  * cdxgen adapter behind the narrow swappable generator interface.
  *
- * The argv built here is locked byte-for-byte by test/cdxgen.test.ts — changing any flag must
+ * The argv built here is locked byte-for-byte by test/cdxgen.test.ts - changing any flag must
  * consciously break that test and invalidate goldens.
  *
  * The raw SBOM, with its volatile fields (serialNumber, metadata.timestamp, annotations), lands in
- * a per-run temp directory and never travels past it — callers parse it, but the canonical model
+ * a per-run temp directory and never travels past it - callers parse it, but the canonical model
  * never carries those fields. The network license-enrichment env toggle stays unset: enrichment is
  * nondeterministic and belongs to a later phase.
  */
@@ -19,7 +19,7 @@ import { execTool } from "./exec";
 import type { Target } from "../targets/target";
 
 /**
- * Generator identity. The exact-version tag inside the argv is the pin — floating tags are
+ * Generator identity. The exact-version tag inside the argv is the pin - floating tags are
  * forbidden.
  */
 export const CDXGEN_TOOL = {
@@ -64,7 +64,7 @@ export interface CollectorSbomFile {
  * The verified argv tail for the runner.
  *
  * - `--no-install-deps` is critical: the default (--install-deps=true) would run a package manager
- *   inside the scanned target — a side effect this tool must never have.
+ *   inside the scanned target - a side effect this tool must never have.
  * - `--no-recurse`: single-target scanning.
  * - `--spec-version 1.6`: cdxgen 12 defaults to 1.7.
  * - `-t <ecosystem>` is the only parameterized flag.
@@ -93,7 +93,7 @@ export function cdxgenArgs(
 
 /**
  * The argv hashed into the cache key: the verified invocation shape with its two volatile path
- * operands replaced by constant sentinels — the per-run mkdtemp output file ("<out>") and the
+ * operands replaced by constant sentinels - the per-run mkdtemp output file ("<out>") and the
  * absolute target directory ("<target>"). Hashing the real paths would make the key change on every
  * run (random mkdtemp name, machine-dependent tmpdir) and differ per checkout (absolute targetDir),
  * so the cache could never hit and keys would never be portable. The manifest bytes already pin the
@@ -105,18 +105,18 @@ export function cdxgenCacheArgs(ecosystem: Ecosystem): string[] {
 
 /**
  * One manifest entry hashed into the cache key: a plain string resolves from the target's own dir
- * (today's exact behavior, byte-unchanged); an object form resolves from an explicit `dir` — the
+ * (today's exact behavior, byte-unchanged); an object form resolves from an explicit `dir` - the
  * yarn workspace-unit path, where the root yarn.lock and root package.json live in a different
  * directory than the workspace's own package.json. The hashed label is ALWAYS the bare file name in
- * both forms — content-relative, never path-relative — so the two-dirs-same-bytes-same-key lock
+ * both forms - content-relative, never path-relative - so the two-dirs-same-bytes-same-key lock
  * (test/yarnPlugin.test.ts) keeps holding for object entries too.
  */
 export type ManifestEntry = string | { file: string; dir: string };
 
 /**
- * Content-hash cache key. Hashes the raw bytes of the target's manifest files (no text decoding —
- * immune to EOL differences) plus the tool identity and the full argv (callers pass the
- * sentinel-normalized cache argv — never an argv carrying per-run temp paths).
+ * Content-hash cache key. Hashes the raw bytes of the target's manifest files (no text decoding -
+ * * immune to EOL differences) plus the tool identity and the full argv (callers pass the
+ * sentinel-normalized cache argv - never an argv carrying per-run temp paths).
  *
  * Every segment is domain-tagged and length-prefixed (files) or NUL-terminated (strings) so
  * distinct inputs can never collide by concatenation ambiguity: bytes cannot move across a
@@ -128,7 +128,7 @@ export type ManifestEntry = string | { file: string; dir: string };
  * package.json) since its manifests are NOT all in target.dir.
  *
  * When `target.workspacePath` is set, one additional domain-tagged segment enters the hash AFTER
- * the file loop and BEFORE the tool segment — a stale-cache poisoning guard so two workspaces that
+ * the file loop and BEFORE the tool segment - a stale-cache poisoning guard so two workspaces that
  * happen to share byte-identical manifests (rare but possible with generated package.json content)
  * can never collide on the same key. Targets without workspacePath (every existing target, every
  * existing test) carry no such segment and hash byte-identically to before this addition.
@@ -145,7 +145,7 @@ export function computeCacheKey(
     const dir = typeof entry === "string" ? target.dir : entry.dir;
     const path = join(dir, file);
     // Python targets bypass resolveTarget's yarn-manifest validation, so a missing pyproject.toml
-    // first surfaces here — name the target identity and the expected absolute path.
+    // first surfaces here - name the target identity and the expected absolute path.
     if (!existsSync(path)) {
       throw new Error(
         `target "${target.identity}" is missing ${file}: expected ${path}`,

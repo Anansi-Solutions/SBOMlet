@@ -3,7 +3,7 @@
  *
  * Recursively walks `--repo-root` with a hand-rolled `node:fs` walk (zero new dependencies) looking
  * for yarn.lock / package-lock.json / pnpm-lock.yaml / bun.lock / poetry.lock / uv.lock. Universal
- * excludes only — node_modules, .git, hidden directories, and the tool's own directory — with no
+ * excludes only - node_modules, .git, hidden directories, and the tool's own directory - with no
  * repository-specific paths anywhere. Discovery output is authoritative over any human-maintained
  * workspace list.
  *
@@ -22,14 +22,14 @@
  * - `*.csproj` files are likewise observed during the walk but never become targets: a directory
  *   with a csproj sighting and no surviving nuget target feeds one AGGREGATED warning naming the
  *   RestorePackagesWithLockFile=true + `dotnet restore` migration (per-directory detail under the
- *   verbose option) — a .NET repo never scans to zero targets silently.
+ *   verbose option) - a .NET repo never scans to zero targets silently.
  * - `pom.xml` is likewise observed during the walk but never becomes a target: a directory with a
  *   pom.xml sighting and no surviving maven target feeds one AGGREGATED warning naming the
- *   cyclonedx-maven-plugin adoption recipe (per-directory detail under the verbose option) — a
+ *   cyclonedx-maven-plugin adoption recipe (per-directory detail under the verbose option) - a
  *   Maven repo never scans to zero targets silently, the same idiom as the csproj near-miss above.
  *
  * This module is pure walk + classify: it never exits, never writes to stderr, and returns an empty
- * array for a lockfile-less root — the CLI owns the zero-targets error and prints the warnings
+ * array for a lockfile-less root - the CLI owns the zero-targets error and prints the warnings
  * returned as data here.
  */
 
@@ -64,7 +64,7 @@ export interface DiscoverOptions {
   /**
    * Per-directory warning detail (the CLI's --verbose): when true, the csproj-no-lock and
    * pom-no-sidecar near-misses emit one warning per directory instead of the aggregated summary
-   * line. Affects warning FORMAT only — never the target set.
+   * line. Affects warning FORMAT only - never the target set.
    */
   verbose?: boolean;
 }
@@ -108,7 +108,7 @@ export function lockfileNameFor(kind: LockfileKind): string {
 const REGEX_SPECIALS = new Set("\\^$.|?+()[]{}");
 
 /**
- * The directories the walk NEVER descends into — the SINGLE source of truth for the universal
+ * The directories the walk NEVER descends into - the SINGLE source of truth for the universal
  * discovery exclusion set, shared verbatim by lockfile discovery here and Dockerfile discovery
  * (src/collectors/dockerfile.ts) so the two can never drift to divergent skip lists. node_modules
  * and .git are named explicitly; every other dotfile/dot-directory (.terraform, .yarn, .cache, …)
@@ -120,14 +120,14 @@ export const EXCLUDED_DIR_NAMES: ReadonlySet<string> = new Set([
   "node_modules",
   ".git",
   // Documented BUILD-OUTPUT dir: a generated artifact tree (this repo's documented `dist/`) must
-  // never be descended — a Dockerfile or lockfile copied into it is a build product, not a source
+  // never be descended - a Dockerfile or lockfile copied into it is a build product, not a source
   // target. Members are compared CASE-INSENSITIVELY so Windows `Dist`/`NODE_MODULES` (the same
   // on-disk tree) are pruned identically.
   //
-  // REVERTED over-pruning: {build, out, target, vendor} were once excluded here too — over-broad.
+  // REVERTED over-pruning: {build, out, target, vendor} were once excluded here too - over-broad.
   // Those are GENERIC names that are routinely legitimate SOURCE / service dirs (a service
   // literally named `target`, a Go `vendor/` whose contents ship in the image), so pruning them
-  // silently DROPPED real app Dockerfiles / lockfiles — under-coverage, the inverse of a leak. Only
+  // silently DROPPED real app Dockerfiles / lockfiles - under-coverage, the inverse of a leak. Only
   // `dist` survives here: it is the documented, low-ambiguity build-output dir.
   "dist",
 ]);
@@ -149,23 +149,23 @@ export const DOCKERFILE_DOT_DIR_ALLOWLIST: ReadonlySet<string> = new Set([
  * {@link EXCLUDED_DIR_NAMES} (node_modules/.git/build-output dirs, matched case-insensitively),
  * every hidden (leading-".") directory (which covers .terraform, .yarn, .cache, …), and the tool's
  * own directory. `sub` is the child path; `name` its basename; `toolDir` (if given) the tool
- * directory in any form — BOTH `sub` and `toolDir` are resolve()'d here before comparison so a
+ * directory in any form - BOTH `sub` and `toolDir` are resolve()'d here before comparison so a
  * caller passing a forward-slash or relative toolDir on Windows still matches (the comparison is
  * canonical, not string-literal).
  *
  * `dotDirAllowlist` decouples the lanes for dot-dirs: when given, a dot-dir whose lower-cased name
- * is in the allowlist (.docker/.devcontainer) is descended even though it starts with "." — the
+ * is in the allowlist (.docker/.devcontainer) is descended even though it starts with "." - the
  * Dockerfile lane passes it; the lockfile lane omits it and keeps pruning ALL dot-dirs unchanged.
  * `.git` is never allowlistable: it is excluded by EXCLUDED_DIR_NAMES BEFORE the dot rule.
  *
  * GIT-SUBMODULE PRUNE: a git-submodule root is an ORDINARY-named directory (its name is not in
  * EXCLUDED_DIR_NAMES and does not start with ".") whose `.git` entry is a FILE (a `gitdir: …`
- * gitlink), not a directory — so none of the rules above fire and the walk would descend into
+ * gitlink), not a directory - so none of the rules above fire and the walk would descend into
  * VENDORED third-party code, attributing its lockfiles/Dockerfiles to OUR distribution. A submodule
  * is detected by testing whether `<sub>/.git` exists as a FILE; if so, descent is skipped. This
  * covers nested submodules and needs no `.gitmodules` parsing, and applies to BOTH lanes (the prune
  * is shared). A normal dir whose `.git` is a DIRECTORY (a real nested git repo's root, unusual
- * inside a checkout) is NOT a gitlink and is unaffected by this rule — only the gitlink-FILE case
+ * inside a checkout) is NOT a gitlink and is unaffected by this rule - only the gitlink-FILE case
  * prunes.
  */
 export function shouldDescendDir(
@@ -186,17 +186,17 @@ export function shouldDescendDir(
     }
   }
   if (toolDir !== undefined && resolve(sub) === resolve(toolDir)) return false;
-  // Git-submodule prune: a `.git` FILE (gitlink) marks a submodule root — vendored third-party code
+  // Git-submodule prune: a `.git` FILE (gitlink) marks a submodule root - vendored third-party code
   // that is not our distribution. Skip descent.
   if (isGitSubmoduleRoot(sub)) return false;
   return true;
 }
 
 /**
- * True iff `dir` is a git-submodule root — i.e. `<dir>/.git` exists and is a FILE (a `gitdir: …`
+ * True iff `dir` is a git-submodule root - i.e. `<dir>/.git` exists and is a FILE (a `gitdir: …`
  * gitlink), as git records for submodule working trees. A `.git` DIRECTORY (a top-level repo /
  * linked worktree) is NOT a gitlink and returns false. statSync is wrapped so a missing `.git` (the
- * common case) and any transient stat error are treated as "not a submodule" — fail-open to
+ * common case) and any transient stat error are treated as "not a submodule" - fail-open to
  * descend, since the leak we guard is over-INCLUSION, and a stat failure here never silently DROPS
  * a legitimate source dir.
  */
@@ -256,7 +256,7 @@ export function isExcluded(
 /**
  * How many near-miss directories (lockless csproj, sidecar-less pom.xml) the aggregated warning
  * names verbatim; past this the list truncates to "e.g." plus the --verbose hint. Real monorepos
- * can hold ~100 such directories — a per-directory warning wall is unusable, so the default is one
+ * can hold ~100 such directories - a per-directory warning wall is unusable, so the default is one
  * summary line. Shared by both near-miss kinds so their aggregation caps can never drift apart.
  */
 const AGGREGATE_EXAMPLE_LIMIT = 3;
@@ -271,7 +271,7 @@ const AGGREGATE_EXAMPLE_LIMIT = 3;
  * Identities are repo-author-controlled directory names printed to stderr, so they pass through
  * sanitizeForLog AT RENDER ONLY (a crafted name cannot forge or erase warning lines); the
  * suppression/exclusion matching upstream stays on the raw identities. Exported for direct unit
- * testing — hostile names cannot be created on every filesystem.
+ * testing - hostile names cannot be created on every filesystem.
  */
 export function csprojNoLockWarnings(
   lockless: readonly string[],
@@ -306,7 +306,7 @@ export function csprojNoLockWarnings(
 
 /**
  * Post-step 3's warning computation: every recorded csproj identity with NO surviving nuget target
- * at that identity (the same-directory suppression — a committed packages.lock.json is
+ * at that identity (the same-directory suppression - a committed packages.lock.json is
  * authoritative), compareCodeUnits-sorted, rendered by {@link csprojNoLockWarnings}.
  */
 function locklessCsprojWarnings(
@@ -336,7 +336,7 @@ function locklessCsprojWarnings(
  * Identities are repo-author-controlled directory names printed to stderr, so they pass through
  * sanitizeForLog AT RENDER ONLY (a crafted name cannot forge or erase warning lines); the
  * suppression/exclusion matching upstream stays on the raw identities. Exported for direct unit
- * testing — hostile names cannot be created on every filesystem.
+ * testing - hostile names cannot be created on every filesystem.
  */
 export function pomNoSidecarWarnings(
   unsidecared: readonly string[],
@@ -371,7 +371,7 @@ export function pomNoSidecarWarnings(
 
 /**
  * Post-step 4's warning computation: every recorded pom.xml identity with NO surviving maven target
- * at that identity (the same-directory suppression — a committed maven.sbom.json is authoritative),
+ * at that identity (the same-directory suppression - a committed maven.sbom.json is authoritative),
  * compareCodeUnits-sorted, rendered by {@link pomNoSidecarWarnings}.
  */
 function unsidecaredPomWarnings(
@@ -394,7 +394,7 @@ function unsidecaredPomWarnings(
 /**
  * The maven.test.sbom.json-without-maven.sbom.json warning strings: the test-inclusive sidecar is
  * optional-additive and never its own discovery trigger (§ LOCKFILES above), so a directory that
- * commits ONLY the test doc — no default `maven.sbom.json` beside it — must be TOLD it never became
+ * commits ONLY the test doc - no default `maven.sbom.json` beside it - must be TOLD it never became
  * a target, rather than silently vanishing. One aggregated summary line by default; one line per
  * directory when `verbose` (the CLI's --verbose) is set. `orphaned` arrives
  * compareCodeUnits-sorted, so both shapes are deterministic.
@@ -402,7 +402,7 @@ function unsidecaredPomWarnings(
  * Identities are repo-author-controlled directory names printed to stderr, so they pass through
  * sanitizeForLog AT RENDER ONLY (a crafted name cannot forge or erase warning lines); the
  * suppression/exclusion matching upstream stays on the raw identities. Exported for direct unit
- * testing — hostile names cannot be created on every filesystem.
+ * testing - hostile names cannot be created on every filesystem.
  */
 export function mavenTestSbomOrphanWarnings(
   orphaned: readonly string[],
@@ -438,7 +438,7 @@ export function mavenTestSbomOrphanWarnings(
 /**
  * Post-step 5's warning computation: every recorded maven.test.sbom.json identity with NO surviving
  * maven target at that identity (a committed maven.sbom.json is authoritative and suppresses the
- * warning — the same same-directory suppression as post-step 4), compareCodeUnits-sorted, rendered
+ * warning - the same same-directory suppression as post-step 4), compareCodeUnits-sorted, rendered
  * by {@link mavenTestSbomOrphanWarnings}.
  */
 function orphanedMavenTestSbomWarnings(
@@ -462,7 +462,7 @@ function orphanedMavenTestSbomWarnings(
 export interface DiscoveryResult {
   targets: DiscoveredTarget[];
   /**
-   * Deterministic (compareCodeUnits-sorted) warning strings, without any "warning: " prefix — the
+   * Deterministic (compareCodeUnits-sorted) warning strings, without any "warning: " prefix - the
    * CLI prefixes and prints them; this module stays pure.
    */
   warnings: string[];
@@ -503,7 +503,7 @@ export function discoverTargetsWithWarnings(
     shouldDescendDir(sub, name, toolDir);
 
   const recordLockfile = (dir: string, fileName: string): void => {
-    // Identity: forward-slash on every platform — raw path.relative output contains backslashes on
+    // Identity: forward-slash on every platform - raw path.relative output contains backslashes on
     // Windows.
     const identity = identityOf(dir);
     if (isExcluded(identity, matchers)) return;
@@ -526,7 +526,7 @@ export function discoverTargetsWithWarnings(
     // Observed, never a target (the bun.lockb idiom for .NET): *.csproj is a name PATTERN, so it
     // cannot live in the exact-name LOCKFILES map; the post-step below decides whether the sighting
     // warrants the no-lock migration warning. Directory.Packages.props is deliberately NOT a
-    // trigger: it is not a project marker — a CPM repo with locks properly committed would
+    // trigger: it is not a project marker - a CPM repo with locks properly committed would
     // otherwise get a spurious root-level warning (the props file's directory typically holds no
     // lock), while a CPM repo WITHOUT locks already warns once per project via its csproj dirs.
     const identity = identityOf(dir);
@@ -536,7 +536,7 @@ export function discoverTargetsWithWarnings(
 
   const recordPom = (dir: string): void => {
     // Observed, never a target (the bun.lockb/csproj idiom, simplified: the trigger is the exact
-    // name "pom.xml", no pattern needed — the committed sidecar is a fixed-name per-module file).
+    // name "pom.xml", no pattern needed - the committed sidecar is a fixed-name per-module file).
     // The post-step below decides whether the sighting warrants the no-sidecar adoption warning.
     const identity = identityOf(dir);
     if (isExcluded(identity, matchers)) return;
@@ -544,7 +544,7 @@ export function discoverTargetsWithWarnings(
   };
 
   const recordMavenTestSbom = (dir: string): void => {
-    // Observed, never a target: maven.test.sbom.json is optional-additive (not in LOCKFILES) — the
+    // Observed, never a target: maven.test.sbom.json is optional-additive (not in LOCKFILES) - the
     // post-step below decides whether a lone sighting (no maven.sbom.json in the same directory)
     // warrants the orphan warning.
     const identity = identityOf(dir);
@@ -553,7 +553,7 @@ export function discoverTargetsWithWarnings(
   };
 
   const walk = (dir: string): void => {
-    // Symlinks report isDirectory() === false on Dirent entries, so they are never followed — no
+    // Symlinks report isDirectory() === false on Dirent entries, so they are never followed - no
     // cycle traversal, no escape from repoRoot. Do not add a followSymlinks option.
     for (const entry of readdirSync(dir, { withFileTypes: true })) {
       if (entry.isDirectory()) {
@@ -583,7 +583,7 @@ export function discoverTargetsWithWarnings(
   const warnings: string[] = [];
 
   // Post-step 1: collapse same-dir JS lockfile collisions to the single highest-precedence kind.
-  // Python kinds in the same directory are untouched — cross-ecosystem pairs remain two targets.
+  // Python kinds in the same directory are untouched - cross-ecosystem pairs remain two targets.
   const jsByIdentity = new Map<string, DiscoveredTarget[]>();
   for (const target of sorted) {
     if (JS_PRECEDENCE.has(target.lockfile)) {
@@ -637,17 +637,17 @@ export function discoverTargetsWithWarnings(
 
   // Post-step 3: csproj sightings (the bun.lockb idiom for .NET). Silent when a nuget target
   // survived in the same directory (the committed lock is authoritative); otherwise the directory
-  // joins the no-lock warning — aggregated by default, per-directory under the verbose option.
+  // joins the no-lock warning - aggregated by default, per-directory under the verbose option.
   warnings.push(...locklessCsprojWarnings(csprojIdentities, targets, opts));
 
   // Post-step 4: pom.xml sightings (the csproj idiom, simplified to a fixed name trigger). Silent
   // when a maven target survived in the same directory (the committed sidecar is authoritative);
-  // otherwise the directory joins the no-sidecar warning — aggregated by default, per-directory
+  // otherwise the directory joins the no-sidecar warning - aggregated by default, per-directory
   // under the verbose option.
   warnings.push(...unsidecaredPomWarnings(pomIdentities, targets, opts));
 
   // Post-step 5: maven.test.sbom.json sightings (the pom.xml idiom, suppressed by a surviving maven
-  // target in the same directory — a committed maven.sbom.json is authoritative). The test doc is
+  // target in the same directory - a committed maven.sbom.json is authoritative). The test doc is
   // optional-additive and never its own target, so a lone sighting must never scan to zero
   // silently.
   warnings.push(
@@ -659,7 +659,7 @@ export function discoverTargetsWithWarnings(
 }
 
 /**
- * Collision-resolved target list only — thin wrapper over discoverTargetsWithWarnings for callers
+ * Collision-resolved target list only - thin wrapper over discoverTargetsWithWarnings for callers
  * that do not surface warnings.
  */
 export function discoverTargets(

@@ -19,7 +19,7 @@
  * Two match modes, exactly one per entry, mirroring the `[[compatible]]` shape:
  *
  *   match = "license": `pattern` is an SPDX id or an OR of ids, pre-decomposed
- *     at validation time (orLeaves) into a spdx-satisfies allowlist — identical to the compatible
+ *     at validation time (orLeaves) into a spdx-satisfies allowlist - identical to the compatible
  *     license path. The matcher walks the finding's parsed expression and asks, per node, "is this
  *     branch unavoidably denied?" Never substring, never re-parsed at evaluate time. RSAL has no
  *     registered SPDX id, so it ships in name-mode, not here.
@@ -27,15 +27,15 @@
  *   match = "name": `pattern` is a verbatim, case-sensitive package-name
  *     compare. This is the escape hatch for non-SPDX use-restriction riders like Commons-Clause,
  *     which is not a registered SPDX license and rides alongside another license (e.g. "MIT AND
- *     Commons-Clause" — not SPDX-parseable). The spdx-satisfies path cannot catch it; an exact name
- *     compare can. Name-mode deliberately does not require a parseable license expression — a
+ *     Commons-Clause" - not SPDX-parseable). The spdx-satisfies path cannot catch it; an exact name
+ *     compare can. Name-mode deliberately does not require a parseable license expression - a
  *     package with an unknown (null) finding can still be name-denied. The compare is exact, never
  *     a broad regex or substring, so a typo'd or unrelated name can never be denied. The shipped
- *     defaults are license-mode only — a name-mode default would have to guess encumbered package
+ *     defaults are license-mode only - a name-mode default would have to guess encumbered package
  *     names.
  *
  * Election applies to deny too, not just to compatible (load-bearing): spdx-satisfies(finding,
- * allowlist) is the wrong primitive for deny — it treats the allowlist as "available licenses" and
+ * allowlist) is the wrong primitive for deny - it treats the allowlist as "available licenses" and
  * calls an OR finding satisfied when any branch is available, so satisfies("MIT OR BUSL-1.1",
  * ["BUSL-1.1"]) is true. That would wrongly deny a dependency that can elect MIT instead. The
  * correct rule is the dual of isCopyleft's recursion: a finding is denied only when it has no
@@ -43,10 +43,10 @@
  *   - leaf       → denied iff the leaf satisfies the deny allowlist;
  *   - OR (l, r) → denied iff both sides are denied (one electable branch
  *                  defeats the denial);
- *   - AND (l, r) → denied iff either side is denied (an AND conjunct cannot be elected away — every
+ *   - AND (l, r) → denied iff either side is denied (an AND conjunct cannot be elected away - every
  *     obligation applies).
  * Concretely, with BUSL-1.1 in the deny set:
- *   - "MIT OR BUSL-1.1"      → not denied (MIT is an electable branch — the
+ *   - "MIT OR BUSL-1.1"      → not denied (MIT is an electable branch - the
  *                              same election compatible relies on).
  *   - "GPL-3.0 OR BUSL-1.1" → denied only when the deny set covers both branches, i.e. no branch is
  *     electable out.
@@ -57,11 +57,11 @@
  * the union of every match="license" deny allowlist, not each rule's allowlist in isolation. The
  * shipped defaults provide BUSL-1.1, SSPL-1.0, and Elastic-2.0 as separate match="license" rules,
  * so an isolated per-rule election sees only one branch of "BUSL-1.1 OR SSPL-1.0" and never denies
- * it — each rule finds the other branch electable on its own. The correct decision builds the
+ * it - each rule finds the other branch electable on its own. The correct decision builds the
  * combined allowlist once and asks nodeDenied against it: "BUSL-1.1 OR SSPL-1.0" then has no
  * electable branch and is denied, while "MIT OR BUSL-1.1" stays electable (MIT is in neither
  * allowlist). When the union denies, the verdict is attributed to the first license rule that
- * contributes a denied leaf, for the rule-id/reason. Name-mode rules stay per-rule — an exact name
+ * contributes a denied leaf, for the rule-id/reason. Name-mode rules stay per-rule - an exact name
  * compare has nothing to elect.
  *
  * Pure functions, no I/O, no logging; the satisfies calls are wrapped in a defensive catch to
@@ -170,7 +170,7 @@ function anyLeafDenied(
 /**
  * License-mode union election: build the combined allowlist of every match="license" rule (policy +
  * shipped defaults) once and ask nodeDenied against it. When denied, attribute to the first license
- * rule that contributes a denied leaf, so the rule-id/reason names a real rule — policy first per
+ * rule that contributes a denied leaf, so the rule-id/reason names a real rule - policy first per
  * effectiveDenyRules order. A null/unparseable expression can never be license-denied. Returns
  * undefined when no license rule, or no electable-out branch, applies.
  */
@@ -211,7 +211,7 @@ function unionLicenseDeny(
  * expression (unknown/imprecise) can never be license-denied.
  *
  * Name-mode and license-mode are reconciled by effective order, so the earliest-listed matching
- * rule wins — a name rule before a contributing license rule is cited first, matching the
+ * rule wins - a name rule before a contributing license rule is cited first, matching the
  * documented "first deny rule" precedence.
  */
 export function denyRuleFor(

@@ -1,5 +1,5 @@
 /**
- * Custom bun.lock collector — the one conscious exception to orchestrate-don't-parse, because no
+ * Custom bun.lock collector - the one conscious exception to orchestrate-don't-parse, because no
  * upstream tool reads bun.lock correctly:
  * - cdxgen (`-t js` and `-t bun`) and syft emit 0 components (no bun.lock
  *   parser/cataloger);
@@ -8,17 +8,17 @@
  *
  * bun.lock is machine-written JSONC (JSON + trailing commas, never comments): a trailing-comma
  * strip + JSON.parse reads it with zero new dependencies. Identity always comes from
- * packages[key][0] ("name@version", split at the first "@" after the optional leading scope — the
- * version part of non-registry resolutions can itself contain "@", see splitSpec) — never from the
+ * packages[key][0] ("name@version", split at the first "@" after the optional leading scope - the
+ * version part of non-registry resolutions can itself contain "@", see splitSpec) - never from the
  * key, which is the trivy failure mode. First-party exclusion lives here: `@workspace:` protocol
  * entries plus workspaces[*].name members are never emitted.
  *
  * The emitted document is a minimal, deterministic CycloneDX 1.6 bom.json (no serialNumber, no
- * timestamp, components sorted compareCodeUnits by purl) written into the per-run temp dir — the
+ * timestamp, components sorted compareCodeUnits by purl) written into the per-run temp dir - the
  * existing SBOM parse path consumes it unchanged. The cache key reuses computeCacheKey with the
  * shared framing contract.
  *
- * Fully in-process — no subprocess, no eval, no cwd change; a MAX_BUN_LOCK_BYTES stat gate bounds
+ * Fully in-process - no subprocess, no eval, no cwd change; a MAX_BUN_LOCK_BYTES stat gate bounds
  * memory before any read/parse; whole-file parse failure throws loudly (the scan-failure path)
  * while malformed individual entries are skipped via a tolerant walk.
  */
@@ -43,7 +43,7 @@ import type { Target } from "../targets/target";
 
 /**
  * Collector identity (the CLI prints `${name}@${version}`). Version bumps when the emission or
- * scope semantics change — it is hashed into the cache key, so a bump invalidates cache entries on
+ * scope semantics change - it is hashed into the cache key, so a bump invalidates cache entries on
  * purpose.
  */
 export const BUN_COLLECTOR_TOOL = {
@@ -59,7 +59,7 @@ export const MAX_BUN_LOCK_BYTES = 32 * 1024 * 1024;
 
 /**
  * Stat-gate a bun.lock path against MAX_BUN_LOCK_BYTES before any read or parse. Shared by
- * collectWithBunLock and the CLI loop — the CLI reads the full lockfile text for the coverage
+ * collectWithBunLock and the CLI loop - the CLI reads the full lockfile text for the coverage
  * counter before the collector ever runs, so every entry point that touches bun.lock must honor the
  * same single-sourced cap and loud message.
  */
@@ -76,19 +76,19 @@ export function assertBunLockSize(lockPath: string): void {
 
 /**
  * The constant pseudo-argv hashed into the cache key. There is no real subprocess invocation to
- * hash — this sentinel plays the role cdxgenCacheArgs plays for cdxgen targets, and changes only
+ * hash - this sentinel plays the role cdxgenCacheArgs plays for cdxgen targets, and changes only
  * when the collector's observable behavior changes (alongside the tool version).
  */
 const BUN_CACHE_ARGS = ["bun-collector-v1"];
 
 /**
- * Manifest files hashed into the cache key — derived from the single source (dispatch.ts) so the
+ * Manifest files hashed into the cache key - derived from the single source (dispatch.ts) so the
  * collector's cache-key framing can never drift from the dispatch table's bun entry.
  */
 const BUN_MANIFEST_FILES = manifestFilesFor("bun");
 
 /**
- * Property name cdxgen uses to mark JS dev dependencies — emitted here so merge.ts's
+ * Property name cdxgen uses to mark JS dev dependencies - emitted here so merge.ts's
  * propertyDevMarker consumes bun components unchanged. Local
  * constant on purpose: merge/ is a different layer and is never imported from
  * scanners.
@@ -113,7 +113,7 @@ function specOf(value: unknown): string | undefined {
 
 /**
  * Split "name@version" at the first "@" after the optional leading scope marker. npm package names
- * cannot contain "@" past the scope, so that "@" is always the name/version separator — for
+ * cannot contain "@" past the scope, so that "@" is always the name/version separator - for
  * registry semvers ("@types/bun@1.3.14") and for non-registry resolutions whose version part embeds
  * further "@"s, which a last-"@" split silently corrupts:
  *
@@ -132,7 +132,7 @@ function splitSpec(
 
 /**
  * purl with the scope's leading "@" encoded as %40 and "+" in the version encoded as %2B (purl-spec
- * percent-encoding) — byte-identical to cdxgen's npm purl output, so a build-metadata version
+ * percent-encoding) - byte-identical to cdxgen's npm purl output, so a build-metadata version
  * ("1.0.0+build") reached via both a bun target and an npm/yarn target folds into one row.
  */
 function purlOf(name: string, version: string): string {
@@ -157,7 +157,7 @@ export function bunThirdPartyEntryCount(
   } catch {
     return undefined;
   }
-  // A failed document narrow is the unknown path — same as no packages map.
+  // A failed document narrow is the unknown path - same as no packages map.
   const doc = BunLockDocument(parsed);
   if (doc instanceof type.errors) return undefined;
   const packages = doc.packages;
@@ -196,7 +196,7 @@ function depNamesOf(
 
 /**
  * Transitive dev/prod scope: BFS over the lockfile's dependency edges, prod roots first, mirroring
- * cdxgen's _markTreeDevelopment semantics — a package reachable from both a prod and a dev root
+ * cdxgen's _markTreeDevelopment semantics - a package reachable from both a prod and a dev root
  * stays prod (prod-direct-wins).
  *
  * Roots: every workspaces[path] importer contributes its
@@ -205,7 +205,7 @@ function depNamesOf(
  *
  * Edge resolution uses bun's hoisting lookup: a dep name in the context of a parent resolves to
  * packages["<parentChain>/<depName>"], then progressively shorter parent chains, then the bare
- * packages["<depName>"] — so nested version-conflict entries are reached via their parent and their
+ * packages["<depName>"] - so nested version-conflict entries are reached via their parent and their
  * scope follows the parent's path. The chain is an array of whole package names, shortened one name
  * per step: scoped names contain "/", so shortening the raw key string one path segment at a time
  * could cross a scope boundary and resolve a bare dep "y" of parent "@scope/pkg" against an
@@ -220,8 +220,7 @@ function transitiveDevKeys(
   packages: Record<string, unknown>,
   workspaces: Record<string, unknown>,
 ): ReadonlySet<string> {
-  // Hoisting lookup: candidate keys are rebuilt from the parent's chain of whole package names —
-  // "<chain>/<depName>" with the chain truncated one name (which may itself contain "/" for scoped
+  // Hoisting lookup: candidate keys are rebuilt from the parent's chain of whole package names -   // "<chain>/<depName>" with the chain truncated one name (which may itself contain "/" for scoped
   // packages) per step, down to the bare top-level "<depName>". Never substring or path-segment
   // prefixes: those can cross a scope boundary.
   const resolveChain = (
@@ -288,7 +287,7 @@ function transitiveDevKeys(
       }
     }
   };
-  // Prod first, marking visited; the dev pass then marks only unvisited keys — anything
+  // Prod first, marking visited; the dev pass then marks only unvisited keys - anything
   // prod-reachable was already fully traversed, so a dev path can never re-mark it
   // (prod-direct-wins).
   traverse(prodRoots, false);
@@ -328,10 +327,10 @@ function componentsOf(
   const components: BunComponent[] = [];
   for (const [key, value] of Object.entries(packages)) {
     const spec = specOf(value);
-    if (spec === undefined) continue; // malformed entry — tolerant skip
+    if (spec === undefined) continue; // malformed entry - tolerant skip
     if (spec.includes("@workspace:")) continue; // first-party member
     const identity = splitSpec(spec);
-    if (identity === undefined) continue; // malformed spec — tolerant skip
+    if (identity === undefined) continue; // malformed spec - tolerant skip
     if (memberNames.has(identity.name)) continue; // belt-and-braces
     const component: BunComponent = {
       type: "library",
@@ -346,7 +345,7 @@ function componentsOf(
   }
 
   // compareCodeUnits by purl. Array.prototype.sort is stable, so duplicate-purl nested entries keep
-  // the lockfile's key order — the whole emission is a pure function of the lockfile bytes.
+  // the lockfile's key order - the whole emission is a pure function of the lockfile bytes.
   components.sort((a, b) => (a.purl < b.purl ? -1 : a.purl > b.purl ? 1 : 0));
   return components;
 }
@@ -381,7 +380,7 @@ export async function collectWithBunLock(
     );
   }
 
-  // Size gate FIRST — before read, before parse (DoS bound).
+  // Size gate FIRST - before read, before parse (DoS bound).
   assertBunLockSize(lockPath);
 
   const text = readFileSync(lockPath, "utf8");
@@ -406,7 +405,7 @@ export async function collectWithBunLock(
 
   const components = componentsOf(packages, workspaces);
 
-  // Minimal deterministic CycloneDX 1.6: bomFormat/specVersion/components only — deliberately no
+  // Minimal deterministic CycloneDX 1.6: bomFormat/specVersion/components only - deliberately no
   // serialNumber, no metadata.timestamp, so the volatile fields the merge must never see cannot
   // leak.
   const doc = {
@@ -421,7 +420,7 @@ export async function collectWithBunLock(
 
   return {
     sbomPath,
-    // Shared cache-key framing contract — reused, never duplicated.
+    // Shared cache-key framing contract - reused, never duplicated.
     cacheKey: computeCacheKey(
       target,
       BUN_COLLECTOR_TOOL,
