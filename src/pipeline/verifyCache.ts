@@ -23,9 +23,7 @@ export interface VerifyCacheOptions {
   backoffBaseMs?: number;
 }
 
-export function runVerifyCache(
-  opts: VerifyCacheOptions,
-): Promise<VerifyResult> {
+export function runVerifyCache(opts: VerifyCacheOptions): Promise<VerifyResult> {
   const cachePath =
     opts.enrichmentCachePath !== undefined
       ? resolveFrom(opts.baseDir, opts.enrichmentCachePath)
@@ -33,8 +31,6 @@ export function runVerifyCache(
   return verifyCache({
     cachePath,
     verbose: opts.verbose,
-    ...(opts.backoffBaseMs === undefined
-      ? {}
-      : { backoffBaseMs: opts.backoffBaseMs }),
+    ...(opts.backoffBaseMs === undefined ? {} : { backoffBaseMs: opts.backoffBaseMs }),
   });
 }

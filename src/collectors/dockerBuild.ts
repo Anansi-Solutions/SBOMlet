@@ -48,10 +48,7 @@ const DEFAULT_BUILD_TIMEOUT_MS = 20 * 60 * 1000;
  */
 export function imageTag(dockerfilePath: string): string {
   const sanitized = dockerfilePath.toLowerCase().replace(/[^a-z0-9._-]/g, "-");
-  const hash = createHash("sha256")
-    .update(dockerfilePath)
-    .digest("hex")
-    .slice(0, 8);
+  const hash = createHash("sha256").update(dockerfilePath).digest("hex").slice(0, 8);
   return `sbomlet-scan/${sanitized}-${hash}`;
 }
 

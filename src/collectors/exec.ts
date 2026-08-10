@@ -72,11 +72,7 @@ export function execTool(
     const timer = setTimeout(() => {
       timedOut = true;
       killProcessTree(child);
-      reject(
-        new Error(
-          `${cmd} ${args[0] ?? ""} timed out after ${opts.timeoutMs} ms`,
-        ),
-      );
+      reject(new Error(`${cmd} ${args[0] ?? ""} timed out after ${opts.timeoutMs} ms`));
     }, opts.timeoutMs);
 
     let stdout = "";

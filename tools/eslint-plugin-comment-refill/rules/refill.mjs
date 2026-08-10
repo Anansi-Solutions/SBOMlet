@@ -21,8 +21,7 @@ const TAG_LINE_RE = /^@[A-Za-z]/;
  * when combined with ESLint's own "unused directive" autofix. Isolating the
  * whole line is the only reflow-safe choice.
  */
-const STRUCTURAL_DIRECTIVE_RE =
-  /^(eslint-[A-Za-z-]+|@ts-[A-Za-z-]+|prettier-ignore|#!)/;
+const STRUCTURAL_DIRECTIVE_RE = /^(eslint-[A-Za-z-]+|@ts-[A-Za-z-]+|prettier-ignore|#!)/;
 /**
  * A short label followed by a colon and a space: `TODO:`, `FIXME:`, a
  * platform/ecosystem name in a parallel clause list (`POSIX:`, `win32:`,
@@ -186,11 +185,9 @@ function splitParagraphGroups(lines) {
     let canContinue = false;
     if (current && current.type === "prose") {
       if (current.bulleted) {
-        canContinue =
-          !marker && !label && indent.length > current.baseIndent.length;
+        canContinue = !marker && !label && indent.length > current.baseIndent.length;
       } else {
-        canContinue =
-          !marker && !label && indent.length === current.baseIndent.length;
+        canContinue = !marker && !label && indent.length === current.baseIndent.length;
       }
     }
 
@@ -291,13 +288,9 @@ function wrapWords(words, width) {
   let length = 0;
   for (let i = 0; i < words.length; i++) {
     const word = words[i];
-    const glueNext =
-      STICKY_SEPARATOR_RE.test(word) && i + 1 < words.length
-        ? words[i + 1]
-        : null;
+    const glueNext = STICKY_SEPARATOR_RE.test(word) && i + 1 < words.length ? words[i + 1] : null;
     const unit = glueNext === null ? word : `${word} ${glueNext}`;
-    const nextLength =
-      current.length === 0 ? unit.length : length + 1 + unit.length;
+    const nextLength = current.length === 0 ? unit.length : length + 1 + unit.length;
     if (current.length > 0 && nextLength > width) {
       lines.push(current.join(" "));
       current = [word];
@@ -323,9 +316,7 @@ function renderProseGroup(group, prefix, maxLength) {
   const availableWidth = Math.max(1, maxLength - linePrefix.length);
 
   if (!group.bulleted) {
-    const words = tokenizeLines(
-      group.lines.map((line) => splitIndent(line.content).text),
-    );
+    const words = tokenizeLines(group.lines.map((line) => splitIndent(line.content).text));
     if (words.length === 0) return [linePrefix.replace(/\s+$/, "")];
     return wrapWords(words, availableWidth).map((text) => linePrefix + text);
   }
@@ -364,10 +355,7 @@ function actualLines(sourceCode, group) {
 /** Reports and fixes one group when its canonical reflow differs from its source text. */
 function checkGroup(context, sourceCode, group, canonical) {
   const actual = actualLines(sourceCode, group);
-  if (
-    canonical.length === actual.length &&
-    canonical.every((text, i) => text === actual[i])
-  ) {
+  if (canonical.length === actual.length && canonical.every((text, i) => text === actual[i])) {
     return;
   }
 
@@ -460,9 +448,7 @@ function parseBlockLines(sourceCode, token) {
 function checkLineRun(context, sourceCode, tokens, maxLength) {
   const physical = lineRunToPhysical(sourceCode, tokens);
   const groups = splitParagraphGroups(physical);
-  const indentLength = /^\s*/.exec(
-    sourceCode.lines[tokens[0].loc.start.line - 1],
-  )[0].length;
+  const indentLength = /^\s*/.exec(sourceCode.lines[tokens[0].loc.start.line - 1])[0].length;
   const sourceIndent = " ".repeat(indentLength);
 
   for (const group of groups) {
@@ -481,14 +467,10 @@ function checkSingleLineBlock(context, sourceCode, token, maxLength) {
   if (!match) return;
   const [, indent, markerStyle, inner] = match;
 
-  const singleLine = inner
-    ? `${indent}${markerStyle} ${inner} */`
-    : `${indent}${markerStyle} */`;
+  const singleLine = inner ? `${indent}${markerStyle} ${inner} */` : `${indent}${markerStyle} */`;
 
   if (singleLine.length <= maxLength) {
-    checkGroup(context, sourceCode, { lines: [{ sourceLine: lineNumber }] }, [
-      singleLine,
-    ]);
+    checkGroup(context, sourceCode, { lines: [{ sourceLine: lineNumber }] }, [singleLine]);
     return;
   }
 
@@ -498,20 +480,9 @@ function checkSingleLineBlock(context, sourceCode, token, maxLength) {
   const contentLines =
     words.length === 0
       ? []
-      : wrapWords(words, availableWidth).map(
-          (text) => `${starIndent}* ${text}`,
-        );
-  const canonical = [
-    `${indent}${markerStyle}`,
-    ...contentLines,
-    `${starIndent}*/`,
-  ];
-  checkGroup(
-    context,
-    sourceCode,
-    { lines: [{ sourceLine: lineNumber }] },
-    canonical,
-  );
+      : wrapWords(words, availableWidth).map((text) => `${starIndent}* ${text}`);
+  const canonical = [`${indent}${markerStyle}`, ...contentLines, `${starIndent}*/`];
+  checkGroup(context, sourceCode, { lines: [{ sourceLine: lineNumber }] }, canonical);
 }
 
 /** Checks a multi-line block comment's inner paragraph groups. */
@@ -598,9 +569,7 @@ export const refillRule = {
   create(context) {
     const options = context.options[0];
     if (!options || typeof options.maxLength !== "number") {
-      throw new Error(
-        "comment-refill/refill requires a { maxLength } option; none was provided",
-      );
+      throw new Error("comment-refill/refill requires a { maxLength } option; none was provided");
     }
     const maxLength = options.maxLength;
     const sourceCode = context.sourceCode ?? context.getSourceCode();

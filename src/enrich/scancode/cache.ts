@@ -68,9 +68,7 @@ export function readScancodeMemo(path: string): Map<string, ScancodeMemoEntry> {
  * indent 2, LF, trailing newline, no timestamp) - double-serialize is byte-identical. There is one
  * sorter tool-wide, never a second JSON writer.
  */
-export function serializeScancodeMemo(
-  memo: Map<string, ScancodeMemoEntry>,
-): string {
+export function serializeScancodeMemo(memo: Map<string, ScancodeMemoEntry>): string {
   const file: ScancodeMemoFile = {
     version: MEMO_VERSION,
     entries: Object.fromEntries(memo),
@@ -94,9 +92,7 @@ export function putMemoEntry(
   if (memo.has(purl)) return;
   memo.set(purl, {
     ...entry,
-    ...(entry.scannedAt === undefined
-      ? { scannedAt: now().toISOString() }
-      : {}),
+    ...(entry.scannedAt === undefined ? { scannedAt: now().toISOString() } : {}),
   });
 }
 

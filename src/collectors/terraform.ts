@@ -57,13 +57,7 @@
  * throws loudly (the scan-failure path). Zero new runtime dependencies.
  */
 
-import {
-  existsSync,
-  mkdtempSync,
-  statSync,
-  readFileSync,
-  writeFileSync,
-} from "node:fs";
+import { existsSync, mkdtempSync, statSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -145,8 +139,7 @@ export interface TerraformProvider {
  * advances to the next line, the real `version = "..."`. `[ \t]*` (horizontal whitespace only,
  * never `\s` which would cross newlines) keeps the anchor to a single line.
  */
-const PROVIDER_BLOCK =
-  /provider\s+"([^"]+)"\s*\{[^}]*?^[ \t]*version\s*=\s*"([^"]+)"/gms;
+const PROVIDER_BLOCK = /provider\s+"([^"]+)"\s*\{[^}]*?^[ \t]*version\s*=\s*"([^"]+)"/gms;
 
 /**
  * Parse the lock-pinned providers from `.terraform.lock.hcl` text. Pure
@@ -265,9 +258,7 @@ function parseModuleSource(source: string): ParsedModuleSource | undefined {
  * Individual malformed entries inside the array are still tolerantly skipped (an array with some
  * bad rows keeps the good rows, never throws).
  */
-export function readExternalModules(
-  modulesJsonText: string,
-): TerraformModule[] {
+export function readExternalModules(modulesJsonText: string): TerraformModule[] {
   // The empty-string sentinel = "no modules.json present" → zero modules.
   if (modulesJsonText === "") return [];
   let parsed: unknown;
@@ -285,8 +276,7 @@ export function readExternalModules(
     // A present `Modules` key that is not an array (the narrow's only failure mode here) is
     // structurally invalid → loud scan failure.
     throw new Error(
-      "modules.json scan failed: a present `Modules` key is not an array " +
-        `(${doc.summary})`,
+      "modules.json scan failed: a present `Modules` key is not an array " + `(${doc.summary})`,
     );
   }
   const modules: TerraformModule[] = [];
@@ -448,10 +438,7 @@ function moduleComponent(module: TerraformModule): TerraformComponent {
  * submodules of the same module at the same version share a purl (the `//submodule` suffix is
  * stripped before purl construction) and collapse to one row here.
  */
-function componentsOf(
-  lockText: string,
-  modulesJsonText: string,
-): TerraformComponent[] {
+function componentsOf(lockText: string, modulesJsonText: string): TerraformComponent[] {
   const byPurl = new Map<string, TerraformComponent>();
   for (const component of [
     ...parseProviders(lockText).map(providerComponent),
@@ -514,8 +501,7 @@ export async function collectWithTerraform(
   const lockPath = join(target.dir, ".terraform.lock.hcl");
   if (!existsSync(lockPath)) {
     throw new Error(
-      `target "${target.identity}" is missing .terraform.lock.hcl: ` +
-        `expected ${lockPath}`,
+      `target "${target.identity}" is missing .terraform.lock.hcl: ` + `expected ${lockPath}`,
     );
   }
   // Size gate first - before any read or parse (DoS bound).
@@ -527,12 +513,7 @@ export async function collectWithTerraform(
   // (providers-only - tofu writes modules.json for any module call) → collect providers with an
   // empty modules document; it is absent → init never ran → we cannot prove providers-only → loud
   // fail. No `.tf`/HCL is parsed (see {@link absentModulesJsonShouldFail}).
-  const modulesJsonPath = join(
-    target.dir,
-    ".terraform",
-    "modules",
-    "modules.json",
-  );
+  const modulesJsonPath = join(target.dir, ".terraform", "modules", "modules.json");
   let modulesJsonText = "";
   if (modulesJsonIsPresentFile(modulesJsonPath)) {
     assertTerraformLockSize(modulesJsonPath);

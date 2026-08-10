@@ -100,25 +100,19 @@ describe("cdxgenCacheArgs", () => {
     const PACKAGE_JSON = '{"name":"x"}\n';
     const a = makeTarget(YARN_LOCK, PACKAGE_JSON);
     const b = makeTarget(YARN_LOCK, PACKAGE_JSON);
-    expect(
-      computeCacheKey(a, CDXGEN_TOOL, cdxgenCacheArgs("js"), JS_MANIFESTS),
-    ).toBe(
+    expect(computeCacheKey(a, CDXGEN_TOOL, cdxgenCacheArgs("js"), JS_MANIFESTS)).toBe(
       computeCacheKey(b, CDXGEN_TOOL, cdxgenCacheArgs("js"), JS_MANIFESTS),
     );
     // The ecosystem still differentiates keys (it is a REAL input).
-    expect(
-      computeCacheKey(a, CDXGEN_TOOL, cdxgenCacheArgs("js"), JS_MANIFESTS),
-    ).not.toBe(
+    expect(computeCacheKey(a, CDXGEN_TOOL, cdxgenCacheArgs("js"), JS_MANIFESTS)).not.toBe(
       computeCacheKey(a, CDXGEN_TOOL, cdxgenCacheArgs("python"), JS_MANIFESTS),
     );
   });
 });
 
 describe("computeCacheKey", () => {
-  const YARN_LOCK =
-    '# synthetic lockfile\n"left-pad@npm:1.3.0":\n  version: 1.3.0\n';
-  const PACKAGE_JSON =
-    '{"name":"synthetic","devDependencies":{"left-pad":"1.3.0"}}\n';
+  const YARN_LOCK = '# synthetic lockfile\n"left-pad@npm:1.3.0":\n  version: 1.3.0\n';
+  const PACKAGE_JSON = '{"name":"synthetic","devDependencies":{"left-pad":"1.3.0"}}\n';
   const ARGS = cdxgenArgs("/abs/target", "/tmp/x/bom.json", "js");
 
   test("returns a 64-char lowercase hex string", () => {
@@ -182,9 +176,9 @@ describe("computeCacheKey", () => {
 
   test('["a b"] and ["a", "b"] produce different keys', () => {
     const target = makeTarget(YARN_LOCK, PACKAGE_JSON);
-    expect(
-      computeCacheKey(target, CDXGEN_TOOL, ["a b"], JS_MANIFESTS),
-    ).not.toBe(computeCacheKey(target, CDXGEN_TOOL, ["a", "b"], JS_MANIFESTS));
+    expect(computeCacheKey(target, CDXGEN_TOOL, ["a b"], JS_MANIFESTS)).not.toBe(
+      computeCacheKey(target, CDXGEN_TOOL, ["a", "b"], JS_MANIFESTS),
+    );
   });
 
   test("a poetry manifest list reads poetry.lock and pyproject.toml", () => {
@@ -202,9 +196,7 @@ describe("computeCacheKey", () => {
     const keyA = computeCacheKey(a, CDXGEN_TOOL, pyArgs, POETRY_MANIFESTS);
     expect(keyA).toMatch(/^[0-9a-f]{64}$/);
     // A poetry.lock byte change must change the key — proof the files were read.
-    expect(keyA).not.toBe(
-      computeCacheKey(b, CDXGEN_TOOL, pyArgs, POETRY_MANIFESTS),
-    );
+    expect(keyA).not.toBe(computeCacheKey(b, CDXGEN_TOOL, pyArgs, POETRY_MANIFESTS));
   });
 
   test("same target and args with different manifest lists produce different keys", () => {
@@ -222,11 +214,11 @@ describe("computeCacheKey", () => {
 
   test("a missing manifest file throws an error naming the expected path", () => {
     const target = makeTargetWithFiles({ "poetry.lock": "[[package]]\n" });
-    expect(() =>
-      computeCacheKey(target, CDXGEN_TOOL, ARGS, POETRY_MANIFESTS),
-    ).toThrow(/pyproject\.toml/);
-    expect(() =>
-      computeCacheKey(target, CDXGEN_TOOL, ARGS, POETRY_MANIFESTS),
-    ).toThrow(new RegExp(target.dir.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+    expect(() => computeCacheKey(target, CDXGEN_TOOL, ARGS, POETRY_MANIFESTS)).toThrow(
+      /pyproject\.toml/,
+    );
+    expect(() => computeCacheKey(target, CDXGEN_TOOL, ARGS, POETRY_MANIFESTS)).toThrow(
+      new RegExp(target.dir.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")),
+    );
   });
 });

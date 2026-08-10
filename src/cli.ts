@@ -35,10 +35,7 @@ import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { parseArgs } from "node:util";
 
-import {
-  runGenerateDockerSbom,
-  type GenerateDockerSbomOptions,
-} from "./pipeline/dockerSbom";
+import { runGenerateDockerSbom, type GenerateDockerSbomOptions } from "./pipeline/dockerSbom";
 import { exitCodeFor, runCheck, type CheckResult } from "./gate/check";
 import { defaultNoticesPath, resolveFrom } from "./pipeline/paths";
 import { runGenerate, type GenerateOptions } from "./pipeline/pipeline";
@@ -113,8 +110,7 @@ function reportVerifyCache(result: VerifyResult): void {
     line(`  registry:  ${mismatch.current ?? "(none)"}`);
     line(`  ${mismatch.reason}`);
   }
-  const verb =
-    result.mismatches.length === 1 ? "diverges from" : "diverge from";
+  const verb = result.mismatches.length === 1 ? "diverges from" : "diverge from";
   line(
     `verify-cache: ${result.mismatches.length} of ${result.audited} audited cache ${noun} ` +
       `${verb} upstream — investigate before release`,
@@ -186,9 +182,7 @@ function discoverDefaultPolicy(values: CliValues): string | undefined {
  */
 export function optionsFrom(values: CliValues): GenerateOptions {
   if (values.target !== undefined && values["repo-root"] !== undefined) {
-    fail(
-      `--target and --repo-root are mutually exclusive — pass at most one\n${USAGE}`,
-    );
+    fail(`--target and --repo-root are mutually exclusive — pass at most one\n${USAGE}`);
   }
   const outputPath = values.output ?? "THIRD_PARTY_LICENSES.md";
   return {
@@ -224,17 +218,12 @@ export function optionsFrom(values: CliValues): GenerateOptions {
 export function dockerSbomModeConflict(values: CliValues): string | undefined {
   const hasImage = values.image !== undefined && values.image.length > 0;
   const hasRepoRoot = values["repo-root"] !== undefined;
-  const hasDockerfile =
-    values.dockerfile !== undefined && values.dockerfile.length > 0;
+  const hasDockerfile = values.dockerfile !== undefined && values.dockerfile.length > 0;
   const hasListDockerfiles = values["list-dockerfiles"] === true;
   const pairs: Array<[boolean, boolean, string]> = [
     // --list-dockerfiles never combines with a build/scan lane (checked first so the message names
     // --list-dockerfiles even when --repo-root is also set as its required walk root).
-    [
-      hasListDockerfiles,
-      hasImage,
-      "--list-dockerfiles and --image are mutually exclusive",
-    ],
+    [hasListDockerfiles, hasImage, "--list-dockerfiles and --image are mutually exclusive"],
     [
       hasListDockerfiles,
       hasDockerfile,
@@ -289,9 +278,7 @@ function hasValues(list: string[] | undefined): boolean {
  * invocation, exits 3 with the usage). Mode-flag computation is routed through {@link hasValues} to
  * keep this function under the complexity bound.
  */
-export function dockerSbomOptionsFrom(
-  values: CliValues,
-): GenerateDockerSbomOptions {
+export function dockerSbomOptionsFrom(values: CliValues): GenerateDockerSbomOptions {
   const conflict = dockerSbomModeConflict(values);
   if (conflict !== undefined) {
     fail(`${conflict}\n${USAGE}`);

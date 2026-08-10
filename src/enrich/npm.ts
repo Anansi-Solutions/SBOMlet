@@ -50,9 +50,7 @@ interface LicenseFields {
 }
 
 /** OR-join a legacy `licenses` array: single element unparenthesized, else `(A OR B)`. */
-function joinLicensesArray(
-  array: Array<{ type?: string }> | undefined,
-): string | undefined {
+function joinLicensesArray(array: Array<{ type?: string }> | undefined): string | undefined {
   const types = (array ?? [])
     .map((entry) => nonEmpty(entry.type))
     .filter((type): type is string => type !== undefined);
@@ -86,10 +84,7 @@ function resolveFields(
 }
 
 /** Resolve a raw npm license for an exact version from a packument. */
-export function resolveNpmLicense(
-  packument: unknown,
-  version: string,
-): NpmResolution | null {
+export function resolveNpmLicense(packument: unknown, version: string): NpmResolution | null {
   const doc = narrowNpmPackument(packument);
   if (doc === undefined) return null;
 

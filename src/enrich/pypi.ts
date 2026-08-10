@@ -33,9 +33,7 @@ function isLicenseId(value: string): boolean {
 }
 
 /** Layer 3: resolve from the first usable "License ::" trove classifier. */
-function resolveFromClassifiers(
-  classifiers: readonly string[],
-): PypiResolution | null {
+function resolveFromClassifiers(classifiers: readonly string[]): PypiResolution | null {
   for (const classifier of classifiers) {
     const spdx = troveToSpdx(classifier);
     if (spdx !== undefined) {

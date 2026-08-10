@@ -3,10 +3,7 @@ import { join } from "node:path";
 
 import { describe, expect, test } from "bun:test";
 
-import {
-  BUILTIN_DENY_RULES,
-  BUILTIN_DENY_RULE_ID,
-} from "../src/policy/builtinDenylist";
+import { BUILTIN_DENY_RULES, BUILTIN_DENY_RULE_ID } from "../src/policy/builtinDenylist";
 import { denyRuleFor } from "../src/policy/denylist";
 import type { Policy } from "../src/policy/schema";
 
@@ -25,19 +22,10 @@ const EMPTY_POLICY: Policy = {
 // The same spdx-license-ids data spdx-expression-parse matches against — a typo
 // in a shipped deny pattern would never match a parsed leaf and would silently
 // ship a default that denies nothing.
-const spdxDataDir = join(
-  import.meta.dir,
-  "..",
-  "node_modules",
-  "spdx-license-ids",
-);
+const spdxDataDir = join(import.meta.dir, "..", "node_modules", "spdx-license-ids");
 const spdxIds = new Set<string>([
-  ...(JSON.parse(
-    readFileSync(join(spdxDataDir, "index.json"), "utf8"),
-  ) as string[]),
-  ...(JSON.parse(
-    readFileSync(join(spdxDataDir, "deprecated.json"), "utf8"),
-  ) as string[]),
+  ...(JSON.parse(readFileSync(join(spdxDataDir, "index.json"), "utf8")) as string[]),
+  ...(JSON.parse(readFileSync(join(spdxDataDir, "deprecated.json"), "utf8")) as string[]),
 ]);
 
 describe("builtin source-available deny defaults", () => {
@@ -63,9 +51,7 @@ describe("builtin source-available deny defaults", () => {
   });
 
   test("an OR finding with a permissive electable branch is NOT denied", () => {
-    expect(
-      denyRuleFor(EMPTY_POLICY, "MIT OR BUSL-1.1", "some-pkg"),
-    ).toBeUndefined();
+    expect(denyRuleFor(EMPTY_POLICY, "MIT OR BUSL-1.1", "some-pkg")).toBeUndefined();
   });
 
   test("an OR finding denied on every branch IS denied (union across builtins)", () => {

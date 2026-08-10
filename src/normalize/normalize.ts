@@ -26,13 +26,7 @@ import {
   type StaleOverride,
 } from "../model/dependencies";
 import { COULD_BE_COPYLEFT_FAMILIES } from "../policy/copyleftFamily";
-import {
-  elect,
-  isCopyleft,
-  leafIds,
-  renderNode,
-  type ExpressionNode,
-} from "./expression";
+import { elect, isCopyleft, leafIds, renderNode, type ExpressionNode } from "./expression";
 
 /**
  * Raw values that must never reach correct(): npm's "UNLICENSED" means proprietary (correct() maps
@@ -305,9 +299,7 @@ function findingFromClaims(
   // result with its trimmed raw so the os-partial path can surface the faithful token.
   const unknownTokens = distinct
     .map((c, i) => ({ raw: c.raw.trim(), result: results[i]! }))
-    .filter(
-      ({ result }) => result.expression === null && result.imprecise !== true,
-    )
+    .filter(({ result }) => result.expression === null && result.imprecise !== true)
     .map(({ raw }) => raw)
     .filter((raw) => raw !== "");
   if (unknownTokens.length > 0) {
@@ -384,9 +376,7 @@ function expressionIsCopyleft(expression: string): boolean {
  * to the could-be-copyleft review lane deterministically. Returns undefined when no imprecise
  * family is present.
  */
-function electImpreciseFamily(
-  results: ReadonlyArray<NormalizeResult>,
-): string | undefined {
+function electImpreciseFamily(results: ReadonlyArray<NormalizeResult>): string | undefined {
   let permissive: string | undefined;
   for (const r of results) {
     if (r.imprecise !== true || r.impreciseFamily === undefined) continue;
@@ -399,9 +389,7 @@ function electImpreciseFamily(
 }
 
 /** AND-combine the precise (non-null) normalize results into one finding. */
-function combinePrecise(
-  preciseResults: ReadonlyArray<NormalizeResult>,
-): LicenseFinding {
+function combinePrecise(preciseResults: ReadonlyArray<NormalizeResult>): LicenseFinding {
   // Dedupe expression strings: an spdx-id claim and a name claim may normalize to the same
   // expression.
   const expressions: string[] = [];
@@ -494,9 +482,7 @@ function observedSignal(
  * consults this set so a denied member is seen even when combineKnown elects an imprecise family /
  * collapses to unknown and drops it from the combined expression. Empty → caller omits the field.
  */
-function observedExpressions(
-  claims: ReadonlyArray<LicenseClaim>,
-): readonly string[] {
+function observedExpressions(claims: ReadonlyArray<LicenseClaim>): readonly string[] {
   const seen = new Set<string>();
   for (const c of claims) {
     const precise = normalizeRaw(c.raw).expression;
@@ -506,10 +492,7 @@ function observedExpressions(
 }
 
 /** Case-insensitive, trimmed equality of `expects` against any signal member. */
-function signalMatches(
-  signal: ReadonlyArray<string>,
-  expects: string,
-): boolean {
+function signalMatches(signal: ReadonlyArray<string>, expects: string): boolean {
   const want = expects.trim().toLowerCase();
   return signal.some((s) => s.trim().toLowerCase() === want);
 }
@@ -559,10 +542,7 @@ function signalContradicts(
  * redundant and falls through to the stale-fail path. spdx-satisfies is defensive - any throw is
  * treated as NOT satisfying (fail closed).
  */
-function baseSatisfiesAssertion(
-  base: LicenseFinding,
-  expression: string,
-): boolean {
+function baseSatisfiesAssertion(base: LicenseFinding, expression: string): boolean {
   if (base.expression === null) return false; // imprecise/unknown: not redundant
   try {
     return satisfies(base.expression, [expression]);
@@ -572,10 +552,7 @@ function baseSatisfiesAssertion(
 }
 
 /** Build the override finding from a validated SPDX expression. */
-function overrideFinding(
-  expression: string,
-  overrideRule: string | undefined,
-): LicenseFinding {
+function overrideFinding(expression: string, overrideRule: string | undefined): LicenseFinding {
   const node = parse(expression) as ExpressionNode;
   return {
     expression,
@@ -587,10 +564,7 @@ function overrideFinding(
 }
 
 /** Attach a stale-override marker to the un-overridden finding. */
-function withStaleOverride(
-  base: LicenseFinding,
-  stale: StaleOverride,
-): LicenseFinding {
+function withStaleOverride(base: LicenseFinding, stale: StaleOverride): LicenseFinding {
   return { ...base, staleOverride: stale };
 }
 
@@ -656,8 +630,7 @@ function resolveOverride(
   // Project clarify FIRST (project-wins-on-conflict).
   const clarifyIndex = clarify.findIndex(
     (rule) =>
-      rule.name === entry.name &&
-      (rule.version === undefined || rule.version === entry.version),
+      rule.name === entry.name && (rule.version === undefined || rule.version === entry.version),
   );
   if (clarifyIndex !== -1) {
     usedClarifyIndices.add(clarifyIndex);
@@ -747,10 +720,7 @@ function quickCheckClaims(claims: ReadonlyArray<LicenseClaim>): LicenseClaim[] {
  * contradicted by a precise assessment must become a visible conflict, never be silently decided in
  * either direction.
  */
-function claimAgreesWithAssessment(
-  claim: LicenseClaim,
-  assessed: string,
-): boolean {
+function claimAgreesWithAssessment(claim: LicenseClaim, assessed: string): boolean {
   const result = normalizeRaw(claim.raw);
   if (result.expression !== null) {
     if (result.expression === assessed) return true;
@@ -815,10 +785,7 @@ function assessPrecise(
  * either side to weigh).
  */
 function assessImprecise(family: string, base: LicenseFinding): LicenseFinding {
-  if (
-    base.expression !== null &&
-    !expressionInFamily(base.expression, family)
-  ) {
+  if (base.expression !== null && !expressionInFamily(base.expression, family)) {
     return {
       ...base,
       conflict: { assessed: family, disagreeing: [base.expression] },
@@ -887,14 +854,7 @@ export function annotateFindings(
     // lives on this base only, and overrideFinding builds a fresh object.
     const base = applyScancodeAssessment(entry.licenseClaims, unrefinedBase);
     const signal = observedSignal(entry.licenseClaims, base);
-    const overridden = resolveOverride(
-      entry,
-      clarify,
-      builtins,
-      base,
-      signal,
-      usedClarifyIndices,
-    );
+    const overridden = resolveOverride(entry, clarify, builtins, base, signal, usedClarifyIndices);
     const finding = overridden ?? base;
     // Deny terminal over overrides: preserve the PRE-OVERRIDE observed expression whenever an
     // override REWROTE it (overridden has a different expression than the un-overridden base). The
@@ -913,9 +873,7 @@ export function annotateFindings(
       ...entry,
       finding: {
         ...finding,
-        ...(rewroteExpression
-          ? { observedExpression: base.expression as string }
-          : {}),
+        ...(rewroteExpression ? { observedExpression: base.expression as string } : {}),
         ...(observed.length > 0 ? { observedExpressions: observed } : {}),
       },
     };

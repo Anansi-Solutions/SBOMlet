@@ -20,10 +20,7 @@ import { join } from "node:path";
 import { afterEach, describe, expect, test } from "bun:test";
 
 import { computeCacheKey } from "../src/collectors/cdxgen";
-import {
-  collectWithNugetLock,
-  NUGET_COLLECTOR_TOOL,
-} from "../src/collectors/nugetLock";
+import { collectWithNugetLock, NUGET_COLLECTOR_TOOL } from "../src/collectors/nugetLock";
 import { collectors } from "../src/collectors/registry";
 import type { Target } from "../src/targets/target";
 
@@ -288,9 +285,7 @@ async function scanLock(lock: string): Promise<ScannedDoc> {
   const result = await collectWithNugetLock(target, { tempDir: makeOutDir() });
   const raw = readFileSync(result.sbomPath, "utf8");
   const doc = JSON.parse(raw) as Record<string, unknown>;
-  const components = (doc["components"] ?? []) as Array<
-    Record<string, unknown>
-  >;
+  const components = (doc["components"] ?? []) as Array<Record<string, unknown>>;
   return { target, ...result, raw, doc, components };
 }
 
@@ -311,11 +306,7 @@ describe("collectWithNugetLock — determinism", () => {
 
   test("the document is exactly { bomFormat, specVersion, components } with no volatile fields", async () => {
     const { doc, raw } = await scanLock(V1_LOCK);
-    expect(Object.keys(doc)).toEqual([
-      "bomFormat",
-      "specVersion",
-      "components",
-    ]);
+    expect(Object.keys(doc)).toEqual(["bomFormat", "specVersion", "components"]);
     expect(doc["bomFormat"]).toBe("CycloneDX");
     expect(doc["specVersion"]).toBe("1.6");
     expect(raw.includes("serialNumber")).toBe(false);
@@ -457,10 +448,7 @@ describe("collectWithNugetLock — identity and emission", () => {
       },
     });
     const { components } = await scanLock(lock);
-    expect(componentPurls(components)).toEqual([
-      "pkg:nuget/Cpm.A@1.0.0",
-      "pkg:nuget/Cpm.B@2.0.0",
-    ]);
+    expect(componentPurls(components)).toEqual(["pkg:nuget/Cpm.A@1.0.0", "pkg:nuget/Cpm.B@2.0.0"]);
   });
 
   test("a Unicode id (illegal per the NuGet grammar — a hostile lock) emits VERBATIM, never crashes and never re-encodes", async () => {
@@ -473,9 +461,7 @@ describe("collectWithNugetLock — identity and emission", () => {
       },
     });
     const { components } = await scanLock(lock);
-    expect(componentPurls(components)).toEqual([
-      "pkg:nuget/Ünïcode.Päckage@1.0.0",
-    ]);
+    expect(componentPurls(components)).toEqual(["pkg:nuget/Ünïcode.Päckage@1.0.0"]);
   });
 
   test("a THIRD-PARTY entry sharing a Project entry's id (another section) SURVIVES — exclusion is per-entry by type, never by name", async () => {
@@ -537,12 +523,7 @@ describe("collectWithNugetLock — contract and cache key", () => {
       tempDir: makeOutDir(),
     });
     expect(result.cacheKey).toBe(
-      computeCacheKey(
-        target,
-        NUGET_COLLECTOR_TOOL,
-        ["nuget-collector-v1"],
-        ["packages.lock.json"],
-      ),
+      computeCacheKey(target, NUGET_COLLECTOR_TOOL, ["nuget-collector-v1"], ["packages.lock.json"]),
     );
   });
 });
@@ -554,9 +535,9 @@ describe("collectWithNugetLock — contract and cache key", () => {
 describe("collectWithNugetLock — failure modes", () => {
   test("missing packages.lock.json throws the target.ts-shaped error", async () => {
     const target = makeTargetWithFiles({});
-    await expect(
-      collectWithNugetLock(target, { tempDir: makeOutDir() }),
-    ).rejects.toThrow(/missing packages\.lock\.json/);
+    await expect(collectWithNugetLock(target, { tempDir: makeOutDir() })).rejects.toThrow(
+      /missing packages\.lock\.json/,
+    );
   });
 
   test("oversized lock fails loudly naming path, size, and cap BEFORE any parse", async () => {
@@ -590,8 +571,8 @@ describe("collectWithNugetLock — failure modes", () => {
 
   test("an unsupported lock version throws naming it", async () => {
     const target = makeNugetTarget(V3_LOCK);
-    await expect(
-      collectWithNugetLock(target, { tempDir: makeOutDir() }),
-    ).rejects.toThrow(/version 3 is not supported/);
+    await expect(collectWithNugetLock(target, { tempDir: makeOutDir() })).rejects.toThrow(
+      /version 3 is not supported/,
+    );
   });
 });

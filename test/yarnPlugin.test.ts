@@ -75,9 +75,7 @@ describe("yarnPluginArgs", () => {
 
   test("the literal version tag in the argv equals the YARN_PLUGIN_TOOL pin (Trivy lesson)", () => {
     const args = yarnPluginArgs("/tmp/x/full.json", false);
-    expect(args).toContain(
-      `${YARN_PLUGIN_TOOL.name}@${YARN_PLUGIN_TOOL.version}`,
-    );
+    expect(args).toContain(`${YARN_PLUGIN_TOOL.name}@${YARN_PLUGIN_TOOL.version}`);
   });
 });
 
@@ -90,9 +88,7 @@ describe("pluginEnv", () => {
     // (spike-verified) — the key must be ABSENT, not just falsy.
     expect("NODE_ENV" in env).toBe(false);
     expect(env.FOO).toBe("bar");
-    expect(env.YARN_INSTALL_STATE_PATH).toBe(
-      join("/tmp/run", "install-state.gz"),
-    );
+    expect(env.YARN_INSTALL_STATE_PATH).toBe(join("/tmp/run", "install-state.gz"));
 
     // The input object is not mutated.
     expect(base.NODE_ENV).toBe("production");
@@ -101,10 +97,8 @@ describe("pluginEnv", () => {
 });
 
 describe("dual-run cache key", () => {
-  const YARN_LOCK =
-    '# synthetic lockfile\n"left-pad@npm:1.3.0":\n  version: 1.3.0\n';
-  const PACKAGE_JSON =
-    '{"name":"synthetic","devDependencies":{"left-pad":"1.3.0"}}\n';
+  const YARN_LOCK = '# synthetic lockfile\n"left-pad@npm:1.3.0":\n  version: 1.3.0\n';
+  const PACKAGE_JSON = '{"name":"synthetic","devDependencies":{"left-pad":"1.3.0"}}\n';
   const MANIFESTS = ["yarn.lock", "package.json"] as const;
 
   test("hashes BOTH argv arrays — differs from a full-run-only key for the same target", () => {
@@ -118,12 +112,7 @@ describe("dual-run cache key", () => {
       [...fullArgs, ...prodArgs],
       MANIFESTS,
     );
-    const fullOnlyKey = computeCacheKey(
-      target,
-      YARN_PLUGIN_TOOL,
-      fullArgs,
-      MANIFESTS,
-    );
+    const fullOnlyKey = computeCacheKey(target, YARN_PLUGIN_TOOL, fullArgs, MANIFESTS);
     expect(dualKey).toMatch(/^[0-9a-f]{64}$/);
     expect(dualKey).not.toBe(fullOnlyKey);
   });
@@ -172,9 +161,7 @@ describe("dual-run cache key", () => {
     // manifest bytes + tool + sentinel argv only.
     const a = makeTarget(YARN_LOCK, PACKAGE_JSON);
     const b = makeTarget(YARN_LOCK, PACKAGE_JSON);
-    expect(
-      computeCacheKey(a, YARN_PLUGIN_TOOL, yarnPluginCacheArgs(), MANIFESTS),
-    ).toBe(
+    expect(computeCacheKey(a, YARN_PLUGIN_TOOL, yarnPluginCacheArgs(), MANIFESTS)).toBe(
       computeCacheKey(b, YARN_PLUGIN_TOOL, yarnPluginCacheArgs(), MANIFESTS),
     );
   });
@@ -184,21 +171,11 @@ describe("dual-run cache key", () => {
     // entry pointing at the SAME dir as the target must hash identically to
     // the plain-string spelling of the same file.
     const target = makeTarget(YARN_LOCK, PACKAGE_JSON);
-    const stringKey = computeCacheKey(
-      target,
-      YARN_PLUGIN_TOOL,
-      yarnPluginCacheArgs(),
-      MANIFESTS,
-    );
-    const objectKey = computeCacheKey(
-      target,
-      YARN_PLUGIN_TOOL,
-      yarnPluginCacheArgs(),
-      [
-        { file: "yarn.lock", dir: target.dir },
-        { file: "package.json", dir: target.dir },
-      ],
-    );
+    const stringKey = computeCacheKey(target, YARN_PLUGIN_TOOL, yarnPluginCacheArgs(), MANIFESTS);
+    const objectKey = computeCacheKey(target, YARN_PLUGIN_TOOL, yarnPluginCacheArgs(), [
+      { file: "yarn.lock", dir: target.dir },
+      { file: "package.json", dir: target.dir },
+    ]);
     expect(objectKey).toBe(stringKey);
   });
 
@@ -220,32 +197,27 @@ describe("dual-run cache key", () => {
       { file: "package.json", dir: unitDir },
       { file: "package.json", dir: rootDir },
     ];
-    const baseline = computeCacheKey(
-      unit,
-      YARN_PLUGIN_TOOL,
-      yarnPluginCacheArgs(),
-      manifests,
-    );
+    const baseline = computeCacheKey(unit, YARN_PLUGIN_TOOL, yarnPluginCacheArgs(), manifests);
 
     // Mutate root yarn.lock only.
     writeFileSync(join(rootDir, "yarn.lock"), YARN_LOCK + "\n# mutated\n");
-    expect(
-      computeCacheKey(unit, YARN_PLUGIN_TOOL, yarnPluginCacheArgs(), manifests),
-    ).not.toBe(baseline);
+    expect(computeCacheKey(unit, YARN_PLUGIN_TOOL, yarnPluginCacheArgs(), manifests)).not.toBe(
+      baseline,
+    );
     writeFileSync(join(rootDir, "yarn.lock"), YARN_LOCK);
 
     // Mutate workspace package.json only.
     writeFileSync(join(unitDir, "package.json"), PACKAGE_JSON + "\n");
-    expect(
-      computeCacheKey(unit, YARN_PLUGIN_TOOL, yarnPluginCacheArgs(), manifests),
-    ).not.toBe(baseline);
+    expect(computeCacheKey(unit, YARN_PLUGIN_TOOL, yarnPluginCacheArgs(), manifests)).not.toBe(
+      baseline,
+    );
     writeFileSync(join(unitDir, "package.json"), PACKAGE_JSON);
 
     // Mutate root package.json only.
     writeFileSync(join(rootDir, "package.json"), '{"name":"root-changed"}\n');
-    expect(
-      computeCacheKey(unit, YARN_PLUGIN_TOOL, yarnPluginCacheArgs(), manifests),
-    ).not.toBe(baseline);
+    expect(computeCacheKey(unit, YARN_PLUGIN_TOOL, yarnPluginCacheArgs(), manifests)).not.toBe(
+      baseline,
+    );
   });
 
   test("two units with byte-identical workspace package.json under the same root differ ONLY by workspacePath and get DIFFERENT keys", () => {
@@ -296,12 +268,7 @@ describe("dual-run cache key", () => {
     const target = makeTarget(YARN_LOCK, PACKAGE_JSON);
     expect(target.lockfileDir).toBeUndefined();
     expect(target.workspacePath).toBeUndefined();
-    const key = computeCacheKey(
-      target,
-      YARN_PLUGIN_TOOL,
-      yarnPluginCacheArgs(),
-      MANIFESTS,
-    );
+    const key = computeCacheKey(target, YARN_PLUGIN_TOOL, yarnPluginCacheArgs(), MANIFESTS);
     expect(key).toMatch(/^[0-9a-f]{64}$/);
   });
 });
@@ -322,10 +289,7 @@ describe("collectWithYarnPlugin — unit-aware cwd and cache key", () => {
         // Write a minimal valid plugin output at the -o operand so
         // validatePluginOutput passes without a real yarn spawn.
         const outFile = args[args.length - 1] as string;
-        writeFileSync(
-          outFile,
-          JSON.stringify({ specVersion: "1.6", components: [] }),
-        );
+        writeFileSync(outFile, JSON.stringify({ specVersion: "1.6", components: [] }));
         return { stdout: "", stderr: "" };
       },
     }));

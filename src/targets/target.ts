@@ -55,9 +55,7 @@ export function resolveTarget(targetArg: string, cwd?: string): Target {
   const dir = resolve(cwd ?? process.cwd(), targetArg);
 
   if (!existsSync(dir) || !statSync(dir).isDirectory()) {
-    throw new Error(
-      `--target "${targetArg}" does not resolve to a directory: ${dir}`,
-    );
+    throw new Error(`--target "${targetArg}" does not resolve to a directory: ${dir}`);
   }
 
   // Single-target mode is yarn-only debug mode: a poetry/uv project must fail fast here with the

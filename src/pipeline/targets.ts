@@ -26,11 +26,7 @@ import {
 } from "../targets/discover";
 import { yarnWorkspaceMembers } from "../targets/firstParty";
 import { resolveTarget } from "../targets/target";
-import {
-  classifyCoverage,
-  componentCountOf,
-  coverageSkipReason,
-} from "./coverage";
+import { classifyCoverage, componentCountOf, coverageSkipReason } from "./coverage";
 import { resolveFrom } from "./paths";
 import { type GenerateOptions } from "./pipeline";
 
@@ -153,10 +149,7 @@ function expandYarnWorkspaceUnits(
   target: DiscoveredTarget,
   lockfileText: string,
 ): ExpandedUnit[] | undefined {
-  if (
-    target.lockfile !== "yarn" ||
-    selectJsGenerator(lockfileText) !== "yarn-plugin"
-  ) {
+  if (target.lockfile !== "yarn" || selectJsGenerator(lockfileText) !== "yarn-plugin") {
     return undefined;
   }
   const members = yarnWorkspaceMembers(lockfileText);
@@ -206,19 +199,14 @@ function expandYarnWorkspaceUnits(
       unit: {
         ...target,
         dir: memberDir,
-        identity:
-          target.identity === "."
-            ? member.relPath
-            : `${target.identity}/${member.relPath}`,
+        identity: target.identity === "." ? member.relPath : `${target.identity}/${member.relPath}`,
         lockfileDir: target.dir,
         workspacePath: member.relPath,
       },
       hasDependencies: member.hasDependencies,
     });
   }
-  return units.sort((a, b) =>
-    compareCodeUnits(a.unit.identity, b.unit.identity),
-  );
+  return units.sort((a, b) => compareCodeUnits(a.unit.identity, b.unit.identity));
 }
 
 /**
@@ -241,9 +229,7 @@ async function dispatchAndCollect(
   // routing an unregistered kind to the tool-error exit path.
   const collector = collectors.get(target.lockfile);
   if (collector === undefined) {
-    throw new Error(
-      `no collector is registered for lockfile kind "${target.lockfile}"`,
-    );
+    throw new Error(`no collector is registered for lockfile kind "${target.lockfile}"`);
   }
   // The CLI owns stderr: the collecting line is emitted HERE, never inside a collector, with the
   // identity the registration reports for this lockfile text (yarn's generator choice is
@@ -280,17 +266,11 @@ async function dispatchAndCollect(
  * lockfile+manifest at target.dir; a workspace unit checks only package.json at its own dir (the
  * root yarn.lock's existence was already proven by the read at the root).
  */
-function assertManifestsExist(
-  identity: string,
-  dir: string,
-  files: readonly string[],
-): void {
+function assertManifestsExist(identity: string, dir: string, files: readonly string[]): void {
   for (const file of files) {
     const manifestPath = join(dir, file);
     if (!existsSync(manifestPath)) {
-      throw new Error(
-        `target "${identity}" is missing ${file}: expected ${manifestPath}`,
-      );
+      throw new Error(`target "${identity}" is missing ${file}: expected ${manifestPath}`);
     }
   }
 }
@@ -317,11 +297,7 @@ async function scanWorkspaceUnits(
   // loudly, and never burn a generator spawn on a verdict that is already decided. Without this,
   // the post-scan "skip" branch would be the only SILENT skip in the collect loop, reached after
   // both plugin runs were spawned per unit.
-  const skipReason = coverageSkipReason(
-    lockfileName,
-    rootLockfileText,
-    target.dir,
-  );
+  const skipReason = coverageSkipReason(lockfileName, rootLockfileText, target.dir);
   if (skipReason !== undefined) {
     log(`warning: skipping ${target.identity} — ${skipReason}`);
     return [];
@@ -330,19 +306,11 @@ async function scanWorkspaceUnits(
   for (const { unit, hasDependencies } of expandedUnits) {
     if (!hasDependencies) {
       // Loud, never silent - covers the dep-less root unit as well as any dep-less workspace.
-      log(
-        `warning: skipping ${unit.identity} — workspace declares no dependencies in yarn.lock`,
-      );
+      log(`warning: skipping ${unit.identity} — workspace declares no dependencies in yarn.lock`);
       continue;
     }
     assertManifestsExist(unit.identity, unit.dir, ["package.json"]);
-    const input = await dispatchAndCollect(
-      unit,
-      rootLockfileText,
-      lockfileName,
-      opts,
-      log,
-    );
+    const input = await dispatchAndCollect(unit, rootLockfileText, lockfileName, opts, log);
     if (input !== undefined) results.push(input);
   }
   return results;
@@ -359,9 +327,7 @@ function absorbUnitInputs(
   inputs: CollectedSbom[],
   dirs: Set<string>,
 ): void {
-  const dirByIdentity = new Map(
-    expandedUnits.map(({ unit }) => [unit.identity, unit.dir]),
-  );
+  const dirByIdentity = new Map(expandedUnits.map(({ unit }) => [unit.identity, unit.dir]));
   for (const input of unitInputs) {
     inputs.push(input);
     const unitDir = dirByIdentity.get(input.targetIdentity);
@@ -380,9 +346,7 @@ function absorbUnitInputs(
  * whole run over one target's bad sidecar. The size gate still fires here, before this read, same
  * as every other entry point that touches a maven.sbom.json.
  */
-function mavenFirstPartyPurls(
-  targets: readonly DiscoveredTarget[],
-): ReadonlySet<string> {
+function mavenFirstPartyPurls(targets: readonly DiscoveredTarget[]): ReadonlySet<string> {
   const purls = new Set<string>();
   for (const target of targets) {
     if (target.lockfile !== "maven") continue;
@@ -469,11 +433,7 @@ export async function collectTargets(
       continue;
     }
 
-    const skipReason = coverageSkipReason(
-      lockfileName,
-      lockfileText,
-      target.dir,
-    );
+    const skipReason = coverageSkipReason(lockfileName, lockfileText, target.dir);
     if (skipReason !== undefined) {
       // Loud, never silent: the skip names the target and the reason. Skipping before dispatch also
       // means a zero-dependency Yarn-4 workspace never spawns a generator at all.
@@ -481,19 +441,9 @@ export async function collectTargets(
       continue;
     }
 
-    assertManifestsExist(
-      target.identity,
-      target.dir,
-      manifestFilesFor(target.lockfile),
-    );
+    assertManifestsExist(target.identity, target.dir, manifestFilesFor(target.lockfile));
 
-    const input = await dispatchAndCollect(
-      target,
-      lockfileText,
-      lockfileName,
-      opts,
-      log,
-    );
+    const input = await dispatchAndCollect(target, lockfileText, lockfileName, opts, log);
     if (input === undefined) continue;
     inputs.push(applyMavenFirstPartyFilter(target, input, mavenFirstPartySet));
     dirs.add(target.dir);

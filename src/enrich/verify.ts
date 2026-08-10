@@ -27,34 +27,15 @@ import {
 } from "./enrich";
 import { depsDevVersionUrl, resolveMavenLicenses } from "./maven";
 import { readCache, type CacheEntry } from "./cache";
-import {
-  fetchGithubLicense,
-  fetchJson,
-  fetchJsonOr404,
-  mapLimit,
-} from "./fetch";
-import {
-  githubLicenseRefsFor,
-  githubRepoFor,
-  resolveGithubLicense,
-} from "./github";
-import {
-  catalogEntryUrlOf,
-  nugetRegistrationLeafUrl,
-  resolveNugetCatalogLicense,
-} from "./nuget";
+import { fetchGithubLicense, fetchJson, fetchJsonOr404, mapLimit } from "./fetch";
+import { githubLicenseRefsFor, githubRepoFor, resolveGithubLicense } from "./github";
+import { catalogEntryUrlOf, nugetRegistrationLeafUrl, resolveNugetCatalogLicense } from "./nuget";
 
 /** Bounded concurrency over the audit fetch set (mirrors enrich's FETCH_CONCURRENCY). */
 const VERIFY_CONCURRENCY = 8;
 
 /** The purl types the cache can hold and this audit can re-resolve. */
-const VERIFIABLE_TYPES = new Set([
-  "pypi",
-  "npm",
-  "terraform",
-  "nuget",
-  "maven",
-]);
+const VERIFIABLE_TYPES = new Set(["pypi", "npm", "terraform", "nuget", "maven"]);
 
 export interface VerifyOptions {
   /** Committed cache path (base-dir-resolved by the caller). */
@@ -238,10 +219,7 @@ async function auditEntry(
  */
 export async function verifyCache(opts: VerifyOptions): Promise<VerifyResult> {
   const cache = readCache(opts.cachePath);
-  const fetchOpts =
-    opts.backoffBaseMs === undefined
-      ? {}
-      : { backoffBaseMs: opts.backoffBaseMs };
+  const fetchOpts = opts.backoffBaseMs === undefined ? {} : { backoffBaseMs: opts.backoffBaseMs };
 
   // One network call per distinct URL: many npm versions share a packument, and a repeated URL
   // reuses the in-flight promise (dedup survives concurrency).

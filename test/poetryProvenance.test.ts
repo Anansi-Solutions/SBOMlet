@@ -104,10 +104,7 @@ describe("poetryIntroductions (PEP 621 roots)", () => {
   test("multi-parent transitive carries the sorted-unique introducer SET", () => {
     const c = intro.get("pkg:pypi/c-pkg@3.0.0");
     expect(c!.direct).toBe(false);
-    expect(c!.introducedBy).toEqual([
-      "pkg:pypi/a-pkg@1.0.0",
-      "pkg:pypi/b-pkg@2.0.0",
-    ]);
+    expect(c!.introducedBy).toEqual(["pkg:pypi/a-pkg@1.0.0", "pkg:pypi/b-pkg@2.0.0"]);
   });
 
   test("transitive path is a deterministic tie-broken representative chain", () => {
@@ -217,10 +214,7 @@ describe("poetryIntroductions — optionality descoped", () => {
     const m = intro.get("pkg:pypi/multi-pkg@2.0.0");
     expect(m!.direct).toBe(false);
     expect(m!.introducedBy).toEqual(["pkg:pypi/host-pkg@1.0.0"]);
-    expect(m!.path).toEqual([
-      "pkg:pypi/host-pkg@1.0.0",
-      "pkg:pypi/multi-pkg@2.0.0",
-    ]);
+    expect(m!.path).toEqual(["pkg:pypi/host-pkg@1.0.0", "pkg:pypi/multi-pkg@2.0.0"]);
     expect("optional" in m!).toBe(false);
   });
 
@@ -353,8 +347,7 @@ describe("poetryIntroductions — honest residual on multi-version names", () =>
   ].join("\n");
 
   test("(#1) a transitive version of a declared-root NAME is NOT mislabeled direct", () => {
-    const pyproject =
-      '[project]\ndependencies = ["foo (>=1.0)", "bar (>=1.0)"]\n';
+    const pyproject = '[project]\ndependencies = ["foo (>=1.0)", "bar (>=1.0)"]\n';
     const intro = poetryIntroductions(MULTI_VERSION_ROOT, pyproject);
     // foo is a multi-version declared-root name → NEITHER version is
     // blanket-marked direct (version-agnostic direct would mislabel foo@2.0.0).
@@ -388,8 +381,7 @@ describe("poetryIntroductions — honest residual on multi-version names", () =>
   ].join("\n");
 
   test("(baseline) single-version names keep precise direct + precise introducer", () => {
-    const pyproject =
-      '[project]\ndependencies = ["foo (>=1.0)", "bar (>=1.0)"]\n';
+    const pyproject = '[project]\ndependencies = ["foo (>=1.0)", "bar (>=1.0)"]\n';
     const intro = poetryIntroductions(SINGLE_VERSION_BASELINE, pyproject);
     expect(intro.get("pkg:pypi/foo@1.0.0")!.direct).toBe(true);
     expect(intro.get("pkg:pypi/bar@1.0.0")!.direct).toBe(true);
@@ -404,8 +396,7 @@ describe("poetryIntroductions — honest residual on multi-version names", () =>
     // chain that must still resolve precisely — multi-version names elsewhere
     // do not poison unrelated unambiguous edges.
     const lock = [MULTI_VERSION_CLICK, SINGLE_VERSION_BASELINE].join("\n");
-    const pyproject =
-      '[project]\ndependencies = ["black (>=23)", "bar (>=1.0)"]\n';
+    const pyproject = '[project]\ndependencies = ["black (>=23)", "bar (>=1.0)"]\n';
     const intro = poetryIntroductions(lock, pyproject);
     const baz = intro.get("pkg:pypi/baz@1.0.0");
     expect(baz!.introducedBy).toEqual(["pkg:pypi/bar@1.0.0"]);
@@ -416,23 +407,10 @@ describe("poetryIntroductions — honest residual on multi-version names", () =>
   test("an asymmetric permutation of multi-version packages yields identical output (order-independent)", () => {
     const serialize = (m: ReadonlyMap<string, unknown>): string =>
       JSON.stringify([...m.entries()].sort());
-    const pyproject =
-      '[project]\ndependencies = ["foo (>=1.0)", "bar (>=1.0)"]\n';
+    const pyproject = '[project]\ndependencies = ["foo (>=1.0)", "bar (>=1.0)"]\n';
     const blocks = [
-      [
-        "[[package]]",
-        'name = "foo"',
-        'version = "1.0.0"',
-        'groups = ["main"]',
-        "",
-      ].join("\n"),
-      [
-        "[[package]]",
-        'name = "foo"',
-        'version = "2.0.0"',
-        'groups = ["main"]',
-        "",
-      ].join("\n"),
+      ["[[package]]", 'name = "foo"', 'version = "1.0.0"', 'groups = ["main"]', ""].join("\n"),
+      ["[[package]]", 'name = "foo"', 'version = "2.0.0"', 'groups = ["main"]', ""].join("\n"),
       [
         "[[package]]",
         'name = "bar"',
@@ -613,10 +591,7 @@ describe("poetryIntroductions — legacy main-deps precedence", () => {
     const leftover = intro.get("pkg:pypi/leftover@1.0.0");
     expect(leftover!.direct).toBe(false);
     expect(leftover!.introducedBy).toEqual(["pkg:pypi/app@1.0.0"]);
-    expect(leftover!.path).toEqual([
-      "pkg:pypi/app@1.0.0",
-      "pkg:pypi/leftover@1.0.0",
-    ]);
+    expect(leftover!.path).toEqual(["pkg:pypi/app@1.0.0", "pkg:pypi/leftover@1.0.0"]);
   });
 
   test("legacy-only baseline (no [project]) — the legacy main table IS still used as roots", () => {
@@ -702,12 +677,7 @@ describe("poetryIntroductions — introducedBy ⊆ root-reachable", () => {
   ].join("\n");
 
   test("a transitive whose only parent is root-disconnected has introducedBy [] (not the disconnected parent)", () => {
-    const pyproject = [
-      "[project]",
-      'name = "root"',
-      'dependencies = ["app (>=1)"]',
-      "",
-    ].join("\n");
+    const pyproject = ["[project]", 'name = "root"', 'dependencies = ["app (>=1)"]', ""].join("\n");
     const intro = poetryIntroductions(ORPHAN_PARENT_LOCK, pyproject);
     const child = intro.get("pkg:pypi/child@1.0.0");
     expect(child).toBeDefined();
@@ -795,12 +765,7 @@ describe("poetryIntroductions — introducedBy ⊆ root-reachable", () => {
       'groups = ["main"]',
       "",
     ].join("\n");
-    const pyproject = [
-      "[project]",
-      'name = "root"',
-      'dependencies = ["app (>=1)"]',
-      "",
-    ].join("\n");
+    const pyproject = ["[project]", 'name = "root"', 'dependencies = ["app (>=1)"]', ""].join("\n");
     const intro = poetryIntroductions(lock, pyproject);
     const child = intro.get("pkg:pypi/child@1.0.0");
     // Only the reachable parent survives.
@@ -809,22 +774,11 @@ describe("poetryIntroductions — introducedBy ⊆ root-reachable", () => {
   });
 
   test("reachability filter is order-independent (asymmetric permutation byte-identical)", () => {
-    const pyproject = [
-      "[project]",
-      'name = "root"',
-      'dependencies = ["app (>=1)"]',
-      "",
-    ].join("\n");
+    const pyproject = ["[project]", 'name = "root"', 'dependencies = ["app (>=1)"]', ""].join("\n");
     const serialize = (m: ReadonlyMap<string, unknown>): string =>
       JSON.stringify([...m.entries()].sort());
     const blocks = [
-      [
-        "[[package]]",
-        'name = "app"',
-        'version = "1.0.0"',
-        'groups = ["main"]',
-        "",
-      ].join("\n"),
+      ["[[package]]", 'name = "app"', 'version = "1.0.0"', 'groups = ["main"]', ""].join("\n"),
       [
         "[[package]]",
         'name = "orphanparent"',
@@ -834,13 +788,7 @@ describe("poetryIntroductions — introducedBy ⊆ root-reachable", () => {
         'child = ">=1.0"',
         "",
       ].join("\n"),
-      [
-        "[[package]]",
-        'name = "child"',
-        'version = "1.0.0"',
-        'groups = ["main"]',
-        "",
-      ].join("\n"),
+      ["[[package]]", 'name = "child"', 'version = "1.0.0"', 'groups = ["main"]', ""].join("\n"),
     ];
     const order1 = blocks.join("\n");
     // asymmetric permutation (rotate): [child, app, orphanparent]

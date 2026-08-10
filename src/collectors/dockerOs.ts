@@ -222,13 +222,9 @@ function licenseSortKey(license: OsLicense): string {
 function osLicensesOf(raw: RawComponent): OsLicense[] | undefined {
   const licenses = raw.licenses;
   if (!Array.isArray(licenses)) return undefined;
-  const narrowed = licenses
-    .map(narrowLicense)
-    .filter((l): l is OsLicense => l !== undefined);
+  const narrowed = licenses.map(narrowLicense).filter((l): l is OsLicense => l !== undefined);
   if (narrowed.length === 0) return undefined;
-  return narrowed.sort((a, b) =>
-    compareCodeUnits(licenseSortKey(a), licenseSortKey(b)),
-  );
+  return narrowed.sort((a, b) => compareCodeUnits(licenseSortKey(a), licenseSortKey(b)));
 }
 
 /** A parsed syft CycloneDX doc - only the fields we read. */
@@ -310,9 +306,7 @@ export function unionOsComponents(
       }
     }
   }
-  const merged = [...byPurl.values()].sort((a, b) =>
-    compareCodeUnits(a.purl, b.purl),
-  );
+  const merged = [...byPurl.values()].sort((a, b) => compareCodeUnits(a.purl, b.purl));
   for (const entry of merged) entry.images.sort(compareCodeUnits);
   return merged;
 }
@@ -329,9 +323,7 @@ export function emitDockerOsDoc(
   components: AttributedOsComponent[],
   dockerImages: DockerImageDigest[],
 ): string {
-  const sortedImages = [...dockerImages].sort((a, b) =>
-    compareCodeUnits(a.image, b.image),
-  );
+  const sortedImages = [...dockerImages].sort((a, b) => compareCodeUnits(a.image, b.image));
   return toSortedJson({
     bomFormat: "CycloneDX",
     specVersion: "1.6",
@@ -380,9 +372,7 @@ async function scanImage(
   });
 
   if (!existsSync(outFile)) {
-    throw new Error(
-      `syft produced no output file at ${outFile}\ninvocation: ${invocation}`,
-    );
+    throw new Error(`syft produced no output file at ${outFile}\ninvocation: ${invocation}`);
   }
   // Size gate BEFORE read (DoS bound).
   assertSyftSbomSize(outFile);
@@ -395,11 +385,7 @@ async function scanImage(
 }
 
 /** Parse + specVersion-assert the syft output, naming the invocation on failure. */
-function parseSyftOutput(
-  rawOutput: string,
-  outFile: string,
-  invocation: string,
-): unknown {
+function parseSyftOutput(rawOutput: string, outFile: string, invocation: string): unknown {
   let parsed: unknown;
   try {
     parsed = JSON.parse(rawOutput);
@@ -464,10 +450,7 @@ async function resolveDigest(
  * The common single-element case returns that one element either way - behavior identical to the
  * prior `digests[0]`. Returns undefined for an empty set (the caller throws).
  */
-export function selectDigest(
-  image: string,
-  digests: readonly string[],
-): string | undefined {
+export function selectDigest(image: string, digests: readonly string[]): string | undefined {
   if (digests.length === 0) return undefined;
   // Sort a COPY by code units first so every subsequent pick is order-stable.
   const sorted = [...digests].sort(compareCodeUnits);
@@ -497,8 +480,7 @@ function repositoryOf(ref: string): string | undefined {
   // before the path is not mistaken for a tag).
   const lastSlash = withoutDigest.lastIndexOf("/");
   const lastColon = withoutDigest.lastIndexOf(":");
-  const repo =
-    lastColon > lastSlash ? withoutDigest.slice(0, lastColon) : withoutDigest;
+  const repo = lastColon > lastSlash ? withoutDigest.slice(0, lastColon) : withoutDigest;
   return repo === "" ? undefined : repo;
 }
 
@@ -598,9 +580,7 @@ export async function collectDockerOsSbom(
   const dockerImages: DockerImageDigest[] = [];
   const sbomPaths: string[] = [];
 
-  const sortedImages = [...images].sort((a, b) =>
-    compareCodeUnits(a.image, b.image),
-  );
+  const sortedImages = [...images].sort((a, b) => compareCodeUnits(a.image, b.image));
   let index = 0;
   for (const { image, source } of sortedImages) {
     const outFile = join(tempDir, `syft-${index}.json`);

@@ -76,9 +76,7 @@ describe("resolveTargetedDockerfiles (targeted build lane, NO docker, NO file re
       { identity: "db/Dockerfile", path: b },
     ]);
     expect(summary).toContain("building 2 targeted Dockerfile(s):");
-    expect(summary).toContain(
-      `app/Dockerfile -> ${imageTag("app/Dockerfile")}`,
-    );
+    expect(summary).toContain(`app/Dockerfile -> ${imageTag("app/Dockerfile")}`);
     expect(summary).toContain(`db/Dockerfile -> ${imageTag("db/Dockerfile")}`);
     expect(summary).toContain("build set (2):");
   });
@@ -97,13 +95,9 @@ describe("resolveTargetedDockerfiles (targeted build lane, NO docker, NO file re
     const a = writeFile(root, "app/Dockerfile", "FROM alpine:3.20\n");
     const craftedIdentity = `app${String.fromCharCode(7)}/Dockerfile`; // embedded BEL
 
-    const { summary } = resolveTargetedDockerfiles([
-      { identity: craftedIdentity, path: a },
-    ]);
+    const { summary } = resolveTargetedDockerfiles([{ identity: craftedIdentity, path: a }]);
     expect(summary).not.toContain(String.fromCharCode(7));
-    expect(summary).toContain(
-      `app /Dockerfile -> ${imageTag(craftedIdentity)}`,
-    );
+    expect(summary).toContain(`app /Dockerfile -> ${imageTag(craftedIdentity)}`);
   });
 
   test("WR-07: the build-set summary line also routes the identity through sanitizeForLog", () => {
@@ -114,12 +108,8 @@ describe("resolveTargetedDockerfiles (targeted build lane, NO docker, NO file re
     const a = writeFile(root, "app/Dockerfile", "FROM alpine:3.20\n");
     const craftedIdentity = `app${String.fromCharCode(7)}/Dockerfile`; // embedded BEL
 
-    const { summary } = resolveTargetedDockerfiles([
-      { identity: craftedIdentity, path: a },
-    ]);
-    const buildSetLine = summary
-      .split("\n")
-      .find((l) => l.includes("build set"));
+    const { summary } = resolveTargetedDockerfiles([{ identity: craftedIdentity, path: a }]);
+    const buildSetLine = summary.split("\n").find((l) => l.includes("build set"));
     expect(buildSetLine).toBeDefined();
     expect(buildSetLine).not.toContain(String.fromCharCode(7));
     expect(buildSetLine).toContain("app /Dockerfile");

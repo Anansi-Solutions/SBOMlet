@@ -1,19 +1,9 @@
-import {
-  existsSync,
-  mkdtempSync,
-  readFileSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, test } from "bun:test";
 
-import {
-  TROVE_TO_SPDX,
-  isAmbiguousTroveClassifier,
-  troveToSpdx,
-} from "../src/enrich/trove";
+import { TROVE_TO_SPDX, isAmbiguousTroveClassifier, troveToSpdx } from "../src/enrich/trove";
 import {
   narrowNpmPackument,
   narrowNugetCatalogEntry,
@@ -43,11 +33,7 @@ import {
 } from "../src/enrich/cache";
 import { enrichUnknowns } from "../src/enrich/enrich";
 import { annotateFindings } from "../src/normalize/normalize";
-import type {
-  CanonicalDependencies,
-  LicenseClaim,
-  PackageEntry,
-} from "../src/model/dependencies";
+import type { CanonicalDependencies, LicenseClaim, PackageEntry } from "../src/model/dependencies";
 
 /** Load a captured registry fixture as parsed JSON (the live response shape). */
 function registryFixture(name: string): unknown {
@@ -58,31 +44,18 @@ function registryFixture(name: string): unknown {
 
 /** SPDX ids known to spdx-license-ids (current + deprecated), as the parser sees them. */
 function knownSpdxIds(): Set<string> {
-  const dataDir = join(
-    import.meta.dir,
-    "..",
-    "node_modules",
-    "spdx-license-ids",
-  );
-  const current = JSON.parse(
-    readFileSync(join(dataDir, "index.json"), "utf8"),
-  ) as string[];
-  const deprecated = JSON.parse(
-    readFileSync(join(dataDir, "deprecated.json"), "utf8"),
-  ) as string[];
+  const dataDir = join(import.meta.dir, "..", "node_modules", "spdx-license-ids");
+  const current = JSON.parse(readFileSync(join(dataDir, "index.json"), "utf8")) as string[];
+  const deprecated = JSON.parse(readFileSync(join(dataDir, "deprecated.json"), "utf8")) as string[];
   return new Set([...current, ...deprecated]);
 }
 
 describe("trove classifier -> SPDX map", () => {
   test("fills the spdx-correct gaps (PSF label, ISCL)", () => {
-    expect(
-      troveToSpdx(
-        "License :: OSI Approved :: Python Software Foundation License",
-      ),
-    ).toBe("Python-2.0");
-    expect(troveToSpdx("License :: OSI Approved :: ISC License (ISCL)")).toBe(
-      "ISC",
+    expect(troveToSpdx("License :: OSI Approved :: Python Software Foundation License")).toBe(
+      "Python-2.0",
     );
+    expect(troveToSpdx("License :: OSI Approved :: ISC License (ISCL)")).toBe("ISC");
   });
 
   test("the bare 'ISC license' label maps to ISC (suffix handling — pexpect false-negative)", () => {
@@ -95,45 +68,29 @@ describe("trove classifier -> SPDX map", () => {
 
   test("maps precise classifiers exactly (MIT/ISC/MPL)", () => {
     expect(troveToSpdx("License :: OSI Approved :: MIT License")).toBe("MIT");
-    expect(
-      troveToSpdx(
-        "License :: OSI Approved :: Mozilla Public License 2.0 (MPL 2.0)",
-      ),
-    ).toBe("MPL-2.0");
+    expect(troveToSpdx("License :: OSI Approved :: Mozilla Public License 2.0 (MPL 2.0)")).toBe(
+      "MPL-2.0",
+    );
   });
 
   test("returns undefined for an unknown classifier (never throws)", () => {
-    expect(
-      troveToSpdx("License :: OSI Approved :: Totally Made Up License"),
-    ).toBeUndefined();
+    expect(troveToSpdx("License :: OSI Approved :: Totally Made Up License")).toBeUndefined();
     expect(troveToSpdx("not a classifier at all")).toBeUndefined();
   });
 
   test("flags ambiguous BSD/Apache classifiers LOW (not silently HIGH)", () => {
-    expect(
-      isAmbiguousTroveClassifier("License :: OSI Approved :: BSD License"),
-    ).toBe(true);
-    expect(
-      isAmbiguousTroveClassifier(
-        "License :: OSI Approved :: Apache Software License",
-      ),
-    ).toBe(true);
+    expect(isAmbiguousTroveClassifier("License :: OSI Approved :: BSD License")).toBe(true);
+    expect(isAmbiguousTroveClassifier("License :: OSI Approved :: Apache Software License")).toBe(
+      true,
+    );
     // Precise classifiers are NOT ambiguous.
-    expect(
-      isAmbiguousTroveClassifier("License :: OSI Approved :: MIT License"),
-    ).toBe(false);
-    expect(
-      isAmbiguousTroveClassifier(
-        "License :: OSI Approved :: ISC License (ISCL)",
-      ),
-    ).toBe(false);
+    expect(isAmbiguousTroveClassifier("License :: OSI Approved :: MIT License")).toBe(false);
+    expect(isAmbiguousTroveClassifier("License :: OSI Approved :: ISC License (ISCL)")).toBe(false);
   });
 
   test("every SPDX value in the map is a real SPDX id (typo-proof)", () => {
     const known = knownSpdxIds();
-    const typos = TROVE_TO_SPDX.map(([, spdx]) => spdx).filter(
-      (spdx) => !known.has(spdx),
-    );
+    const typos = TROVE_TO_SPDX.map(([, spdx]) => spdx).filter((spdx) => !known.has(spdx));
     expect(typos).toEqual([]);
   });
 });
@@ -144,10 +101,7 @@ describe("PyPI response narrow (tolerant)", () => {
       info: {
         license_expression: "MIT",
         license: "MIT License",
-        classifiers: [
-          "License :: OSI Approved :: MIT License",
-          "Programming Language :: Python",
-        ],
+        classifiers: ["License :: OSI Approved :: MIT License", "Programming Language :: Python"],
       },
     });
     expect(info?.licenseExpression).toBe("MIT");
@@ -185,9 +139,7 @@ describe("PyPI response narrow (tolerant)", () => {
         classifiers: ["License :: OSI Approved :: MIT License", 5, null],
       },
     });
-    expect(info?.classifiers).toEqual([
-      "License :: OSI Approved :: MIT License",
-    ]);
+    expect(info?.classifiers).toEqual(["License :: OSI Approved :: MIT License"]);
   });
 
   test("a non-object top-level value narrows to undefined, never throws", () => {
@@ -216,10 +168,7 @@ describe("npm packument narrow (tolerant)", () => {
       licenses: [{ type: "MIT" }, { type: "Apache-2.0" }],
     });
     expect(doc?.licenseObject?.type).toBe("MIT");
-    expect(doc?.licensesArray?.map((l) => l.type)).toEqual([
-      "MIT",
-      "Apache-2.0",
-    ]);
+    expect(doc?.licensesArray?.map((l) => l.type)).toEqual(["MIT", "Apache-2.0"]);
   });
 
   test("version-level legacy license object and licenses array are narrowed too", () => {
@@ -230,9 +179,10 @@ describe("npm packument narrow (tolerant)", () => {
       },
     });
     expect(doc?.versions?.["1.0.0"]?.licenseObject?.type).toBe("ISC");
-    expect(doc?.versions?.["2.0.0"]?.licensesArray?.map((l) => l.type)).toEqual(
-      ["MIT", "Apache-2.0"],
-    );
+    expect(doc?.versions?.["2.0.0"]?.licensesArray?.map((l) => l.type)).toEqual([
+      "MIT",
+      "Apache-2.0",
+    ]);
   });
 
   test("versions: null narrows to absent, never throws", () => {
@@ -342,9 +292,7 @@ describe("fetchJson", () => {
         },
         () => fetchJson(url, fastBackoff),
       ),
-    ).rejects.toThrow(
-      new RegExp(`500.*${url.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`),
-    );
+    ).rejects.toThrow(new RegExp(`500.*${url.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`));
     expect(calls).toBeGreaterThan(1); // retried before giving up
   });
 
@@ -396,9 +344,7 @@ describe("PyPI 3-layer resolver", () => {
   test("Layer 2 guard: a full-text license field (comm) is rejected and falls through to Layer 3", () => {
     // The comm fixture carries the full BSD-3 license TEXT in info.license and
     // an ambiguous BSD classifier — the field must NOT be treated as an id.
-    const result = resolvePypiLicense(
-      registryFixture("pypi-comm-fulltext.json"),
-    );
+    const result = resolvePypiLicense(registryFixture("pypi-comm-fulltext.json"));
     expect(result).toEqual({
       raw: "BSD License",
       via: "classifier",
@@ -415,9 +361,7 @@ describe("PyPI 3-layer resolver", () => {
   });
 
   test("Layer 3: an ambiguous BSD classifier (jinja2) resolves raw via the label, tagged LOW", () => {
-    const result = resolvePypiLicense(
-      registryFixture("pypi-jinja2-classifier.json"),
-    );
+    const result = resolvePypiLicense(registryFixture("pypi-jinja2-classifier.json"));
     expect(result).toEqual({
       raw: "BSD License",
       via: "classifier",
@@ -458,20 +402,14 @@ describe("PyPI 3-layer resolver", () => {
 
 describe("npm packument resolver", () => {
   test("versions[version].license wins over top-level (color-convert)", () => {
-    const result = resolveNpmLicense(
-      registryFixture("npm-color-convert.json"),
-      "1.9.3",
-    );
+    const result = resolveNpmLicense(registryFixture("npm-color-convert.json"), "1.9.3");
     expect(result).toEqual({ raw: "MIT", via: "version-license" });
   });
 
   test("falls back to the top-level license when the exact version has none (cjs alias)", () => {
     // The *-cjs alias packument: the exact version omits license, but the
     // top-level legacy { type } object resolves it via the packument path.
-    const result = resolveNpmLicense(
-      registryFixture("npm-cjs-alias.json"),
-      "8.1.1",
-    );
+    const result = resolveNpmLicense(registryFixture("npm-cjs-alias.json"), "8.1.1");
     expect(result).toEqual({ raw: "ISC", via: "top-license-object" });
   });
 
@@ -575,18 +513,12 @@ describe("npm packument resolver", () => {
   });
 
   test("an empty-license packument everywhere (node-clone) → null", () => {
-    const result = resolveNpmLicense(
-      registryFixture("npm-node-clone-null.json"),
-      "0.1.1",
-    );
+    const result = resolveNpmLicense(registryFixture("npm-node-clone-null.json"), "0.1.1");
     expect(result).toBeNull();
   });
 
   test("an unknown version with no top-level license → null", () => {
-    const result = resolveNpmLicense(
-      { versions: { "1.0.0": { license: "MIT" } } },
-      "9.9.9",
-    );
+    const result = resolveNpmLicense({ versions: { "1.0.0": { license: "MIT" } } }, "9.9.9");
     expect(result).toBeNull();
   });
 
@@ -802,10 +734,7 @@ describe("enrichUnknowns orchestrator (cache-first, generate-fetch, check-stale)
   }
 
   /** Run `fn` with globalThis.fetch swapped, always restored in finally. */
-  async function withFetch<T>(
-    impl: typeof fetch,
-    fn: () => Promise<T>,
-  ): Promise<T> {
+  async function withFetch<T>(impl: typeof fetch, fn: () => Promise<T>): Promise<T> {
     const original = globalThis.fetch;
     globalThis.fetch = impl;
     try {
@@ -816,9 +745,7 @@ describe("enrichUnknowns orchestrator (cache-first, generate-fetch, check-stale)
   }
 
   /** The registry claim appended to a package, or undefined when none was. */
-  function registryClaim(
-    entry: PackageEntry | undefined,
-  ): LicenseClaim | undefined {
+  function registryClaim(entry: PackageEntry | undefined): LicenseClaim | undefined {
     return entry?.licenseClaims.find((c) => c.source === "registry");
   }
 
@@ -1284,9 +1211,7 @@ describe("enrichUnknowns terraform/github (version-tag, transient-vs-definitive,
     };
   }
 
-  function registryClaim(
-    entry: PackageEntry | undefined,
-  ): LicenseClaim | undefined {
+  function registryClaim(entry: PackageEntry | undefined): LicenseClaim | undefined {
     return entry?.licenseClaims.find((c) => c.source === "registry");
   }
 
@@ -1311,10 +1236,7 @@ describe("enrichUnknowns terraform/github (version-tag, transient-vs-definitive,
     });
   }
 
-  async function withFetch<T>(
-    impl: typeof fetch,
-    fn: () => Promise<T>,
-  ): Promise<T> {
+  async function withFetch<T>(impl: typeof fetch, fn: () => Promise<T>): Promise<T> {
     const original = globalThis.fetch;
     globalThis.fetch = impl;
     try {
@@ -1466,9 +1388,7 @@ describe("enrichUnknowns terraform/github (version-tag, transient-vs-definitive,
       // NO call is the bare (no-?ref) default-branch URL — every fetch carries ?ref=.
       expect(
         calls.some(
-          (u) =>
-            u ===
-            "https://api.github.com/repos/hashicorp/terraform-provider-aws/license",
+          (u) => u === "https://api.github.com/repos/hashicorp/terraform-provider-aws/license",
         ),
       ).toBe(false);
       expect(calls.every((u) => u.includes("?ref="))).toBe(true);
@@ -1580,9 +1500,7 @@ describe("enrichUnknowns terraform/github (version-tag, transient-vs-definitive,
   test("a NOASSERTION body across all refs writes a NEGATIVE entry → unknown", async () => {
     const { dir, path } = tempCachePath();
     try {
-      const { fetch } = fetchByUrl(() =>
-        jsonResponse({ license: { spdx_id: "NOASSERTION" } }),
-      );
+      const { fetch } = fetchByUrl(() => jsonResponse({ license: { spdx_id: "NOASSERTION" } }));
       const result = await withFetch(fetch, () =>
         enrichUnknowns(model(unknownProvider()), {
           mode: "generate",
@@ -1606,9 +1524,7 @@ describe("enrichUnknowns terraform/github (version-tag, transient-vs-definitive,
     const { dir, path } = tempCachePath();
     try {
       // First generate stamps fetchedAt from the fixed clock.
-      const { fetch: fetch1 } = fetchByUrl(() =>
-        jsonResponse({ license: { spdx_id: "MPL-2.0" } }),
-      );
+      const { fetch: fetch1 } = fetchByUrl(() => jsonResponse({ license: { spdx_id: "MPL-2.0" } }));
       await withFetch(fetch1, () =>
         enrichUnknowns(model(unknownProvider()), {
           mode: "generate",
@@ -1836,9 +1752,7 @@ describe("nuget registration URL builder + catalogEntry host pin", () => {
   });
 
   test("an attacker leaf pointing at a foreign host yields undefined (SSRF pin)", () => {
-    expect(
-      catalogEntryUrlOf({ catalogEntry: "https://evil.example/steal" }),
-    ).toBeUndefined();
+    expect(catalogEntryUrlOf({ catalogEntry: "https://evil.example/steal" })).toBeUndefined();
   });
 
   test("a lookalike host (api.nuget.org.evil.example) fails the trailing-slash prefix", () => {
@@ -1867,9 +1781,11 @@ describe("nuget registration URL builder + catalogEntry host pin", () => {
 
 describe("nuget catalogEntry resolver (four-class ladder)", () => {
   test("class 1: licenseExpression wins verbatim, via license-expression HIGH", () => {
-    expect(
-      resolveNugetCatalogLicense(registryFixture("nuget-expression.json")),
-    ).toEqual({ raw: "MIT", via: "license-expression", confidence: "high" });
+    expect(resolveNugetCatalogLicense(registryFixture("nuget-expression.json"))).toEqual({
+      raw: "MIT",
+      via: "license-expression",
+      confidence: "high",
+    });
   });
 
   test("class 1 wins over class 2: BOTH licenseExpression and licenseFile present → the expression (declared beats embedded)", () => {
@@ -1882,9 +1798,7 @@ describe("nuget catalogEntry resolver (four-class ladder)", () => {
   });
 
   test("class 2: an embedded licenseFile is an honest unknown (null) — the aka.ms sentinel never reads as a URL", () => {
-    expect(
-      resolveNugetCatalogLicense(registryFixture("nuget-licensefile.json")),
-    ).toBeNull();
+    expect(resolveNugetCatalogLicense(registryFixture("nuget-licensefile.json"))).toBeNull();
   });
 
   test("class 2 ladder order: licenseFile is checked BEFORE a decodable licenses.nuget.org URL", () => {
@@ -1978,15 +1892,11 @@ describe("nuget catalogEntry resolver (four-class ladder)", () => {
   });
 
   test("class 4: a pre-2019 url-only entry (github blob) is an honest unknown", () => {
-    expect(
-      resolveNugetCatalogLicense(registryFixture("nuget-urlonly.json")),
-    ).toBeNull();
+    expect(resolveNugetCatalogLicense(registryFixture("nuget-urlonly.json"))).toBeNull();
   });
 
   test("class 4: no license fields at all (the none fixture) → null", () => {
-    expect(
-      resolveNugetCatalogLicense(registryFixture("nuget-none.json")),
-    ).toBeNull();
+    expect(resolveNugetCatalogLicense(registryFixture("nuget-none.json"))).toBeNull();
   });
 
   test("an empty licenseExpression falls through (never an empty raw)", () => {
@@ -2008,9 +1918,9 @@ describe("nuget catalogEntry resolver (four-class ladder)", () => {
 
 describe("nuget narrows (tolerant)", () => {
   test("narrowNugetLeaf reads catalogEntry; wrong-typed/absent → undefined field", () => {
-    expect(
-      narrowNugetLeaf({ catalogEntry: "https://api.nuget.org/x" }),
-    ).toEqual({ catalogEntry: "https://api.nuget.org/x" });
+    expect(narrowNugetLeaf({ catalogEntry: "https://api.nuget.org/x" })).toEqual({
+      catalogEntry: "https://api.nuget.org/x",
+    });
     expect(narrowNugetLeaf({ catalogEntry: 42 })?.catalogEntry).toBeUndefined();
     expect(narrowNugetLeaf({})?.catalogEntry).toBeUndefined();
   });
@@ -2079,14 +1989,11 @@ describe("enrichUnknowns nuget (two-step fetch, negative discipline, offline che
 
   // The stubbed URLs are LOWERCASE while the purl above is mixed-case — the
   // casing differential the URL builder owns.
-  const LEAF_URL =
-    "https://api.nuget.org/v3/registration5-gz-semver2/newtonsoft.json/13.0.4.json";
+  const LEAF_URL = "https://api.nuget.org/v3/registration5-gz-semver2/newtonsoft.json/13.0.4.json";
   const CATALOG_URL =
     "https://api.nuget.org/v3/catalog0/data/2024.03.27.08.21.03/newtonsoft.json.13.0.4.json";
 
-  function registryClaim(
-    entry: PackageEntry | undefined,
-  ): LicenseClaim | undefined {
+  function registryClaim(entry: PackageEntry | undefined): LicenseClaim | undefined {
     return entry?.licenseClaims.find((c) => c.source === "registry");
   }
 
@@ -2111,10 +2018,7 @@ describe("enrichUnknowns nuget (two-step fetch, negative discipline, offline che
     });
   }
 
-  async function withFetch<T>(
-    impl: typeof fetch,
-    fn: () => Promise<T>,
-  ): Promise<T> {
+  async function withFetch<T>(impl: typeof fetch, fn: () => Promise<T>): Promise<T> {
     const original = globalThis.fetch;
     globalThis.fetch = impl;
     try {
@@ -2128,8 +2032,7 @@ describe("enrichUnknowns nuget (two-step fetch, negative discipline, offline che
     const { dir, path } = tempCachePath();
     try {
       const { fetch, calls } = fetchByUrl((url) => {
-        if (url === LEAF_URL)
-          return jsonResponse({ catalogEntry: CATALOG_URL });
+        if (url === LEAF_URL) return jsonResponse({ catalogEntry: CATALOG_URL });
         if (url === CATALOG_URL) {
           return jsonResponse({
             licenseExpression: "MIT",
@@ -2154,10 +2057,7 @@ describe("enrichUnknowns nuget (two-step fetch, negative discipline, offline che
         source: "registry",
       });
       // Cache keyed by the VERBATIM mixed-case purl (never the lowercase URL id).
-      const recorded = getEntry(
-        readCache(path),
-        "pkg:nuget/Newtonsoft.Json@13.0.4",
-      );
+      const recorded = getEntry(readCache(path), "pkg:nuget/Newtonsoft.Json@13.0.4");
       expect(recorded).toEqual({
         license: "MIT",
         fetchedFrom: "nuget",
@@ -2186,10 +2086,7 @@ describe("enrichUnknowns nuget (two-step fetch, negative discipline, offline che
       );
       expect(calls).toEqual([LEAF_URL]); // the leaf 404 is terminal — no second hop
       expect(registryClaim(result.model.packages[0])).toBeUndefined();
-      const recorded = getEntry(
-        readCache(path),
-        "pkg:nuget/Newtonsoft.Json@13.0.4",
-      );
+      const recorded = getEntry(readCache(path), "pkg:nuget/Newtonsoft.Json@13.0.4");
       expect(recorded).toEqual({
         license: null,
         fetchedFrom: "nuget",
@@ -2205,9 +2102,7 @@ describe("enrichUnknowns nuget (two-step fetch, negative discipline, offline che
     const { dir, path } = tempCachePath();
     try {
       const { fetch, calls } = fetchByUrl((url) =>
-        url === LEAF_URL
-          ? jsonResponse({ catalogEntry: CATALOG_URL })
-          : jsonResponse({}, 404),
+        url === LEAF_URL ? jsonResponse({ catalogEntry: CATALOG_URL }) : jsonResponse({}, 404),
       );
       const result = await withFetch(fetch, () =>
         enrichUnknowns(model(unknownNuget()), {
@@ -2219,10 +2114,7 @@ describe("enrichUnknowns nuget (two-step fetch, negative discipline, offline che
       );
       expect(calls).toEqual([LEAF_URL, CATALOG_URL]);
       expect(registryClaim(result.model.packages[0])).toBeUndefined();
-      const recorded = getEntry(
-        readCache(path),
-        "pkg:nuget/Newtonsoft.Json@13.0.4",
-      );
+      const recorded = getEntry(readCache(path), "pkg:nuget/Newtonsoft.Json@13.0.4");
       expect(recorded?.resolvable).toBe(false);
       expect(recorded?.license).toBeNull();
     } finally {
@@ -2247,10 +2139,7 @@ describe("enrichUnknowns nuget (two-step fetch, negative discipline, offline che
         }),
       );
       expect(registryClaim(result.model.packages[0])).toBeUndefined();
-      const recorded = getEntry(
-        readCache(path),
-        "pkg:nuget/Newtonsoft.Json@13.0.4",
-      );
+      const recorded = getEntry(readCache(path), "pkg:nuget/Newtonsoft.Json@13.0.4");
       expect(recorded?.resolvable).toBe(false);
     } finally {
       rmSync(dir, { recursive: true, force: true });
@@ -2271,10 +2160,7 @@ describe("enrichUnknowns nuget (two-step fetch, negative discipline, offline che
       );
       expect(calls).toEqual([LEAF_URL]); // never a second hop without a pinned URL
       expect(registryClaim(result.model.packages[0])).toBeUndefined();
-      expect(
-        getEntry(readCache(path), "pkg:nuget/Newtonsoft.Json@13.0.4")
-          ?.resolvable,
-      ).toBe(false);
+      expect(getEntry(readCache(path), "pkg:nuget/Newtonsoft.Json@13.0.4")?.resolvable).toBe(false);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
@@ -2299,10 +2185,7 @@ describe("enrichUnknowns nuget (two-step fetch, negative discipline, offline che
       expect(calls).toEqual([LEAF_URL]);
       expect(calls.some((u) => u.includes("evil.example"))).toBe(false);
       expect(registryClaim(result.model.packages[0])).toBeUndefined();
-      expect(
-        getEntry(readCache(path), "pkg:nuget/Newtonsoft.Json@13.0.4")
-          ?.resolvable,
-      ).toBe(false);
+      expect(getEntry(readCache(path), "pkg:nuget/Newtonsoft.Json@13.0.4")?.resolvable).toBe(false);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
@@ -2341,15 +2224,12 @@ describe("enrichUnknowns nuget (two-step fetch, negative discipline, offline che
       licenseClaims: [],
       scope: "app",
     };
-    const GOOD_LEAF =
-      "https://api.nuget.org/v3/registration5-gz-semver2/good.package/1.0.0.json";
+    const GOOD_LEAF = "https://api.nuget.org/v3/registration5-gz-semver2/good.package/1.0.0.json";
     const GOOD_CATALOG = "https://api.nuget.org/v3/catalog0/good.json";
     try {
       const { fetch } = fetchByUrl((url) => {
-        if (url === GOOD_LEAF)
-          return jsonResponse({ catalogEntry: GOOD_CATALOG });
-        if (url === GOOD_CATALOG)
-          return jsonResponse({ licenseExpression: "MIT" });
+        if (url === GOOD_LEAF) return jsonResponse({ catalogEntry: GOOD_CATALOG });
+        if (url === GOOD_CATALOG) return jsonResponse({ licenseExpression: "MIT" });
         return jsonResponse({}, 503); // the OTHER miss — persistent transient
       });
       await expect(
@@ -2436,9 +2316,7 @@ describe("enrichUnknowns nuget (two-step fetch, negative discipline, offline che
           verbose: false,
         }),
       );
-      expect(result.staleUnknowns).toEqual([
-        "pkg:nuget/Newtonsoft.Json@13.0.4",
-      ]);
+      expect(result.staleUnknowns).toEqual(["pkg:nuget/Newtonsoft.Json@13.0.4"]);
       expect(registryClaim(result.model.packages[0])).toBeUndefined();
       expect(readCache(path).size).toBe(0); // no file was ever written
     } finally {
@@ -2472,8 +2350,7 @@ describe("enrichUnknowns nuget (two-step fetch, negative discipline, offline che
         if (url === "https://registry.npmjs.org/no-claims") {
           return jsonResponse({ versions: { "2.0.0": { license: "ISC" } } });
         }
-        if (url === LEAF_URL)
-          return jsonResponse({ catalogEntry: CATALOG_URL });
+        if (url === LEAF_URL) return jsonResponse({ catalogEntry: CATALOG_URL });
         if (url === CATALOG_URL) {
           return jsonResponse({ licenseExpression: "Apache-2.0" });
         }
@@ -2491,9 +2368,7 @@ describe("enrichUnknowns nuget (two-step fetch, negative discipline, offline che
       const claims = result.model.packages.map((p) => registryClaim(p)?.raw);
       expect(claims).toEqual(["MIT", "ISC", "Apache-2.0"]);
       const loaded = readCache(path);
-      expect(getEntry(loaded, "pkg:nuget/Newtonsoft.Json@13.0.4")?.via).toBe(
-        "license-expression",
-      );
+      expect(getEntry(loaded, "pkg:nuget/Newtonsoft.Json@13.0.4")?.via).toBe("license-expression");
       expect(loaded.size).toBe(3);
     } finally {
       rmSync(dir, { recursive: true, force: true });
@@ -2509,9 +2384,7 @@ describe("maven deps.dev URL builder (qualifier stripping + SSRF pin)", () => {
   });
 
   test("strips a classifier qualifier too (?classifier=jakarta&type=jar)", () => {
-    expect(
-      depsDevVersionUrl("com.example/lib", "2.0.0?classifier=jakarta&type=jar"),
-    ).toBe(
+    expect(depsDevVersionUrl("com.example/lib", "2.0.0?classifier=jakarta&type=jar")).toBe(
       "https://api.deps.dev/v3/systems/MAVEN/packages/com.example%3Alib/versions/2.0.0",
     );
   });
@@ -2528,23 +2401,15 @@ describe("maven deps.dev URL builder (qualifier stripping + SSRF pin)", () => {
   });
 
   test("an attacker-shaped group/artifact (embedded slash, @, percent-escapes) can never change the host or path root", () => {
-    const url = depsDevVersionUrl(
-      "evil.example%2Fsteal/lib%40x",
-      "1.0.0?type=jar",
-    );
-    expect(
-      url.startsWith(`${DEPS_DEV_API_HOST}/v3/systems/MAVEN/packages/`),
-    ).toBe(true);
+    const url = depsDevVersionUrl("evil.example%2Fsteal/lib%40x", "1.0.0?type=jar");
+    expect(url.startsWith(`${DEPS_DEV_API_HOST}/v3/systems/MAVEN/packages/`)).toBe(true);
     // A decoded "/" is re-encoded, never becoming a real path boundary.
     expect(url).not.toContain("evil.example/steal");
     expect(url).toContain(encodeURIComponent("evil.example/steal:lib@x"));
   });
 
   test("a classifier purl targets the SAME GAV document as its non-classifier sibling", () => {
-    const plain = depsDevVersionUrl(
-      "org.example/querydsl-apt",
-      "5.0.0?type=jar",
-    );
+    const plain = depsDevVersionUrl("org.example/querydsl-apt", "5.0.0?type=jar");
     const classified = depsDevVersionUrl(
       "org.example/querydsl-apt",
       "5.0.0?classifier=jakarta&type=jar",
@@ -2583,9 +2448,7 @@ describe("maven deps.dev resolver (honest-sentinel ladder)", () => {
   });
 
   test("a mix of a real id and non-standard keeps only the real one", () => {
-    expect(
-      resolveMavenLicenses({ licenses: ["Apache-2.0", "non-standard"] }),
-    ).toEqual({
+    expect(resolveMavenLicenses({ licenses: ["Apache-2.0", "non-standard"] })).toEqual({
       raws: ["Apache-2.0"],
       via: "deps-dev-licenses",
       confidence: "high",
@@ -2671,10 +2534,7 @@ describe("enrichUnknowns maven (deps.dev single fetch, honest sentinel, 404-defi
     });
   }
 
-  async function withFetch<T>(
-    impl: typeof fetch,
-    fn: () => Promise<T>,
-  ): Promise<T> {
+  async function withFetch<T>(impl: typeof fetch, fn: () => Promise<T>): Promise<T> {
     const original = globalThis.fetch;
     globalThis.fetch = impl;
     try {
@@ -2688,8 +2548,7 @@ describe("enrichUnknowns maven (deps.dev single fetch, honest sentinel, 404-defi
     const { dir, path } = tempCachePath();
     try {
       const { fetch, calls } = fetchByUrl((url) => {
-        if (url === VERSION_URL)
-          return jsonResponse({ licenses: ["Apache-2.0"] });
+        if (url === VERSION_URL) return jsonResponse({ licenses: ["Apache-2.0"] });
         throw new Error(`unexpected url ${url}`);
       });
       const result = await withFetch(fetch, () =>
@@ -2704,10 +2563,7 @@ describe("enrichUnknowns maven (deps.dev single fetch, honest sentinel, 404-defi
       expect(registryClaims(result.model.packages[0])).toEqual([
         { raw: "Apache-2.0", kind: "expression", source: "registry" },
       ]);
-      const recorded = getEntry(
-        readCache(path),
-        "pkg:maven/com.example/lib@2.0.0?type=jar",
-      );
+      const recorded = getEntry(readCache(path), "pkg:maven/com.example/lib@2.0.0?type=jar");
       expect(recorded).toEqual({
         license: "Apache-2.0",
         fetchedFrom: "deps-dev",
@@ -2722,9 +2578,7 @@ describe("enrichUnknowns maven (deps.dev single fetch, honest sentinel, 404-defi
   test('sentinel: "non-standard" → NO registry claim, a governed NEGATIVE entry (a definitive answer, not a retry)', async () => {
     const { dir, path } = tempCachePath();
     try {
-      const { fetch } = fetchByUrl(() =>
-        jsonResponse({ licenses: ["non-standard"] }),
-      );
+      const { fetch } = fetchByUrl(() => jsonResponse({ licenses: ["non-standard"] }));
       const result = await withFetch(fetch, () =>
         enrichUnknowns(model(unknownMaven()), {
           mode: "generate",
@@ -2734,10 +2588,7 @@ describe("enrichUnknowns maven (deps.dev single fetch, honest sentinel, 404-defi
         }),
       );
       expect(registryClaims(result.model.packages[0])).toEqual([]);
-      const recorded = getEntry(
-        readCache(path),
-        "pkg:maven/com.example/lib@2.0.0?type=jar",
-      );
+      const recorded = getEntry(readCache(path), "pkg:maven/com.example/lib@2.0.0?type=jar");
       expect(recorded).toEqual({
         license: null,
         fetchedFrom: "deps-dev",
@@ -2770,15 +2621,8 @@ describe("enrichUnknowns maven (deps.dev single fetch, honest sentinel, 404-defi
         { raw: "LGPL-3.0-only", kind: "expression", source: "registry" },
         { raw: "MPL-1.1", kind: "expression", source: "registry" },
       ]);
-      const recorded = getEntry(
-        readCache(path),
-        "pkg:maven/com.example/lib@2.0.0?type=jar",
-      );
-      expect(recorded?.license).toEqual([
-        "GPL-3.0-only",
-        "LGPL-3.0-only",
-        "MPL-1.1",
-      ]);
+      const recorded = getEntry(readCache(path), "pkg:maven/com.example/lib@2.0.0?type=jar");
+      expect(recorded?.license).toEqual(["GPL-3.0-only", "LGPL-3.0-only", "MPL-1.1"]);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
@@ -2798,10 +2642,7 @@ describe("enrichUnknowns maven (deps.dev single fetch, honest sentinel, 404-defi
       );
       expect(calls).toEqual([VERSION_URL]);
       expect(registryClaims(result.model.packages[0])).toEqual([]);
-      const recorded = getEntry(
-        readCache(path),
-        "pkg:maven/com.example/lib@2.0.0?type=jar",
-      );
+      const recorded = getEntry(readCache(path), "pkg:maven/com.example/lib@2.0.0?type=jar");
       expect(recorded).toEqual({
         license: null,
         fetchedFrom: "deps-dev",
@@ -2905,9 +2746,11 @@ describe("enrichUnknowns maven (deps.dev single fetch, honest sentinel, 404-defi
         }),
       );
       expect(calls).toEqual([]);
-      expect(
-        registryClaims(result.model.packages[0]).map((c) => c.raw),
-      ).toEqual(["GPL-3.0-only", "LGPL-3.0-only", "MPL-1.1"]);
+      expect(registryClaims(result.model.packages[0]).map((c) => c.raw)).toEqual([
+        "GPL-3.0-only",
+        "LGPL-3.0-only",
+        "MPL-1.1",
+      ]);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
@@ -2954,9 +2797,7 @@ describe("enrichUnknowns maven (deps.dev single fetch, honest sentinel, 404-defi
           verbose: false,
         }),
       );
-      expect(result.staleUnknowns).toEqual([
-        "pkg:maven/com.example/lib@2.0.0?type=jar",
-      ]);
+      expect(result.staleUnknowns).toEqual(["pkg:maven/com.example/lib@2.0.0?type=jar"]);
       expect(registryClaims(result.model.packages[0])).toEqual([]);
       expect(readCache(path).size).toBe(0);
     } finally {
@@ -3065,9 +2906,7 @@ describe("enrichUnknowns maven (deps.dev single fetch, honest sentinel, 404-defi
         }),
       );
       expect(calls).toHaveLength(2);
-      const claims = result.model.packages.map(
-        (p) => registryClaims(p)[0]?.raw,
-      );
+      const claims = result.model.packages.map((p) => registryClaims(p)[0]?.raw);
       expect(claims).toEqual(["MIT", "Apache-2.0"]);
       const loaded = readCache(path);
       expect(loaded.size).toBe(2);

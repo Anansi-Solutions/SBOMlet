@@ -28,11 +28,7 @@ import { tmpdir } from "node:os";
 import { join, relative, resolve } from "node:path";
 import { afterAll, beforeAll, describe, expect, mock, test } from "bun:test";
 
-import {
-  dockerSbomOptionsFrom,
-  dockerSbomModeConflict,
-  optionsFrom,
-} from "../src/cli";
+import { dockerSbomOptionsFrom, dockerSbomModeConflict, optionsFrom } from "../src/cli";
 import { exitCodeFor, runCheck } from "../src/gate/check";
 import { classifyCoverage, coverageSkipReason } from "../src/pipeline/coverage";
 import { defaultNoticesPath, resolveFrom } from "../src/pipeline/paths";
@@ -127,30 +123,23 @@ describe("classifyCoverage — coverage policy (pure)", () => {
   });
 
   test("zero-dependency Yarn-4 lockfile with zero components classifies as skip, not throw", () => {
-    expect(
-      classifyCoverage("apps/no-deps", "yarn.lock", NO_DEPS_V8_LOCKFILE, 0),
-    ).toBe("skip");
+    expect(classifyCoverage("apps/no-deps", "yarn.lock", NO_DEPS_V8_LOCKFILE, 0)).toBe("skip");
   });
 
   test("a poetry lockfile WITH [[package]] entries that scans to zero components stays the hard error", () => {
     // The relaxation only covers lockfiles with zero third-party [[package]]
     // tables — a parse/scan failure on a populated lockfile is exactly the
     // silent-incomplete-inventory case the coverage policy exists to catch.
-    expect(() =>
-      classifyCoverage("apps/jupyter", "poetry.lock", "[[package]]\n", 0),
-    ).toThrow("coverage assertion failed");
+    expect(() => classifyCoverage("apps/jupyter", "poetry.lock", "[[package]]\n", 0)).toThrow(
+      "coverage assertion failed",
+    );
   });
 
   test("a dependency-free poetry.lock (metadata only) classifies as skip, not throw", () => {
-    const lockfile = [
-      "[metadata]",
-      'lock-version = "2.1"',
-      'python-versions = ">=3.12"',
-      "",
-    ].join("\n");
-    expect(classifyCoverage("apps/pyfree", "poetry.lock", lockfile, 0)).toBe(
-      "skip",
+    const lockfile = ["[metadata]", 'lock-version = "2.1"', 'python-versions = ">=3.12"', ""].join(
+      "\n",
     );
+    expect(classifyCoverage("apps/pyfree", "poetry.lock", lockfile, 0)).toBe("skip");
   });
 
   test("a dependency-free uv.lock (only the local self entry) classifies as skip, not throw", () => {
@@ -163,9 +152,7 @@ describe("classifyCoverage — coverage policy (pure)", () => {
       'source = { virtual = "." }',
       "",
     ].join("\n");
-    expect(classifyCoverage("apps/uvfree", "uv.lock", lockfile, 0)).toBe(
-      "skip",
-    );
+    expect(classifyCoverage("apps/uvfree", "uv.lock", lockfile, 0)).toBe("skip");
   });
 
   test("skip classification cannot drift: every coverageSkipReason skip is an classifyCoverage skip", () => {
@@ -179,16 +166,11 @@ describe("classifyCoverage — coverage policy (pure)", () => {
       ["poetry.lock", "   \n"],
       ["yarn.lock", NO_DEPS_V8_LOCKFILE],
       ["poetry.lock", '[metadata]\nlock-version = "2.1"\n'],
-      [
-        "uv.lock",
-        'version = 1\n\n[[package]]\nname = "p"\nsource = { virtual = "." }\n',
-      ],
+      ["uv.lock", 'version = 1\n\n[[package]]\nname = "p"\nsource = { virtual = "." }\n'],
     ];
     for (const [lockfileName, lockfileText] of skipClassified) {
       expect(coverageSkipReason(lockfileName, lockfileText)).toBeDefined();
-      expect(classifyCoverage("apps/x", lockfileName, lockfileText, 0)).toBe(
-        "skip",
-      );
+      expect(classifyCoverage("apps/x", lockfileName, lockfileText, 0)).toBe("skip");
     }
   });
 });
@@ -256,14 +238,9 @@ const PNPM_V9_WITH_PACKAGES = [
 ].join("\n");
 
 /** Workspace-only v9 lockfile: importers, NO packages: section → skip. */
-const PNPM_V9_IMPORTERS_ONLY = [
-  "lockfileVersion: '9.0'",
-  "",
-  "importers:",
-  "",
-  "  .: {}",
-  "",
-].join("\n");
+const PNPM_V9_IMPORTERS_ONLY = ["lockfileVersion: '9.0'", "", "importers:", "", "  .: {}", ""].join(
+  "\n",
+);
 
 /** bun.lock whose only packages entry is an @workspace: member → skip. */
 const BUN_WORKSPACE_ONLY_LOCK = `{
@@ -290,9 +267,7 @@ const BUN_WITH_THIRD_PARTY_LOCK = `{
 
 describe("coverageSkipReason — npm/pnpm/bun branches", () => {
   test("package-lock.json v3 with third-party deps routes to scan", () => {
-    expect(
-      coverageSkipReason("package-lock.json", NPM_V3_WITH_DEPS),
-    ).toBeUndefined();
+    expect(coverageSkipReason("package-lock.json", NPM_V3_WITH_DEPS)).toBeUndefined();
   });
 
   test("package-lock.json v3 with only the root entry skips naming the lockfile", () => {
@@ -303,29 +278,21 @@ describe("coverageSkipReason — npm/pnpm/bun branches", () => {
   });
 
   test("package-lock.json v3 with only workspace links skips (positively-determined zero)", () => {
-    expect(
-      coverageSkipReason("package-lock.json", NPM_V3_LINKS_ONLY),
-    ).toBeDefined();
+    expect(coverageSkipReason("package-lock.json", NPM_V3_LINKS_ONLY)).toBeDefined();
   });
 
   test("package-lock.json v1 (no packages map) routes to scan — unknown is never a skip", () => {
     // A v1 lockfile proves nothing about its entry count. The target must
     // scan; a zero-component scan then hard-fails loudly.
-    expect(
-      coverageSkipReason("package-lock.json", NPM_V1_LOCKFILE),
-    ).toBeUndefined();
+    expect(coverageSkipReason("package-lock.json", NPM_V1_LOCKFILE)).toBeUndefined();
   });
 
   test("package-lock.json garbage routes to scan (unknown count)", () => {
-    expect(
-      coverageSkipReason("package-lock.json", "not json {"),
-    ).toBeUndefined();
+    expect(coverageSkipReason("package-lock.json", "not json {")).toBeUndefined();
   });
 
   test("pnpm-lock.yaml v9 with a packages section routes to scan", () => {
-    expect(
-      coverageSkipReason("pnpm-lock.yaml", PNPM_V9_WITH_PACKAGES),
-    ).toBeUndefined();
+    expect(coverageSkipReason("pnpm-lock.yaml", PNPM_V9_WITH_PACKAGES)).toBeUndefined();
   });
 
   test("pnpm-lock.yaml importers-only skips naming the lockfile", () => {
@@ -343,9 +310,7 @@ describe("coverageSkipReason — npm/pnpm/bun branches", () => {
   });
 
   test("bun.lock with third-party entries routes to scan", () => {
-    expect(
-      coverageSkipReason("bun.lock", BUN_WITH_THIRD_PARTY_LOCK),
-    ).toBeUndefined();
+    expect(coverageSkipReason("bun.lock", BUN_WITH_THIRD_PARTY_LOCK)).toBeUndefined();
   });
 
   test("bun.lock garbage routes to scan — the collector throws loudly later", () => {
@@ -354,12 +319,8 @@ describe("coverageSkipReason — npm/pnpm/bun branches", () => {
 
   test("empty/whitespace text for every new kind takes the existing empty reason", () => {
     for (const name of ["package-lock.json", "pnpm-lock.yaml", "bun.lock"]) {
-      expect(coverageSkipReason(name, "")).toBe(
-        `${name} is empty (whitespace only)`,
-      );
-      expect(coverageSkipReason(name, " \n\t\n")).toBe(
-        `${name} is empty (whitespace only)`,
-      );
+      expect(coverageSkipReason(name, "")).toBe(`${name} is empty (whitespace only)`);
+      expect(coverageSkipReason(name, " \n\t\n")).toBe(`${name} is empty (whitespace only)`);
     }
   });
 
@@ -372,9 +333,7 @@ describe("coverageSkipReason — npm/pnpm/bun branches", () => {
     ];
     for (const [lockfileName, lockfileText] of skipClassified) {
       expect(coverageSkipReason(lockfileName, lockfileText)).toBeDefined();
-      expect(classifyCoverage("apps/x", lockfileName, lockfileText, 0)).toBe(
-        "skip",
-      );
+      expect(classifyCoverage("apps/x", lockfileName, lockfileText, 0)).toBe("skip");
     }
   });
 });
@@ -387,13 +346,10 @@ describe("sanitizeForLog — stderr injection boundary", () => {
   const CSI = String.fromCharCode(155); // 0x9B (C1 single-byte CSI)
 
   test("newline injection cannot forge a summary line", () => {
-    const forged =
-      "ok\npolicy: 0 fail, 0 warn, 0 suppressed, 9999 ok (9999 verdicts)";
+    const forged = "ok\npolicy: 0 fail, 0 warn, 0 suppressed, 9999 ok (9999 verdicts)";
     const out = sanitizeForLog(forged);
     expect(out).not.toContain("\n");
-    expect(out).toBe(
-      "ok policy: 0 fail, 0 warn, 0 suppressed, 9999 ok (9999 verdicts)",
-    );
+    expect(out).toBe("ok policy: 0 fail, 0 warn, 0 suppressed, 9999 ok (9999 verdicts)");
   });
 
   test("ANSI erase/cursor sequences are neutralized (ESC flattened)", () => {
@@ -437,15 +393,12 @@ describe("writePolicySummary — imprecise count line", () => {
       writePolicySummary(parsePolicy(""), verdicts, new Set());
     });
     // The locked counts-line shape is intact (both imprecise verdicts are warns).
-    expect(stderr).toContain(
-      "policy: 0 fail, 2 warn, 0 suppressed, 0 ok (2 verdicts)\n",
-    );
+    expect(stderr).toContain("policy: 0 fail, 2 warn, 0 suppressed, 0 ok (2 verdicts)\n");
     // ...plus a NEW imprecise line. I1: the count is PER-OCCURRENCE (matching
     // the `(M verdicts)` denominator, NOT the per-package markdown section), so
     // the line carries an explicit "(N verdicts)" suffix mirroring that shape.
     expect(stderr).toContain(
-      "policy: 2 imprecise (review / disambiguate via [[clarify]]) " +
-        "(2 verdicts)\n",
+      "policy: 2 imprecise (review / disambiguate via [[clarify]]) " + "(2 verdicts)\n",
     );
   });
 
@@ -462,9 +415,7 @@ describe("writePolicySummary — imprecise count line", () => {
     const stderr = await withCapturedStderr(async () => {
       writePolicySummary(parsePolicy(""), verdicts, new Set());
     });
-    expect(stderr).toContain(
-      "policy: 0 fail, 0 warn, 0 suppressed, 1 ok (1 verdicts)\n",
-    );
+    expect(stderr).toContain("policy: 0 fail, 0 warn, 0 suppressed, 1 ok (1 verdicts)\n");
     expect(stderr).not.toContain("imprecise");
   });
 });
@@ -487,14 +438,11 @@ describe("writePolicySummary — assessment conflict count line", () => {
       writePolicySummary(parsePolicy(""), verdicts, new Set());
     });
     // The locked counts-line shape is intact (both conflicts are fails).
-    expect(stderr).toContain(
-      "policy: 2 fail, 0 warn, 0 suppressed, 0 ok (2 verdicts)\n",
-    );
+    expect(stderr).toContain("policy: 2 fail, 0 warn, 0 suppressed, 0 ok (2 verdicts)\n");
     // ...plus a NEW conflict line, mirroring the imprecise-count shape with an
     // explicit "(N verdicts)" per-occurrence denominator.
     expect(stderr).toContain(
-      "policy: 2 assessment conflict(s) — resolve via [[clarify]] " +
-        "(2 verdicts)\n",
+      "policy: 2 assessment conflict(s) — resolve via [[clarify]] " + "(2 verdicts)\n",
     );
   });
 
@@ -621,9 +569,7 @@ describe("runGenerate discovery mode — offline branches", () => {
     });
 
     expect(thrown).toBeDefined();
-    expect(thrown!.message).toContain(
-      'target "pyproj" is missing pyproject.toml',
-    );
+    expect(thrown!.message).toContain('target "pyproj" is missing pyproject.toml');
     expect(thrown!.message).toContain(join(projDir, "pyproject.toml"));
   });
 
@@ -711,9 +657,7 @@ describe("runGenerate discovery warnings (collision, bun.lockb)", () => {
       });
     });
 
-    expect(stderr).toContain(
-      'warning: target "binproj" has a binary bun.lockb',
-    );
+    expect(stderr).toContain('warning: target "binproj" has a binary bun.lockb');
     expect(stderr).toContain("bun install --save-text-lockfile");
     // binproj never became a target: no skip line for it, no dispatch at all.
     expect(stderr).not.toContain("warning: skipping binproj");
@@ -778,13 +722,9 @@ async function fakeScanWithCdxgen(): Promise<cdxgenModule.CollectorSbomFile> {
  * Yarn-1-style lockfile: no __metadata block (→ cdxgen dispatch) and ONE
  * third-party entry header (→ not skip-classified by coverageSkipReason).
  */
-const V1_LOCKFILE = [
-  "# yarn lockfile v1",
-  "",
-  "lodash@^4.17.21:",
-  '  version "4.17.21"',
-  "",
-].join("\n");
+const V1_LOCKFILE = ["# yarn lockfile v1", "", "lodash@^4.17.21:", '  version "4.17.21"', ""].join(
+  "\n",
+);
 
 /** Temp repo root with one cdxgen-dispatched yarn project named "proj". */
 function makeScannableTree(): { root: string } {
@@ -849,10 +789,7 @@ afterAll(() => {
  * appears in a root listTree/snapshotTree write-free assertion.
  */
 function enrichCache(): string {
-  return join(
-    mkdtempSync(join(tmpdir(), "licenses-cli-enrich-")),
-    "enrichment-cache.json",
-  );
+  return join(mkdtempSync(join(tmpdir(), "licenses-cli-enrich-")), "enrichment-cache.json");
 }
 
 describe("runGenerate --policy", () => {
@@ -989,18 +926,12 @@ describe("runGenerate --policy", () => {
 
     // Counts line with all four statuses: copyleft-lib fails, no-claims
     // warns (default [unknown] handling), mit-lib is ok.
-    expect(stderr).toContain(
-      "policy: 1 fail, 1 warn, 0 suppressed, 1 ok (3 verdicts)\n",
-    );
+    expect(stderr).toContain("policy: 1 fail, 1 warn, 0 suppressed, 1 ok (3 verdicts)\n");
 
     // One line per fail/warn verdict: purl, occurrence target, rule, reason.
-    expect(stderr).toContain(
-      "policy fail: pkg:npm/copyleft-lib@1.0.0 in proj — default:copyleft:",
-    );
+    expect(stderr).toContain("policy fail: pkg:npm/copyleft-lib@1.0.0 in proj — default:copyleft:");
     expect(stderr).toContain('copyleft license "AGPL-3.0-only"');
-    expect(stderr).toContain(
-      "policy warn: pkg:npm/no-claims@2.0.0 in proj — default:unknown:",
-    );
+    expect(stderr).toContain("policy warn: pkg:npm/no-claims@2.0.0 in proj — default:unknown:");
 
     // Unused-entry warning names the rule id and its reason.
     expect(stderr).toContain(
@@ -1036,9 +967,7 @@ describe("runGenerate --policy", () => {
       });
     });
 
-    expect(stderr).toContain(
-      "policy fail: pkg:npm/copyleft-lib@1.0.0 in proj — default:copyleft:",
-    );
+    expect(stderr).toContain("policy fail: pkg:npm/copyleft-lib@1.0.0 in proj — default:copyleft:");
     expect(stderr).toContain(
       "policy warning: unused entry compatible[0] — scoped-dead-rule-marker",
     );
@@ -1072,10 +1001,7 @@ describe("runGenerate --policy", () => {
 
     // (b) Semantically invalid policy (missing reason) → PolicyError naming
     // the table path.
-    const semanticPath = writePolicy(
-      root,
-      '[[compatible]]\nmatch = "license"\npattern = "MIT"\n',
-    );
+    const semanticPath = writePolicy(root, '[[compatible]]\nmatch = "license"\npattern = "MIT"\n');
     let semanticThrown: Error | undefined;
     await withCapturedStderr(async () => {
       try {
@@ -1135,19 +1061,14 @@ describe("runGenerate --policy", () => {
       const keys = Object.keys(pkg.finding).sort();
       const core = keys.filter((k) => k !== "observedExpressions");
       expect(core).toEqual(["confidence", "elected", "expression", "source"]);
-      const f = pkg.finding as { expression: string | null } & Record<
-        string,
-        unknown
-      >;
+      const f = pkg.finding as { expression: string | null } & Record<string, unknown>;
       if (f.expression !== null) {
         expect(keys).toContain("observedExpressions");
       } else {
         expect(keys).not.toContain("observedExpressions");
       }
     }
-    const copyleft = dump.packages.find(
-      (p) => p.purl === "pkg:npm/copyleft-lib@1.0.0",
-    );
+    const copyleft = dump.packages.find((p) => p.purl === "pkg:npm/copyleft-lib@1.0.0");
     expect(copyleft!.finding.expression).toBe("AGPL-3.0-only");
     expect(copyleft!.finding.elected).toBe("AGPL-3.0-only");
 
@@ -1173,8 +1094,7 @@ describe("runGenerate --policy", () => {
     // TOML basic-string escapes for both.
     const ESC = String.fromCharCode(27);
     const forgedReason =
-      "real reason\npolicy: 0 fail, 0 warn, 0 suppressed, 9999 ok " +
-      `(9999 verdicts)${ESC}[2K`;
+      "real reason\npolicy: 0 fail, 0 warn, 0 suppressed, 9999 ok " + `(9999 verdicts)${ESC}[2K`;
     // The 0BSD rule matches nothing in the fixture → its reason is printed
     // via the unused-entry warning path.
     const policyPath = writePolicy(
@@ -1199,9 +1119,7 @@ describe("runGenerate --policy", () => {
     });
 
     // The REAL counts line is intact...
-    expect(stderr).toContain(
-      "policy: 1 fail, 1 warn, 0 suppressed, 1 ok (3 verdicts)\n",
-    );
+    expect(stderr).toContain("policy: 1 fail, 1 warn, 0 suppressed, 1 ok (3 verdicts)\n");
     // ...the forged counts line never starts a line of its own...
     expect(stderr).not.toContain("\npolicy: 0 fail");
     // ...no raw ESC byte survives to the terminal...
@@ -1356,14 +1274,10 @@ describe("buildOutputs and the generate output set", () => {
     // Bytes on disk are EXACTLY the buildOutputs strings (one pipeline core).
     expect(readFileSync(opts.outputPath, "utf8")).toBe(expected!.licensesMd);
     expect(readFileSync(opts.noticesPath, "utf8")).toBe(expected!.noticesMd);
-    expect(readFileSync(opts.cyclonedxPath, "utf8")).toBe(
-      expected!.cyclonedxJson!,
-    );
+    expect(readFileSync(opts.cyclonedxPath, "utf8")).toBe(expected!.cyclonedxJson!);
 
     // One "wrote ..." stderr line per written file.
-    const wroteLines = stderr
-      .split("\n")
-      .filter((line) => line.startsWith("wrote "));
+    const wroteLines = stderr.split("\n").filter((line) => line.startsWith("wrote "));
     expect(wroteLines.length).toBe(3);
     expect(stderr).toContain(`wrote ${opts.outputPath}`);
     expect(stderr).toContain(`wrote ${opts.noticesPath}`);
@@ -1408,12 +1322,10 @@ describe("buildOutputs and the generate output set", () => {
   test("Test 5: --notices default path, explicit-path precedence, and absent --cyclonedx", async () => {
     // (a) Default --notices path: THIRD_PARTY_NOTICES.md in the same directory
     // as the output path — main()'s computation helper.
-    expect(
-      defaultNoticesPath(join("some", "dir", "THIRD_PARTY_LICENSES.md")),
-    ).toBe(join("some", "dir", "THIRD_PARTY_NOTICES.md"));
-    expect(defaultNoticesPath("THIRD_PARTY_LICENSES.md")).toBe(
-      "THIRD_PARTY_NOTICES.md",
+    expect(defaultNoticesPath(join("some", "dir", "THIRD_PARTY_LICENSES.md"))).toBe(
+      join("some", "dir", "THIRD_PARTY_NOTICES.md"),
     );
+    expect(defaultNoticesPath("THIRD_PARTY_LICENSES.md")).toBe("THIRD_PARTY_NOTICES.md");
 
     // (b) An explicit notices path wins: the companion lands exactly there,
     // and with --cyclonedx absent no export file is created anywhere.
@@ -1504,9 +1416,7 @@ describe("buildOutputs and the generate output set", () => {
     // The policy was read from the base dir (the pointer line proves a
     // policy run happened) and the document keeps the RAW relative path —
     // never a machine-specific absolute path in committed bytes.
-    expect(squish(md)).toContain(
-      "Copyleft notice rules are configured in policy.toml.",
-    );
+    expect(squish(md)).toContain("Copyleft notice rules are configured in policy.toml.");
     expect(md).not.toContain(root);
 
     // check resolves the SAME paths — a clean baseDir round-trip exits 0.
@@ -1951,19 +1861,11 @@ describe("dispatch wiring: bun branch + per-kind firstPartyNames", () => {
 
     const md = readFileSync(outputPath, "utf8");
     // Third-party rows at the correct versions, used-in = target identity.
-    expect(squish(md)).toContain(
-      "| smol-toml | npm | 1.6.1 | unknown | bunproj |",
-    );
-    expect(squish(md)).toContain(
-      "| spdx-compare | npm | 1.0.0 | unknown | bunproj |",
-    );
-    expect(squish(md)).toContain(
-      "| typescript | npm | 5.9.3 | unknown | bunproj |",
-    );
+    expect(squish(md)).toContain("| smol-toml | npm | 1.6.1 | unknown | bunproj |");
+    expect(squish(md)).toContain("| spdx-compare | npm | 1.0.0 | unknown | bunproj |");
+    expect(squish(md)).toContain("| typescript | npm | 5.9.3 | unknown | bunproj |");
     // The nested-conflict purl folded to exactly ONE row.
-    expect(squish(md)).toContain(
-      "| spdx-expression-parse | npm | 3.0.1 | unknown | bunproj |",
-    );
+    expect(squish(md)).toContain("| spdx-expression-parse | npm | 3.0.1 | unknown | bunproj |");
     expect(md.match(/\| spdx-expression-parse \|/g)!.length).toBe(1);
     // The workspace member is absent (collector-side exclusion).
     expect(md).not.toContain("| member |");
@@ -1972,13 +1874,9 @@ describe("dispatch wiring: bun branch + per-kind firstPartyNames", () => {
     // dev/prod per the BFS: typescript is the dev root; everything else
     // is prod-reachable (incl. both folded nested/top-level entries).
     const occurrences = occurrencesByName(dumpPath);
-    expect(occurrences.get("typescript")).toEqual([
-      { target: "bunproj", isDevDependency: true },
-    ]);
+    expect(occurrences.get("typescript")).toEqual([{ target: "bunproj", isDevDependency: true }]);
     for (const name of ["smol-toml", "spdx-compare", "spdx-expression-parse"]) {
-      expect(occurrences.get(name)).toEqual([
-        { target: "bunproj", isDevDependency: false },
-      ]);
+      expect(occurrences.get(name)).toEqual([{ target: "bunproj", isDevDependency: false }]);
     }
   });
 
@@ -2044,12 +1942,8 @@ describe("dispatch wiring: bun branch + per-kind firstPartyNames", () => {
 
     // Through the CLI: development+optional pair merges PROD.
     const occurrences = occurrencesByName(dumpPath);
-    expect(occurrences.get("fsevents")).toEqual([
-      { target: "npm-app", isDevDependency: false },
-    ]);
-    expect(occurrences.get("express")).toEqual([
-      { target: "npm-app", isDevDependency: false },
-    ]);
+    expect(occurrences.get("fsevents")).toEqual([{ target: "npm-app", isDevDependency: false }]);
+    expect(occurrences.get("express")).toEqual([{ target: "npm-app", isDevDependency: false }]);
   });
 
   test("a pnpm target merges development-marked dev scope; no first-party leakage", async () => {
@@ -2072,24 +1966,16 @@ describe("dispatch wiring: bun branch + per-kind firstPartyNames", () => {
     expect(stderr).toContain("collecting pnpm-app via");
 
     const md = readFileSync(outputPath, "utf8");
-    expect(squish(md)).toContain(
-      "| smol-toml | npm | 1.6.1 | unknown | pnpm-app |",
-    );
-    expect(squish(md)).toContain(
-      "| typescript | npm | 5.9.3 | unknown | pnpm-app |",
-    );
+    expect(squish(md)).toContain("| smol-toml | npm | 1.6.1 | unknown | pnpm-app |");
+    expect(squish(md)).toContain("| typescript | npm | 5.9.3 | unknown | pnpm-app |");
     // No first-party leakage: cdxgen omits pnpm members; the importer-name
     // belt-and-braces wiring must not surface anything either.
     expect(md).not.toContain("| liba |");
     expect(md).toContain("- Total packages: 2");
 
     const occurrences = occurrencesByName(dumpPath);
-    expect(occurrences.get("typescript")).toEqual([
-      { target: "pnpm-app", isDevDependency: true },
-    ]);
-    expect(occurrences.get("smol-toml")).toEqual([
-      { target: "pnpm-app", isDevDependency: false },
-    ]);
+    expect(occurrences.get("typescript")).toEqual([{ target: "pnpm-app", isDevDependency: true }]);
+    expect(occurrences.get("smol-toml")).toEqual([{ target: "pnpm-app", isDevDependency: false }]);
   });
 
   test("an npm v1 target routes to scan and the zero-component result hard-fails naming the target", async () => {
@@ -2235,18 +2121,14 @@ describe("generate-docker-sbom three-lane contract", () => {
 describe("optionsFrom --intensive threading (absent-not-false)", () => {
   test("intensive absent from CliValues leaves options.intensive ABSENT (own-property, not false)", () => {
     const options = optionsFrom({});
-    expect(Object.prototype.hasOwnProperty.call(options, "intensive")).toBe(
-      false,
-    );
+    expect(Object.prototype.hasOwnProperty.call(options, "intensive")).toBe(false);
     expect(options.intensive).toBeUndefined();
   });
 
   test("--intensive true yields options.intensive === true", () => {
     const options = optionsFrom({ intensive: true });
     expect(options.intensive).toBe(true);
-    expect(Object.prototype.hasOwnProperty.call(options, "intensive")).toBe(
-      true,
-    );
+    expect(Object.prototype.hasOwnProperty.call(options, "intensive")).toBe(true);
   });
 
   test("intensive: false (should never happen — no default in parseArgs) still yields ABSENT, never a stored false", () => {
@@ -2254,9 +2136,7 @@ describe("optionsFrom --intensive threading (absent-not-false)", () => {
     // option), but optionsFrom's own guard is `=== true`, so even a stray
     // false input cannot leak a stored false into GenerateOptions.
     const options = optionsFrom({ intensive: false });
-    expect(Object.prototype.hasOwnProperty.call(options, "intensive")).toBe(
-      false,
-    );
+    expect(Object.prototype.hasOwnProperty.call(options, "intensive")).toBe(false);
   });
 });
 
@@ -2284,16 +2164,11 @@ describe("Taskfile split invariants (static, YAML-parsed — locks the public/de
   }
 
   function loadTaskfile(name: string): TaskfileDoc {
-    return Bun.YAML.parse(
-      readFileSync(join(import.meta.dir, "..", name), "utf8"),
-    ) as TaskfileDoc;
+    return Bun.YAML.parse(readFileSync(join(import.meta.dir, "..", name), "utf8")) as TaskfileDoc;
   }
 
   test("generate composes --intensive from the INTENSIVE var (bare boolean idiom)", () => {
-    const taskfile = readFileSync(
-      join(import.meta.dir, "..", "Taskfile.yml"),
-      "utf8",
-    );
+    const taskfile = readFileSync(join(import.meta.dir, "..", "Taskfile.yml"), "utf8");
     expect(taskfile).toContain("{{if .INTENSIVE}} --intensive{{end}}");
   });
 
@@ -2302,12 +2177,7 @@ describe("Taskfile split invariants (static, YAML-parsed — locks the public/de
     const described = Object.keys(tasks)
       .filter((name) => tasks[name]?.desc !== undefined)
       .sort();
-    expect(described).toEqual([
-      "check",
-      "docker:list",
-      "generate",
-      "verify:cache",
-    ]);
+    expect(described).toEqual(["check", "docker:list", "generate", "verify:cache"]);
   });
 
   test("the dev include is optional and flattened, so a vendored copy may drop Taskfile.dev.yml entirely", () => {
@@ -2358,9 +2228,7 @@ describe("Taskfile split invariants (static, YAML-parsed — locks the public/de
 
   test("generate composes the docker refresh under DOCKER=1 through the internal generate:docker helper", () => {
     const tasks = loadTaskfile("Taskfile.yml").tasks ?? {};
-    expect(JSON.stringify(tasks.generate?.cmds)).toContain(
-      "{{if .DOCKER}}generate:docker{{end}}",
-    );
+    expect(JSON.stringify(tasks.generate?.cmds)).toContain("{{if .DOCKER}}generate:docker{{end}}");
     expect(tasks["generate:docker"]?.internal).toBe(true);
   });
 

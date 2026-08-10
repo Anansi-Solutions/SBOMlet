@@ -102,8 +102,7 @@ export function discoverDockerfiles(
   const excludeMatchers = (opts?.excludes ?? []).map(globToRegExp);
   const ignoreMatchers = (opts?.dockerIgnore ?? []).map(globToRegExp);
 
-  const identityOf = (path: string): string =>
-    relative(repoRoot, path).split(sep).join("/");
+  const identityOf = (path: string): string => relative(repoRoot, path).split(sep).join("/");
 
   const found: DiscoveredDockerfile[] = [];
   const ignored: string[] = [];
@@ -117,14 +116,7 @@ export function discoverDockerfiles(
         // Dockerfile lane: pass the dot-dir allowlist so .docker/.devcontainer (conventional
         // Dockerfile homes) are descended while .git/.terraform and every other dot-dir stay
         // pruned.
-        if (
-          shouldDescendDir(
-            sub,
-            entry.name,
-            toolDir,
-            DOCKERFILE_DOT_DIR_ALLOWLIST,
-          )
-        ) {
+        if (shouldDescendDir(sub, entry.name, toolDir, DOCKERFILE_DOT_DIR_ALLOWLIST)) {
           walk(sub);
         }
         continue;

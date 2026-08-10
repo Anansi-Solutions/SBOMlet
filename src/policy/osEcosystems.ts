@@ -17,9 +17,4 @@
  * per-container System/Application table split - one discriminator, so the two views can never
  * disagree about which packages are routine.
  */
-export const OS_PACKAGE_ECOSYSTEMS: ReadonlySet<string> = new Set([
-  "deb",
-  "apk",
-  "rpm",
-  "alpm",
-]);
+export const OS_PACKAGE_ECOSYSTEMS: ReadonlySet<string> = new Set(["deb", "apk", "rpm", "alpm"]);

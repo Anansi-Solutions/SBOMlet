@@ -58,12 +58,8 @@ describe("resolveDiscoveredImages (discovery build lane, NO docker, NO file read
       dockerIgnore: ["docker/dev/**"],
     });
     // Found files with their deterministic build tags.
-    expect(summary).toContain(
-      `app/Dockerfile -> ${imageTag("app/Dockerfile")}`,
-    );
-    expect(summary).toContain(
-      `svc/build.dockerfile -> ${imageTag("svc/build.dockerfile")}`,
-    );
+    expect(summary).toContain(`app/Dockerfile -> ${imageTag("app/Dockerfile")}`);
+    expect(summary).toContain(`svc/build.dockerfile -> ${imageTag("svc/build.dockerfile")}`);
     // The ignored dev Dockerfile is named as ignored, never built.
     expect(summary).toContain("docker/dev/Dockerfile");
     expect(summary).toContain("ignored");
@@ -96,9 +92,9 @@ describe("resolveDiscoveredImages (discovery build lane, NO docker, NO file read
 
 describe("safeLiveScanImages (image-lane ref hardening, #5/#8)", () => {
   test("drops empty/whitespace/dash-prefixed refs before they reach syft", () => {
-    expect(
-      safeLiveScanImages(["", "   ", "-rf", "--image", "postgres:18"]),
-    ).toEqual(["postgres:18"]);
+    expect(safeLiveScanImages(["", "   ", "-rf", "--image", "postgres:18"])).toEqual([
+      "postgres:18",
+    ]);
   });
 
   test("keeps clean refs verbatim and order-stable", () => {
@@ -123,10 +119,7 @@ describe("dockerfileListing (--list-dockerfiles, NO docker, NO writes)", () => {
     const identities = dockerfileListing(root, {
       dockerIgnore: ["ops/**"],
     });
-    expect(identities).toEqual([
-      "backend/Dockerfile",
-      "worker/build.dockerfile",
-    ]);
+    expect(identities).toEqual(["backend/Dockerfile", "worker/build.dockerfile"]);
   });
 
   test("returns [] for a tree with no Dockerfile name-matches", () => {
@@ -190,10 +183,7 @@ describe("buildImages (buildx cwd threading)", () => {
     );
     expect(cwds).toEqual(["/repo/root", "/repo/root"]);
     // Tags remain a pure function of the identity — the cwd never touches argv.
-    expect(tags).toEqual([
-      imageTag("backend/Dockerfile"),
-      imageTag("svc/build.dockerfile"),
-    ]);
+    expect(tags).toEqual([imageTag("backend/Dockerfile"), imageTag("svc/build.dockerfile")]);
   });
 
   test("no cwd (explicit --dockerfile lane) leaves each spawn's cwd unset", async () => {

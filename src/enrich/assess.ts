@@ -37,10 +37,7 @@
  * expression election) live in the scancode/ module (sources.ts, invocation.ts, election.ts) and
  * are used verbatim; this stage only decides WHICH packages to analyze and how their results flow.
  */
-import {
-  type CanonicalDependencies,
-  type PackageEntry,
-} from "../model/dependencies";
+import { type CanonicalDependencies, type PackageEntry } from "../model/dependencies";
 import { writeArtifact } from "../pipeline/paths";
 import { sanitizeForLog } from "../pipeline/summary";
 import { parsePurl, withCacheClaim, withReplayAttribution } from "./enrich";
@@ -114,10 +111,7 @@ export async function assessPackages(
 }
 
 /** Append the memo's positive answers as ScanCode claims across ALL packages. */
-function replayMemo(
-  packages: PackageEntry[],
-  memo: Map<string, ScancodeMemoEntry>,
-): void {
+function replayMemo(packages: PackageEntry[], memo: Map<string, ScancodeMemoEntry>): void {
   packages.forEach((entry, index) => {
     const memoEntry = getMemoEntry(memo, entry.purl);
     // A no-result entry (license null) appends nothing - a scan-skip marker, never a disagreement
@@ -173,19 +167,13 @@ async function scanFullSet(
  * the scan and memoize the outcome. A memo hit is skipped; an unsupported ecosystem or an absent
  * local tree is counted and reported but NEVER memoized (a memo entry means the tree was analyzed).
  */
-async function analyzeOne(
-  entry: PackageEntry,
-  ctx: ScanContext,
-): Promise<void> {
+async function analyzeOne(entry: PackageEntry, ctx: ScanContext): Promise<void> {
   if (getMemoEntry(ctx.memo, entry.purl) !== undefined) {
     ctx.counts.hits += 1;
     return;
   }
   const parsed = parsePurl(entry.purl);
-  if (
-    parsed === undefined ||
-    (parsed.type !== "npm" && parsed.type !== "pypi")
-  ) {
+  if (parsed === undefined || (parsed.type !== "npm" && parsed.type !== "pypi")) {
     ctx.counts.unsupported += 1;
     return;
   }
@@ -194,8 +182,7 @@ async function analyzeOne(
     ctx.counts.noLocalSources += 1;
     if (ctx.verbose) {
       process.stderr.write(
-        `intensive skip: ${sanitizeForLog(entry.purl)} — ` +
-          `sources not locally present\n`,
+        `intensive skip: ${sanitizeForLog(entry.purl)} — ` + `sources not locally present\n`,
       );
     }
     return;
@@ -232,21 +219,15 @@ function memoEntryFor(resolved: ScancodeResolution | null): ScancodeMemoEntry {
   return {
     license: resolved.raw,
     via: resolved.via,
-    ...(resolved.copyrights.length > 0
-      ? { copyrights: resolved.copyrights }
-      : {}),
+    ...(resolved.copyrights.length > 0 ? { copyrights: resolved.copyrights } : {}),
   };
 }
 
 /** Project IntensiveOptions onto the scan-invocation options (conditional spread). */
 function scanOptionsFrom(intensive: IntensiveOptions): ScancodeScanOptions {
   return {
-    ...(intensive.scancodeBin !== undefined
-      ? { scancodeBin: intensive.scancodeBin }
-      : {}),
-    ...(intensive.timeoutMs !== undefined
-      ? { timeoutMs: intensive.timeoutMs }
-      : {}),
+    ...(intensive.scancodeBin !== undefined ? { scancodeBin: intensive.scancodeBin } : {}),
+    ...(intensive.timeoutMs !== undefined ? { timeoutMs: intensive.timeoutMs } : {}),
     ...(intensive.tempDir !== undefined ? { tempDir: intensive.tempDir } : {}),
   };
 }

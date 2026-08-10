@@ -88,8 +88,7 @@ const DEPENDENCIES_BLOCK_RE = /^[ \t]+dependencies:$/;
 export function yarnWorkspaceMembers(
   lockfileText: string,
 ): { name: string; relPath: string; hasDependencies: boolean }[] {
-  const members: { name: string; relPath: string; hasDependencies: boolean }[] =
-    [];
+  const members: { name: string; relPath: string; hasDependencies: boolean }[] = [];
   let candidate: { name: string; relPath: string } | undefined;
   // Per-block flag, independent of whether the resolution: line has been seen yet: key order within
   // an entry is not this parser's assumption (a YAML normalizer sorting keys alphabetically emits
@@ -150,9 +149,7 @@ export function thirdPartyEntryCount(lockfileText: string): number {
     if (/^"?__metadata"?:$/.test(line)) continue;
     // A header containing any workspace:/portal: descriptor resolves to a first-party member - it
     // is not a third-party entry.
-    if (
-      line.split(", ").some((descriptor) => FIRST_PARTY_RE.test(descriptor))
-    ) {
+    if (line.split(", ").some((descriptor) => FIRST_PARTY_RE.test(descriptor))) {
       continue;
     }
     count += 1;
@@ -192,10 +189,7 @@ export function pythonThirdPartyEntryCount(lockfileText: string): number {
     }
     // A local-source line inside the current [[package]] block marks the entry first-party (uv's
     // root/workspace self entries).
-    if (
-      inPackage &&
-      /^source\s*=\s*\{[^}]*\b(?:virtual|editable)\s*=/.test(line)
-    ) {
+    if (inPackage && /^source\s*=\s*\{[^}]*\b(?:virtual|editable)\s*=/.test(line)) {
       isLocal = true;
     }
   }
@@ -223,9 +217,7 @@ export function pythonThirdPartyEntryCount(lockfileText: string): number {
  * loudly; only a positively-determined zero (a `packages` map with no third-party keys) takes the
  * warn+skip branch. Never throws.
  */
-export function npmThirdPartyEntryCount(
-  lockfileText: string,
-): number | undefined {
+export function npmThirdPartyEntryCount(lockfileText: string): number | undefined {
   let parsed: unknown;
   try {
     parsed = JSON.parse(lockfileText);
@@ -287,9 +279,7 @@ export function npmFirstPartyNames(lockfileText: string): ReadonlySet<string> {
       names.add(key.slice("node_modules/".length));
     } else if (key !== "" && !key.includes("node_modules")) {
       const name = entry?.["name"];
-      names.add(
-        typeof name === "string" ? name : key.slice(key.lastIndexOf("/") + 1),
-      );
+      names.add(typeof name === "string" ? name : key.slice(key.lastIndexOf("/") + 1));
     }
   }
   return names;
@@ -315,9 +305,7 @@ export function npmFirstPartyNames(lockfileText: string): ReadonlySet<string> {
  * zero-component hard-fail fires; only a positively-determined zero (every section empty or
  * Project-only) takes the warn+skip branch. Never throws.
  */
-export function nugetThirdPartyEntryCount(
-  lockfileText: string,
-): number | undefined {
+export function nugetThirdPartyEntryCount(lockfileText: string): number | undefined {
   let parsed: unknown;
   try {
     parsed = JSON.parse(lockfileText);
@@ -448,9 +436,7 @@ export function pnpmImporterNames(lockfileText: string): ReadonlySet<string> {
  * Returns undefined (unknown count) for non-JSON text or a failed document narrow - a doc that
  * proves nothing routes the target to the scan, never to the warn+skip branch. Never throws.
  */
-export function mavenThirdPartyEntryCount(
-  lockfileText: string,
-): number | undefined {
+export function mavenThirdPartyEntryCount(lockfileText: string): number | undefined {
   let parsed: unknown;
   try {
     parsed = JSON.parse(lockfileText);

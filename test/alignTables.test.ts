@@ -2,8 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import { alignTables } from "../src/render/alignTables";
 
-const lineWidths = (md: string): Set<number> =>
-  new Set(md.split("\n").map((line) => line.length));
+const lineWidths = (md: string): Set<number> => new Set(md.split("\n").map((line) => line.length));
 
 describe("alignTables", () => {
   test("pads columns so a ragged table's pipes line up", () => {
@@ -37,20 +36,14 @@ describe("alignTables", () => {
       ].join("\n"),
     ).split("\n");
     // the fenced table is byte-for-byte verbatim
-    expect(out.slice(1, 4)).toEqual([
-      "| a | bb |",
-      "| --- | --- |",
-      "| x | y |",
-    ]);
+    expect(out.slice(1, 4)).toEqual(["| a | bb |", "| --- | --- |", "| x | y |"]);
     // the real table below the fence is aligned
     expect(lineWidths(out.slice(6, 9).join("\n")).size).toBe(1);
   });
 
   test("preserves an escaped pipe in a cell and counts it for width", () => {
     const out = alignTables(
-      ["| Name | License |", "| --- | --- |", "| pkg | MIT \\| Apache |"].join(
-        "\n",
-      ),
+      ["| Name | License |", "| --- | --- |", "| pkg | MIT \\| Apache |"].join("\n"),
     ).split("\n");
     expect(out[2]).toContain("MIT \\| Apache");
     expect(new Set(out.map((l) => l.length)).size).toBe(1);

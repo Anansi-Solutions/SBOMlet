@@ -6,13 +6,7 @@
  * module contract the assessment stage builds on. (The path/CLI plumbing is
  * locked below.)
  */
-import {
-  existsSync,
-  mkdtempSync,
-  readFileSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
 import { describe, expect, test } from "bun:test";
@@ -73,9 +67,7 @@ describe("scancode memo — envelope, entry shape, deterministic read/write", ()
 
       const loaded = readScancodeMemo(path);
       expect(getMemoEntry(loaded, "pkg:pypi/anyio@4.12.1")).toEqual(positive);
-      expect(getMemoEntry(loaded, "pkg:npm/no-license-pkg@2.0.0")).toEqual(
-        noResult,
-      );
+      expect(getMemoEntry(loaded, "pkg:npm/no-license-pkg@2.0.0")).toEqual(noResult);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
@@ -226,9 +218,7 @@ describe("scancode memo — envelope, entry shape, deterministic read/write", ()
       // The DECODED form is NOT a key — the encoding is preserved verbatim.
       expect(getMemoEntry(loaded, "pkg:npm/@scope/pkg@1.2.3")).toBeUndefined();
       // The raw bytes carry the encoded key, never a decoded/split one.
-      expect(readFileSync(path, "utf8")).toContain(
-        "pkg:npm/%40scope/pkg@1.2.3",
-      );
+      expect(readFileSync(path, "utf8")).toContain("pkg:npm/%40scope/pkg@1.2.3");
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
@@ -263,18 +253,15 @@ describe("scancode memo path resolution + --scancode-cache flag", () => {
 
   test("--scancode-cache <path> overrides the resolved path, symmetric with --enrichment-cache", () => {
     const dir = join(tmpdir(), "repo", ".sbomlet.cache");
-    const resolved = scancodeCachePath(
-      { ...baseOpts, scancodeCachePath: "custom/memo.json" },
-      dir,
-    );
+    const resolved = scancodeCachePath({ ...baseOpts, scancodeCachePath: "custom/memo.json" }, dir);
     expect(basename(resolved)).toBe("memo.json");
     expect(resolved.endsWith(join("custom", "memo.json"))).toBe(true);
   });
 
   test("optionsFrom threads --scancode-cache into scancodeCachePath (undefined when absent) — the shared parser both generate and check consume", () => {
     expect(optionsFrom({}).scancodeCachePath).toBeUndefined();
-    expect(
-      optionsFrom({ "scancode-cache": "custom/memo.json" }).scancodeCachePath,
-    ).toBe("custom/memo.json");
+    expect(optionsFrom({ "scancode-cache": "custom/memo.json" }).scancodeCachePath).toBe(
+      "custom/memo.json",
+    );
   });
 });

@@ -31,8 +31,7 @@ afterEach(() => {
 
 function writeCache(path: string, entries: Record<string, CacheEntry>): void {
   const cache = new Map<string, CacheEntry>();
-  for (const [purl, entry] of Object.entries(entries))
-    putEntry(cache, purl, entry);
+  for (const [purl, entry] of Object.entries(entries)) putEntry(cache, purl, entry);
   writeFileSync(path, serializeCache(cache));
 }
 
@@ -86,9 +85,7 @@ function githubLicense(spdxId: string): unknown {
 }
 
 /** A URL-routed fetch stub recording every requested URL. */
-function fetchMock(
-  route: (url: string) => { status: number; body?: unknown },
-): {
+function fetchMock(route: (url: string) => { status: number; body?: unknown }): {
   fetch: typeof fetch;
   calls: string[];
 } {
@@ -106,10 +103,7 @@ function fetchMock(
 }
 
 /** Run `fn` with globalThis.fetch swapped, always restored in finally. */
-async function withFetch<T>(
-  impl: typeof fetch,
-  fn: () => Promise<T>,
-): Promise<T> {
+async function withFetch<T>(impl: typeof fetch, fn: () => Promise<T>): Promise<T> {
   const original = globalThis.fetch;
   globalThis.fetch = impl;
   try {
@@ -139,9 +133,7 @@ describe("verifyCache", () => {
       }
       return { status: 500 };
     });
-    const result = await withFetch(fetch, () =>
-      verifyCache({ cachePath: path, verbose: false }),
-    );
+    const result = await withFetch(fetch, () => verifyCache({ cachePath: path, verbose: false }));
     expect(result.audited).toBe(3);
     expect(result.mismatches).toEqual([]);
   });
@@ -153,9 +145,7 @@ describe("verifyCache", () => {
       status: 200,
       body: npmPackument({ "1.2.3": "GPL-3.0-only" }),
     }));
-    const result = await withFetch(fetch, () =>
-      verifyCache({ cachePath: path, verbose: false }),
-    );
+    const result = await withFetch(fetch, () => verifyCache({ cachePath: path, verbose: false }));
     expect(result.mismatches).toHaveLength(1);
     expect(result.mismatches[0]).toMatchObject({
       purl: "pkg:npm/foo@1.2.3",
@@ -172,9 +162,7 @@ describe("verifyCache", () => {
       status: 200,
       body: pypiDoc("Apache-2.0"),
     }));
-    const result = await withFetch(fetch, () =>
-      verifyCache({ cachePath: path, verbose: false }),
-    );
+    const result = await withFetch(fetch, () => verifyCache({ cachePath: path, verbose: false }));
     expect(calls[0]).toContain("pypi.org/pypi/anyio/4.12.1/json");
     expect(result.mismatches).toHaveLength(1);
     expect(result.mismatches[0]).toMatchObject({
@@ -191,9 +179,7 @@ describe("verifyCache", () => {
       status: 200,
       body: npmPackument({ "1.0.0": "MIT" }),
     }));
-    const result = await withFetch(fetch, () =>
-      verifyCache({ cachePath: path, verbose: false }),
-    );
+    const result = await withFetch(fetch, () => verifyCache({ cachePath: path, verbose: false }));
     expect(result.mismatches).toHaveLength(1);
     expect(result.mismatches[0]).toMatchObject({
       cached: "MIT",
@@ -209,9 +195,7 @@ describe("verifyCache", () => {
       status: 200,
       body: npmPackument({ "1.0.0": "AGPL-3.0-only" }),
     }));
-    const result = await withFetch(fetch, () =>
-      verifyCache({ cachePath: path, verbose: false }),
-    );
+    const result = await withFetch(fetch, () => verifyCache({ cachePath: path, verbose: false }));
     expect(result.mismatches).toHaveLength(1);
     expect(result.mismatches[0]).toMatchObject({
       cached: null,
@@ -223,19 +207,14 @@ describe("verifyCache", () => {
   test("a terraform entry matching its GitHub License version tag → no mismatch", async () => {
     const path = tempCachePath();
     writeCache(path, {
-      "pkg:terraform/registry.terraform.io/hashicorp/aws@5.0.0": positive(
-        "MPL-2.0",
-        "github",
-      ),
+      "pkg:terraform/registry.terraform.io/hashicorp/aws@5.0.0": positive("MPL-2.0", "github"),
     });
     const { fetch, calls } = fetchMock((url) =>
       url.includes("/hashicorp/terraform-provider-aws/license?ref=v5.0.0")
         ? { status: 200, body: githubLicense("MPL-2.0") }
         : { status: 404 },
     );
-    const result = await withFetch(fetch, () =>
-      verifyCache({ cachePath: path, verbose: false }),
-    );
+    const result = await withFetch(fetch, () => verifyCache({ cachePath: path, verbose: false }));
     expect(result.mismatches).toEqual([]);
     expect(calls.some((u) => u.includes("ref=v5.0.0"))).toBe(true);
   });
@@ -243,19 +222,14 @@ describe("verifyCache", () => {
   test("a terraform entry whose GitHub License changed → mismatch", async () => {
     const path = tempCachePath();
     writeCache(path, {
-      "pkg:terraform/registry.terraform.io/hashicorp/aws@5.0.0": positive(
-        "MPL-2.0",
-        "github",
-      ),
+      "pkg:terraform/registry.terraform.io/hashicorp/aws@5.0.0": positive("MPL-2.0", "github"),
     });
     const { fetch } = fetchMock((url) =>
       url.includes("ref=v5.0.0")
         ? { status: 200, body: githubLicense("BUSL-1.1") }
         : { status: 404 },
     );
-    const result = await withFetch(fetch, () =>
-      verifyCache({ cachePath: path, verbose: false }),
-    );
+    const result = await withFetch(fetch, () => verifyCache({ cachePath: path, verbose: false }));
     expect(result.mismatches).toHaveLength(1);
     expect(result.mismatches[0]).toMatchObject({
       cached: "MPL-2.0",
@@ -267,9 +241,7 @@ describe("verifyCache", () => {
     const path = tempCachePath();
     writeCache(path, { "pkg:gem/rails@7.0.0": positive("MIT", "npm") });
     const { fetch, calls } = fetchMock(() => ({ status: 200, body: {} }));
-    const result = await withFetch(fetch, () =>
-      verifyCache({ cachePath: path, verbose: false }),
-    );
+    const result = await withFetch(fetch, () => verifyCache({ cachePath: path, verbose: false }));
     expect(calls).toEqual([]);
     expect(result.mismatches).toHaveLength(1);
     expect(result.mismatches[0]?.reason).toContain("re-resolvable");
@@ -285,9 +257,7 @@ describe("verifyCache", () => {
       status: 200,
       body: npmPackument({ "1.0.0": "MIT", "2.0.0": "MIT" }),
     }));
-    const result = await withFetch(fetch, () =>
-      verifyCache({ cachePath: path, verbose: false }),
-    );
+    const result = await withFetch(fetch, () => verifyCache({ cachePath: path, verbose: false }));
     expect(result.mismatches).toEqual([]);
     expect(calls).toHaveLength(1);
   });
@@ -303,9 +273,7 @@ describe("verifyCache", () => {
         ? { status: 200, body: npmPackument({ "1.0.0": "GPL-3.0-only" }) }
         : { status: 200, body: npmPackument({ "1.0.0": "Apache-2.0" }) },
     );
-    const result = await withFetch(fetch, () =>
-      verifyCache({ cachePath: path, verbose: false }),
-    );
+    const result = await withFetch(fetch, () => verifyCache({ cachePath: path, verbose: false }));
     expect(result.mismatches.map((m) => m.purl)).toEqual([
       "pkg:npm/alpha@1.0.0",
       "pkg:npm/zeta@1.0.0",
@@ -317,9 +285,7 @@ describe("verifyCache", () => {
     writeCache(path, { "pkg:npm/foo@1.0.0": positive("MIT", "npm") });
     const { fetch } = fetchMock(() => ({ status: 503 }));
     await expect(
-      withFetch(fetch, () =>
-        verifyCache({ cachePath: path, verbose: false, backoffBaseMs: 1 }),
-      ),
+      withFetch(fetch, () => verifyCache({ cachePath: path, verbose: false, backoffBaseMs: 1 })),
     ).rejects.toThrow(/registry 503/);
   });
 
@@ -336,9 +302,7 @@ describe("verifyCache", () => {
     const path = tempCachePath();
     writeCache(path, {});
     const { fetch, calls } = fetchMock(() => ({ status: 200, body: {} }));
-    const result = await withFetch(fetch, () =>
-      verifyCache({ cachePath: path, verbose: false }),
-    );
+    const result = await withFetch(fetch, () => verifyCache({ cachePath: path, verbose: false }));
     expect(result.audited).toBe(0);
     expect(result.mismatches).toEqual([]);
     expect(calls).toEqual([]);
@@ -347,15 +311,12 @@ describe("verifyCache", () => {
 
 describe("verifyCache nuget (two-step re-resolution, the same resolver generate uses)", () => {
   const NUGET_PURL = "pkg:nuget/Newtonsoft.Json@13.0.4";
-  const LEAF_URL =
-    "https://api.nuget.org/v3/registration5-gz-semver2/newtonsoft.json/13.0.4.json";
+  const LEAF_URL = "https://api.nuget.org/v3/registration5-gz-semver2/newtonsoft.json/13.0.4.json";
   const CATALOG_URL =
     "https://api.nuget.org/v3/catalog0/data/2024.03.27.08.21.03/newtonsoft.json.13.0.4.json";
 
   /** Route the two-step: leaf → host-pinned catalogEntry with the given body. */
-  function nugetRoute(
-    catalogBody: unknown,
-  ): (url: string) => { status: number; body?: unknown } {
+  function nugetRoute(catalogBody: unknown): (url: string) => { status: number; body?: unknown } {
     return (url) => {
       if (url === LEAF_URL) {
         return { status: 200, body: { catalogEntry: CATALOG_URL } };
@@ -368,12 +329,8 @@ describe("verifyCache nuget (two-step re-resolution, the same resolver generate 
   test("a committed positive entry matching the registry → audited, no mismatch", async () => {
     const path = tempCachePath();
     writeCache(path, { [NUGET_PURL]: positive("MIT", "nuget") });
-    const { fetch, calls } = fetchMock(
-      nugetRoute({ licenseExpression: "MIT" }),
-    );
-    const result = await withFetch(fetch, () =>
-      verifyCache({ cachePath: path, verbose: false }),
-    );
+    const { fetch, calls } = fetchMock(nugetRoute({ licenseExpression: "MIT" }));
+    const result = await withFetch(fetch, () => verifyCache({ cachePath: path, verbose: false }));
     expect(result.audited).toBe(1);
     expect(result.mismatches).toEqual([]);
     // The two-step went to the LOWERCASED leaf URL, then the pinned catalogEntry.
@@ -383,12 +340,8 @@ describe("verifyCache nuget (two-step re-resolution, the same resolver generate 
   test("a flipped license (cache says MIT, registry says Apache-2.0) → mismatch with the changed reason", async () => {
     const path = tempCachePath();
     writeCache(path, { [NUGET_PURL]: positive("MIT", "nuget") });
-    const { fetch } = fetchMock(
-      nugetRoute({ licenseExpression: "Apache-2.0" }),
-    );
-    const result = await withFetch(fetch, () =>
-      verifyCache({ cachePath: path, verbose: false }),
-    );
+    const { fetch } = fetchMock(nugetRoute({ licenseExpression: "Apache-2.0" }));
+    const result = await withFetch(fetch, () => verifyCache({ cachePath: path, verbose: false }));
     expect(result.mismatches).toHaveLength(1);
     expect(result.mismatches[0]).toMatchObject({
       purl: NUGET_PURL,
@@ -402,9 +355,7 @@ describe("verifyCache nuget (two-step re-resolution, the same resolver generate 
     const path = tempCachePath();
     writeCache(path, { [NUGET_PURL]: positive("MIT", "nuget") });
     const { fetch } = fetchMock(() => ({ status: 404 }));
-    const result = await withFetch(fetch, () =>
-      verifyCache({ cachePath: path, verbose: false }),
-    );
+    const result = await withFetch(fetch, () => verifyCache({ cachePath: path, verbose: false }));
     expect(result.mismatches).toHaveLength(1);
     expect(result.mismatches[0]).toMatchObject({
       cached: "MIT",
@@ -416,12 +367,8 @@ describe("verifyCache nuget (two-step re-resolution, the same resolver generate 
   test("a NEGATIVE entry the registry now resolves → mismatch (hidden obligation)", async () => {
     const path = tempCachePath();
     writeCache(path, { [NUGET_PURL]: negative("nuget") });
-    const { fetch } = fetchMock(
-      nugetRoute({ licenseExpression: "AGPL-3.0-only" }),
-    );
-    const result = await withFetch(fetch, () =>
-      verifyCache({ cachePath: path, verbose: false }),
-    );
+    const { fetch } = fetchMock(nugetRoute({ licenseExpression: "AGPL-3.0-only" }));
+    const result = await withFetch(fetch, () => verifyCache({ cachePath: path, verbose: false }));
     expect(result.mismatches).toHaveLength(1);
     expect(result.mismatches[0]).toMatchObject({
       cached: null,
@@ -435,9 +382,7 @@ describe("verifyCache nuget (two-step re-resolution, the same resolver generate 
     writeCache(path, { [NUGET_PURL]: positive("MIT", "nuget") });
     const { fetch } = fetchMock(() => ({ status: 503 }));
     await expect(
-      withFetch(fetch, () =>
-        verifyCache({ cachePath: path, verbose: false, backoffBaseMs: 1 }),
-      ),
+      withFetch(fetch, () => verifyCache({ cachePath: path, verbose: false, backoffBaseMs: 1 })),
     ).rejects.toThrow(/registry 503/);
   });
 });
@@ -451,13 +396,9 @@ describe("verifyCache maven (deps.dev single-fetch re-resolution, the same resol
     const path = tempCachePath();
     writeCache(path, { [MAVEN_PURL]: positive("Apache-2.0", "deps-dev") });
     const { fetch, calls } = fetchMock((url) =>
-      url === VERSION_URL
-        ? { status: 200, body: { licenses: ["Apache-2.0"] } }
-        : { status: 500 },
+      url === VERSION_URL ? { status: 200, body: { licenses: ["Apache-2.0"] } } : { status: 500 },
     );
-    const result = await withFetch(fetch, () =>
-      verifyCache({ cachePath: path, verbose: false }),
-    );
+    const result = await withFetch(fetch, () => verifyCache({ cachePath: path, verbose: false }));
     expect(result.audited).toBe(1);
     expect(result.mismatches).toEqual([]);
     expect(calls).toEqual([VERSION_URL]);
@@ -470,9 +411,7 @@ describe("verifyCache maven (deps.dev single-fetch re-resolution, the same resol
       status: 200,
       body: { licenses: ["MIT"] },
     }));
-    const result = await withFetch(fetch, () =>
-      verifyCache({ cachePath: path, verbose: false }),
-    );
+    const result = await withFetch(fetch, () => verifyCache({ cachePath: path, verbose: false }));
     expect(result.mismatches).toHaveLength(1);
     expect(result.mismatches[0]).toMatchObject({
       purl: MAVEN_PURL,
@@ -486,9 +425,7 @@ describe("verifyCache maven (deps.dev single-fetch re-resolution, the same resol
     const path = tempCachePath();
     writeCache(path, { [MAVEN_PURL]: positive("Apache-2.0", "deps-dev") });
     const { fetch } = fetchMock(() => ({ status: 404 }));
-    const result = await withFetch(fetch, () =>
-      verifyCache({ cachePath: path, verbose: false }),
-    );
+    const result = await withFetch(fetch, () => verifyCache({ cachePath: path, verbose: false }));
     expect(result.mismatches).toHaveLength(1);
     expect(result.mismatches[0]).toMatchObject({
       cached: "Apache-2.0",
@@ -504,9 +441,7 @@ describe("verifyCache maven (deps.dev single-fetch re-resolution, the same resol
       status: 200,
       body: { licenses: ["AGPL-3.0-only"] },
     }));
-    const result = await withFetch(fetch, () =>
-      verifyCache({ cachePath: path, verbose: false }),
-    );
+    const result = await withFetch(fetch, () => verifyCache({ cachePath: path, verbose: false }));
     expect(result.mismatches).toHaveLength(1);
     expect(result.mismatches[0]).toMatchObject({
       cached: null,
@@ -518,18 +453,13 @@ describe("verifyCache maven (deps.dev single-fetch re-resolution, the same resol
   test("a committed multi-value array entry matching the registry (order-independent) → no mismatch", async () => {
     const path = tempCachePath();
     writeCache(path, {
-      [MAVEN_PURL]: positive(
-        ["GPL-3.0-only", "LGPL-3.0-only", "MPL-1.1"],
-        "deps-dev",
-      ),
+      [MAVEN_PURL]: positive(["GPL-3.0-only", "LGPL-3.0-only", "MPL-1.1"], "deps-dev"),
     });
     const { fetch } = fetchMock(() => ({
       status: 200,
       body: { licenses: ["MPL-1.1", "LGPL-3.0-only", "GPL-3.0-only"] },
     }));
-    const result = await withFetch(fetch, () =>
-      verifyCache({ cachePath: path, verbose: false }),
-    );
+    const result = await withFetch(fetch, () => verifyCache({ cachePath: path, verbose: false }));
     expect(result.mismatches).toEqual([]);
   });
 
@@ -542,9 +472,7 @@ describe("verifyCache maven (deps.dev single-fetch re-resolution, the same resol
       status: 200,
       body: { licenses: ["MIT"] },
     }));
-    const result = await withFetch(fetch, () =>
-      verifyCache({ cachePath: path, verbose: false }),
-    );
+    const result = await withFetch(fetch, () => verifyCache({ cachePath: path, verbose: false }));
     expect(result.mismatches).toHaveLength(1);
     expect(result.mismatches[0]).toMatchObject({
       cached: ["Apache-2.0", "MIT"],
@@ -557,9 +485,7 @@ describe("verifyCache maven (deps.dev single-fetch re-resolution, the same resol
     writeCache(path, { [MAVEN_PURL]: positive("Apache-2.0", "deps-dev") });
     const { fetch } = fetchMock(() => ({ status: 503 }));
     await expect(
-      withFetch(fetch, () =>
-        verifyCache({ cachePath: path, verbose: false, backoffBaseMs: 1 }),
-      ),
+      withFetch(fetch, () => verifyCache({ cachePath: path, verbose: false, backoffBaseMs: 1 })),
     ).rejects.toThrow(/registry 503/);
   });
 });

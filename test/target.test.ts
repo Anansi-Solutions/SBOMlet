@@ -86,12 +86,8 @@ describe("resolveTarget", () => {
     writeFileSync(join(targetDir, "pyproject.toml"), "[project]\n");
     writeFileSync(join(targetDir, "poetry.lock"), '[[package]]\nname = "x"\n');
 
-    expect(() => resolveTarget(targetDir)).toThrow(
-      /--target only supports yarn projects/,
-    );
-    expect(() => resolveTarget(targetDir)).toThrow(
-      /use --repo-root for poetry\/uv targets/,
-    );
+    expect(() => resolveTarget(targetDir)).toThrow(/--target only supports yarn projects/);
+    expect(() => resolveTarget(targetDir)).toThrow(/use --repo-root for poetry\/uv targets/);
     expect(() => resolveTarget(targetDir)).toThrow(/pyproj/);
   });
 

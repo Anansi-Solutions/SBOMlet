@@ -37,11 +37,7 @@ const REAL_YARN_PLUGIN = { ...yarnPluginModule };
 /** Original cdxgen exports captured before any mock.module call. */
 const REAL_CDXGEN = { ...cdxgenModule };
 
-const WORKSPACE_LOCK = join(
-  import.meta.dir,
-  "fixtures",
-  "workspace-berry.lock",
-);
+const WORKSPACE_LOCK = join(import.meta.dir, "fixtures", "workspace-berry.lock");
 
 /** basename(target.dir) -> fixture pair name ("root" default for the root unit). */
 const FIXTURE_PAIRS: Record<string, string> = {
@@ -64,14 +60,8 @@ async function fakeCollectWithYarnPlugin(
   const tempDir = mkdtempSync(join(tmpdir(), "licenses-yarnws-scan-"));
   const sbomPath = join(tempDir, "full.json");
   const prodSbomPath = join(tempDir, "prod.json");
-  copyFileSync(
-    join(import.meta.dir, "fixtures", `${pairName}-full.json`),
-    sbomPath,
-  );
-  copyFileSync(
-    join(import.meta.dir, "fixtures", `${pairName}-prod.json`),
-    prodSbomPath,
-  );
+  copyFileSync(join(import.meta.dir, "fixtures", `${pairName}-full.json`), sbomPath);
+  copyFileSync(join(import.meta.dir, "fixtures", `${pairName}-prod.json`), prodSbomPath);
   return {
     sbomPath,
     prodSbomPath,
@@ -161,8 +151,7 @@ describe("collectTargets — yarn workspace expansion (mechanism test)", () => {
     mkdirSync(apiDir, { recursive: true });
     writeFileSync(
       join(webAppDir, "package.json"),
-      JSON.stringify({ name: "@acme/web-app", dependencies: { ms: "2.1.3" } }) +
-        "\n",
+      JSON.stringify({ name: "@acme/web-app", dependencies: { ms: "2.1.3" } }) + "\n",
     );
     writeFileSync(
       join(apiDir, "package.json"),
@@ -226,9 +215,7 @@ describe("collectTargets — yarn workspace expansion (mechanism test)", () => {
     // would silently fall back to the root fixture for any other
     // directory name, which would prove nothing about THIS test's exotic-
     // name shapes.
-    const sbomFor = (
-      components: { name: string; version: string; purl: string }[],
-    ): string =>
+    const sbomFor = (components: { name: string; version: string; purl: string }[]): string =>
       JSON.stringify({
         bomFormat: "CycloneDX",
         specVersion: "1.6",
@@ -243,17 +230,13 @@ describe("collectTargets — yarn workspace expansion (mechanism test)", () => {
       collectWithYarnPlugin: async (
         target: Target,
       ): Promise<yarnPluginModule.YarnPluginScanResult> => {
-        const tempDir = mkdtempSync(
-          join(tmpdir(), "licenses-yarnws-nameshape-scan-"),
-        );
+        const tempDir = mkdtempSync(join(tmpdir(), "licenses-yarnws-nameshape-scan-"));
         const sbomPath = join(tempDir, "full.json");
         const prodSbomPath = join(tempDir, "prod.json");
         const dirName = basename(target.dir);
         const full =
           dirName === "web-app"
-            ? sbomFor([
-                { name: "ms", version: "2.1.3", purl: "pkg:npm/ms@2.1.3" },
-              ])
+            ? sbomFor([{ name: "ms", version: "2.1.3", purl: "pkg:npm/ms@2.1.3" }])
             : dirName === "backend-api"
               ? sbomFor([
                   {
@@ -269,10 +252,7 @@ describe("collectTargets — yarn workspace expansion (mechanism test)", () => {
                     purl: "pkg:npm/left-pad@1.3.0",
                   },
                 ]);
-        const prod =
-          dirName === "web-app" || dirName === "backend-api"
-            ? full
-            : sbomFor([]);
+        const prod = dirName === "web-app" || dirName === "backend-api" ? full : sbomFor([]);
         writeFileSync(sbomPath, full);
         writeFileSync(prodSbomPath, prod);
         return {
@@ -296,12 +276,8 @@ describe("collectTargets — yarn workspace expansion (mechanism test)", () => {
 
       const model = mergeSboms(result.inputs);
       const ms = model.packages.find((pkg) => pkg.purl === "pkg:npm/ms@2.1.3");
-      const sax = model.packages.find(
-        (pkg) => pkg.purl === "pkg:npm/sax@1.4.1",
-      );
-      expect(ms?.occurrences).toEqual([
-        { target: "packages/web-app", isDevDependency: false },
-      ]);
+      const sax = model.packages.find((pkg) => pkg.purl === "pkg:npm/sax@1.4.1");
+      expect(ms?.occurrences).toEqual([{ target: "packages/web-app", isDevDependency: false }]);
       expect(sax?.occurrences).toEqual([
         { target: "services/backend-api", isDevDependency: false },
       ]);
@@ -329,9 +305,7 @@ describe("collectTargets — yarn workspace expansion (mechanism test)", () => {
     ]);
 
     // (b) backend's prodPurlSet contains ms, excludes isarray.
-    const backendInput = result.inputs.find(
-      (input) => input.targetIdentity === "backend",
-    );
+    const backendInput = result.inputs.find((input) => input.targetIdentity === "backend");
     expect(backendInput?.prodPurlSet?.has("pkg:npm/ms@2.1.3")).toBe(true);
     expect(backendInput?.prodPurlSet?.has("pkg:npm/isarray@2.0.5")).toBe(false);
 
@@ -339,20 +313,12 @@ describe("collectTargets — yarn workspace expansion (mechanism test)", () => {
     // backend; left-pad classifies dev in the root.
     const model = mergeSboms(result.inputs);
     const ms = model.packages.find((pkg) => pkg.purl === "pkg:npm/ms@2.1.3");
-    expect(ms?.occurrences).toEqual([
-      { target: "backend", isDevDependency: false },
-    ]);
-    const leftPad = model.packages.find(
-      (pkg) => pkg.purl === "pkg:npm/left-pad@1.3.0",
-    );
-    expect(leftPad?.occurrences).toEqual([
-      { target: ".", isDevDependency: true },
-    ]);
+    expect(ms?.occurrences).toEqual([{ target: "backend", isDevDependency: false }]);
+    const leftPad = model.packages.find((pkg) => pkg.purl === "pkg:npm/left-pad@1.3.0");
+    expect(leftPad?.occurrences).toEqual([{ target: ".", isDevDependency: true }]);
 
     // (d) exactly three "collecting <identity> via ..." lines, sorted.
-    const collectingLines = log.filter((line) =>
-      line.startsWith("collecting "),
-    );
+    const collectingLines = log.filter((line) => line.startsWith("collecting "));
     expect(collectingLines).toEqual([
       "collecting . via @cyclonedx/yarn-plugin-cyclonedx@3.3.1",
       "collecting backend via @cyclonedx/yarn-plugin-cyclonedx@3.3.1",
@@ -388,8 +354,7 @@ describe("collectTargets — yarn workspace expansion (mechanism test)", () => {
     );
     writeFileSync(
       join(frontendDir, "package.json"),
-      JSON.stringify({ name: "frontend", dependencies: { sax: "1.4.1" } }) +
-        "\n",
+      JSON.stringify({ name: "frontend", dependencies: { sax: "1.4.1" } }) + "\n",
     );
     // The lock entries themselves are in REVERSE alphabetic order
     // (frontend, then backend, then root) — expandYarnWorkspaceUnits'
@@ -803,10 +768,7 @@ describe("collectTargets — yarn workspace expansion edge behavior", () => {
     );
     const backendDir = join(root, "backend");
     mkdirSync(backendDir);
-    writeFileSync(
-      join(backendDir, "package.json"),
-      JSON.stringify({ name: "backend" }) + "\n",
-    );
+    writeFileSync(join(backendDir, "package.json"), JSON.stringify({ name: "backend" }) + "\n");
     writeFileSync(
       join(root, "yarn.lock"),
       [
@@ -870,10 +832,7 @@ describe("collectTargets — yarn workspace expansion edge behavior", () => {
     );
     const backendDir = join(root, "backend");
     mkdirSync(backendDir);
-    writeFileSync(
-      join(backendDir, "package.json"),
-      JSON.stringify({ name: "backend" }) + "\n",
-    );
+    writeFileSync(join(backendDir, "package.json"), JSON.stringify({ name: "backend" }) + "\n");
     writeFileSync(
       join(root, "yarn.lock"),
       [
@@ -948,8 +907,7 @@ describe("collectTargets — yarn workspace expansion edge behavior", () => {
     );
     writeFileSync(
       join(frontendDir, "package.json"),
-      JSON.stringify({ name: "frontend", dependencies: { sax: "1.4.1" } }) +
-        "\n",
+      JSON.stringify({ name: "frontend", dependencies: { sax: "1.4.1" } }) + "\n",
     );
 
     const log: string[] = [];
@@ -958,21 +916,13 @@ describe("collectTargets — yarn workspace expansion edge behavior", () => {
     });
 
     // The dep-less root unit skips loudly; backend and frontend still scan.
-    expect(log).toContain(
-      "warning: skipping . — workspace declares no dependencies in yarn.lock",
-    );
-    expect(result.inputs.map((input) => input.targetIdentity)).toEqual([
-      "backend",
-      "frontend",
-    ]);
+    expect(log).toContain("warning: skipping . — workspace declares no dependencies in yarn.lock");
+    expect(result.inputs.map((input) => input.targetIdentity)).toEqual(["backend", "frontend"]);
   });
 
   test("containment: a traversal @workspace: path throws before any spawn, naming the identity and offending path", async () => {
     const root = mkdtempSync(join(tmpdir(), "licenses-yarnws-traversal-"));
-    writeFileSync(
-      join(root, "package.json"),
-      JSON.stringify({ name: "demo-root" }) + "\n",
-    );
+    writeFileSync(join(root, "package.json"), JSON.stringify({ name: "demo-root" }) + "\n");
     writeFileSync(join(root, "yarn.lock"), TRAVERSAL_LOCK_LINES.join("\n"));
 
     let spawnCount = 0;
@@ -986,9 +936,7 @@ describe("collectTargets — yarn workspace expansion edge behavior", () => {
       },
     }));
 
-    await expect(collectTargets(baseOpts(root), () => {})).rejects.toThrow(
-      /outside/,
-    );
+    await expect(collectTargets(baseOpts(root), () => {})).rejects.toThrow(/outside/);
     expect(spawnCount).toBe(0);
 
     mock.module("../src/collectors/yarnPlugin", () => ({
@@ -1071,9 +1019,7 @@ describe("collectTargets — yarn workspace expansion edge behavior", () => {
     try {
       // GREEN: the real-filesystem containment check throws before ANY
       // spawn, exactly like the lexical traversal/absolute checks above.
-      await expect(collectTargets(baseOpts(root), () => {})).rejects.toThrow(
-        /symlink/,
-      );
+      await expect(collectTargets(baseOpts(root), () => {})).rejects.toThrow(/symlink/);
       expect(spawnCount).toBe(0);
     } finally {
       mock.module("../src/collectors/yarnPlugin", () => ({
@@ -1138,9 +1084,7 @@ describe("collectTargets — yarn workspace expansion edge behavior", () => {
       collectWithYarnPlugin: async (
         _target: Target,
       ): Promise<yarnPluginModule.YarnPluginScanResult> => {
-        const tempDir = mkdtempSync(
-          join(tmpdir(), "licenses-yarnws-hardfail-scan-"),
-        );
+        const tempDir = mkdtempSync(join(tmpdir(), "licenses-yarnws-hardfail-scan-"));
         const sbomPath = join(tempDir, "full.json");
         const prodSbomPath = join(tempDir, "prod.json");
         const empty = JSON.stringify({
@@ -1173,10 +1117,7 @@ describe("collectTargets — yarn workspace expansion edge behavior", () => {
 
   test("containment: an absolute @workspace: path throws before any spawn, naming the identity and offending path", async () => {
     const root = mkdtempSync(join(tmpdir(), "licenses-yarnws-absolute-"));
-    writeFileSync(
-      join(root, "package.json"),
-      JSON.stringify({ name: "demo-root" }) + "\n",
-    );
+    writeFileSync(join(root, "package.json"), JSON.stringify({ name: "demo-root" }) + "\n");
     writeFileSync(join(root, "yarn.lock"), ABSOLUTE_LOCK_LINES.join("\n"));
 
     let spawnCount = 0;
@@ -1190,9 +1131,7 @@ describe("collectTargets — yarn workspace expansion edge behavior", () => {
       },
     }));
 
-    await expect(collectTargets(baseOpts(root), () => {})).rejects.toThrow(
-      /evil/,
-    );
+    await expect(collectTargets(baseOpts(root), () => {})).rejects.toThrow(/evil/);
     expect(spawnCount).toBe(0);
 
     mock.module("../src/collectors/yarnPlugin", () => ({
@@ -1215,15 +1154,9 @@ describe("collectTargets — yarn workspace expansion edge behavior", () => {
       // error. resolve()/relative() are purely lexical — the drive letter
       // need not exist on the machine.
       const root = mkdtempSync(join(tmpdir(), "licenses-yarnws-xdrive-"));
-      writeFileSync(
-        join(root, "package.json"),
-        JSON.stringify({ name: "demo-root" }) + "\n",
-      );
+      writeFileSync(join(root, "package.json"), JSON.stringify({ name: "demo-root" }) + "\n");
       const otherDrive = root[0]?.toUpperCase() === "Q" ? "Z" : "Q";
-      writeFileSync(
-        join(root, "yarn.lock"),
-        evilPathLockLines(`${otherDrive}:/evil`).join("\n"),
-      );
+      writeFileSync(join(root, "yarn.lock"), evilPathLockLines(`${otherDrive}:/evil`).join("\n"));
 
       let spawnCount = 0;
       mock.module("../src/collectors/yarnPlugin", () => ({
@@ -1259,15 +1192,9 @@ describe("collectTargets — yarn workspace expansion edge behavior", () => {
       // another drive entirely. Same lexical-gate obligation as the
       // cross-drive absolute arm above.
       const root = mkdtempSync(join(tmpdir(), "licenses-yarnws-drvrel-"));
-      writeFileSync(
-        join(root, "package.json"),
-        JSON.stringify({ name: "demo-root" }) + "\n",
-      );
+      writeFileSync(join(root, "package.json"), JSON.stringify({ name: "demo-root" }) + "\n");
       const otherDrive = root[0]?.toUpperCase() === "Q" ? "Z" : "Q";
-      writeFileSync(
-        join(root, "yarn.lock"),
-        evilPathLockLines(`${otherDrive}:evil`).join("\n"),
-      );
+      writeFileSync(join(root, "yarn.lock"), evilPathLockLines(`${otherDrive}:evil`).join("\n"));
 
       let spawnCount = 0;
       mock.module("../src/collectors/yarnPlugin", () => ({
@@ -1307,8 +1234,7 @@ describe("collectTargets — yarn workspace expansion edge behavior", () => {
     const root = mkdtempSync(join(tmpdir(), "licenses-yarnws-classic-"));
     writeFileSync(
       join(root, "package.json"),
-      JSON.stringify({ name: "demo-root", dependencies: { ms: "2.1.3" } }) +
-        "\n",
+      JSON.stringify({ name: "demo-root", dependencies: { ms: "2.1.3" } }) + "\n",
     );
     const evilDir = join(root, "packages", "evil");
     mkdirSync(evilDir, { recursive: true });
@@ -1347,9 +1273,7 @@ describe("collectTargets — yarn workspace expansion edge behavior", () => {
       ...REAL_CDXGEN,
       collectWithCdxgen: async (): Promise<cdxgenModule.CollectorSbomFile> => {
         cdxgenCalls += 1;
-        const tempDir = mkdtempSync(
-          join(tmpdir(), "licenses-yarnws-classic-scan-"),
-        );
+        const tempDir = mkdtempSync(join(tmpdir(), "licenses-yarnws-classic-scan-"));
         const sbomPath = join(tempDir, "bom.json");
         writeFileSync(
           sbomPath,
@@ -1501,10 +1425,7 @@ describe("collectTargets — yarn workspace expansion (fixture-mirror document)"
   test("policy run: the FAIL line names imaging-native 'in frontend' under a default posture (dev_dependencies=warn)", async () => {
     const { root } = makeWorkspaceTree();
     const policyPath = join(root, "policy.toml");
-    writeFileSync(
-      policyPath,
-      ["[unknown]", 'handling = "warn"', ""].join("\n"),
-    );
+    writeFileSync(policyPath, ["[unknown]", 'handling = "warn"', ""].join("\n"));
 
     const stderr = await withCapturedStderr(async () => {
       await runGenerate(generateOpts(root, policyPath));
@@ -1521,10 +1442,7 @@ describe("collectTargets — yarn workspace expansion (fixture-mirror document)"
 describe("collectTargets — nuget packages.lock.json coverage integration", () => {
   test("an empty-sections packages.lock.json logs the warn+skip line and collects nothing", async () => {
     const root = mkdtempSync(join(tmpdir(), "licenses-nuget-cov-"));
-    writeFileSync(
-      join(root, "packages.lock.json"),
-      '{"version":2,"dependencies":{"net9.0":{}}}\n',
-    );
+    writeFileSync(join(root, "packages.lock.json"), '{"version":2,"dependencies":{"net9.0":{}}}\n');
 
     const log: string[] = [];
     const result = await collectTargets(baseOpts(root), (line) => {
@@ -1652,10 +1570,7 @@ describe("collectTargets — maven reactor attribution", () => {
     mkdirSync(allsiblingsDir);
     writeFileSync(join(libaDir, "maven.sbom.json"), REACTOR_LIBA_SBOM);
     writeFileSync(join(appbDir, "maven.sbom.json"), REACTOR_APPB_SBOM);
-    writeFileSync(
-      join(allsiblingsDir, "maven.sbom.json"),
-      REACTOR_ALLSIBLINGS_SBOM,
-    );
+    writeFileSync(join(allsiblingsDir, "maven.sbom.json"), REACTOR_ALLSIBLINGS_SBOM);
 
     const log: string[] = [];
     const result = await collectTargets(baseOpts(root), (line) => {
@@ -1663,9 +1578,7 @@ describe("collectTargets — maven reactor attribution", () => {
     });
 
     // The aggregator pom is never pushed into the merge, and never hard-fails.
-    expect(result.inputs.some((input) => input.targetIdentity === ".")).toBe(
-      false,
-    );
+    expect(result.inputs.some((input) => input.targetIdentity === ".")).toBe(false);
     expect(
       log.some(
         (line) =>
@@ -1680,24 +1593,18 @@ describe("collectTargets — maven reactor attribution", () => {
       "liba",
     ]);
 
-    const appbInput = result.inputs.find(
-      (input) => input.targetIdentity === "appb",
-    );
+    const appbInput = result.inputs.find((input) => input.targetIdentity === "appb");
     expect(componentPurlsOf(appbInput?.sbom)).toEqual([
       "pkg:maven/com.example.fixture/commons-lang3@3.12.0?type=jar",
       "pkg:maven/com.example.fixture/gson@2.10.1?type=jar",
     ]);
 
-    const libaInput = result.inputs.find(
-      (input) => input.targetIdentity === "liba",
-    );
+    const libaInput = result.inputs.find((input) => input.targetIdentity === "liba");
     expect(componentPurlsOf(libaInput?.sbom)).toEqual([
       "pkg:maven/com.example.fixture/commons-lang3@3.12.0?type=jar",
     ]);
 
-    const allsiblingsInput = result.inputs.find(
-      (input) => input.targetIdentity === "allsiblings",
-    );
+    const allsiblingsInput = result.inputs.find((input) => input.targetIdentity === "allsiblings");
     expect(componentPurlsOf(allsiblingsInput?.sbom)).toEqual([]);
   });
 });
@@ -1738,15 +1645,9 @@ describe("collectTargets — maven reactor attribution with a test-inclusive sid
     writeFileSync(join(libaDir, "maven.sbom.json"), REACTOR_LIBA_SBOM);
     // The ONLY difference from the plain reactor test above: liba also
     // commits a test-inclusive sidecar.
-    writeFileSync(
-      join(libaDir, "maven.test.sbom.json"),
-      REACTOR_LIBA_TEST_SBOM,
-    );
+    writeFileSync(join(libaDir, "maven.test.sbom.json"), REACTOR_LIBA_TEST_SBOM);
     writeFileSync(join(appbDir, "maven.sbom.json"), REACTOR_APPB_SBOM);
-    writeFileSync(
-      join(allsiblingsDir, "maven.sbom.json"),
-      REACTOR_ALLSIBLINGS_SBOM,
-    );
+    writeFileSync(join(allsiblingsDir, "maven.sbom.json"), REACTOR_ALLSIBLINGS_SBOM);
 
     const log: string[] = [];
     const result = await collectTargets(baseOpts(root), (line) => {
@@ -1755,9 +1656,7 @@ describe("collectTargets — maven reactor attribution with a test-inclusive sid
 
     // The aggregator pom still skips exactly as before — the counter and
     // coverage arm never see the test doc (they read maven.sbom.json only).
-    expect(result.inputs.some((input) => input.targetIdentity === ".")).toBe(
-      false,
-    );
+    expect(result.inputs.some((input) => input.targetIdentity === ".")).toBe(false);
     expect(
       log.some(
         (line) =>
@@ -1776,9 +1675,7 @@ describe("collectTargets — maven reactor attribution with a test-inclusive sid
 
     // liba's OWN inventory now carries the composed dual-doc set (its
     // default component plus the test-only addition).
-    const libaInput = result.inputs.find(
-      (input) => input.targetIdentity === "liba",
-    );
+    const libaInput = result.inputs.find((input) => input.targetIdentity === "liba");
     expect(componentPurlsOf(libaInput?.sbom).sort()).toEqual(
       [
         "pkg:maven/com.example.fixture/commons-lang3@3.12.0?type=jar",
@@ -1789,18 +1686,14 @@ describe("collectTargets — maven reactor attribution with a test-inclusive sid
     // appb's sibling exclusion is UNCHANGED: liba's purl (from the default
     // doc's own root, the only thing the pre-pass ever reads) still drops
     // out of appb's inventory exactly as in the no-test-doc reactor test.
-    const appbInput = result.inputs.find(
-      (input) => input.targetIdentity === "appb",
-    );
+    const appbInput = result.inputs.find((input) => input.targetIdentity === "appb");
     expect(componentPurlsOf(appbInput?.sbom)).toEqual([
       "pkg:maven/com.example.fixture/commons-lang3@3.12.0?type=jar",
       "pkg:maven/com.example.fixture/gson@2.10.1?type=jar",
     ]);
 
     // allsiblings is untouched by liba's test doc — still collapses to zero.
-    const allsiblingsInput = result.inputs.find(
-      (input) => input.targetIdentity === "allsiblings",
-    );
+    const allsiblingsInput = result.inputs.find((input) => input.targetIdentity === "allsiblings");
     expect(componentPurlsOf(allsiblingsInput?.sbom)).toEqual([]);
   });
 });
@@ -1836,15 +1729,10 @@ describe("collectTargets — maven reactor: the residual never re-introduces a s
     mkdirSync(appbDir);
     writeFileSync(join(libaDir, "maven.sbom.json"), REACTOR_LIBA_SBOM);
     writeFileSync(join(appbDir, "maven.sbom.json"), REACTOR_APPB_SBOM);
-    writeFileSync(
-      join(appbDir, "maven.test.sbom.json"),
-      REACTOR_APPB_NON_SUPERSET_TEST_SBOM,
-    );
+    writeFileSync(join(appbDir, "maven.test.sbom.json"), REACTOR_APPB_NON_SUPERSET_TEST_SBOM);
 
     const result = await collectTargets(baseOpts(root), () => {});
-    const appbInput = result.inputs.find(
-      (input) => input.targetIdentity === "appb",
-    );
+    const appbInput = result.inputs.find((input) => input.targetIdentity === "appb");
     // liba (the residual-carried sibling) is gone; commons-lang3 (the
     // residual-carried third-party dep) survives; the test-only dep joins.
     expect(componentPurlsOf(appbInput?.sbom).sort()).toEqual(
@@ -1856,9 +1744,7 @@ describe("collectTargets — maven reactor: the residual never re-introduces a s
     );
     // The prod purl set (the default doc's own purls) rides the filter spread.
     expect(
-      appbInput?.prodPurlSet?.has(
-        "pkg:maven/com.example.fixture/commons-lang3@3.12.0?type=jar",
-      ),
+      appbInput?.prodPurlSet?.has("pkg:maven/com.example.fixture/commons-lang3@3.12.0?type=jar"),
     ).toBe(true);
   });
 });

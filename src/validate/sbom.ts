@@ -58,15 +58,13 @@ const ArrayOrAbsent = type("unknown[]")
  * as absent, never a package drop. Written as a single unknown→morph (an object-shape union with an
  * inner morph is indeterminate in arktype).
  */
-const EvidenceOrAbsent = type("unknown").pipe(
-  (value): { licenses?: unknown[] } | undefined => {
-    if (value === null || typeof value !== "object" || Array.isArray(value)) {
-      return undefined;
-    }
-    const licenses = (value as { licenses?: unknown }).licenses;
-    return Array.isArray(licenses) ? { licenses } : {};
-  },
-);
+const EvidenceOrAbsent = type("unknown").pipe((value): { licenses?: unknown[] } | undefined => {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    return undefined;
+  }
+  const licenses = (value as { licenses?: unknown }).licenses;
+  return Array.isArray(licenses) ? { licenses } : {};
+});
 
 /**
  * One CycloneDX dependency-graph edge (provenance input): a `ref` bom-ref and its `dependsOn`

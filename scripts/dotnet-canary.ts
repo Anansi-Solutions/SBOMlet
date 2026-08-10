@@ -34,8 +34,7 @@ const PINNED = [
  * framework it ships for — its presence proves Transitive entries surface.
  * Prefix only: the resolved version may move with the restore's TFM.
  */
-const TRANSITIVE_PREFIX =
-  "pkg:nuget/Microsoft.Extensions.DependencyInjection.Abstractions@";
+const TRANSITIVE_PREFIX = "pkg:nuget/Microsoft.Extensions.DependencyInjection.Abstractions@";
 
 const DOTNET_ENV: NodeJS.ProcessEnv = {
   ...process.env,
@@ -61,15 +60,9 @@ async function dotnet(args: string[], cwd: string): Promise<void> {
 /** Restore a pinned probe project and return its project directory. */
 async function restoreProbeProject(scratch: string): Promise<string> {
   const project = join(scratch, "probe");
-  await dotnet(
-    ["new", "classlib", "--output", project, "--no-restore"],
-    scratch,
-  );
+  await dotnet(["new", "classlib", "--output", project, "--no-restore"], scratch);
   for (const { id, version } of PINNED) {
-    await dotnet(
-      ["add", project, "package", id, "--version", version, "--no-restore"],
-      scratch,
-    );
+    await dotnet(["add", project, "package", id, "--version", version, "--no-restore"], scratch);
   }
   await dotnet(["restore", project, "--use-lock-file"], scratch);
 
@@ -92,10 +85,7 @@ async function restoreProbeProject(scratch: string): Promise<string> {
 }
 
 /** Run the real collector over the fresh lock and assert the expected purls. */
-async function assertCollectorReadsLock(
-  project: string,
-  scratch: string,
-): Promise<void> {
+async function assertCollectorReadsLock(project: string, scratch: string): Promise<void> {
   // The real code path — an unreadable format throws loudly right here.
   const collected = await collectWithNugetLock(
     { dir: project, identity: "dotnet-canary-probe" },
@@ -107,9 +97,7 @@ async function assertCollectorReadsLock(
   const purls = (bom.components ?? []).map((c) => c.purl ?? "");
   console.log(`collector emitted ${purls.length} components`);
 
-  const expected = PINNED.map(
-    ({ id, version }) => `pkg:nuget/${id}@${version}`,
-  );
+  const expected = PINNED.map(({ id, version }) => `pkg:nuget/${id}@${version}`);
   const missing = expected.filter((purl) => !purls.includes(purl));
   if (missing.length > 0) {
     fail(
@@ -125,13 +113,9 @@ async function assertCollectorReadsLock(
   }
   // Three pinned directs plus at least the asserted transitive.
   if (purls.length < PINNED.length + 1) {
-    fail(
-      `expected at least ${PINNED.length + 1} components, got ${purls.length}`,
-    );
+    fail(`expected at least ${PINNED.length + 1} components, got ${purls.length}`);
   }
-  console.log(
-    "PASS: the collector read the SDK's lockfile and emitted every expected purl",
-  );
+  console.log("PASS: the collector read the SDK's lockfile and emitted every expected purl");
 }
 
 const sdkVersion = await execTool("dotnet", ["--version"], {

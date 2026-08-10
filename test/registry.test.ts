@@ -41,20 +41,10 @@ const ALL_KINDS: readonly LockfileKind[] = [
 ];
 
 /** Minimal Yarn 4+ lockfile head: `__metadata.version: 8` → plugin. */
-const YARN_V8_LOCKFILE = [
-  "__metadata:",
-  "  version: 8",
-  "  cacheKey: 10c0",
-  "",
-].join("\n");
+const YARN_V8_LOCKFILE = ["__metadata:", "  version: 8", "  cacheKey: 10c0", ""].join("\n");
 
 /** Minimal Yarn 3 lockfile head: `__metadata.version: 6` → cdxgen. */
-const YARN_V6_LOCKFILE = [
-  "__metadata:",
-  "  version: 6",
-  "  cacheKey: 8",
-  "",
-].join("\n");
+const YARN_V6_LOCKFILE = ["__metadata:", "  version: 6", "  cacheKey: 8", ""].join("\n");
 
 describe("collector registry", () => {
   test("registers a collector for every LockfileKind (exhaustive)", () => {
@@ -75,9 +65,7 @@ describe("collector registry", () => {
   });
 
   test("terraform reports the in-process terraform collector identity", () => {
-    expect(collectors.get("terraform")?.tool("")).toEqual(
-      TERRAFORM_COLLECTOR_TOOL,
-    );
+    expect(collectors.get("terraform")?.tool("")).toEqual(TERRAFORM_COLLECTOR_TOOL);
   });
 
   test("nuget reports the in-process packages.lock.json collector identity", () => {
@@ -89,16 +77,12 @@ describe("collector registry", () => {
   });
 
   test("yarn routes a Yarn 4+ lockfile to the plugin tool identity", () => {
-    expect(collectors.get("yarn")?.tool(YARN_V8_LOCKFILE)).toEqual(
-      YARN_PLUGIN_TOOL,
-    );
+    expect(collectors.get("yarn")?.tool(YARN_V8_LOCKFILE)).toEqual(YARN_PLUGIN_TOOL);
   });
 
   test("yarn routes a pre-4 or unparseable lockfile to the cdxgen identity", () => {
     expect(collectors.get("yarn")?.tool(YARN_V6_LOCKFILE)).toEqual(CDXGEN_TOOL);
     expect(collectors.get("yarn")?.tool("")).toEqual(CDXGEN_TOOL);
-    expect(collectors.get("yarn")?.tool("not a lockfile }{ :::")).toEqual(
-      CDXGEN_TOOL,
-    );
+    expect(collectors.get("yarn")?.tool("not a lockfile }{ :::")).toEqual(CDXGEN_TOOL);
   });
 });

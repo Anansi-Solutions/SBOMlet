@@ -98,36 +98,26 @@ const LOCAL_ONLY_MODULES_JSON = JSON.stringify({
 describe("coverageSkipReason — terraform arm (filesystem-signal gate)", () => {
   test("ABSENT modules.json + no `.terraform/` dir routes to the collect path (undefined, not a skip)", () => {
     const dir = makeLockDir(PROVIDER_LOCK); // no modules.json, no .terraform/
-    expect(
-      coverageSkipReason(".terraform.lock.hcl", PROVIDER_LOCK, dir),
-    ).toBeUndefined();
+    expect(coverageSkipReason(".terraform.lock.hcl", PROVIDER_LOCK, dir)).toBeUndefined();
   });
 
   test("providers-only dir (`.terraform/` EXISTS, no modules.json) → scan (undefined), NOT loud-fail", () => {
     // The providers-only finding-B shape: tofu init wrote `.terraform/providers/` but
     // no modules.json because there were no module calls to resolve.
     const dir = makeLockDir(PROVIDER_LOCK, { terraformDir: "providers-only" });
-    expect(
-      coverageSkipReason(".terraform.lock.hcl", PROVIDER_LOCK, dir),
-    ).toBeUndefined();
+    expect(coverageSkipReason(".terraform.lock.hcl", PROVIDER_LOCK, dir)).toBeUndefined();
   });
 
   test("ABSENT modules.json + no `.terraform/` dir (init never ran) → route to collect (undefined → loud-fail at collector)", () => {
     const dir = makeLockDir(PROVIDER_LOCK, { terraformDir: "none" });
-    expect(
-      coverageSkipReason(".terraform.lock.hcl", PROVIDER_LOCK, dir),
-    ).toBeUndefined();
+    expect(coverageSkipReason(".terraform.lock.hcl", PROVIDER_LOCK, dir)).toBeUndefined();
   });
 
   test("a zero-provider lock with a present local-only modules.json is skip-classified", () => {
     const dir = makeLockDir(ZERO_PROVIDER_LOCK, {
       modulesJson: LOCAL_ONLY_MODULES_JSON,
     });
-    const reason = coverageSkipReason(
-      ".terraform.lock.hcl",
-      ZERO_PROVIDER_LOCK,
-      dir,
-    );
+    const reason = coverageSkipReason(".terraform.lock.hcl", ZERO_PROVIDER_LOCK, dir);
     expect(reason).toContain("no providers and no external modules");
   });
 
@@ -135,18 +125,14 @@ describe("coverageSkipReason — terraform arm (filesystem-signal gate)", () => 
     const dir = makeLockDir(PROVIDER_LOCK, {
       modulesJson: LOCAL_ONLY_MODULES_JSON,
     });
-    expect(
-      coverageSkipReason(".terraform.lock.hcl", PROVIDER_LOCK, dir),
-    ).toBeUndefined();
+    expect(coverageSkipReason(".terraform.lock.hcl", PROVIDER_LOCK, dir)).toBeUndefined();
   });
 
   test("zero providers but an EXTERNAL module present → scan (undefined)", () => {
     const dir = makeLockDir(ZERO_PROVIDER_LOCK, {
       modulesJson: EXTERNAL_MODULES_JSON,
     });
-    expect(
-      coverageSkipReason(".terraform.lock.hcl", ZERO_PROVIDER_LOCK, dir),
-    ).toBeUndefined();
+    expect(coverageSkipReason(".terraform.lock.hcl", ZERO_PROVIDER_LOCK, dir)).toBeUndefined();
   });
 
   test("an empty/whitespace lock is the generic empty skip before the terraform arm", () => {
@@ -161,11 +147,7 @@ describe("coverageSkipReason — terraform arm (filesystem-signal gate)", () => 
     const dir = makeLockDir(ZERO_PROVIDER_LOCK, {
       terraformDir: "providers-only",
     });
-    const reason = coverageSkipReason(
-      ".terraform.lock.hcl",
-      ZERO_PROVIDER_LOCK,
-      dir,
-    );
+    const reason = coverageSkipReason(".terraform.lock.hcl", ZERO_PROVIDER_LOCK, dir);
     expect(reason).toContain("no providers and no external modules");
   });
 
@@ -185,9 +167,7 @@ describe("coverageSkipReason — terraform arm (filesystem-signal gate)", () => 
     // The gate sees `.terraform/modules/` exists with no modules.json FILE →
     // stale/partial → absentModulesJsonShouldFail true → routes to collect
     // (undefined). The classifyCoverage zero-component throw then fires loudly.
-    expect(
-      coverageSkipReason(".terraform.lock.hcl", PROVIDER_LOCK, dir),
-    ).toBeUndefined();
+    expect(coverageSkipReason(".terraform.lock.hcl", PROVIDER_LOCK, dir)).toBeUndefined();
   });
 
   // The size gate must fire BEFORE the coverage read of
@@ -203,9 +183,9 @@ describe("coverageSkipReason — terraform arm (filesystem-signal gate)", () => 
     const fd = openSync(path, "w");
     ftruncateSync(fd, MAX_TERRAFORM_LOCK_BYTES + 1);
     closeSync(fd);
-    expect(() =>
-      coverageSkipReason(".terraform.lock.hcl", PROVIDER_LOCK, dir),
-    ).toThrow(/cap|bytes/i);
+    expect(() => coverageSkipReason(".terraform.lock.hcl", PROVIDER_LOCK, dir)).toThrow(
+      /cap|bytes/i,
+    );
   });
 });
 
@@ -214,42 +194,32 @@ describe("classifyCoverage — terraform filesystem-signal loud-fail routing", (
     const dir = makeLockDir(PROVIDER_LOCK); // no modules.json, no .terraform/
     // componentCount 0 here is irrelevant: init never ran, so it must route to
     // the loud zero-component throw via the collector, never a silent skip.
-    expect(() =>
-      classifyCoverage("infra", ".terraform.lock.hcl", PROVIDER_LOCK, 0, dir),
-    ).toThrow(/zero components|coverage assertion/);
+    expect(() => classifyCoverage("infra", ".terraform.lock.hcl", PROVIDER_LOCK, 0, dir)).toThrow(
+      /zero components|coverage assertion/,
+    );
   });
 
   test("a positive component count with a present modules.json is included", () => {
     const dir = makeLockDir(PROVIDER_LOCK, {
       modulesJson: EXTERNAL_MODULES_JSON,
     });
-    expect(
-      classifyCoverage("infra", ".terraform.lock.hcl", PROVIDER_LOCK, 2, dir),
-    ).toBe("include");
+    expect(classifyCoverage("infra", ".terraform.lock.hcl", PROVIDER_LOCK, 2, dir)).toBe("include");
   });
 
   test("providers-only dir (`.terraform/` exists), absent modules.json, positive provider count is INCLUDED (not loud-fail)", () => {
     // The collector collects providers-only when `.terraform/` exists but no
     // modules.json was written; the coverage policy must include it, not throw.
     const dir = makeLockDir(PROVIDER_LOCK, { terraformDir: "providers-only" });
-    expect(
-      classifyCoverage("infra", ".terraform.lock.hcl", PROVIDER_LOCK, 1, dir),
-    ).toBe("include");
+    expect(classifyCoverage("infra", ".terraform.lock.hcl", PROVIDER_LOCK, 1, dir)).toBe("include");
   });
 
   test("a zero-provider lock with a local-only modules.json is skipped", () => {
     const dir = makeLockDir(ZERO_PROVIDER_LOCK, {
       modulesJson: LOCAL_ONLY_MODULES_JSON,
     });
-    expect(
-      classifyCoverage(
-        "infra",
-        ".terraform.lock.hcl",
-        ZERO_PROVIDER_LOCK,
-        0,
-        dir,
-      ),
-    ).toBe("skip");
+    expect(classifyCoverage("infra", ".terraform.lock.hcl", ZERO_PROVIDER_LOCK, 0, dir)).toBe(
+      "skip",
+    );
   });
 });
 
@@ -273,54 +243,41 @@ const NUGET_REAL_LOCK = JSON.stringify({
 
 describe("coverageSkipReason — packages.lock.json arm (strict === 0)", () => {
   test("empty dependency sections are a positively-determined zero → skip with the house reason", () => {
-    expect(
-      coverageSkipReason("packages.lock.json", NUGET_EMPTY_SECTIONS_LOCK),
-    ).toBe(
+    expect(coverageSkipReason("packages.lock.json", NUGET_EMPTY_SECTIONS_LOCK)).toBe(
       "packages.lock.json has no third-party entries (only Project entries, or empty dependency sections)",
     );
   });
 
   test("a Project-only lock skip-classifies (first-party references are not inventory)", () => {
-    expect(
-      coverageSkipReason("packages.lock.json", NUGET_PROJECT_ONLY_LOCK),
-    ).toContain("no third-party entries");
+    expect(coverageSkipReason("packages.lock.json", NUGET_PROJECT_ONLY_LOCK)).toContain(
+      "no third-party entries",
+    );
   });
 
   test("garbage text routes to the scan (undefined — the collector's loud throw fires there)", () => {
-    expect(
-      coverageSkipReason("packages.lock.json", "not json at all }{"),
-    ).toBeUndefined();
+    expect(coverageSkipReason("packages.lock.json", "not json at all }{")).toBeUndefined();
   });
 
   test("a non-zero count falls through to the scan", () => {
-    expect(
-      coverageSkipReason("packages.lock.json", NUGET_REAL_LOCK),
-    ).toBeUndefined();
+    expect(coverageSkipReason("packages.lock.json", NUGET_REAL_LOCK)).toBeUndefined();
   });
 });
 
 describe("classifyCoverage — packages.lock.json warn+skip vs hard-fail split", () => {
   test("a zero-entry lock with zero components is skipped (never a hard fail)", () => {
-    expect(
-      classifyCoverage(
-        "app",
-        "packages.lock.json",
-        NUGET_EMPTY_SECTIONS_LOCK,
-        0,
-      ),
-    ).toBe("skip");
+    expect(classifyCoverage("app", "packages.lock.json", NUGET_EMPTY_SECTIONS_LOCK, 0)).toBe(
+      "skip",
+    );
   });
 
   test("a garbage lock that scans to zero components HARD-FAILS (unknown is never a silent skip)", () => {
-    expect(() =>
-      classifyCoverage("app", "packages.lock.json", "not json at all }{", 0),
-    ).toThrow(/zero components|coverage assertion/);
+    expect(() => classifyCoverage("app", "packages.lock.json", "not json at all }{", 0)).toThrow(
+      /zero components|coverage assertion/,
+    );
   });
 
   test("a real lock with a positive component count is included", () => {
-    expect(
-      classifyCoverage("app", "packages.lock.json", NUGET_REAL_LOCK, 1),
-    ).toBe("include");
+    expect(classifyCoverage("app", "packages.lock.json", NUGET_REAL_LOCK, 1)).toBe("include");
   });
 });
 
@@ -374,34 +331,26 @@ describe("coverageSkipReason — maven.sbom.json arm (strict === 0)", () => {
   });
 
   test("garbage text routes to the scan (undefined — the collector's loud throw fires there)", () => {
-    expect(
-      coverageSkipReason("maven.sbom.json", "not json at all }{"),
-    ).toBeUndefined();
+    expect(coverageSkipReason("maven.sbom.json", "not json at all }{")).toBeUndefined();
   });
 
   test("a non-zero count falls through to the scan", () => {
-    expect(
-      coverageSkipReason("maven.sbom.json", MAVEN_MODULE_SBOM),
-    ).toBeUndefined();
+    expect(coverageSkipReason("maven.sbom.json", MAVEN_MODULE_SBOM)).toBeUndefined();
   });
 });
 
 describe("classifyCoverage — maven.sbom.json warn+skip vs hard-fail split", () => {
   test("the aggregator pom's zero-component doc is skipped (never a hard fail)", () => {
-    expect(
-      classifyCoverage("reactor", "maven.sbom.json", MAVEN_AGGREGATOR_SBOM, 0),
-    ).toBe("skip");
+    expect(classifyCoverage("reactor", "maven.sbom.json", MAVEN_AGGREGATOR_SBOM, 0)).toBe("skip");
   });
 
   test("a garbage sidecar that scans to zero components HARD-FAILS (unknown is never a silent skip)", () => {
-    expect(() =>
-      classifyCoverage("reactor", "maven.sbom.json", "not json at all }{", 0),
-    ).toThrow(/zero components|coverage assertion/);
+    expect(() => classifyCoverage("reactor", "maven.sbom.json", "not json at all }{", 0)).toThrow(
+      /zero components|coverage assertion/,
+    );
   });
 
   test("a real module sidecar with a positive component count is included", () => {
-    expect(
-      classifyCoverage("liba", "maven.sbom.json", MAVEN_MODULE_SBOM, 1),
-    ).toBe("include");
+    expect(classifyCoverage("liba", "maven.sbom.json", MAVEN_MODULE_SBOM, 1)).toBe("include");
   });
 });

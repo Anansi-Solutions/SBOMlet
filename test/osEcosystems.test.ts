@@ -22,11 +22,6 @@ describe("OS_PACKAGE_ECOSYSTEMS — literal allowlist", () => {
   });
 
   test("is exactly the four-member set", () => {
-    expect([...OS_PACKAGE_ECOSYSTEMS].sort()).toEqual([
-      "alpm",
-      "apk",
-      "deb",
-      "rpm",
-    ]);
+    expect([...OS_PACKAGE_ECOSYSTEMS].sort()).toEqual(["alpm", "apk", "deb", "rpm"]);
   });
 });

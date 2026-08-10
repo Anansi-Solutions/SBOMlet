@@ -13,8 +13,7 @@ import { describe, expect, test } from "bun:test";
 
 import { execTool } from "../src/collectors/exec";
 
-const sleep = (ms: number): Promise<void> =>
-  new Promise((resolve) => setTimeout(resolve, ms));
+const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
 function isAlive(pid: number): boolean {
   try {
@@ -84,10 +83,7 @@ describe("execTool", () => {
     // shape), records its pid to a file, then sleeps itself. After the
     // timeout rejection, the grandchild must die too — a plain child.kill()
     // would orphan it.
-    const pidFile = join(
-      mkdtempSync(join(tmpdir(), "licenses-exec-test-")),
-      "grandchild.pid",
-    );
+    const pidFile = join(mkdtempSync(join(tmpdir(), "licenses-exec-test-")), "grandchild.pid");
     const childScript =
       'const { spawn } = require("node:child_process");' +
       'const g = spawn(process.execPath, ["-e", "setTimeout(() => {}, 30000)"], { stdio: "ignore" });' +
@@ -120,10 +116,7 @@ describe("execTool", () => {
   test.if(process.platform === "win32")(
     "win32: an unspawnable taskkill on timeout falls back to child.kill() instead of crashing",
     async () => {
-      const pidFile = join(
-        mkdtempSync(join(tmpdir(), "licenses-exec-test-")),
-        "child.pid",
-      );
+      const pidFile = join(mkdtempSync(join(tmpdir(), "licenses-exec-test-")), "child.pid");
       const script =
         `require("node:fs").writeFileSync(${JSON.stringify(pidFile)}, String(process.pid));` +
         "setTimeout(() => {}, 30000);";
@@ -134,9 +127,7 @@ describe("execTool", () => {
       // listeners: an uncaught exception killing the whole process instead
       // of surfacing the timeout rejection. The test child itself needs no
       // PATH because process.execPath is absolute.
-      const pathKeys = Object.keys(process.env).filter(
-        (key) => key.toUpperCase() === "PATH",
-      );
+      const pathKeys = Object.keys(process.env).filter((key) => key.toUpperCase() === "PATH");
       const saved = pathKeys.map((key) => [key, process.env[key]] as const);
       for (const key of pathKeys) delete process.env[key];
       try {

@@ -61,9 +61,7 @@ function target(owner: string, repo: string): GithubTarget {
  *   3-segment `<host>/<ns>/<name>`            → <ns>/terraform-provider-<name>
  *   4-segment `<host>/<ns>/<name>/<provider>` → <ns>/terraform-<provider>-<name>
  */
-export function githubRepoFor(
-  parsed: ParsedTerraformPurl,
-): GithubTarget | null {
+export function githubRepoFor(parsed: ParsedTerraformPurl): GithubTarget | null {
   const segments = parsed.encodedName.split("/");
 
   if (segments.length === 3) {
@@ -71,12 +69,7 @@ export function githubRepoFor(
     return target(namespace, `terraform-provider-${name}`);
   }
   if (segments.length === 4) {
-    const [, namespace, name, provider] = segments as [
-      string,
-      string,
-      string,
-      string,
-    ];
+    const [, namespace, name, provider] = segments as [string, string, string, string];
     return target(namespace, `terraform-${provider}-${name}`);
   }
   return null;

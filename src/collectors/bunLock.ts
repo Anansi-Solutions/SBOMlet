@@ -23,13 +23,7 @@
  * while malformed individual entries are skipped via a tolerant walk.
  */
 
-import {
-  existsSync,
-  mkdtempSync,
-  statSync,
-  readFileSync,
-  writeFileSync,
-} from "node:fs";
+import { existsSync, mkdtempSync, statSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -122,9 +116,7 @@ function specOf(value: unknown): string | undefined {
  *
  * Returns undefined for specs without a version separator (malformed → tolerant skip).
  */
-function splitSpec(
-  spec: string,
-): { name: string; version: string } | undefined {
+function splitSpec(spec: string): { name: string; version: string } | undefined {
   const at = spec.indexOf("@", spec.startsWith("@") ? 1 : 0);
   if (at <= 0) return undefined; // no separator, or a bare leading-@ scope
   return { name: spec.slice(0, at), version: spec.slice(at + 1) };
@@ -148,9 +140,7 @@ function purlOf(name: string, version: string): string {
  * - undefined when the text is unparseable or carries no packages record (unknown → route to scan;
  *   the collector itself then throws loudly and zero components hard-fail, never a silent skip).
  */
-export function bunThirdPartyEntryCount(
-  lockfileText: string,
-): number | undefined {
+export function bunThirdPartyEntryCount(lockfileText: string): number | undefined {
   let parsed: unknown;
   try {
     parsed = JSON.parse(stripTrailingCommas(lockfileText));
@@ -173,17 +163,10 @@ export function bunThirdPartyEntryCount(
 }
 
 /** Importer/metadata maps whose keys are PROD dependency roots/edges. */
-const PROD_DEP_FIELDS = [
-  "dependencies",
-  "optionalDependencies",
-  "peerDependencies",
-] as const;
+const PROD_DEP_FIELDS = ["dependencies", "optionalDependencies", "peerDependencies"] as const;
 
 /** Tolerantly collect dependency names from the given maps of a record. */
-function depNamesOf(
-  record: Record<string, unknown>,
-  fields: readonly string[],
-): string[] {
+function depNamesOf(record: Record<string, unknown>, fields: readonly string[]): string[] {
   const names: string[] = [];
   for (const field of fields) {
     const deps = recordOf(record[field]);
@@ -254,8 +237,7 @@ function transitiveDevKeys(
     if (importer === undefined) continue;
     const rawName = importer["name"];
     const importerName = typeof rawName === "string" ? rawName : undefined;
-    const parentChain =
-      importerName === undefined || importerName === "" ? [] : [importerName];
+    const parentChain = importerName === undefined || importerName === "" ? [] : [importerName];
     for (const name of depNamesOf(importer, PROD_DEP_FIELDS)) {
       prodRoots.push({ parentChain, name });
     }
@@ -377,9 +359,7 @@ export async function collectWithBunLock(
 ): Promise<CollectorSbomFile> {
   const lockPath = join(target.dir, "bun.lock");
   if (!existsSync(lockPath)) {
-    throw new Error(
-      `target "${target.identity}" is missing bun.lock: expected ${lockPath}`,
-    );
+    throw new Error(`target "${target.identity}" is missing bun.lock: expected ${lockPath}`);
   }
 
   // Size gate FIRST - before read, before parse (DoS bound).
@@ -390,20 +370,17 @@ export async function collectWithBunLock(
   try {
     parsed = JSON.parse(stripTrailingCommas(text));
   } catch (error) {
-    throw new Error(
-      `bun.lock at ${lockPath} is not valid JSONC: ${String(error)}`,
-      { cause: error },
-    );
+    throw new Error(`bun.lock at ${lockPath} is not valid JSONC: ${String(error)}`, {
+      cause: error,
+    });
   }
 
   // Each map is narrowed INDEPENDENTLY (recordOf), so a wrong-typed sibling field never zeroes the
   // other: a failed narrow yields {} (the old record-narrow-undefined path → empty map, zero
   // components, loud zero-component hard fail).
   const narrowed = BunLockDocument(parsed);
-  const packages =
-    (narrowed instanceof type.errors ? undefined : narrowed.packages) ?? {};
-  const workspaces =
-    recordOf((parsed as { workspaces?: unknown })?.workspaces) ?? {};
+  const packages = (narrowed instanceof type.errors ? undefined : narrowed.packages) ?? {};
+  const workspaces = recordOf((parsed as { workspaces?: unknown })?.workspaces) ?? {};
 
   const components = componentsOf(packages, workspaces);
 
@@ -423,12 +400,7 @@ export async function collectWithBunLock(
   return {
     sbomPath,
     /** Shared cache-key framing contract - reused, never duplicated. */
-    cacheKey: computeCacheKey(
-      target,
-      BUN_COLLECTOR_TOOL,
-      BUN_CACHE_ARGS,
-      BUN_MANIFEST_FILES,
-    ),
+    cacheKey: computeCacheKey(target, BUN_COLLECTOR_TOOL, BUN_CACHE_ARGS, BUN_MANIFEST_FILES),
     tool: BUN_COLLECTOR_TOOL,
   };
 }

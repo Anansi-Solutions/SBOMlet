@@ -32,12 +32,7 @@ interface FileMetrics extends CommentMetrics {
 }
 
 function commentRanges(text: string): Array<{ pos: number; end: number }> {
-  const sourceFile = ts.createSourceFile(
-    "f.ts",
-    text,
-    ts.ScriptTarget.Latest,
-    true,
-  );
+  const sourceFile = ts.createSourceFile("f.ts", text, ts.ScriptTarget.Latest, true);
   const seen = new Set<number>();
   const ranges: Array<{ pos: number; end: number }> = [];
   const collect = (candidates: ts.CommentRange[] | undefined): void => {
@@ -58,8 +53,7 @@ function commentRanges(text: string): Array<{ pos: number; end: number }> {
 }
 
 function countWords(text: string): number {
-  return (text.match(/\S+/g) ?? []).filter((token) => /[A-Za-z0-9]/.test(token))
-    .length;
+  return (text.match(/\S+/g) ?? []).filter((token) => /[A-Za-z0-9]/.test(token)).length;
 }
 
 export function measureFile(text: string): CommentMetrics {
@@ -70,10 +64,7 @@ export function measureFile(text: string): CommentMetrics {
   for (const { pos, end } of ranges) {
     const span = text.slice(pos, end);
     commentText += ` ${span}`;
-    codeOnly =
-      codeOnly.slice(0, pos) +
-      span.replace(/[^\n]/g, " ") +
-      codeOnly.slice(end);
+    codeOnly = codeOnly.slice(0, pos) + span.replace(/[^\n]/g, " ") + codeOnly.slice(end);
   }
   const lines = text.split("\n");
   const codeLines = codeOnly.split("\n");
@@ -84,10 +75,7 @@ export function measureFile(text: string): CommentMetrics {
     totalLines++;
     if (codeLines[i]!.trim() === "") commentLines++;
   }
-  const strippedComment = commentText.replace(
-    /\/\*+|\*+\/|^\s*\*+|\/\//gm,
-    " ",
-  );
+  const strippedComment = commentText.replace(/\/\*+|\*+\/|^\s*\*+|\/\//gm, " ");
   return {
     totalLines,
     commentLines,

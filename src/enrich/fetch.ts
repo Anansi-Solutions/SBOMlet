@@ -116,9 +116,7 @@ export class GithubTransientError extends Error {
 }
 
 /** The result of a single GitHub License API fetch at one candidate ref. */
-export type GithubLicenseFetch =
-  | { status: 200; body: unknown }
-  | { status: 404 };
+export type GithubLicenseFetch = { status: 200; body: unknown } | { status: 404 };
 
 /**
  * GET a GitHub License API URL with the same bound/backoff posture as {@link fetchJson}, PLUS the

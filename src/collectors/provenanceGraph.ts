@@ -17,10 +17,7 @@
  * introducer.
  */
 
-import {
-  compareCodeUnits,
-  type DependencyIntroduction,
-} from "../model/dependencies";
+import { compareCodeUnits, type DependencyIntroduction } from "../model/dependencies";
 
 /** Purl-space directed graph anchored at a synthetic root (the scanned target). */
 export interface PurlGraph {
@@ -35,11 +32,7 @@ export interface PurlGraph {
 }
 
 /** Insert one (key→value) into a Set-of-values map. */
-export function addToSetMap(
-  map: Map<string, Set<string>>,
-  key: string,
-  value: string,
-): void {
+export function addToSetMap(map: Map<string, Set<string>>, key: string, value: string): void {
   let set = map.get(key);
   if (set === undefined) {
     set = new Set<string>();
@@ -49,9 +42,7 @@ export function addToSetMap(
 }
 
 /** Materialize a Set-of-values map into a sorted-array adjacency map. */
-export function sortSetMap(
-  map: Map<string, Set<string>>,
-): Map<string, string[]> {
+export function sortSetMap(map: Map<string, Set<string>>): Map<string, string[]> {
   const out = new Map<string, string[]>();
   for (const [key, set] of map) {
     out.set(key, [...set].sort(compareCodeUnits));
@@ -97,10 +88,7 @@ function expandLevel(
  * lexicographically-smallest-path comparison would select. Returns undefined when unreachable from
  * the root.
  */
-export function shortestPath(
-  graph: PurlGraph,
-  target: string,
-): string[] | undefined {
+export function shortestPath(graph: PurlGraph, target: string): string[] | undefined {
   const visited = new Set<string>();
   let frontier: BfsNode[] = [];
   for (const child of [...graph.rootChildren].sort(compareCodeUnits)) {
@@ -183,9 +171,7 @@ function reachableFromRoots(graph: PurlGraph): Set<string> {
  *
  * Optionality is descoped - no `optional` field is ever emitted.
  */
-export function deriveIntroductions(
-  graph: PurlGraph,
-): Map<string, DependencyIntroduction> {
+export function deriveIntroductions(graph: PurlGraph): Map<string, DependencyIntroduction> {
   const reachable = reachableFromRoots(graph);
   const result = new Map<string, DependencyIntroduction>();
   for (const purl of graph.nodes) {
@@ -197,9 +183,7 @@ export function deriveIntroductions(
     // Intersect the purl-space parent SET with the root-reachable set: a parent unreachable from
     // every declared root cannot be a real introducer (the bad state is unrepresentable). Already
     // sorted (parents is a sorted adjacency), so the filter preserves order.
-    const introducedBy = (graph.parents.get(purl) ?? []).filter((parent) =>
-      reachable.has(parent),
-    );
+    const introducedBy = (graph.parents.get(purl) ?? []).filter((parent) => reachable.has(parent));
     const introduction: DependencyIntroduction = {
       direct: false,
       introducedBy,

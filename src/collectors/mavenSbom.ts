@@ -42,13 +42,7 @@
  */
 
 import { createHash } from "node:crypto";
-import {
-  existsSync,
-  mkdtempSync,
-  statSync,
-  readFileSync,
-  writeFileSync,
-} from "node:fs";
+import { existsSync, mkdtempSync, statSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -165,10 +159,9 @@ function readAndNarrowMavenSbom(
   try {
     parsed = JSON.parse(text);
   } catch (error) {
-    throw new Error(
-      `${label} at ${sbomPath} is not valid JSON: ${String(error)}`,
-      { cause: error },
-    );
+    throw new Error(`${label} at ${sbomPath} is not valid JSON: ${String(error)}`, {
+      cause: error,
+    });
   }
 
   const narrowed = MavenSbomDocument(parsed);
@@ -203,10 +196,7 @@ function readAndNarrowMavenSbom(
  * through completely untouched. A shallow spread over the test doc - the excludeMavenFirstParty
  * new-doc pattern - never a hand-rebuilt document that could drop a field neither narrow declares.
  */
-function composeMavenInventory(
-  testParsed: unknown,
-  defaultParsed: unknown,
-): unknown {
+function composeMavenInventory(testParsed: unknown, defaultParsed: unknown): unknown {
   const testDoc = recordOf(testParsed);
   if (testDoc === undefined) return testParsed;
   const testComponents = Array.isArray(testDoc["components"])
@@ -263,9 +253,7 @@ export async function collectWithMavenSbom(
 ): Promise<MavenCollectResult> {
   const sbomPath = join(target.dir, "maven.sbom.json");
   if (!existsSync(sbomPath)) {
-    throw new Error(
-      `target "${target.identity}" is missing maven.sbom.json: expected ${sbomPath}`,
-    );
+    throw new Error(`target "${target.identity}" is missing maven.sbom.json: expected ${sbomPath}`);
   }
 
   // Size gate FIRST - before read, before parse (the DoS bound above).
@@ -306,14 +294,9 @@ export async function collectWithMavenSbom(
     // Composing builds a NEW document object (the shallow-spread pattern above), so - unlike the
     // default-doc-only verbatim path - this is a deliberate re-serialization: JSON.stringify over
     // that new object.
-    outputText = JSON.stringify(
-      composeMavenInventory(testParsed, defaultParsed),
-    );
+    outputText = JSON.stringify(composeMavenInventory(testParsed, defaultParsed));
     prodPurlSet = purlSetOf(defaultParsed);
-    cacheArgs = [
-      ...MAVEN_CACHE_ARGS,
-      `maven-test-sbom-sha256:${sha256Hex(testText)}`,
-    ];
+    cacheArgs = [...MAVEN_CACHE_ARGS, `maven-test-sbom-sha256:${sha256Hex(testText)}`];
   }
 
   // Verbatim pass-through in the common (no test doc) case: the committed bytes are copied
@@ -327,12 +310,7 @@ export async function collectWithMavenSbom(
   return {
     sbomPath: outPath,
     /** Shared cache-key framing contract - reused, never duplicated. */
-    cacheKey: computeCacheKey(
-      target,
-      MAVEN_COLLECTOR_TOOL,
-      cacheArgs,
-      MAVEN_MANIFEST_FILES,
-    ),
+    cacheKey: computeCacheKey(target, MAVEN_COLLECTOR_TOOL, cacheArgs, MAVEN_MANIFEST_FILES),
     tool: MAVEN_COLLECTOR_TOOL,
     ...(prodPurlSet !== undefined ? { prodPurlSet } : {}),
   };
@@ -381,10 +359,7 @@ export function mavenRootPurlOf(text: string): string | undefined {
  * array is returned as-is: the collector's own loud ladder owns malformed-sidecar failures, not
  * this pure filter.
  */
-export function excludeMavenFirstParty(
-  sbom: unknown,
-  purls: ReadonlySet<string>,
-): unknown {
+export function excludeMavenFirstParty(sbom: unknown, purls: ReadonlySet<string>): unknown {
   const doc = recordOf(sbom);
   if (doc === undefined) return sbom;
   const components = doc["components"];

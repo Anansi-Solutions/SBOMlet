@@ -33,21 +33,9 @@
 
 import { type } from "arktype";
 
-import {
-  compareCodeUnits,
-  type DependencyIntroduction,
-} from "../model/dependencies";
-import {
-  SbomComponent,
-  SbomDependencyEdge,
-  SbomDocument,
-} from "../validate/sbom";
-import {
-  addToSetMap,
-  deriveIntroductions,
-  sortSetMap,
-  type PurlGraph,
-} from "./provenanceGraph";
+import { compareCodeUnits, type DependencyIntroduction } from "../model/dependencies";
+import { SbomComponent, SbomDependencyEdge, SbomDocument } from "../validate/sbom";
+import { addToSetMap, deriveIntroductions, sortSetMap, type PurlGraph } from "./provenanceGraph";
 
 /** Tolerant root-bom-ref extraction - independent of the document narrow. */
 const RootBomRef = type({
@@ -166,10 +154,7 @@ interface NpmGraph {
  * bom-ref? If not, the root's declared-direct set is absent from the graph and direct-detection
  * would mark every real direct as transitive. The caller abstains in that case.
  */
-function hasRootAnchorEdge(
-  dependencies: readonly unknown[],
-  rootBomRef: string,
-): boolean {
+function hasRootAnchorEdge(dependencies: readonly unknown[], rootBomRef: string): boolean {
   for (const raw of dependencies) {
     const edge = SbomDependencyEdge(raw);
     if (edge instanceof type.errors) continue;
@@ -210,11 +195,7 @@ function buildNpmGraph(sbom: unknown): NpmGraph | undefined {
   if (!hasRootAnchorEdge(dependencies, rootBomRef)) return undefined;
 
   const rootPurl = rootPurlOf(sbom);
-  const { bomRefToPurl, componentPurls } = buildBomRefJoin(
-    components,
-    rootBomRef,
-    rootPurl,
-  );
+  const { bomRefToPurl, componentPurls } = buildBomRefJoin(components, rootBomRef, rootPurl);
   if (componentPurls.size === 0) return undefined;
 
   const acc: EdgeAccumulator = {
@@ -226,14 +207,7 @@ function buildNpmGraph(sbom: unknown): NpmGraph | undefined {
   for (const raw of dependencies) {
     const edge = SbomDependencyEdge(raw);
     if (edge instanceof type.errors || edge.ref === undefined) continue;
-    ingestEdge(
-      acc,
-      bomRefToPurl,
-      edge.ref,
-      edge.dependsOn ?? [],
-      rootBomRef,
-      rootPurl,
-    );
+    ingestEdge(acc, bomRefToPurl, edge.ref, edge.dependsOn ?? [], rootBomRef, rootPurl);
   }
 
   const graph: PurlGraph = {
@@ -260,8 +234,7 @@ interface RefBfsNode {
 function sortRefFrontier(nodes: RefBfsNode[]): RefBfsNode[] {
   return nodes.sort(
     (a, b) =>
-      compareCodeUnits(a.path.join("\0"), b.path.join("\0")) ||
-      compareCodeUnits(a.ref, b.ref),
+      compareCodeUnits(a.path.join("\0"), b.path.join("\0")) || compareCodeUnits(a.ref, b.ref),
   );
 }
 
@@ -363,9 +336,7 @@ function realIntroducerPurls(
     if (!reachableRefs.has(parentRef) || parentRef === rootBomRef) continue;
     const parentPurl = bomRefToPurl.get(parentRef);
     if (parentPurl === undefined || parentPurl === targetPurl) continue;
-    if (
-      hasReachableChildPurl(bomRefToPurl, children, reachableRefs, targetPurl)
-    ) {
+    if (hasReachableChildPurl(bomRefToPurl, children, reachableRefs, targetPurl)) {
       introducers.add(parentPurl);
     }
   }
@@ -380,10 +351,7 @@ function realIntroducerPurls(
  * serializations of the same graph pick the identical representative chain. Returns undefined when
  * the target purl is unreachable on the real graph.
  */
-function realShortestPath(
-  npm: NpmGraph,
-  targetPurl: string,
-): string[] | undefined {
+function realShortestPath(npm: NpmGraph, targetPurl: string): string[] | undefined {
   const { bomRefToPurl, rootBomRef } = npm;
   if (rootBomRef === undefined) return undefined;
   const visited = new Set<string>([rootBomRef]);
@@ -419,9 +387,7 @@ function realShortestPath(
  * output) neither the shared filter nor this branch changes anything, so the common case is
  * unchanged.
  */
-export function npmIntroductions(
-  sbom: unknown,
-): ReadonlyMap<string, DependencyIntroduction> {
+export function npmIntroductions(sbom: unknown): ReadonlyMap<string, DependencyIntroduction> {
   const npm = buildNpmGraph(sbom);
   if (npm === undefined) return new Map();
   const introductions = deriveIntroductions(npm.graph);

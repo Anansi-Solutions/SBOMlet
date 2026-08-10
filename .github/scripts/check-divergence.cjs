@@ -44,9 +44,7 @@ module.exports = async ({ core }) => {
     return;
   }
 
-  core.error(
-    "regenerated scan artifacts are not committed -- run generate and commit the result",
-  );
+  core.error("regenerated scan artifacts are not committed -- run generate and commit the result");
   core.info(execFileSync("git", ["diff", "--stat"], { encoding: "utf8" }));
 
   assertUploadable(status);

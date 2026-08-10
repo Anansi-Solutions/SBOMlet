@@ -108,27 +108,17 @@ export function readEnvelope<T>(
 }
 
 /** Validate the {version,entries} envelope, throwing loudly on any deviation. */
-function envelopeEntries<T>(
-  parsed: unknown,
-  path: string,
-  label: string,
-): Record<string, T> {
+function envelopeEntries<T>(parsed: unknown, path: string, label: string): Record<string, T> {
   if (
     parsed === null ||
     typeof parsed !== "object" ||
     Array.isArray(parsed) ||
     !("entries" in parsed)
   ) {
-    throw new Error(
-      `malformed ${label} (missing {version,entries} envelope): ${path}`,
-    );
+    throw new Error(`malformed ${label} (missing {version,entries} envelope): ${path}`);
   }
   const entries = (parsed as { entries: unknown }).entries;
-  if (
-    entries === null ||
-    typeof entries !== "object" ||
-    Array.isArray(entries)
-  ) {
+  if (entries === null || typeof entries !== "object" || Array.isArray(entries)) {
     throw new Error(`malformed ${label} (entries is not an object): ${path}`);
   }
   return entries as Record<string, T>;
@@ -148,18 +138,11 @@ export function serializeCache(cache: Map<string, CacheEntry>): string {
 }
 
 /** Store an entry under its verbatim purl key (mutates the Map in place). */
-export function putEntry(
-  cache: Map<string, CacheEntry>,
-  purl: string,
-  entry: CacheEntry,
-): void {
+export function putEntry(cache: Map<string, CacheEntry>, purl: string, entry: CacheEntry): void {
   cache.set(purl, entry);
 }
 
 /** Look up a purl: the entry on a hit, undefined on a miss (zero I/O). */
-export function getEntry(
-  cache: Map<string, CacheEntry>,
-  purl: string,
-): CacheEntry | undefined {
+export function getEntry(cache: Map<string, CacheEntry>, purl: string): CacheEntry | undefined {
   return cache.get(purl);
 }

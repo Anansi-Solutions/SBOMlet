@@ -20,15 +20,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import {
-  afterAll,
-  afterEach,
-  beforeAll,
-  describe,
-  expect,
-  mock,
-  test,
-} from "bun:test";
+import { afterAll, afterEach, beforeAll, describe, expect, mock, test } from "bun:test";
 
 import * as cdxgenModule from "../src/collectors/cdxgen";
 import * as execModule from "../src/collectors/exec";
@@ -64,11 +56,7 @@ const REAL_CDXGEN = { ...cdxgenModule };
 let invocations: string[][] = [];
 
 /** The fixture path, loaded once and JSON.parse'd for in-test variant surgery. */
-const FIXTURE_PATH = join(
-  __dirname,
-  "fixtures",
-  "scancode-license-file-trimmed.json",
-);
+const FIXTURE_PATH = join(__dirname, "fixtures", "scancode-license-file-trimmed.json");
 
 /**
  * A subprocess-free execTool recorder. For a scancode invocation (argv
@@ -77,10 +65,7 @@ const FIXTURE_PATH = join(
  * spawning anything (the dockerOsBuilt.test.ts fakeExecTool shape, keyed
  * positionally instead of key=value).
  */
-function fakeExecTool(
-  cmd: string,
-  args: string[],
-): Promise<{ stdout: string; stderr: string }> {
+function fakeExecTool(cmd: string, args: string[]): Promise<{ stdout: string; stderr: string }> {
   invocations.push([cmd, ...args]);
   const jsonPpIndex = args.indexOf("--json-pp");
   if (jsonPpIndex !== -1) {
@@ -93,10 +78,7 @@ function fakeExecTool(
 /** Build a fakeExecTool that writes a CALLER-SUPPLIED doc instead of the fixture. */
 function makeFakeExecToolWithDoc(
   doc: unknown,
-): (
-  cmd: string,
-  args: string[],
-) => Promise<{ stdout: string; stderr: string }> {
+): (cmd: string, args: string[]) => Promise<{ stdout: string; stderr: string }> {
   return (cmd: string, args: string[]) => {
     invocations.push([cmd, ...args]);
     const jsonPpIndex = args.indexOf("--json-pp");
@@ -180,18 +162,14 @@ describe("scanPackageSources (subprocess-free, exec recorder harness)", () => {
 
     expect(result).not.toBeNull();
     expect(result?.raw).toBe("MIT");
-    expect(result?.via).toBe(
-      `${SCANCODE_TOOL.name}@${SCANCODE_TOOL.version}/license-file`,
-    );
+    expect(result?.via).toBe(`${SCANCODE_TOOL.name}@${SCANCODE_TOOL.version}/license-file`);
     // Copyrights union across ALL files (LICENSE + the bundled snippet),
     // sorted + deduped.
     expect(result?.copyrights).toEqual(
       [...result!.copyrights].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0)),
     );
     expect(result?.copyrights.length).toBeGreaterThan(0);
-    expect(
-      result?.copyrights.some((c) => c.includes("Evgeny Poberezkin")),
-    ).toBe(true);
+    expect(result?.copyrights.some((c) => c.includes("Evgeny Poberezkin"))).toBe(true);
     expect(result?.copyrights.some((c) => c.includes("Gary Court"))).toBe(true);
   });
 
@@ -215,9 +193,7 @@ describe("scanPackageSources (subprocess-free, exec recorder harness)", () => {
 
     expect(result).not.toBeNull();
     expect(result?.raw).toBe("MIT");
-    expect(result?.via).toBe(
-      `${SCANCODE_TOOL.name}@${SCANCODE_TOOL.version}/manifest`,
-    );
+    expect(result?.via).toBe(`${SCANCODE_TOOL.name}@${SCANCODE_TOOL.version}/manifest`);
 
     // Restore the shared fixture-based stub for subsequent tests.
     mock.module("../src/collectors/exec", () => ({
@@ -298,9 +274,9 @@ describe("scanPackageSources (subprocess-free, exec recorder harness)", () => {
     }));
 
     tempDir = mkdtempSync(join(tmpdir(), "scancode-version-"));
-    await expect(
-      scanPackageSources("/some/source/dir", { tempDir }),
-    ).rejects.toThrow(/31\.0\.0.*32\.5\.0|invocation:/s);
+    await expect(scanPackageSources("/some/source/dir", { tempDir })).rejects.toThrow(
+      /31\.0\.0.*32\.5\.0|invocation:/s,
+    );
 
     mock.module("../src/collectors/exec", () => ({
       ...REAL_EXEC,
@@ -315,9 +291,9 @@ describe("scanPackageSources (subprocess-free, exec recorder harness)", () => {
     }));
 
     tempDir = mkdtempSync(join(tmpdir(), "scancode-oversized-"));
-    await expect(
-      scanPackageSources("/some/source/dir", { tempDir }),
-    ).rejects.toThrow(/over the.*byte cap/);
+    await expect(scanPackageSources("/some/source/dir", { tempDir })).rejects.toThrow(
+      /over the.*byte cap/,
+    );
 
     mock.module("../src/collectors/exec", () => ({
       ...REAL_EXEC,
@@ -332,9 +308,9 @@ describe("scanPackageSources (subprocess-free, exec recorder harness)", () => {
     }));
 
     tempDir = mkdtempSync(join(tmpdir(), "scancode-enoent-"));
-    await expect(
-      scanPackageSources("/some/source/dir", { tempDir }),
-    ).rejects.toThrow(/run mise install/);
+    await expect(scanPackageSources("/some/source/dir", { tempDir })).rejects.toThrow(
+      /run mise install/,
+    );
 
     mock.module("../src/collectors/exec", () => ({
       ...REAL_EXEC,
@@ -353,9 +329,7 @@ describe("scanPackageSources (subprocess-free, exec recorder harness)", () => {
       const i = args.indexOf("--json-pp");
       if (i !== -1) copyFileSync(FIXTURE_PATH, args[i + 1] as string);
       return Promise.reject(
-        new Error(
-          "scancode exited with code 1\nSome files failed to scan properly",
-        ),
+        new Error("scancode exited with code 1\nSome files failed to scan properly"),
       );
     };
     mock.module("../src/collectors/exec", () => ({
@@ -365,9 +339,7 @@ describe("scanPackageSources (subprocess-free, exec recorder harness)", () => {
     tempDir = mkdtempSync(join(tmpdir(), "scancode-partial-"));
     const result = await scanPackageSources("/some/source/dir", { tempDir });
     expect(result?.raw).toBe("MIT");
-    expect(result?.via).toBe(
-      `${SCANCODE_TOOL.name}@${SCANCODE_TOOL.version}/license-file`,
-    );
+    expect(result?.via).toBe(`${SCANCODE_TOOL.name}@${SCANCODE_TOOL.version}/license-file`);
     mock.module("../src/collectors/exec", () => ({
       ...REAL_EXEC,
       execTool: fakeExecTool,
@@ -387,9 +359,9 @@ describe("scanPackageSources (subprocess-free, exec recorder harness)", () => {
       execTool: failNoOutput,
     }));
     tempDir = mkdtempSync(join(tmpdir(), "scancode-fail-noout-"));
-    await expect(
-      scanPackageSources("/some/source/dir", { tempDir }),
-    ).rejects.toThrow(/exited with code 1|produced no output/);
+    await expect(scanPackageSources("/some/source/dir", { tempDir })).rejects.toThrow(
+      /exited with code 1|produced no output/,
+    );
     mock.module("../src/collectors/exec", () => ({
       ...REAL_EXEC,
       execTool: fakeExecTool,
@@ -411,8 +383,7 @@ describe("scanPackageSources (subprocess-free, exec recorder harness)", () => {
     ): Promise<{ stdout: string; stderr: string }> => {
       invocations.push([cmd, ...args]);
       const i = args.indexOf("--json-pp");
-      if (i !== -1)
-        writeFileSync(args[i + 1] as string, JSON.stringify(wrongVersion));
+      if (i !== -1) writeFileSync(args[i + 1] as string, JSON.stringify(wrongVersion));
       return Promise.reject(new Error("scancode exited with code 1"));
     };
     mock.module("../src/collectors/exec", () => ({
@@ -420,9 +391,9 @@ describe("scanPackageSources (subprocess-free, exec recorder harness)", () => {
       execTool: failWrongVersion,
     }));
     tempDir = mkdtempSync(join(tmpdir(), "scancode-fail-version-"));
-    await expect(
-      scanPackageSources("/some/source/dir", { tempDir }),
-    ).rejects.toThrow(/31\.0\.0.*32\.5\.0|invocation:/s);
+    await expect(scanPackageSources("/some/source/dir", { tempDir })).rejects.toThrow(
+      /31\.0\.0.*32\.5\.0|invocation:/s,
+    );
     mock.module("../src/collectors/exec", () => ({
       ...REAL_EXEC,
       execTool: fakeExecTool,
@@ -456,9 +427,9 @@ describe("scanPackageSources (subprocess-free, exec recorder harness)", () => {
     try {
       const first = await scanPackageSources("/pkg/first", { tempDir });
       expect(first?.raw).toBe("MIT");
-      await expect(
-        scanPackageSources("/pkg/second", { tempDir }),
-      ).rejects.toThrow(/produced no output/);
+      await expect(scanPackageSources("/pkg/second", { tempDir })).rejects.toThrow(
+        /produced no output/,
+      );
     } finally {
       mock.module("../src/collectors/exec", () => ({
         ...REAL_EXEC,
@@ -546,9 +517,7 @@ describe("electExpression / electCopyrights (pure narrow, no exec)", () => {
       },
     ];
     expect(() => electCopyrights(files)).not.toThrow();
-    expect(electCopyrights(files)).toEqual([
-      "Copyright (c) 2020 Example Author",
-    ]);
+    expect(electCopyrights(files)).toEqual(["Copyright (c) 2020 Example Author"]);
   });
 });
 
@@ -566,10 +535,7 @@ describe("sourceDirsFor — npm mapping", () => {
   function writeNpmPackage(dir: string, name: string, version: string): string {
     const pkgDir = join(dir, "node_modules", ...name.split("/"));
     mkdirSync(pkgDir, { recursive: true });
-    writeFileSync(
-      join(pkgDir, "package.json"),
-      JSON.stringify({ name, version }),
-    );
+    writeFileSync(join(pkgDir, "package.json"), JSON.stringify({ name, version }));
     return pkgDir;
   }
 
@@ -621,9 +587,7 @@ describe("sourceDirsFor — npm mapping", () => {
     mkdirSync(pkgDir, { recursive: true });
     writeFileSync(join(pkgDir, "package.json"), "{ not valid json");
 
-    expect(() =>
-      sourceDirsFor("pkg:npm/left-pad@1.3.0", [targetDir]),
-    ).not.toThrow();
+    expect(() => sourceDirsFor("pkg:npm/left-pad@1.3.0", [targetDir])).not.toThrow();
     const result = sourceDirsFor("pkg:npm/left-pad@1.3.0", [targetDir]);
     expect(result).toEqual([]);
   });
@@ -662,11 +626,8 @@ describe("sourceDirsFor — npm mapping", () => {
       const pkgInA = writeNpmPackage(dirA, "left-pad", "1.3.0");
       writeNpmPackage(dirB, "left-pad", "1.3.0");
 
-      const sortedFirst = [dirA, dirB].sort((a, b) =>
-        a < b ? -1 : a > b ? 1 : 0,
-      )[0];
-      const expected =
-        sortedFirst === dirA ? pkgInA : join(dirB, "node_modules", "left-pad");
+      const sortedFirst = [dirA, dirB].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0))[0];
+      const expected = sortedFirst === dirA ? pkgInA : join(dirB, "node_modules", "left-pad");
 
       // Call with REVERSED argument order to prove determinism is a function
       // of the sorted set, not caller order.
@@ -706,9 +667,7 @@ describe("sourceDirsFor — pypi mapping", () => {
     const packageDir = join(sitePackages, "typing_extensions");
     mkdirSync(packageDir, { recursive: true });
 
-    const result = sourceDirsFor("pkg:pypi/typing-extensions@4.9.0", [
-      targetDir,
-    ]);
+    const result = sourceDirsFor("pkg:pypi/typing-extensions@4.9.0", [targetDir]);
     // The dist-info dir holds the wheel's METADATA and legal files — it is
     // the first scan candidate; the import package dir follows.
     expect(result).toEqual([distInfoDir, packageDir]);
@@ -716,9 +675,7 @@ describe("sourceDirsFor — pypi mapping", () => {
 
   test("absent venv returns undefined", () => {
     targetDir = mkdtempSync(join(tmpdir(), "scancode-pypi-novenv-"));
-    const result = sourceDirsFor("pkg:pypi/typing-extensions@4.9.0", [
-      targetDir,
-    ]);
+    const result = sourceDirsFor("pkg:pypi/typing-extensions@4.9.0", [targetDir]);
     expect(result).toEqual([]);
   });
 
@@ -731,9 +688,7 @@ describe("sourceDirsFor — pypi mapping", () => {
     writeFileSync(join(distInfoDir, "top_level.txt"), "typing_extensions\n");
     // Deliberately do NOT create the sibling package dir.
 
-    const result = sourceDirsFor("pkg:pypi/typing-extensions@4.9.0", [
-      targetDir,
-    ]);
+    const result = sourceDirsFor("pkg:pypi/typing-extensions@4.9.0", [targetDir]);
     expect(result).toEqual([distInfoDir]);
   });
 
@@ -773,17 +728,14 @@ describe("sourceDirsFor — pypi mapping", () => {
 
 describe("sourceDirsFor — unsupported ecosystems and malformed purls", () => {
   test("terraform purls return undefined with zero fs probes", () => {
-    const result = sourceDirsFor(
-      "pkg:terraform/registry.opentofu.org/hashicorp/aws@5.0.0",
-      ["/nonexistent/dir/that/would/throw/if/probed"],
-    );
+    const result = sourceDirsFor("pkg:terraform/registry.opentofu.org/hashicorp/aws@5.0.0", [
+      "/nonexistent/dir/that/would/throw/if/probed",
+    ]);
     expect(result).toEqual([]);
   });
 
   test("apk purls return undefined", () => {
-    const result = sourceDirsFor("pkg:apk/alpine/musl@1.2.0", [
-      "/nonexistent/dir",
-    ]);
+    const result = sourceDirsFor("pkg:apk/alpine/musl@1.2.0", ["/nonexistent/dir"]);
     expect(result).toEqual([]);
   });
 
@@ -799,9 +751,7 @@ describe("sourceDirsFor — unsupported ecosystems and malformed purls", () => {
       // decodeURIComponent("%ZZ") throws URIError; the mapper's contract is
       // undefined on ANY structural mismatch — a crafted SBOM purl must
       // never crash the run.
-      expect(() =>
-        sourceDirsFor("pkg:npm/%ZZ@1.0.0", [targetDir]),
-      ).not.toThrow();
+      expect(() => sourceDirsFor("pkg:npm/%ZZ@1.0.0", [targetDir])).not.toThrow();
       expect(sourceDirsFor("pkg:npm/%ZZ@1.0.0", [targetDir])).toEqual([]);
     } finally {
       rmSync(targetDir, { recursive: true, force: true });
@@ -817,9 +767,7 @@ describe("sourceDirsFor — unsupported ecosystems and malformed purls", () => {
           ? join(targetDir, ".venv", "Lib", "site-packages")
           : join(targetDir, ".venv", "lib", "python3.12", "site-packages");
       mkdirSync(sitePackages, { recursive: true });
-      expect(() =>
-        sourceDirsFor("pkg:pypi/%ZZ@1.0.0", [targetDir]),
-      ).not.toThrow();
+      expect(() => sourceDirsFor("pkg:pypi/%ZZ@1.0.0", [targetDir])).not.toThrow();
       expect(sourceDirsFor("pkg:pypi/%ZZ@1.0.0", [targetDir])).toEqual([]);
     } finally {
       rmSync(targetDir, { recursive: true, force: true });
@@ -874,10 +822,8 @@ describe("assessPackages — ScanCode peer assessment stage", () => {
 
   afterEach(() => {
     invocations = [];
-    if (repoDir !== undefined)
-      rmSync(repoDir, { recursive: true, force: true });
-    if (memoDir !== undefined)
-      rmSync(memoDir, { recursive: true, force: true });
+    if (repoDir !== undefined) rmSync(repoDir, { recursive: true, force: true });
+    if (memoDir !== undefined) rmSync(memoDir, { recursive: true, force: true });
     repoDir = undefined;
     memoDir = undefined;
   });
@@ -901,18 +847,11 @@ describe("assessPackages — ScanCode peer assessment stage", () => {
   ): void {
     const pkgDir = join(targetDir, "node_modules", ...name.split("/"));
     mkdirSync(pkgDir, { recursive: true });
-    writeFileSync(
-      join(pkgDir, "package.json"),
-      JSON.stringify({ name, version }),
-    );
+    writeFileSync(join(pkgDir, "package.json"), JSON.stringify({ name, version }));
     writeFileSync(join(pkgDir, "LICENSE"), licenseText);
   }
 
-  function npmPackage(
-    name: string,
-    version: string,
-    claims: LicenseClaim[] = [],
-  ): PackageEntry {
+  function npmPackage(name: string, version: string, claims: LicenseClaim[] = []): PackageEntry {
     return {
       purl: `pkg:npm/${name}@${version}`,
       name,
@@ -927,30 +866,18 @@ describe("assessPackages — ScanCode peer assessment stage", () => {
     return { raw, kind: "expression", source: "generator" };
   }
 
-  function scancodeClaim(
-    entry: PackageEntry | undefined,
-  ): LicenseClaim | undefined {
+  function scancodeClaim(entry: PackageEntry | undefined): LicenseClaim | undefined {
     return entry?.licenseClaims.find((c) => c.source === "scancode");
   }
 
   /** Seed a committed memo file with the given purl→entry map, returning the path. */
   function seedMemo(
-    entries: Array<
-      [string, import("../src/enrich/scancode").ScancodeMemoEntry]
-    >,
+    entries: Array<[string, import("../src/enrich/scancode").ScancodeMemoEntry]>,
   ): string {
     const path = newMemoPath();
-    const memo = new Map<
-      string,
-      import("../src/enrich/scancode").ScancodeMemoEntry
-    >();
+    const memo = new Map<string, import("../src/enrich/scancode").ScancodeMemoEntry>();
     for (const [purl, entry] of entries) {
-      putMemoEntry(
-        memo,
-        purl,
-        entry,
-        () => new Date("2026-01-01T00:00:00.000Z"),
-      );
+      putMemoEntry(memo, purl, entry, () => new Date("2026-01-01T00:00:00.000Z"));
     }
     writeFileSync(path, serializeScancodeMemo(memo));
     return path;
@@ -987,10 +914,7 @@ describe("assessPackages — ScanCode peer assessment stage", () => {
 
   test("replay: a positive memo entry lands a ScanCode claim on a PRECISELY-declared package — the finding becomes the assessment (the load-bearing full-replay change)", async () => {
     const path = seedMemo([
-      [
-        "pkg:npm/left-pad@1.3.0",
-        { license: "MIT", via: "scancode-toolkit@32.5.0/license-file" },
-      ],
+      ["pkg:npm/left-pad@1.3.0", { license: "MIT", via: "scancode-toolkit@32.5.0/license-file" }],
     ]);
     const model: CanonicalDependenciesLike = {
       packages: [npmPackage("left-pad", "1.3.0", [generatorClaim("MIT")])],
@@ -1040,10 +964,7 @@ describe("assessPackages — ScanCode peer assessment stage", () => {
         {
           license: "Apache-2.0",
           via: "scancode-toolkit@32.5.0/license-file",
-          copyrights: [
-            "Copyright (c) 2020 Zeta Corp",
-            "Copyright (c) 2019 Alpha Author",
-          ],
+          copyrights: ["Copyright (c) 2020 Zeta Corp", "Copyright (c) 2019 Alpha Author"],
         },
       ],
     ]);
@@ -1058,10 +979,7 @@ describe("assessPackages — ScanCode peer assessment stage", () => {
     });
 
     expect(assessed.packages[0]?.attribution).toEqual({
-      copyrightLines: [
-        "Copyright (c) 2019 Alpha Author",
-        "Copyright (c) 2020 Zeta Corp",
-      ],
+      copyrightLines: ["Copyright (c) 2019 Alpha Author", "Copyright (c) 2020 Zeta Corp"],
       noticeTexts: [],
       hasVerbatimText: false,
     });
@@ -1069,10 +987,7 @@ describe("assessPackages — ScanCode peer assessment stage", () => {
 
   test("replay: a no-result memo entry (license null) appends NOTHING and never conflicts with a positive registry answer", async () => {
     const path = seedMemo([
-      [
-        "pkg:npm/no-evidence@1.0.0",
-        { license: null, via: "scancode-toolkit@32.5.0/no-answer" },
-      ],
+      ["pkg:npm/no-evidence@1.0.0", { license: null, via: "scancode-toolkit@32.5.0/no-answer" }],
     ]);
     const model: CanonicalDependenciesLike = {
       packages: [
@@ -1108,9 +1023,7 @@ describe("assessPackages — ScanCode peer assessment stage", () => {
     });
 
     expect(scancodeClaim(assessed.packages[0])).toBeUndefined();
-    expect(assessed.packages[0]?.licenseClaims).toEqual([
-      generatorClaim("MIT"),
-    ]);
+    expect(assessed.packages[0]?.licenseClaims).toEqual([generatorClaim("MIT")]);
     expect(existsSync(path)).toBe(false);
   });
 
@@ -1133,9 +1046,7 @@ describe("assessPackages — ScanCode peer assessment stage", () => {
     });
 
     expect(invocations.length).toBe(1);
-    expect(
-      getMemoEntry(readScancodeMemo(path), "pkg:npm/left-pad@1.3.0"),
-    ).toBeDefined();
+    expect(getMemoEntry(readScancodeMemo(path), "pkg:npm/left-pad@1.3.0")).toBeDefined();
   });
 
   test("scan: a memo hit — positive OR no-result — is skipped, never re-analyzed (memo presence is the skip test)", async () => {
@@ -1144,20 +1055,11 @@ describe("assessPackages — ScanCode peer assessment stage", () => {
     writeNpmSource(repo, "silent", "1.0.0");
 
     const path = seedMemo([
-      [
-        "pkg:npm/left-pad@1.3.0",
-        { license: "MIT", via: "scancode-toolkit@32.5.0/license-file" },
-      ],
-      [
-        "pkg:npm/silent@1.0.0",
-        { license: null, via: "scancode-toolkit@32.5.0/no-answer" },
-      ],
+      ["pkg:npm/left-pad@1.3.0", { license: "MIT", via: "scancode-toolkit@32.5.0/license-file" }],
+      ["pkg:npm/silent@1.0.0", { license: null, via: "scancode-toolkit@32.5.0/no-answer" }],
     ]);
     const model: CanonicalDependenciesLike = {
-      packages: [
-        npmPackage("left-pad", "1.3.0"),
-        npmPackage("silent", "1.0.0"),
-      ],
+      packages: [npmPackage("left-pad", "1.3.0"), npmPackage("silent", "1.0.0")],
     };
 
     await assessPackages(model as never, {
@@ -1186,9 +1088,7 @@ describe("assessPackages — ScanCode peer assessment stage", () => {
     });
 
     expect(invocations.length).toBe(0);
-    expect(
-      getMemoEntry(readScancodeMemo(path), "pkg:npm/absent@1.0.0"),
-    ).toBeUndefined();
+    expect(getMemoEntry(readScancodeMemo(path), "pkg:npm/absent@1.0.0")).toBeUndefined();
   });
 
   test("scan + replay (mechanism proof): a fresh positive is memoized {license, via, copyrights, scannedAt} and its claim + attribution + PRECISE finding land in the SAME run", async () => {
@@ -1208,10 +1108,7 @@ describe("assessPackages — ScanCode peer assessment stage", () => {
     });
 
     expect(invocations.length).toBe(1);
-    const entry = getMemoEntry(
-      readScancodeMemo(path),
-      "pkg:npm/left-pad@1.3.0",
-    );
+    const entry = getMemoEntry(readScancodeMemo(path), "pkg:npm/left-pad@1.3.0");
     expect(entry?.license).toBe("MIT");
     expect(entry?.via).toBe("scancode-toolkit@32.5.0/license-file");
     expect(entry?.copyrights?.length).toBeGreaterThan(0);
@@ -1222,9 +1119,7 @@ describe("assessPackages — ScanCode peer assessment stage", () => {
       kind: "expression",
       source: "scancode",
     });
-    expect(
-      assessed.packages[0]?.attribution?.copyrightLines.length,
-    ).toBeGreaterThan(0);
+    expect(assessed.packages[0]?.attribution?.copyrightLines.length).toBeGreaterThan(0);
     const finding = findingOf(assessed.packages);
     expect(finding.expression).toBe("MIT");
     expect(finding.confidence).toBe("exact");
@@ -1270,10 +1165,7 @@ describe("assessPackages — ScanCode peer assessment stage", () => {
         intensive: { targetDirs: [repo] },
       });
       expect(invocations.length).toBe(1);
-      const entry = getMemoEntry(
-        readScancodeMemo(path),
-        "pkg:npm/no-answer-pkg@1.0.0",
-      );
+      const entry = getMemoEntry(readScancodeMemo(path), "pkg:npm/no-answer-pkg@1.0.0");
       expect(entry?.license).toBeNull();
       expect(entry?.via).toBe("scancode-toolkit@32.5.0/no-answer");
       expect(entry?.scannedAt).toBe("2026-01-01T00:00:00.000Z");
@@ -1292,10 +1184,7 @@ describe("assessPackages — ScanCode peer assessment stage", () => {
     const repo = newRepo();
     writeNpmSource(repo, "left-pad", "1.3.0"); // scanned 1
     const path = seedMemo([
-      [
-        "pkg:npm/hit@1.0.0",
-        { license: "MIT", via: "scancode-toolkit@32.5.0/license-file" },
-      ],
+      ["pkg:npm/hit@1.0.0", { license: "MIT", via: "scancode-toolkit@32.5.0/license-file" }],
     ]);
     const model: CanonicalDependenciesLike = {
       packages: [
@@ -1428,10 +1317,7 @@ describe("assessPackages — ScanCode peer assessment stage", () => {
         verbose: false,
         intensive: { targetDirs: [repo] },
       });
-      const { model } = annotateFindings(
-        { packages: generated.model.packages } as never,
-        [],
-      );
+      const { model } = annotateFindings({ packages: generated.model.packages } as never, []);
       dumpGenerated = toSortedDependenciesJson(model as never);
       expect(dumpGenerated).toContain("conflict");
     } finally {
@@ -1456,10 +1342,7 @@ describe("assessPackages — ScanCode peer assessment stage", () => {
         memoPath: path,
         verbose: false,
       });
-      const { model } = annotateFindings(
-        { packages: checked.model.packages } as never,
-        [],
-      );
+      const { model } = annotateFindings({ packages: checked.model.packages } as never, []);
       const dumpChecked = toSortedDependenciesJson(model as never);
       expect(dumpChecked).toBe(dumpGenerated);
       expect(invocations.length).toBe(0);
@@ -1491,22 +1374,16 @@ describe("assessPackages — ScanCode peer assessment stage", () => {
     const enrichBytes = serializeCache(enrichCache);
     writeFileSync(enrichPath, enrichBytes);
 
-    await assessPackages(
-      { packages: [npmPackage("left-pad", "1.3.0")] } as never,
-      {
-        mode: "generate",
-        memoPath,
-        verbose: false,
-        now: FIXED_NOW,
-        intensive: { targetDirs: [repo] },
-      },
-    );
+    await assessPackages({ packages: [npmPackage("left-pad", "1.3.0")] } as never, {
+      mode: "generate",
+      memoPath,
+      verbose: false,
+      now: FIXED_NOW,
+      intensive: { targetDirs: [repo] },
+    });
 
     expect(invocations.length).toBe(1);
-    expect(
-      getMemoEntry(readScancodeMemo(memoPath), "pkg:npm/left-pad@1.3.0")
-        ?.license,
-    ).toBe("MIT");
+    expect(getMemoEntry(readScancodeMemo(memoPath), "pkg:npm/left-pad@1.3.0")?.license).toBe("MIT");
     expect(readFileSync(enrichPath, "utf8")).toBe(enrichBytes);
   });
 
@@ -1540,14 +1417,11 @@ describe("assessPackages — ScanCode peer assessment stage", () => {
         hasVerbatimText: false,
       },
     };
-    const { model: assessed } = await assessPackages(
-      { packages: [held] } as never,
-      {
-        mode: "check",
-        memoPath: path,
-        verbose: false,
-      },
-    );
+    const { model: assessed } = await assessPackages({ packages: [held] } as never, {
+      mode: "check",
+      memoPath: path,
+      verbose: false,
+    });
     expect(assessed.packages[0]?.attribution).toEqual({
       copyrightLines: ["Copyright (c) 1999 Original Holder"],
       noticeTexts: [],
@@ -1654,10 +1528,7 @@ describe("default generate path isolation lock (structural proof)", () => {
       join(pkgDir, "package.json"),
       JSON.stringify({ name: "left-pad", version: "1.3.0" }),
     );
-    writeFileSync(
-      join(pkgDir, "LICENSE"),
-      "MIT License\n\nCopyright (c) 2020 Example Author\n",
-    );
+    writeFileSync(join(pkgDir, "LICENSE"), "MIT License\n\nCopyright (c) 2020 Example Author\n");
     return { root };
   }
 

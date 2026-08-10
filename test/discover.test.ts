@@ -29,10 +29,7 @@ function makeYarnProject(dir: string): void {
 
 function makePoetryProject(dir: string): void {
   mkdirSync(dir, { recursive: true });
-  writeFileSync(
-    join(dir, "pyproject.toml"),
-    '[tool.poetry]\nname = "fixture"\n',
-  );
+  writeFileSync(join(dir, "pyproject.toml"), '[tool.poetry]\nname = "fixture"\n');
   writeFileSync(join(dir, "poetry.lock"), "# fixture lockfile\n");
 }
 
@@ -78,35 +75,23 @@ function writeBunLockb(dir: string): void {
 function writeCsproj(dir: string, name = "App"): void {
   mkdirSync(dir, { recursive: true });
   // Content is never read — only the *.csproj name PATTERN matters.
-  writeFileSync(
-    join(dir, `${name}.csproj`),
-    '<Project Sdk="Microsoft.NET.Sdk" />\n',
-  );
+  writeFileSync(join(dir, `${name}.csproj`), '<Project Sdk="Microsoft.NET.Sdk" />\n');
 }
 
 function writePom(dir: string): void {
   mkdirSync(dir, { recursive: true });
   // Content is never read - only the exact pom.xml file NAME matters.
-  writeFileSync(
-    join(dir, "pom.xml"),
-    "<project><modelVersion>4.0.0</modelVersion></project>",
-  );
+  writeFileSync(join(dir, "pom.xml"), "<project><modelVersion>4.0.0</modelVersion></project>");
 }
 
 function makeMavenProject(dir: string): void {
   writePom(dir);
-  writeFileSync(
-    join(dir, "maven.sbom.json"),
-    '{ "bomFormat": "CycloneDX", "components": [] }',
-  );
+  writeFileSync(join(dir, "maven.sbom.json"), '{ "bomFormat": "CycloneDX", "components": [] }');
 }
 
 function makeNugetProject(dir: string): void {
   mkdirSync(dir, { recursive: true });
-  writeFileSync(
-    join(dir, "packages.lock.json"),
-    '{ "version": 2, "dependencies": {} }\n',
-  );
+  writeFileSync(join(dir, "packages.lock.json"), '{ "version": 2, "dependencies": {} }\n');
 }
 
 afterEach(() => {
@@ -126,12 +111,7 @@ describe("discoverTargets", () => {
     const targets = discoverTargets(root);
 
     expect(targets.map((t) => t.identity)).toEqual(["a", "a/b/c", "py", "uv"]);
-    expect(targets.map((t) => t.lockfile)).toEqual([
-      "yarn",
-      "yarn",
-      "poetry",
-      "uv",
-    ]);
+    expect(targets.map((t) => t.lockfile)).toEqual(["yarn", "yarn", "poetry", "uv"]);
   });
 
   test("skips node_modules, .git, hidden directories, and the configured toolDir", () => {
@@ -196,18 +176,12 @@ describe("discoverTargets", () => {
     makeYarnProject(join(root, "app"));
     // Submodule root: `.git` is a FILE (gitlink) → its lockfile must NOT be found.
     makeYarnProject(join(root, "vendored"));
-    writeFileSync(
-      join(root, "vendored", ".git"),
-      "gitdir: ../.git/modules/vendored\n",
-    );
+    writeFileSync(join(root, "vendored", ".git"), "gitdir: ../.git/modules/vendored\n");
     makeYarnProject(join(root, "vendored", "nested"));
     // A normal dir whose `.git` is a DIRECTORY: its own lockfile IS discovered.
     makeYarnProject(join(root, "normal"));
     mkdirSync(join(root, "normal", ".git"), { recursive: true });
-    writeFileSync(
-      join(root, "normal", ".git", "HEAD"),
-      "ref: refs/heads/main\n",
-    );
+    writeFileSync(join(root, "normal", ".git", "HEAD"), "ref: refs/heads/main\n");
 
     const targets = discoverTargets(root);
 
@@ -322,11 +296,7 @@ describe("discoverTargets — npm/pnpm/bun lockfile kinds", () => {
 
     const targets = discoverTargets(root);
 
-    expect(targets.map((t) => t.identity)).toEqual([
-      "bun-app",
-      "npm-app",
-      "pnpm-app",
-    ]);
+    expect(targets.map((t) => t.identity)).toEqual(["bun-app", "npm-app", "pnpm-app"]);
     expect(targets.map((t) => t.lockfile)).toEqual(["bun", "npm", "pnpm"]);
   });
 });

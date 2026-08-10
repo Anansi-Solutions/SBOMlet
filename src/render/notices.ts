@@ -34,11 +34,9 @@ import { leafIds, type ExpressionNode } from "../normalize/expression";
 import { escapeCell } from "./markdown";
 import { isUnknownLicense } from "./unknownLicense";
 
-const HEADER_LINE =
-  "<!-- AUTO-GENERATED - do not edit. Regenerate with: task generate -->";
+const HEADER_LINE = "<!-- AUTO-GENERATED - do not edit. Regenerate with: task generate -->";
 
-const CANONICAL_MARKER =
-  "(canonical SPDX text — package-specific copyright not located)";
+const CANONICAL_MARKER = "(canonical SPDX text — package-specific copyright not located)";
 
 const PROSE =
   "Attribution is grouped to avoid duplication: the per-package sections below " +
@@ -108,8 +106,7 @@ function qualifiesForSection(pkg: PackageEntry): boolean {
     attribution.copyrightLines.length > 0 ||
     attribution.noticeTexts.length > 0 ||
     attribution.author !== undefined ||
-    (attribution.verbatimTexts !== undefined &&
-      attribution.verbatimTexts.length > 0)
+    (attribution.verbatimTexts !== undefined && attribution.verbatimTexts.length > 0)
   );
 }
 

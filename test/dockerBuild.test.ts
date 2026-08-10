@@ -12,11 +12,7 @@
 
 import { describe, expect, test } from "bun:test";
 
-import {
-  imageTag,
-  buildImageArgs,
-  buildImage,
-} from "../src/collectors/dockerBuild";
+import { imageTag, buildImageArgs, buildImage } from "../src/collectors/dockerBuild";
 import type { ExecOptions } from "../src/collectors/exec";
 
 /**
@@ -89,9 +85,7 @@ describe("imageTag (deterministic tag lock)", () => {
 
 describe("buildImageArgs (argv builder)", () => {
   test("returns exactly the buildx flags/operands, POSIX dirname context", () => {
-    expect(
-      buildImageArgs("examples/docker-scan/Dockerfile", "the-tag"),
-    ).toEqual([
+    expect(buildImageArgs("examples/docker-scan/Dockerfile", "the-tag")).toEqual([
       "buildx",
       "build",
       "--load",
@@ -128,9 +122,9 @@ describe("buildImage (execTool seam)", () => {
 
   test("a nonzero buildx exit throws naming the Dockerfile and returns no tag", async () => {
     const { exec } = makeRecorder(true);
-    await expect(
-      buildImage("examples/docker-scan/Dockerfile", exec),
-    ).rejects.toThrow("examples/docker-scan/Dockerfile");
+    await expect(buildImage("examples/docker-scan/Dockerfile", exec)).rejects.toThrow(
+      "examples/docker-scan/Dockerfile",
+    );
   });
 
   test("determinism: building the same path list twice yields identical argv and tags", async () => {

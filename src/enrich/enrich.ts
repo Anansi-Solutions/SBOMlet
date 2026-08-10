@@ -32,26 +32,12 @@ import {
 } from "../model/dependencies";
 import { normalizeRaw } from "../normalize/normalize";
 import { writeArtifact } from "../pipeline/paths";
-import {
-  getEntry,
-  putEntry,
-  readCache,
-  serializeCache,
-  type CacheEntry,
-} from "./cache";
+import { getEntry, putEntry, readCache, serializeCache, type CacheEntry } from "./cache";
 import { fetchGithubLicense, fetchJsonOr404, mapLimit } from "./fetch";
-import {
-  githubLicenseRefsFor,
-  githubRepoFor,
-  resolveGithubLicense,
-} from "./github";
+import { githubLicenseRefsFor, githubRepoFor, resolveGithubLicense } from "./github";
 import { depsDevVersionUrl, resolveMavenLicenses } from "./maven";
 import { resolveNpmLicense } from "./npm";
-import {
-  catalogEntryUrlOf,
-  nugetRegistrationLeafUrl,
-  resolveNugetCatalogLicense,
-} from "./nuget";
+import { catalogEntryUrlOf, nugetRegistrationLeafUrl, resolveNugetCatalogLicense } from "./nuget";
 import { resolvePypiLicense } from "./pypi";
 
 /** Cap on copyright lines attached from a scancode replay (matches the extractor/merge cap). */
@@ -265,11 +251,7 @@ export async function enrichUnknowns(
     const hit = getEntry(cache, unknown.entry.purl);
     if (hit !== undefined) {
       if (hit.resolvable && hit.license !== null) {
-        const withClaim = withCacheClaim(
-          unknown.entry,
-          hit.license,
-          "registry",
-        );
+        const withClaim = withCacheClaim(unknown.entry, hit.license, "registry");
         packages[unknown.index] = withClaim;
       }
       // A negative hit (resolvable:false) leaves the package unknown, no fetch.
@@ -296,11 +278,7 @@ export async function enrichUnknowns(
 const GITHUB_API_HOST = "https://api.github.com";
 
 /** Build the GitHub License API URL for a repo at an optional ref (URL-encoded). */
-export function githubLicenseUrl(
-  owner: string,
-  repo: string,
-  ref: string | undefined,
-): string {
+export function githubLicenseUrl(owner: string, repo: string, ref: string | undefined): string {
   const base = `${GITHUB_API_HOST}/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/license`;
   return ref === undefined ? base : `${base}?ref=${encodeURIComponent(ref)}`;
 }
@@ -318,14 +296,9 @@ async function fetchMisses(
   cache: Map<string, CacheEntry>,
   opts: EnrichOptions,
 ): Promise<void> {
-  const fetchOpts =
-    opts.backoffBaseMs === undefined
-      ? {}
-      : { backoffBaseMs: opts.backoffBaseMs };
+  const fetchOpts = opts.backoffBaseMs === undefined ? {} : { backoffBaseMs: opts.backoffBaseMs };
 
-  const registryMisses = misses.filter(
-    (m) => m.parsed.type === "pypi" || m.parsed.type === "npm",
-  );
+  const registryMisses = misses.filter((m) => m.parsed.type === "pypi" || m.parsed.type === "npm");
   const terraformMisses = misses.filter((m) => m.parsed.type === "terraform");
   const nugetMisses = misses.filter((m) => m.parsed.type === "nuget");
   const mavenMisses = misses.filter((m) => m.parsed.type === "maven");
@@ -370,11 +343,7 @@ async function fetchRegistryMisses(
     const group = byUrl.get(url) ?? [];
     if (result.status === 404) {
       for (const miss of group) {
-        recordNegative(
-          miss,
-          cache,
-          miss.parsed.type as CacheEntry["fetchedFrom"],
-        );
+        recordNegative(miss, cache, miss.parsed.type as CacheEntry["fetchedFrom"]);
       }
       return;
     }
@@ -419,11 +388,7 @@ async function fetchTerraformMisses(
       const resolved = resolveGithubLicense(result.body);
       if (resolved === null) continue; // NOASSERTION/null at this ref → next
       const viaRef = ref ?? "default";
-      packages[miss.index] = withCacheClaim(
-        miss.entry,
-        resolved.raw,
-        "registry",
-      );
+      packages[miss.index] = withCacheClaim(miss.entry, resolved.raw, "registry");
       putEntry(cache, miss.entry.purl, {
         license: resolved.raw,
         fetchedFrom: "github",
@@ -519,13 +484,8 @@ async function fetchMavenMisses(
       recordNegative(miss, cache, "deps-dev"); // non-standard/empty - honest unknown
       return;
     }
-    const license =
-      resolved.raws.length === 1 ? resolved.raws[0]! : resolved.raws;
-    packages[miss.index] = withCacheClaim(
-      miss.entry,
-      resolved.raws,
-      "registry",
-    );
+    const license = resolved.raws.length === 1 ? resolved.raws[0]! : resolved.raws;
+    packages[miss.index] = withCacheClaim(miss.entry, resolved.raws, "registry");
     putEntry(cache, miss.entry.purl, {
       license,
       fetchedFrom: "deps-dev",
