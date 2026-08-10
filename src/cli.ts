@@ -39,8 +39,7 @@ import { runGenerateDockerSbom, type GenerateDockerSbomOptions } from "./pipelin
 import { exitCodeFor, runCheck, type CheckResult } from "./gate/check";
 import { defaultNoticesPath, resolveFrom } from "./pipeline/paths";
 import { runGenerate, type GenerateOptions } from "./pipeline/pipeline";
-import { runVerifyCache } from "./pipeline/verifyCache";
-import type { VerifyResult } from "./enrich/verify";
+import { runVerifyCache, type VerifyCacheResult } from "./pipeline/verifyCache";
 
 const USAGE =
   "usage: sbomlet <generate|check|verify-cache|generate-docker-sbom> [options]\n" +
@@ -90,9 +89,11 @@ function fail(message: string): never {
 /**
  * Print the cache-integrity audit to stderr (the tool's message channel; the exit code is the
  * machine signal). Each mismatch names the purl, the committed value, the registry's current
- * answer, and why they diverge.
+ * answer, and why they diverge. Always closes with the ScanCode memo line: like the audited-entry
+ * count above, it reports its count unconditionally (0 included) rather than appearing/disappearing
+ * with the memo's existence: an empty and an absent memo mean the same thing to a reader here.
  */
-function reportVerifyCache(result: VerifyResult): void {
+export function reportVerifyCache(result: VerifyCacheResult): void {
   const line = (text: string): void => {
     process.stderr.write(`${text}\n`);
   };
@@ -102,18 +103,23 @@ function reportVerifyCache(result: VerifyResult): void {
       `verify-cache: audited ${result.audited} cache ${noun} — ` +
         `all audited entries match upstream`,
     );
-    return;
+  } else {
+    for (const mismatch of result.mismatches) {
+      line(`MISMATCH  ${mismatch.purl}`);
+      line(`  committed: ${mismatch.cached ?? "(none)"}`);
+      line(`  registry:  ${mismatch.current ?? "(none)"}`);
+      line(`  ${mismatch.reason}`);
+    }
+    const verb = result.mismatches.length === 1 ? "diverges from" : "diverge from";
+    line(
+      `verify-cache: ${result.mismatches.length} of ${result.audited} audited cache ${noun} ` +
+        `${verb} upstream — investigate before release`,
+    );
   }
-  for (const mismatch of result.mismatches) {
-    line(`MISMATCH  ${mismatch.purl}`);
-    line(`  committed: ${mismatch.cached ?? "(none)"}`);
-    line(`  registry:  ${mismatch.current ?? "(none)"}`);
-    line(`  ${mismatch.reason}`);
-  }
-  const verb = result.mismatches.length === 1 ? "diverges from" : "diverge from";
+  const memoNoun = result.scancodeMemoEntries === 1 ? "entry" : "entries";
   line(
-    `verify-cache: ${result.mismatches.length} of ${result.audited} audited cache ${noun} ` +
-      `${verb} upstream — investigate before release`,
+    `scancode memo: ${result.scancodeMemoEntries} ${memoNoun} ` +
+      `(not audited: local scan results have no upstream to verify against)`,
   );
 }
 
@@ -349,7 +355,7 @@ async function runCheckCommand(values: CliValues): Promise<never> {
  * never a false "all match".
  */
 async function runVerifyCacheCommand(values: CliValues): Promise<never> {
-  let result: VerifyResult;
+  let result: VerifyCacheResult;
   try {
     result = await runVerifyCache({
       baseDir: values["base-dir"],
