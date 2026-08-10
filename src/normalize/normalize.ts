@@ -26,7 +26,15 @@ import {
   type StaleOverride,
 } from "../model/dependencies";
 import { COULD_BE_COPYLEFT_FAMILIES } from "../policy/copyleftFamily";
-import { elect, isCopyleft, leafIds, renderNode, type ExpressionNode } from "./expression";
+import {
+  elect,
+  isCompoundClaim,
+  isCopyleft,
+  leafIds,
+  orLeaves,
+  renderNode,
+  type ExpressionNode,
+} from "./expression";
 
 /**
  * Raw values that must never reach correct(): npm's "UNLICENSED" means proprietary (correct() maps
@@ -569,13 +577,36 @@ function withStaleOverride(base: LicenseFinding, stale: StaleOverride): LicenseF
 }
 
 /**
+ * True when the signal/satisfies decision tree in applyOverride cannot run: spdx-satisfies's
+ * allowlist argument can never take an AND entry (the orLeaves precedent this codebase already
+ * applies to compatible/deny patterns), and signalContradicts/baseSatisfiesAssertion both pass
+ * `expression` into exactly that argument. Either half of a preconditioned override being a
+ * compound (AND/OR) claim - `expects` naming a multi-license registry claim, or `expression`
+ * asserting one - trips this: an untested compound expression would otherwise degrade to a
+ * defensive `false` inside those helpers' try/catch and fail the override closed on every run, not
+ * just on a genuine relicense.
+ */
+function needsLiteralExpectsMatch(expects: string, expression: string): boolean {
+  return isCompoundClaim(expects) || orLeaves(parse(expression) as ExpressionNode) === null;
+}
+
+/**
  * Apply one preconditioned override to a package, given its un-overridden finding and observed
  * signal. Returns the override finding on a match, the UNCHANGED base finding on a redundant match
  * (the gap fix below), a stale-marked finding on a genuine mismatch, or undefined when this
  * override does not apply (no `expects` blind path is the only undefined caller path).
  *
- * `expects` undefined → blind apply (backward-compat). `expects` present → decision tree on the
- * observed signal S and the asserted expression E:
+ * `expects` undefined → blind apply (backward-compat). A COMPOUND override (see {@link
+ * needsLiteralExpectsMatch}) skips the signal/satisfies decision tree entirely and falls back to
+ * literal claim-string equality: `expects` must exactly match one member of the observed signal
+ * (signalMatches's own normalization - case-insensitive, trimmed, compared against the RAW claim
+ * string, never re-derived through the normalizer/spdx-correct) or the override is stale. There is
+ * no redundancy path for a compound override: a compound claim already names the EXACT
+ * multi-license reading it was written against, so there is nothing to promote-from the way an
+ * imprecise family label ("BSD") promotes to its precise variant.
+ *
+ * Otherwise (both `expects` and `expression` decompose cleanly), `expects` present → decision tree
+ * on the observed signal S and the asserted expression E:
  *
  *   IF expects ∈ S (signalMatches):
  *     IF a non-`expects` precise member contradicts E (signalContradicts)
@@ -601,6 +632,11 @@ function applyOverride(
   signal: ReadonlyArray<string>,
 ): LicenseFinding {
   if (expects === undefined) return overrideFinding(expression, overrideRule);
+  if (needsLiteralExpectsMatch(expects, expression)) {
+    return signalMatches(signal, expects)
+      ? overrideFinding(expression, overrideRule)
+      : withStaleOverride(base, { level, expected: expects, observed: signal });
+  }
   if (signalMatches(signal, expects)) {
     if (!signalContradicts(signal, expects, expression)) {
       return overrideFinding(expression, overrideRule);

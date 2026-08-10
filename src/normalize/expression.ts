@@ -12,6 +12,8 @@
  * Pure functions, no I/O, no logging - the CLI owns stderr. Inputs are structurally-typed parse
  * output (spdx-expression-parse internals are never imported).
  */
+import parseSpdx from "spdx-expression-parse";
+
 import { compareCodeUnits } from "../model/dependencies";
 import { COPYLEFT_IDS } from "../policy/copyleft";
 
@@ -138,4 +140,21 @@ export function orLeaves(node: ExpressionNode): string[] | null {
   };
   if (!walk(node)) return null;
   return leaves.sort(compareCodeUnits);
+}
+
+/**
+ * True when `text` parses as a valid SPDX expression carrying an AND/OR conjunction at any level
+ * - a compound claim, never a single license leaf. A free-form label ("Dual License") or a plain
+ * unparseable string returns false, same as a single license id: only a genuine multi-license claim
+ * returns true. The compound-`expects` staleness comparison (normalize.ts) uses this to decide when
+ * a clarify override must fall back to literal claim-string equality, because spdx-satisfies's
+ * allowlist argument can never take an AND entry (the {@link orLeaves} precedent above) and a
+ * compound claim is not a single leaf spdx-satisfies can test either.
+ */
+export function isCompoundClaim(text: string): boolean {
+  try {
+    return "conjunction" in (parseSpdx(text) as ExpressionNode);
+  } catch {
+    return false;
+  }
 }

@@ -1550,6 +1550,87 @@ describe("evaluate — staleness-guarded overrides", () => {
     expect(verdicts[0].status).toBe("fail");
     expect(verdicts[0].rule).toContain("override:stale");
   });
+
+  test("regression: a SIMPLE single-id expects still takes the signal/satisfies path — the redundancy gap-fix still applies (proves the compound classifier does not misfire on a plain leaf)", () => {
+    const builtins: BuiltinOverrideInput[] = [
+      { name: "ipython", expects: "BSD", expression: "BSD-3-Clause" },
+    ];
+    const { verdicts } = runEngine(
+      [pkgSpec("ipython", "BSD-3-Clause", ["backend"])],
+      "",
+      builtins,
+    );
+    expect(verdicts[0].status).not.toBe("fail");
+    expect(verdicts[0].rule).not.toContain("override:stale");
+  });
+});
+
+// ===========================================================================
+// COMPOUND `expects`: a clarify written against a multi-license (AND/OR)
+// registry claim. signalContradicts/baseSatisfiesAssertion both feed
+// `expression` into spdx-satisfies's allowlist argument, which throws on an
+// AND entry - so a compound override (either half compound) instead compares
+// `expects` against the observed signal by LITERAL claim-string equality,
+// mirroring signalMatches's own normalization (case-insensitive, trimmed, the
+// RAW claim - never re-derived through the normalizer). Modeled on the real
+// spdx-ranges dogfood case: npm declares "(MIT AND CC-BY-3.0)", the in-depth
+// scan reads only the root LICENSE and sees "MIT" - two co-present signal
+// members, one of which is the compound the clarify names.
+// ===========================================================================
+
+describe("evaluate — COMPOUND expects (the AND/OR registry-claim precondition)", () => {
+  const compoundClaim = "(MIT AND CC-BY-3.0)";
+
+  /** A [[clarify]] whose `expects` AND `expression` are the same compound claim. */
+  const compoundClarify = [
+    "[[clarify]]",
+    'package = { name = "compound-pkg" }',
+    `expects = ${JSON.stringify(compoundClaim)}`,
+    `expression = ${JSON.stringify(compoundClaim)}`,
+    'reason = "the registry declares the compound claim; the in-depth scan only sees the root MIT license"',
+  ].join("\n");
+
+  test("HEADLINE: a compound expects APPLIES while the registry claim still matches, alongside a co-present scancode claim", () => {
+    const { verdicts } = runEngine(
+      [scanPkgSpec("compound-pkg", compoundClaim, "MIT", ["backend"])],
+      compoundClarify,
+    );
+    expect(verdicts[0].status).toBe("ok");
+    expect(verdicts[0].rule).toBe("clarify[0]");
+  });
+
+  test("the claim changing ANY character goes stale (fail closed), naming expected and now-observed", () => {
+    const { verdicts } = runEngine(
+      [scanPkgSpec("compound-pkg", "(MIT AND CC0-1.0)", "MIT", ["backend"])],
+      compoundClarify,
+    );
+    expect(verdicts[0].status).toBe("fail");
+    expect(verdicts[0].rule).toContain("override:stale");
+    expect(verdicts[0].reason).toContain(compoundClaim); // expected
+    expect(verdicts[0].reason).toContain("(MIT AND CC0-1.0)"); // now-observed
+  });
+
+  test("an OR-compound expression also takes the literal-equality path (either half compound trips it)", () => {
+    const orClaim = "(MIT OR Apache-2.0)";
+    const policyText = [
+      "[[clarify]]",
+      'package = { name = "or-compound-pkg" }',
+      `expects = ${JSON.stringify(orClaim)}`,
+      `expression = ${JSON.stringify(orClaim)}`,
+      'reason = "the registry declares a dual-license OR claim"',
+    ].join("\n");
+    const { verdicts } = runEngine(
+      [scanPkgSpec("or-compound-pkg", orClaim, "MIT", ["backend"])],
+      policyText,
+    );
+    expect(verdicts[0].status).toBe("ok");
+    expect(verdicts[0].rule).toBe("clarify[0]");
+  });
+
+  test("parsePolicy ACCEPTS a compound expects — validation never restricts its shape", () => {
+    const policy = parsePolicy(compoundClarify);
+    expect(policy.clarify[0]?.expects).toBe(compoundClaim);
+  });
 });
 
 // ===========================================================================
