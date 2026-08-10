@@ -36,6 +36,7 @@ import {
 } from "../model/dependencies";
 import { leafIds, type ExpressionNode } from "../normalize/expression";
 import { escapeCell } from "./markdown";
+import { isUnknownLicense } from "./unknownLicense";
 
 const HEADER_LINE =
   "<!-- AUTO-GENERATED - do not edit. Regenerate with: task generate -->";
@@ -98,19 +99,6 @@ function licenseLabelOf(pkg: PackageEntry): string {
   return pkg.licenseClaims.length === 0
     ? "unknown"
     : [...new Set(pkg.licenseClaims.map((claim) => claim.raw))].join(", ");
-}
-
-/**
- * Unknown-license predicate — mirrors the markdown.ts counts rule. An imprecise
- * finding is present, not unknown, so it is excluded.
- */
-function isUnknownLicense(pkg: PackageEntry): boolean {
-  if (pkg.finding !== undefined) {
-    return (
-      pkg.finding.confidence !== "imprecise" && pkg.finding.expression === null
-    );
-  }
-  return pkg.licenseClaims.length === 0;
 }
 
 /**

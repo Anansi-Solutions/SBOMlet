@@ -90,9 +90,7 @@ export function leafIds(node: ExpressionNode): {
 /**
  * True if any leaf is a LicenseRef-/DocumentRef- reference. This is SPDX
  * grammar syntax detection (anchored prefix per spec), not license-id
- * matching — election tie-break 2b prefers branches without opaque refs, and
- * the policy engine reuses this to keep a ref that SURVIVES election out of
- * default:ok (its content is unknowable to the tool).
+ * matching.
  */
 export function hasRefLeaf(node: ExpressionNode): boolean {
   if ("license" in node)
@@ -104,15 +102,8 @@ export function hasRefLeaf(node: ExpressionNode): boolean {
 }
 
 /**
- * True when EVERY leaf is a LicenseRef-/DocumentRef- reference — "the elected
- * branch's only license content is a ref", distinct from hasRefLeaf's ANY-leaf
- * check above. An AND that keeps a known conjunct alongside a ref is
- * hasRefLeaf but not allLeavesAreRefs — the render layer's Unknown-license
- * count (markdown.ts#isUnknownLicense) uses this narrower predicate so a
- * package with real known content isn't double-counted as unknown merely
- * because an unrelated ref rides along; the policy engine's verdict lane
- * uses the broader hasRefLeaf instead (a ref anywhere in the elected branch
- * is unassessed content the verdict must not silently pass).
+ * True when EVERY leaf is a LicenseRef-/DocumentRef- reference — distinct
+ * from hasRefLeaf's ANY-leaf check.
  */
 export function allLeavesAreRefs(node: ExpressionNode): boolean {
   if ("license" in node) return hasRefLeaf(node);

@@ -35,8 +35,6 @@
  * The normative placement spec is docs/reference/report-placement.md — update both together.
  */
 
-import parseSpdx from "spdx-expression-parse";
-
 import {
   compareCodeUnits,
   comparePackages,
@@ -48,8 +46,8 @@ import {
   type PackageEntry,
   type Verdict,
 } from "../model/dependencies";
-import { allLeavesAreRefs, type ExpressionNode } from "../normalize/expression";
 import { OS_PACKAGE_ECOSYSTEMS } from "../policy/osEcosystems";
+import { isUnknownLicense } from "./unknownLicense";
 import type { AcceptedContainerNotice } from "../policy/evaluate";
 import type { SuppressedWorkspace } from "../policy/schema";
 
@@ -289,39 +287,6 @@ function whyCellOf(
   // No path AND no introducer in scope → the honest "—" residual.
   if (union.length === 0) return "—";
   return boundedJoin(union, ", ");
-}
-
-/**
- * Unknown-license predicate for the counts block: a finding with a null
- * expression, or — pre-annotation — no finding and zero claims. An imprecise
- * finding (confidence "imprecise") is PRESENT, not unknown, so it is
- * excluded — the counts stay honest (imprecise is its own thing, surfaced in the
- * dedicated review section).
- */
-function isUnknownLicense(pkg: PackageEntry): boolean {
-  const finding = pkg.finding;
-  if (finding !== undefined) {
-    if (finding.confidence === "imprecise") return false;
-    if (finding.expression === null) return true;
-    return electedIsRefOnly(finding.elected);
-  }
-  return pkg.licenseClaims.length === 0;
-}
-
-/**
- * True when a finding's elected branch is composed ENTIRELY of
- * LicenseRef-/DocumentRef- leaves — delegates to allLeavesAreRefs.
- * Defensive: elected was rendered by renderNode(elect(...)) so it parses
- * by construction; the catch mirrors the policy engine's never-throws
- * posture rather than crashing report generation.
- */
-function electedIsRefOnly(elected: string | null): boolean {
-  if (elected === null) return false;
-  try {
-    return allLeavesAreRefs(parseSpdx(elected) as ExpressionNode);
-  } catch {
-    return false;
-  }
 }
 
 /**
