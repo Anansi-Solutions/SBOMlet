@@ -18,6 +18,8 @@ policy verdict — is decided upstream, in
 [dependency-classification.md](./dependency-classification.md); a future
 output format (a JSON export, say) would define its own placement page
 against that same classification tree, not this one.
+`THIRD_PARTY_NOTICES.md` already has one:
+[notices-placement.md](./notices-placement.md).
 
 Placement is one question, asked after classification already answered scope
 and verdict: given a package's scope and verdict, which section does it land
