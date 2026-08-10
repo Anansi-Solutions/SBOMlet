@@ -54,7 +54,9 @@ finding always resolves to the same branch. Copyleft and deny walk the same
 tree asking the mirror question: is there an *electable* branch, one a
 consumer could legitimately choose, that avoids the obligation or the deny
 rule? A finding is copyleft only if every branch is; a finding is denied only
-if every branch matches a deny rule.
+when it has no electable branch left — an OR is denied only when every
+branch is denied (an electable branch defeats it), while an AND is denied
+when any conjunct is denied (a conjunct can't be elected away).
 
 ### enrichment and the enrichment cache
 

@@ -9,7 +9,7 @@ import { type } from "arktype";
 import { UnknownRecord } from "./record";
 
 /**
- * Narrowed exactly like the npm sibling's NpmLockDocument (validate/npmLock.ts).
+ * Narrowed exactly like the npm sibling's NpmLockDocument (src/validate/npmLock.ts).
  * `lockfileVersion` is consumed nowhere, and `workspaces` is read independently
  * with recordOf in the collector — declaring either here would narrow them
  * atomically, so a string lockfileVersion or an array workspaces would fail
