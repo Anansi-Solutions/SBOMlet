@@ -295,7 +295,7 @@ export function sourceDirsFor(purl: string, targetDirs: string[]): string[] {
   return [];
 }
 
-// --- Invocation lane -------------------------------------------------------
+// Invocation lane
 
 /**
  * Options threading the `--intensive` lane through enrichUnknowns. Present ONLY on

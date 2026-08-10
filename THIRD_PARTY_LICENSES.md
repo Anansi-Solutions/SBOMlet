@@ -6,12 +6,12 @@ Copyleft notice rules are configured in .sbomlet.policy.toml.
 
 **Package counts:**
 
-- Total packages: 422
+- Total packages: 423
 - apk: 17
-- npm: 404
+- npm: 405
 - pypi: 1
 - Production packages: 15
-- Development-only packages: 407
+- Development-only packages: 408
 - Container packages: 19
 - Unknown license: 0
 
@@ -271,6 +271,7 @@ The packages listed below carry copyleft or special license obligations in at le
 | eslint-import-context                             | npm       | 0.1.9   | MIT                  | .       |
 | eslint-plugin-comment-length                      | npm       | 2.3.1   | MIT                  | .       |
 | eslint-plugin-import-x                            | npm       | 4.16.2  | MIT                  | .       |
+| eslint-plugin-no-comment-slop                     | npm       | 0.2.0   | MIT                  | .       |
 | eslint-plugin-prettier                            | npm       | 5.5.6   | MIT                  | .       |
 | eslint-plugin-tsdoc                               | npm       | 0.5.2   | MIT                  | .       |
 | eslint-plugin-write-good-comments-2               | npm       | 1.2.7   | MIT                  | .       |

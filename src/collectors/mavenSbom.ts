@@ -2,7 +2,7 @@
  * In-process maven.sbom.json collector — a conscious exception to orchestrate-don't-parse, because
  * Maven has no native lockfile: `pom.xml` declares directs only, and only a build-side plugin can
  * resolve the real closure (parent BOMs, dependencyManagement, conflict mediation). Every scan-time
- * candidate that avoids running Maven inside the target fails the robust bar instead — cdxgen
+ * candidate that avoids running Maven inside the target fails the reliability bar instead — cdxgen
  * either shells out to `mvn` in the scanned repo (the exact side effect this tool forbids) or,
  * without Maven on PATH, silently emits an 8% fraction with version-less purls; syft sees pom
  * directs only and fabricates identity from stale local jars.
