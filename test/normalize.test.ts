@@ -1792,7 +1792,7 @@ describe("annotateFindings — cross-image claim divergence overlay", () => {
     expect(model.packages[0]!.finding!.conflict).toBeUndefined();
   });
 
-  test("a ScanCode assessment conflict takes the conflict slot over a co-present cross-image divergence — the senior in-depth assessment wins the shared slot", () => {
+  test("a ScanCode assessment conflict takes the conflict slot over a co-present cross-image divergence — the in-depth ScanCode assessment wins the shared slot", () => {
     const entry: PackageEntry = {
       ...dockerPkgWithDivergence("both-conflicts-pkg", "1.0.0", [
         { target: "docker:image-a", claims: ["MIT"] },
@@ -1810,9 +1810,7 @@ describe("annotateFindings — cross-image claim divergence overlay", () => {
       { target: "docker:image-a", claims: ["MIT"] },
       { target: "docker:image-b", claims: ["Apache-2.0"] },
     ]);
-    const clarify: ClarifyInput[] = [
-      { name: "clarified-divergent-pkg", expression: "MIT" },
-    ];
+    const clarify: ClarifyInput[] = [{ name: "clarified-divergent-pkg", expression: "MIT" }];
     const { model } = annotateFindings(modelOf(entry), clarify);
     const finding = model.packages[0]!.finding!;
     expect(finding.source).toBe("override");
