@@ -12,9 +12,8 @@
  *
  * Pure function: no I/O, no logging (the caller reads the file).
  *
- * Also hosts the per-ecosystem lockfile entry counters the coverage policy
- * consumes, and yarnWorkspaceMembers; same contract throughout: pure text in,
- * data out, never throw on garbage.
+ * Hosts the per-ecosystem lockfile entry counters the coverage policy consumes.
+ * Same contract throughout: pure text in, data out, never throw on garbage.
  */
 
 import { type } from "arktype";
