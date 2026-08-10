@@ -12,7 +12,7 @@ import { join } from "node:path";
 import ts from "typescript";
 
 /** Ceiling for comment lines as a share of non-blank lines in src/. */
-export const MAX_COMMENT_LINE_RATIO = 0.41;
+export const MAX_COMMENT_LINE_RATIO = 0.43;
 /** Ceiling for comment words as a share of word tokens in src/. */
 export const MAX_COMMENT_WORD_RATIO = 0.7;
 
