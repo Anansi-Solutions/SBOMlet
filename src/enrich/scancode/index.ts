@@ -10,11 +10,11 @@ export { electCopyrights, electExpression } from "./election";
 export {
   scancodeArgs,
   scanPackageSources,
-  SCANCODE_TOOL,
   type IntensiveOptions,
   type ScancodeResolution,
   type ScancodeScanOptions,
 } from "./invocation";
+export { SCANCODE_TOOL } from "./tool";
 export {
   getMemoEntry,
   putMemoEntry,

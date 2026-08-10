@@ -2,7 +2,7 @@ import { basename } from "node:path";
 
 import { sanitizeEvidenceText } from "../../merge/merge";
 import { compareCodeUnits } from "../../model/dependencies";
-import { SCANCODE_TOOL } from "./invocation";
+import { SCANCODE_TOOL } from "./tool";
 
 /** Cap on copyright lines returned per scanned package (extractor-cap parity). */
 const MAX_SCANCODE_COPYRIGHT_LINES = 20;
