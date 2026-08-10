@@ -20,6 +20,7 @@ import { acceptedContainerNotices, evaluate } from "../src/policy/evaluate";
 import { parsePolicy, type Policy } from "../src/policy/schema";
 import { alignTables } from "../src/render/alignTables";
 import { renderMarkdown, type PolicyView } from "../src/render/markdown";
+import { renderNotices } from "../src/render/notices";
 import { globToRegExp } from "../src/targets/discover";
 
 const DEPENDENCY_CLASSIFICATION_DOC = join(
@@ -1506,4 +1507,123 @@ describe("dependency classification and report placement — Path index E2E", ()
       SCENARIOS[path]();
     });
   }
+});
+
+// ===========================================================================
+// Cross-document invariants: THIRD_PARTY_LICENSES.md and THIRD_PARTY_NOTICES.md
+// are two renderers over ONE model, and per report-placement.md and
+// notices-placement.md must never disagree on what they both claim to show.
+// The isUnknownLicense predicate (src/render/unknownLicense.ts) is the
+// mechanism, but these tests never import it - they drive renderMarkdown and
+// renderNotices from the same model and compare the rendered text, so a future
+// change that keeps the predicate "consistent" but breaks a renderer's use of
+// it still fails here.
+// ===========================================================================
+
+describe("cross-document invariants — LICENSES and NOTICES agree on one shared model", () => {
+  const UNKNOWN_OR_IMPRECISE_WORKSPACE = "apps/mixed";
+
+  /**
+   * One workspace with four packages spanning every unknown-adjacent lane:
+   * a known permissive license (must count as neither unknown nor imprecise),
+   * a package with NO license claim at all (unknown), a LicenseRef-only
+   * package (unknown via the ref-only rule, not a bare null expression), and
+   * an imprecise bare-family label (present, NOT unknown - the negative case
+   * this suite exists to guard).
+   */
+  function buildUnknownAdjacentScenario(): {
+    doc: string;
+    notices: string;
+    scoped: CanonicalDependencies;
+  } {
+    const { doc, scoped } = buildScenario(
+      [
+        {
+          targetIdentity: UNKNOWN_OR_IMPRECISE_WORKSPACE,
+          components: [
+            {
+              name: "known-mit",
+              purl: "pkg:npm/known-mit@1.0.0",
+              license: "MIT",
+            },
+            { name: "unknown-null", purl: "pkg:npm/unknown-null@1.0.0" },
+            {
+              name: "unknown-ref",
+              purl: "pkg:npm/unknown-ref@1.0.0",
+              license: "LicenseRef-proprietary-eula",
+            },
+            {
+              name: "imprecise-bsd",
+              purl: "pkg:npm/imprecise-bsd@1.0.0",
+              licenseName: "BSD",
+            },
+          ],
+        },
+      ],
+      UNKNOWN_WARN,
+    );
+    return { doc, notices: renderNotices(scoped), scoped };
+  }
+
+  test("unknown-agreement: a package counts unknown in LICENSES iff it rows in NOTICES' unknown section", () => {
+    const { doc, notices } = buildUnknownAdjacentScenario();
+
+    assertStructural(
+      doc.includes("- Unknown license: 2"),
+      "LICENSES unknown count vs the two genuinely-unknown packages",
+      "known-mit (known) and imprecise-bsd (imprecise, present-but-ambiguous) must not count; only unknown-null and unknown-ref should",
+    );
+    assertStructural(
+      notices.includes(
+        "- unknown-null@1.0.0 — unknown license, no text included",
+      ) &&
+        notices.includes(
+          "- unknown-ref@1.0.0 — unknown license, no text included",
+        ),
+      "NOTICES unknown section vs the two genuinely-unknown packages",
+      "both unknown-null (no claim) and unknown-ref (LicenseRef-only) must row in NOTICES' unknown section",
+    );
+    assertStructural(
+      !notices.includes("known-mit") && !notices.includes("imprecise-bsd"),
+      "NOTICES unknown section vs the two NON-unknown packages",
+      "known-mit (known permissive) and imprecise-bsd (imprecise, not unknown) must never appear in NOTICES at all - the negative direction of the iff",
+    );
+  });
+
+  test("every package NOTICES' unknown section lists also has an inventory row in LICENSES", () => {
+    const { doc, notices } = buildUnknownAdjacentScenario();
+    const unknownEntries = [
+      ...notices.matchAll(/^- (\S+)@\S+ — unknown license/gm),
+    ].map((m) => m[1]);
+    assertStructural(
+      unknownEntries.length === 2,
+      "NOTICES unknown section entry count",
+      `expected exactly the two unknown packages, found: [${unknownEntries.join(", ")}]`,
+    );
+    for (const name of unknownEntries) {
+      assertStructural(
+        name !== undefined && doc.includes(name),
+        `NOTICES entry "${name ?? "(unmatched)"}" vs the LICENSES inventory`,
+        "every package NOTICES names must still keep its inventory row in LICENSES - nothing NOTICES lists is ever dropped from the inventory",
+      );
+    }
+  });
+
+  test("determinism: both documents are byte-stable across a double render of the same model", () => {
+    const { scoped } = buildUnknownAdjacentScenario();
+    const noticesA = renderNotices(scoped);
+    const noticesB = renderNotices(scoped);
+    const licensesA = renderMarkdown(scoped);
+    const licensesB = renderMarkdown(scoped);
+    assertStructural(
+      noticesA === noticesB,
+      "renderNotices double-render",
+      "the same model must render byte-identical NOTICES output",
+    );
+    assertStructural(
+      licensesA === licensesB,
+      "renderMarkdown double-render",
+      "the same model must render byte-identical LICENSES output",
+    );
+  });
 });

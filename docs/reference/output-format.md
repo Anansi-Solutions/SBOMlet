@@ -324,7 +324,8 @@ The attribution companion. The same header and regenerate command lead it,
 followed by a paragraph explaining its grouped layout. Attribution is grouped to
 keep the file small, roughly half a megabyte to a megabyte at repository scale,
 rather than the several megabytes that repeating each licence text verbatim
-would cost.
+would cost. For which packages land in each part and why, see
+[notices-placement.md](./notices-placement.md).
 
 It has three parts, in order.
 

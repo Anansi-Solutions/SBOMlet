@@ -22,6 +22,7 @@
  */
 
 import {
+  DOCKER_IDENTITY_PREFIX,
   purlEcosystem,
   type CanonicalDependencies,
   type Occurrence,
@@ -48,9 +49,33 @@ export function applyContainerScopes(
   model: CanonicalDependencies,
   developmentContainers: ReadonlySet<string>,
 ): CanonicalDependencies {
-  return {
-    packages: model.packages.map((pkg) => rescoped(pkg, developmentContainers)),
-  };
+  const packages = model.packages.map((pkg) =>
+    rescoped(pkg, developmentContainers),
+  );
+  for (const pkg of packages) assertOsScopeIsDockerOnly(pkg);
+  return { packages };
+}
+
+/**
+ * Defensive invariant, checked at the chokepoint where scope is FINAL for this run: scope "os"
+ * implies every occurrence target is docker:-prefixed. True by construction today - only the docker
+ * collector ever stamps scope "os" (pipeline.ts's readCommittedDockerSbom), and this
+ * function only ever narrows "os" toward "app", never the reverse - but nothing in the type system
+ * enforces it, and report-placement.md routes an os-scope package into its container's System/
+ * Application table by that docker: target alone. A future refactor that let a non-docker
+ * occurrence reach an os-scope package would silently drop it from every inventory section - not a
+ * wrong table, an absent row - so this throws loudly instead, naming the purl and the offending
+ * target.
+ */
+function assertOsScopeIsDockerOnly(pkg: PackageEntry): void {
+  if (pkg.scope !== "os") return;
+  for (const occurrence of pkg.occurrences) {
+    if (!occurrence.target.startsWith(DOCKER_IDENTITY_PREFIX)) {
+      throw new Error(
+        `invariant violated: os-scope package "${pkg.purl}" has a non-docker occurrence target "${occurrence.target}" - an os-scope package must carry only docker: occurrences, or it silently vanishes from every inventory section`,
+      );
+    }
+  }
 }
 
 /**
