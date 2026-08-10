@@ -72,10 +72,7 @@ import {
 } from "../normalize/expression";
 import { BUILTIN_DENY_RULE_ID } from "./builtinDenylist";
 import { AGPL_IDS, COPYLEFT_FAMILY } from "./copyleft";
-import {
-  COULD_BE_COPYLEFT_FAMILIES,
-  WORKSPACE_ABSORBS,
-} from "./copyleftFamily";
+import { COULD_BE_COPYLEFT_FAMILIES, WORKSPACE_ABSORBS } from "./copyleftFamily";
 import { denyRuleFor, type IndexedDenyRule } from "./denylist";
 import type {
   CompatibleLicenseRule,
@@ -167,10 +164,7 @@ function matchesIdentityPrefix(target: string, path: string): boolean {
  * as an identity prefix.
  */
 function appliesAt(rule: CompatibleRule, target: string): boolean {
-  return (
-    rule.where === undefined ||
-    rule.where.some((path) => matchesIdentityPrefix(target, path))
-  );
+  return rule.where === undefined || rule.where.some((path) => matchesIdentityPrefix(target, path));
 }
 
 /**
@@ -282,11 +276,7 @@ function suppressionJustification(
   const leaves = copyleftLeafIds(electedNode);
   if (leaves.length === 0) return undefined;
   const leafFamilies = leaves.map((id) => COPYLEFT_FAMILY.get(id));
-  if (
-    !leafFamilies.every(
-      (family) => family !== undefined && absorbed.has(family),
-    )
-  ) {
+  if (!leafFamilies.every((family) => family !== undefined && absorbed.has(family))) {
     return undefined;
   }
   if (leafFamilies.every((family) => family === workspaceFamily)) {
@@ -306,8 +296,7 @@ function suppressionJustification(
 function clarifyIndexFor(entry: PackageEntry, policy: Policy): number {
   return policy.clarify.findIndex(
     (rule) =>
-      rule.name === entry.name &&
-      (rule.version === undefined || rule.version === entry.version),
+      rule.name === entry.name && (rule.version === undefined || rule.version === entry.version),
   );
 }
 
@@ -404,8 +393,7 @@ function conflictVerdict(
   conflict: NonNullable<PackageEntry["finding"]>["conflict"],
 ): Verdict {
   const c = conflict as NonNullable<typeof conflict>;
-  const disagreeing =
-    c.disagreeing.length > 0 ? c.disagreeing.join(", ") : "(none)";
+  const disagreeing = c.disagreeing.length > 0 ? c.disagreeing.join(", ") : "(none)";
   return {
     ...base,
     status: "fail",
@@ -471,11 +459,7 @@ function overrideCitation(
  * Higher-precedence lanes (suppression, compatible, clarify, stale, imprecise) never reach this
  * helper - it sits at the would-be default-fail terminals only.
  */
-function applyDevScope(
-  failVerdict: Verdict,
-  occurrence: Occurrence,
-  policy: Policy,
-): Verdict {
+function applyDevScope(failVerdict: Verdict, occurrence: Occurrence, policy: Policy): Verdict {
   if (!occurrence.isDevDependency) return failVerdict;
   const handling = policy.devDependencies;
   if (handling === "fail") return failVerdict;
@@ -510,11 +494,7 @@ function applyDevScope(
  * Deny is terminal-0 above this helper (denyVerdict returns first in verdictFor), so a denied os
  * package is never reached here.
  */
-function applyOsScope(
-  failVerdict: Verdict,
-  entry: PackageEntry,
-  policy: Policy,
-): Verdict {
+function applyOsScope(failVerdict: Verdict, entry: PackageEntry, policy: Policy): Verdict {
   if (entry.scope !== "os") return failVerdict;
   const handling = policy.osDependencies;
   if (handling === "fail") return failVerdict;
@@ -546,11 +526,7 @@ function applyScopeDowngrades(
   occurrence: Occurrence,
   policy: Policy,
 ): Verdict {
-  return applyDevScope(
-    applyOsScope(failVerdict, entry, policy),
-    occurrence,
-    policy,
-  );
+  return applyDevScope(applyOsScope(failVerdict, entry, policy), occurrence, policy);
 }
 
 /**
@@ -625,16 +601,11 @@ function sourceAvailableExemption(
   policy: Policy,
   denyRule: IndexedDenyRule,
 ): { index: number; license: string; reason: string } | undefined {
-  if (
-    denyRule.ruleId !== BUILTIN_DENY_RULE_ID ||
-    denyRule.rule.match !== "license"
-  ) {
+  if (denyRule.ruleId !== BUILTIN_DENY_RULE_ID || denyRule.rule.match !== "license") {
     return undefined;
   }
   const license = denyRule.rule.pattern;
-  const index = policy.allowSourceAvailable.findIndex(
-    (entry) => entry.license === license,
-  );
+  const index = policy.allowSourceAvailable.findIndex((entry) => entry.license === license);
   if (index === -1) return undefined;
   return { index, license, reason: policy.allowSourceAvailable[index]!.reason };
 }
@@ -762,11 +733,7 @@ function copyleftVerdict(
 ): Verdict {
   const target = occurrence.target;
   const suppression = suppressionFor(target, policy);
-  if (
-    suppression !== undefined &&
-    assessment.electedNode !== null &&
-    assessment.elected !== null
-  ) {
+  if (suppression !== undefined && assessment.electedNode !== null && assessment.elected !== null) {
     const { index, rule } = suppression;
     const justification = suppressionJustification(
       assessment.electedNode,
@@ -859,25 +826,14 @@ function verdictFor(
   }
 
   if (assessment.impreciseFamily !== undefined) {
-    return impreciseVerdict(
-      base,
-      target,
-      assessment.impreciseFamily,
-      entry.scope,
-    );
+    return impreciseVerdict(base, target, assessment.impreciseFamily, entry.scope);
   }
 
   if (assessment.expression === null) {
     return unknownVerdict(base, entry, occurrence, policy);
   }
 
-  const citation = overrideCitation(
-    entry,
-    base,
-    target,
-    assessment.expression,
-    policy,
-  );
+  const citation = overrideCitation(entry, base, target, assessment.expression, policy);
   if (citation !== undefined) return citation;
 
   // A LicenseRef-/DocumentRef- leaf that survived election is unassessed content, not a clean
@@ -903,10 +859,7 @@ function verdictFor(
  * treated as unknown - defensive, documented. Returns one verdict per (package × occurrence),
  * sorted compareCodeUnits on (purl, occurrenceTarget).
  */
-export function evaluate(
-  model: CanonicalDependencies,
-  policy: Policy,
-): Verdict[] {
+export function evaluate(model: CanonicalDependencies, policy: Policy): Verdict[] {
   const verdicts: Verdict[] = [];
   for (const entry of model.packages) {
     const assessment = assessPackage(entry);
@@ -942,22 +895,13 @@ export function evaluate(
           ? licenseRuleFor(assessment.expression, occurrence.target, policy)
           : undefined;
       verdicts.push(
-        verdictFor(
-          entry,
-          occurrence,
-          assessment,
-          packageRule,
-          licenseRule,
-          denyRule,
-          policy,
-        ),
+        verdictFor(entry, occurrence, assessment, packageRule, licenseRule, denyRule, policy),
       );
     }
   }
   return verdicts.sort(
     (a, b) =>
-      compareCodeUnits(a.purl, b.purl) ||
-      compareCodeUnits(a.occurrenceTarget, b.occurrenceTarget),
+      compareCodeUnits(a.purl, b.purl) || compareCodeUnits(a.occurrenceTarget, b.occurrenceTarget),
   );
 }
 
@@ -1015,10 +959,7 @@ export function acceptedContainerNotices(
 ): AcceptedContainerNotice[] {
   const verdictByKey = new Map<string, Verdict>();
   for (const verdict of verdicts) {
-    verdictByKey.set(
-      `${verdict.purl}\u0000${verdict.occurrenceTarget}`,
-      verdict,
-    );
+    verdictByKey.set(`${verdict.purl}\u0000${verdict.occurrenceTarget}`, verdict);
   }
 
   const notices: AcceptedContainerNotice[] = [];
@@ -1031,9 +972,7 @@ export function acceptedContainerNotices(
     let rule: string | undefined;
     let reason: string | undefined;
     for (const occurrence of entry.occurrences) {
-      const verdict = verdictByKey.get(
-        `${entry.purl}\u0000${occurrence.target}`,
-      );
+      const verdict = verdictByKey.get(`${entry.purl}\u0000${occurrence.target}`);
       if (
         verdict === undefined ||
         verdict.status !== "ok" ||

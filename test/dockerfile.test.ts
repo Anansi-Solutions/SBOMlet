@@ -3,10 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, test } from "bun:test";
 
-import {
-  discoverDockerfiles,
-  isDockerfileName,
-} from "../src/collectors/dockerfile";
+import { discoverDockerfiles, isDockerfileName } from "../src/collectors/dockerfile";
 
 // Self-contained temp trees only — no reference to any host-project path.
 const tempRoots: string[] = [];
@@ -42,16 +39,8 @@ describe("discoverDockerfiles", () => {
     writeFile(root, "frontend/Dockerfile", "FROM node:22-slim\n");
     writeFile(root, "docker/nginx.Dockerfile", "FROM nginx:stable-alpine\n");
     // Vendored / dependency Dockerfiles that must NEVER be found:
-    writeFile(
-      root,
-      "infrastructure/.terraform/modules/x/Dockerfile",
-      "FROM ubuntu\n",
-    );
-    writeFile(
-      root,
-      "frontend/node_modules/swagger2openapi/Dockerfile",
-      "FROM node\n",
-    );
+    writeFile(root, "infrastructure/.terraform/modules/x/Dockerfile", "FROM ubuntu\n");
+    writeFile(root, "frontend/node_modules/swagger2openapi/Dockerfile", "FROM node\n");
 
     const result = discoverDockerfiles(root);
     expect(result.dockerfiles.map((d) => d.identity)).toEqual([
@@ -109,9 +98,7 @@ describe("discoverDockerfiles", () => {
     // parent dir. Discovery lists it; the build lane handles it.
     writeFile(root, "ci/Dockerfile.go", "FROM golang:1.22-alpine\n");
     const result = discoverDockerfiles(root);
-    expect(result.dockerfiles.map((d) => d.identity)).toContain(
-      "ci/Dockerfile.go",
-    );
+    expect(result.dockerfiles.map((d) => d.identity)).toContain("ci/Dockerfile.go");
   });
 
   test("#5: a matched non-Dockerfile is LISTED, never silently dropped (name-pattern-only contract)", () => {
@@ -130,19 +117,13 @@ describe("discoverDockerfiles", () => {
     const root = makeTempRoot();
     writeFile(root, "app/Dockerfile", "FROM alpine:3.20\n");
     // Simulate the tool living under src/collectors with its own dockerfile.ts.
-    writeFile(
-      root,
-      "tool/src/collectors/dockerfile.ts",
-      "export const x = 1;\n",
-    );
+    writeFile(root, "tool/src/collectors/dockerfile.ts", "export const x = 1;\n");
     writeFile(root, "tool/src/collectors/dockerfile.test.ts", "test();\n");
 
     const toolDir = join(root, "tool");
     const result = discoverDockerfiles(root, { toolDir });
     // The tool dir subtree is pruned; only the consumer Dockerfile remains.
-    expect(result.dockerfiles.map((d) => d.identity)).toEqual([
-      "app/Dockerfile",
-    ]);
+    expect(result.dockerfiles.map((d) => d.identity)).toEqual(["app/Dockerfile"]);
   });
 
   test("only dist/ is pruned; build/out/target/vendor Dockerfiles ARE discovered", () => {
@@ -174,9 +155,7 @@ describe("discoverDockerfiles", () => {
     writeFile(root, "Dist/Dockerfile", "FROM node\n");
 
     const result = discoverDockerfiles(root);
-    expect(result.dockerfiles.map((d) => d.identity)).toEqual([
-      "backend/Dockerfile",
-    ]);
+    expect(result.dockerfiles.map((d) => d.identity)).toEqual(["backend/Dockerfile"]);
   });
 
   test("#4: Dockerfiles under .docker/ and .devcontainer/ ARE discovered", () => {
@@ -201,9 +180,7 @@ describe("discoverDockerfiles", () => {
     writeFile(root, ".cache/Dockerfile", "FROM busybox\n");
 
     const result = discoverDockerfiles(root);
-    expect(result.dockerfiles.map((d) => d.identity)).toEqual([
-      "backend/Dockerfile",
-    ]);
+    expect(result.dockerfiles.map((d) => d.identity)).toEqual(["backend/Dockerfile"]);
   });
 
   test("a git-SUBMODULE root (.git is a FILE / gitlink) is NOT descended", () => {
@@ -240,9 +217,7 @@ describe("discoverDockerfiles", () => {
     const result = discoverDockerfiles(root, {
       dockerIgnore: ["docker/dev/**"],
     });
-    expect(result.dockerfiles.map((d) => d.identity)).toEqual([
-      "backend/Dockerfile",
-    ]);
+    expect(result.dockerfiles.map((d) => d.identity)).toEqual(["backend/Dockerfile"]);
     // The ignored one is surfaced by name (never silently dropped).
     expect(result.ignored).toEqual(["docker/dev/Dockerfile"]);
   });
@@ -253,9 +228,7 @@ describe("discoverDockerfiles", () => {
     writeFile(root, "legacy/Dockerfile", "FROM node:18\n");
 
     const result = discoverDockerfiles(root, { excludes: ["legacy/**"] });
-    expect(result.dockerfiles.map((d) => d.identity)).toEqual([
-      "backend/Dockerfile",
-    ]);
+    expect(result.dockerfiles.map((d) => d.identity)).toEqual(["backend/Dockerfile"]);
   });
 
   test("output is deterministically sorted by repo-relative forward-slash path", () => {
@@ -277,9 +250,7 @@ describe("discoverDockerfiles", () => {
     writeFile(root, "backend/Dockerfile", "FROM node:22-slim\n");
 
     const result = discoverDockerfiles(root);
-    const entry = result.dockerfiles.find(
-      (d) => d.identity === "backend/Dockerfile",
-    );
+    const entry = result.dockerfiles.find((d) => d.identity === "backend/Dockerfile");
     expect(entry).toBeDefined();
     expect(entry?.path).toBe(join(root, "backend", "Dockerfile"));
     // The entry shape carries identity + path only — no derived base field.

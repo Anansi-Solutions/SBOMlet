@@ -221,9 +221,7 @@ async function scanLock(bunLock: string): Promise<ScannedDoc> {
   const result = await collectWithBunLock(target, { tempDir: makeOutDir() });
   const raw = readFileSync(result.sbomPath, "utf8");
   const doc = JSON.parse(raw) as Record<string, unknown>;
-  const components = (doc["components"] ?? []) as Array<
-    Record<string, unknown>
-  >;
+  const components = (doc["components"] ?? []) as Array<Record<string, unknown>>;
   return { target, ...result, raw, doc, components };
 }
 
@@ -345,34 +343,22 @@ describe("collectWithBunLock — identity and emission", () => {
   test("nested conflict keys yield identity from value[0], NEVER the key (the trivy failure mode)", async () => {
     const { components } = await scanLock(SCOPED_NESTED_LOCK);
     // No component may carry the nested KEY as its name.
-    expect(
-      componentNames(components).includes("spdx-compare/spdx-expression-parse"),
-    ).toBe(false);
+    expect(componentNames(components).includes("spdx-compare/spdx-expression-parse")).toBe(false);
     // The nested entry resolves to the same purl as a top-level twin would
     // (the 3-nested-entries-to-1-purl fold happens at merge, not here).
-    const v301 = components.filter(
-      (c) => c["purl"] === "pkg:npm/spdx-expression-parse@3.0.1",
-    );
+    const v301 = components.filter((c) => c["purl"] === "pkg:npm/spdx-expression-parse@3.0.1");
     expect(v301).toHaveLength(1);
     expect(v301[0]).toMatchObject({
       name: "spdx-expression-parse",
       version: "3.0.1",
     });
     // The top-level entry of the other version is also present.
-    expect(
-      components.some(
-        (c) => c["purl"] === "pkg:npm/spdx-expression-parse@4.0.0",
-      ),
-    ).toBe(true);
+    expect(components.some((c) => c["purl"] === "pkg:npm/spdx-expression-parse@4.0.0")).toBe(true);
   });
 
   test("@workspace: entries are never emitted", async () => {
     const { components } = await scanLock(WORKSPACE_LOCK);
-    expect(componentNames(components)).toEqual([
-      "array-find-index",
-      "smol-toml",
-      "typescript",
-    ]);
+    expect(componentNames(components)).toEqual(["array-find-index", "smol-toml", "typescript"]);
   });
 
   test("workspaces[*].name members are never emitted even without the @workspace: protocol (belt-and-braces)", async () => {
@@ -496,9 +482,9 @@ describe("collectWithBunLock — contract and cache key", () => {
 
   test("missing package.json throws the target.ts-shaped error (from computeCacheKey)", async () => {
     const target = makeTargetWithFiles({ "bun.lock": WORKSPACE_LOCK });
-    await expect(
-      collectWithBunLock(target, { tempDir: makeOutDir() }),
-    ).rejects.toThrow(/missing package\.json/);
+    await expect(collectWithBunLock(target, { tempDir: makeOutDir() })).rejects.toThrow(
+      /missing package\.json/,
+    );
   });
 });
 
@@ -558,10 +544,7 @@ function isDevMarked(component: Record<string, unknown>): boolean {
   });
 }
 
-function byPurl(
-  components: Array<Record<string, unknown>>,
-  purl: string,
-): Record<string, unknown> {
+function byPurl(components: Array<Record<string, unknown>>, purl: string): Record<string, unknown> {
   const found = components.find((c) => c["purl"] === purl);
   if (found === undefined) throw new Error(`no component with purl ${purl}`);
   return found;
@@ -715,15 +698,9 @@ const CYCLE_LOCK = `{
 describe("collectWithBunLock — transitive dev/prod scope BFS (research A4)", () => {
   test("workspace fixture: typescript dev; smol-toml and array-find-index (via the libb member importer) prod", async () => {
     const { components } = await scanLock(WORKSPACE_LOCK);
-    expect(isDevMarked(byPurl(components, "pkg:npm/typescript@5.9.3"))).toBe(
-      true,
-    );
-    expect(isDevMarked(byPurl(components, "pkg:npm/smol-toml@1.6.1"))).toBe(
-      false,
-    );
-    expect(
-      isDevMarked(byPurl(components, "pkg:npm/array-find-index@1.0.2")),
-    ).toBe(false);
+    expect(isDevMarked(byPurl(components, "pkg:npm/typescript@5.9.3"))).toBe(true);
+    expect(isDevMarked(byPurl(components, "pkg:npm/smol-toml@1.6.1"))).toBe(false);
+    expect(isDevMarked(byPurl(components, "pkg:npm/array-find-index@1.0.2"))).toBe(false);
   });
 
   test("same-version twin via a prod AND a dev parent emits divergent same-purl components that merge prod-wins (prod-wins safety)", async () => {
@@ -740,59 +717,39 @@ describe("collectWithBunLock — transitive dev/prod scope BFS (research A4)", (
     // dev-downgraded out of the gate.
     const model = mergeSboms([{ sbom: doc, targetIdentity: "." }]);
     const twin = model.packages.find((p) => p.purl === "pkg:npm/twin@1.0.0");
-    expect(twin?.occurrences).toEqual([
-      { target: ".", isDevDependency: false },
-    ]);
+    expect(twin?.occurrences).toEqual([{ target: ".", isDevDependency: false }]);
   });
 
   test("dev components carry exactly the merge-consumed property; prod components carry none", async () => {
     const { components } = await scanLock(WORKSPACE_LOCK);
-    expect(
-      byPurl(components, "pkg:npm/typescript@5.9.3")["properties"],
-    ).toEqual([{ name: DEV_PROPERTY, value: "true" }]);
-    expect(
-      byPurl(components, "pkg:npm/smol-toml@1.6.1")["properties"],
-    ).toBeUndefined();
+    expect(byPurl(components, "pkg:npm/typescript@5.9.3")["properties"]).toEqual([
+      { name: DEV_PROPERTY, value: "true" },
+    ]);
+    expect(byPurl(components, "pkg:npm/smol-toml@1.6.1")["properties"]).toBeUndefined();
   });
 
   test("transitive deps of a dev root are dev-marked, including optionalDependencies edges", async () => {
     const { components } = await scanLock(TRANSITIVE_LOCK);
-    expect(isDevMarked(byPurl(components, "pkg:npm/dev-root@1.0.0"))).toBe(
-      true,
-    );
-    expect(isDevMarked(byPurl(components, "pkg:npm/dev-leaf@1.0.0"))).toBe(
-      true,
-    );
-    expect(isDevMarked(byPurl(components, "pkg:npm/dev-opt-leaf@1.0.0"))).toBe(
-      true,
-    );
+    expect(isDevMarked(byPurl(components, "pkg:npm/dev-root@1.0.0"))).toBe(true);
+    expect(isDevMarked(byPurl(components, "pkg:npm/dev-leaf@1.0.0"))).toBe(true);
+    expect(isDevMarked(byPurl(components, "pkg:npm/dev-opt-leaf@1.0.0"))).toBe(true);
   });
 
   test("a package reachable from BOTH a prod root and a dev root stays prod (prod wins)", async () => {
     const { components } = await scanLock(TRANSITIVE_LOCK);
-    expect(isDevMarked(byPurl(components, "pkg:npm/keep-prod@1.0.0"))).toBe(
-      false,
-    );
+    expect(isDevMarked(byPurl(components, "pkg:npm/keep-prod@1.0.0"))).toBe(false);
     expect(isDevMarked(byPurl(components, "pkg:npm/shared@1.0.0"))).toBe(false);
   });
 
   test("nested conflict entries are reached via the parent-prefixed lookup and follow the parent's path", async () => {
     const { components } = await scanLock(HOISTING_LOCK);
     // The nested entry under the dev parent is dev …
-    expect(isDevMarked(byPurl(components, "pkg:npm/shared-dep@2.0.0"))).toBe(
-      true,
-    );
+    expect(isDevMarked(byPurl(components, "pkg:npm/shared-dep@2.0.0"))).toBe(true);
     // … while the top-level twin name at another version, reached from the
     // prod parent via the bare fallback, stays prod.
-    expect(isDevMarked(byPurl(components, "pkg:npm/shared-dep@1.0.0"))).toBe(
-      false,
-    );
-    expect(isDevMarked(byPurl(components, "pkg:npm/dev-parent@1.0.0"))).toBe(
-      true,
-    );
-    expect(isDevMarked(byPurl(components, "pkg:npm/prod-parent@1.0.0"))).toBe(
-      false,
-    );
+    expect(isDevMarked(byPurl(components, "pkg:npm/shared-dep@1.0.0"))).toBe(false);
+    expect(isDevMarked(byPurl(components, "pkg:npm/dev-parent@1.0.0"))).toBe(true);
+    expect(isDevMarked(byPurl(components, "pkg:npm/prod-parent@1.0.0"))).toBe(false);
   });
 
   test("dep edges resolve through progressively shorter parent prefixes", async () => {
@@ -805,20 +762,14 @@ describe("collectWithBunLock — transitive dev/prod scope BFS (research A4)", (
 
   test("prod roots include optionalDependencies and peerDependencies of every importer", async () => {
     const { components } = await scanLock(PROD_ROOTS_LOCK);
-    expect(isDevMarked(byPurl(components, "pkg:npm/opt-pkg@1.0.0"))).toBe(
-      false,
-    );
-    expect(isDevMarked(byPurl(components, "pkg:npm/peer-pkg@1.0.0"))).toBe(
-      false,
-    );
+    expect(isDevMarked(byPurl(components, "pkg:npm/opt-pkg@1.0.0"))).toBe(false);
+    expect(isDevMarked(byPurl(components, "pkg:npm/peer-pkg@1.0.0"))).toBe(false);
     expect(isDevMarked(byPurl(components, "pkg:npm/dev-pkg@1.0.0"))).toBe(true);
   });
 
   test("unknown dep names are leaves; unvisited packages stay prod (conservative A4)", async () => {
     const { components } = await scanLock(UNKNOWN_LEAF_LOCK);
-    expect(isDevMarked(byPurl(components, "pkg:npm/real-dev@1.0.0"))).toBe(
-      true,
-    );
+    expect(isDevMarked(byPurl(components, "pkg:npm/real-dev@1.0.0"))).toBe(true);
     expect(isDevMarked(byPurl(components, "pkg:npm/orphan@1.0.0"))).toBe(false);
   });
 
@@ -831,13 +782,9 @@ describe("collectWithBunLock — transitive dev/prod scope BFS (research A4)", (
   test("hoisting never crosses a scope-name boundary: bare dep of @scope/pkg resolves to y, not @scope/y", async () => {
     const { components } = await scanLock(SCOPE_BOUNDARY_LOCK);
     // The dev root and its REAL bare dep are dev-marked …
-    expect(isDevMarked(byPurl(components, "pkg:npm/%40scope/pkg@1.0.0"))).toBe(
-      true,
-    );
+    expect(isDevMarked(byPurl(components, "pkg:npm/%40scope/pkg@1.0.0"))).toBe(true);
     expect(isDevMarked(byPurl(components, "pkg:npm/y@1.0.0"))).toBe(true);
     // … and the unrelated scope sibling stays prod (unvisited, A4).
-    expect(isDevMarked(byPurl(components, "pkg:npm/%40scope/y@1.0.0"))).toBe(
-      false,
-    );
+    expect(isDevMarked(byPurl(components, "pkg:npm/%40scope/y@1.0.0"))).toBe(false);
   });
 });

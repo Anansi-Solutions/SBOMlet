@@ -11,13 +11,7 @@
  * downstream. It never spawns outside `execTool`, and it never writes the cache itself - the single
  * write site stays in enrich.ts.
  */
-import {
-  existsSync,
-  mkdtempSync,
-  readFileSync,
-  rmSync,
-  statSync,
-} from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -190,9 +184,7 @@ async function runScancode(
   }
 
   if (!existsSync(outFile)) {
-    throw new Error(
-      `scancode produced no output file at ${outFile}\ninvocation: ${invocation}`,
-    );
+    throw new Error(`scancode produced no output file at ${outFile}\ninvocation: ${invocation}`);
   }
   // Size gate BEFORE read (DoS bound).
   assertScancodeOutputSize(outFile);
@@ -226,8 +218,7 @@ export async function scanPackageSources(
   const verbose = opts.verbose ?? false;
   const scancodeBin = opts.scancodeBin ?? "scancode";
   const ownsTempDir = opts.tempDir === undefined;
-  const tempDir =
-    opts.tempDir ?? mkdtempSync(join(tmpdir(), "licenses-scancode-"));
+  const tempDir = opts.tempDir ?? mkdtempSync(join(tmpdir(), "licenses-scancode-"));
   const outFile = join(tempDir, "scancode-output.json");
   rmSync(outFile, { force: true });
 

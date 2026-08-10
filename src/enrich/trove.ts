@@ -24,14 +24,9 @@
  */
 
 /** Literal classifier → SPDX id pairs; the single reviewable source. */
-export const TROVE_TO_SPDX: ReadonlyArray<
-  readonly [classifier: string, spdx: string]
-> = [
+export const TROVE_TO_SPDX: ReadonlyArray<readonly [classifier: string, spdx: string]> = [
   // Gaps spdx-correct misses (correct() returns null for these labels):
-  [
-    "License :: OSI Approved :: Python Software Foundation License",
-    "Python-2.0",
-  ],
+  ["License :: OSI Approved :: Python Software Foundation License", "Python-2.0"],
   ["License :: OSI Approved :: ISC License (ISCL)", "ISC"],
   // The bare "ISC license"/"ISC License" label: spdx-correct returns null for it (the suffix
   // false-negative that dropped pexpect to unknown), while bare "ISC" parses. Carry both casings so
@@ -40,14 +35,8 @@ export const TROVE_TO_SPDX: ReadonlyArray<
   ["ISC License", "ISC"],
   // Precise classifiers (used when the license field is empty):
   ["License :: OSI Approved :: MIT License", "MIT"],
-  [
-    "License :: OSI Approved :: Mozilla Public License 2.0 (MPL 2.0)",
-    "MPL-2.0",
-  ],
-  [
-    "License :: OSI Approved :: Mozilla Public License 1.1 (MPL 1.1)",
-    "MPL-1.1",
-  ],
+  ["License :: OSI Approved :: Mozilla Public License 2.0 (MPL 2.0)", "MPL-2.0"],
+  ["License :: OSI Approved :: Mozilla Public License 1.1 (MPL 1.1)", "MPL-1.1"],
 ];
 
 const TROVE_MAP: ReadonlyMap<string, string> = new Map(TROVE_TO_SPDX);

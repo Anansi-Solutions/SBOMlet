@@ -26,8 +26,7 @@ export type ExpressionNode =
 export function renderNode(node: ExpressionNode): string {
   if ("license" in node) {
     const plus = node.plus === true ? "+" : "";
-    const withPart =
-      node.exception !== undefined ? ` WITH ${node.exception}` : "";
+    const withPart = node.exception !== undefined ? ` WITH ${node.exception}` : "";
     return `${node.license}${plus}${withPart}`;
   }
   const operand = (child: ExpressionNode): string =>
@@ -43,8 +42,7 @@ export function renderNode(node: ExpressionNode): string {
  */
 export function isCopyleft(node: ExpressionNode): boolean {
   if ("license" in node) return COPYLEFT_IDS.has(node.license);
-  if (node.conjunction === "and")
-    return isCopyleft(node.left) || isCopyleft(node.right);
+  if (node.conjunction === "and") return isCopyleft(node.left) || isCopyleft(node.right);
   return isCopyleft(node.left) && isCopyleft(node.right);
 }
 
@@ -90,10 +88,7 @@ export function leafIds(node: ExpressionNode): {
  */
 export function hasRefLeaf(node: ExpressionNode): boolean {
   if ("license" in node)
-    return (
-      node.license.startsWith("LicenseRef-") ||
-      node.license.startsWith("DocumentRef-")
-    );
+    return node.license.startsWith("LicenseRef-") || node.license.startsWith("DocumentRef-");
   return hasRefLeaf(node.left) || hasRefLeaf(node.right);
 }
 
@@ -123,9 +118,7 @@ export function elect(node: ExpressionNode): ExpressionNode {
   const leftRef = hasRefLeaf(left);
   const rightRef = hasRefLeaf(right);
   if (leftRef !== rightRef) return leftRef ? right : left;
-  return compareCodeUnits(renderNode(left), renderNode(right)) <= 0
-    ? left
-    : right;
+  return compareCodeUnits(renderNode(left), renderNode(right)) <= 0 ? left : right;
 }
 
 /**

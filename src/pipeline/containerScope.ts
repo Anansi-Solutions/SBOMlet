@@ -88,14 +88,8 @@ function assertOsScopeIsDockerOnly(pkg: PackageEntry): void {
  * docker collector's always-false default - the scope-level "it already gates" fact says nothing
  * about THIS occurrence, which has no other source of truth for the [[docker.development]] marking.
  */
-function rescoped(
-  pkg: PackageEntry,
-  developmentContainers: ReadonlySet<string>,
-): PackageEntry {
-  if (
-    pkg.scope === "os" &&
-    OS_PACKAGE_ECOSYSTEMS.has(purlEcosystem(pkg.purl))
-  ) {
+function rescoped(pkg: PackageEntry, developmentContainers: ReadonlySet<string>): PackageEntry {
+  if (pkg.scope === "os" && OS_PACKAGE_ECOSYSTEMS.has(purlEcosystem(pkg.purl))) {
     return pkg;
   }
   const occurrences = pkg.occurrences.map((occurrence) =>

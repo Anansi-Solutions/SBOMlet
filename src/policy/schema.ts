@@ -393,9 +393,7 @@ function validateDockerDevelopment(
   if (!("development" in table)) return [];
   const raw = table["development"];
   if (!Array.isArray(raw)) {
-    problems.push(
-      "docker.development: must be an array of tables ([[docker.development]])",
-    );
+    problems.push("docker.development: must be an array of tables ([[docker.development]])");
     return [];
   }
   const development: DockerDevelopmentEntry[] = [];
@@ -456,10 +454,7 @@ function validateDocker(
  * slash), so a committed artifact directory can never escape the repo. A malformed `dir` drops to
  * {} after recording the aggregated PolicyError naming cache.dir.
  */
-function validateCache(
-  root: Record<string, unknown>,
-  problems: string[],
-): CacheConfig | undefined {
+function validateCache(root: Record<string, unknown>, problems: string[]): CacheConfig | undefined {
   if (!("cache" in root)) return undefined;
   const table = recordOf(root["cache"]);
   if (table === undefined) {
@@ -511,9 +506,7 @@ function validatePath(path: string, where: string, problems: string[]): void {
     );
   }
   if (path.startsWith("/") || path.endsWith("/")) {
-    problems.push(
-      `${where}: path "${path}" must not have a leading or trailing slash`,
-    );
+    problems.push(`${where}: path "${path}" must not have a leading or trailing slash`);
   }
   const segments = path.split("/");
   if (segments.includes("..")) {
@@ -582,12 +575,7 @@ function validateSuppressions(
         }
       }
     }
-    if (
-      path !== undefined &&
-      license !== undefined &&
-      licenseValid &&
-      description !== undefined
-    ) {
+    if (path !== undefined && license !== undefined && licenseValid && description !== undefined) {
       suppressed.push({ path, license, description });
     }
   });
@@ -630,10 +618,7 @@ function validateWhere(
   return { where: scope, valid: true };
 }
 
-function validateCompatible(
-  root: Record<string, unknown>,
-  problems: string[],
-): CompatibleRule[] {
+function validateCompatible(root: Record<string, unknown>, problems: string[]): CompatibleRule[] {
   const compatible: CompatibleRule[] = [];
   const raw = root["compatible"];
   if (raw === undefined) return compatible;
@@ -698,12 +683,7 @@ function validateCompatiblePackage(
   where: string,
   problems: string[],
 ): CompatiblePackageRule | undefined {
-  checkKeys(
-    entry,
-    ["match", "name", "version", "reason", "where"],
-    where,
-    problems,
-  );
+  checkKeys(entry, ["match", "name", "version", "reason", "where"], where, problems);
   const name = requireText(entry, "name", where, problems);
   const reason = requireText(entry, "reason", where, problems);
   const scope = validateWhere(entry, where, problems);
@@ -749,9 +729,7 @@ function validateClarifyPackage(
   }
   const pkg = recordOf(entry["package"]);
   if (pkg === undefined) {
-    problems.push(
-      `${where}: key "package" must be an inline table { name, version? }`,
-    );
+    problems.push(`${where}: key "package" must be an inline table { name, version? }`);
     return { versionValid: true };
   }
   checkKeys(pkg, ["name", "version"], `${where}: package`, problems);
@@ -786,10 +764,7 @@ function makeClarifyRule(
   };
 }
 
-function validateClarify(
-  root: Record<string, unknown>,
-  problems: string[],
-): ClarifyRule[] {
+function validateClarify(root: Record<string, unknown>, problems: string[]): ClarifyRule[] {
   const clarify: ClarifyRule[] = [];
   const raw = root["clarify"];
   if (raw === undefined) return clarify;
@@ -804,17 +779,8 @@ function validateClarify(
       problems.push(`${where}: must be a table`);
       return;
     }
-    checkKeys(
-      entry,
-      ["package", "expects", "expression", "reason"],
-      where,
-      problems,
-    );
-    const { name, version, versionValid } = validateClarifyPackage(
-      entry,
-      where,
-      problems,
-    );
+    checkKeys(entry, ["package", "expects", "expression", "reason"], where, problems);
+    const { name, version, versionValid } = validateClarifyPackage(entry, where, problems);
     // `expects` is OPTIONAL (backward-compat) but, when present, must be a non-empty string - a
     // blank precondition could never match an observed signal and would be silently dead.
     // requireText records the existing aggregated-PolicyError messages naming clarify[i].
@@ -828,8 +794,7 @@ function validateClarify(
     let expressionValid = false;
     if (expression !== undefined) {
       expressionValid =
-        parseSpdxChecked(expression, `${where}: expression`, problems) !==
-        undefined;
+        parseSpdxChecked(expression, `${where}: expression`, problems) !== undefined;
     }
     const reason = requireText(entry, "reason", where, problems);
     if (
@@ -887,10 +852,7 @@ function validateDenyEntry(
   return undefined;
 }
 
-function validateDeny(
-  root: Record<string, unknown>,
-  problems: string[],
-): DenyRule[] {
+function validateDeny(root: Record<string, unknown>, problems: string[]): DenyRule[] {
   const deny: DenyRule[] = [];
   const raw = root["deny"];
   if (raw === undefined) return deny;
@@ -958,10 +920,7 @@ function validateAllowSourceAvailable(
   return exemptions;
 }
 
-function validateUnknown(
-  root: Record<string, unknown>,
-  problems: string[],
-): "warn" | "fail" {
+function validateUnknown(root: Record<string, unknown>, problems: string[]): "warn" | "fail" {
   const raw = root["unknown"];
   if (raw === undefined) return "warn"; // absent table defaults to warn
   const table = recordOf(raw);
@@ -1006,9 +965,7 @@ function validateDevDependencies(
   if (handling === "warn" || handling === "fail" || handling === "ignore") {
     return handling;
   }
-  problems.push(
-    'dev_dependencies.handling: must be "warn", "fail", or "ignore"',
-  );
+  problems.push('dev_dependencies.handling: must be "warn", "fail", or "ignore"');
   return "warn";
 }
 
@@ -1038,9 +995,7 @@ function validateOsDependencies(
   if (handling === "warn" || handling === "fail" || handling === "ignore") {
     return handling;
   }
-  problems.push(
-    'os_dependencies.handling: must be "warn", "fail", or "ignore"',
-  );
+  problems.push('os_dependencies.handling: must be "warn", "fail", or "ignore"');
   return "warn";
 }
 

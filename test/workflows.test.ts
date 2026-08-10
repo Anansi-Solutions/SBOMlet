@@ -1,10 +1,4 @@
-import {
-  mkdtempSync,
-  readdirSync,
-  readFileSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
+import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -61,16 +55,11 @@ function extractRunBlocks(file: string, text: string): RunBlock[] {
     const indent = match[1]?.length ?? 0;
     const inline = (match[2] ?? "").trim();
     const isSingleLineForm =
-      inline !== "" &&
-      inline !== "|" &&
-      inline !== ">" &&
-      !inline.startsWith("#");
+      inline !== "" && inline !== "|" && inline !== ">" && !inline.startsWith("#");
     // Single-line form (`run: cmd`): the whole body is on this line.
     // Block-scalar form (`run: |` / `run: >`): body is the following
     // more-indented lines, collected by collectBlockScalarBody below.
-    const bodyLines = isSingleLineForm
-      ? [inline]
-      : collectBlockScalarBody(lines, i + 1, indent);
+    const bodyLines = isSingleLineForm ? [inline] : collectBlockScalarBody(lines, i + 1, indent);
 
     blocks.push({ file, line: i + 1, body: bodyLines.join("\n") });
   }
@@ -85,11 +74,7 @@ function extractRunBlocks(file: string, text: string): RunBlock[] {
  * end it. Split out of `extractRunBlocks` to keep nesting within the lint
  * budget.
  */
-function collectBlockScalarBody(
-  lines: string[],
-  startIndex: number,
-  keyIndent: number,
-): string[] {
+function collectBlockScalarBody(lines: string[], startIndex: number, keyIndent: number): string[] {
   const bodyLines: string[] = [];
   for (let j = startIndex; j < lines.length; j++) {
     const next = lines[j] ?? "";
@@ -162,14 +147,9 @@ function jobsOf(doc: Record<string, unknown>): Record<string, JobShape> {
  * Extracted out of the test body to keep the per-job checks at one nesting
  * level instead of four.
  */
-function checkContentsWriteJob(
-  file: string,
-  jobName: string,
-  job: JobShape,
-): string[] {
+function checkContentsWriteJob(file: string, jobName: string, job: JobShape): string[] {
   const perms = job.permissions;
-  const contentsWrite =
-    typeof perms === "object" && perms !== null && perms.contents === "write";
+  const contentsWrite = typeof perms === "object" && perms !== null && perms.contents === "write";
   if (!contentsWrite) return [];
 
   const checkoutSteps = (job.steps ?? []).filter((s) =>
@@ -181,10 +161,7 @@ function checkContentsWriteJob(
 
   return checkoutSteps
     .filter((step) => step.with?.["persist-credentials"] !== false)
-    .map(
-      () =>
-        `${file}:${jobName} (contents:write checkout missing persist-credentials: false)`,
-    );
+    .map(() => `${file}:${jobName} (contents:write checkout missing persist-credentials: false)`);
 }
 
 const workflows = loadWorkflows(WORKFLOWS_DIR);
@@ -202,10 +179,7 @@ describe("workflow authoring invariants (.github/workflows/*.yml)", () => {
 
   test("no interpolation markers inside any run-step body (injection surface -- use env: indirection)", () => {
     const offenders = findRunBodyInterpolations(workflows);
-    expect(
-      offenders,
-      offenders.map((o) => `${o.file}:${o.line}`).join(", "),
-    ).toEqual([]);
+    expect(offenders, offenders.map((o) => `${o.file}:${o.line}`).join(", ")).toEqual([]);
   });
 
   test("no internal-tooling names under .github/ (gsd, claude, anthropic)", () => {
@@ -214,13 +188,11 @@ describe("workflow authoring invariants (.github/workflows/*.yml)", () => {
       const full = join(GITHUB_DIR, relPath);
       const text = readFileSync(full, "utf8");
       const names = findToolingNames(text);
-      if (names.length > 0)
-        offenders.push({ file: `.github/${relPath}`, names });
+      if (names.length > 0) offenders.push({ file: `.github/${relPath}`, names });
     }
-    expect(
-      offenders,
-      offenders.map((o) => `${o.file}: ${o.names.join(", ")}`).join("; "),
-    ).toEqual([]);
+    expect(offenders, offenders.map((o) => `${o.file}: ${o.names.join(", ")}`).join("; ")).toEqual(
+      [],
+    );
   });
 
   test("push triggers with paths: filters also declare branches: (tag-push trap)", () => {
@@ -261,9 +233,7 @@ describe("workflow authoring invariants (.github/workflows/*.yml)", () => {
     for (const { file, text } of workflows) {
       for (const block of extractRunBlocks(file, text)) {
         const hits = retired.filter((name) => block.body.includes(name));
-        offenders.push(
-          ...hits.map((name) => `${file}:${block.line} (${name})`),
-        );
+        offenders.push(...hits.map((name) => `${file}:${block.line} (${name})`));
       }
     }
     expect(offenders, offenders.join(", ")).toEqual([]);
@@ -293,9 +263,7 @@ describe("workflow invariant sensitivity (extraction helpers actually catch viol
       "          echo " + INTERP_MARKER + " github.event.issue.title }}",
       "          echo done",
     ].join("\n");
-    const offenders = findRunBodyInterpolations([
-      { file: "inline.yml", text: hostile },
-    ]);
+    const offenders = findRunBodyInterpolations([{ file: "inline.yml", text: hostile }]);
     expect(offenders.length).toBe(1);
     expect(offenders[0]?.line).toBe(5);
   });
@@ -308,9 +276,7 @@ describe("workflow invariant sensitivity (extraction helpers actually catch viol
       "      - name: dangerous",
       "        run: echo " + INTERP_MARKER + " inputs.thing }}",
     ].join("\n");
-    const offenders = findRunBodyInterpolations([
-      { file: "inline.yml", text: hostile },
-    ]);
+    const offenders = findRunBodyInterpolations([{ file: "inline.yml", text: hostile }]);
     expect(offenders.length).toBe(1);
     expect(offenders[0]?.line).toBe(5);
   });
@@ -328,9 +294,7 @@ describe("workflow invariant sensitivity (extraction helpers actually catch viol
       "        run: |",
       "          echo $THING",
     ].join("\n");
-    const offenders = findRunBodyInterpolations([
-      { file: "inline.yml", text: benign },
-    ]);
+    const offenders = findRunBodyInterpolations([{ file: "inline.yml", text: benign }]);
     expect(offenders).toEqual([]);
   });
 
@@ -347,9 +311,7 @@ describe("workflow invariant sensitivity (extraction helpers actually catch viol
       "          THING: " + INTERP_MARKER + " inputs.thing }}",
       "        run: echo $THING",
     ].join("\n");
-    const offenders = findRunBodyInterpolations([
-      { file: "inline.yml", text: mixed },
-    ]);
+    const offenders = findRunBodyInterpolations([{ file: "inline.yml", text: mixed }]);
     expect(offenders).toEqual([]);
   });
 
@@ -357,9 +319,7 @@ describe("workflow invariant sensitivity (extraction helpers actually catch viol
     expect(findToolingNames("this step must contain the artifact")).toEqual([]);
     expect(findToolingNames("run gsd-tools next")).toEqual(["gsd"]);
     expect(findToolingNames("ask Claude for help")).toEqual(["claude"]);
-    expect(findToolingNames("built with anthropic's SDK")).toEqual([
-      "anthropic",
-    ]);
+    expect(findToolingNames("built with anthropic's SDK")).toEqual(["anthropic"]);
   });
 
   test("branches: sensitivity -- a push trigger with paths: and no branches: is flagged, mutate-and-restore on a temp copy", () => {

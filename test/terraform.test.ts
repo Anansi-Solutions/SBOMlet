@@ -33,13 +33,7 @@
  * No subprocess is spawned anywhere here: the collector is fully in-process.
  */
 
-import {
-  mkdtempSync,
-  mkdirSync,
-  readFileSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
+import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, test } from "bun:test";
@@ -255,15 +249,13 @@ const MODULES_JSON = JSON.stringify({
     },
     {
       Key: "backend.ecs_cluster",
-      Source:
-        "registry.opentofu.org/terraform-aws-modules/ecs/aws//modules/cluster",
+      Source: "registry.opentofu.org/terraform-aws-modules/ecs/aws//modules/cluster",
       Version: "7.5.0",
       Dir: ".terraform/modules/backend.ecs_cluster/modules/cluster",
     },
     {
       Key: "backend.ecs_service",
-      Source:
-        "registry.opentofu.org/terraform-aws-modules/ecs/aws//modules/service",
+      Source: "registry.opentofu.org/terraform-aws-modules/ecs/aws//modules/service",
       Version: "7.5.0",
       Dir: ".terraform/modules/backend.ecs_service/modules/service",
     },
@@ -347,12 +339,7 @@ afterEach(() => {
  *     exist but NO modules.json — a stale/partial module install → loud throw
  *     expected.
  */
-type TerraformDirState =
-  | "none"
-  | "providers-only"
-  | "file"
-  | "empty"
-  | "stale-modules";
+type TerraformDirState = "none" | "providers-only" | "file" | "empty" | "stale-modules";
 
 interface TerraformTargetOptions {
   /** Present modules.json text — takes the authoritative present-path. */
@@ -373,15 +360,8 @@ interface TerraformTargetOptions {
  * decides what `.terraform/` materialization (if any) the redesigned filesystem
  * gate observes. No `.tf` files are written — the gate no longer reads any HCL.
  */
-function makeTerraformTarget(
-  lockText: string,
-  options: TerraformTargetOptions = {},
-): Target {
-  const {
-    modulesJson,
-    terraformDir = "none",
-    modulesJsonAsDir = false,
-  } = options;
+function makeTerraformTarget(lockText: string, options: TerraformTargetOptions = {}): Target {
+  const { modulesJson, terraformDir = "none", modulesJsonAsDir = false } = options;
   const dir = mkdtempSync(join(tmpdir(), "licenses-tf-"));
   tempDirs.push(dir);
   writeFileSync(join(dir, ".terraform.lock.hcl"), lockText);
@@ -430,17 +410,12 @@ interface ScannedDoc {
   components: Array<Record<string, unknown>>;
 }
 
-async function scanTarget(
-  lockText: string,
-  modulesJson?: string,
-): Promise<ScannedDoc> {
+async function scanTarget(lockText: string, modulesJson?: string): Promise<ScannedDoc> {
   const target = makeTerraformTarget(lockText, { modulesJson });
   const result = await collectWithTerraform(target, { tempDir: makeOutDir() });
   const raw = readFileSync(result.sbomPath, "utf8");
   const doc = JSON.parse(raw) as Record<string, unknown>;
-  const components = (doc["components"] ?? []) as Array<
-    Record<string, unknown>
-  >;
+  const components = (doc["components"] ?? []) as Array<Record<string, unknown>>;
   return { target, ...result, raw, doc, components };
 }
 
@@ -468,9 +443,7 @@ describe("TERRAFORM_COLLECTOR_TOOL", () => {
 describe("parseProviders", () => {
   test("the root lock parses to its exact (host, namespace, name, version) SET", () => {
     const set = new Set(
-      parseProviders(ROOT_LOCK).map(
-        (p) => `${p.host}|${p.namespace}|${p.name}|${p.version}`,
-      ),
+      parseProviders(ROOT_LOCK).map((p) => `${p.host}|${p.namespace}|${p.name}|${p.version}`),
     );
     // Re-derived from the live root lock bytes, never a RESEARCH count.
     expect(set).toEqual(
@@ -485,9 +458,7 @@ describe("parseProviders", () => {
 
   test("the cloudfront lock parses every provider including the no-constraints archive block", () => {
     const set = new Set(
-      parseProviders(CLOUDFRONT_LOCK).map(
-        (p) => `${p.namespace}/${p.name}@${p.version}`,
-      ),
+      parseProviders(CLOUDFRONT_LOCK).map((p) => `${p.namespace}/${p.name}@${p.version}`),
     );
     expect(set).toEqual(
       new Set([
@@ -502,9 +473,7 @@ describe("parseProviders", () => {
   });
 
   test("a provider block with NO constraints line still parses (version then hashes)", () => {
-    const archive = parseProviders(CLOUDFRONT_LOCK).find(
-      (p) => p.name === "archive",
-    );
+    const archive = parseProviders(CLOUDFRONT_LOCK).find((p) => p.name === "archive");
     expect(archive).toMatchObject({
       host: "registry.opentofu.org",
       namespace: "hashicorp",
@@ -519,18 +488,14 @@ describe("parseProviders", () => {
   });
 
   test("brace-edge: a hashes array between version and the closing } does not break block boundaries", () => {
-    const set = new Set(
-      parseProviders(BRACE_EDGE_LOCK).map((p) => `${p.name}@${p.version}`),
-    );
+    const set = new Set(parseProviders(BRACE_EDGE_LOCK).map((p) => `${p.name}@${p.version}`));
     // Both blocks resolve; the version of each is taken from its own header,
     // not corrupted by the bracket/brace of the hashes array.
     expect(set).toEqual(new Set(["edge@1.2.3", "after@9.9.9"]));
   });
 
   test("the fargate lock parses aws 6.42.0 and time 0.13.1", () => {
-    const set = new Set(
-      parseProviders(FARGATE_LOCK).map((p) => `${p.name}@${p.version}`),
-    );
+    const set = new Set(parseProviders(FARGATE_LOCK).map((p) => `${p.name}@${p.version}`));
     expect(set).toEqual(new Set(["aws@6.42.0", "time@0.13.1"]));
   });
 
@@ -549,9 +514,7 @@ provider "registry.opentofu.org/hashicorp/aws" {
   hashes = [ "h1:y" ]
 }
 `;
-    const set = new Set(
-      parseProviders(lock).map((p) => `${p.namespace}/${p.name}@${p.version}`),
-    );
+    const set = new Set(parseProviders(lock).map((p) => `${p.namespace}/${p.name}@${p.version}`));
     expect(set).toEqual(new Set(["hashicorp/aws@6.42.0"]));
   });
 
@@ -603,9 +566,7 @@ describe("readExternalModules", () => {
   });
 
   test("a `//submodule` Source strips the submodule path, keeping <ns>/<name>/<provider>", () => {
-    const ecs = readExternalModules(MODULES_JSON).filter(
-      (m) => m.name === "ecs",
-    );
+    const ecs = readExternalModules(MODULES_JSON).filter((m) => m.name === "ecs");
     // Both the cluster and service submodule entries resolve to the SAME
     // <ns>/<name>/<provider>@version address (submodule path stripped).
     expect(ecs.length).toBe(2);
@@ -745,9 +706,7 @@ describe("readExternalModules", () => {
   });
 
   test("structurally-invalid modules.json (JSON.parse fails) throws loud naming the failure", () => {
-    expect(() => readExternalModules("this is not json {{{")).toThrow(
-      /modules\.json/,
-    );
+    expect(() => readExternalModules("this is not json {{{")).toThrow(/modules\.json/);
     expect(() => readExternalModules("{broken")).toThrow(/modules\.json/);
   });
 
@@ -759,12 +718,10 @@ describe("readExternalModules", () => {
   });
 
   test("a `Modules` key that is NOT an array throws loud (structurally-invalid)", () => {
-    expect(() => readExternalModules(JSON.stringify({ Modules: "x" }))).toThrow(
+    expect(() => readExternalModules(JSON.stringify({ Modules: "x" }))).toThrow(/modules\.json/);
+    expect(() => readExternalModules(JSON.stringify({ Modules: { a: 1 } }))).toThrow(
       /modules\.json/,
     );
-    expect(() =>
-      readExternalModules(JSON.stringify({ Modules: { a: 1 } })),
-    ).toThrow(/modules\.json/);
   });
 
   // Tolerant skipping of individual malformed ENTRIES is
@@ -782,9 +739,7 @@ describe("readExternalModules", () => {
       ],
     });
     const set = new Set(
-      readExternalModules(json).map(
-        (m) => `${m.namespace}/${m.name}/${m.provider}@${m.version}`,
-      ),
+      readExternalModules(json).map((m) => `${m.namespace}/${m.name}/${m.provider}@${m.version}`),
     );
     expect(set).toEqual(new Set(["terraform-aws-modules/vpc/aws@6.6.1"]));
   });
@@ -802,15 +757,11 @@ describe("terraformComponentCount", () => {
   });
 
   test("a zero-provider lock with a local-only modules.json returns 0", () => {
-    expect(
-      terraformComponentCount(ZERO_PROVIDER_LOCK, LOCAL_ONLY_MODULES_JSON),
-    ).toBe(0);
+    expect(terraformComponentCount(ZERO_PROVIDER_LOCK, LOCAL_ONLY_MODULES_JSON)).toBe(0);
   });
 
   test("a providers-only count when modules.json is local-only equals the provider count", () => {
-    expect(terraformComponentCount(FARGATE_LOCK, LOCAL_ONLY_MODULES_JSON)).toBe(
-      2,
-    );
+    expect(terraformComponentCount(FARGATE_LOCK, LOCAL_ONLY_MODULES_JSON)).toBe(2);
   });
 });
 
@@ -831,9 +782,7 @@ describe("collectWithTerraform — emission", () => {
   test("a provider emits the locked purl spelling and name with no group", async () => {
     const { components } = await scanTarget(ROOT_LOCK, MODULES_JSON);
     const aws = components.find(
-      (c) =>
-        c["purl"] ===
-        "pkg:terraform/registry.opentofu.org/hashicorp/aws@6.42.0",
+      (c) => c["purl"] === "pkg:terraform/registry.opentofu.org/hashicorp/aws@6.42.0",
     );
     expect(aws).toMatchObject({
       type: "library",
@@ -848,8 +797,7 @@ describe("collectWithTerraform — emission", () => {
     const { components } = await scanTarget(ROOT_LOCK, MODULES_JSON);
     const vpc = components.find(
       (c) =>
-        c["purl"] ===
-        "pkg:terraform/registry.opentofu.org/terraform-aws-modules/vpc/aws@6.6.1",
+        c["purl"] === "pkg:terraform/registry.opentofu.org/terraform-aws-modules/vpc/aws@6.6.1",
     );
     expect(vpc).toMatchObject({
       type: "library",
@@ -870,14 +818,11 @@ describe("collectWithTerraform — emission", () => {
       return atVersion.split("/").length - 1; // minus the host segment
     };
     const provider = components.find(
-      (c) =>
-        c["purl"] ===
-        "pkg:terraform/registry.opentofu.org/hashicorp/aws@6.42.0",
+      (c) => c["purl"] === "pkg:terraform/registry.opentofu.org/hashicorp/aws@6.42.0",
     );
     const module = components.find(
       (c) =>
-        c["purl"] ===
-        "pkg:terraform/registry.opentofu.org/terraform-aws-modules/vpc/aws@6.6.1",
+        c["purl"] === "pkg:terraform/registry.opentofu.org/terraform-aws-modules/vpc/aws@6.6.1",
     );
     expect(pathSegs(String(provider?.["purl"]))).toBe(2);
     expect(pathSegs(String(module?.["purl"]))).toBe(3);
@@ -889,8 +834,7 @@ describe("collectWithTerraform — emission", () => {
     // terraform-aws-modules/ecs/aws@7.5.0 → exactly one component row.
     const ecsRows = components.filter(
       (c) =>
-        c["purl"] ===
-        "pkg:terraform/registry.opentofu.org/terraform-aws-modules/ecs/aws@7.5.0",
+        c["purl"] === "pkg:terraform/registry.opentofu.org/terraform-aws-modules/ecs/aws@7.5.0",
     );
     expect(ecsRows.length).toBe(1);
     // And the bom carries no duplicate purls at all.
@@ -901,14 +845,10 @@ describe("collectWithTerraform — emission", () => {
   test("every emitted component purl ends in @<exact-version> (the enrich-stage contract)", async () => {
     const { components } = await scanTarget(ROOT_LOCK, MODULES_JSON);
     // A provider purl tail and a module purl tail are both exact pins.
-    expect(
-      purls(components).some((p) => p.endsWith("/hashicorp/aws@6.42.0")),
-    ).toBe(true);
-    expect(
-      purls(components).some((p) =>
-        p.endsWith("/terraform-aws-modules/vpc/aws@6.6.1"),
-      ),
-    ).toBe(true);
+    expect(purls(components).some((p) => p.endsWith("/hashicorp/aws@6.42.0"))).toBe(true);
+    expect(purls(components).some((p) => p.endsWith("/terraform-aws-modules/vpc/aws@6.6.1"))).toBe(
+      true,
+    );
     // No component carries a version-stripped or constraint-shaped tail.
     for (const purl of purls(components)) {
       expect(/@[^@/]+$/.test(purl)).toBe(true);
@@ -1074,9 +1014,9 @@ describe("collectWithTerraform — absent modules.json + no `.terraform/` (loud 
     const target = makeTerraformTarget(PROVIDERS_ONLY_LOCK, {
       terraformDir: "none",
     });
-    await expect(
-      collectWithTerraform(target, { tempDir: makeOutDir() }),
-    ).rejects.toThrow(/tofu init|tofu get/);
+    await expect(collectWithTerraform(target, { tempDir: makeOutDir() })).rejects.toThrow(
+      /tofu init|tofu get/,
+    );
   });
 
   test("the loud-fail message names the missing modules.json path", async () => {
@@ -1095,18 +1035,16 @@ describe("collectWithTerraform — absent modules.json + no `.terraform/` (loud 
     const target = makeTerraformTarget(PROVIDERS_ONLY_LOCK, {
       terraformDir: "none",
     });
-    await expect(
-      collectWithTerraform(target, { tempDir: makeOutDir() }),
-    ).rejects.toThrow();
+    await expect(collectWithTerraform(target, { tempDir: makeOutDir() })).rejects.toThrow();
   });
 
   test("a stray `.terraform` FILE (not a dir) + absent modules.json still throws", async () => {
     const target = makeTerraformTarget(PROVIDERS_ONLY_LOCK, {
       terraformDir: "file",
     });
-    await expect(
-      collectWithTerraform(target, { tempDir: makeOutDir() }),
-    ).rejects.toThrow(/tofu init|tofu get/);
+    await expect(collectWithTerraform(target, { tempDir: makeOutDir() })).rejects.toThrow(
+      /tofu init|tofu get/,
+    );
   });
 
   // An empty `.terraform/` lacking `providers/` → throw.
@@ -1114,9 +1052,9 @@ describe("collectWithTerraform — absent modules.json + no `.terraform/` (loud 
     const target = makeTerraformTarget(PROVIDERS_ONLY_LOCK, {
       terraformDir: "empty",
     });
-    await expect(
-      collectWithTerraform(target, { tempDir: makeOutDir() }),
-    ).rejects.toThrow(/tofu init|tofu get/);
+    await expect(collectWithTerraform(target, { tempDir: makeOutDir() })).rejects.toThrow(
+      /tofu init|tofu get/,
+    );
   });
 
   // `.terraform/modules/` without modules.json → throw.
@@ -1124,9 +1062,9 @@ describe("collectWithTerraform — absent modules.json + no `.terraform/` (loud 
     const target = makeTerraformTarget(PROVIDERS_ONLY_LOCK, {
       terraformDir: "stale-modules",
     });
-    await expect(
-      collectWithTerraform(target, { tempDir: makeOutDir() }),
-    ).rejects.toThrow(/tofu init|tofu get/);
+    await expect(collectWithTerraform(target, { tempDir: makeOutDir() })).rejects.toThrow(
+      /tofu init|tofu get/,
+    );
   });
 
   // A directory-named modules.json is a non-regular-file
@@ -1136,9 +1074,9 @@ describe("collectWithTerraform — absent modules.json + no `.terraform/` (loud 
     const target = makeTerraformTarget(PROVIDERS_ONLY_LOCK, {
       modulesJsonAsDir: true,
     });
-    await expect(
-      collectWithTerraform(target, { tempDir: makeOutDir() }),
-    ).rejects.toThrow(/tofu init|tofu get/);
+    await expect(collectWithTerraform(target, { tempDir: makeOutDir() })).rejects.toThrow(
+      /tofu init|tofu get/,
+    );
   });
 });
 
@@ -1174,9 +1112,7 @@ describe("collectWithTerraform — providers-only, `.terraform/` exists (no thro
     });
     const raw = readFileSync(result.sbomPath, "utf8");
     const doc = JSON.parse(raw) as Record<string, unknown>;
-    const components = (doc["components"] ?? []) as Array<
-      Record<string, unknown>
-    >;
+    const components = (doc["components"] ?? []) as Array<Record<string, unknown>>;
     const got = new Set(purls(components));
     expect(got).toEqual(
       new Set([
@@ -1195,9 +1131,7 @@ describe("collectWithTerraform — providers-only, `.terraform/` exists (no thro
     });
     const raw = readFileSync(result.sbomPath, "utf8");
     const doc = JSON.parse(raw) as Record<string, unknown>;
-    const components = (doc["components"] ?? []) as Array<
-      Record<string, unknown>
-    >;
+    const components = (doc["components"] ?? []) as Array<Record<string, unknown>>;
     // No 3-path-segment (module) purls — only 2-segment provider purls.
     const moduleRows = purls(components).filter((p) => {
       const afterType = p.slice("pkg:terraform/".length);

@@ -108,9 +108,7 @@ export interface IndexedDenyRule {
  */
 function effectiveDenyRules(policy: Policy): IndexedDenyRule[] {
   const rules: IndexedDenyRule[] = [];
-  policy.deny.forEach((rule, index) =>
-    rules.push({ ruleId: `denied[${index}]`, rule }),
-  );
+  policy.deny.forEach((rule, index) => rules.push({ ruleId: `denied[${index}]`, rule }));
   for (const rule of BUILTIN_DENY_RULES) {
     rules.push({ ruleId: BUILTIN_DENY_RULE_ID, rule });
   }
@@ -131,40 +129,25 @@ function leafDenied(leaf: string, allowlist: ReadonlyArray<string>): boolean {
  * (an electable branch defeats the denial); AND is denied when either conjunct is denied (no
  * conjunct can be elected away).
  */
-function nodeDenied(
-  node: ExpressionNode,
-  allowlist: ReadonlyArray<string>,
-): boolean {
+function nodeDenied(node: ExpressionNode, allowlist: ReadonlyArray<string>): boolean {
   if ("license" in node) return leafDenied(renderLeaf(node), allowlist);
   if (node.conjunction === "and") {
-    return (
-      nodeDenied(node.left, allowlist) || nodeDenied(node.right, allowlist)
-    );
+    return nodeDenied(node.left, allowlist) || nodeDenied(node.right, allowlist);
   }
   return nodeDenied(node.left, allowlist) && nodeDenied(node.right, allowlist);
 }
 
 /** Leaf rendering for the satisfies call (id[+][ WITH exception]). */
-function renderLeaf(node: {
-  license: string;
-  plus?: true;
-  exception?: string;
-}): string {
+function renderLeaf(node: { license: string; plus?: true; exception?: string }): string {
   const plus = node.plus === true ? "+" : "";
-  const withPart =
-    node.exception !== undefined ? ` WITH ${node.exception}` : "";
+  const withPart = node.exception !== undefined ? ` WITH ${node.exception}` : "";
   return `${node.license}${plus}${withPart}`;
 }
 
 /** True when any leaf of the parsed expression satisfies the allowlist. */
-function anyLeafDenied(
-  node: ExpressionNode,
-  allowlist: ReadonlyArray<string>,
-): boolean {
+function anyLeafDenied(node: ExpressionNode, allowlist: ReadonlyArray<string>): boolean {
   if ("license" in node) return leafDenied(renderLeaf(node), allowlist);
-  return (
-    anyLeafDenied(node.left, allowlist) || anyLeafDenied(node.right, allowlist)
-  );
+  return anyLeafDenied(node.left, allowlist) || anyLeafDenied(node.right, allowlist);
 }
 
 /**
@@ -193,10 +176,7 @@ function unionLicenseDeny(
   if (!nodeDenied(node, union)) return undefined;
   // Attribute to the first license rule that contributes a denied leaf.
   for (const candidate of licenseRules) {
-    if (
-      candidate.rule.match === "license" &&
-      anyLeafDenied(node, candidate.rule.allowlist)
-    ) {
+    if (candidate.rule.match === "license" && anyLeafDenied(node, candidate.rule.allowlist)) {
       return candidate;
     }
   }
@@ -229,8 +209,7 @@ export function denyRuleFor(
       break;
     }
   }
-  const licenseMatch =
-    expression === null ? undefined : unionLicenseDeny(rules, expression);
+  const licenseMatch = expression === null ? undefined : unionLicenseDeny(rules, expression);
   if (nameMatch === undefined) return licenseMatch;
   if (licenseMatch === undefined) return nameMatch;
   // Both matched: the earlier rule in effective order wins (mirrors the prior lowest-index

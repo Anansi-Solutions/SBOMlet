@@ -136,10 +136,7 @@ export default tseslint.config(
       // cannot fight refill's canonical reflow on the lines refill does
       // touch. Both target the same maxLength.
       "comment-refill/refill": ["error", { maxLength: 100 }],
-      "comment-length/limit-single-line-comments": [
-        "error",
-        { maxLength: 100 },
-      ],
+      "comment-length/limit-single-line-comments": ["error", { maxLength: 100 }],
       "comment-length/limit-multi-line-comments": ["error", { maxLength: 100 }],
       // Kept checks: illusion (repeated words), thereIs, cliches.
       "write-good-comments/write-good-comments": [

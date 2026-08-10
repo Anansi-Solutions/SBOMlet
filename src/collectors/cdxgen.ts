@@ -69,11 +69,7 @@ export interface CollectorSbomFile {
  * - `--spec-version 1.6`: cdxgen 12 defaults to 1.7.
  * - `-t <ecosystem>` is the only parameterized flag.
  */
-export function cdxgenArgs(
-  targetDir: string,
-  outFile: string,
-  ecosystem: Ecosystem,
-): string[] {
+export function cdxgenArgs(targetDir: string, outFile: string, ecosystem: Ecosystem): string[] {
   // Literal pin on purpose (not assembled from CDXGEN_TOOL): the exact version tag must be
   // grep-detectable in this file, and the exact-array test asserts it matches CDXGEN_TOOL.
   return [
@@ -147,9 +143,7 @@ export function computeCacheKey(
     // Python targets bypass resolveTarget's yarn-manifest validation, so a missing pyproject.toml
     // first surfaces here - name the target identity and the expected absolute path.
     if (!existsSync(path)) {
-      throw new Error(
-        `target "${target.identity}" is missing ${file}: expected ${path}`,
-      );
+      throw new Error(`target "${target.identity}" is missing ${file}: expected ${path}`);
     }
     const bytes = readFileSync(path);
     hash.update(`file:${file}:${bytes.length}\0`).update(bytes);
@@ -189,10 +183,7 @@ export async function collectWithCdxgen(
   // asserting the output parses with specVersion 1.6 pins what we actually got. Failures name the
   // full invocation so they are actionable.
   if (!existsSync(outFile)) {
-    throw new Error(
-      `cdxgen produced no output file at ${outFile}\n` +
-        `invocation: ${invocation}`,
-    );
+    throw new Error(`cdxgen produced no output file at ${outFile}\n` + `invocation: ${invocation}`);
   }
   // Read outside the parse try: an I/O failure (permissions, transient Windows lock) must surface
   // as itself, not as a misleading "not valid JSON" message.
@@ -221,12 +212,7 @@ export async function collectWithCdxgen(
      * Sentinel-normalized argv: identical inputs hash to the same key across runs, machines, and
      * checkout locations.
      */
-    cacheKey: computeCacheKey(
-      target,
-      CDXGEN_TOOL,
-      cdxgenCacheArgs(ecosystem),
-      manifestFiles,
-    ),
+    cacheKey: computeCacheKey(target, CDXGEN_TOOL, cdxgenCacheArgs(ecosystem), manifestFiles),
     tool: CDXGEN_TOOL,
   };
 }

@@ -13,11 +13,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { purlSetOf, type CollectedSbom } from "../merge/merge";
-import {
-  firstPartyNames,
-  npmFirstPartyNames,
-  pnpmImporterNames,
-} from "../targets/firstParty";
+import { firstPartyNames, npmFirstPartyNames, pnpmImporterNames } from "../targets/firstParty";
 import { BUN_COLLECTOR_TOOL, collectWithBunLock } from "./bunLock";
 import { CDXGEN_TOOL, collectWithCdxgen } from "./cdxgen";
 import { ecosystemFor, manifestFilesFor, selectJsGenerator } from "./dispatch";
@@ -58,9 +54,7 @@ export interface CollectContext {
  */
 function requireLockfileText(ctx: CollectContext): string {
   if (ctx.lockfileText === undefined) {
-    throw new Error(
-      "collector requires lockfile text but the context provided none",
-    );
+    throw new Error("collector requires lockfile text but the context provided none");
   }
   return ctx.lockfileText;
 }
@@ -76,10 +70,7 @@ export interface Collector {
    * One discovered target -> the merge-ready input. Throws on scan failure (the CLI's
    * config/tool-error exit path).
    */
-  collect(
-    target: DiscoveredTarget,
-    ctx: CollectContext,
-  ): Promise<CollectedSbom>;
+  collect(target: DiscoveredTarget, ctx: CollectContext): Promise<CollectedSbom>;
 }
 
 /** Parse a collector's SBOM output file as an untrusted shape. */
@@ -141,9 +132,7 @@ const yarnCdxgenCollector = cdxgenCollector("yarn", firstPartyNames);
  */
 const yarnCollector: Collector = {
   tool: (lockfileText): ToolIdentity =>
-    selectJsGenerator(lockfileText) === "yarn-plugin"
-      ? YARN_PLUGIN_TOOL
-      : CDXGEN_TOOL,
+    selectJsGenerator(lockfileText) === "yarn-plugin" ? YARN_PLUGIN_TOOL : CDXGEN_TOOL,
   async collect(target, ctx): Promise<CollectedSbom> {
     const lockfileText = requireLockfileText(ctx);
     if (selectJsGenerator(lockfileText) !== "yarn-plugin") {
@@ -215,10 +204,7 @@ const poetryCollector: Collector = {
        * no usable poetry graph. Keyed by the same pkg:pypi/<pep503>@<version> purls cdxgen emits,
        * so the map joins onto the cdxgen components by purl.
        */
-      introductions: poetryIntroductions(
-        lockfileText,
-        readPyprojectText(target),
-      ),
+      introductions: poetryIntroductions(lockfileText, readPyprojectText(target)),
     };
   },
 };
@@ -283,9 +269,7 @@ const mavenCollector: Collector = {
     return {
       sbom: readSbom(result.sbomPath),
       targetIdentity: target.identity,
-      ...(result.prodPurlSet !== undefined
-        ? { prodPurlSet: result.prodPurlSet }
-        : {}),
+      ...(result.prodPurlSet !== undefined ? { prodPurlSet: result.prodPurlSet } : {}),
     };
   },
 };
@@ -296,10 +280,7 @@ const mavenCollector: Collector = {
  * lockfile-derived name set. The pnpm importer-name set is defensive only: cdxgen omits pnpm
  * workspace members from components entirely, so the merge's marker condition stays load-bearing.
  */
-export const collectors: ReadonlyMap<LockfileKind, Collector> = new Map<
-  LockfileKind,
-  Collector
->([
+export const collectors: ReadonlyMap<LockfileKind, Collector> = new Map<LockfileKind, Collector>([
   ["yarn", yarnCollector],
   ["npm", cdxgenCollector("npm", npmFirstPartyNames)],
   ["pnpm", cdxgenCollector("pnpm", pnpmImporterNames)],

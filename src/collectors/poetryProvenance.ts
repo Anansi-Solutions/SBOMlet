@@ -25,12 +25,7 @@
 import { parse as parseToml } from "smol-toml";
 
 import { recordOf, stringOf } from "../validate/record";
-import {
-  addToSetMap,
-  deriveIntroductions,
-  sortSetMap,
-  type PurlGraph,
-} from "./provenanceGraph";
+import { addToSetMap, deriveIntroductions, sortSetMap, type PurlGraph } from "./provenanceGraph";
 import type { DependencyIntroduction } from "../model/dependencies";
 
 /**
@@ -47,10 +42,7 @@ function normalizePep503(name: string): string {
  * normalized. The conventional `python` key is skipped - it is the interpreter constraint, not a
  * package. Shared by the legacy main table and every dependency-group table.
  */
-function addTableNames(
-  roots: Set<string>,
-  table: Record<string, unknown> | undefined,
-): void {
+function addTableNames(roots: Set<string>, table: Record<string, unknown> | undefined): void {
   if (table === undefined) return;
   for (const name of Object.keys(table)) {
     if (name.toLowerCase() === "python") continue; // the interpreter, not a dep

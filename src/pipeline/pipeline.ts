@@ -206,9 +206,7 @@ function isNonEmptyString(value: unknown): value is string {
  * non-object entry, a missing/empty image or source, or a duplicate image name (which would make a
  * membership's source ambiguous).
  */
-function narrowSidecarImages(
-  value: unknown,
-): Array<{ image: string; source: string }> | undefined {
+function narrowSidecarImages(value: unknown): Array<{ image: string; source: string }> | undefined {
   if (!Array.isArray(value)) return undefined;
   const entries: Array<{ image: string; source: string }> = [];
   const seen = new Set<string>();
@@ -257,9 +255,7 @@ function narrowSidecarComponents(
  * narrows cleanly, undefined otherwise - the caller then fails the whole run, never building a
  * partial per-image model.
  */
-function narrowAttributedSidecar(
-  parsed: unknown,
-): AttributedSidecar | undefined {
+function narrowAttributedSidecar(parsed: unknown): AttributedSidecar | undefined {
   if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
     return undefined;
   }
@@ -289,10 +285,7 @@ function narrowAttributedSidecar(
  * iterates the sidecar's stored order (the emitter sorts dockerImages by image), so repeated reads
  * are byte-identical.
  */
-function readCommittedDockerSbom(
-  opts: GenerateOptions,
-  dir: string,
-): CollectedSbom[] | undefined {
+function readCommittedDockerSbom(opts: GenerateOptions, dir: string): CollectedSbom[] | undefined {
   const osSbomPath =
     opts.dockerSbomPath !== undefined
       ? resolveFrom(resolvedRepoRoot(opts) ?? opts.baseDir, opts.dockerSbomPath)
@@ -326,9 +319,7 @@ function readCommittedDockerSbom(
   return attributed.images.map(({ image, source }) => ({
     sbom: {
       ...attributed.doc,
-      components: attributed.components.filter((component) =>
-        component.images.includes(image),
-      ),
+      components: attributed.components.filter((component) => component.images.includes(image)),
     },
     targetIdentity: `${DOCKER_IDENTITY_PREFIX}${source}`,
     scope: "os",
@@ -355,9 +346,7 @@ function policyPointerPath(opts: GenerateOptions): string {
  * and the Action.
  */
 function resolvedRepoRoot(opts: GenerateOptions): string | undefined {
-  return opts.repoRoot === undefined
-    ? undefined
-    : resolveFrom(opts.baseDir, opts.repoRoot);
+  return opts.repoRoot === undefined ? undefined : resolveFrom(opts.baseDir, opts.repoRoot);
 }
 
 /**
@@ -387,9 +376,7 @@ export function resolveCacheDir(opts: {
   policyPath?: string;
 }): string {
   const repoRoot =
-    opts.repoRoot === undefined
-      ? undefined
-      : resolveFrom(opts.baseDir, opts.repoRoot);
+    opts.repoRoot === undefined ? undefined : resolveFrom(opts.baseDir, opts.repoRoot);
   let dirSetting: string | undefined;
   if (opts.policyPath !== undefined) {
     const file = resolveFrom(opts.baseDir, opts.policyPath);
@@ -407,10 +394,7 @@ export function resolveCacheDir(opts: {
  */
 function enrichmentCachePath(opts: GenerateOptions, dir: string): string {
   return opts.enrichmentCachePath !== undefined
-    ? resolveFrom(
-        resolvedRepoRoot(opts) ?? opts.baseDir,
-        opts.enrichmentCachePath,
-      )
+    ? resolveFrom(resolvedRepoRoot(opts) ?? opts.baseDir, opts.enrichmentCachePath)
     : resolveFrom(dir, ENRICHMENT_CACHE_FILE);
 }
 
@@ -422,10 +406,7 @@ function enrichmentCachePath(opts: GenerateOptions, dir: string): string {
  */
 export function scancodeCachePath(opts: GenerateOptions, dir: string): string {
   return opts.scancodeCachePath !== undefined
-    ? resolveFrom(
-        resolvedRepoRoot(opts) ?? opts.baseDir,
-        opts.scancodeCachePath,
-      )
+    ? resolveFrom(resolvedRepoRoot(opts) ?? opts.baseDir, opts.scancodeCachePath)
     : resolveFrom(dir, SCANCODE_CACHE_FILE);
 }
 
@@ -455,9 +436,7 @@ function intensiveOptionsFor(
  * re-keys application-ecosystem container packages to scope "app", and it must not lose an app-only
  * container just because its packages already carry the gating scope.
  */
-function analyzedContainerSources(
-  model: CanonicalDependencies,
-): ReadonlySet<string> {
+function analyzedContainerSources(model: CanonicalDependencies): ReadonlySet<string> {
   const sources = new Set<string>();
   for (const pkg of model.packages) {
     for (const occurrence of pkg.occurrences) {
@@ -541,9 +520,7 @@ function projectPolicyView(
  * check byte-compares them against the committed files, so check can never overwrite the files it
  * is gating on.
  */
-export async function buildOutputs(
-  opts: GenerateOptions,
-): Promise<BuiltOutputs> {
+export async function buildOutputs(opts: GenerateOptions): Promise<BuiltOutputs> {
   // Load + validate the policy before any target resolution or scan: an invalid policy must abort
   // through the exit-3 config-error path immediately, never after minutes of scanning. TomlError
   // (caret-annotated syntax message) and PolicyError (aggregated table-path problems) propagate
@@ -559,9 +536,7 @@ export async function buildOutputs(
       policyText = readFileSync(policyFile, "utf8");
     } catch {
       // ENOENT and friends → the target.ts error idiom naming the path.
-      throw new Error(
-        `policy file is missing or unreadable: expected ${policyFile}`,
-      );
+      throw new Error(`policy file is missing or unreadable: expected ${policyFile}`);
     }
     policy = parsePolicy(policyText);
   }
@@ -654,9 +629,7 @@ export async function buildOutputs(
   // Dump surface: with a policy run the dump is the EvaluatedDependencies (findings + verdicts);
   // without one it is the re-scoped model.
   const evaluated: EvaluatedDependencies | undefined =
-    verdicts === undefined
-      ? undefined
-      : { packages: scoped.packages, verdicts };
+    verdicts === undefined ? undefined : { packages: scoped.packages, verdicts };
   const dumpJson = toSortedDependenciesJson(evaluated ?? scoped);
 
   return {
@@ -688,18 +661,13 @@ export async function runGenerate(opts: GenerateOptions): Promise<string> {
   // user sees where the files landed.
   if (opts.dumpModelPath !== undefined) {
     // Sorted-key JSON debug surface for golden-file tests.
-    writeFileSync(
-      resolveFrom(opts.baseDir, opts.dumpModelPath),
-      outputs.dumpJson,
-    );
+    writeFileSync(resolveFrom(opts.baseDir, opts.dumpModelPath), outputs.dumpJson);
   }
 
   // Write the exact rendered strings - the renderers own the bytes.
   const outputPath = resolveFrom(opts.baseDir, opts.outputPath);
   writeFileSync(outputPath, outputs.licensesMd);
-  process.stderr.write(
-    `wrote ${sanitizeForLog(outputPath)} (${outputs.packageCount} packages)\n`,
-  );
+  process.stderr.write(`wrote ${sanitizeForLog(outputPath)} (${outputs.packageCount} packages)\n`);
   const noticesPath = resolveFrom(opts.baseDir, opts.noticesPath);
   writeFileSync(noticesPath, outputs.noticesMd);
   process.stderr.write(`wrote ${sanitizeForLog(noticesPath)}\n`);

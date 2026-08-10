@@ -15,11 +15,7 @@ import { join } from "node:path";
 import { describe, expect, test } from "bun:test";
 
 import { renderCyclonedx } from "../src/render/cyclonedx";
-import type {
-  CanonicalDependencies,
-  PackageEntry,
-  Verdict,
-} from "../src/model/dependencies";
+import type { CanonicalDependencies, PackageEntry, Verdict } from "../src/model/dependencies";
 
 function golden(name: string): string {
   return readFileSync(join(import.meta.dir, "golden", name), "utf-8");
@@ -27,8 +23,7 @@ function golden(name: string): string {
 
 /** Hand-built PackageEntry with sensible defaults for contract tests. */
 function entry(
-  partial: Partial<PackageEntry> &
-    Pick<PackageEntry, "name" | "version" | "purl">,
+  partial: Partial<PackageEntry> & Pick<PackageEntry, "name" | "version" | "purl">,
 ): PackageEntry {
   return {
     occurrences: [{ target: "apps/a", isDevDependency: false }],
@@ -42,9 +37,7 @@ const exprEntry = entry({
   purl: "pkg:npm/expr-pkg@3.0.0",
   name: "expr-pkg",
   version: "3.0.0",
-  licenseClaims: [
-    { raw: "MIT OR Apache-2.0", kind: "expression", source: "generator" },
-  ],
+  licenseClaims: [{ raw: "MIT OR Apache-2.0", kind: "expression", source: "generator" }],
   finding: {
     expression: "MIT OR Apache-2.0",
     elected: "Apache-2.0",
@@ -135,9 +128,7 @@ describe("renderCyclonedx — top-level shape", () => {
     expect(output.includes("serialNumber")).toBe(false);
     expect(output.includes("timestamp")).toBe(false);
 
-    expect(doc.metadata.tools.components).toEqual([
-      { type: "application", name: "licenses-tool" },
-    ]);
+    expect(doc.metadata.tools.components).toEqual([{ type: "application", name: "licenses-tool" }]);
   });
 });
 
@@ -158,9 +149,7 @@ describe("renderCyclonedx — license dispatch", () => {
 
   test("Test 2b: a finding-less package with a named raw emits license.name entries deduped by raw", () => {
     const component = byPurl.get("pkg:npm/jsonify@0.0.1")!;
-    expect(component["licenses"]).toEqual([
-      { license: { name: "Public Domain" } },
-    ]);
+    expect(component["licenses"]).toEqual([{ license: { name: "Public Domain" } }]);
   });
 
   test("Test 2c: a package with neither finding expression nor claims has NO licenses key", () => {
@@ -173,9 +162,7 @@ describe("renderCyclonedx — license dispatch", () => {
       purl: "pkg:npm/mystery@1.0.0",
       name: "mystery",
       version: "1.0.0",
-      licenseClaims: [
-        { raw: "Custom License", kind: "name", source: "generator" },
-      ],
+      licenseClaims: [{ raw: "Custom License", kind: "name", source: "generator" }],
       finding: {
         expression: null,
         elected: null,
@@ -184,9 +171,7 @@ describe("renderCyclonedx — license dispatch", () => {
       },
     });
     const doc2 = parse(renderCyclonedx({ packages: [unknownFinding] }));
-    expect(doc2.components[0]!["licenses"]).toEqual([
-      { license: { name: "Custom License" } },
-    ]);
+    expect(doc2.components[0]!["licenses"]).toEqual([{ license: { name: "Custom License" } }]);
   });
 
   // #9: an os-scope partial finding carries unrecognizedTokens that the
@@ -231,16 +216,12 @@ describe("renderCyclonedx — license dispatch", () => {
       },
     });
     const doc2 = parse(renderCyclonedx({ packages: [imprecisePartial] }));
-    expect(doc2.components[0]!["licenses"]).toEqual([
-      { license: { name: "some-custom-token" } },
-    ]);
+    expect(doc2.components[0]!["licenses"]).toEqual([{ license: { name: "some-custom-token" } }]);
   });
 
   test("#9: a finding WITHOUT unrecognizedTokens emits exactly the expression tuple (no regression)", () => {
     const component = byPurl.get("pkg:npm/expr-pkg@3.0.0")!;
-    expect(component["licenses"]).toEqual([
-      { expression: "MIT OR Apache-2.0" },
-    ]);
+    expect(component["licenses"]).toEqual([{ expression: "MIT OR Apache-2.0" }]);
   });
 });
 
@@ -356,8 +337,6 @@ const goldenModel: CanonicalDependencies = {
 
 describe("renderCyclonedx — golden byte equality", () => {
   test("the all-branch golden model matches test/golden/cyclonedx.json byte-for-byte", () => {
-    expect(renderCyclonedx(goldenModel, sharpVerdicts)).toBe(
-      golden("cyclonedx.json"),
-    );
+    expect(renderCyclonedx(goldenModel, sharpVerdicts)).toBe(golden("cyclonedx.json"));
   });
 });

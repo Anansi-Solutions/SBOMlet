@@ -87,29 +87,17 @@ function placementDivergence(slug: string, expectation: string): string {
 }
 
 /** Throws a classificationDivergence message naming `slug` when `condition` is false. */
-function assertClassification(
-  condition: boolean,
-  slug: string,
-  expectation: string,
-): void {
+function assertClassification(condition: boolean, slug: string, expectation: string): void {
   if (!condition) throw new Error(classificationDivergence(slug, expectation));
 }
 
 /** Throws a placementDivergence message naming `slug` when `condition` is false. */
-function assertPlacement(
-  condition: boolean,
-  slug: string,
-  expectation: string,
-): void {
+function assertPlacement(condition: boolean, slug: string, expectation: string): void {
   if (!condition) throw new Error(placementDivergence(slug, expectation));
 }
 
 /** Structural (cross-page) drift: names which two id sets disagree, and how. */
-function assertStructural(
-  condition: boolean,
-  subject: string,
-  expectation: string,
-): void {
+function assertStructural(condition: boolean, subject: string, expectation: string): void {
   if (!condition) {
     throw new Error(
       `structural drift: ${subject} — ${expectation}. If the code broke the documented classification or placement, fix the code; if the split changed intentionally, update the affected doc(s) and this suite in the same commit.`,
@@ -242,18 +230,14 @@ function resolveDevelopmentContainers(
   for (const devEntry of policy.docker?.development ?? []) {
     const matcher = globToRegExp(devEntry.source);
     for (const source of sources) {
-      if (matcher.test(source))
-        resolved.add(`${DOCKER_IDENTITY_PREFIX}${source}`);
+      if (matcher.test(source)) resolved.add(`${DOCKER_IDENTITY_PREFIX}${source}`);
     }
   }
   return resolved;
 }
 
 /** merge -> annotate -> resolve dev containers -> re-scope -> evaluate -> render. */
-function buildScenario(
-  inputs: ReadonlyArray<ScenarioInput>,
-  policyToml: string,
-): ScenarioResult {
+function buildScenario(inputs: ReadonlyArray<ScenarioInput>, policyToml: string): ScenarioResult {
   const merged = mergeSboms(
     inputs.map((input) => ({
       sbom: sbomDoc(input.components.map(sbomComponent)),
@@ -262,11 +246,7 @@ function buildScenario(
     })),
   );
   const policy = parsePolicy(policyToml);
-  const { model: annotated } = annotateFindings(
-    merged,
-    policy.clarify,
-    BUILTIN_OVERRIDES,
-  );
+  const { model: annotated } = annotateFindings(merged, policy.clarify, BUILTIN_OVERRIDES);
   const developmentContainers = resolveDevelopmentContainers(annotated, policy);
   const scoped = applyContainerScopes(annotated, developmentContainers);
   const verdicts = evaluate(scoped, policy);
@@ -285,10 +265,7 @@ function buildScenario(
 }
 
 /** The post-transform scope of the package carrying `purl`, or undefined if absent. */
-function findScope(
-  scoped: CanonicalDependencies,
-  purl: string,
-): string | undefined {
+function findScope(scoped: CanonicalDependencies, purl: string): string | undefined {
   return scoped.packages.find((pkg) => pkg.purl === purl)?.scope;
 }
 
@@ -298,9 +275,7 @@ function findVerdict(
   purl: string,
   occurrenceTarget: string,
 ): Verdict | undefined {
-  return verdicts.find(
-    (v) => v.purl === purl && v.occurrenceTarget === occurrenceTarget,
-  );
+  return verdicts.find((v) => v.purl === purl && v.occurrenceTarget === occurrenceTarget);
 }
 
 /**
@@ -399,33 +374,19 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
       ],
       UNKNOWN_WARN,
     );
-    assertClassificationOutcome(
-      scoped,
-      verdicts,
-      purl,
-      WORKSPACE,
-      slug,
-      "app",
-      "ok",
-      "default:ok",
-    );
+    assertClassificationOutcome(scoped, verdicts, purl, WORKSPACE, slug, "app", "ok", "default:ok");
     assertPlacement(
-      appTableOnly(doc, "## Production dependencies").includes(
-        "permissive-lib",
-      ),
+      appTableOnly(doc, "## Production dependencies").includes("permissive-lib"),
       slug,
       "an npm workspace production dependency with a permissive license rows in the Production dependencies app table",
     );
     assertPlacement(
-      !appTableOnly(doc, "## Development-only dependencies").includes(
-        "permissive-lib",
-      ),
+      !appTableOnly(doc, "## Development-only dependencies").includes("permissive-lib"),
       slug,
       "a production package must not row in the Development-only dependencies table",
     );
     assertPlacement(
-      doc.includes("- Production packages: 1") &&
-        doc.includes("- Development-only packages: 0"),
+      doc.includes("- Production packages: 1") && doc.includes("- Development-only packages: 0"),
       slug,
       "the package-counts block counts the package under Production, not Development-only",
     );
@@ -438,27 +399,14 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
       [
         {
           targetIdentity: WORKSPACE,
-          components: [
-            { name: "dev-only-lib", purl, license: "MIT", dev: true },
-          ],
+          components: [{ name: "dev-only-lib", purl, license: "MIT", dev: true }],
         },
       ],
       UNKNOWN_WARN,
     );
-    assertClassificationOutcome(
-      scoped,
-      verdicts,
-      purl,
-      WORKSPACE,
-      slug,
-      "app",
-      "ok",
-      "default:ok",
-    );
+    assertClassificationOutcome(scoped, verdicts, purl, WORKSPACE, slug, "app", "ok", "default:ok");
     assertPlacement(
-      appTableOnly(doc, "## Development-only dependencies").includes(
-        "dev-only-lib",
-      ),
+      appTableOnly(doc, "## Development-only dependencies").includes("dev-only-lib"),
       slug,
       "a workspace dependency that is dev at every occurrence rows in the Development-only dependencies app table",
     );
@@ -468,8 +416,7 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
       "a development-only package must not row in the Production dependencies table",
     );
     assertPlacement(
-      doc.includes("- Development-only packages: 1") &&
-        doc.includes("- Production packages: 0"),
+      doc.includes("- Development-only packages: 1") && doc.includes("- Production packages: 0"),
       slug,
       "the package-counts block counts the package under Development-only, not Production",
     );
@@ -482,38 +429,23 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
       [
         {
           targetIdentity: WORKSPACE,
-          components: [
-            { name: "shared-lib", purl, version: "2.0.0", license: "MIT" },
-          ],
+          components: [{ name: "shared-lib", purl, version: "2.0.0", license: "MIT" }],
         },
         {
           targetIdentity: PROD_CONTAINER,
           scope: "os",
-          components: [
-            { name: "shared-lib", purl, version: "2.0.0", license: "MIT" },
-          ],
+          components: [{ name: "shared-lib", purl, version: "2.0.0", license: "MIT" }],
         },
       ],
       UNKNOWN_WARN,
     );
-    assertClassificationOutcome(
-      scoped,
-      verdicts,
-      purl,
-      WORKSPACE,
-      slug,
-      "app",
-      "ok",
-      "default:ok",
-    );
+    assertClassificationOutcome(scoped, verdicts, purl, WORKSPACE, slug, "app", "ok", "default:ok");
     assertPlacement(
       appTableOnly(doc, "## Production dependencies").includes("shared-lib"),
       slug,
       "a package with a workspace occurrence rows in the Production dependencies app table (app wins over os)",
     );
-    const { application } = containerPartition(
-      containerSubsection(doc, PROD_CONTAINER),
-    );
+    const { application } = containerPartition(containerSubsection(doc, PROD_CONTAINER));
     assertPlacement(
       application.includes("shared-lib"),
       slug,
@@ -544,9 +476,7 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
       "ok",
       "default:ok",
     );
-    const { system } = containerPartition(
-      containerSubsection(doc, PROD_CONTAINER),
-    );
+    const { system } = containerPartition(containerSubsection(doc, PROD_CONTAINER));
     assertPlacement(
       system.includes("system-pkg"),
       slug,
@@ -554,9 +484,7 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
     );
     assertPlacement(
       !appTableOnly(doc, "## Production dependencies").includes("system-pkg") &&
-        !appTableOnly(doc, "## Development-only dependencies").includes(
-          "system-pkg",
-        ),
+        !appTableOnly(doc, "## Development-only dependencies").includes("system-pkg"),
       slug,
       "a container-only system package must not row in either app table",
     );
@@ -585,21 +513,15 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
       "ok",
       "default:ok",
     );
-    const { application } = containerPartition(
-      containerSubsection(doc, PROD_CONTAINER),
-    );
+    const { application } = containerPartition(containerSubsection(doc, PROD_CONTAINER));
     assertPlacement(
       application.includes("baked-npm-lib"),
       slug,
       "an npm package baked into a container with no workspace occurrence rows in that container's Application packages table",
     );
     assertPlacement(
-      !appTableOnly(doc, "## Production dependencies").includes(
-        "baked-npm-lib",
-      ) &&
-        !appTableOnly(doc, "## Development-only dependencies").includes(
-          "baked-npm-lib",
-        ),
+      !appTableOnly(doc, "## Production dependencies").includes("baked-npm-lib") &&
+        !appTableOnly(doc, "## Development-only dependencies").includes("baked-npm-lib"),
       slug,
       "a container-only application-ecosystem package must not row in either app table",
     );
@@ -633,9 +555,7 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
       slug,
       'a copyleft package on an unrecognized purl ecosystem baked into a production container fails "default:copyleft" and rows in Problematic (the allowlist fails safe)',
     );
-    const { system, application } = containerPartition(
-      containerSubsection(doc, PROD_CONTAINER),
-    );
+    const { system, application } = containerPartition(containerSubsection(doc, PROD_CONTAINER));
     assertPlacement(
       application.includes("mystery-pkg") && !system.includes("mystery-pkg"),
       slug,
@@ -676,9 +596,7 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
       slug,
       "routine system copyleft (non-AGPL) is excluded from the Copyleft section regardless of verdict",
     );
-    const { system } = containerPartition(
-      containerSubsection(doc, PROD_CONTAINER),
-    );
+    const { system } = containerPartition(containerSubsection(doc, PROD_CONTAINER));
     assertPlacement(
       system.includes("gpl-tool"),
       slug,
@@ -745,9 +663,7 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
       slug,
       "an ignored os-scope copyleft package is neither Problematic nor a Copyleft notice",
     );
-    const { system } = containerPartition(
-      containerSubsection(doc, PROD_CONTAINER),
-    );
+    const { system } = containerPartition(containerSubsection(doc, PROD_CONTAINER));
     assertPlacement(
       system.includes("gpl-tool"),
       slug,
@@ -819,8 +735,7 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
     );
     const copyleft = section(doc, "## Copyleft and special notices");
     assertPlacement(
-      copyleft.includes("agpl-daemon") &&
-        copyleft.includes("accepted via compatible\\[0\\]"),
+      copyleft.includes("agpl-daemon") && copyleft.includes("accepted via compatible\\[0\\]"),
       slug,
       "an accepted AGPL system package renders as a non-blocking notice in Copyleft and special notices",
     );
@@ -871,9 +786,7 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
       'an imprecise bare-"AGPL" system package fails "default:agpl-container" and rows in Problematic',
     );
     assertPlacement(
-      section(doc, "## Imprecise licenses (review / disambiguate)").includes(
-        "relay-imprecise",
-      ),
+      section(doc, "## Imprecise licenses (review / disambiguate)").includes("relay-imprecise"),
       slug,
       "it also rows in Imprecise licenses — the overlap with Problematic is by design",
     );
@@ -919,15 +832,12 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
     );
     const copyleft = section(doc, "## Copyleft and special notices");
     assertPlacement(
-      copyleft.includes("relay-imprecise") &&
-        copyleft.includes("accepted via compatible\\[0\\]"),
+      copyleft.includes("relay-imprecise") && copyleft.includes("accepted via compatible\\[0\\]"),
       slug,
       "an accepted imprecise-AGPL system package renders as a non-blocking notice in Copyleft and special notices",
     );
     assertPlacement(
-      section(doc, "## Imprecise licenses (review / disambiguate)").includes(
-        "relay-imprecise",
-      ),
+      section(doc, "## Imprecise licenses (review / disambiguate)").includes("relay-imprecise"),
       slug,
       "it still rows in Imprecise licenses regardless of the accepted verdict",
     );
@@ -955,16 +865,12 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
         {
           targetIdentity: PROD_CONTAINER,
           scope: "os",
-          components: [
-            { name: "shared-agpl-daemon", purl, license: "AGPL-3.0-only" },
-          ],
+          components: [{ name: "shared-agpl-daemon", purl, license: "AGPL-3.0-only" }],
         },
         {
           targetIdentity: OTHER_CONTAINER,
           scope: "os",
-          components: [
-            { name: "shared-agpl-daemon", purl, license: "AGPL-3.0-only" },
-          ],
+          components: [{ name: "shared-agpl-daemon", purl, license: "AGPL-3.0-only" }],
         },
       ],
       policy,
@@ -985,9 +891,7 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
       "the unaccepted occurrence's fail rows the purl in Problematic",
     );
     assertPlacement(
-      !section(doc, "## Copyleft and special notices").includes(
-        "shared-agpl-daemon",
-      ),
+      !section(doc, "## Copyleft and special notices").includes("shared-agpl-daemon"),
       slug,
       "a purl already in Problematic never also shows an accepted-AGPL notice",
     );
@@ -1021,9 +925,7 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
       slug,
       "a golang copyleft package baked into a production container fails default:copyleft and rows in Problematic",
     );
-    const { application } = containerPartition(
-      containerSubsection(doc, PROD_CONTAINER),
-    );
+    const { application } = containerPartition(containerSubsection(doc, PROD_CONTAINER));
     assertPlacement(
       application.includes("metrics-tool"),
       slug,
@@ -1039,9 +941,7 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
         {
           targetIdentity: DEV_CONTAINER,
           scope: "os",
-          components: [
-            { name: "dev-tool-lib", purl, license: "LGPL-2.1-or-later" },
-          ],
+          components: [{ name: "dev-tool-lib", purl, license: "LGPL-2.1-or-later" }],
         },
       ],
       DEV_CONTAINER_POLICY,
@@ -1063,8 +963,7 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
     );
     const devSection = section(doc, "## Development-only dependencies");
     assertPlacement(
-      devSection.includes(`### Container: ${DEV_CONTAINER}`) &&
-        devSection.includes("dev-tool-lib"),
+      devSection.includes(`### Container: ${DEV_CONTAINER}`) && devSection.includes("dev-tool-lib"),
       slug,
       "its container subsection sits under Development-only dependencies",
     );
@@ -1105,9 +1004,7 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
       "a workspace dev-dependency copyleft package dev-downgrades to warn and rows in Copyleft and special notices",
     );
     assertPlacement(
-      appTableOnly(doc, "## Development-only dependencies").includes(
-        "doc-tool",
-      ),
+      appTableOnly(doc, "## Development-only dependencies").includes("doc-tool"),
       slug,
       "it rows in the Development-only dependencies app table",
     );
@@ -1125,9 +1022,7 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
       [
         {
           targetIdentity: WORKSPACE,
-          components: [
-            { name: "prod-copyleft", purl, license: "GPL-3.0-only" },
-          ],
+          components: [{ name: "prod-copyleft", purl, license: "GPL-3.0-only" }],
         },
       ],
       UNKNOWN_WARN,
@@ -1148,9 +1043,7 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
       "a workspace production copyleft package fails default:copyleft and rows in Problematic",
     );
     assertPlacement(
-      !section(doc, "## Copyleft and special notices").includes(
-        "prod-copyleft",
-      ),
+      !section(doc, "## Copyleft and special notices").includes("prod-copyleft"),
       slug,
       "a purl already in Problematic is deduped out of the Copyleft flagged rows",
     );
@@ -1184,9 +1077,7 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
       "default:imprecise-copyleft",
     );
     assertPlacement(
-      section(doc, "## Imprecise licenses (review / disambiguate)").includes(
-        "bare-gpl-lib",
-      ),
+      section(doc, "## Imprecise licenses (review / disambiguate)").includes("bare-gpl-lib"),
       slug,
       'a bare "GPL" app package warns "default:imprecise-copyleft" and rows in Imprecise licenses',
     );
@@ -1220,16 +1111,13 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
       "default:imprecise",
     );
     assertPlacement(
-      section(doc, "## Imprecise licenses (review / disambiguate)").includes(
-        "bare-bsd-lib",
-      ),
+      section(doc, "## Imprecise licenses (review / disambiguate)").includes("bare-bsd-lib"),
       slug,
       'a bare "BSD" app package warns "default:imprecise" and rows in Imprecise licenses only',
     );
     assertPlacement(
-      !section(doc, "## Copyleft and special notices").includes(
-        "bare-bsd-lib",
-      ) && !section(doc, "## Problematic licenses").includes("bare-bsd-lib"),
+      !section(doc, "## Copyleft and special notices").includes("bare-bsd-lib") &&
+        !section(doc, "## Problematic licenses").includes("bare-bsd-lib"),
       slug,
       "a known-permissive imprecise family never rows in Copyleft or Problematic",
     );
@@ -1303,19 +1191,13 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
       "a package whose only license content is an opaque LicenseRef counts under Unknown license, exactly like a genuine unknown",
     );
     assertPlacement(
-      appTableOnly(doc, "## Production dependencies").includes(
-        "licenseref-only-lib",
-      ),
+      appTableOnly(doc, "## Production dependencies").includes("licenseref-only-lib"),
       slug,
       "it still keeps its inventory row in the Production dependencies app table",
     );
     assertPlacement(
-      !section(doc, "## Problematic licenses").includes(
-        "licenseref-only-lib",
-      ) &&
-        !section(doc, "## Copyleft and special notices").includes(
-          "licenseref-only-lib",
-        ) &&
+      !section(doc, "## Problematic licenses").includes("licenseref-only-lib") &&
+        !section(doc, "## Copyleft and special notices").includes("licenseref-only-lib") &&
         !doc.includes("## Imprecise licenses (review / disambiguate)"),
       slug,
       "an unassessed LicenseRef is a warn under the unknown lane, not a flagged copyleft/imprecise/problematic row — the Problematic/Copyleft sections render their no-findings placeholder and the empty Imprecise section is omitted entirely",
@@ -1361,8 +1243,7 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
     );
     const copyleft = section(doc, "## Copyleft and special notices");
     assertPlacement(
-      copyleft.includes(suppressedWorkspace) &&
-        copyleft.includes("AGPL-3.0-only"),
+      copyleft.includes(suppressedWorkspace) && copyleft.includes("AGPL-3.0-only"),
       slug,
       "the suppressed-workspaces list renders in Copyleft and special notices",
     );
@@ -1439,8 +1320,7 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
       "default:ok",
     );
     assertPlacement(
-      doc.includes("- Development-only packages: 1") &&
-        doc.includes("- Production packages: 0"),
+      doc.includes("- Development-only packages: 1") && doc.includes("- Production packages: 0"),
       slug,
       "a system package whose only container is dev-marked counts Development-only via the container's classification",
     );
@@ -1470,10 +1350,7 @@ describe("dependency classification and report placement — Path index structur
   });
 
   test("report-placement.md's Path index matches the suite", () => {
-    const placementIds = parseDocPathIndexIds(
-      readReportPlacementDoc(),
-      "report-placement.md",
-    );
+    const placementIds = parseDocPathIndexIds(readReportPlacementDoc(), "report-placement.md");
     const testIds = new Set<string>(PLACEMENT_PATHS);
     assertSlugSetsMatch(
       placementIds,
@@ -1488,10 +1365,7 @@ describe("dependency classification and report placement — Path index structur
       readDependencyClassificationDoc(),
       "dependency-classification.md",
     );
-    const placementIds = parseDocPathIndexIds(
-      readReportPlacementDoc(),
-      "report-placement.md",
-    );
+    const placementIds = parseDocPathIndexIds(readReportPlacementDoc(), "report-placement.md");
     assertSlugSetsMatch(
       classificationIds,
       "dependency-classification.md",

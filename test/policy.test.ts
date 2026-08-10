@@ -9,18 +9,11 @@ import {
   normalizeRaw,
   type BuiltinOverrideInput,
 } from "../src/normalize/normalize";
-import {
-  acceptedContainerNotices,
-  evaluate,
-  unusedRuleIds,
-} from "../src/policy/evaluate";
+import { acceptedContainerNotices, evaluate, unusedRuleIds } from "../src/policy/evaluate";
 import { BUILTIN_DENY_RULES } from "../src/policy/builtinDenylist";
 import { denyRuleFor } from "../src/policy/denylist";
 import { AGPL_IDS, COPYLEFT_IDS } from "../src/policy/copyleft";
-import {
-  COULD_BE_COPYLEFT_FAMILIES,
-  WORKSPACE_ABSORBS,
-} from "../src/policy/copyleftFamily";
+import { COULD_BE_COPYLEFT_FAMILIES, WORKSPACE_ABSORBS } from "../src/policy/copyleftFamily";
 import { BUILTIN_OVERRIDES } from "../src/policy/builtinOverrides";
 import { parsePolicy, PolicyError, type Policy } from "../src/policy/schema";
 import type {
@@ -65,12 +58,9 @@ const suppressionFixture = (path: string): string =>
 
 const SUPPRESSION_DESCRIPTION =
   "Workspace is itself distributed under AGPL-3.0; in-family copyleft is fine.";
-const MPL_REASON =
-  "Weak copyleft; compatible under AGPL-3.0 and Apache License v2.0";
-const SHARP_REASON =
-  "Dual-licensed Apache-2.0 AND LGPL-3.0-or-later; LGPL obligations accepted.";
-const CLARIFY_REASON =
-  "Upstream declares Public Domain; mapped to Unlicense deliberately.";
+const MPL_REASON = "Weak copyleft; compatible under AGPL-3.0 and Apache License v2.0";
+const SHARP_REASON = "Dual-licensed Apache-2.0 AND LGPL-3.0-or-later; LGPL obligations accepted.";
+const CLARIFY_REASON = "Upstream declares Public Domain; mapped to Unlicense deliberately.";
 
 // Happy path: every table class present, exercising the full locked TOML
 // surface.
@@ -147,16 +137,12 @@ describe("parsePolicy — compatible pattern decomposition", () => {
   });
 
   test("WITH leaf is preserved as a single allowlist entry", () => {
-    const policy = parsePolicy(
-      licenseRuleFixture("GPL-2.0-only WITH Classpath-exception-2.0"),
-    );
+    const policy = parsePolicy(licenseRuleFixture("GPL-2.0-only WITH Classpath-exception-2.0"));
     const rule = policy.compatible[0];
     if (rule === undefined || rule.match !== "license") {
       throw new Error("expected a compatible license rule");
     }
-    expect(rule.allowlist).toEqual([
-      "GPL-2.0-only WITH Classpath-exception-2.0",
-    ]);
+    expect(rule.allowlist).toEqual(["GPL-2.0-only WITH Classpath-exception-2.0"]);
   });
 
   test("AND pattern is rejected at validation time (satisfies throws on AND allowlists)", () => {
@@ -197,9 +183,7 @@ const scopedPackageFixture = (whereToml: string): string =>
 
 describe("parsePolicy — compatible `where` scope", () => {
   test("license form parses with where; the rule carries the array", () => {
-    const policy = parsePolicy(
-      scopedLicenseFixture(JSON.stringify([DOCKER_ID])),
-    );
+    const policy = parsePolicy(scopedLicenseFixture(JSON.stringify([DOCKER_ID])));
     expect(policy.compatible).toEqual([
       {
         match: "license",
@@ -240,35 +224,27 @@ describe("parsePolicy — compatible `where` scope", () => {
   });
 
   test("colons in entries pass validation (image refs are legal identities)", () => {
-    const policy = parsePolicy(
-      scopedPackageFixture('["docker:node:24-alpine"]'),
-    );
+    const policy = parsePolicy(scopedPackageFixture('["docker:node:24-alpine"]'));
     expect(policy.compatible[0]).toMatchObject({
       where: ["docker:node:24-alpine"],
     });
   });
 
   test("a backslash entry rejects naming compatible[0].where", () => {
-    const error = expectPolicyError(
-      scopedLicenseFixture(JSON.stringify(["docker:img\\bad"])),
-    );
+    const error = expectPolicyError(scopedLicenseFixture(JSON.stringify(["docker:img\\bad"])));
     expect(error.message).toContain("compatible[0].where[0]");
     expect(error.message).toContain("forward slashes");
   });
 
   test('a ".." segment rejects naming compatible[0].where', () => {
-    const error = expectPolicyError(
-      scopedPackageFixture('["docker:img/../etc"]'),
-    );
+    const error = expectPolicyError(scopedPackageFixture('["docker:img/../etc"]'));
     expect(error.message).toContain("compatible[0].where[0]");
     expect(error.message).toContain('".." segments');
   });
 
   test("leading and trailing slashes reject naming compatible[0].where", () => {
     for (const bad of ["/docker:img", "docker:img/"]) {
-      const error = expectPolicyError(
-        scopedLicenseFixture(JSON.stringify([bad])),
-      );
+      const error = expectPolicyError(scopedLicenseFixture(JSON.stringify([bad])));
       expect(error.message).toContain("compatible[0].where[0]");
       expect(error.message).toContain("leading or trailing slash");
     }
@@ -410,15 +386,8 @@ describe("BUILTIN_OVERRIDES — the shipped tool-level set", () => {
   });
 
   test("every expression's leaf ids are real SPDX ids", () => {
-    const dataDir = join(
-      import.meta.dir,
-      "..",
-      "node_modules",
-      "spdx-license-ids",
-    );
-    const current = JSON.parse(
-      readFileSync(join(dataDir, "index.json"), "utf8"),
-    ) as string[];
+    const dataDir = join(import.meta.dir, "..", "node_modules", "spdx-license-ids");
+    const current = JSON.parse(readFileSync(join(dataDir, "index.json"), "utf8")) as string[];
     const deprecated = JSON.parse(
       readFileSync(join(dataDir, "deprecated.json"), "utf8"),
     ) as string[];
@@ -467,9 +436,7 @@ describe("BUILTIN_OVERRIDES — the shipped tool-level set", () => {
 
   test("does NOT ship copier or jinja2-ansible-filters (Phase-6 project judgment)", () => {
     expect(BUILTIN_OVERRIDES.some((o) => o.name === "copier")).toBe(false);
-    expect(
-      BUILTIN_OVERRIDES.some((o) => o.name === "jinja2-ansible-filters"),
-    ).toBe(false);
+    expect(BUILTIN_OVERRIDES.some((o) => o.name === "jinja2-ansible-filters")).toBe(false);
   });
 
   test("keys by package NAME (version optional) so an override survives version bumps", () => {
@@ -561,9 +528,7 @@ describe("parsePolicy — suppression path validation", () => {
   });
 
   test('a "docker:"-prefixed path is rejected — a container image is not a workspace', () => {
-    const error = expectPolicyError(
-      suppressionFixture("docker:api/Dockerfile"),
-    );
+    const error = expectPolicyError(suppressionFixture("docker:api/Dockerfile"));
     expect(error.message).toContain("workspace.copyleft_suppressed[0]");
     expect(error.message).toContain('"docker:"');
     expect(error.message).toContain("not a workspace");
@@ -599,19 +564,12 @@ describe("policy.example.toml — the shipped starter contract", () => {
   test("the real file round-trips through parsePolicy with all four rule classes", () => {
     // Read the REAL shipped file from disk — no inline copy. This test locks
     // the example template: it must always parse and validate cleanly.
-    const text = readFileSync(
-      join(import.meta.dir, "..", "policy.example.toml"),
-      "utf8",
-    );
+    const text = readFileSync(join(import.meta.dir, "..", "policy.example.toml"), "utf8");
     const policy = parsePolicy(text);
-    expect(
-      policy.suppressedWorkspaces.some((w) => w.path === "apps/scratch"),
-    ).toBe(true);
-    expect(
-      policy.compatible.some(
-        (r) => r.match === "license" && r.pattern === "MPL-2.0",
-      ),
-    ).toBe(true);
+    expect(policy.suppressedWorkspaces.some((w) => w.path === "apps/scratch")).toBe(true);
+    expect(policy.compatible.some((r) => r.match === "license" && r.pattern === "MPL-2.0")).toBe(
+      true,
+    );
     expect(policy.compatible.some((r) => r.match === "package")).toBe(true);
     expect(policy.clarify.length).toBeGreaterThanOrEqual(1);
     // The example must carry an EXPLICIT [unknown] table (the knob is part
@@ -670,16 +628,12 @@ describe("parsePolicy — [document] title + preamble", () => {
   });
 
   test("title-only is valid (preamble absent)", () => {
-    const policy = parsePolicy(
-      ["[document]", 'title = "Just A Title"'].join("\n"),
-    );
+    const policy = parsePolicy(["[document]", 'title = "Just A Title"'].join("\n"));
     expect(policy.document).toEqual({ title: "Just A Title" });
   });
 
   test("preamble-only is valid (title absent)", () => {
-    const policy = parsePolicy(
-      ["[document]", 'preamble = "Just a preamble."'].join("\n"),
-    );
+    const policy = parsePolicy(["[document]", 'preamble = "Just a preamble."'].join("\n"));
     expect(policy.document).toEqual({ preamble: "Just a preamble." });
   });
 
@@ -706,17 +660,13 @@ describe("parsePolicy — [document] title + preamble", () => {
   });
 
   test("empty-string preamble is rejected", () => {
-    const error = expectPolicyError(
-      ["[document]", 'preamble = "   "'].join("\n"),
-    );
+    const error = expectPolicyError(["[document]", 'preamble = "   "'].join("\n"));
     expect(error.message).toContain("document");
     expect(error.message).toContain('"preamble"');
   });
 
   test("unknown key under [document] is rejected", () => {
-    const error = expectPolicyError(
-      ["[document]", 'title = "T"', 'footer = "nope"'].join("\n"),
-    );
+    const error = expectPolicyError(["[document]", 'title = "T"', 'footer = "nope"'].join("\n"));
     expect(error.message).toContain("document");
     expect(error.message).toContain('"footer"');
   });
@@ -897,10 +847,7 @@ describe("evaluate — precedence chain", () => {
       "",
       SUPPRESS_SCRATCH,
     ].join("\n");
-    const { verdicts } = runEngine(
-      [pkgSpec("mpl-pkg", "MPL-2.0", ["apps/scratch"])],
-      policyText,
-    );
+    const { verdicts } = runEngine([pkgSpec("mpl-pkg", "MPL-2.0", ["apps/scratch"])], policyText);
     expect(verdicts).toHaveLength(1);
     expect(verdicts[0].status).toBe("ok");
     expect(verdicts[0].rule).toBe("compatible[0]");
@@ -950,13 +897,11 @@ describe("evaluate — segment-aware suppression", () => {
       SUPPRESS_SCRATCH,
     );
     // compareCodeUnits order on occurrenceTarget: "-" (0x2D) sorts before "/" (0x2F).
-    expect(verdicts.map((v) => [v.occurrenceTarget, v.status, v.rule])).toEqual(
-      [
-        ["apps/scratch", "suppressed", "workspace.copyleft_suppressed[0]"],
-        ["apps/scratch-helper", "fail", "default:copyleft"],
-        ["apps/scratch/sub", "suppressed", "workspace.copyleft_suppressed[0]"],
-      ],
-    );
+    expect(verdicts.map((v) => [v.occurrenceTarget, v.status, v.rule])).toEqual([
+      ["apps/scratch", "suppressed", "workspace.copyleft_suppressed[0]"],
+      ["apps/scratch-helper", "fail", "default:copyleft"],
+      ["apps/scratch/sub", "suppressed", "workspace.copyleft_suppressed[0]"],
+    ]);
   });
 });
 
@@ -984,20 +929,14 @@ describe("evaluate — family-aware suppression", () => {
     expect(verdicts.map((v) => v.status)).toEqual(["suppressed", "suppressed"]);
     // The audit-trail reason states the VERIFIED relationship, never an
     // unverified in-family assertion.
-    expect(verdicts[0].reason).toContain(
-      "same GNU family as the workspace license AGPL-3.0-only",
-    );
+    expect(verdicts[0].reason).toContain("same GNU family as the workspace license AGPL-3.0-only");
   });
 
   test("AND expressions suppress when every copyleft leaf is in-family", () => {
     // The sharp-win32 shape: Apache-2.0 AND LGPL-3.0-or-later — the only
     // copyleft obligation (LGPL) is GNU-family under the AGPL workspace.
     const { verdicts } = runEngine(
-      [
-        pkgSpec("sharp-ish", "Apache-2.0 AND LGPL-3.0-or-later", [
-          "apps/scratch",
-        ]),
-      ],
+      [pkgSpec("sharp-ish", "Apache-2.0 AND LGPL-3.0-or-later", ["apps/scratch"])],
       SUPPRESS_SCRATCH,
     );
     expect(verdicts[0].status).toBe("suppressed");
@@ -1022,11 +961,7 @@ describe("evaluate — family-aware suppression", () => {
 
   test("mixed AND with an out-of-family copyleft leaf is NOT suppressed", () => {
     const { verdicts } = runEngine(
-      [
-        pkgSpec("mixed-pkg", "LGPL-3.0-or-later AND CC-BY-SA-4.0", [
-          "apps/scratch",
-        ]),
-      ],
+      [pkgSpec("mixed-pkg", "LGPL-3.0-or-later AND CC-BY-SA-4.0", ["apps/scratch"])],
       SUPPRESS_SCRATCH,
     );
     expect(verdicts[0].status).toBe("fail");
@@ -1072,9 +1007,7 @@ describe("evaluate — absorb-all-copyleft suppression", () => {
     expect(verdicts[0].status).toBe("suppressed");
     expect(verdicts[0].rule).toBe("workspace.copyleft_suppressed[0]");
     // The audit-trail reason names the absorption, not an in-family assertion.
-    expect(verdicts[0].reason).toContain(
-      "absorbed by the GNU workspace license",
-    );
+    expect(verdicts[0].reason).toContain("absorbed by the GNU workspace license");
   });
 
   test("it STILL suppresses GPL-3.0 and LGPL (exact-family regression intact)", () => {
@@ -1087,9 +1020,7 @@ describe("evaluate — absorb-all-copyleft suppression", () => {
     );
     expect(verdicts.map((v) => v.status)).toEqual(["suppressed", "suppressed"]);
     // The same-family path keeps its "same GNU family" wording.
-    expect(verdicts[0].reason).toContain(
-      "same GNU family as the workspace license AGPL-3.0-only",
-    );
+    expect(verdicts[0].reason).toContain("same GNU family as the workspace license AGPL-3.0-only");
   });
 
   test("it STILL does NOT suppress SSPL-1.0 or CC-BY-SA (the safety floor)", () => {
@@ -1118,10 +1049,7 @@ describe("evaluate — absorb-all-copyleft suppression", () => {
       "",
       SUPPRESS_SCRATCH,
     ].join("\n");
-    const { verdicts } = runEngine(
-      [pkgSpec("sspl-pkg", "SSPL-1.0", ["apps/scratch"])],
-      policyText,
-    );
+    const { verdicts } = runEngine([pkgSpec("sspl-pkg", "SSPL-1.0", ["apps/scratch"])], policyText);
     expect(verdicts[0].status).toBe("fail");
     expect(verdicts[0].rule).toBe("denied[0]");
   });
@@ -1210,10 +1138,7 @@ describe("evaluate — CR-01 copyleft families reach default:copyleft", () => {
   });
 
   test("OR-with-permissive still elects the permissive branch for the new ids", () => {
-    const { verdicts } = runEngine(
-      [pkgSpec("dual-pkg", "(CC-BY-SA-4.0 OR MIT)", ["backend"])],
-      "",
-    );
+    const { verdicts } = runEngine([pkgSpec("dual-pkg", "(CC-BY-SA-4.0 OR MIT)", ["backend"])], "");
     expect(verdicts[0].status).toBe("ok");
     expect(verdicts[0].rule).toBe("default:ok");
   });
@@ -1293,21 +1218,13 @@ describe("COULD_BE_COPYLEFT_FAMILIES — literal token set", () => {
   });
 
   test("is exactly the four-token set", () => {
-    expect([...COULD_BE_COPYLEFT_FAMILIES].sort()).toEqual([
-      "AGPL",
-      "EUPL",
-      "GPL",
-      "LGPL",
-    ]);
+    expect([...COULD_BE_COPYLEFT_FAMILIES].sort()).toEqual(["AGPL", "EUPL", "GPL", "LGPL"]);
   });
 });
 
 describe("evaluate — imprecise findings route to a safe lane", () => {
   test("a permissive imprecise family (BSD) gets a non-gating default:imprecise status", () => {
-    const { verdicts } = runEngine(
-      [pkgSpec("jinja2-ish", "BSD License", ["frontend"])],
-      "",
-    );
+    const { verdicts } = runEngine([pkgSpec("jinja2-ish", "BSD License", ["frontend"])], "");
     expect(verdicts[0].status).not.toBe("fail");
     expect(verdicts[0].rule).toBe("default:imprecise");
     // The signal must be visible — not a silent default:ok.
@@ -1315,19 +1232,13 @@ describe("evaluate — imprecise findings route to a safe lane", () => {
   });
 
   test("an imprecise BSD family is NOT copyleft-flagged and NOT a hard fail in a non-suppressed workspace", () => {
-    const { verdicts } = runEngine(
-      [pkgSpec("bsd-pkg", "BSD", ["backend"])],
-      "",
-    );
+    const { verdicts } = runEngine([pkgSpec("bsd-pkg", "BSD", ["backend"])], "");
     expect(verdicts[0].rule).not.toBe("default:copyleft");
     expect(verdicts[0].status).not.toBe("fail");
   });
 
   test("a could-be-copyleft imprecise family (GPL) is flagged for review, never silently passed", () => {
-    const { verdicts } = runEngine(
-      [pkgSpec("gpl-ish", "GPL", ["backend"])],
-      "",
-    );
+    const { verdicts } = runEngine([pkgSpec("gpl-ish", "GPL", ["backend"])], "");
     expect(verdicts[0].rule).toBe("default:imprecise-copyleft");
     expect(verdicts[0].status).not.toBe("ok");
     // Not the permissive lane and not a silent default:ok.
@@ -1336,10 +1247,7 @@ describe("evaluate — imprecise findings route to a safe lane", () => {
   });
 
   test("bare EUPL routes to default:imprecise-copyleft, never a silent default:ok (W1)", () => {
-    const { verdicts } = runEngine(
-      [pkgSpec("eupl-pkg", "EUPL", ["backend"])],
-      "",
-    );
+    const { verdicts } = runEngine([pkgSpec("eupl-pkg", "EUPL", ["backend"])], "");
     expect(verdicts[0].rule).toBe("default:imprecise-copyleft");
     expect(verdicts[0].status).not.toBe("ok");
     // The masking this kills: EUPL → UPL-1.0 (permissive) → default:ok.
@@ -1348,10 +1256,7 @@ describe("evaluate — imprecise findings route to a safe lane", () => {
 
   test("bare imprecise AGPL and LGPL are likewise flagged for review (the WARNING-2 regression)", () => {
     for (const token of ["AGPL", "LGPL"]) {
-      const { verdicts } = runEngine(
-        [pkgSpec(`${token}-ish`, token, ["backend"])],
-        "",
-      );
+      const { verdicts } = runEngine([pkgSpec(`${token}-ish`, token, ["backend"])], "");
       expect(verdicts[0].rule).toBe("default:imprecise-copyleft");
       expect(verdicts[0].status).not.toBe("ok");
       // The regression this kills: a COPYLEFT_FAMILY.get("GPL") lookup returns
@@ -1401,10 +1306,7 @@ describe("evaluate — imprecise findings route to a safe lane", () => {
 
 describe("evaluate — unknown handling knob", () => {
   test('zero-claim package warns under handling "warn" (the absent-table default)', () => {
-    const { verdicts } = runEngine(
-      [pkgSpec("no-claims", null, ["backend"])],
-      "",
-    );
+    const { verdicts } = runEngine([pkgSpec("no-claims", null, ["backend"])], "");
     expect(verdicts[0].status).toBe("warn");
     expect(verdicts[0].rule).toBe("default:unknown");
   });
@@ -1428,10 +1330,7 @@ describe("evaluate — per-occurrence verdicts", () => {
       SUPPRESS_SCRATCH,
     );
     expect(verdicts).toHaveLength(2);
-    expect(verdicts.map((v) => v.occurrenceTarget)).toEqual([
-      "apps/scratch",
-      "backend",
-    ]);
+    expect(verdicts.map((v) => v.occurrenceTarget)).toEqual(["apps/scratch", "backend"]);
     expect(verdicts[0].status).toBe("suppressed");
     expect(verdicts[1].status).toBe("fail");
     // Fail reasons MUST name the occurrence target AND the elected
@@ -1478,19 +1377,12 @@ describe("evaluate — LicenseRef acceptance for commercial clarifies (A4/P-05)"
       claims: [], // the honest unknown: no registry presence, no POM license
       occurrences: ["backend"],
     };
-    const { verdicts, usedClarifyIndices, policy } = runEngine(
-      [spec],
-      policyText,
-    );
-    expect(policy.clarify[0]?.expression).toBe(
-      "LicenseRef-commercial-vendor-agreement",
-    );
+    const { verdicts, usedClarifyIndices, policy } = runEngine([spec], policyText);
+    expect(policy.clarify[0]?.expression).toBe("LicenseRef-commercial-vendor-agreement");
     expect(usedClarifyIndices.has(0)).toBe(true);
     expect(verdicts[0].status).toBe("ok");
     expect(verdicts[0].rule).toBe("clarify[0]");
-    expect(verdicts[0].reason).toContain(
-      "LicenseRef-commercial-vendor-agreement",
-    );
+    expect(verdicts[0].reason).toContain("LicenseRef-commercial-vendor-agreement");
   });
 
   test("a LicenseRef- expression inside a compound (LicenseRef-x OR MIT) is LOCKED to whatever the in-tree machinery already does — no compound handling is extended here", () => {
@@ -1561,11 +1453,7 @@ describe("evaluate — an unassessed LicenseRef never reaches default:ok (silent
 
   test("a copyleft leaf ANDed with a ref still fails default:copyleft — copyleft is a stronger signal than the ref-unknown lane", () => {
     const { verdicts } = runEngine(
-      [
-        pkgSpec("agpl-and-ref-pkg", "(AGPL-3.0-only AND LicenseRef-x)", [
-          "backend",
-        ]),
-      ],
+      [pkgSpec("agpl-and-ref-pkg", "(AGPL-3.0-only AND LicenseRef-x)", ["backend"])],
       "",
     );
     expect(verdicts[0].status).toBe("fail");
@@ -1578,11 +1466,7 @@ describe("evaluate — staleness-guarded overrides", () => {
     const builtins: BuiltinOverrideInput[] = [
       { name: "ipython", expects: "BSD", expression: "BSD-3-Clause" },
     ];
-    const { verdicts } = runEngine(
-      [pkgSpec("ipython", "BSD", ["backend"])],
-      "",
-      builtins,
-    );
+    const { verdicts } = runEngine([pkgSpec("ipython", "BSD", ["backend"])], "", builtins);
     expect(verdicts[0].status).toBe("ok");
     expect(verdicts[0].rule).toBe("override:builtin[0]");
     expect(verdicts[0].rule).not.toBe("default:ok");
@@ -1632,21 +1516,13 @@ describe("evaluate — staleness-guarded overrides", () => {
     const builtins: BuiltinOverrideInput[] = [
       { name: "ipython", expects: "BSD", expression: "BSD-3-Clause" },
     ];
-    const { verdicts } = runEngine(
-      [pkgSpec("ipython", "BSD", ["backend"])],
-      policyText,
-      builtins,
-    );
+    const { verdicts } = runEngine([pkgSpec("ipython", "BSD", ["backend"])], policyText, builtins);
     expect(verdicts[0].rule).toBe("clarify[0]");
     expect(verdicts[0].reason).toContain("project says MIT");
   });
 
   test("an imprecise finding with NO matching override stays imprecise+surfaced", () => {
-    const { verdicts } = runEngine(
-      [pkgSpec("orphan-bsd", "BSD", ["backend"])],
-      "",
-      [],
-    );
+    const { verdicts } = runEngine([pkgSpec("orphan-bsd", "BSD", ["backend"])], "", []);
     expect(verdicts[0].status).toBe("warn");
     expect(verdicts[0].rule).toBe("default:imprecise");
   });
@@ -1659,11 +1535,7 @@ describe("evaluate — staleness-guarded overrides", () => {
     const builtins: BuiltinOverrideInput[] = [
       { name: "ipython", expects: "BSD", expression: "BSD-3-Clause" },
     ];
-    const { verdicts } = runEngine(
-      [pkgSpec("ipython", "BSD-3-Clause", ["backend"])],
-      "",
-      builtins,
-    );
+    const { verdicts } = runEngine([pkgSpec("ipython", "BSD-3-Clause", ["backend"])], "", builtins);
     expect(verdicts[0].status).not.toBe("fail");
     expect(verdicts[0].rule).not.toContain("override:stale");
   });
@@ -1674,11 +1546,7 @@ describe("evaluate — staleness-guarded overrides", () => {
     const builtins: BuiltinOverrideInput[] = [
       { name: "relicensed", expects: "BSD", expression: "BSD-3-Clause" },
     ];
-    const { verdicts } = runEngine(
-      [pkgSpec("relicensed", "MIT", ["backend"])],
-      "",
-      builtins,
-    );
+    const { verdicts } = runEngine([pkgSpec("relicensed", "MIT", ["backend"])], "", builtins);
     expect(verdicts[0].status).toBe("fail");
     expect(verdicts[0].rule).toContain("override:stale");
   });
@@ -1776,10 +1644,7 @@ describe("evaluate — conflict:scancode fail verdict", () => {
 
     // Agreement: scancode MIT corroborates declared MIT → scancode-sourced ok,
     // no conflict verdict, no warn.
-    const agreed = runEngine(
-      [scanPkgSpec("agree-pkg", "MIT", "MIT", ["backend"])],
-      "",
-    ).verdicts;
+    const agreed = runEngine([scanPkgSpec("agree-pkg", "MIT", "MIT", ["backend"])], "").verdicts;
     expect(agreed.every((v) => v.rule !== "conflict:scancode")).toBe(true);
     expect(agreed[0].status).toBe("ok");
   });
@@ -1839,11 +1704,7 @@ describe("evaluate — conflict:scancode resolution via [[clarify]]", () => {
     // not satisfy the asserted BSD-3-Clause → the override is stale, fail closed,
     // and fires above the co-present conflict.
     const { verdicts } = runEngine(
-      [
-        scanPkgSpec("disputed-pkg", "GPL-3.0-only", "BSD-3-Clause", [
-          "backend",
-        ]),
-      ],
+      [scanPkgSpec("disputed-pkg", "GPL-3.0-only", "BSD-3-Clause", ["backend"])],
       clarifyResolvesToScancode,
     );
     expect(verdicts[0].status).toBe("fail");
@@ -1852,10 +1713,7 @@ describe("evaluate — conflict:scancode resolution via [[clarify]]", () => {
 
   test("determinism: a conflict with NO clarify stays a conflict:scancode fail across repeated runs — same rule, byte-identical reason (no flapping)", () => {
     const run = (): Verdict[] =>
-      runEngine(
-        [scanPkgSpec("unresolved-pkg", "Apache-2.0", "MIT", ["backend"])],
-        "",
-      ).verdicts;
+      runEngine([scanPkgSpec("unresolved-pkg", "Apache-2.0", "MIT", ["backend"])], "").verdicts;
     const a = run();
     const b = run();
     expect(a).toEqual(b); // byte-identical verdict incl. reason
@@ -1933,13 +1791,7 @@ const scopedGplPolicy = (where: ReadonlyArray<string>): string =>
 
 /** An os-scope GPL busybox occurring at the given targets. */
 const busyboxAt = (targets: ReadonlyArray<string>): PackageSpec =>
-  osPkgSpec(
-    "pkg:apk/alpine/busybox@1.37.0",
-    "busybox",
-    "GPL-2.0-only",
-    targets,
-    "1.37.0",
-  );
+  osPkgSpec("pkg:apk/alpine/busybox@1.37.0", "busybox", "GPL-2.0-only", targets, "1.37.0");
 
 describe("evaluate — where-scoped compatible matching", () => {
   test("package form: scoped rule cited ONLY at its target; segment-aware; other occurrences fall to default:copyleft", () => {
@@ -1950,13 +1802,11 @@ describe("evaluate — where-scoped compatible matching", () => {
     // compareCodeUnits order: .../a/Dockerfile, .../a/Dockerfile-extra,
     // .../b/Dockerfile. Out-of-scope occurrences fall to default:copyleft,
     // os-downgraded to warn ([os_dependencies] defaults to "warn").
-    expect(verdicts.map((v) => [v.occurrenceTarget, v.status, v.rule])).toEqual(
-      [
-        [TARGET_A, "ok", "compatible[0]"],
-        [TARGET_A_EXTRA, "warn", "default:copyleft"],
-        [TARGET_B, "warn", "default:copyleft"],
-      ],
-    );
+    expect(verdicts.map((v) => [v.occurrenceTarget, v.status, v.rule])).toEqual([
+      [TARGET_A, "ok", "compatible[0]"],
+      [TARGET_A_EXTRA, "warn", "default:copyleft"],
+      [TARGET_B, "warn", "default:copyleft"],
+    ]);
   });
 
   test("license form: same matrix", () => {
@@ -1964,13 +1814,11 @@ describe("evaluate — where-scoped compatible matching", () => {
       [busyboxAt([TARGET_A, TARGET_B, TARGET_A_EXTRA])],
       scopedGplPolicy([TARGET_A]),
     );
-    expect(verdicts.map((v) => [v.occurrenceTarget, v.status, v.rule])).toEqual(
-      [
-        [TARGET_A, "ok", "compatible[0]"],
-        [TARGET_A_EXTRA, "warn", "default:copyleft"],
-        [TARGET_B, "warn", "default:copyleft"],
-      ],
-    );
+    expect(verdicts.map((v) => [v.occurrenceTarget, v.status, v.rule])).toEqual([
+      [TARGET_A, "ok", "compatible[0]"],
+      [TARGET_A_EXTRA, "warn", "default:copyleft"],
+      [TARGET_B, "warn", "default:copyleft"],
+    ]);
   });
 
   test("a prefix scope matches every target under it as a whole segment and the prefix itself (both forms)", () => {
@@ -1994,21 +1842,14 @@ describe("evaluate — where-scoped compatible matching", () => {
     // The reverse comparison: the scope docker:a/Dockerfile is LONGER than the
     // target docker:a — a broader occurrence must never satisfy a narrower
     // scope, or an acceptance reviewed for one image would leak upward.
-    for (const policyText of [
-      scopedBusyboxPolicy([TARGET_A]),
-      scopedGplPolicy([TARGET_A]),
-    ]) {
+    for (const policyText of [scopedBusyboxPolicy([TARGET_A]), scopedGplPolicy([TARGET_A])]) {
       const { verdicts, usedClarifyIndices, policy } = runEngine(
         [busyboxAt([TARGET_A_PREFIX])],
         policyText,
       );
-      expect(verdicts.map((v) => [v.status, v.rule])).toEqual([
-        ["warn", "default:copyleft"],
-      ]);
+      expect(verdicts.map((v) => [v.status, v.rule])).toEqual([["warn", "default:copyleft"]]);
       // ...and the rule that decided nothing surfaces as unused.
-      expect(unusedRuleIds(policy, verdicts, usedClarifyIndices)).toEqual([
-        "compatible[0]",
-      ]);
+      expect(unusedRuleIds(policy, verdicts, usedClarifyIndices)).toEqual(["compatible[0]"]);
     }
   });
 
@@ -2021,16 +1862,11 @@ describe("evaluate — where-scoped compatible matching", () => {
       'name = "busybox"',
       'reason = "accepted everywhere else"',
     ].join("\n");
-    const { verdicts } = runEngine(
-      [busyboxAt([TARGET_A, TARGET_B])],
-      policyText,
-    );
-    expect(verdicts.map((v) => [v.occurrenceTarget, v.status, v.rule])).toEqual(
-      [
-        [TARGET_A, "ok", "compatible[0]"],
-        [TARGET_B, "ok", "compatible[1]"],
-      ],
-    );
+    const { verdicts } = runEngine([busyboxAt([TARGET_A, TARGET_B])], policyText);
+    expect(verdicts.map((v) => [v.occurrenceTarget, v.status, v.rule])).toEqual([
+      [TARGET_A, "ok", "compatible[0]"],
+      [TARGET_B, "ok", "compatible[1]"],
+    ]);
   });
 
   test("byte-identity: an unscoped policy over a multi-occurrence model is unchanged — rule ids and statuses per occurrence", () => {
@@ -2057,15 +1893,13 @@ describe("evaluate — where-scoped compatible matching", () => {
       ],
       policyText,
     );
-    expect(verdicts.map((v) => [v.occurrenceTarget, v.status, v.rule])).toEqual(
-      [
-        ["apps/scratch", "ok", "compatible[0]"],
-        ["backend", "ok", "compatible[0]"],
-        ["proj", "ok", "compatible[0]"],
-        ["backend", "ok", "compatible[1]"],
-        ["proj", "ok", "compatible[1]"],
-      ],
-    );
+    expect(verdicts.map((v) => [v.occurrenceTarget, v.status, v.rule])).toEqual([
+      ["apps/scratch", "ok", "compatible[0]"],
+      ["backend", "ok", "compatible[0]"],
+      ["proj", "ok", "compatible[0]"],
+      ["backend", "ok", "compatible[1]"],
+      ["proj", "ok", "compatible[1]"],
+    ]);
   });
 
   test("dead scoped rule: a where that matches no occurrence lands in unusedRuleIds", () => {
@@ -2074,22 +1908,14 @@ describe("evaluate — where-scoped compatible matching", () => {
       scopedBusyboxPolicy([TARGET_B]),
     );
     expect(verdicts.map((v) => v.rule)).toEqual(["default:copyleft"]);
-    expect(unusedRuleIds(policy, verdicts, usedClarifyIndices)).toEqual([
-      "compatible[0]",
-    ]);
+    expect(unusedRuleIds(policy, verdicts, usedClarifyIndices)).toEqual(["compatible[0]"]);
   });
 });
 
 describe("evaluate — purity and determinism", () => {
   test("identical inputs evaluate to deeply equal arrays; occurrence input order is irrelevant", () => {
-    const forward = pkgSpec("agpl-pkg", "AGPL-3.0-only", [
-      "apps/scratch",
-      "backend",
-    ]);
-    const reversed = pkgSpec("agpl-pkg", "AGPL-3.0-only", [
-      "backend",
-      "apps/scratch",
-    ]);
+    const forward = pkgSpec("agpl-pkg", "AGPL-3.0-only", ["apps/scratch", "backend"]);
+    const reversed = pkgSpec("agpl-pkg", "AGPL-3.0-only", ["backend", "apps/scratch"]);
     const first = runEngine([forward], SUPPRESS_SCRATCH).verdicts;
     const second = runEngine([forward], SUPPRESS_SCRATCH).verdicts;
     const shuffled = runEngine([reversed], SUPPRESS_SCRATCH).verdicts;
@@ -2214,12 +2040,10 @@ describe("AGPL acceptance corpus", () => {
       'reason = "Dual-licensed Apache-2.0 AND LGPL-3.0-or-later; LGPL obligations accepted."',
     ].join("\n");
     const accepted = runEngine([spec], withRule).verdicts;
-    expect(accepted.map((v) => [v.occurrenceTarget, v.status, v.rule])).toEqual(
-      [
-        ["apps/scratch", "ok", "compatible[0]"],
-        ["frontend", "ok", "compatible[0]"],
-      ],
-    );
+    expect(accepted.map((v) => [v.occurrenceTarget, v.status, v.rule])).toEqual([
+      ["apps/scratch", "ok", "compatible[0]"],
+      ["frontend", "ok", "compatible[0]"],
+    ]);
   });
 
   // Corpus row: dompurify @3.1.6/@3.3.1 — "(MPL-2.0 OR Apache-2.0)",
@@ -2261,10 +2085,7 @@ describe("AGPL acceptance corpus", () => {
     expect(warned[0].status).toBe("warn");
     expect(warned[0].rule).toBe("default:unknown");
 
-    const failPolicy = ACCEPTANCE_POLICY.replace(
-      'handling = "warn"',
-      'handling = "fail"',
-    );
+    const failPolicy = ACCEPTANCE_POLICY.replace('handling = "warn"', 'handling = "fail"');
     // A dev-only unknown-fail downgrades to warn by default.
     const failed = runEngine([spec], failPolicy).verdicts;
     expect(failed[0].status).toBe("warn");
@@ -2303,10 +2124,7 @@ describe("dev_dependencies knob — parsing (mirrors unknown.handling)", () => {
 
   test('handling = "warn" | "fail" | "ignore" parse to themselves', () => {
     for (const value of ["warn", "fail", "ignore"] as const) {
-      expect(
-        parsePolicy(`[dev_dependencies]\nhandling = "${value}"`)
-          .devDependencies,
-      ).toBe(value);
+      expect(parsePolicy(`[dev_dependencies]\nhandling = "${value}"`).devDependencies).toBe(value);
     }
   });
 
@@ -2319,37 +2137,25 @@ describe("dev_dependencies knob — parsing (mirrors unknown.handling)", () => {
 
   test("a non-table [dev_dependencies] value rejects", () => {
     const error = expectPolicyError('dev_dependencies = "warn"');
-    expect(
-      error.problems.some((p) =>
-        p.includes("dev_dependencies: must be a table"),
-      ),
-    ).toBe(true);
+    expect(error.problems.some((p) => p.includes("dev_dependencies: must be a table"))).toBe(true);
   });
 
   test("a missing handling key rejects", () => {
     const error = expectPolicyError("[dev_dependencies]\nother = 1");
     expect(
-      error.problems.some((p) =>
-        p.includes('dev_dependencies: missing required key "handling"'),
-      ),
+      error.problems.some((p) => p.includes('dev_dependencies: missing required key "handling"')),
     ).toBe(true);
   });
 
   test("an unknown key inside [dev_dependencies] rejects", () => {
-    const error = expectPolicyError(
-      '[dev_dependencies]\nhandling = "warn"\nbogus = 1',
+    const error = expectPolicyError('[dev_dependencies]\nhandling = "warn"\nbogus = 1');
+    expect(error.problems.some((p) => p.includes('dev_dependencies: unknown key "bogus"'))).toBe(
+      true,
     );
-    expect(
-      error.problems.some((p) =>
-        p.includes('dev_dependencies: unknown key "bogus"'),
-      ),
-    ).toBe(true);
   });
 
   test("dev_dependencies is an accepted top-level key (no unknown-key error)", () => {
-    expect(() =>
-      parsePolicy('[dev_dependencies]\nhandling = "warn"'),
-    ).not.toThrow();
+    expect(() => parsePolicy('[dev_dependencies]\nhandling = "warn"')).not.toThrow();
   });
 
   test("a genuinely unknown top-level key still rejects", () => {
@@ -2383,10 +2189,7 @@ describe("evaluate — dev-scope downgrade (default warn)", () => {
   });
 
   test("unknown-fail downgrade is covered too (general, both default-FAIL terminals)", () => {
-    const { verdicts } = runEngine(
-      [DEV_PROD_UNKNOWN],
-      '[unknown]\nhandling = "fail"',
-    );
+    const { verdicts } = runEngine([DEV_PROD_UNKNOWN], '[unknown]\nhandling = "fail"');
     const dev = verdicts.find((v) => v.occurrenceTarget === "apps/a");
     const prod = verdicts.find((v) => v.occurrenceTarget === "apps/b");
     expect(dev?.status).toBe("warn");
@@ -2417,11 +2220,7 @@ describe("evaluate — workspace-shape production occurrences", () => {
 
   test("HEADLINE: a production copyleft occurrence on {target:'frontend', isDevDependency:false} FAILS under dev_dependencies=warn — never downgraded", () => {
     const { verdicts } = runEngine(
-      [
-        pkgSpec("imaging-native", "LGPL-3.0-or-later", [
-          { target: "frontend", dev: false },
-        ]),
-      ],
+      [pkgSpec("imaging-native", "LGPL-3.0-or-later", [{ target: "frontend", dev: false }])],
       "",
     );
     expect(verdicts).toHaveLength(1);
@@ -2432,11 +2231,7 @@ describe("evaluate — workspace-shape production occurrences", () => {
 
   test("contrast arm: the SAME package as a dev occurrence on the workspace shape WARNS — proving the terminal, not the shape, does the work", () => {
     const { verdicts } = runEngine(
-      [
-        pkgSpec("imaging-native", "LGPL-3.0-or-later", [
-          { target: "frontend", dev: true },
-        ]),
-      ],
+      [pkgSpec("imaging-native", "LGPL-3.0-or-later", [{ target: "frontend", dev: true }])],
       "",
     );
     expect(verdicts).toHaveLength(1);
@@ -2472,10 +2267,7 @@ describe("evaluate — workspace-shape production occurrences", () => {
 
 describe('evaluate — dev_dependencies = "fail" (the pre-knob behavior)', () => {
   test("BOTH copyleft occurrences fail (no downgrade)", () => {
-    const { verdicts } = runEngine(
-      [DEV_PROD_COPYLEFT],
-      '[dev_dependencies]\nhandling = "fail"',
-    );
+    const { verdicts } = runEngine([DEV_PROD_COPYLEFT], '[dev_dependencies]\nhandling = "fail"');
     expect(verdicts.map((v) => v.status)).toEqual(["fail", "fail"]);
     expect(verdicts.every((v) => v.rule === "default:copyleft")).toBe(true);
     expect(verdicts.every((v) => !v.reason.includes("dev-only"))).toBe(true);
@@ -2492,10 +2284,7 @@ describe('evaluate — dev_dependencies = "fail" (the pre-knob behavior)', () =>
 
 describe('evaluate — dev_dependencies = "ignore"', () => {
   test("dev copyleft occurrence is ok; prod copyleft occurrence still FAILS", () => {
-    const { verdicts } = runEngine(
-      [DEV_PROD_COPYLEFT],
-      '[dev_dependencies]\nhandling = "ignore"',
-    );
+    const { verdicts } = runEngine([DEV_PROD_COPYLEFT], '[dev_dependencies]\nhandling = "ignore"');
     const dev = verdicts.find((v) => v.occurrenceTarget === "apps/a");
     const prod = verdicts.find((v) => v.occurrenceTarget === "apps/b");
     expect(dev?.status).toBe("ok");
@@ -2521,11 +2310,7 @@ describe("evaluate — precedence is preserved (downgrade is last)", () => {
     // apps/scratch is family-suppressed AND the occurrence is dev: suppression
     // wins, the dev-scope downgrade never touches it.
     const { verdicts } = runEngine(
-      [
-        pkgSpec("agpl-pkg", "AGPL-3.0-only", [
-          { target: "apps/scratch", dev: true },
-        ]),
-      ],
+      [pkgSpec("agpl-pkg", "AGPL-3.0-only", [{ target: "apps/scratch", dev: true }])],
       SUPPRESS_SCRATCH,
     );
     expect(verdicts[0].status).toBe("suppressed");
@@ -2548,11 +2333,7 @@ describe("evaluate — precedence is preserved (downgrade is last)", () => {
       { name: "relicensed", expects: "BSD", expression: "BSD-3-Clause" },
     ];
     const { verdicts } = runEngine(
-      [
-        pkgSpec("relicensed", "GPL-3.0-only", [
-          { target: "apps/a", dev: true },
-        ]),
-      ],
+      [pkgSpec("relicensed", "GPL-3.0-only", [{ target: "apps/a", dev: true }])],
       "",
       builtins,
     );
@@ -2644,9 +2425,7 @@ describe("parsePolicy — [[deny]] parsing (mirrors compatible two-mode)", () =>
 
   test("a blank pattern is rejected naming deny[i]", () => {
     const error = expectPolicyError(
-      ["[[deny]]", 'match = "name"', 'pattern = "   "', 'reason = "r"'].join(
-        "\n",
-      ),
+      ["[[deny]]", 'match = "name"', 'pattern = "   "', 'reason = "r"'].join("\n"),
     );
     expect(error.message).toContain("deny[0]");
     expect(error.message).toContain('"pattern"');
@@ -2654,13 +2433,9 @@ describe("parsePolicy — [[deny]] parsing (mirrors compatible two-mode)", () =>
 
   test("an unknown key inside a deny entry is rejected naming deny[i]", () => {
     const error = expectPolicyError(
-      [
-        "[[deny]]",
-        'match = "license"',
-        'pattern = "BUSL-1.1"',
-        'reason = "r"',
-        "bogus = 1",
-      ].join("\n"),
+      ["[[deny]]", 'match = "license"', 'pattern = "BUSL-1.1"', 'reason = "r"', "bogus = 1"].join(
+        "\n",
+      ),
     );
     expect(error.message).toContain("deny[0]");
     expect(error.message).toContain('unknown key "bogus"');
@@ -2668,12 +2443,7 @@ describe("parsePolicy — [[deny]] parsing (mirrors compatible two-mode)", () =>
 
   test("an invalid match value is rejected naming deny[i]", () => {
     const error = expectPolicyError(
-      [
-        "[[deny]]",
-        'match = "spdx"',
-        'pattern = "BUSL-1.1"',
-        'reason = "r"',
-      ].join("\n"),
+      ["[[deny]]", 'match = "spdx"', 'pattern = "BUSL-1.1"', 'reason = "r"'].join("\n"),
     );
     expect(error.message).toContain("deny[0]");
     expect(error.message).toContain('"match"');
@@ -2681,11 +2451,7 @@ describe("parsePolicy — [[deny]] parsing (mirrors compatible two-mode)", () =>
 
   test("a non-array deny is rejected", () => {
     const error = expectPolicyError('deny = "BUSL-1.1"');
-    expect(
-      error.problems.some((p) =>
-        p.includes("deny: must be an array of tables"),
-      ),
-    ).toBe(true);
+    expect(error.problems.some((p) => p.includes("deny: must be an array of tables"))).toBe(true);
   });
 
   test("a non-table deny entry is rejected naming deny[i]", () => {
@@ -2733,18 +2499,14 @@ describe("denyRuleFor — pure matcher (SPDX + name + OR-election)", () => {
   test("W1: an OR finding with NO acceptable branch IS denied", () => {
     // Deny set covers BOTH branches → the dep cannot elect out → denied.
     const policy = parsePolicy(denyLicenseFixture("(GPL-3.0 OR BUSL-1.1)"));
-    expect(denyRuleFor(policy, "GPL-3.0 OR BUSL-1.1", "x")?.ruleId).toBe(
-      "denied[0]",
-    );
+    expect(denyRuleFor(policy, "GPL-3.0 OR BUSL-1.1", "x")?.ruleId).toBe("denied[0]");
   });
 
   test("name-mode matches the target package name (verbatim, non-SPDX rider)", () => {
     const policy = parsePolicy(denyNameFixture("commons-clause-pkg"));
     // name-mode matches on the PACKAGE NAME and does not require a parseable
     // license expression (the Commons-Clause rider rides a non-SPDX value).
-    expect(denyRuleFor(policy, null, "commons-clause-pkg")?.ruleId).toBe(
-      "denied[0]",
-    );
+    expect(denyRuleFor(policy, null, "commons-clause-pkg")?.ruleId).toBe("denied[0]");
     expect(denyRuleFor(policy, null, "unrelated-pkg")).toBeUndefined();
   });
 
@@ -2764,10 +2526,7 @@ describe("evaluate — deny is terminal-0 (beats every accept lever)", () => {
       'pattern = "BUSL-1.1"',
       'reason = "would-be accepted but deny wins"',
     ].join("\n");
-    const { verdicts } = runEngine(
-      [pkgSpec("busl-pkg", "BUSL-1.1", ["backend"])],
-      policyText,
-    );
+    const { verdicts } = runEngine([pkgSpec("busl-pkg", "BUSL-1.1", ["backend"])], policyText);
     expect(verdicts[0].status).toBe("fail");
     expect(verdicts[0].rule).toBe("denied[0]");
     expect(verdicts[0].reason).toContain("BUSL-1.1");
@@ -2776,11 +2535,7 @@ describe("evaluate — deny is terminal-0 (beats every accept lever)", () => {
   test("deny BEATS suppression: a denied in-family copyleft under a suppressed path still fails", () => {
     // AGPL-3.0-only under apps/scratch would normally be family-suppressed; the
     // deny terminal sits above suppression, so it still fails.
-    const policyText = [
-      denyLicenseFixture("AGPL-3.0-only"),
-      "",
-      SUPPRESS_SCRATCH,
-    ].join("\n");
+    const policyText = [denyLicenseFixture("AGPL-3.0-only"), "", SUPPRESS_SCRATCH].join("\n");
     const { verdicts } = runEngine(
       [pkgSpec("agpl-pkg", "AGPL-3.0-only", ["apps/scratch"])],
       policyText,
@@ -2871,10 +2626,7 @@ describe("evaluate — deny is terminal OVER OVERRIDES (C#1: deny reads the pre-
       'expression = "MIT"',
       'reason = "claims MIT but observed signal is BUSL-1.1"',
     ].join("\n");
-    const { verdicts } = runEngine(
-      [pkgSpec("evil", "BUSL-1.1", ["backend"])],
-      policyText,
-    );
+    const { verdicts } = runEngine([pkgSpec("evil", "BUSL-1.1", ["backend"])], policyText);
     expect(verdicts[0].status).toBe("fail");
     expect(verdicts[0].rule).toBe("denied[0]");
   });
@@ -2910,10 +2662,7 @@ describe("evaluate — deny is terminal OVER OVERRIDES (C#1: deny reads the pre-
       'expression = "Apache-2.0"',
       'reason = "disambiguate the imprecise Apache family"',
     ].join("\n");
-    const { verdicts } = runEngine(
-      [pkgSpec("legit", "Apache", ["backend"])],
-      policyText,
-    );
+    const { verdicts } = runEngine([pkgSpec("legit", "Apache", ["backend"])], policyText);
     expect(verdicts[0].status).toBe("ok");
     expect(verdicts[0].rule).toBe("clarify[0]");
   });
@@ -2929,10 +2678,7 @@ describe("evaluate — deny is terminal OVER OVERRIDES (C#1: deny reads the pre-
       'expression = "MIT"',
       'reason = "rewrites a denied observed license"',
     ].join("\n");
-    const { verdicts } = runEngine(
-      [pkgSpec("sspl-evil", "SSPL-1.0", ["backend"])],
-      policyText,
-    );
+    const { verdicts } = runEngine([pkgSpec("sspl-evil", "SSPL-1.0", ["backend"])], policyText);
     expect(verdicts[0].status).toBe("fail");
     expect(verdicts[0].rule).toBe("denied[0]");
   });
@@ -3035,14 +2781,7 @@ describe("evaluate — deny sees EVERY observed claim (#1/#5/#11: lossy combine 
 
     test(`[Elastic-2.0, GPL] in ${scope} scope → fail denied[0]`, () => {
       const { verdicts } = runEngine(
-        [
-          multiClaimSpec(
-            "elastic-gpl",
-            ["Elastic-2.0", "GPL"],
-            ["backend"],
-            scope,
-          ),
-        ],
+        [multiClaimSpec("elastic-gpl", ["Elastic-2.0", "GPL"], ["backend"], scope)],
         denyElastic,
       );
       expect(verdicts[0].status).toBe("fail");
@@ -3051,14 +2790,7 @@ describe("evaluate — deny sees EVERY observed claim (#1/#5/#11: lossy combine 
 
     test(`[BUSL-1.1, public-domain] in ${scope} scope → fail denied[0] (unknown token co-present)`, () => {
       const { verdicts } = runEngine(
-        [
-          multiClaimSpec(
-            "busl-pd",
-            ["BUSL-1.1", "public-domain"],
-            ["backend"],
-            scope,
-          ),
-        ],
+        [multiClaimSpec("busl-pd", ["BUSL-1.1", "public-domain"], ["backend"], scope)],
         denyBusl,
       );
       expect(verdicts[0].status).toBe("fail");
@@ -3109,26 +2841,20 @@ describe("evaluate — deny sees EVERY observed claim (#1/#5/#11: lossy combine 
   });
 
   test("a single denied claim still fails (no observedExpressions regression for the single-claim path)", () => {
-    const { verdicts } = runEngine(
-      [pkgSpec("busl-only", "BUSL-1.1", ["backend"])],
-      denyBusl,
-    );
+    const { verdicts } = runEngine([pkgSpec("busl-only", "BUSL-1.1", ["backend"])], denyBusl);
     expect(verdicts[0].status).toBe("fail");
     expect(verdicts[0].rule).toBe("denied[0]");
   });
 });
 
 describe("policy.example.toml — the shipped [[deny]] block", () => {
-  const exampleText = readFileSync(
-    join(import.meta.dir, "..", "policy.example.toml"),
-    "utf8",
-  );
+  const exampleText = readFileSync(join(import.meta.dir, "..", "policy.example.toml"), "utf8");
   const examplePolicy = parsePolicy(exampleText);
 
   test("ships the source-available set BUSL-1.1, SSPL-1.0, Elastic-2.0 as built-in defaults", () => {
-    const licensePatterns = BUILTIN_DENY_RULES.filter(
-      (r) => r.match === "license",
-    ).map((r) => r.pattern);
+    const licensePatterns = BUILTIN_DENY_RULES.filter((r) => r.match === "license").map(
+      (r) => r.pattern,
+    );
     for (const id of ["BUSL-1.1", "SSPL-1.0", "Elastic-2.0"]) {
       expect(licensePatterns.some((p) => p.includes(id))).toBe(true);
     }
@@ -3138,9 +2864,7 @@ describe("policy.example.toml — the shipped [[deny]] block", () => {
     // RSAL has no registered SPDX id, so it is name-mode and its rationale
     // lives in the reason (audit trail), not the SPDX-less pattern.
     expect(
-      examplePolicy.deny.some(
-        (r) => r.match === "name" && r.reason.toLowerCase().includes("rsal"),
-      ),
+      examplePolicy.deny.some((r) => r.match === "name" && r.reason.toLowerCase().includes("rsal")),
     ).toBe(true);
     expect(
       examplePolicy.deny.some(
@@ -3153,15 +2877,8 @@ describe("policy.example.toml — the shipped [[deny]] block", () => {
   });
 
   test("every license-mode deny SPDX id is a real spdx-license-id (typo-proof)", () => {
-    const dataDir = join(
-      import.meta.dir,
-      "..",
-      "node_modules",
-      "spdx-license-ids",
-    );
-    const current = JSON.parse(
-      readFileSync(join(dataDir, "index.json"), "utf8"),
-    ) as string[];
+    const dataDir = join(import.meta.dir, "..", "node_modules", "spdx-license-ids");
+    const current = JSON.parse(readFileSync(join(dataDir, "index.json"), "utf8")) as string[];
     const deprecated = JSON.parse(
       readFileSync(join(dataDir, "deprecated.json"), "utf8"),
     ) as string[];
@@ -3189,12 +2906,9 @@ describe("policy.example.toml — the shipped [[deny]] block", () => {
 // ===========================================================================
 
 /** An OS-scope copyleft package (a pkg:deb glibc-style LGPL row). */
-const OS_COPYLEFT = osPkgSpec(
-  "pkg:deb/debian/libc6@2.36-9",
-  "libc6",
-  "LGPL-2.1-or-later",
-  ["docker:img/Dockerfile"],
-);
+const OS_COPYLEFT = osPkgSpec("pkg:deb/debian/libc6@2.36-9", "libc6", "LGPL-2.1-or-later", [
+  "docker:img/Dockerfile",
+]);
 
 /** An OS-scope UNKNOWN-license package (zero claims). */
 const OS_UNKNOWN = osPkgSpec("pkg:apk/alpine/mystery@1.0.0", "mystery", null, [
@@ -3208,9 +2922,7 @@ describe("os_dependencies knob — parsing (mirrors dev_dependencies EXACTLY)", 
 
   test('handling = "warn" | "fail" | "ignore" parse to themselves', () => {
     for (const value of ["warn", "fail", "ignore"] as const) {
-      expect(
-        parsePolicy(`[os_dependencies]\nhandling = "${value}"`).osDependencies,
-      ).toBe(value);
+      expect(parsePolicy(`[os_dependencies]\nhandling = "${value}"`).osDependencies).toBe(value);
     }
   });
 
@@ -3223,37 +2935,25 @@ describe("os_dependencies knob — parsing (mirrors dev_dependencies EXACTLY)", 
 
   test("a non-table [os_dependencies] value rejects", () => {
     const error = expectPolicyError('os_dependencies = "warn"');
-    expect(
-      error.problems.some((p) =>
-        p.includes("os_dependencies: must be a table"),
-      ),
-    ).toBe(true);
+    expect(error.problems.some((p) => p.includes("os_dependencies: must be a table"))).toBe(true);
   });
 
   test("a missing handling key rejects", () => {
     const error = expectPolicyError("[os_dependencies]\nother = 1");
     expect(
-      error.problems.some((p) =>
-        p.includes('os_dependencies: missing required key "handling"'),
-      ),
+      error.problems.some((p) => p.includes('os_dependencies: missing required key "handling"')),
     ).toBe(true);
   });
 
   test("an unknown key inside [os_dependencies] rejects", () => {
-    const error = expectPolicyError(
-      '[os_dependencies]\nhandling = "warn"\nbogus = 1',
+    const error = expectPolicyError('[os_dependencies]\nhandling = "warn"\nbogus = 1');
+    expect(error.problems.some((p) => p.includes('os_dependencies: unknown key "bogus"'))).toBe(
+      true,
     );
-    expect(
-      error.problems.some((p) =>
-        p.includes('os_dependencies: unknown key "bogus"'),
-      ),
-    ).toBe(true);
   });
 
   test("os_dependencies is an accepted top-level key (no unknown-key error)", () => {
-    expect(() =>
-      parsePolicy('[os_dependencies]\nhandling = "warn"'),
-    ).not.toThrow();
+    expect(() => parsePolicy('[os_dependencies]\nhandling = "warn"')).not.toThrow();
   });
 });
 
@@ -3267,29 +2967,20 @@ describe("evaluate — os-scope downgrade (default warn)", () => {
   });
 
   test('os_dependencies="fail" gates an os-scope copyleft exactly like an app one', () => {
-    const { verdicts } = runEngine(
-      [OS_COPYLEFT],
-      '[os_dependencies]\nhandling = "fail"',
-    );
+    const { verdicts } = runEngine([OS_COPYLEFT], '[os_dependencies]\nhandling = "fail"');
     expect(verdicts[0].status).toBe("fail");
     expect(verdicts[0].rule).toBe("default:copyleft");
   });
 
   test('os_dependencies="ignore" makes an os-scope copyleft ok (rule id preserved)', () => {
-    const { verdicts } = runEngine(
-      [OS_COPYLEFT],
-      '[os_dependencies]\nhandling = "ignore"',
-    );
+    const { verdicts } = runEngine([OS_COPYLEFT], '[os_dependencies]\nhandling = "ignore"');
     expect(verdicts[0].status).toBe("ok");
     expect(verdicts[0].rule).toBe("default:copyleft");
     expect(verdicts[0].reason).toContain("os_dependencies=ignore");
   });
 
   test("the os-scope downgrade applies at the unknown-fail terminal too", () => {
-    const { verdicts } = runEngine(
-      [OS_UNKNOWN],
-      '[unknown]\nhandling = "fail"',
-    );
+    const { verdicts } = runEngine([OS_UNKNOWN], '[unknown]\nhandling = "fail"');
     expect(verdicts[0].status).toBe("warn");
     expect(verdicts[0].rule).toBe("default:unknown");
     expect(verdicts[0].reason).toContain("os_dependencies=warn");
@@ -3335,11 +3026,7 @@ describe("evaluate — deny STAYS TERMINAL over the os knob", () => {
 
   test("name-mode deny on an os-scope package with UNKNOWN finding still fails", () => {
     const { verdicts } = runEngine(
-      [
-        osPkgSpec("pkg:deb/debian/rider-os@1.0.0", "rider-os", null, [
-          "docker:img/Dockerfile",
-        ]),
-      ],
+      [osPkgSpec("pkg:deb/debian/rider-os@1.0.0", "rider-os", null, ["docker:img/Dockerfile"])],
       denyNameFixture("rider-os"),
     );
     expect(verdicts[0].status).toBe("fail");
@@ -3436,13 +3123,7 @@ const osMultiSpec = (
 describe("evaluate — os-scope partial finding", () => {
   test("os [GPL-2.0-only, BSD-3-Clause, public-domain] → known copyleft WARNS (os non-gating)", () => {
     const { verdicts } = runEngine(
-      [
-        osMultiSpec("os-partial", [
-          "GPL-2.0-only",
-          "BSD-3-Clause",
-          "public-domain",
-        ]),
-      ],
+      [osMultiSpec("os-partial", ["GPL-2.0-only", "BSD-3-Clause", "public-domain"])],
       "",
     );
     expect(verdicts).toHaveLength(1);
@@ -3547,11 +3228,7 @@ describe("evaluate — os-scope AGPL container escalation", () => {
 
   test("HEADLINE: os-scope AGPL-3.0-only under os_dependencies=warn escalates to a REAL fail, not the routine warn", () => {
     const { verdicts } = runEngine(
-      [
-        osPkgSpec("pkg:deb/debian/agpl-os@1.0.0", "agpl-os", "AGPL-3.0-only", [
-          AGPL_TARGET,
-        ]),
-      ],
+      [osPkgSpec("pkg:deb/debian/agpl-os@1.0.0", "agpl-os", "AGPL-3.0-only", [AGPL_TARGET])],
       "",
     );
     expect(verdicts[0].status).toBe("fail");
@@ -3560,11 +3237,7 @@ describe("evaluate — os-scope AGPL container escalation", () => {
 
   test("os_dependencies=ignore does not license the AGPL container package back in (the loudest current escape)", () => {
     const { verdicts } = runEngine(
-      [
-        osPkgSpec("pkg:deb/debian/agpl-os@1.0.0", "agpl-os", "AGPL-3.0-only", [
-          AGPL_TARGET,
-        ]),
-      ],
+      [osPkgSpec("pkg:deb/debian/agpl-os@1.0.0", "agpl-os", "AGPL-3.0-only", [AGPL_TARGET])],
       '[os_dependencies]\nhandling = "ignore"',
     );
     expect(verdicts[0].status).toBe("fail");
@@ -3573,11 +3246,7 @@ describe("evaluate — os-scope AGPL container escalation", () => {
 
   test("os_dependencies=fail also fails with the SAME distinct rule id (deterministic across every handling)", () => {
     const { verdicts } = runEngine(
-      [
-        osPkgSpec("pkg:deb/debian/agpl-os@1.0.0", "agpl-os", "AGPL-3.0-only", [
-          AGPL_TARGET,
-        ]),
-      ],
+      [osPkgSpec("pkg:deb/debian/agpl-os@1.0.0", "agpl-os", "AGPL-3.0-only", [AGPL_TARGET])],
       '[os_dependencies]\nhandling = "fail"',
     );
     expect(verdicts[0].status).toBe("fail");
@@ -3587,12 +3256,9 @@ describe("evaluate — os-scope AGPL container escalation", () => {
   test("OR-election: AGPL-3.0-only OR MIT elects MIT and stays default:ok (election semantics preserved)", () => {
     const { verdicts } = runEngine(
       [
-        osPkgSpec(
-          "pkg:deb/debian/agpl-or-mit@1.0.0",
-          "agpl-or-mit",
-          "AGPL-3.0-only OR MIT",
-          [AGPL_TARGET],
-        ),
+        osPkgSpec("pkg:deb/debian/agpl-or-mit@1.0.0", "agpl-or-mit", "AGPL-3.0-only OR MIT", [
+          AGPL_TARGET,
+        ]),
       ],
       "",
     );
@@ -3617,10 +3283,7 @@ describe("evaluate — os-scope AGPL container escalation", () => {
   });
 
   test("app-scope precise AGPL stays default:copyleft UNCHANGED — the new rule id is container-only", () => {
-    const { verdicts } = runEngine(
-      [pkgSpec("agpl-app", "AGPL-3.0-only", ["apps/a"])],
-      "",
-    );
+    const { verdicts } = runEngine([pkgSpec("agpl-app", "AGPL-3.0-only", ["apps/a"])], "");
     expect(verdicts[0].status).toBe("fail");
     expect(verdicts[0].rule).toBe("default:copyleft");
   });
@@ -3648,12 +3311,9 @@ describe("evaluate — os-scope AGPL container escalation", () => {
     ].join("\n");
     const { verdicts } = runEngine(
       [
-        osPkgSpec(
-          "pkg:deb/debian/agpl-os-accepted@1.0.0",
-          "agpl-os-accepted",
-          "AGPL-3.0-only",
-          [AGPL_TARGET],
-        ),
+        osPkgSpec("pkg:deb/debian/agpl-os-accepted@1.0.0", "agpl-os-accepted", "AGPL-3.0-only", [
+          AGPL_TARGET,
+        ]),
       ],
       policyText,
     );
@@ -3664,12 +3324,9 @@ describe("evaluate — os-scope AGPL container escalation", () => {
   test("a [[deny]] license match still yields denied[..] (deny is terminal above the AGPL escalation too)", () => {
     const { verdicts } = runEngine(
       [
-        osPkgSpec(
-          "pkg:deb/debian/agpl-os-denied@1.0.0",
-          "agpl-os-denied",
-          "AGPL-3.0-only",
-          [AGPL_TARGET],
-        ),
+        osPkgSpec("pkg:deb/debian/agpl-os-denied@1.0.0", "agpl-os-denied", "AGPL-3.0-only", [
+          AGPL_TARGET,
+        ]),
       ],
       denyLicenseFixture("AGPL-3.0-only"),
     );
@@ -3690,11 +3347,7 @@ describe("evaluate — os-scope AGPL container escalation", () => {
     // package at the same target has only one reachable outcome: the
     // container escalation fail — never suppressed.
     const { verdicts } = runEngine(
-      [
-        osPkgSpec("pkg:deb/debian/agpl-os@1.0.0", "agpl-os", "AGPL-3.0-only", [
-          AGPL_TARGET,
-        ]),
-      ],
+      [osPkgSpec("pkg:deb/debian/agpl-os@1.0.0", "agpl-os", "AGPL-3.0-only", [AGPL_TARGET])],
       "",
     );
     expect(verdicts[0].status).toBe("fail");
@@ -3705,11 +3358,7 @@ describe("evaluate — os-scope AGPL container escalation", () => {
 describe("evaluate — imprecise AGPL container escalation (imprecise variant)", () => {
   test("os-scope imprecise AGPL fails default:agpl-container (the imprecise escape lane is closed too, not just the precise-expression one)", () => {
     const { verdicts } = runEngine(
-      [
-        osPkgSpec("pkg:apk/alpine/agpl-ish@1.0.0", "agpl-ish", "AGPL", [
-          "docker:img/Dockerfile",
-        ]),
-      ],
+      [osPkgSpec("pkg:apk/alpine/agpl-ish@1.0.0", "agpl-ish", "AGPL", ["docker:img/Dockerfile"])],
       "",
     );
     expect(verdicts[0].status).toBe("fail");
@@ -3717,10 +3366,7 @@ describe("evaluate — imprecise AGPL container escalation (imprecise variant)",
   });
 
   test("app-scope imprecise AGPL stays warn default:imprecise-copyleft UNCHANGED", () => {
-    const { verdicts } = runEngine(
-      [pkgSpec("agpl-ish-app", "AGPL", ["apps/a"])],
-      "",
-    );
+    const { verdicts } = runEngine([pkgSpec("agpl-ish-app", "AGPL", ["apps/a"])], "");
     expect(verdicts[0].status).toBe("warn");
     expect(verdicts[0].rule).toBe("default:imprecise-copyleft");
   });
@@ -3760,12 +3406,9 @@ describe("evaluate — accepted-AGPL container notices (acceptedContainerNotices
     ].join("\n");
     const { verdicts, model } = runEngine(
       [
-        osPkgSpec(
-          "pkg:deb/debian/agpl-os-notice@1.0.0",
-          "agpl-os-notice",
-          "AGPL-3.0-only",
-          [NOTICE_TARGET],
-        ),
+        osPkgSpec("pkg:deb/debian/agpl-os-notice@1.0.0", "agpl-os-notice", "AGPL-3.0-only", [
+          NOTICE_TARGET,
+        ]),
       ],
       policyText,
     );
@@ -3794,12 +3437,9 @@ describe("evaluate — accepted-AGPL container notices (acceptedContainerNotices
     ].join("\n");
     const { verdicts, model } = runEngine(
       [
-        osPkgSpec(
-          "pkg:apk/alpine/agpl-ish-notice@1.0.0",
-          "agpl-ish-notice",
-          "AGPL",
-          [NOTICE_TARGET],
-        ),
+        osPkgSpec("pkg:apk/alpine/agpl-ish-notice@1.0.0", "agpl-ish-notice", "AGPL", [
+          NOTICE_TARGET,
+        ]),
       ],
       policyText,
     );
@@ -3825,28 +3465,20 @@ describe("evaluate — accepted-AGPL container notices (acceptedContainerNotices
     ].join("\n");
     const { verdicts: acceptedVerdicts, model: acceptedModel } = runEngine(
       [
-        osPkgSpec(
-          "pkg:deb/debian/gpl-os-accepted@1.0.0",
-          "gpl-os-accepted",
-          "GPL-3.0-only",
-          [NOTICE_TARGET],
-        ),
+        osPkgSpec("pkg:deb/debian/gpl-os-accepted@1.0.0", "gpl-os-accepted", "GPL-3.0-only", [
+          NOTICE_TARGET,
+        ]),
       ],
       acceptPolicy,
     );
     expect(acceptedVerdicts[0].status).toBe("ok");
-    expect(
-      acceptedContainerNotices(acceptedModel, acceptedVerdicts),
-    ).toHaveLength(0);
+    expect(acceptedContainerNotices(acceptedModel, acceptedVerdicts)).toHaveLength(0);
 
     const { verdicts: warnVerdicts, model: warnModel } = runEngine(
       [
-        osPkgSpec(
-          "pkg:deb/debian/lgpl-os-warn@1.0.0",
-          "lgpl-os-warn",
-          "LGPL-2.1-or-later",
-          [NOTICE_TARGET],
-        ),
+        osPkgSpec("pkg:deb/debian/lgpl-os-warn@1.0.0", "lgpl-os-warn", "LGPL-2.1-or-later", [
+          NOTICE_TARGET,
+        ]),
       ],
       "",
     );
@@ -3857,12 +3489,9 @@ describe("evaluate — accepted-AGPL container notices (acceptedContainerNotices
   test("a FAILING AGPL system package (not accepted) is not an accepted-container notice — Problematic only, never duplicated", () => {
     const { verdicts, model } = runEngine(
       [
-        osPkgSpec(
-          "pkg:deb/debian/agpl-os-failing@1.0.0",
-          "agpl-os-failing",
-          "AGPL-3.0-only",
-          [NOTICE_TARGET],
-        ),
+        osPkgSpec("pkg:deb/debian/agpl-os-failing@1.0.0", "agpl-os-failing", "AGPL-3.0-only", [
+          NOTICE_TARGET,
+        ]),
       ],
       "",
     );
@@ -3887,18 +3516,11 @@ describe("evaluate — accepted-AGPL container notices (acceptedContainerNotices
     ].join("\n");
     const { verdicts, model } = runEngine(
       [
-        osPkgSpec(
-          "pkg:deb/debian/zeta-agpl@1.0.0",
-          "zeta-agpl",
-          "AGPL-3.0-only",
-          [TARGET_B, TARGET_A],
-        ),
-        osPkgSpec(
-          "pkg:deb/debian/alpha-agpl@1.0.0",
-          "alpha-agpl",
-          "AGPL-3.0-only",
-          [TARGET_A],
-        ),
+        osPkgSpec("pkg:deb/debian/zeta-agpl@1.0.0", "zeta-agpl", "AGPL-3.0-only", [
+          TARGET_B,
+          TARGET_A,
+        ]),
+        osPkgSpec("pkg:deb/debian/alpha-agpl@1.0.0", "alpha-agpl", "AGPL-3.0-only", [TARGET_A]),
       ],
       policyText,
     );
@@ -3924,9 +3546,7 @@ describe("[docker] ignore parsing", () => {
   });
 
   test("valid ignore globs parse into a readonly array", () => {
-    const policy = parsePolicy(
-      '[docker]\nignore = ["docker/dev/**", "legacy/Dockerfile"]\n',
-    );
+    const policy = parsePolicy('[docker]\nignore = ["docker/dev/**", "legacy/Dockerfile"]\n');
     expect(policy.docker).toEqual({
       ignore: ["docker/dev/**", "legacy/Dockerfile"],
       development: [],
@@ -4009,9 +3629,7 @@ describe("[[docker.development]] schema parsing", () => {
 
   test("a `**` glob source parses and is stored verbatim", () => {
     const policy = parsePolicy(developmentFixture("tools/**"));
-    expect(policy.docker?.development).toEqual([
-      { source: "tools/**", reason: "test reason" },
-    ]);
+    expect(policy.docker?.development).toEqual([{ source: "tools/**", reason: "test reason" }]);
   });
 
   test("a `*` glob source parses and is stored verbatim", () => {
@@ -4033,24 +3651,18 @@ describe("[[docker.development]] schema parsing", () => {
 
   test("missing reason rejects naming docker.development[0]", () => {
     const err = expectPolicyError(
-      ["[docker]", "", "[[docker.development]]", 'source = "tools/**"'].join(
-        "\n",
-      ),
+      ["[docker]", "", "[[docker.development]]", 'source = "tools/**"'].join("\n"),
     );
     expect(
       err.problems.some(
-        (p) =>
-          p.includes("docker.development[0]") &&
-          p.includes('missing required key "reason"'),
+        (p) => p.includes("docker.development[0]") && p.includes('missing required key "reason"'),
       ),
     ).toBe(true);
   });
 
   test("an empty-string source rejects naming docker.development[0]", () => {
     const err = expectPolicyError(developmentFixture(""));
-    expect(err.problems.some((p) => p.includes("docker.development[0]"))).toBe(
-      true,
-    );
+    expect(err.problems.some((p) => p.includes("docker.development[0]"))).toBe(true);
   });
 
   test("a backslash source rejects (forward-slash posture, byte-identical to docker.ignore)", () => {
@@ -4065,19 +3677,13 @@ describe("[[docker.development]] schema parsing", () => {
 
   test("a leading-slash source rejects", () => {
     const err = expectPolicyError(developmentFixture("/tools/**"));
-    expect(
-      err.problems.some((p) => p.includes("leading or trailing slash")),
-    ).toBe(true);
+    expect(err.problems.some((p) => p.includes("leading or trailing slash"))).toBe(true);
   });
 
   test('a "docker:"-prefixed source rejects with a pointed double-prefix message', () => {
-    const err = expectPolicyError(
-      developmentFixture("docker:tools/Dockerfile"),
-    );
+    const err = expectPolicyError(developmentFixture("docker:tools/Dockerfile"));
     expect(
-      err.problems.some(
-        (p) => p.includes("docker.development[0]") && p.includes('"docker:"'),
-      ),
+      err.problems.some((p) => p.includes("docker.development[0]") && p.includes('"docker:"')),
     ).toBe(true);
   });
 
@@ -4095,9 +3701,7 @@ describe("[[docker.development]] schema parsing", () => {
     ].join("\n");
     const err = expectPolicyError(policyText);
     expect(
-      err.problems.some(
-        (p) => p.includes("docker.development[1]") && p.includes("duplicate"),
-      ),
+      err.problems.some((p) => p.includes("docker.development[1]") && p.includes("duplicate")),
     ).toBe(true);
   });
 
@@ -4131,9 +3735,7 @@ describe("[[docker.development]] schema parsing", () => {
     ].join("\n");
     const err = expectPolicyError(policyText);
     expect(
-      err.problems.some(
-        (p) => p.includes("docker.development[0]") && p.includes("bogus"),
-      ),
+      err.problems.some((p) => p.includes("docker.development[0]") && p.includes("bogus")),
     ).toBe(true);
   });
 
@@ -4167,19 +3769,13 @@ describe("evaluate — [[allow_source_available]] exemption (ADR-0013 opt-out)",
   ].join("\n");
 
   test("an exempted source-available license WARNS (allowed), not fail", () => {
-    const { verdicts } = runEngine(
-      [pkgSpec("busl-pkg", "BUSL-1.1", ["backend"])],
-      exemptBusl,
-    );
+    const { verdicts } = runEngine([pkgSpec("busl-pkg", "BUSL-1.1", ["backend"])], exemptBusl);
     expect(verdicts[0].status).toBe("warn");
     expect(verdicts[0].rule).toBe("allow_source_available[0]");
   });
 
   test("a non-exempted source-available license still FAILS by default", () => {
-    const { verdicts } = runEngine(
-      [pkgSpec("sspl-pkg", "SSPL-1.0", ["backend"])],
-      exemptBusl,
-    );
+    const { verdicts } = runEngine([pkgSpec("sspl-pkg", "SSPL-1.0", ["backend"])], exemptBusl);
     expect(verdicts[0].status).toBe("fail");
     expect(verdicts[0].rule).toBe("default:source-available");
   });
@@ -4193,10 +3789,7 @@ describe("evaluate — [[allow_source_available]] exemption (ADR-0013 opt-out)",
       "",
       exemptBusl,
     ].join("\n");
-    const { verdicts } = runEngine(
-      [pkgSpec("busl-pkg", "BUSL-1.1", ["backend"])],
-      policyText,
-    );
+    const { verdicts } = runEngine([pkgSpec("busl-pkg", "BUSL-1.1", ["backend"])], policyText);
     expect(verdicts[0].status).toBe("fail");
     expect(verdicts[0].rule).toBe("denied[0]");
   });
@@ -4205,9 +3798,7 @@ describe("evaluate — [[allow_source_available]] exemption (ADR-0013 opt-out)",
 describe("policy — [[allow_source_available]] validation", () => {
   test("rejects a licence that is not a built-in source-available default", () => {
     const error = expectPolicyError(
-      ["[[allow_source_available]]", 'license = "MIT"', 'reason = "x"'].join(
-        "\n",
-      ),
+      ["[[allow_source_available]]", 'license = "MIT"', 'reason = "x"'].join("\n"),
     );
     expect(error.message).toContain("not a built-in source-available default");
   });
@@ -4247,21 +3838,15 @@ describe("parsePolicy — [cache] table", () => {
   });
 
   test('a ".." segment is rejected (a committed dir cannot escape the repo)', () => {
-    expect(
-      expectPolicyError('[cache]\ndir = "../outside"\n').message,
-    ).toContain("cache.dir");
+    expect(expectPolicyError('[cache]\ndir = "../outside"\n').message).toContain("cache.dir");
   });
 
   test("a leading slash is rejected", () => {
-    expect(expectPolicyError('[cache]\ndir = "/abs"\n').message).toContain(
-      "cache.dir",
-    );
+    expect(expectPolicyError('[cache]\ndir = "/abs"\n').message).toContain("cache.dir");
   });
 
   test("an unknown key is rejected", () => {
-    expect(expectPolicyError('[cache]\nfolder = "x"\n').message).toContain(
-      'unknown key "folder"',
-    );
+    expect(expectPolicyError('[cache]\nfolder = "x"\n').message).toContain('unknown key "folder"');
   });
 
   test("an empty dir is rejected", () => {

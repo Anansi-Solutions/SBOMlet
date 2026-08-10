@@ -44,8 +44,7 @@ import { isUnknownLicense } from "./unknownLicense";
 import type { AcceptedContainerNotice } from "../policy/evaluate";
 import type { SuppressedWorkspace } from "../policy/schema";
 
-const HEADER_LINE =
-  "<!-- AUTO-GENERATED - do not edit. Regenerate with: task generate -->";
+const HEADER_LINE = "<!-- AUTO-GENERATED - do not edit. Regenerate with: task generate -->";
 
 /**
  * Policy projection for the document renderer. Verdicts drive copyleft-section membership;
@@ -125,10 +124,7 @@ function licenseCellOf(pkg: PackageEntry): string {
     // to BOTH the precise-expression and the imprecise branches - an imprecise os-partial
     // (imprecise family + unknown token) must show the remainder too, not drop it.
     const tokens = pkg.finding.unrecognizedTokens;
-    const suffix =
-      tokens !== undefined && tokens.length > 0
-        ? ` (+ ${tokens.join(", ")})`
-        : "";
+    const suffix = tokens !== undefined && tokens.length > 0 ? ` (+ ${tokens.join(", ")})` : "";
     if (pkg.finding.confidence === "imprecise") {
       return `${pkg.finding.impreciseFamily ?? "unknown"} (imprecise)${suffix}`;
     }
@@ -199,10 +195,7 @@ function boundedJoin(items: readonly string[], separator: string): string {
  * Optionality is descoped - no ", optional" suffix is ever rendered, and there is no
  * hard-required/optional tier preference.
  */
-function whyCellOf(
-  pkg: PackageEntry,
-  shownTargets: ReadonlySet<string>,
-): string {
+function whyCellOf(pkg: PackageEntry, shownTargets: ReadonlySet<string>): string {
   // Fold ONLY over the occurrences the row actually shows. The Why cell and the Used-in cell must
   // describe the SAME workspaces.
   const scoped = pkg.occurrences.filter((o) => shownTargets.has(o.target));
@@ -251,9 +244,7 @@ function whyCellOf(
   }
 
   // No path in scope - fall back to the sorted-union of every in-scope occurrence's introducer set.
-  const union = [...new Set(introductions.flatMap((i) => i.introducedBy))].sort(
-    compareCodeUnits,
-  );
+  const union = [...new Set(introductions.flatMap((i) => i.introducedBy))].sort(compareCodeUnits);
   // No path AND no introducer in scope → the honest " - " residual.
   if (union.length === 0) return "—";
   return boundedJoin(union, ", ");
@@ -267,10 +258,7 @@ function whyCellOf(
  * treated as production so it never hides in the dev-only section.
  */
 function isDevelopmentOnly(pkg: PackageEntry): boolean {
-  return (
-    pkg.occurrences.length > 0 &&
-    pkg.occurrences.every((o) => o.isDevDependency)
-  );
+  return pkg.occurrences.length > 0 && pkg.occurrences.every((o) => o.isDevDependency);
 }
 
 /**
@@ -281,9 +269,7 @@ function isDevelopmentOnly(pkg: PackageEntry): boolean {
  * - complete inventories, not an exclusive choice.
  */
 function hasContainerOccurrence(pkg: PackageEntry): boolean {
-  return pkg.occurrences.some((occurrence) =>
-    occurrence.target.startsWith(DOCKER_IDENTITY_PREFIX),
-  );
+  return pkg.occurrences.some((occurrence) => occurrence.target.startsWith(DOCKER_IDENTITY_PREFIX));
 }
 
 /**
@@ -297,9 +283,7 @@ function hasContainerOccurrence(pkg: PackageEntry): boolean {
 function isContainerPackage(pkg: PackageEntry): boolean {
   return (
     pkg.occurrences.length > 0 &&
-    pkg.occurrences.every((occurrence) =>
-      occurrence.target.startsWith(DOCKER_IDENTITY_PREFIX),
-    )
+    pkg.occurrences.every((occurrence) => occurrence.target.startsWith(DOCKER_IDENTITY_PREFIX))
   );
 }
 
@@ -330,10 +314,7 @@ function rendersDevelopmentOnly(
 /** The resolved development-container set for a no-policy render. */
 const EMPTY_DEVELOPMENT_CONTAINERS: ReadonlySet<string> = new Set();
 
-const CONTAINERS_HEAD = [
-  "| Container | Classification | Packages |",
-  "| --- | --- | --- |",
-];
+const CONTAINERS_HEAD = ["| Container | Classification | Packages |", "| --- | --- | --- |"];
 
 /**
  * The deduped, compareCodeUnits-sorted docker:<source> identities carried by ANY package's
@@ -342,9 +323,7 @@ const CONTAINERS_HEAD = [
  * never drift apart. Occurrence-keyed, not scope-keyed: a container is discovered from any package
  * that occurs there, regardless of whether that package also carries an app occurrence elsewhere.
  */
-function analyzedContainerIdentities(
-  sorted: readonly PackageEntry[],
-): string[] {
+function analyzedContainerIdentities(sorted: readonly PackageEntry[]): string[] {
   const identities = new Set<string>();
   for (const pkg of sorted) {
     for (const occurrence of pkg.occurrences) {
@@ -383,9 +362,7 @@ function containersSectionLines(
   }
   const lines: string[] = [heading, "", ...CONTAINERS_HEAD];
   for (const identity of identities) {
-    const classification = developmentContainers.has(identity)
-      ? "development"
-      : "production";
+    const classification = developmentContainers.has(identity) ? "development" : "production";
     lines.push(
       `| ${escapeCell(identity)} | ${escapeCell(classification)} | ${counts.get(identity)} |`,
     );
@@ -414,10 +391,7 @@ function containerTableRow(pkg: PackageEntry): string {
  * the document. Returns [] when `rows` is empty so an empty partition adds no stray heading or
  * table.
  */
-function containerPartitionLines(
-  label: string,
-  rows: readonly PackageEntry[],
-): string[] {
+function containerPartitionLines(label: string, rows: readonly PackageEntry[]): string[] {
   if (rows.length === 0) return [];
   const lines: string[] = [`**${label}**`, "", ...CONTAINER_TABLE_HEAD];
   for (const pkg of rows) lines.push(containerTableRow(pkg));
@@ -454,12 +428,8 @@ function containerSubsectionLines(
     const rows = containerRows.filter((pkg) =>
       pkg.occurrences.some((occurrence) => occurrence.target === identity),
     );
-    const system = rows.filter((pkg) =>
-      OS_PACKAGE_ECOSYSTEMS.has(purlEcosystem(pkg.purl)),
-    );
-    const application = rows.filter(
-      (pkg) => !OS_PACKAGE_ECOSYSTEMS.has(purlEcosystem(pkg.purl)),
-    );
+    const system = rows.filter((pkg) => OS_PACKAGE_ECOSYSTEMS.has(purlEcosystem(pkg.purl)));
+    const application = rows.filter((pkg) => !OS_PACKAGE_ECOSYSTEMS.has(purlEcosystem(pkg.purl)));
     lines.push(`### Container: ${escapeCell(identity)}`, "");
     lines.push(...containerPartitionLines("System packages", system));
     lines.push(...containerPartitionLines("Application packages", application));
@@ -512,10 +482,7 @@ const COPYLEFT_HEAD = [
  * occurrences. `shownTargets` is the deduped+sorted flagged-target list whose join is the Used-in
  * cell.
  */
-function copyleftRow(
-  pkg: PackageEntry,
-  shownTargets: readonly string[],
-): string {
+function copyleftRow(pkg: PackageEntry, shownTargets: readonly string[]): string {
   const usedIn = shownTargets.join(", ");
   const scope = new Set(shownTargets);
   return `| ${escapeCell(pkg.name)} | ${escapeCell(purlEcosystem(pkg.purl))} | ${escapeCell(pkg.version)} | ${escapeCell(licenseCellOf(pkg))} | ${escapeCell(usedIn)} | ${escapeCell(whyCellOf(pkg, scope))} |`;
@@ -603,13 +570,9 @@ function packageCountsLines(
     if (rendersDevelopmentOnly(pkg, developmentContainers)) devOnlyCount += 1;
   }
   const prodCount = sorted.length - devOnlyCount;
-  const lines: string[] = [
-    "**Package counts:**",
-    "",
-    `- Total packages: ${sorted.length}`,
-  ];
-  for (const [ecosystem, count] of [...ecosystemCounts.entries()].sort(
-    ([a], [b]) => compareCodeUnits(a, b),
+  const lines: string[] = ["**Package counts:**", "", `- Total packages: ${sorted.length}`];
+  for (const [ecosystem, count] of [...ecosystemCounts.entries()].sort(([a], [b]) =>
+    compareCodeUnits(a, b),
   )) {
     lines.push(`- ${escapeCell(ecosystem)}: ${count}`);
   }
@@ -733,12 +696,8 @@ function problematicSectionLines(
       const pkgB = byPurl.get(b.purl)!;
       const byPkg = comparePackages(pkgA, pkgB);
       if (byPkg !== 0) return byPkg;
-      const targetsA = [...new Set(a.targets)]
-        .sort(compareCodeUnits)
-        .join(", ");
-      const targetsB = [...new Set(b.targets)]
-        .sort(compareCodeUnits)
-        .join(", ");
+      const targetsA = [...new Set(a.targets)].sort(compareCodeUnits).join(", ");
+      const targetsB = [...new Set(b.targets)].sort(compareCodeUnits).join(", ");
       return compareCodeUnits(targetsA, targetsB);
     });
     lines.push(...PROBLEMATIC_HEAD);
@@ -793,10 +752,7 @@ function problematicSectionLines(
  * Returns the full section (heading, suppressed-workspaces list, accepted-notices list, table or
  * the ✅ empty state) for the caller to push.
  */
-function copyleftSectionLines(
-  sorted: readonly PackageEntry[],
-  policyView: PolicyView,
-): string[] {
+function copyleftSectionLines(sorted: readonly PackageEntry[], policyView: PolicyView): string[] {
   // Group verdicts by purl once - the renderer stays a pure function of its arguments.
   const verdictsByPurl = new Map<string, Verdict[]>();
   for (const verdict of policyView.verdicts) {
@@ -825,9 +781,9 @@ function copyleftSectionLines(
         verdict.rule === "default:copyleft",
     );
     if (flagged.length === 0) continue;
-    const targets = [
-      ...new Set(flagged.map((verdict) => verdict.occurrenceTarget)),
-    ].sort(compareCodeUnits);
+    const targets = [...new Set(flagged.map((verdict) => verdict.occurrenceTarget))].sort(
+      compareCodeUnits,
+    );
     copyleftRows.push(copyleftRow(pkg, targets));
   }
 
@@ -880,28 +836,17 @@ function copyleftSectionLines(
       "",
     );
   } else if (notices.length === 0) {
-    lines.push(
-      "✅ No package carries copyleft or special license obligations.",
-      "",
-    );
+    lines.push("✅ No package carries copyleft or special license obligations.", "");
   }
 
   return lines;
 }
 
-export function renderMarkdown(
-  model: CanonicalDependencies,
-  policyView?: PolicyView,
-): string {
+export function renderMarkdown(model: CanonicalDependencies, policyView?: PolicyView): string {
   // Defensive re-sort: the renderer must not trust input order.
   const sorted = [...model.packages].sort(comparePackages);
 
-  const lines: string[] = [
-    `# ${documentTitle(policyView)}`,
-    "",
-    HEADER_LINE,
-    "",
-  ];
+  const lines: string[] = [`# ${documentTitle(policyView)}`, "", HEADER_LINE, ""];
 
   // Author preamble: verbatim markdown block after the auto-generated header comment and BEFORE the
   // policy pointer / counts. CRLF/CR normalized to "\n" (determinism); rendered as-is - NOT
@@ -915,18 +860,14 @@ export function renderMarkdown(
   // Policy pointer line - policy runs only. The path is policy-authored config and routes through
   // escapeCell.
   if (policyView !== undefined) {
-    lines.push(
-      `Copyleft notice rules are configured in ${escapeCell(policyView.policyPath)}.`,
-      "",
-    );
+    lines.push(`Copyleft notice rules are configured in ${escapeCell(policyView.policyPath)}.`, "");
   }
 
   // Containers index - scope-derived, so it renders with or without a policy view (a no-policy
   // render passes the empty set; every container reads "production"). Resolved once, above the
   // counts block, so the Production/Development-only counts can classify a container package by the
   // same set the Containers index and the container subsections use.
-  const developmentContainers =
-    policyView?.developmentContainers ?? EMPTY_DEVELOPMENT_CONTAINERS;
+  const developmentContainers = policyView?.developmentContainers ?? EMPTY_DEVELOPMENT_CONTAINERS;
 
   lines.push(...packageCountsLines(sorted, developmentContainers));
 
@@ -974,11 +915,7 @@ export function renderMarkdown(
     developmentContainers.has(identity),
   );
   lines.push(
-    ...summarySection(
-      "## Production dependencies",
-      production,
-      "✅ No production dependencies.",
-    ),
+    ...summarySection("## Production dependencies", production, "✅ No production dependencies."),
   );
   lines.push("");
   lines.push(...containerSubsectionLines(productionContainers, containerRows));
@@ -990,9 +927,7 @@ export function renderMarkdown(
     ),
   );
   lines.push("");
-  lines.push(
-    ...containerSubsectionLines(developmentContainerIds, containerRows),
-  );
+  lines.push(...containerSubsectionLines(developmentContainerIds, containerRows));
 
   // Defensive trailing-blank trim: a non-empty final container subsection owns its own trailing
   // separator (matching every other section-lines helper), which would otherwise leave a blank line

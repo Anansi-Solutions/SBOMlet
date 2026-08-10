@@ -24,11 +24,7 @@ import { existsSync, mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import {
-  computeCacheKey,
-  type CollectOptions,
-  type ManifestEntry,
-} from "./cdxgen";
+import { computeCacheKey, type CollectOptions, type ManifestEntry } from "./cdxgen";
 import { execTool } from "./exec";
 import type { Target } from "../targets/target";
 
@@ -120,8 +116,7 @@ export interface YarnPluginScanResult {
 function validatePluginOutput(outFile: string, invocation: string): void {
   if (!existsSync(outFile)) {
     throw new Error(
-      `yarn-plugin-cyclonedx produced no output file at ${outFile}\n` +
-        `invocation: ${invocation}`,
+      `yarn-plugin-cyclonedx produced no output file at ${outFile}\n` + `invocation: ${invocation}`,
     );
   }
   const rawOutput = readFileSync(outFile, "utf8");

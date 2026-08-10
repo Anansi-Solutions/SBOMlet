@@ -83,9 +83,7 @@ function electFromPattern(
  * answer there, ADR-0007) rather than accepted as noise - the caller falls through to the next
  * lane, or to a clean no-answer if both lanes reject.
  */
-export function electExpression(
-  files: unknown,
-): { raw: string; via: string } | undefined {
+export function electExpression(files: unknown): { raw: string; via: string } | undefined {
   if (!Array.isArray(files)) return undefined;
   const entries = files.filter(isRawScancodeFile);
 
@@ -122,7 +120,5 @@ export function electCopyrights(files: unknown): string[] {
       seen.add(sanitizeEvidenceText(text));
     }
   }
-  return [...seen]
-    .sort(compareCodeUnits)
-    .slice(0, MAX_SCANCODE_COPYRIGHT_LINES);
+  return [...seen].sort(compareCodeUnits).slice(0, MAX_SCANCODE_COPYRIGHT_LINES);
 }

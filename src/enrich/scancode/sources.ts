@@ -44,10 +44,7 @@ function safeDecode(encoded: string): string | undefined {
  * - honest skip), version mismatch, or a decoded name that would escape the node_modules root
  * (resolve + strict prefix-check, never best-effort).
  */
-function npmSourceDir(
-  purl: EcosystemPurl,
-  targetDir: string,
-): string | undefined {
+function npmSourceDir(purl: EcosystemPurl, targetDir: string): string | undefined {
   // The decode exactly mirrors npmPackumentUrl's scoped-name decode (enrich.ts npmPackumentUrl):
   // "%40scope/pkg" -> "@scope/pkg".
   const name = safeDecode(purl.encodedName);
@@ -59,9 +56,7 @@ function npmSourceDir(
   // Strict prefix-check under the RESOLVED node_modules root: a ".."-shaped or absolute-path-shaped
   // decoded name can never produce a non-null result outside it. A path-separator-suffixed prefix
   // guards against a sibling-directory false-positive (e.g. "node_modules-evil").
-  const rootWithSep = nodeModulesRoot.endsWith(sep)
-    ? nodeModulesRoot
-    : `${nodeModulesRoot}${sep}`;
+  const rootWithSep = nodeModulesRoot.endsWith(sep) ? nodeModulesRoot : `${nodeModulesRoot}${sep}`;
   if (candidate !== nodeModulesRoot && !candidate.startsWith(rootWithSep)) {
     return undefined;
   }
@@ -116,9 +111,7 @@ function posixSitePackagesDir(venvDir: string): string {
     .filter((e) => e.startsWith("python"))
     .sort(compareCodeUnits);
   const chosen = pythonDirs[0];
-  return chosen === undefined
-    ? fallback
-    : join(libDir, chosen, "site-packages");
+  return chosen === undefined ? fallback : join(libDir, chosen, "site-packages");
 }
 
 /** The platform-appropriate site-packages path under a project `.venv`. */
@@ -153,9 +146,7 @@ function pypiSourceDirs(purl: EcosystemPurl, targetDir: string): string[] {
 
   const entries = safeReaddir(sitePackages);
   const distInfoName = entries.find(
-    (e) =>
-      e.endsWith(".dist-info") &&
-      pep503Fold(e.slice(0, -".dist-info".length)) === folded,
+    (e) => e.endsWith(".dist-info") && pep503Fold(e.slice(0, -".dist-info".length)) === folded,
   );
   if (distInfoName === undefined) return [];
 
@@ -168,10 +159,7 @@ function pypiSourceDirs(purl: EcosystemPurl, targetDir: string): string[] {
  * The `top_level.txt`-named import package dir inside site-packages, or undefined when
  * absent/unreadable/empty or when no named sibling exists.
  */
-function topLevelPackageDir(
-  sitePackages: string,
-  distInfoDir: string,
-): string | undefined {
+function topLevelPackageDir(sitePackages: string, distInfoDir: string): string | undefined {
   const topLevelPath = join(distInfoDir, "top_level.txt");
   if (!existsSync(topLevelPath)) return undefined;
 
@@ -190,9 +178,7 @@ function topLevelPackageDir(
   // Strict prefix-check under the RESOLVED site-packages root: an attacker-controlled top_level.txt
   // line can never produce a non-null result outside it (or site-packages itself). The
   // separator-suffixed prefix guards against a sibling false-positive ("site-packages-evil").
-  const rootWithSep = sitePackages.endsWith(sep)
-    ? sitePackages
-    : `${sitePackages}${sep}`;
+  const rootWithSep = sitePackages.endsWith(sep) ? sitePackages : `${sitePackages}${sep}`;
   for (const candidate of candidates) {
     const packageDir = resolve(sitePackages, candidate);
     if (!packageDir.startsWith(rootWithSep)) continue; // escape attempt: skip

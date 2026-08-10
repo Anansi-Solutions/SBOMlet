@@ -38,19 +38,14 @@ const fixtureRaw = readFileSync(
   "utf-8",
 );
 
-const shapesRaw = readFileSync(
-  join(import.meta.dir, "fixtures", "license-shapes.json"),
-  "utf-8",
-);
+const shapesRaw = readFileSync(join(import.meta.dir, "fixtures", "license-shapes.json"), "utf-8");
 const fixture = JSON.parse(fixtureRaw) as {
   serialNumber: string;
   metadata: { timestamp: string };
 };
 
 function build(): { md: string; dump: string } {
-  const model = mergeSboms([
-    { sbom: JSON.parse(fixtureRaw), targetIdentity: TARGET },
-  ]);
+  const model = mergeSboms([{ sbom: JSON.parse(fixtureRaw), targetIdentity: TARGET }]);
   return { md: renderMarkdown(model), dump: toSortedDependenciesJson(model) };
 }
 
@@ -68,12 +63,8 @@ describe("determinism — double-render byte-identity", () => {
   });
 
   test("double-build double-emit CycloneDX is byte-identical and keeps the LF contract (OUT-03)", () => {
-    const first = mergeSboms([
-      { sbom: JSON.parse(fixtureRaw), targetIdentity: TARGET },
-    ]);
-    const second = mergeSboms([
-      { sbom: JSON.parse(fixtureRaw), targetIdentity: TARGET },
-    ]);
+    const first = mergeSboms([{ sbom: JSON.parse(fixtureRaw), targetIdentity: TARGET }]);
+    const second = mergeSboms([{ sbom: JSON.parse(fixtureRaw), targetIdentity: TARGET }]);
     // Inline verdicts so the verdict-property path is part of the
     // regression surface, not just the bare emit.
     const verdicts: Verdict[] = [
@@ -136,13 +127,9 @@ describe("determinism — multi-target merge", () => {
         occurrences: Array<{ target: string; isDevDependency: boolean }>;
       }>;
     };
-    const sharedPackage = parsed.packages.find(
-      (pkg) => pkg.occurrences.length === 2,
-    );
+    const sharedPackage = parsed.packages.find((pkg) => pkg.occurrences.length === 2);
     expect(sharedPackage).toBeDefined();
-    const byTarget = new Map(
-      sharedPackage!.occurrences.map((o) => [o.target, o.isDevDependency]),
-    );
+    const byTarget = new Map(sharedPackage!.occurrences.map((o) => [o.target, o.isDevDependency]));
     expect(byTarget.get("a")).toBe(true);
   });
 });
@@ -286,10 +273,7 @@ function makeBunFixtureTarget(): Target {
   const dir = mkdtempSync(join(tmpdir(), "licenses-det-bun-"));
   collectorTempDirs.push(dir);
   writeFileSync(join(dir, "bun.lock"), BUN_DET_LOCK);
-  writeFileSync(
-    join(dir, "package.json"),
-    '{ "name": "det-root", "private": true }\n',
-  );
+  writeFileSync(join(dir, "package.json"), '{ "name": "det-root", "private": true }\n');
   return { dir, identity: BUN_TARGET_IDENTITY };
 }
 
@@ -332,12 +316,8 @@ describe("determinism — bun collector double-run byte-identity", () => {
 
     // Not vacuously equal: the nested-conflict purl reaches the model
     // alongside its 4.0.0 twin, and the first-party member never renders.
-    expect(first.dump.includes("pkg:npm/spdx-expression-parse@3.0.1")).toBe(
-      true,
-    );
-    expect(first.dump.includes("pkg:npm/spdx-expression-parse@4.0.0")).toBe(
-      true,
-    );
+    expect(first.dump.includes("pkg:npm/spdx-expression-parse@3.0.1")).toBe(true);
+    expect(first.dump.includes("pkg:npm/spdx-expression-parse@4.0.0")).toBe(true);
     expect(first.md.includes("libb")).toBe(false);
 
     // LF contract holds on the collector-fed render path too.
@@ -369,9 +349,7 @@ describe("determinism — bun collector double-run byte-identity", () => {
 
     // Both kinds are present in the merged dump (multi-PM, not vacuous).
     expect(first.dump.includes("pkg:npm/smol-toml@1.6.1")).toBe(true);
-    expect(
-      first.dump.includes("pkg:npm/%40next/swc-win32-x64-msvc@16.0.10"),
-    ).toBe(true);
+    expect(first.dump.includes("pkg:npm/%40next/swc-win32-x64-msvc@16.0.10")).toBe(true);
   });
 });
 
@@ -477,9 +455,7 @@ describe("determinism — nuget collector double-run byte-identity", () => {
     // Not vacuously equal: the CentralTransitive entry reaches the model,
     // the cross-section duplicate folds to one row, and the first-party
     // Project entry never renders.
-    expect(
-      first.dump.includes("pkg:nuget/Microsoft.Extensions.Logging@9.0.9"),
-    ).toBe(true);
+    expect(first.dump.includes("pkg:nuget/Microsoft.Extensions.Logging@9.0.9")).toBe(true);
     expect(first.dump.includes("pkg:nuget/Newtonsoft.Json@13.0.4")).toBe(true);
     expect(first.md.includes("det.lib")).toBe(false);
 
@@ -563,9 +539,7 @@ describe("determinism — maven collector double-run byte-identity", () => {
 
     // Verbatim pass-through is exercised on both the classifier purl and the
     // no-license component, not vacuously equal.
-    expect(first).toContain(
-      "pkg:maven/com.example/det-lib@2.0.0?classifier=jakarta&type=jar",
-    );
+    expect(first).toContain("pkg:maven/com.example/det-lib@2.0.0?classifier=jakarta&type=jar");
     expect(first).toContain("det-proprietary");
   });
 
@@ -588,9 +562,7 @@ describe("determinism — maven collector double-run byte-identity", () => {
     // Not vacuously equal: both the classifier purl and the no-license
     // component reach the merged model.
     expect(
-      first.dump.includes(
-        "pkg:maven/com.example/det-lib@2.0.0?classifier=jakarta&type=jar",
-      ),
+      first.dump.includes("pkg:maven/com.example/det-lib@2.0.0?classifier=jakarta&type=jar"),
     ).toBe(true);
     expect(first.md.includes("det-proprietary")).toBe(true);
 
@@ -669,10 +641,7 @@ describe("determinism — maven collector double-run byte-identity", () => {
       const buildOnce = async (): Promise<{ md: string; dump: string }> => {
         const tempDir = mkdtempSync(join(tmpdir(), "licenses-det-out-"));
         collectorTempDirs.push(tempDir);
-        const result = await collectWithMavenSbom(
-          makeDualMavenFixtureTarget(),
-          { tempDir },
-        );
+        const result = await collectWithMavenSbom(makeDualMavenFixtureTarget(), { tempDir });
         const sbom = JSON.parse(readFileSync(result.sbomPath, "utf-8"));
         const model = mergeSboms([
           {
@@ -726,8 +695,6 @@ describe("determinism — maven collector double-run byte-identity", () => {
 
     // Both kinds are present in the merged dump (multi-PM, not vacuous).
     expect(first.dump.includes("pkg:npm/smol-toml@1.6.1")).toBe(true);
-    expect(
-      first.dump.includes("pkg:npm/%40next/swc-win32-x64-msvc@16.0.10"),
-    ).toBe(true);
+    expect(first.dump.includes("pkg:npm/%40next/swc-win32-x64-msvc@16.0.10")).toBe(true);
   });
 });

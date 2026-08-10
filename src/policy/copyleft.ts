@@ -28,9 +28,7 @@
  */
 
 /** Literal (family → member ids) groups; the single reviewable source. */
-const FAMILY_MEMBERS: ReadonlyArray<
-  readonly [family: string, ids: ReadonlyArray<string>]
-> = [
+const FAMILY_MEMBERS: ReadonlyArray<readonly [family: string, ids: ReadonlyArray<string>]> = [
   [
     "GNU",
     [
@@ -75,17 +73,7 @@ const FAMILY_MEMBERS: ReadonlyArray<
   ["CDDL", ["CDDL-1.0", "CDDL-1.1"]],
   ["EUPL", ["EUPL-1.0", "EUPL-1.1", "EUPL-1.2"]],
   ["OSL", ["OSL-1.0", "OSL-1.1", "OSL-2.0", "OSL-2.1", "OSL-3.0"]],
-  [
-    "CECILL",
-    [
-      "CECILL-1.0",
-      "CECILL-1.1",
-      "CECILL-2.0",
-      "CECILL-2.1",
-      "CECILL-B",
-      "CECILL-C",
-    ],
-  ],
+  ["CECILL", ["CECILL-1.0", "CECILL-1.1", "CECILL-2.0", "CECILL-2.1", "CECILL-B", "CECILL-C"]],
   ["SSPL", ["SSPL-1.0"]],
   [
     // CC ShareAlike family (ShareAlike = copyleft for adaptations), incl. the jurisdiction ports
@@ -145,15 +133,11 @@ const FAMILY_MEMBERS: ReadonlyArray<
  * membership and family data.
  */
 export const COPYLEFT_FAMILY: ReadonlyMap<string, string> = new Map(
-  FAMILY_MEMBERS.flatMap(([family, ids]) =>
-    ids.map((id) => [id, family] as const),
-  ),
+  FAMILY_MEMBERS.flatMap(([family, ids]) => ids.map((id) => [id, family] as const)),
 );
 
 /** Exact-ID copyleft membership - the keys of the family map. */
-export const COPYLEFT_IDS: ReadonlySet<string> = new Set(
-  COPYLEFT_FAMILY.keys(),
-);
+export const COPYLEFT_IDS: ReadonlySet<string> = new Set(COPYLEFT_FAMILY.keys());
 
 /**
  * Exact-ID AGPL membership - the network-copyleft subset of the GNU family. The FAMILY_MEMBERS

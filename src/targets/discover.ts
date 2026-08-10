@@ -246,10 +246,7 @@ export function globToRegExp(glob: string): RegExp {
   return new RegExp(`^${out}$`, "i");
 }
 
-export function isExcluded(
-  identity: string,
-  matchers: readonly RegExp[],
-): boolean {
+export function isExcluded(identity: string, matchers: readonly RegExp[]): boolean {
   return matchers.some((re) => re.test(identity));
 }
 
@@ -273,10 +270,7 @@ const AGGREGATE_EXAMPLE_LIMIT = 3;
  * suppression/exclusion matching upstream stays on the raw identities. Exported for direct unit
  * testing - hostile names cannot be created on every filesystem.
  */
-export function csprojNoLockWarnings(
-  lockless: readonly string[],
-  verbose: boolean,
-): string[] {
+export function csprojNoLockWarnings(lockless: readonly string[], verbose: boolean): string[] {
   if (lockless.length === 0) return [];
   if (verbose) {
     return lockless.map(
@@ -293,8 +287,7 @@ export function csprojNoLockWarnings(
     .slice(0, AGGREGATE_EXAMPLE_LIMIT)
     .map((identity) => `"${sanitizeForLog(identity)}"`)
     .join(", ");
-  const countPhrase =
-    count === 1 ? "1 directory contains" : `${count} directories contain`;
+  const countPhrase = count === 1 ? "1 directory contains" : `${count} directories contain`;
   return [
     `${countPhrase} a .csproj but no packages.lock.json, which is required ` +
       `for .NET scanning (${truncated ? "e.g. " : ""}${examples}) — set ` +
@@ -317,10 +310,7 @@ function locklessCsprojWarnings(
   const lockless = [...csprojIdentities]
     .filter(
       (identity) =>
-        !targets.some(
-          (target) =>
-            target.identity === identity && target.lockfile === "nuget",
-        ),
+        !targets.some((target) => target.identity === identity && target.lockfile === "nuget"),
     )
     .sort(compareCodeUnits);
   return csprojNoLockWarnings(lockless, opts?.verbose ?? false);
@@ -338,10 +328,7 @@ function locklessCsprojWarnings(
  * suppression/exclusion matching upstream stays on the raw identities. Exported for direct unit
  * testing - hostile names cannot be created on every filesystem.
  */
-export function pomNoSidecarWarnings(
-  unsidecared: readonly string[],
-  verbose: boolean,
-): string[] {
+export function pomNoSidecarWarnings(unsidecared: readonly string[], verbose: boolean): string[] {
   if (unsidecared.length === 0) return [];
   if (verbose) {
     return unsidecared.map(
@@ -358,8 +345,7 @@ export function pomNoSidecarWarnings(
     .slice(0, AGGREGATE_EXAMPLE_LIMIT)
     .map((identity) => `"${sanitizeForLog(identity)}"`)
     .join(", ");
-  const countPhrase =
-    count === 1 ? "1 directory contains" : `${count} directories contain`;
+  const countPhrase = count === 1 ? "1 directory contains" : `${count} directories contain`;
   return [
     `${countPhrase} a pom.xml but no committed maven.sbom.json, which is ` +
       `required for Maven scanning (${truncated ? "e.g. " : ""}${examples}) — ` +
@@ -382,10 +368,7 @@ function unsidecaredPomWarnings(
   const unsidecared = [...pomIdentities]
     .filter(
       (identity) =>
-        !targets.some(
-          (target) =>
-            target.identity === identity && target.lockfile === "maven",
-        ),
+        !targets.some((target) => target.identity === identity && target.lockfile === "maven"),
     )
     .sort(compareCodeUnits);
   return pomNoSidecarWarnings(unsidecared, opts?.verbose ?? false);
@@ -424,8 +407,7 @@ export function mavenTestSbomOrphanWarnings(
     .slice(0, AGGREGATE_EXAMPLE_LIMIT)
     .map((identity) => `"${sanitizeForLog(identity)}"`)
     .join(", ");
-  const countPhrase =
-    count === 1 ? "1 directory contains" : `${count} directories contain`;
+  const countPhrase = count === 1 ? "1 directory contains" : `${count} directories contain`;
   return [
     `${countPhrase} a maven.test.sbom.json but no maven.sbom.json ` +
       `(${truncated ? "e.g. " : ""}${examples}) — commit maven.sbom.json ` +
@@ -449,10 +431,7 @@ function orphanedMavenTestSbomWarnings(
   const orphaned = [...mavenTestSbomIdentities]
     .filter(
       (identity) =>
-        !targets.some(
-          (target) =>
-            target.identity === identity && target.lockfile === "maven",
-        ),
+        !targets.some((target) => target.identity === identity && target.lockfile === "maven"),
     )
     .sort(compareCodeUnits);
   return mavenTestSbomOrphanWarnings(orphaned, opts?.verbose ?? false);
@@ -484,8 +463,7 @@ export function discoverTargetsWithWarnings(
   repoRoot: string,
   opts?: DiscoverOptions,
 ): DiscoveryResult {
-  const toolDir =
-    opts?.toolDir === undefined ? undefined : resolve(opts.toolDir);
+  const toolDir = opts?.toolDir === undefined ? undefined : resolve(opts.toolDir);
   const matchers = (opts?.excludes ?? []).map(globToRegExp);
   const found: DiscoveredTarget[] = [];
   const bunLockbIdentities = new Set<string>();
@@ -493,8 +471,7 @@ export function discoverTargetsWithWarnings(
   const pomIdentities = new Set<string>();
   const mavenTestSbomIdentities = new Set<string>();
 
-  const identityOf = (dir: string): string =>
-    relative(repoRoot, dir).split(sep).join("/") || ".";
+  const identityOf = (dir: string): string => relative(repoRoot, dir).split(sep).join("/") || ".";
 
   // True when this subdirectory should be descended into: skip node_modules, .git, hidden dirs
   // (.yarn/.cache/...), and the tool's own directory. Shared verbatim with Dockerfile discovery via
@@ -575,9 +552,7 @@ export function discoverTargetsWithWarnings(
 
   walk(repoRoot);
   const sorted = found.sort(
-    (a, b) =>
-      compareCodeUnits(a.identity, b.identity) ||
-      compareCodeUnits(a.lockfile, b.lockfile),
+    (a, b) => compareCodeUnits(a.identity, b.identity) || compareCodeUnits(a.lockfile, b.lockfile),
   );
 
   const warnings: string[] = [];
@@ -650,9 +625,7 @@ export function discoverTargetsWithWarnings(
   // target in the same directory - a committed maven.sbom.json is authoritative). The test doc is
   // optional-additive and never its own target, so a lone sighting must never scan to zero
   // silently.
-  warnings.push(
-    ...orphanedMavenTestSbomWarnings(mavenTestSbomIdentities, targets, opts),
-  );
+  warnings.push(...orphanedMavenTestSbomWarnings(mavenTestSbomIdentities, targets, opts));
 
   warnings.sort(compareCodeUnits);
   return { targets, warnings };
@@ -662,9 +635,6 @@ export function discoverTargetsWithWarnings(
  * Collision-resolved target list only - thin wrapper over discoverTargetsWithWarnings for callers
  * that do not surface warnings.
  */
-export function discoverTargets(
-  repoRoot: string,
-  opts?: DiscoverOptions,
-): DiscoveredTarget[] {
+export function discoverTargets(repoRoot: string, opts?: DiscoverOptions): DiscoveredTarget[] {
   return discoverTargetsWithWarnings(repoRoot, opts).targets;
 }

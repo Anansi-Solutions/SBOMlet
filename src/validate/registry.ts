@@ -162,9 +162,7 @@ const NugetCatalogDocument = type({
  * - the resolver simply sees absent fields and falls through its ladder (skip-don't-throw, ASVS
  * V5).
  */
-export function narrowNugetCatalogEntry(
-  value: unknown,
-): NugetCatalogEntry | undefined {
+export function narrowNugetCatalogEntry(value: unknown): NugetCatalogEntry | undefined {
   if (recordOf(value) === undefined) return undefined;
   const parsed = NugetCatalogDocument(value);
   if (parsed instanceof type.errors) return undefined;
@@ -189,9 +187,7 @@ const DepsDevVersionDocument = type({ "licenses?": "unknown" });
  * non-string array entries are dropped (skip-don't-throw, ASVS V5) - the resolver simply sees an
  * absent/shorter array and falls through its own empty-result handling.
  */
-export function narrowDepsDevVersion(
-  value: unknown,
-): DepsDevVersion | undefined {
+export function narrowDepsDevVersion(value: unknown): DepsDevVersion | undefined {
   if (recordOf(value) === undefined) return undefined;
   const parsed = DepsDevVersionDocument(value);
   if (parsed instanceof type.errors) return undefined;

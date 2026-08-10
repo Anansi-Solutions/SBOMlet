@@ -149,9 +149,7 @@ export function renderCyclonedx(
   model: CanonicalDependencies,
   verdicts?: ReadonlyArray<Verdict>,
 ): string {
-  const sorted = [...model.packages].sort((a, b) =>
-    compareCodeUnits(a.purl, b.purl),
-  );
+  const sorted = [...model.packages].sort((a, b) => compareCodeUnits(a.purl, b.purl));
   const doc = {
     bomFormat: "CycloneDX",
     specVersion: "1.6",

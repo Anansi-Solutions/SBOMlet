@@ -85,22 +85,16 @@ export function ecosystemFor(kind: LockfileKind): "js" | "python" {
       // Terraform targets never route through the cdxgen ecosystem dispatch - the in-process
       // terraform collector computes its own cache key directly (the bun.lock precedent).
       // ecosystemFor stays js|python; reaching here is a wiring bug, not a normal path.
-      throw new Error(
-        "terraform targets are collected in-process and have no cdxgen ecosystem",
-      );
+      throw new Error("terraform targets are collected in-process and have no cdxgen ecosystem");
     case "nuget":
       // nuget targets are likewise collected in-process (the terraform/bun precedent): the custom
       // collector computes its own cache key and spawns nothing. Reaching here is a wiring bug, not
       // a normal path.
-      throw new Error(
-        "nuget targets are collected in-process and have no cdxgen ecosystem",
-      );
+      throw new Error("nuget targets are collected in-process and have no cdxgen ecosystem");
     case "maven":
       // maven targets are collected in-process from a committed CycloneDX sidecar - no build tool
       // runs, so there is no cdxgen ecosystem to select. Reaching here is a wiring bug.
-      throw new Error(
-        "maven targets are collected in-process and have no cdxgen ecosystem",
-      );
+      throw new Error("maven targets are collected in-process and have no cdxgen ecosystem");
   }
 }
 

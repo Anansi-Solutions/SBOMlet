@@ -20,9 +20,7 @@ describe("extractCopyrightLines — concrete lines", () => {
       "Permission is hereby granted, free of charge, to any person obtaining",
     ].join("\n");
 
-    expect(extractCopyrightLines(text)).toEqual([
-      "Copyright (c) 2015 Jane Doe",
-    ]);
+    expect(extractCopyrightLines(text)).toEqual(["Copyright (c) 2015 Jane Doe"]);
   });
 
   test("a © line without '(c)' or the word 'copyright' matches via the year/© test", () => {
@@ -103,9 +101,7 @@ describe("extractCopyrightLines — dedup and cap", () => {
       "Copyright (c) 2015 Jane Doe",
     ].join("\n");
 
-    expect(extractCopyrightLines(text)).toEqual([
-      "Copyright (c) 2015 Jane Doe",
-    ]);
+    expect(extractCopyrightLines(text)).toEqual(["Copyright (c) 2015 Jane Doe"]);
   });
 
   test("a pathological file with 50 distinct copyright lines caps at 20", () => {

@@ -17,10 +17,7 @@ function unusedRuleReason(policy: Policy, ruleId: string): string {
   const match = /^(compatible|clarify)\[(\d+)\]$/.exec(ruleId);
   if (match === null) return "";
   const index = Number(match[2]);
-  const rule =
-    match[1] === "compatible"
-      ? policy.compatible[index]
-      : policy.clarify[index];
+  const rule = match[1] === "compatible" ? policy.compatible[index] : policy.clarify[index];
   return rule?.reason ?? "";
 }
 
@@ -86,9 +83,7 @@ export function writePolicySummary(
   // denominator above - NOT the per-package markdown review section. The "(N verdicts)" suffix
   // mirrors the counts-line above so the denominator is unambiguous and never read as a package
   // count.
-  const impreciseCount = verdicts.filter((v) =>
-    v.rule.startsWith("default:imprecise"),
-  ).length;
+  const impreciseCount = verdicts.filter((v) => v.rule.startsWith("default:imprecise")).length;
   if (impreciseCount > 0) {
     process.stderr.write(
       `policy: ${impreciseCount} imprecise (review / disambiguate via ` +
@@ -99,9 +94,7 @@ export function writePolicySummary(
   // unchanged). A conflict:scancode verdict is a FAIL (a subset of the fail count) - the in-depth
   // scan disagrees with the quick check and a human must resolve it via [[clarify]]. Printed only
   // when any exist, so policies with no conflicts keep byte-identical output.
-  const conflictCount = verdicts.filter(
-    (v) => v.rule === "conflict:scancode",
-  ).length;
+  const conflictCount = verdicts.filter((v) => v.rule === "conflict:scancode").length;
   if (conflictCount > 0) {
     process.stderr.write(
       `policy: ${conflictCount} assessment conflict(s) — resolve via ` +
@@ -114,9 +107,7 @@ export function writePolicySummary(
   // policies with no dev downgrades keep byte-identical output. Matched on the auditable
   // dev-downgrade marker that evaluate.applyDevScope appends to the reason.
   const devDowngradedCount = verdicts.filter(
-    (v) =>
-      v.status === "warn" &&
-      v.reason.includes("downgraded to warn: dev-only occurrence"),
+    (v) => v.status === "warn" && v.reason.includes("downgraded to warn: dev-only occurrence"),
   ).length;
   if (devDowngradedCount > 0) {
     process.stderr.write(

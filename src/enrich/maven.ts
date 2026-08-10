@@ -46,10 +46,7 @@ export function mavenVersionWithoutQualifiers(version: string): string {
  * the path root - SSRF impossible by
  * construction, the nuget.ts idiom.
  */
-export function depsDevVersionUrl(
-  encodedName: string,
-  version: string,
-): string {
+export function depsDevVersionUrl(encodedName: string, version: string): string {
   const slash = encodedName.indexOf("/");
   const groupEncoded = slash === -1 ? encodedName : encodedName.slice(0, slash);
   const artifactEncoded = slash === -1 ? "" : encodedName.slice(slash + 1);
@@ -84,10 +81,7 @@ export function resolveMavenLicenses(doc: unknown): MavenResolution | null {
     ...new Set(
       parsed.licenses
         .map((license) => license.trim())
-        .filter(
-          (license) =>
-            license !== "" && license.toLowerCase() !== NON_STANDARD_SENTINEL,
-        ),
+        .filter((license) => license !== "" && license.toLowerCase() !== NON_STANDARD_SENTINEL),
     ),
   ].sort(compareCodeUnits);
   if (raws.length === 0) return null;

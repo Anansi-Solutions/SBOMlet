@@ -1,18 +1,14 @@
 import { describe, expect, test } from "bun:test";
 
 import { applyContainerScopes } from "../src/pipeline/containerScope";
-import type {
-  CanonicalDependencies,
-  PackageEntry,
-} from "../src/model/dependencies";
+import type { CanonicalDependencies, PackageEntry } from "../src/model/dependencies";
 
 const API_CONTAINER = "docker:services/api/Dockerfile";
 const BUILD_CONTAINER = "docker:tools/build/Dockerfile";
 
 /** Hand-built PackageEntry with sensible defaults for the transform tests. */
 function entry(
-  partial: Partial<PackageEntry> &
-    Pick<PackageEntry, "name" | "version" | "purl">,
+  partial: Partial<PackageEntry> & Pick<PackageEntry, "name" | "version" | "purl">,
 ): PackageEntry {
   return {
     occurrences: [{ target: API_CONTAINER, isDevDependency: false }],
@@ -73,10 +69,7 @@ describe("applyContainerScopes — application ecosystems re-key to app", () => 
       name: "pip-app",
       version: "1.0.0",
     });
-    const result = applyContainerScopes(
-      { packages: [pkg] },
-      new Set([API_CONTAINER]),
-    );
+    const result = applyContainerScopes({ packages: [pkg] }, new Set([API_CONTAINER]));
     expect(result.packages[0]!.scope).toBe("app");
     expect(result.packages[0]!.occurrences[0]!.isDevDependency).toBe(true);
   });
@@ -91,10 +84,7 @@ describe("applyContainerScopes — application ecosystems re-key to app", () => 
         { target: BUILD_CONTAINER, isDevDependency: false },
       ],
     });
-    const result = applyContainerScopes(
-      { packages: [pkg] },
-      new Set([BUILD_CONTAINER]),
-    );
+    const result = applyContainerScopes({ packages: [pkg] }, new Set([BUILD_CONTAINER]));
     const [atApi, atBuild] = result.packages[0]!.occurrences;
     expect(atApi!.target).toBe(API_CONTAINER);
     expect(atApi!.isDevDependency).toBe(false);
@@ -133,10 +123,7 @@ describe("applyContainerScopes — an already-app package still dev-marks its do
       licenseClaims: [],
       scope: "app",
     };
-    const result = applyContainerScopes(
-      { packages: [pkg] },
-      new Set([BUILD_CONTAINER]),
-    );
+    const result = applyContainerScopes({ packages: [pkg] }, new Set([BUILD_CONTAINER]));
     expect(result.packages[0]!.scope).toBe("app");
     const [atApp, atBuild] = result.packages[0]!.occurrences;
     expect(atApp!.target).toBe("apps/web");

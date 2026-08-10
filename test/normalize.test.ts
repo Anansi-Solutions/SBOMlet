@@ -76,15 +76,8 @@ describe("COPYLEFT_IDS membership", () => {
     // node_modules (the same data spdx-expression-parse matches against):
     // a typo'd id here would never match a parsed leaf and would silently
     // recreate the CR-01 default:ok gap.
-    const dataDir = join(
-      import.meta.dir,
-      "..",
-      "node_modules",
-      "spdx-license-ids",
-    );
-    const current = JSON.parse(
-      readFileSync(join(dataDir, "index.json"), "utf8"),
-    ) as string[];
+    const dataDir = join(import.meta.dir, "..", "node_modules", "spdx-license-ids");
+    const current = JSON.parse(readFileSync(join(dataDir, "index.json"), "utf8")) as string[];
     const deprecated = JSON.parse(
       readFileSync(join(dataDir, "deprecated.json"), "utf8"),
     ) as string[];
@@ -118,9 +111,7 @@ describe("isCopyleft tree semantics", () => {
   });
 
   test("WITH exception does not clear copyleft", () => {
-    expect(isCopyleft(p("GPL-2.0-only WITH Classpath-exception-2.0"))).toBe(
-      true,
-    );
+    expect(isCopyleft(p("GPL-2.0-only WITH Classpath-exception-2.0"))).toBe(true);
   });
 });
 
@@ -137,15 +128,11 @@ describe("elect — deterministic OR-branch election", () => {
 
   test("tie-break 2b: prefers a branch with no LicenseRef/DocumentRef leaves", () => {
     // Pure lexicographic would elect LicenseRef-internal-foo (L < M).
-    expect(renderNode(elect(p("(LicenseRef-internal-foo OR MIT)")))).toBe(
-      "MIT",
-    );
+    expect(renderNode(elect(p("(LicenseRef-internal-foo OR MIT)")))).toBe("MIT");
   });
 
   test("AND composes elected sub-expressions (rule 1)", () => {
-    expect(renderNode(elect(p("(MIT OR GPL-2.0-only) AND Apache-2.0")))).toBe(
-      "MIT AND Apache-2.0",
-    );
+    expect(renderNode(elect(p("(MIT OR GPL-2.0-only) AND Apache-2.0")))).toBe("MIT AND Apache-2.0");
   });
 
   test("(MPL-2.0 OR Apache-2.0) elects Apache-2.0 and avoids copyleft", () => {
@@ -155,9 +142,9 @@ describe("elect — deterministic OR-branch election", () => {
   });
 
   test("WITH leaves are elected as a unit — exception never stripped (rule 3)", () => {
-    expect(
-      renderNode(elect(p("GPL-2.0-only WITH Classpath-exception-2.0"))),
-    ).toBe("GPL-2.0-only WITH Classpath-exception-2.0");
+    expect(renderNode(elect(p("GPL-2.0-only WITH Classpath-exception-2.0")))).toBe(
+      "GPL-2.0-only WITH Classpath-exception-2.0",
+    );
   });
 });
 
@@ -200,9 +187,7 @@ describe("spdx-satisfies allowlist-entry edge (agreement-test substrate)", () =>
     // Even the byte-identical expression cannot satisfy itself through the
     // allowlist — the exact-equality pre-check is the ONLY agreement path
     // for compound in-depth expressions.
-    expect(() =>
-      satisfies("MIT AND Apache-2.0", ["MIT AND Apache-2.0"]),
-    ).toThrow();
+    expect(() => satisfies("MIT AND Apache-2.0", ["MIT AND Apache-2.0"])).toThrow();
   });
 
   test("an OR-bearing allowlist entry throws too (stricter than the AND-only schema.ts comment)", () => {
@@ -225,16 +210,13 @@ describe("spdx-satisfies allowlist-entry edge (agreement-test substrate)", () =>
 // normalizeRaw + annotateFindings (Task 3)
 // ---------------------------------------------------------------------------
 
-const claim = (
-  raw: string,
-  kind: LicenseClaimKind = "spdx-id",
-): LicenseClaim => ({ raw, kind, source: "generator" });
+const claim = (raw: string, kind: LicenseClaimKind = "spdx-id"): LicenseClaim => ({
+  raw,
+  kind,
+  source: "generator",
+});
 
-const pkg = (
-  name: string,
-  version: string,
-  claims: LicenseClaim[],
-): PackageEntry => ({
+const pkg = (name: string, version: string, claims: LicenseClaim[]): PackageEntry => ({
   purl: `pkg:npm/${name}@${version}`,
   name,
   version,
@@ -244,11 +226,7 @@ const pkg = (
 });
 
 /** OS-scope variant of {@link pkg} (a pkg:deb row): scope "os", os target. */
-const osPkg = (
-  name: string,
-  version: string,
-  claims: LicenseClaim[],
-): PackageEntry => ({
+const osPkg = (name: string, version: string, claims: LicenseClaim[]): PackageEntry => ({
   purl: `pkg:deb/debian/${name}@${version}`,
   name,
   version,
@@ -267,12 +245,7 @@ type CorpusClass = "exact" | "corrected" | "none" | "imprecise";
 // every distinct (kind, raw) value the real repo produces, with the expected
 // Normalized column. [raw, kind, expectedExpression, class]
 const CORPUS: ReadonlyArray<
-  [
-    raw: string,
-    kind: LicenseClaimKind,
-    expected: string | null,
-    klass: CorpusClass,
-  ]
+  [raw: string, kind: LicenseClaimKind, expected: string | null, klass: CorpusClass]
 > = [
   ["MIT", "spdx-id", "MIT", "exact"],
   ["Apache-2.0", "spdx-id", "Apache-2.0", "exact"],
@@ -293,12 +266,7 @@ const CORPUS: ReadonlyArray<
   // disambiguate them to BSD-3-Clause.
   ["BSD", "name", null, "imprecise"],
   ["CC0-1.0", "spdx-id", "CC0-1.0", "exact"],
-  [
-    "Apache-2.0 AND LGPL-3.0-or-later",
-    "expression",
-    "Apache-2.0 AND LGPL-3.0-or-later",
-    "exact",
-  ],
+  ["Apache-2.0 AND LGPL-3.0-or-later", "expression", "Apache-2.0 AND LGPL-3.0-or-later", "exact"],
   ["Unlicense", "spdx-id", "Unlicense", "exact"],
   ["0BSD", "spdx-id", "0BSD", "exact"],
   ["(CC-BY-4.0 AND MIT)", "expression", "(CC-BY-4.0 AND MIT)", "exact"],
@@ -314,19 +282,9 @@ const CORPUS: ReadonlyArray<
   ["BSD-3-Clause OR MIT", "expression", "BSD-3-Clause OR MIT", "exact"],
   ["Python-2.0", "spdx-id", "Python-2.0", "exact"],
   ["Apache License, Version 2.0", "name", "Apache-2.0", "corrected"],
-  [
-    "(AFL-2.1 OR BSD-3-Clause)",
-    "expression",
-    "(AFL-2.1 OR BSD-3-Clause)",
-    "exact",
-  ],
+  ["(AFL-2.1 OR BSD-3-Clause)", "expression", "(AFL-2.1 OR BSD-3-Clause)", "exact"],
   ["Public Domain", "name", null, "none"],
-  [
-    "(MIT OR GPL-3.0-or-later)",
-    "expression",
-    "(MIT OR GPL-3.0-or-later)",
-    "exact",
-  ],
+  ["(MIT OR GPL-3.0-or-later)", "expression", "(MIT OR GPL-3.0-or-later)", "exact"],
   ["(WTFPL OR MIT)", "expression", "(WTFPL OR MIT)", "exact"],
   ["(MIT AND Zlib)", "expression", "(MIT AND Zlib)", "exact"],
   [
@@ -336,36 +294,25 @@ const CORPUS: ReadonlyArray<
     "exact",
   ],
   ["CC-BY-3.0", "spdx-id", "CC-BY-3.0", "exact"],
-  [
-    "(Unlicense OR Apache-2.0)",
-    "expression",
-    "(Unlicense OR Apache-2.0)",
-    "exact",
-  ],
+  ["(Unlicense OR Apache-2.0)", "expression", "(Unlicense OR Apache-2.0)", "exact"],
 ];
 
 describe("normalizeRaw — live 33-value corpus", () => {
   test("corpus covers all 33 distinct live (kind, raw) values", () => {
     expect(CORPUS.length).toBe(33);
-    expect(new Set(CORPUS.map(([raw, kind]) => `${kind}\0${raw}`)).size).toBe(
-      33,
-    );
+    expect(new Set(CORPUS.map(([raw, kind]) => `${kind}\0${raw}`)).size).toBe(33);
   });
 
   for (const [raw, , expected, klass] of CORPUS) {
     test(`"${raw}" → ${expected === null ? "unknown" : `"${expected}"`}`, () => {
       const result = normalizeRaw(raw);
       expect(result.expression).toBe(expected);
-      expect(result.source).toBe(
-        klass === "corrected" ? "corrected" : "generator",
-      );
+      expect(result.source).toBe(klass === "corrected" ? "corrected" : "generator");
     });
   }
 
   test("findings over the corpus carry the expected confidence", () => {
-    const entries = CORPUS.map(([raw, kind], i) =>
-      pkg(`corpus-${i}`, "1.0.0", [claim(raw, kind)]),
-    );
+    const entries = CORPUS.map(([raw, kind], i) => pkg(`corpus-${i}`, "1.0.0", [claim(raw, kind)]));
     const { model } = annotateFindings(modelOf(...entries), []);
     for (const [i, [raw, , expected, klass]] of CORPUS.entries()) {
       const finding = model.packages[i]!.finding;
@@ -464,9 +411,7 @@ describe("normalizeRaw — real-world Maven free-text raws (locked)", () => {
   });
 
   test('juniversalchardet\'s PARALLEL "GNU LESSER GENERAL PUBLIC LICENSE, version 3 (LGPL-3.0)" stays an honest UNKNOWN — an asymmetry with its GPL sibling above, locked as-observed', () => {
-    const result = normalizeRaw(
-      "GNU LESSER GENERAL PUBLIC LICENSE, version 3 (LGPL-3.0)",
-    );
+    const result = normalizeRaw("GNU LESSER GENERAL PUBLIC LICENSE, version 3 (LGPL-3.0)");
     // LOCKED: despite the identical structure and an explicit "(LGPL-3.0)"
     // hint, correct() fails to resolve this one while its GPL sibling (same
     // POM, same author, same wording pattern) DOES resolve — an inconsistent
@@ -486,10 +431,7 @@ describe("normalizeRaw — real-world Maven free-text raws (locked)", () => {
     const perClaim = claims.map((c) => normalizeRaw(c.raw).expression);
     expect(perClaim).toEqual(["MPL-1.1", "GPL-3.0-or-later", null]);
 
-    const { model } = annotateFindings(
-      modelOf(pkg("juniversalchardet", "2.5.0", claims)),
-      [],
-    );
+    const { model } = annotateFindings(modelOf(pkg("juniversalchardet", "2.5.0", claims)), []);
     const finding = model.packages[0]!.finding;
     // LOCKED: two of three sub-licenses resolve, but the third's genuine
     // unknown forces the combined app-scope finding to unknown — partial
@@ -646,10 +588,7 @@ describe("annotateFindings — imprecise findings", () => {
   test("an imprecise finding is distinct from an unknown finding", () => {
     const impreciseEntry = pkg("imp", "1.0.0", [claim("BSD", "name")]);
     const unknownEntry = pkg("unk", "1.0.0", [claim("Public Domain", "name")]);
-    const { model } = annotateFindings(
-      modelOf(impreciseEntry, unknownEntry),
-      [],
-    );
+    const { model } = annotateFindings(modelOf(impreciseEntry, unknownEntry), []);
     expect(model.packages[0]!.finding!.confidence).toBe("imprecise");
     expect(model.packages[0]!.finding!.impreciseFamily).toBe("BSD");
     expect(model.packages[1]!.finding!.confidence).toBe("none");
@@ -657,10 +596,7 @@ describe("annotateFindings — imprecise findings", () => {
   });
 
   test("one precise + one imprecise claim degrades conservatively (never AND-ed into a fake expression)", () => {
-    const entry = pkg("mixed", "1.0.0", [
-      claim("MIT"),
-      claim("BSD License", "name"),
-    ]);
+    const entry = pkg("mixed", "1.0.0", [claim("MIT"), claim("BSD License", "name")]);
     const { model } = annotateFindings(modelOf(entry), []);
     const finding = model.packages[0]!.finding!;
     // Conservative: the combined finding is at most as confident as its
@@ -672,9 +608,7 @@ describe("annotateFindings — imprecise findings", () => {
 
   test("a clarify override on an imprecise package wins (precise expression, source override)", () => {
     const entry = pkg("jupyter-thing", "1.0.0", [claim("BSD", "name")]);
-    const clarify: ClarifyInput[] = [
-      { name: "jupyter-thing", expression: "BSD-3-Clause" },
-    ];
+    const clarify: ClarifyInput[] = [{ name: "jupyter-thing", expression: "BSD-3-Clause" }];
     const { model } = annotateFindings(modelOf(entry), clarify);
     const finding = model.packages[0]!.finding!;
     expect(finding.source).toBe("override");
@@ -693,10 +627,7 @@ describe("annotateFindings — claim combination (Pitfalls 7-8)", () => {
   });
 
   test("distinct claims AND-combine conservatively and re-parse", () => {
-    const entry = pkg("two-claims", "1.0.0", [
-      claim("MIT"),
-      claim("Apache-2.0"),
-    ]);
+    const entry = pkg("two-claims", "1.0.0", [claim("MIT"), claim("Apache-2.0")]);
     const { model } = annotateFindings(modelOf(entry), []);
     const expression = model.packages[0]!.finding!.expression;
     expect(expression).toBe("MIT AND Apache-2.0");
@@ -705,10 +636,7 @@ describe("annotateFindings — claim combination (Pitfalls 7-8)", () => {
 
   test("one normalizable + one garbage claim → whole finding unknown", () => {
     // Partial knowledge must not hide an obligation.
-    const entry = pkg("mixed", "1.0.0", [
-      claim("MIT"),
-      claim("total garbage xyz", "name"),
-    ]);
+    const entry = pkg("mixed", "1.0.0", [claim("MIT"), claim("total garbage xyz", "name")]);
     const { model } = annotateFindings(modelOf(entry), []);
     const finding = model.packages[0]!.finding!;
     expect(finding.expression).toBeNull();
@@ -740,10 +668,7 @@ describe("findingFromClaims — copyleft dominates a permissive sibling (C2/W2)"
   });
 
   test("C2: imprecise BSD + precise GPL-3.0-only → GPL preserved (copyleft)", () => {
-    const entry = pkg("mixed", "1.0.0", [
-      claim("BSD", "name"),
-      claim("GPL-3.0-only", "spdx-id"),
-    ]);
+    const entry = pkg("mixed", "1.0.0", [claim("BSD", "name"), claim("GPL-3.0-only", "spdx-id")]);
     const { model } = annotateFindings(modelOf(entry), []);
     const finding = model.packages[0]!.finding!;
     expect(finding.expression).toBe("GPL-3.0-only");
@@ -773,10 +698,7 @@ describe("findingFromClaims — copyleft dominates a permissive sibling (C2/W2)"
   });
 
   test("regression: precise permissive + imprecise permissive still degrades to imprecise (line 449 intact)", () => {
-    const entry = pkg("mixed", "1.0.0", [
-      claim("MIT"),
-      claim("BSD License", "name"),
-    ]);
+    const entry = pkg("mixed", "1.0.0", [claim("MIT"), claim("BSD License", "name")]);
     const { model } = annotateFindings(modelOf(entry), []);
     const finding = model.packages[0]!.finding!;
     expect(finding.expression).toBeNull();
@@ -805,9 +727,7 @@ describe("annotateFindings — coverage, immutability, election", () => {
   });
 
   test("elected branch is recorded — raw expression preserved", () => {
-    const entry = pkg("dompurify", "3.1.6", [
-      claim("(MPL-2.0 OR Apache-2.0)", "expression"),
-    ]);
+    const entry = pkg("dompurify", "3.1.6", [claim("(MPL-2.0 OR Apache-2.0)", "expression")]);
     const { model } = annotateFindings(modelOf(entry), []);
     const finding = model.packages[0]!.finding!;
     expect(finding.expression).toBe("(MPL-2.0 OR Apache-2.0)");
@@ -827,10 +747,7 @@ describe("annotateFindings — clarify overrides", () => {
         expression: "Apache-2.0",
       },
     ];
-    const { model, usedClarifyIndices } = annotateFindings(
-      modelOf(entry),
-      clarify,
-    );
+    const { model, usedClarifyIndices } = annotateFindings(modelOf(entry), clarify);
     const finding = model.packages[0]!.finding!;
     expect(finding.source).toBe("override");
     expect(finding.confidence).toBe("exact");
@@ -846,10 +763,7 @@ describe("annotateFindings — clarify overrides", () => {
     const clarify: ClarifyInput[] = [
       { name: "@img/sharp-win32-x64", version: "9.9.9", expression: "MIT" },
     ];
-    const { model, usedClarifyIndices } = annotateFindings(
-      modelOf(entry),
-      clarify,
-    );
+    const { model, usedClarifyIndices } = annotateFindings(modelOf(entry), clarify);
     const finding = model.packages[0]!.finding!;
     expect(finding.source).toBe("generator");
     expect(finding.expression).toBe("Apache-2.0 AND LGPL-3.0-or-later");
@@ -858,13 +772,8 @@ describe("annotateFindings — clarify overrides", () => {
 
   test("version-less clarify matches any version of the named package", () => {
     const entry = pkg("jsonify", "0.0.1", [claim("Public Domain", "name")]);
-    const clarify: ClarifyInput[] = [
-      { name: "jsonify", expression: "Unlicense" },
-    ];
-    const { model, usedClarifyIndices } = annotateFindings(
-      modelOf(entry),
-      clarify,
-    );
+    const clarify: ClarifyInput[] = [{ name: "jsonify", expression: "Unlicense" }];
+    const { model, usedClarifyIndices } = annotateFindings(modelOf(entry), clarify);
     expect(model.packages[0]!.finding!.expression).toBe("Unlicense");
     expect(model.packages[0]!.finding!.source).toBe("override");
     expect(usedClarifyIndices.has(0)).toBe(true);
@@ -881,10 +790,7 @@ describe("annotateFindings — staleness-guarded clarify", () => {
     const clarify: ClarifyInput[] = [
       { name: "jupyter-thing", expects: "BSD", expression: "BSD-3-Clause" },
     ];
-    const { model, usedClarifyIndices } = annotateFindings(
-      modelOf(entry),
-      clarify,
-    );
+    const { model, usedClarifyIndices } = annotateFindings(modelOf(entry), clarify);
     const finding = model.packages[0]!.finding!;
     expect(finding.source).toBe("override");
     expect(finding.expression).toBe("BSD-3-Clause");
@@ -935,9 +841,7 @@ describe("annotateFindings — staleness-guarded clarify", () => {
 
   test("no-expects clarify still applies blindly (backward-compat)", () => {
     const entry = pkg("jsonify", "0.0.1", [claim("Public Domain", "name")]);
-    const clarify: ClarifyInput[] = [
-      { name: "jsonify", expression: "Unlicense" },
-    ];
+    const clarify: ClarifyInput[] = [{ name: "jsonify", expression: "Unlicense" }];
     const { model } = annotateFindings(modelOf(entry), clarify);
     const finding = model.packages[0]!.finding!;
     expect(finding.source).toBe("override");
@@ -970,14 +874,8 @@ describe("annotateFindings — tool-level BUILTIN overrides", () => {
 
   test("project clarify WINS over a tool-level override on conflict (project-wins)", () => {
     const entry = pkg("ipython", "8.0.0", [claim("BSD", "name")]);
-    const clarify: ClarifyInput[] = [
-      { name: "ipython", expects: "BSD", expression: "MIT" },
-    ];
-    const { model, usedClarifyIndices } = annotateFindings(
-      modelOf(entry),
-      clarify,
-      jupyterBuiltin,
-    );
+    const clarify: ClarifyInput[] = [{ name: "ipython", expects: "BSD", expression: "MIT" }];
+    const { model, usedClarifyIndices } = annotateFindings(modelOf(entry), clarify, jupyterBuiltin);
     const finding = model.packages[0]!.finding!;
     expect(finding.expression).toBe("MIT");
     expect(finding.overrideRule).toBeUndefined(); // project clarify, not builtin
@@ -996,9 +894,7 @@ describe("annotateFindings — tool-level BUILTIN overrides", () => {
 
   test("the chain performs no I/O and never throws on a stale override", () => {
     const entry = pkg("ipython", "8.0.0", [claim("GPL-3.0-only")]);
-    expect(() =>
-      annotateFindings(modelOf(entry), [], jupyterBuiltin),
-    ).not.toThrow();
+    expect(() => annotateFindings(modelOf(entry), [], jupyterBuiltin)).not.toThrow();
   });
 });
 
@@ -1015,15 +911,8 @@ describe("annotateFindings — staleness fails CLOSED on a contradicting co-clai
     // The canonical relicense-metadata-lag case: PyPI still carries the old
     // "BSD" classifier while a new precise "GPL-3.0-only" id has appeared. The
     // shipped ipython BUILTIN_OVERRIDES entry must NOT mask the GPL.
-    const entry = pkg("ipython", "8.0.0", [
-      claim("BSD", "name"),
-      claim("GPL-3.0-only", "spdx-id"),
-    ]);
-    const { model } = annotateFindings(
-      modelOf(entry),
-      [],
-      [...BUILTIN_OVERRIDES],
-    );
+    const entry = pkg("ipython", "8.0.0", [claim("BSD", "name"), claim("GPL-3.0-only", "spdx-id")]);
+    const { model } = annotateFindings(modelOf(entry), [], [...BUILTIN_OVERRIDES]);
     const finding = model.packages[0]!.finding!;
     expect(finding.source).not.toBe("override");
     expect(finding.staleOverride).toBeDefined();
@@ -1033,11 +922,7 @@ describe("annotateFindings — staleness fails CLOSED on a contradicting co-clai
 
   test("clean case: BSD alone still applies BSD-3-Clause (shipped ipython builtin)", () => {
     const entry = pkg("ipython", "8.0.0", [claim("BSD", "name")]);
-    const { model } = annotateFindings(
-      modelOf(entry),
-      [],
-      [...BUILTIN_OVERRIDES],
-    );
+    const { model } = annotateFindings(modelOf(entry), [], [...BUILTIN_OVERRIDES]);
     const finding = model.packages[0]!.finding!;
     expect(finding.source).toBe("override");
     expect(finding.expression).toBe("BSD-3-Clause");
@@ -1046,11 +931,7 @@ describe("annotateFindings — staleness fails CLOSED on a contradicting co-clai
 
   test("GPL alone (no lingering BSD) still fails closed (control)", () => {
     const entry = pkg("ipython", "8.0.0", [claim("GPL-3.0-only", "spdx-id")]);
-    const { model } = annotateFindings(
-      modelOf(entry),
-      [],
-      [...BUILTIN_OVERRIDES],
-    );
+    const { model } = annotateFindings(modelOf(entry), [], [...BUILTIN_OVERRIDES]);
     const finding = model.packages[0]!.finding!;
     expect(finding.source).not.toBe("override");
     expect(finding.staleOverride).toBeDefined();
@@ -1062,15 +943,8 @@ describe("annotateFindings — staleness fails CLOSED on a contradicting co-clai
     // not literally satisfy must not block the disambiguation when there is no
     // contradicting copyleft — the guard fails closed only on a precise member
     // that the asserted expression cannot account for as copyleft.
-    const entry = pkg("ipython", "8.0.0", [
-      claim("BSD", "name"),
-      claim("BSD-3-Clause", "spdx-id"),
-    ]);
-    const { model } = annotateFindings(
-      modelOf(entry),
-      [],
-      [...BUILTIN_OVERRIDES],
-    );
+    const entry = pkg("ipython", "8.0.0", [claim("BSD", "name"), claim("BSD-3-Clause", "spdx-id")]);
+    const { model } = annotateFindings(modelOf(entry), [], [...BUILTIN_OVERRIDES]);
     const finding = model.packages[0]!.finding!;
     expect(finding.source).toBe("override");
     expect(finding.expression).toBe("BSD-3-Clause");
@@ -1094,11 +968,7 @@ describe("annotateFindings — redundant override when metadata catches up (gap 
     // shipped "expects: BSD" override no longer matches the signal. But the
     // observed precise license is IDENTICAL to what the override asserts.
     const entry = pkg("ipython", "9.10.0", [claim("BSD-3-Clause", "spdx-id")]);
-    const { model } = annotateFindings(
-      modelOf(entry),
-      [],
-      [...BUILTIN_OVERRIDES],
-    );
+    const { model } = annotateFindings(modelOf(entry), [], [...BUILTIN_OVERRIDES]);
     const finding = model.packages[0]!.finding!;
     expect(finding.expression).toBe("BSD-3-Clause");
     expect(finding.source).not.toBe("override"); // observed finding stands
@@ -1106,17 +976,9 @@ describe("annotateFindings — redundant override when metadata catches up (gap 
   });
 
   test("REDUNDANT covers the whole now-precise Jupyter stack (ipykernel, jupyter-core)", () => {
-    const ipykernel = pkg("ipykernel", "7.2.0", [
-      claim("BSD-3-Clause", "spdx-id"),
-    ]);
-    const jupyterCore = pkg("jupyter-core", "5.9.1", [
-      claim("BSD-3-Clause", "spdx-id"),
-    ]);
-    const { model } = annotateFindings(
-      modelOf(ipykernel, jupyterCore),
-      [],
-      [...BUILTIN_OVERRIDES],
-    );
+    const ipykernel = pkg("ipykernel", "7.2.0", [claim("BSD-3-Clause", "spdx-id")]);
+    const jupyterCore = pkg("jupyter-core", "5.9.1", [claim("BSD-3-Clause", "spdx-id")]);
+    const { model } = annotateFindings(modelOf(ipykernel, jupyterCore), [], [...BUILTIN_OVERRIDES]);
     for (const p of model.packages) {
       expect(p.finding!.expression).toBe("BSD-3-Clause");
       expect(p.finding!.staleOverride).toBeUndefined();
@@ -1124,9 +986,7 @@ describe("annotateFindings — redundant override when metadata catches up (gap 
   });
 
   test("STALE: precise MIT observed, expects BSD asserts BSD-3-Clause → fail (MIT does not satisfy BSD-3-Clause)", () => {
-    const entry = pkg("relicensed-permissive", "2.0.0", [
-      claim("MIT", "spdx-id"),
-    ]);
+    const entry = pkg("relicensed-permissive", "2.0.0", [claim("MIT", "spdx-id")]);
     const clarify: ClarifyInput[] = [
       {
         name: "relicensed-permissive",
@@ -1144,9 +1004,7 @@ describe("annotateFindings — redundant override when metadata catches up (gap 
   });
 
   test("STALE: precise GPL-3.0-only observed, expects BSD asserts BSD-3-Clause → fail (relicense to copyleft)", () => {
-    const entry = pkg("relicensed-copyleft", "2.0.0", [
-      claim("GPL-3.0-only", "spdx-id"),
-    ]);
+    const entry = pkg("relicensed-copyleft", "2.0.0", [claim("GPL-3.0-only", "spdx-id")]);
     const clarify: ClarifyInput[] = [
       {
         name: "relicensed-copyleft",
@@ -1165,15 +1023,8 @@ describe("annotateFindings — redundant override when metadata catches up (gap 
   test("the C1 masking case STILL fails closed (expects BSD present + co-present GPL contradicts)", () => {
     // Regression guard: the gap fix must not reopen C1. Here expects IS in the
     // signal, so the redundant path is never consulted; signalContradicts fires.
-    const entry = pkg("ipython", "8.0.0", [
-      claim("BSD", "name"),
-      claim("GPL-3.0-only", "spdx-id"),
-    ]);
-    const { model } = annotateFindings(
-      modelOf(entry),
-      [],
-      [...BUILTIN_OVERRIDES],
-    );
+    const entry = pkg("ipython", "8.0.0", [claim("BSD", "name"), claim("GPL-3.0-only", "spdx-id")]);
+    const { model } = annotateFindings(modelOf(entry), [], [...BUILTIN_OVERRIDES]);
     const finding = model.packages[0]!.finding!;
     expect(finding.source).not.toBe("override");
     expect(finding.staleOverride).toBeDefined();
@@ -1183,11 +1034,7 @@ describe("annotateFindings — redundant override when metadata catches up (gap 
   test("the normal disambiguation case STILL applies (observed imprecise BSD, expects BSD)", () => {
     // Regression guard: the gap fix must not break the imprecise→precise path.
     const entry = pkg("traitlets", "5.0.0", [claim("BSD License", "name")]);
-    const { model } = annotateFindings(
-      modelOf(entry),
-      [],
-      [...BUILTIN_OVERRIDES],
-    );
+    const { model } = annotateFindings(modelOf(entry), [], [...BUILTIN_OVERRIDES]);
     const finding = model.packages[0]!.finding!;
     expect(finding.source).toBe("override");
     expect(finding.expression).toBe("BSD-3-Clause");
@@ -1246,15 +1093,8 @@ describe("normalizeRaw — Debian/DEP-5 shorthand map", () => {
   }
 
   test("every Debian-shorthand TARGET is a real SPDX id (typo-proof)", () => {
-    const dataDir = join(
-      import.meta.dir,
-      "..",
-      "node_modules",
-      "spdx-license-ids",
-    );
-    const current = JSON.parse(
-      readFileSync(join(dataDir, "index.json"), "utf8"),
-    ) as string[];
+    const dataDir = join(import.meta.dir, "..", "node_modules", "spdx-license-ids");
+    const current = JSON.parse(readFileSync(join(dataDir, "index.json"), "utf8")) as string[];
     const deprecated = JSON.parse(
       readFileSync(join(dataDir, "deprecated.json"), "utf8"),
     ) as string[];
@@ -1317,9 +1157,7 @@ describe("normalizeRaw — Debian/DEP-5 shorthand map", () => {
     for (const [raw, , expected, klass] of CORPUS) {
       const result = normalizeRaw(raw);
       expect(result.expression).toBe(expected);
-      expect(result.source).toBe(
-        klass === "corrected" ? "corrected" : "generator",
-      );
+      expect(result.source).toBe(klass === "corrected" ? "corrected" : "generator");
     }
     // And the canonical TARGETs themselves still parse as exact (not re-corrected).
     expect(normalizeRaw("GPL-2.0-only").source).toBe("generator");
@@ -1348,17 +1186,15 @@ describe("annotateFindings — OS packages render real licenses for mapped short
   test("a real coreutils-style GPL OS package renders a real copyleft license", () => {
     // Debian DEP-5 "GPL-3+" shorthand → the precise GPL-3.0-or-later copyleft id.
     const entry = pkg("coreutils", "9.1-1", [claim("GPL-3+", "name")]);
-    const finding = annotateFindings(modelOf(entry), []).model.packages[0]!
-      .finding!;
+    const finding = annotateFindings(modelOf(entry), []).model.packages[0]!.finding!;
     expect(finding.expression).toBe("GPL-3.0-or-later");
   });
 
   test("a BSD OS package renders a real permissive license", () => {
     const entry = pkg("libbsd0", "0.11", [claim("BSD-3-clause", "name")]);
-    expect(
-      annotateFindings(modelOf(entry), []).model.packages[0]!.finding!
-        .expression,
-    ).toBe("BSD-3-Clause");
+    expect(annotateFindings(modelOf(entry), []).model.packages[0]!.finding!.expression).toBe(
+      "BSD-3-Clause",
+    );
   });
 
   test("all-or-nothing unknown invariant intact: an Expat sibling next to a genuinely-unknown token stays unknown", () => {
@@ -1368,8 +1204,7 @@ describe("annotateFindings — OS packages render real licenses for mapped short
       claim("AND", "name"),
       claim("custom", "name"),
     ]);
-    const finding = annotateFindings(modelOf(entry), []).model.packages[0]!
-      .finding!;
+    const finding = annotateFindings(modelOf(entry), []).model.packages[0]!.finding!;
     // "custom" is genuinely unknown → the whole row is correctly unknown.
     expect(finding.expression).toBeNull();
     expect(finding.confidence).toBe("none");
@@ -1379,11 +1214,8 @@ describe("annotateFindings — OS packages render real licenses for mapped short
     // syft emits real multi-license deb packages as a single `expression` claim
     // (SbomExpressionClaim, tried first in licenseClaimsOf). It must normalize as
     // one expression — never split into name tokens that force the row unknown.
-    const entry = pkg("font-pkg", "1.0", [
-      claim("FTL OR GPL-2.0-or-later", "expression"),
-    ]);
-    const finding = annotateFindings(modelOf(entry), []).model.packages[0]!
-      .finding!;
+    const entry = pkg("font-pkg", "1.0", [claim("FTL OR GPL-2.0-or-later", "expression")]);
+    const finding = annotateFindings(modelOf(entry), []).model.packages[0]!.finding!;
     expect(finding.expression).toBe("FTL OR GPL-2.0-or-later");
     expect(finding.elected).not.toBeNull();
   });
@@ -1412,8 +1244,7 @@ describe("findingFromClaims — os-scope partial finding", () => {
       claim("BSD-3-Clause", "spdx-id"),
       claim("public-domain", "name"),
     ]);
-    const finding = annotateFindings(modelOf(entry), []).model.packages[0]!
-      .finding!;
+    const finding = annotateFindings(modelOf(entry), []).model.packages[0]!.finding!;
     expect(finding.expression).toBe("GPL-2.0-only AND BSD-3-Clause");
     expect(finding.elected).not.toBeNull();
     expect(finding.unrecognizedTokens).toEqual(["public-domain"]);
@@ -1431,8 +1262,7 @@ describe("findingFromClaims — os-scope partial finding", () => {
       claim("custom", "name"),
       claim("public-domain", "name"), // dup
     ]);
-    const finding = annotateFindings(modelOf(entry), []).model.packages[0]!
-      .finding!;
+    const finding = annotateFindings(modelOf(entry), []).model.packages[0]!.finding!;
     expect(finding.expression).toBe("MIT");
     expect(finding.unrecognizedTokens).toEqual(["custom", "public-domain"]);
   });
@@ -1442,8 +1272,7 @@ describe("findingFromClaims — os-scope partial finding", () => {
       claim("public-domain", "name"),
       claim("custom", "name"),
     ]);
-    const finding = annotateFindings(modelOf(entry), []).model.packages[0]!
-      .finding!;
+    const finding = annotateFindings(modelOf(entry), []).model.packages[0]!.finding!;
     expect(finding.expression).toBeNull();
     expect(finding.confidence).toBe("none");
   });
@@ -1453,20 +1282,15 @@ describe("findingFromClaims — os-scope partial finding", () => {
       claim("GPL-2.0-only", "spdx-id"),
       claim("custom", "name"),
     ]);
-    const finding = annotateFindings(modelOf(entry), []).model.packages[0]!
-      .finding!;
+    const finding = annotateFindings(modelOf(entry), []).model.packages[0]!.finding!;
     expect(finding.expression).toBeNull();
     expect(finding.confidence).toBe("none");
     expect(finding.unrecognizedTokens).toBeUndefined();
   });
 
   test("INVARIANT: app-scope [MIT, custom] still yields unknown (no gate weakening)", () => {
-    const entry = pkg("app-mit-custom", "1.0", [
-      claim("MIT", "spdx-id"),
-      claim("custom", "name"),
-    ]);
-    const finding = annotateFindings(modelOf(entry), []).model.packages[0]!
-      .finding!;
+    const entry = pkg("app-mit-custom", "1.0", [claim("MIT", "spdx-id"), claim("custom", "name")]);
+    const finding = annotateFindings(modelOf(entry), []).model.packages[0]!.finding!;
     expect(finding.expression).toBeNull();
     expect(finding.confidence).toBe("none");
     expect(finding.unrecognizedTokens).toBeUndefined();
@@ -1477,8 +1301,7 @@ describe("findingFromClaims — os-scope partial finding", () => {
       claim("MIT", "spdx-id"),
       claim("BSD-3-Clause", "spdx-id"),
     ]);
-    const finding = annotateFindings(modelOf(entry), []).model.packages[0]!
-      .finding!;
+    const finding = annotateFindings(modelOf(entry), []).model.packages[0]!.finding!;
     expect(finding.expression).toBe("MIT AND BSD-3-Clause");
     expect(finding.unrecognizedTokens).toBeUndefined();
   });
@@ -1490,8 +1313,7 @@ describe("findingFromClaims — os-scope partial finding", () => {
       claim("MIT", "spdx-id"),
       claim("BSD License", "name"),
     ]);
-    const finding = annotateFindings(modelOf(entry), []).model.packages[0]!
-      .finding!;
+    const finding = annotateFindings(modelOf(entry), []).model.packages[0]!.finding!;
     expect(finding.confidence).toBe("imprecise");
     expect(finding.impreciseFamily).toBe("BSD");
     expect(finding.unrecognizedTokens).toBeUndefined();
@@ -1502,8 +1324,7 @@ describe("findingFromClaims — os-scope partial finding", () => {
       claim("MIT", "spdx-id"),
       claim("  Weird Custom Name  ", "name"),
     ]);
-    const finding = annotateFindings(modelOf(entry), []).model.packages[0]!
-      .finding!;
+    const finding = annotateFindings(modelOf(entry), []).model.packages[0]!.finding!;
     expect(finding.expression).toBe("MIT");
     // trimmed but otherwise verbatim.
     expect(finding.unrecognizedTokens).toEqual(["Weird Custom Name"]);
@@ -1519,8 +1340,7 @@ describe("findingFromClaims — os-scope partial finding", () => {
       claim("AND", "name"),
       claim("MIT", "spdx-id"),
     ]);
-    const finding = annotateFindings(modelOf(entry), []).model.packages[0]!
-      .finding!;
+    const finding = annotateFindings(modelOf(entry), []).model.packages[0]!.finding!;
     // The two real licenses combine; "AND" is NOT surfaced as an unknown token.
     expect(finding.unrecognizedTokens ?? []).not.toContain("AND");
     expect(finding.expression).toBe("GPL-2.0-only AND MIT");
@@ -1534,8 +1354,7 @@ describe("findingFromClaims — os-scope partial finding", () => {
       claim("And", "name"),
       claim("public-domain", "name"),
     ]);
-    const finding = annotateFindings(modelOf(entry), []).model.packages[0]!
-      .finding!;
+    const finding = annotateFindings(modelOf(entry), []).model.packages[0]!.finding!;
     const tokens = finding.unrecognizedTokens ?? [];
     for (const connective of ["OR", "with", "And", "AND", "WITH"]) {
       expect(tokens).not.toContain(connective);
@@ -1547,23 +1366,15 @@ describe("findingFromClaims — os-scope partial finding", () => {
   test("#3/#10: a connective token does NOT trigger the all-or-nothing unknown collapse (it is not a claim)", () => {
     // [MIT, AND] in OS scope: "AND" is a syntax artifact, not an unknown claim,
     // so the finding is the clean MIT — NOT unknown, NOT os-partial.
-    const entry = osPkg("os-mit-and", "1.0", [
-      claim("MIT", "spdx-id"),
-      claim("AND", "name"),
-    ]);
-    const finding = annotateFindings(modelOf(entry), []).model.packages[0]!
-      .finding!;
+    const entry = osPkg("os-mit-and", "1.0", [claim("MIT", "spdx-id"), claim("AND", "name")]);
+    const finding = annotateFindings(modelOf(entry), []).model.packages[0]!.finding!;
     expect(finding.expression).toBe("MIT");
     expect(finding.unrecognizedTokens).toBeUndefined();
   });
 
   test("#3/#10: a connective token in APP scope does not force unknown either", () => {
-    const entry = pkg("app-mit-and", "1.0", [
-      claim("MIT", "spdx-id"),
-      claim("AND", "name"),
-    ]);
-    const finding = annotateFindings(modelOf(entry), []).model.packages[0]!
-      .finding!;
+    const entry = pkg("app-mit-and", "1.0", [claim("MIT", "spdx-id"), claim("AND", "name")]);
+    const finding = annotateFindings(modelOf(entry), []).model.packages[0]!.finding!;
     expect(finding.expression).toBe("MIT");
     expect(finding.confidence).not.toBe("none");
   });
@@ -1577,8 +1388,7 @@ describe("findingFromClaims — os-scope partial finding", () => {
       claim("GPL", "name"), // imprecise copyleft family
       claim("some-custom-token", "name"), // genuinely unknown
     ]);
-    const finding = annotateFindings(modelOf(entry), []).model.packages[0]!
-      .finding!;
+    const finding = annotateFindings(modelOf(entry), []).model.packages[0]!.finding!;
     expect(finding.confidence).toBe("imprecise");
     expect(finding.impreciseFamily).toBe("GPL");
     expect(finding.unrecognizedTokens).toEqual(["some-custom-token"]);
@@ -1607,8 +1417,7 @@ const sourcedClaim = (
 ): LicenseClaim => ({ raw, kind, source });
 
 /** A scancode-sourced claim (the assessment trigger). */
-const scancodeClaim = (raw: string): LicenseClaim =>
-  sourcedClaim(raw, "scancode", "expression");
+const scancodeClaim = (raw: string): LicenseClaim => sourcedClaim(raw, "scancode", "expression");
 
 describe("annotateFindings — scancode senior assessment (the re-pinned fill matrix)", () => {
   test("row 1 (vacuous agreement): zero-claim package + a precise scancode claim — the assessment IS the finding, source scancode", () => {
@@ -1651,10 +1460,7 @@ describe("annotateFindings — scancode senior assessment (the re-pinned fill ma
   });
 
   test("row 4 (re-pinned, the flagship conflict): imprecise GPL family + scancode MIT — the copyleft signal STANDS and the disagreement is surfaced as a conflict", () => {
-    const entry = pkg("imprecise-gpl-pkg", "1.0.0", [
-      claim("GPL", "name"),
-      scancodeClaim("MIT"),
-    ]);
+    const entry = pkg("imprecise-gpl-pkg", "1.0.0", [claim("GPL", "name"), scancodeClaim("MIT")]);
     const { model } = annotateFindings(modelOf(entry), []);
     const finding = model.packages[0]!.finding!;
     expect(finding.confidence).toBe("imprecise");
@@ -1749,9 +1555,7 @@ describe("annotateFindings — scancode senior assessment (the re-pinned fill ma
       claim("BSD", "name"),
       scancodeClaim("BSD-3-Clause"),
     ]);
-    const clarify: ClarifyInput[] = [
-      { name: "imprecise-clarified-pkg", expression: "MIT" },
-    ];
+    const clarify: ClarifyInput[] = [{ name: "imprecise-clarified-pkg", expression: "MIT" }];
     const { model } = annotateFindings(modelOf(entry), clarify);
     const finding = model.packages[0]!.finding!;
     expect(finding.source).toBe("override");
@@ -1759,10 +1563,7 @@ describe("annotateFindings — scancode senior assessment (the re-pinned fill ma
   });
 
   test("seniority (formerly never-override): a PRECISE declared claim agreeing with the assessment yields the scancode-sourced finding — the in-depth assessment outranks the quick check", () => {
-    const entry = pkg("agreeing-precise-pkg", "1.0.0", [
-      claim("MIT"),
-      scancodeClaim("MIT"),
-    ]);
+    const entry = pkg("agreeing-precise-pkg", "1.0.0", [claim("MIT"), scancodeClaim("MIT")]);
     const { model } = annotateFindings(modelOf(entry), []);
     const finding = model.packages[0]!.finding!;
     expect(finding.expression).toBe("MIT");
@@ -1807,8 +1608,7 @@ describe("annotateFindings — scancode senior assessment (the re-pinned fill ma
       claim("MIT AND Apache-2.0", "expression"),
       scancodeClaim("MIT AND Apache-2.0"),
     ]);
-    const equalFinding = annotateFindings(modelOf(equal), []).model.packages[0]!
-      .finding!;
+    const equalFinding = annotateFindings(modelOf(equal), []).model.packages[0]!.finding!;
     expect(equalFinding.expression).toBe("MIT AND Apache-2.0");
     expect(equalFinding.source).toBe("scancode");
     expect(equalFinding.conflict).toBeUndefined();
@@ -1817,8 +1617,7 @@ describe("annotateFindings — scancode senior assessment (the re-pinned fill ma
       claim("MIT"),
       scancodeClaim("MIT AND Apache-2.0"),
     ]);
-    const differingFinding = annotateFindings(modelOf(differing), []).model
-      .packages[0]!.finding!;
+    const differingFinding = annotateFindings(modelOf(differing), []).model.packages[0]!.finding!;
     expect(differingFinding.source).not.toBe("scancode");
     expect(differingFinding.conflict).toEqual({
       assessed: "MIT AND Apache-2.0",
@@ -1889,9 +1688,7 @@ describe("annotateFindings — scancode senior assessment (the re-pinned fill ma
       claim("Apache-2.0"),
       scancodeClaim("MIT"),
     ]);
-    const clarify: ClarifyInput[] = [
-      { name: "conflicted-clarified-pkg", expression: "MIT" },
-    ];
+    const clarify: ClarifyInput[] = [{ name: "conflicted-clarified-pkg", expression: "MIT" }];
     const { model } = annotateFindings(modelOf(entry), clarify);
     const finding = model.packages[0]!.finding!;
     expect(finding.source).toBe("override");
@@ -1901,10 +1698,7 @@ describe("annotateFindings — scancode senior assessment (the re-pinned fill ma
   });
 
   test("a STALE clarify override keeps the base finding, which carries BOTH markers — stale + conflict coexist (chain ordering is the policy engine's concern)", () => {
-    const entry = pkg("stale-conflicted-pkg", "1.0.0", [
-      claim("Apache-2.0"),
-      scancodeClaim("MIT"),
-    ]);
+    const entry = pkg("stale-conflicted-pkg", "1.0.0", [claim("Apache-2.0"), scancodeClaim("MIT")]);
     const clarify: ClarifyInput[] = [
       { name: "stale-conflicted-pkg", expects: "BSD", expression: "MIT" },
     ];
@@ -1970,15 +1764,11 @@ describe("applyScancodeAssessment — unit surface", () => {
 
   test("no scancode claim: the base finding is returned unchanged — the identical reference, not a copy (byte-identity for scancode-free inputs)", () => {
     const claims = [claim("MIT"), claim("Apache-2.0")];
-    expect(applyScancodeAssessment(claims, impreciseBsdBase)).toBe(
-      impreciseBsdBase,
-    );
+    expect(applyScancodeAssessment(claims, impreciseBsdBase)).toBe(impreciseBsdBase);
   });
 
   test("a genuinely-unknown scancode raw assesses nothing — base returned unchanged, defensively (the election rejects these upstream)", () => {
     const claims = [claim("MIT"), scancodeClaim("who knows")];
-    expect(applyScancodeAssessment(claims, impreciseBsdBase)).toBe(
-      impreciseBsdBase,
-    );
+    expect(applyScancodeAssessment(claims, impreciseBsdBase)).toBe(impreciseBsdBase);
   });
 });

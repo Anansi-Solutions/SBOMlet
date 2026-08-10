@@ -11,13 +11,7 @@
  * gated dogfood's job.
  */
 
-import {
-  closeSync,
-  ftruncateSync,
-  mkdtempSync,
-  openSync,
-  writeFileSync,
-} from "node:fs";
+import { closeSync, ftruncateSync, mkdtempSync, openSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, test } from "bun:test";
@@ -103,11 +97,7 @@ describe("dockerPullArgs (argv lock, implicit probe-first pull)", () => {
   });
 
   test("returns exactly the `pull -- <image>` invocation", () => {
-    expect(dockerPullArgs("nginx:stable-alpine")).toEqual([
-      "pull",
-      "--",
-      "nginx:stable-alpine",
-    ]);
+    expect(dockerPullArgs("nginx:stable-alpine")).toEqual(["pull", "--", "nginx:stable-alpine"]);
   });
 });
 
@@ -177,13 +167,9 @@ describe("filterOsComponents (image-contents purl filter, all ecosystems)", () =
     const byName = new Map(os.map((c) => [c.name, c]));
 
     // alpine-keys: single license.id.
-    expect(byName.get("alpine-keys")?.licenses).toEqual([
-      { license: { id: "MIT" } },
-    ]);
+    expect(byName.get("alpine-keys")?.licenses).toEqual([{ license: { id: "MIT" } }]);
     // ca-certificates: an SPDX expression shape survives verbatim.
-    expect(byName.get("ca-certificates")?.licenses).toEqual([
-      { expression: "MPL-2.0 AND MIT" },
-    ]);
+    expect(byName.get("ca-certificates")?.licenses).toEqual([{ expression: "MPL-2.0 AND MIT" }]);
     // aom-libs: mixed id + name entries all survive in order.
     expect(byName.get("aom-libs")?.licenses).toEqual([
       { license: { id: "BSD-2-Clause" } },
@@ -264,11 +250,7 @@ describe("filterOsComponents (image-contents purl filter, all ecosystems)", () =
       ],
     };
     const os = filterOsComponents(dup);
-    expect(os.map((c) => c.purl)).toEqual([
-      "pkg:deb/a@1",
-      "pkg:deb/b@2",
-      "pkg:npm/lp@1",
-    ]);
+    expect(os.map((c) => c.purl)).toEqual(["pkg:deb/a@1", "pkg:deb/b@2", "pkg:npm/lp@1"]);
   });
 });
 
@@ -414,10 +396,7 @@ describe("unionOsComponents (cross-image membership union, sidecar v2)", () => {
       { image: "img/b", components: sharedInB },
       { image: "img/a", components: sharedInA },
     ]);
-    expect(merged.find((c) => c.name === "busybox")?.images).toEqual([
-      "img/a",
-      "img/b",
-    ]);
+    expect(merged.find((c) => c.name === "busybox")?.images).toEqual(["img/a", "img/b"]);
   });
 
   test("a duplicate image in the scan set never double-counts one membership", () => {
@@ -440,13 +419,9 @@ describe("unionOsComponents (cross-image membership union, sidecar v2)", () => {
 });
 
 describe("emitDockerOsDoc (deterministic emit, sidecar v2)", () => {
-  const DIGESTS = [
-    { image: "postgres:18", digest: "sha256:abc", source: "postgres:18" },
-  ];
+  const DIGESTS = [{ image: "postgres:18", digest: "sha256:abc", source: "postgres:18" }];
   const postgresAttributed = (): AttributedOsComponent[] =>
-    unionOsComponents([
-      { image: "postgres:18", components: filterOsComponents(postgresFixture) },
-    ]);
+    unionOsComponents([{ image: "postgres:18", components: filterOsComponents(postgresFixture) }]);
 
   test("emits ONLY {bomFormat, specVersion, components, dockerImages}", () => {
     const json = emitDockerOsDoc(postgresAttributed(), DIGESTS);
@@ -472,10 +447,7 @@ describe("emitDockerOsDoc (deterministic emit, sidecar v2)", () => {
     // Single-image doc: every component's membership is exactly that image.
     expect(
       doc.components.every(
-        (c) =>
-          Array.isArray(c.images) &&
-          c.images.length === 1 &&
-          c.images[0] === "postgres:18",
+        (c) => Array.isArray(c.images) && c.images.length === 1 && c.images[0] === "postgres:18",
       ),
     ).toBe(true);
   });
@@ -520,9 +492,7 @@ describe("emitDockerOsDoc (deterministic emit, sidecar v2)", () => {
         source: "nginx:stable-alpine",
       },
     ];
-    expect(emitDockerOsDoc(components, digests)).toBe(
-      emitDockerOsDoc(components, digests),
-    );
+    expect(emitDockerOsDoc(components, digests)).toBe(emitDockerOsDoc(components, digests));
   });
 
   test("the emitted doc carries each component's preserved licenses array", () => {
@@ -588,14 +558,8 @@ describe("selectDigest (deterministic RepoDigest selection)", () => {
   test("parseRepoDigests + selectDigest is order-independent end-to-end", () => {
     const a = "registry-a.io/app@sha256:" + "1".repeat(64);
     const b = "registry-b.io/app@sha256:" + "2".repeat(64);
-    const fwd = selectDigest(
-      "app",
-      parseRepoDigests(JSON.stringify([a, b]), ""),
-    );
-    const rev = selectDigest(
-      "app",
-      parseRepoDigests(JSON.stringify([b, a]), ""),
-    );
+    const fwd = selectDigest("app", parseRepoDigests(JSON.stringify([a, b]), ""));
+    const rev = selectDigest("app", parseRepoDigests(JSON.stringify([b, a]), ""));
     expect(fwd).toBe(rev);
   });
 
@@ -604,12 +568,8 @@ describe("selectDigest (deterministic RepoDigest selection)", () => {
     const other = "ghcr.io/acme/nginx@sha256:" + "d".repeat(64);
     // Requested by the docker.io repo path → that digest is selected regardless
     // of array order, even though "ghcr.io/..." sorts smaller.
-    expect(selectDigest("docker.io/library/nginx", [other, matching])).toBe(
-      matching,
-    );
-    expect(selectDigest("docker.io/library/nginx", [matching, other])).toBe(
-      matching,
-    );
+    expect(selectDigest("docker.io/library/nginx", [other, matching])).toBe(matching);
+    expect(selectDigest("docker.io/library/nginx", [matching, other])).toBe(matching);
   });
 
   test("with no repo match, falls back to the compareCodeUnits-smallest digest", () => {

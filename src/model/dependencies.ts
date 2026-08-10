@@ -325,8 +325,7 @@ export interface EvaluatedDependencies extends CanonicalDependencies {
  * breaking byte-identity of generated output. Code-unit comparison is platform-invariant and is
  * therefore mandatory tool-wide.
  */
-export const compareCodeUnits = (a: string, b: string): number =>
-  a < b ? -1 : a > b ? 1 : 0;
+export const compareCodeUnits = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
 
 /** Stable total order over packages: (name, version, purl). */
 export function comparePackages(a: PackageEntry, b: PackageEntry): number {
@@ -357,9 +356,7 @@ export function purlEcosystem(purl: string): string {
 export function sortedKeyReplacer(_key: string, value: unknown): unknown {
   if (value !== null && typeof value === "object" && !Array.isArray(value)) {
     return Object.fromEntries(
-      Object.entries(value as Record<string, unknown>).sort(([a], [b]) =>
-        compareCodeUnits(a, b),
-      ),
+      Object.entries(value as Record<string, unknown>).sort(([a], [b]) => compareCodeUnits(a, b)),
     );
   }
   return value;

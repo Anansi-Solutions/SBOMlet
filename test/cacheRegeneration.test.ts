@@ -4,13 +4,7 @@
  * generate run — including one whose scan needs no enrichment at all.
  */
 
-import {
-  existsSync,
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  writeFileSync,
-} from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, mock, test } from "bun:test";
@@ -72,13 +66,9 @@ async function fakeScanWithCdxgen(): Promise<cdxgenModule.CollectorSbomFile> {
 }
 
 /** Yarn-1-style lockfile: cdxgen dispatch, one third-party entry. */
-const V1_LOCKFILE = [
-  "# yarn lockfile v1",
-  "",
-  "lodash@^4.17.21:",
-  '  version "4.17.21"',
-  "",
-].join("\n");
+const V1_LOCKFILE = ["# yarn lockfile v1", "", "lodash@^4.17.21:", '  version "4.17.21"', ""].join(
+  "\n",
+);
 
 /** Temp consumer-shaped repo root, no cache-dir configuration. */
 function makeScannableTree(): { root: string } {

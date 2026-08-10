@@ -50,12 +50,7 @@ function terraformSkipReason(
   lockfileDir: string | undefined,
 ): string | undefined {
   if (lockfileDir === undefined) return undefined;
-  const modulesJsonPath = join(
-    lockfileDir,
-    ".terraform",
-    "modules",
-    "modules.json",
-  );
+  const modulesJsonPath = join(lockfileDir, ".terraform", "modules", "modules.json");
   // The PRESENCE check requires a REGULAR FILE: a directory-named modules.json is treated as
   // ABSENT, routing to the filesystem-signal gate (which fails loud) instead of a raw EISDIR read.
   // Mirrors the collector via the shared {@link modulesJsonIsPresentFile} verb.
@@ -158,10 +153,7 @@ const ZERO_THIRD_PARTY_ARMS = new Map<
   string,
   { count: (lockfileText: string) => number | undefined; reason: string }
 >([
-  [
-    "yarn.lock",
-    { count: thirdPartyEntryCount, reason: "only workspace/portal members" },
-  ],
+  ["yarn.lock", { count: thirdPartyEntryCount, reason: "only workspace/portal members" }],
   [
     "poetry.lock",
     {
@@ -190,10 +182,7 @@ const ZERO_THIRD_PARTY_ARMS = new Map<
       reason: "importers only — no packages section",
     },
   ],
-  [
-    "bun.lock",
-    { count: bunThirdPartyEntryCount, reason: "only @workspace: members" },
-  ],
+  ["bun.lock", { count: bunThirdPartyEntryCount, reason: "only @workspace: members" }],
   [
     "packages.lock.json",
     {
@@ -205,8 +194,7 @@ const ZERO_THIRD_PARTY_ARMS = new Map<
     "maven.sbom.json",
     {
       count: mavenThirdPartyEntryCount,
-      reason:
-        "no components other than its own root, e.g. the reactor aggregator pom",
+      reason: "no components other than its own root, e.g. the reactor aggregator pom",
     },
   ],
 ]);
@@ -226,9 +214,7 @@ export function classifyCoverage(
   componentCount: number,
   lockfileDir?: string,
 ): "include" | "skip" {
-  if (
-    coverageSkipReason(lockfileName, lockfileText, lockfileDir) !== undefined
-  ) {
+  if (coverageSkipReason(lockfileName, lockfileText, lockfileDir) !== undefined) {
     return "skip";
   }
   if (componentCount === 0) {

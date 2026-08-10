@@ -103,11 +103,7 @@ describe("npmIntroductions", () => {
     // frontier in compareCodeUnits purl order, so a (< b) wins.
     expect(c!.path).toEqual(["pkg:npm/a@1.0.0", "pkg:npm/c@3.0.0"]);
     const d = intro.get("pkg:npm/d@4.0.0");
-    expect(d!.path).toEqual([
-      "pkg:npm/a@1.0.0",
-      "pkg:npm/c@3.0.0",
-      "pkg:npm/d@4.0.0",
-    ]);
+    expect(d!.path).toEqual(["pkg:npm/a@1.0.0", "pkg:npm/c@3.0.0", "pkg:npm/d@4.0.0"]);
   });
 
   test("dup-purl bom-refs union to one purl node — no self-loop, no duplicate entry", () => {
@@ -145,9 +141,7 @@ describe("npmIntroductions", () => {
     };
     const serialize = (m: ReadonlyMap<string, unknown>): string =>
       JSON.stringify([...m.entries()].sort());
-    expect(serialize(npmIntroductions(reordered))).toBe(
-      serialize(npmIntroductions(SYNTH_BOM)),
-    );
+    expect(serialize(npmIntroductions(reordered))).toBe(serialize(npmIntroductions(SYNTH_BOM)));
   });
 
   test("dup-purl variants do NOT fabricate a path through edges absent on the real variant (#4)", () => {
@@ -216,9 +210,7 @@ describe("npmIntroductions", () => {
     };
     const serialize = (m: ReadonlyMap<string, unknown>): string =>
       JSON.stringify([...m.entries()].sort());
-    expect(serialize(npmIntroductions(reordered))).toBe(
-      serialize(npmIntroductions(dupBom)),
-    );
+    expect(serialize(npmIntroductions(reordered))).toBe(serialize(npmIntroductions(dupBom)));
   });
 
   test("dup bom-ref with DIFFERENT purls resolves deterministically — order-independent (#1)", () => {
@@ -262,9 +254,7 @@ describe("npmIntroductions", () => {
     };
     const serialize = (m: ReadonlyMap<string, unknown>): string =>
       JSON.stringify([...m.entries()].sort());
-    expect(serialize(npmIntroductions(permuted))).toBe(
-      serialize(npmIntroductions(dupRefBom)),
-    );
+    expect(serialize(npmIntroductions(permuted))).toBe(serialize(npmIntroductions(dupRefBom)));
   });
 
   test("graph-less / garbage BOM yields an empty map, never throws", () => {

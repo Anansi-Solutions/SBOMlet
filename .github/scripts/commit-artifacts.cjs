@@ -53,10 +53,7 @@ function changedPaths(status) {
     .map((line) => line.slice(3));
 }
 
-module.exports = async (
-  { github, context, core },
-  { scope, message, pullRequest } = {},
-) => {
+module.exports = async ({ github, context, core }, { scope, message, pullRequest } = {}) => {
   // intensive-scan passes `scope`: the tree may only ever be dirty inside it.
   // Anything else dirty is an earlier step's bug -- refuse to sweep it into
   // this commit.
@@ -110,9 +107,7 @@ module.exports = async (
       // A re-run reuses runId: the branch (and its PR) already exist. Leave the
       // prior attempt's PR in place rather than committing twice.
       if (err.status === 422) {
-        core.info(
-          `refresh branch ${targetBranch} already exists; leaving the existing PR`,
-        );
+        core.info(`refresh branch ${targetBranch} already exists; leaving the existing PR`);
         return;
       }
       throw err;

@@ -234,8 +234,7 @@ ruleTester.run("refill", refillRule, {
       name: "overlong-wrap",
       code: "// This is a single comment line that is much too long to fit on one line.\n",
       options: [{ maxLength: 40 }],
-      output:
-        "// This is a single comment line that is\n// much too long to fit on one line.\n",
+      output: "// This is a single comment line that is\n// much too long to fit on one line.\n",
       errors: 1,
     },
     {
@@ -274,8 +273,7 @@ ruleTester.run("refill", refillRule, {
       name: "line-run-refill",
       code: "// alpha\n// beta\n// gamma delta epsilon zeta eta theta iota kappa\n",
       options: [{ maxLength: 50 }],
-      output:
-        "// alpha beta gamma delta epsilon zeta eta theta\n// iota kappa\n",
+      output: "// alpha beta gamma delta epsilon zeta eta theta\n// iota kappa\n",
       errors: 1,
     },
     {
@@ -290,8 +288,7 @@ ruleTester.run("refill", refillRule, {
       name: "single-line-block-promoted-to-multi-line",
       code: "/** Ceiling for comment lines as a share of non-blank lines in src. */\n",
       options: [{ maxLength: 40 }],
-      output:
-        "/**\n * Ceiling for comment lines as a share\n * of non-blank lines in src.\n */\n",
+      output: "/**\n * Ceiling for comment lines as a share\n * of non-blank lines in src.\n */\n",
       errors: 1,
     },
     {
@@ -312,8 +309,7 @@ ruleTester.run("refill", refillRule, {
       name: "indented-bulleted-paragraph-keeps-its-indent",
       code: "/**\n * Two match modes:\n *\n *   - license: pattern is\n *     an SPDX id.\n */\n",
       options: [{ maxLength: 60 }],
-      output:
-        "/**\n * Two match modes:\n *\n *   - license: pattern is an SPDX id.\n */\n",
+      output: "/**\n * Two match modes:\n *\n *   - license: pattern is an SPDX id.\n */\n",
       errors: 1,
     },
     {
@@ -432,9 +428,7 @@ describe("comment-refill/refill option schema", () => {
       threw = true;
     }
     if (!threw) {
-      throw new Error(
-        "expected a configuration error when maxLength is omitted entirely",
-      );
+      throw new Error("expected a configuration error when maxLength is omitted entirely");
     }
   });
 
@@ -502,9 +496,7 @@ describe("comment-refill/refill leaves structural tool directives alone", () => 
       );
     }
     if (out.messages.length !== 0) {
-      throw new Error(
-        `expected zero remaining messages, got: ${JSON.stringify(out.messages)}`,
-      );
+      throw new Error(`expected zero remaining messages, got: ${JSON.stringify(out.messages)}`);
     }
   });
 });

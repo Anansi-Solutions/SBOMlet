@@ -26,10 +26,7 @@ const LICENSES_NUGET_ORG_PREFIX = "https://licenses.nuget.org/";
  * re-encoded per segment. The host is a literal; an attacker-controlled host is impossible by
  * construction.
  */
-export function nugetRegistrationLeafUrl(
-  encodedName: string,
-  version: string,
-): string {
+export function nugetRegistrationLeafUrl(encodedName: string, version: string): string {
   const id = encodeURIComponent(decodeURIComponent(encodedName).toLowerCase());
   const ver = encodeURIComponent(decodeURIComponent(version).toLowerCase());
   return `${NUGET_API_HOST}/v3/registration5-gz-semver2/${id}/${ver}.json`;
@@ -75,9 +72,7 @@ export interface NugetResolution {
  *   4. Any other `licenseUrl` (the pre-2019 url-only class) or no license fields at all → NULL
  *      - honest unknown.
  */
-export function resolveNugetCatalogLicense(
-  doc: unknown,
-): NugetResolution | null {
+export function resolveNugetCatalogLicense(doc: unknown): NugetResolution | null {
   const entry = narrowNugetCatalogEntry(doc);
   if (entry === undefined) return null;
 

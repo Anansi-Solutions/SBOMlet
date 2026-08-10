@@ -10,25 +10,10 @@
  * afterAll so no other suite observes the stub.
  */
 
-import {
-  copyFileSync,
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
+import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import {
-  afterAll,
-  afterEach,
-  beforeAll,
-  describe,
-  expect,
-  mock,
-  test,
-} from "bun:test";
+import { afterAll, afterEach, beforeAll, describe, expect, mock, test } from "bun:test";
 
 import * as execModule from "../src/collectors/exec";
 import { collectDockerOsSbom } from "../src/collectors/dockerOs";
@@ -153,9 +138,7 @@ function makeFailingPullExec(): ExecFn {
  * DIFFERENT license claims per image — a review probe for silent cross-image claim mixing. Every
  * docker call resolves with "[]" (present, digest "").
  */
-function makePerImageExecTool(
-  licenseByImage: Readonly<Record<string, string>>,
-): ExecFn {
+function makePerImageExecTool(licenseByImage: Readonly<Record<string, string>>): ExecFn {
   return (cmd, args) => {
     invocations.push([cmd, ...args]);
     const outFile = syftOutFile(args);
@@ -188,9 +171,7 @@ function makePerImageExecTool(
  * package sets. docker buildx build argvs resolve with empty stdout/stderr;
  * inspects return "[]" (a built image carries no RepoDigests).
  */
-function makeFixtureByImageExec(
-  fixtureByImage: Readonly<Record<string, string>>,
-): ExecFn {
+function makeFixtureByImageExec(fixtureByImage: Readonly<Record<string, string>>): ExecFn {
   return (cmd, args) => {
     invocations.push([cmd, ...args]);
     const outFile = syftOutFile(args);
@@ -234,8 +215,7 @@ describe("collectDockerOsSbom one posture (full contents, generalized digest, pr
   afterEach(() => {
     invocations = [];
     currentExec = fakeExecTool;
-    if (tempDir !== undefined)
-      rmSync(tempDir, { recursive: true, force: true });
+    if (tempDir !== undefined) rmSync(tempDir, { recursive: true, force: true });
     tempDir = undefined;
   });
 
@@ -247,12 +227,9 @@ describe("collectDockerOsSbom one posture (full contents, generalized digest, pr
 
   test('records {image, digest:"", source} for local-only images (absent RepoDigests), sorted, with NO pull argv', async () => {
     tempDir = mkdtempSync(join(tmpdir(), "licenses-docker-posture-"));
-    const { doc } = await collectDockerOsSbom(
-      refs("local/scan-b", "local/scan-a"),
-      {
-        tempDir,
-      },
-    );
+    const { doc } = await collectDockerOsSbom(refs("local/scan-b", "local/scan-a"), {
+      tempDir,
+    });
     const parsed = JSON.parse(doc) as {
       dockerImages: { image: string; digest: string; source: string }[];
     };
@@ -271,12 +248,8 @@ describe("collectDockerOsSbom one posture (full contents, generalized digest, pr
       tempDir,
     });
     const parsed = JSON.parse(doc) as { components: { purl: string }[] };
-    expect(parsed.components.some((c) => c.purl.startsWith("pkg:npm/"))).toBe(
-      true,
-    );
-    expect(parsed.components.some((c) => c.purl.startsWith("pkg:apk/"))).toBe(
-      true,
-    );
+    expect(parsed.components.some((c) => c.purl.startsWith("pkg:npm/"))).toBe(true);
+    expect(parsed.components.some((c) => c.purl.startsWith("pkg:apk/"))).toBe(true);
   });
 
   test("a locally-present image is probed and scanned as-is, never pulled", async () => {
@@ -293,12 +266,9 @@ describe("collectDockerOsSbom one posture (full contents, generalized digest, pr
     const digestRef = "docker.io/library/scan-a@sha256:" + "a".repeat(64);
     currentExec = makePinnedExec(digestRef);
     tempDir = mkdtempSync(join(tmpdir(), "licenses-docker-posture-"));
-    const { doc } = await collectDockerOsSbom(
-      refs("docker.io/library/scan-a"),
-      {
-        tempDir,
-      },
-    );
+    const { doc } = await collectDockerOsSbom(refs("docker.io/library/scan-a"), {
+      tempDir,
+    });
     const parsed = JSON.parse(doc) as {
       dockerImages: { image: string; digest: string; source: string }[];
     };
@@ -316,12 +286,9 @@ describe("collectDockerOsSbom one posture (full contents, generalized digest, pr
     const digestRef = "registry.example.com/absent@sha256:" + "b".repeat(64);
     currentExec = makeAbsentThenPresentExec(digestRef);
     tempDir = mkdtempSync(join(tmpdir(), "licenses-docker-posture-"));
-    const { doc } = await collectDockerOsSbom(
-      refs("registry.example.com/absent:1"),
-      {
-        tempDir,
-      },
-    );
+    const { doc } = await collectDockerOsSbom(refs("registry.example.com/absent:1"), {
+      tempDir,
+    });
     const argv = argvStrings();
     const firstPull = argv.findIndex((s) => s.includes("pull"));
     const firstScan = argv.findIndex((s) => s.includes("cyclonedx-json="));
@@ -342,9 +309,7 @@ describe("collectDockerOsSbom one posture (full contents, generalized digest, pr
       collectDockerOsSbom(refs("registry.example.com/typo"), { tempDir }),
     ).rejects.toThrow();
     // The scan never ran, so no "" digest could ever mask a typo'd ref.
-    expect(argvStrings().some((s) => s.includes("cyclonedx-json="))).toBe(
-      false,
-    );
+    expect(argvStrings().some((s) => s.includes("cyclonedx-json="))).toBe(false);
   });
 
   // Two images sharing a purl with DIFFERENT
@@ -358,17 +323,15 @@ describe("collectDockerOsSbom one posture (full contents, generalized digest, pr
     currentExec = makePerImageExecTool(licenseByImage);
 
     const dirAB = mkdtempSync(join(tmpdir(), "licenses-docker-posture-"));
-    const { doc: docAB } = await collectDockerOsSbom(
-      refs("local/scan-mit", "local/scan-gpl"),
-      { tempDir: dirAB },
-    );
+    const { doc: docAB } = await collectDockerOsSbom(refs("local/scan-mit", "local/scan-gpl"), {
+      tempDir: dirAB,
+    });
     rmSync(dirAB, { recursive: true, force: true });
 
     const dirBA = mkdtempSync(join(tmpdir(), "licenses-docker-posture-"));
-    const { doc: docBA } = await collectDockerOsSbom(
-      refs("local/scan-gpl", "local/scan-mit"),
-      { tempDir: dirBA },
-    );
+    const { doc: docBA } = await collectDockerOsSbom(refs("local/scan-gpl", "local/scan-mit"), {
+      tempDir: dirBA,
+    });
     rmSync(dirBA, { recursive: true, force: true });
 
     const licenseOf = (doc: string): unknown => {
@@ -378,8 +341,8 @@ describe("collectDockerOsSbom one posture (full contents, generalized digest, pr
           licenses?: { license?: { id?: string } }[];
         }[];
       };
-      return parsed.components.find((c) => c.purl === "pkg:npm/shared@1.0.0")
-        ?.licenses?.[0]?.license?.id;
+      return parsed.components.find((c) => c.purl === "pkg:npm/shared@1.0.0")?.licenses?.[0]
+        ?.license?.id;
     };
 
     expect(licenseOf(docAB)).toBe(licenseOf(docBA));
@@ -434,16 +397,8 @@ describe("collectDockerOsSbom one posture (full contents, generalized digest, pr
 
     const argv = argvStrings();
     // Each Dockerfile was built (buildx build -f <path> -t <tag> <context>).
-    expect(
-      argv.some(
-        (s) => s.includes("buildx build") && s.includes("a.Dockerfile"),
-      ),
-    ).toBe(true);
-    expect(
-      argv.some(
-        (s) => s.includes("buildx build") && s.includes("b.Dockerfile"),
-      ),
-    ).toBe(true);
+    expect(argv.some((s) => s.includes("buildx build") && s.includes("a.Dockerfile"))).toBe(true);
+    expect(argv.some((s) => s.includes("buildx build") && s.includes("b.Dockerfile"))).toBe(true);
     // The two deterministic tags were scanned, digest-less (a built image has
     // no RepoDigests), sorted by image.
     const doc = JSON.parse(readFileSync(out, "utf8")) as {
@@ -494,11 +449,7 @@ describe("collectDockerOsSbom one posture (full contents, generalized digest, pr
 
     // The build -f operand is the discovery identity string (forward-slash).
     const argv = argvStrings();
-    expect(
-      argv.some(
-        (s) => s.includes("buildx build") && s.includes("svc/Dockerfile"),
-      ),
-    ).toBe(true);
+    expect(argv.some((s) => s.includes("buildx build") && s.includes("svc/Dockerfile"))).toBe(true);
     // The tag scanned equals imageTag of the DISCOVERY identity — the exact
     // string that produces today's committed sidecar identity.
     const tag = imageTag("svc/Dockerfile");
@@ -507,9 +458,7 @@ describe("collectDockerOsSbom one posture (full contents, generalized digest, pr
     };
     // Discovery posture: the source is the repo-relative discovery identity —
     // the exact string --list-dockerfiles prints.
-    expect(doc.dockerImages).toEqual([
-      { image: tag, digest: "", source: "svc/Dockerfile" },
-    ]);
+    expect(doc.dockerImages).toEqual([{ image: tag, digest: "", source: "svc/Dockerfile" }]);
   });
 
   test("--repo-root lane: a [docker]-ignored Dockerfile NEVER receives a build argv (Q4-new 5)", async () => {
@@ -518,10 +467,7 @@ describe("collectDockerOsSbom one posture (full contents, generalized digest, pr
     mkdirSync(join(tempDir, "skip"), { recursive: true });
     writeFileSync(join(tempDir, "keep", "Dockerfile"), "FROM alpine:3.20\n");
     writeFileSync(join(tempDir, "skip", "Dockerfile"), "FROM node:22-slim\n");
-    writeFileSync(
-      join(tempDir, "policy.toml"),
-      '[docker]\nignore = ["skip/**"]\n',
-    );
+    writeFileSync(join(tempDir, "policy.toml"), '[docker]\nignore = ["skip/**"]\n');
     const out = join(tempDir, "docker.sbom.json");
 
     await runGenerateDockerSbom({
@@ -532,11 +478,9 @@ describe("collectDockerOsSbom one posture (full contents, generalized digest, pr
     });
 
     const argv = argvStrings();
-    expect(
-      argv.some(
-        (s) => s.includes("buildx build") && s.includes("keep/Dockerfile"),
-      ),
-    ).toBe(true);
+    expect(argv.some((s) => s.includes("buildx build") && s.includes("keep/Dockerfile"))).toBe(
+      true,
+    );
     // The ignored Dockerfile is never handed to a build.
     expect(argv.some((s) => s.includes("skip/Dockerfile"))).toBe(false);
   });

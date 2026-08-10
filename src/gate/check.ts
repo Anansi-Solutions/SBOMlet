@@ -37,14 +37,10 @@ export interface CheckResult {
  */
 export async function runCheck(opts: GenerateOptions): Promise<CheckResult> {
   if (opts.intensive === true) {
-    throw new Error(
-      "check never scans — --intensive is only valid on generate",
-    );
+    throw new Error("check never scans — --intensive is only valid on generate");
   }
   if (opts.dumpModelPath !== undefined) {
-    throw new Error(
-      "check performs no writes — --dump-model is only valid on generate",
-    );
+    throw new Error("check performs no writes — --dump-model is only valid on generate");
   }
   // Force check mode so the ENRICH stage NEVER fetches or writes: a miss that needs enrichment is a
   // stale condition (exit 2), never a network call. This is the zero-network clause - buildOutputs
@@ -60,10 +56,7 @@ export async function runCheck(opts: GenerateOptions): Promise<CheckResult> {
     [resolveFrom(opts.baseDir, opts.noticesPath), outputs.noticesMd],
   ];
   if (opts.cyclonedxPath !== undefined && outputs.cyclonedxJson !== undefined) {
-    pairs.push([
-      resolveFrom(opts.baseDir, opts.cyclonedxPath),
-      outputs.cyclonedxJson,
-    ]);
+    pairs.push([resolveFrom(opts.baseDir, opts.cyclonedxPath), outputs.cyclonedxJson]);
   }
 
   // Locked stderr report shapes; every path through sanitizeForLog.
@@ -81,9 +74,7 @@ export async function runCheck(opts: GenerateOptions): Promise<CheckResult> {
     // construction and never touches disk on the comparison path.
     if (committed.replaceAll("\r\n", "\n") !== rendered) {
       staleFiles.push(path);
-      process.stderr.write(
-        `check stale: ${sanitizeForLog(path)} differs from generated output\n`,
-      );
+      process.stderr.write(`check stale: ${sanitizeForLog(path)} differs from generated output\n`);
     }
   }
 
@@ -101,9 +92,7 @@ export async function runCheck(opts: GenerateOptions): Promise<CheckResult> {
   // Fail-verdict count (zero without a policy): warn/suppressed/ok never gate;
   // the policy summary printed inside buildOutputs already carries the fail/warn/unused-entry
   // lines.
-  const violations = (outputs.verdicts ?? []).filter(
-    (verdict) => verdict.status === "fail",
-  ).length;
+  const violations = (outputs.verdicts ?? []).filter((verdict) => verdict.status === "fail").length;
 
   if (staleFiles.length === 0) {
     process.stderr.write(`check: ok (${pairs.length} outputs verified)\n`);

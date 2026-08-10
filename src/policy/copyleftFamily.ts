@@ -75,10 +75,7 @@ export const COULD_BE_COPYLEFT_FAMILIES: ReadonlySet<string> = new Set([
  * NEVER absorbed. The source-available [[deny]] terminal additionally sits ABOVE suppression, so a
  * denied license under a suppressed path fails regardless of this map.
  */
-export const WORKSPACE_ABSORBS: ReadonlyMap<
-  string,
-  ReadonlySet<string>
-> = new Map([
+export const WORKSPACE_ABSORBS: ReadonlyMap<string, ReadonlySet<string>> = new Map([
   [
     // An AGPL-3.0 (GNU-family) workspace re-releases everything it bundles under AGPL, absorbing
     // the inbound-compatible copyleft families present there.

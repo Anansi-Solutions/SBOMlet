@@ -101,9 +101,7 @@ function licenseClaimsOf(component: SbomComponentShape): LicenseClaim[] {
     // and an entry matching none is skipped.
     const expression = SbomExpressionClaim(raw);
     if (!(expression instanceof type.errors)) {
-      return [
-        { raw: expression.expression, kind: "expression", source: "generator" },
-      ];
+      return [{ raw: expression.expression, kind: "expression", source: "generator" }];
     }
     const id = SbomIdClaim(raw);
     if (!(id instanceof type.errors)) {
@@ -165,9 +163,7 @@ interface EvidenceAttachment {
  * Per verified shape: entry.license = { name: "file: <basename>", text: { content: <base64>,
  * encoding: "base64" } }. Anything else is skipped, never thrown on. Caps enforced before storing.
  */
-function evidenceAttachmentsOf(
-  component: SbomComponentShape,
-): EvidenceAttachment[] {
+function evidenceAttachmentsOf(component: SbomComponentShape): EvidenceAttachment[] {
   const licenses = component.evidence?.licenses;
   if (licenses === undefined) return [];
   const out: EvidenceAttachment[] = [];
@@ -178,9 +174,7 @@ function evidenceAttachmentsOf(
     const entry = SbomEvidenceEntry(raw);
     if (entry instanceof type.errors) continue;
     const { name, text } = entry.license;
-    const fileName = name.startsWith("file: ")
-      ? name.slice("file: ".length)
-      : name;
+    const fileName = name.startsWith("file: ") ? name.slice("file: ".length) : name;
     const content = text.content;
     // Decoded byte count from the base64 length (3 bytes per 4 chars, minus padding) - over-cap
     // entries are skipped without decoding.
@@ -276,15 +270,9 @@ function propertyDevMarker(component: SbomComponentShape): boolean {
     if (property instanceof type.errors) continue;
     if (property.name === DEV_PROPERTY && property.value === "true") {
       jsDevelopment = true;
-    } else if (
-      property.name === OPTIONAL_PROPERTY &&
-      property.value === "true"
-    ) {
+    } else if (property.name === OPTIONAL_PROPERTY && property.value === "true") {
       jsOptional = true;
-    } else if (
-      property.name === PYPROJECT_GROUP_PROPERTY &&
-      property.value === "dev"
-    ) {
+    } else if (property.name === PYPROJECT_GROUP_PROPERTY && property.value === "dev") {
       pyprojectDev = true;
     }
   }
@@ -371,9 +359,7 @@ function reconcileIntroductions(
     return { direct: true, introducedBy: [] };
   }
 
-  const introducedBy = [
-    ...new Set([...a.introducedBy, ...b.introducedBy]),
-  ].sort(compareCodeUnits);
+  const introducedBy = [...new Set([...a.introducedBy, ...b.introducedBy])].sort(compareCodeUnits);
   const reconciled: DependencyIntroduction = {
     direct: false,
     introducedBy,
@@ -381,14 +367,10 @@ function reconcileIntroductions(
 
   // Smallest path by compareCodeUnits over the joined chain (NUL-joined so a shorter prefix can
   // never tie a longer chain by concatenation ambiguity).
-  const paths = [a.path, b.path].filter(
-    (p): p is readonly string[] => p !== undefined,
-  );
+  const paths = [a.path, b.path].filter((p): p is readonly string[] => p !== undefined);
   if (paths.length > 0) {
     reconciled.path = paths.reduce((best, candidate) =>
-      compareCodeUnits(candidate.join("\0"), best.join("\0")) < 0
-        ? candidate
-        : best,
+      compareCodeUnits(candidate.join("\0"), best.join("\0")) < 0 ? candidate : best,
     );
   }
 
@@ -410,16 +392,12 @@ function mergeInto(existing: PackageEntry, incoming: PackageEntry): void {
     if (present === undefined) {
       byTarget.set(occurrence.target, { ...occurrence });
     } else {
-      present.isDevDependency =
-        present.isDevDependency && occurrence.isDevDependency;
+      present.isDevDependency = present.isDevDependency && occurrence.isDevDependency;
       // #7: reconcile `introduction` deterministically on a same-target fold rather than first-wins
       // (the only order-dependent path in the otherwise sorted provenance code). Currently
       // unreachable (target identities are unique), but latent - a deterministic fold keeps the
       // invariant airtight.
-      present.introduction = reconcileIntroductions(
-        present.introduction,
-        occurrence.introduction,
-      );
+      present.introduction = reconcileIntroductions(present.introduction, occurrence.introduction);
     }
   }
   existing.occurrences = [...byTarget.values()].sort((a, b) =>
@@ -451,10 +429,7 @@ function mergeInto(existing: PackageEntry, incoming: PackageEntry): void {
   // First-seen attribution wins, matching the claims posture: the same purl from two targets
   // carries identical tarball contents, so re-folding would only duplicate lines. A stored
   // attribution is never mutated by a later target.
-  if (
-    existing.attribution === undefined &&
-    incoming.attribution !== undefined
-  ) {
+  if (existing.attribution === undefined && incoming.attribution !== undefined) {
     existing.attribution = incoming.attribution;
   }
 }
@@ -481,9 +456,7 @@ function assertNotReservedIdentity(input: CollectedSbom): void {
  * retrofit. The internal Map is keyed by purl verbatim (URL-encoding like %40 intact; never
  * bom-ref).
  */
-export function mergeSboms(
-  inputs: ReadonlyArray<CollectedSbom>,
-): CanonicalDependencies {
+export function mergeSboms(inputs: ReadonlyArray<CollectedSbom>): CanonicalDependencies {
   const byPurl = new Map<string, PackageEntry>();
 
   // Reserved-namespace integrity before any component walks (see assertNotReservedIdentity - a loud
@@ -555,8 +528,7 @@ function packageEntryOf(
   const group = component.group;
   // cdxgen emits group: "" for ungrouped npm packages; treating the empty string as a real group
   // would compose leading-slash names like "/abab", so an empty-string group is treated as absent.
-  const displayName =
-    group !== undefined && group !== "" ? `${group}/${name}` : name;
+  const displayName = group !== undefined && group !== "" ? `${group}/${name}` : name;
   if (isFirstPartyMember(input, component, displayName, version)) {
     return undefined;
   }
@@ -567,9 +539,7 @@ function packageEntryOf(
      * authoritative; otherwise the generator's own property markers apply.
      */
     isDevDependency:
-      input.prodPurlSet !== undefined
-        ? !input.prodPurlSet.has(purl)
-        : propertyDevMarker(component),
+      input.prodPurlSet !== undefined ? !input.prodPurlSet.has(purl) : propertyDevMarker(component),
   };
   // Provenance: the per-target introduction for this purl, when the source supplied a graph.
   // Attached at occurrence creation so it is per-target and rides through mergeInto unchanged (no

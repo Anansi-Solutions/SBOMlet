@@ -1,10 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import {
-  githubLicenseRefsFor,
-  githubRepoFor,
-  resolveGithubLicense,
-} from "../src/enrich/github";
+import { githubLicenseRefsFor, githubRepoFor, resolveGithubLicense } from "../src/enrich/github";
 import { narrowGithubLicense } from "../src/validate/registry";
 
 /** A parsed terraform purl, mirroring enrich.ts ParsedPurl for the resolver. */
@@ -21,18 +17,14 @@ function parsed(
 
 describe("githubRepoFor — repo-name derivation from the registry convention", () => {
   test("provider <opentofu-host>/<ns>/<name> → <ns>/terraform-provider-<name>", () => {
-    const target = githubRepoFor(
-      parsed("registry.opentofu.org/hashicorp/aws", "6.42.0"),
-    );
+    const target = githubRepoFor(parsed("registry.opentofu.org/hashicorp/aws", "6.42.0"));
     expect(target?.owner).toBe("hashicorp");
     expect(target?.repo).toBe("terraform-provider-aws");
     expect(target?.raw).toBe("github.com/hashicorp/terraform-provider-aws");
   });
 
   test("provider integrations/github → integrations/terraform-provider-github", () => {
-    const target = githubRepoFor(
-      parsed("registry.opentofu.org/integrations/github", "6.12.0"),
-    );
+    const target = githubRepoFor(parsed("registry.opentofu.org/integrations/github", "6.12.0"));
     expect(target?.owner).toBe("integrations");
     expect(target?.repo).toBe("terraform-provider-github");
   });
@@ -45,9 +37,7 @@ describe("githubRepoFor — repo-name derivation from the registry convention", 
     );
     expect(target?.owner).toBe("terraform-aws-modules");
     expect(target?.repo).toBe("terraform-aws-alb");
-    expect(target?.raw).toBe(
-      "github.com/terraform-aws-modules/terraform-aws-alb",
-    );
+    expect(target?.raw).toBe("github.com/terraform-aws-modules/terraform-aws-alb");
   });
 
   test("module provider segment drives the repo prefix, not the namespace string", () => {
@@ -62,17 +52,13 @@ describe("githubRepoFor — repo-name derivation from the registry convention", 
   test("a non-conventional namespace module still derives by explicit segments (no ns heuristic)", () => {
     // someorg/thing/aws is a 4-segment module; the OLD ns heuristic would have
     // returned null, the count-based one derives someorg/terraform-aws-thing.
-    const target = githubRepoFor(
-      parsed("registry.opentofu.org/someorg/thing/aws", "1.0.0"),
-    );
+    const target = githubRepoFor(parsed("registry.opentofu.org/someorg/thing/aws", "1.0.0"));
     expect(target?.owner).toBe("someorg");
     expect(target?.repo).toBe("terraform-aws-thing");
   });
 
   test("a malformed encodedName (too few segments) → null", () => {
-    expect(
-      githubRepoFor(parsed("registry.opentofu.org/onlytwo", "1.0.0")),
-    ).toBeNull();
+    expect(githubRepoFor(parsed("registry.opentofu.org/onlytwo", "1.0.0"))).toBeNull();
     expect(githubRepoFor(parsed("registry.opentofu.org", "1.0.0"))).toBeNull();
   });
 
@@ -132,9 +118,7 @@ describe("resolveGithubLicense — raw-only contract over an already-fetched bod
   });
 
   test("spdx_id NOASSERTION → null (a DEFINITIVE no-license answer, not a failure)", () => {
-    expect(
-      resolveGithubLicense({ license: { spdx_id: "NOASSERTION" } }),
-    ).toBeNull();
+    expect(resolveGithubLicense({ license: { spdx_id: "NOASSERTION" } })).toBeNull();
   });
 
   test("spdx_id null → null (definitive no-license)", () => {

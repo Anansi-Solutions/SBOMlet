@@ -24,8 +24,7 @@ const MARKER = "(canonical SPDX text — package-specific copyright not located)
 
 /** Hand-built PackageEntry with sensible defaults for contract tests. */
 function entry(
-  partial: Partial<PackageEntry> &
-    Pick<PackageEntry, "name" | "version" | "purl">,
+  partial: Partial<PackageEntry> & Pick<PackageEntry, "name" | "version" | "purl">,
 ): PackageEntry {
   return {
     occurrences: [{ target: "apps/a", isDevDependency: false }],
@@ -109,9 +108,7 @@ describe("renderNotices — appendix dedup and expression decomposition", () => 
     const lines = output.split("\n");
     expect(lines.filter((line) => line === "### MIT").length).toBe(1);
     // Distinctive canonical-MIT substring from spdx-license-list/full.
-    expect(
-      output.includes("Permission is hereby granted, free of charge"),
-    ).toBe(true);
+    expect(output.includes("Permission is hereby granted, free of charge")).toBe(true);
   });
 
   test("an 'MIT OR Apache-2.0' package contributes BOTH ids to the appendix, sorted compareCodeUnits", () => {
@@ -277,9 +274,7 @@ describe("renderNotices — injection-proof fencing", () => {
         finding: UNKNOWN_FINDING,
         attribution: attribution({
           hasVerbatimText: true,
-          verbatimTexts: [
-            "## Fake heading\nsome text\n`````\nafter the five-tick run",
-          ],
+          verbatimTexts: ["## Fake heading\nsome text\n`````\nafter the five-tick run"],
         }),
       }),
     ],
@@ -326,11 +321,7 @@ describe("renderNotices — unknown-license packages", () => {
     };
     const output = renderNotices(model);
     expect(output.includes("## Packages with unknown licenses")).toBe(true);
-    expect(
-      output.includes(
-        "- mystery-pkg@1.0.0 — unknown license, no text included",
-      ),
-    ).toBe(true);
+    expect(output.includes("- mystery-pkg@1.0.0 — unknown license, no text included")).toBe(true);
     expect(output.includes("- known-pkg@")).toBe(false);
   });
 
@@ -365,11 +356,7 @@ describe("renderNotices/renderMarkdown agreement — LicenseRef-only unknown lan
     const notices = renderNotices(model);
     const licenses = renderMarkdown(model);
     expect(notices.includes("## Packages with unknown licenses")).toBe(true);
-    expect(
-      notices.includes(
-        "- ref-only-pkg@1.0.0 — unknown license, no text included",
-      ),
-    ).toBe(true);
+    expect(notices.includes("- ref-only-pkg@1.0.0 — unknown license, no text included")).toBe(true);
     expect(licenses.includes("- Unknown license: 1")).toBe(true);
   });
 });
@@ -400,8 +387,7 @@ describe("renderNotices — WITH exceptions and unlisted ids (Test 6, A3)", () =
     expect(
       lines.some(
         (line) =>
-          line.startsWith("Flagged: license exception") &&
-          line.includes("Classpath-exception-2.0"),
+          line.startsWith("Flagged: license exception") && line.includes("Classpath-exception-2.0"),
       ),
     ).toBe(true);
   });
@@ -412,9 +398,7 @@ describe("renderNotices — WITH exceptions and unlisted ids (Test 6, A3)", () =
     const lines = output.split("\n");
     expect(
       lines.some(
-        (line) =>
-          line.includes("no canonical text") &&
-          line.includes("LicenseRef-custom-thing"),
+        (line) => line.includes("no canonical text") && line.includes("LicenseRef-custom-thing"),
       ),
     ).toBe(true);
   });
@@ -460,19 +444,11 @@ describe("renderNotices — golden byte equality", () => {
     // The evidence fixture, annotated with an empty clarify list so findings
     // exist — the appendix needs normalized expressions.
     const evidenceDoc = JSON.parse(
-      readFileSync(
-        join(import.meta.dir, "fixtures", "plugin-evidence.json"),
-        "utf-8",
-      ),
+      readFileSync(join(import.meta.dir, "fixtures", "plugin-evidence.json"), "utf-8"),
     ) as unknown;
-    const model = mergeSboms([
-      { sbom: evidenceDoc, targetIdentity: "libraries/evidence-target" },
-    ]);
+    const model = mergeSboms([{ sbom: evidenceDoc, targetIdentity: "libraries/evidence-target" }]);
     const annotated = annotateFindings(model, []).model;
-    const golden = readFileSync(
-      join(import.meta.dir, "golden", "notices.md"),
-      "utf-8",
-    );
+    const golden = readFileSync(join(import.meta.dir, "golden", "notices.md"), "utf-8");
     expect(renderNotices(annotated)).toBe(golden);
   });
 });
@@ -516,9 +492,7 @@ describe("renderNotices — determinism contract", () => {
     expect(output.endsWith("\n\n")).toBe(false);
     const lines = output.split("\n");
     expect(lines[0]).toBe("# Third-Party Notices");
-    expect(lines[2]).toBe(
-      "<!-- AUTO-GENERATED - do not edit. Regenerate with: task generate -->",
-    );
+    expect(lines[2]).toBe("<!-- AUTO-GENERATED - do not edit. Regenerate with: task generate -->");
     expect(/\b20\d\d\b.*generated/i.test(output)).toBe(false);
   });
 });

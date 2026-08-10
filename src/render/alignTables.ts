@@ -70,18 +70,9 @@ export function alignTables(markdown: string): string {
       continue;
     }
     const next = lines[i + 1];
-    if (
-      !inFence &&
-      isTableRow(line) &&
-      next !== undefined &&
-      isSeparatorRow(next)
-    ) {
+    if (!inFence && isTableRow(line) && next !== undefined && isSeparatorRow(next)) {
       const block: string[] = [];
-      while (
-        i < lines.length &&
-        !FENCE.test(lines[i]!) &&
-        isTableRow(lines[i]!)
-      ) {
+      while (i < lines.length && !FENCE.test(lines[i]!) && isTableRow(lines[i]!)) {
         block.push(lines[i]!);
         i += 1;
       }

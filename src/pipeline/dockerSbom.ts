@@ -124,9 +124,7 @@ export function resolveDiscoveredImages(
   }
   summaryParts.push(
     build.length > 0
-      ? `build set (${build.length}): ${build
-          .map((b) => sanitizeForLog(b.identity))
-          .join(", ")}`
+      ? `build set (${build.length}): ${build.map((b) => sanitizeForLog(b.identity)).join(", ")}`
       : "build set is EMPTY (every discovered Dockerfile is [docker]-ignored or --excluded)",
   );
 
@@ -150,10 +148,7 @@ export interface DockerfileListingOptions {
  * policy-aware walk, never a shell find. Ignored (by `[docker] ignore`) identities are deliberately
  * excluded - a policy-ignored Dockerfile must never be built by CI.
  */
-export function dockerfileListing(
-  repoRoot: string,
-  opts: DockerfileListingOptions = {},
-): string[] {
+export function dockerfileListing(repoRoot: string, opts: DockerfileListingOptions = {}): string[] {
   const { dockerfiles } = discoverDockerfiles(repoRoot, {
     ...(opts.toolDir !== undefined ? { toolDir: opts.toolDir } : {}),
     ...(opts.excludes !== undefined ? { excludes: opts.excludes } : {}),
@@ -192,9 +187,7 @@ export interface ResolveTargetedDockerfilesResult {
 export function resolveTargetedDockerfiles(
   dockerfiles: readonly TargetedDockerfile[],
 ): ResolveTargetedDockerfilesResult {
-  const sorted = [...dockerfiles].sort((a, b) =>
-    compareCodeUnits(a.identity, b.identity),
-  );
+  const sorted = [...dockerfiles].sort((a, b) => compareCodeUnits(a.identity, b.identity));
 
   // Fail-fast on a missing/unreadable named path - a caller typo must surface loudly BEFORE any
   // build argv is spawned, never silently drop an image.
@@ -202,9 +195,7 @@ export function resolveTargetedDockerfiles(
     try {
       statSync(df.path);
     } catch {
-      throw new Error(
-        `--dockerfile path is missing or unreadable: expected ${df.path}`,
-      );
+      throw new Error(`--dockerfile path is missing or unreadable: expected ${df.path}`);
     }
   }
 
@@ -226,9 +217,7 @@ export function resolveTargetedDockerfiles(
   ];
   summaryParts.push(
     build.length > 0
-      ? `build set (${build.length}): ${build
-          .map((b) => sanitizeForLog(b.identity))
-          .join(", ")}`
+      ? `build set (${build.length}): ${build.map((b) => sanitizeForLog(b.identity)).join(", ")}`
       : "build set is EMPTY (no Dockerfiles named)",
   );
 
@@ -245,9 +234,7 @@ function dockerIgnoreFromPolicy(
   try {
     policyText = readFileSync(policyFile, "utf8");
   } catch {
-    throw new Error(
-      `policy file is missing or unreadable: expected ${policyFile}`,
-    );
+    throw new Error(`policy file is missing or unreadable: expected ${policyFile}`);
   }
   // parsePolicy throws TomlError/PolicyError verbatim - same fail-fast posture as the generate
   // path; an invalid policy aborts before any scan.
@@ -349,9 +336,7 @@ async function scanAndWrite(
 ): Promise<void> {
   const { doc } = await collectDockerOsSbom(images, { verbose });
   writeArtifact(outputPath, doc);
-  process.stderr.write(
-    `wrote ${sanitizeForLog(outputPath)} (${images.length} image(s) scanned)\n`,
-  );
+  process.stderr.write(`wrote ${sanitizeForLog(outputPath)} (${images.length} image(s) scanned)\n`);
 }
 
 /**
@@ -400,9 +385,7 @@ async function runDiscoveryBuildLane(
 ): Promise<void> {
   const repoRoot = resolveFrom(opts.baseDir, repoRootOpt);
   const dockerIgnore =
-    opts.policyPath !== undefined
-      ? dockerIgnoreFromPolicy(opts.policyPath, opts.baseDir)
-      : [];
+    opts.policyPath !== undefined ? dockerIgnoreFromPolicy(opts.policyPath, opts.baseDir) : [];
   const { build, ignored, summary } = resolveDiscoveredImages(repoRoot, {
     ...(opts.toolDir !== undefined ? { toolDir: opts.toolDir } : {}),
     ...(opts.excludes !== undefined ? { excludes: opts.excludes } : {}),
@@ -441,10 +424,7 @@ async function runDiscoveryBuildLane(
  * presence and pulls only when a ref is absent (a locally-present built tag is scanned as-is). The
  * summary prints to stderr BEFORE the scan.
  */
-async function runImageLane(
-  opts: GenerateDockerSbomOptions,
-  outputPath: string,
-): Promise<void> {
+async function runImageLane(opts: GenerateDockerSbomOptions, outputPath: string): Promise<void> {
   const requested = safeLiveScanImages(opts.images ?? []);
   if (requested.length === 0) {
     throw new Error(
@@ -472,9 +452,7 @@ async function runImageLane(
  * ladder - each lane's logic lives in its own extracted helper so this orchestrator stays under the
  * complexity bound.
  */
-export async function runGenerateDockerSbom(
-  opts: GenerateDockerSbomOptions,
-): Promise<void> {
+export async function runGenerateDockerSbom(opts: GenerateDockerSbomOptions): Promise<void> {
   // LISTING PATH (--list-dockerfiles): returns BEFORE any outputPath resolution or artifact write
   // - this mode scans nothing and writes nothing, it only prints the tool's own policy-aware
   // Dockerfile walk to stdout (the machine channel) for the CI workflow's build loop to consume.
@@ -487,9 +465,7 @@ export async function runGenerateDockerSbom(
     }
     const repoRoot = resolveFrom(opts.baseDir, opts.repoRoot);
     const dockerIgnore =
-      opts.policyPath !== undefined
-        ? dockerIgnoreFromPolicy(opts.policyPath, opts.baseDir)
-        : [];
+      opts.policyPath !== undefined ? dockerIgnoreFromPolicy(opts.policyPath, opts.baseDir) : [];
     const identities = dockerfileListing(repoRoot, {
       ...(opts.toolDir !== undefined ? { toolDir: opts.toolDir } : {}),
       ...(opts.excludes !== undefined ? { excludes: opts.excludes } : {}),
