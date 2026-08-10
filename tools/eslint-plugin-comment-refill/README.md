@@ -104,7 +104,13 @@ a fixture in `rules/refill.test.ts`.
    a line ending in `;`, `{`, or `}`, opening with `}`, `)`, or `]`, or
    opening with a common statement keyword (`const`, `return`, `if (`, and
    so on) — excludes that line from reflow. It is isolated the same way an
-   aligned-layout line is.
+   aligned-layout line is. This is a known, accepted trade-off: ordinary
+   prose that happens to end a semicolon-separated list item with `);`
+   (for example a bullet's continuation line ending "...defeats the
+   denial);") also matches, and is left exactly as written rather than
+   refilled with the rest of its bullet. That is the conservative
+   direction to fail in — the alternative is under-catching real
+   commented-out code, which is a worse mistake for a linter to make.
 7. **Structural tool directives.** A line opening with `eslint-` (covering
    `eslint-disable`, `eslint-disable-next-line`, and `eslint-enable`),
    `@ts-` (`@ts-ignore`, `@ts-expect-error`), `prettier-ignore`, or a

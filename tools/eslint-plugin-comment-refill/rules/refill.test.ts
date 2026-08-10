@@ -119,6 +119,15 @@ ruleTester.run("refill", refillRule, {
       options: [{ maxLength: 40 }],
     },
     {
+      // Documented trade-off: a bullet continuation line ending in a
+      // semicolon-preceded close-paren matches the commented-out-code
+      // heuristic and is excluded from reflow, even though it is
+      // ordinary prose. See README.md point 6.
+      name: "semicolon-ending-continuation-excluded-from-its-bullet",
+      code: "// - OR (l, r) is denied iff both sides are denied (one\n//   electable branch defeats the denial);\n",
+      options: [{ maxLength: 100 }],
+    },
+    {
       name: "code-looking-line-excluded",
       code: "// Example:\n// const result = doThing();\n// Above returns a promise.\n",
       options: [{ maxLength: 100 }],
