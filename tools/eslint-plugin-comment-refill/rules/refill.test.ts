@@ -1,0 +1,510 @@
+import { describe, it } from "bun:test";
+import { Linter, RuleTester } from "eslint";
+
+import { refillRule } from "./refill.mjs";
+
+RuleTester.describe = describe;
+RuleTester.it = it;
+
+const ruleTester = new RuleTester({
+  languageOptions: { ecmaVersion: 2022, sourceType: "module" },
+});
+
+/**
+ * Fixture names prefixed `probe-` are the counterexamples that sank
+ * eslint-plugin-comment-length's `compact` mode during evaluation: it has no
+ * list-marker awareness, so it merges markdown bullets into prose. Each one
+ * here is asserted to keep its bullets, or its colon-then-bullets shape,
+ * intact.
+ *
+ * Every fixture that the rule actually rewrites also has a companion `valid`
+ * case (named "... (idempotent on its own output)") that feeds the rule's own
+ * output back in and asserts zero problems: the fixer is idempotent.
+ */
+ruleTester.run("refill", refillRule, {
+  valid: [
+    {
+      name: "indented-bulleted-paragraph-keeps-its-indent (idempotent on its own output)",
+      code: "/**\n * Two match modes:\n *\n *   - license: pattern is an SPDX id.\n */\n",
+      options: [{ maxLength: 60 }],
+    },
+    {
+      name: "code-span-glued-to-trailing-punctuation (idempotent on its own output)",
+      code: "// The cache dir (e.g. `.sbomlet.cache/`) need not exist on the first generate, and writeFileSync\n// does not create parents.\n",
+      options: [{ maxLength: 100 }],
+    },
+    {
+      name: "plain-prose-refill (idempotent on its own output)",
+      code: "// This is one. This is two. This is\n// three.\n",
+      options: [{ maxLength: 40 }],
+    },
+    {
+      name: "overlong-wrap (idempotent on its own output)",
+      code: "// This is a single comment line that is\n// much too long to fit on one line.\n",
+      options: [{ maxLength: 40 }],
+    },
+    {
+      name: "probe-bullet-list-denylist (idempotent on its own output)",
+      code: "/**\n * - leaf \u2192 denied iff the leaf satisfies at least one deny predicate and none\n *   of the allow predicates override it.\n * - branch \u2192 denied iff every child is denied.\n */\n",
+      options: [{ maxLength: 78 }],
+    },
+    {
+      name: "probe-colon-then-bullets-terraform",
+      code: "// Two inputs, two authorities:\n// - Providers come from the root module's required_providers block.\n// - Consumers come from every module block's source attribute.\n",
+      options: [{ maxLength: 78 }],
+    },
+    {
+      name: "probe-aligned-arrow-table-untouched",
+      code: "/**\n * leaf       \u2192 denied iff the leaf satisfies a predicate\n * branch     \u2192 denied iff every child is denied\n */\n",
+      options: [{ maxLength: 60 }],
+    },
+    {
+      name: "probe-dependencies-merge-colon-bullets",
+      code: "// Two dependency sources feed the merge:\n// - direct dependencies declared in the manifest file itself.\n// - transitive dependencies resolved from the lockfile.\n",
+      options: [{ maxLength: 78 }],
+    },
+    {
+      name: "numbered-list-wraps-with-hang (idempotent on its own output)",
+      code: "// 1. First item that needs to wrap onto a\n//    second continuation line here.\n// 2. Second item that is short.\n",
+      options: [{ maxLength: 45 }],
+    },
+    {
+      name: "tag-block-untouched-after-description-reflows (idempotent on its own output)",
+      code: "/**\n * Loads the file and returns its parsed contents\n * from disk.\n * @param path The file path to read from disk right here.\n * @returns The parsed contents of the file.\n */\n",
+      options: [{ maxLength: 50 }],
+    },
+    {
+      name: "fence-block-untouched",
+      code: "/**\n * Example:\n * ```\n * const   x   =   1;\n * ```\n */\n",
+      options: [{ maxLength: 40 }],
+    },
+    {
+      name: "unbalanced-backtick-no-merge",
+      code: "// A short line.\n// This has an unmatched ` tick.\n// Another line.\n",
+      options: [{ maxLength: 100 }],
+    },
+    {
+      name: "url-overlong-accepted (idempotent on its own output)",
+      code: "// See\n// https://example.com/a/very/long/path/that/will/not/fit/on/one/line\n// for more.\n",
+      options: [{ maxLength: 40 }],
+    },
+    {
+      name: "line-run-refill (idempotent on its own output)",
+      code: "// alpha beta gamma delta epsilon zeta eta theta\n// iota kappa\n",
+      options: [{ maxLength: 50 }],
+    },
+    {
+      name: "trailing-comment-untouched",
+      code: "const x = 1; // this trailing comment is quite long and would overflow badly\n",
+      options: [{ maxLength: 20 }],
+    },
+    {
+      name: "blank-line-paragraphs-preserved",
+      code: "/**\n * First paragraph.\n *\n * Second paragraph.\n */\n",
+      options: [{ maxLength: 60 }],
+    },
+    {
+      name: "bullet-continuation-refilled-within-item (idempotent on its own output)",
+      code: "// - leaf: denied when the leaf itself satisfies at least\n//   one deny predicate.\n",
+      options: [{ maxLength: 60 }],
+    },
+    {
+      name: "single-line-block-fits-stays-single-line",
+      code: "/** Ceiling for comment lines as a share of total lines. */\n",
+      options: [{ maxLength: 60 }],
+    },
+    {
+      name: "single-line-block-promoted-to-multi-line (idempotent on its own output)",
+      code: "/**\n * Ceiling for comment lines as a share\n * of non-blank lines in src.\n */\n",
+      options: [{ maxLength: 40 }],
+    },
+    {
+      // Documented trade-off: a bullet continuation line ending in a
+      // semicolon-preceded close-paren matches the commented-out-code
+      // heuristic and is excluded from reflow, even though it is
+      // ordinary prose. See README.md point 6.
+      name: "semicolon-ending-continuation-excluded-from-its-bullet",
+      code: "// - OR (l, r) is denied iff both sides are denied (one\n//   electable branch defeats the denial);\n",
+      options: [{ maxLength: 100 }],
+    },
+    {
+      name: "code-looking-line-excluded",
+      code: "// Example:\n// const result = doThing();\n// Above returns a promise.\n",
+      options: [{ maxLength: 100 }],
+    },
+    {
+      name: "semantic-comment-own-group",
+      code: "// Plain prose line here.\n// TODO: fix this rough edge soon.\n",
+      options: [{ maxLength: 100 }],
+    },
+    {
+      // Regression: a run of parallel `Label:` clauses, each already on its
+      // own line, must never be folded together even when the combined
+      // length would fit maxLength. This is the user's own example.
+      name: "labeled-clause-pair-preserved (idempotent on its own output)",
+      code: "// POSIX: own process group so the timeout can kill the whole tree.\n// win32: detached would allocate a new console; taskkill /T covers it.\n",
+      options: [{ maxLength: 100 }],
+    },
+    {
+      name: "labeled-clause-three-way-run-preserved (idempotent on its own output)",
+      code: "// npm: the decoded package name under `<targetDir>/node_modules`.\n// pypi: an in-project `.venv`'s site-packages directory.\n// maven: the local repository cache under `~/.m2`.\n",
+      options: [{ maxLength: 100 }],
+    },
+    {
+      name: "labeled-clause-continuation-wraps-within-group (idempotent on its own output)",
+      code: "// npm: This is one. This is two. This\n// is three.\n",
+      options: [{ maxLength: 40 }],
+    },
+    {
+      // Negative control: a word that could pass for a label lacks the
+      // trailing colon, so it never starts a group and ordinary refill
+      // still merges it with its neighbor.
+      name: "label-lookalike-without-colon-still-merges (idempotent on its own output)",
+      code: "// win32 without a colon here still merges normally into one single line.\n",
+      options: [{ maxLength: 100 }],
+    },
+    {
+      name: "hyphen-wrap-compound-roundtrip (idempotent on its own output)",
+      code: "// The input-validation step runs first.\n",
+      options: [{ maxLength: 100 }],
+    },
+    {
+      name: "spaced-hyphen-separator-untouched (idempotent on its own output)",
+      code: "// Walk the whole tree - the whole thing must be considered\n// for license classification.\n",
+      options: [{ maxLength: 60 }],
+    },
+    {
+      name: "line-ending-with-spaced-hyphen-not-coalesced (idempotent on its own output)",
+      code: "// Walk the whole tree - the whole thing must be considered.\n",
+      options: [{ maxLength: 100 }],
+    },
+    {
+      // Regression fixture for the em-dash sweep incident (see the
+      // README's mechanism note): a joined-in continuation line's own `* `
+      // marker, left unstripped, doubled up against the block's real
+      // prefix and rendered as a stray `*` word. Verbatim (post-heal) text
+      // from src/validate/registry.ts.
+      name: "doubled-block-marker-self-heals-real-registry-example (idempotent on its own output)",
+      code: "/**\n * npm packument. Registry responses are third-party, volatile, and may be malformed or oversized\n * - this is the ASVS V5 input-validation control for a brand-new network surface.\n */\n",
+      options: [{ maxLength: 100 }],
+    },
+    {
+      name: "line-run-doubled-marker-self-heals (idempotent on its own output)",
+      code: "// word one two three - word four five.\n",
+      options: [{ maxLength: 100 }],
+    },
+    {
+      // Regression fixture modeled on src/collectors/bunLock.ts: two `//`
+      // lines merged onto one physical line by a join that never split
+      // them back apart. isAlignedTable's 3+-space heuristic used to treat
+      // the swallowed `// ` prefix as a deliberately aligned column and
+      // mark the whole line no-touch, hiding the merge from every
+      // subsequent reflow pass; hasSwallowedCommentPrefix now overrides
+      // that and forces it back into reflow.
+      name: "swallowed-comment-prefix-no-longer-hidden-from-reflow (idempotent on its own output)",
+      code: "// alpha beta gamma - // delta\n// epsilon zeta\n",
+      options: [{ maxLength: 30 }],
+    },
+    {
+      // A standalone `-` separator must never be left dangling as the
+      // last word on a wrapped line: it travels with the word after it.
+      name: "standalone-hyphen-separator-never-ends-a-line (idempotent on its own output)",
+      code: "// Configured value\n// - fallback\n",
+      options: [{ maxLength: 23 }],
+    },
+    {
+      // A bulleted group whose marker has no rest and no continuation
+      // (content is literally the bare marker character) collapses to a
+      // plain blank continuation line instead of stacking a second `*` on
+      // the structural prefix.
+      name: "bare-asterisk-bullet-collapses-to-blank-continuation (idempotent on its own output)",
+      code: "/**\n * intro text.\n *\n *\n */\n",
+      options: [{ maxLength: 60 }],
+    },
+  ],
+  invalid: [
+    {
+      name: "plain-prose-refill",
+      code: "// This is one.\n// This is two.\n// This is three.\n",
+      options: [{ maxLength: 40 }],
+      output: "// This is one. This is two. This is\n// three.\n",
+      errors: 1,
+    },
+    {
+      name: "overlong-wrap",
+      code: "// This is a single comment line that is much too long to fit on one line.\n",
+      options: [{ maxLength: 40 }],
+      output:
+        "// This is a single comment line that is\n// much too long to fit on one line.\n",
+      errors: 1,
+    },
+    {
+      name: "probe-bullet-list-denylist",
+      code: "/**\n * - leaf \u2192 denied iff the leaf satisfies at least one deny predicate and\n *   none of the allow predicates override it.\n * - branch \u2192 denied iff every child is denied.\n */\n",
+      options: [{ maxLength: 78 }],
+      output:
+        "/**\n * - leaf \u2192 denied iff the leaf satisfies at least one deny predicate and none\n *   of the allow predicates override it.\n * - branch \u2192 denied iff every child is denied.\n */\n",
+      errors: 1,
+    },
+    {
+      name: "numbered-list-wraps-with-hang",
+      code: "// 1. First item that needs to wrap onto a second continuation line here.\n// 2. Second item that is short.\n",
+      options: [{ maxLength: 45 }],
+      output:
+        "// 1. First item that needs to wrap onto a\n//    second continuation line here.\n// 2. Second item that is short.\n",
+      errors: 1,
+    },
+    {
+      name: "tag-block-untouched-after-description-reflows",
+      code: "/**\n * Loads the file and returns its parsed contents from disk.\n * @param path The file path to read from disk right here.\n * @returns The parsed contents of the file.\n */\n",
+      options: [{ maxLength: 50 }],
+      output:
+        "/**\n * Loads the file and returns its parsed contents\n * from disk.\n * @param path The file path to read from disk right here.\n * @returns The parsed contents of the file.\n */\n",
+      errors: 1,
+    },
+    {
+      name: "url-overlong-accepted",
+      code: "// See https://example.com/a/very/long/path/that/will/not/fit/on/one/line for more.\n",
+      options: [{ maxLength: 40 }],
+      output:
+        "// See\n// https://example.com/a/very/long/path/that/will/not/fit/on/one/line\n// for more.\n",
+      errors: 1,
+    },
+    {
+      name: "line-run-refill",
+      code: "// alpha\n// beta\n// gamma delta epsilon zeta eta theta iota kappa\n",
+      options: [{ maxLength: 50 }],
+      output:
+        "// alpha beta gamma delta epsilon zeta eta theta\n// iota kappa\n",
+      errors: 1,
+    },
+    {
+      name: "bullet-continuation-refilled-within-item",
+      code: "// - leaf: denied when the leaf itself satisfies at least\n//   one\n//   deny\n//   predicate.\n",
+      options: [{ maxLength: 60 }],
+      output:
+        "// - leaf: denied when the leaf itself satisfies at least\n//   one deny predicate.\n",
+      errors: 1,
+    },
+    {
+      name: "single-line-block-promoted-to-multi-line",
+      code: "/** Ceiling for comment lines as a share of non-blank lines in src. */\n",
+      options: [{ maxLength: 40 }],
+      output:
+        "/**\n * Ceiling for comment lines as a share\n * of non-blank lines in src.\n */\n",
+      errors: 1,
+    },
+    {
+      // Regression: a code span glued to trailing punctuation, with no
+      // space in between, used to gain a space when a wrap merged its
+      // line with a neighbor. The span and its punctuation must stay glued.
+      name: "code-span-glued-to-trailing-punctuation",
+      code: "// The cache dir (e.g. `.sbomlet.cache/`) need not exist on the first\n// generate, and writeFileSync does not create parents.\n",
+      options: [{ maxLength: 100 }],
+      output:
+        "// The cache dir (e.g. `.sbomlet.cache/`) need not exist on the first generate, and writeFileSync\n// does not create parents.\n",
+      errors: 1,
+    },
+    {
+      // Regression: an indented, non-bulleted paragraph (a hanging or
+      // definition-list-style block under a colon line) used to lose its
+      // indent entirely on reflow, collapsing to the comment's flat prefix.
+      name: "indented-bulleted-paragraph-keeps-its-indent",
+      code: "/**\n * Two match modes:\n *\n *   - license: pattern is\n *     an SPDX id.\n */\n",
+      options: [{ maxLength: 60 }],
+      output:
+        "/**\n * Two match modes:\n *\n *   - license: pattern is an SPDX id.\n */\n",
+      errors: 1,
+    },
+    {
+      // Same regression as the valid pair above, but starting from the
+      // damaged (pre-fix) shape: the label used to be foldable into the
+      // previous group's continuation lines; it no longer is.
+      name: "labeled-clause-continuation-wraps-within-group",
+      code: "// npm: This is one.\n// This is two.\n// This is three.\n",
+      options: [{ maxLength: 40 }],
+      output: "// npm: This is one. This is two. This\n// is three.\n",
+      errors: 1,
+    },
+    {
+      // Regression: a paragraph wrapped at a hyphen inside a compound word
+      // (`input-` on one line, `validation` on the next) used to reflow
+      // with a space inserted at the join, turning `input-validation` into
+      // `input- validation`. The two tokens must recombine into one word.
+      name: "hyphen-wrap-compound-roundtrip",
+      code: "// The input-\n// validation step runs first.\n",
+      options: [{ maxLength: 100 }],
+      output: "// The input-validation step runs first.\n",
+      errors: 1,
+    },
+    {
+      // A deliberate ` - ` separator must never gain the hyphen-wrap
+      // rejoin treatment: rewrapping this sentence across the width still
+      // keeps its spaces on both sides of the hyphen.
+      name: "spaced-hyphen-separator-untouched",
+      code: "// Walk the whole tree - the whole thing must be considered for license classification.\n",
+      options: [{ maxLength: 60 }],
+      output:
+        "// Walk the whole tree - the whole thing must be considered\n// for license classification.\n",
+      errors: 1,
+    },
+    {
+      // A line ending in a spaced hyphen separator, with the continuation
+      // on the next source line, must not coalesce: the hyphen tokenizes
+      // alone (nothing precedes it directly), so its stem is empty and
+      // never passes the word-ish check.
+      name: "line-ending-with-spaced-hyphen-not-coalesced",
+      code: "// Walk the whole tree -\n// the whole thing must be considered.\n",
+      options: [{ maxLength: 100 }],
+      output: "// Walk the whole tree - the whole thing must be considered.\n",
+      errors: 1,
+    },
+    {
+      // Regression fixture for the em-dash sweep incident: a joined-in
+      // continuation line's own `* ` marker, left unstripped by the swap
+      // script, doubled up against the block's real prefix. Verbatim
+      // (pre-heal) text from src/validate/registry.ts.
+      name: "doubled-block-marker-self-heals-real-registry-example",
+      code: "/**\n * npm packument. Registry responses are third-party, volatile, and may be malformed or oversized -\n *  * this is the ASVS V5 input-validation control for a brand-new network surface.\n */\n",
+      options: [{ maxLength: 100 }],
+      output:
+        "/**\n * npm packument. Registry responses are third-party, volatile, and may be malformed or oversized\n * - this is the ASVS V5 input-validation control for a brand-new network surface.\n */\n",
+      errors: 1,
+    },
+    {
+      // A `//` run whose second physical line's own marker was joined in
+      // as literal content instead of being stripped: `// // word`.
+      name: "line-run-doubled-marker-self-heals",
+      code: "// word one two three -\n// // word four five.\n",
+      options: [{ maxLength: 100 }],
+      output: "// word one two three - word four five.\n",
+      errors: 1,
+    },
+    {
+      // Regression fixture modeled on src/collectors/bunLock.ts: two `//`
+      // lines merged onto one physical line, the second line's marker
+      // surviving as literal mid-line text. isAlignedTable's 3+-space
+      // heuristic used to treat the swallowed prefix as a deliberately
+      // aligned column and mark the whole line no-touch, hiding the
+      // corruption from every subsequent reflow pass.
+      name: "swallowed-comment-prefix-no-longer-hidden-from-reflow",
+      code: "// alpha beta gamma -   // delta epsilon zeta\n",
+      options: [{ maxLength: 30 }],
+      output: "// alpha beta gamma - // delta\n// epsilon zeta\n",
+      errors: 1,
+    },
+    {
+      // A standalone `-` separator must never be left dangling as the last
+      // word on a wrapped line: it travels with the word after it instead
+      // of leaving room for an accidentally-joined-in stray token to land
+      // beside it (the em-dash sweep incident's actual failure mode).
+      name: "standalone-hyphen-separator-never-ends-a-line",
+      code: "// Configured value - fallback\n",
+      options: [{ maxLength: 23 }],
+      output: "// Configured value\n// - fallback\n",
+      errors: 1,
+    },
+    {
+      // A bulleted group whose marker has no rest and no continuation
+      // (content is literally the bare marker character) must not stack a
+      // second `*` on the structural prefix; it collapses to a plain
+      // blank continuation line instead.
+      name: "bare-asterisk-bullet-collapses-to-blank-continuation",
+      code: "/**\n * intro text.\n *\n * *\n */\n",
+      options: [{ maxLength: 60 }],
+      output: "/**\n * intro text.\n *\n *\n */\n",
+      errors: 1,
+    },
+  ],
+});
+
+describe("comment-refill/refill option schema", () => {
+  it("rejects configuration with no options object at all", () => {
+    const linter = new Linter();
+    let threw = false;
+    try {
+      linter.verify("// a\n", {
+        languageOptions: { ecmaVersion: 2022, sourceType: "module" },
+        plugins: { refill: { rules: { refill: refillRule } } },
+        rules: { "refill/refill": "error" },
+      });
+    } catch {
+      threw = true;
+    }
+    if (!threw) {
+      throw new Error(
+        "expected a configuration error when maxLength is omitted entirely",
+      );
+    }
+  });
+
+  it("rejects configuration with an options object missing maxLength", () => {
+    const linter = new Linter();
+    let threw = false;
+    try {
+      linter.verify("// a\n", {
+        languageOptions: { ecmaVersion: 2022, sourceType: "module" },
+        plugins: { refill: { rules: { refill: refillRule } } },
+        rules: { "refill/refill": ["error", {}] },
+      });
+    } catch {
+      threw = true;
+    }
+    if (!threw) {
+      throw new Error(
+        "expected a configuration error when maxLength is missing from the options object",
+      );
+    }
+  });
+
+  it("accepts configuration with maxLength provided", () => {
+    const linter = new Linter();
+    const messages = linter.verify("// a\n", {
+      languageOptions: { ecmaVersion: 2022, sourceType: "module" },
+      plugins: { refill: { rules: { refill: refillRule } } },
+      rules: { "refill/refill": ["error", { maxLength: 80 }] },
+    });
+    const fatal = messages.find((m) => m.fatal);
+    if (fatal) {
+      throw new Error(`did not expect a fatal error, got: ${fatal.message}`);
+    }
+  });
+});
+
+describe("comment-refill/refill leaves structural tool directives alone", () => {
+  it("never rewrites an eslint-disable-next-line comment, even when it overflows maxLength", () => {
+    const linter = new Linter();
+    const code =
+      "function decodeSpdxPath(path) {\n" +
+      "  let decoded;\n" +
+      "  try {\n" +
+      "    decoded = decodeURIComponent(path);\n" +
+      "  } catch {\n" +
+      "    return undefined;\n" +
+      "  }\n" +
+      "\n" +
+      "  // eslint-disable-next-line no-control-regex -- deliberate control-character class: reject, never resolve\n" +
+      "  if (/[\u0000-\u001f\u007f-\u009f]/.test(decoded)) return undefined;\n" +
+      "  return decoded.trim();\n" +
+      "}\n";
+    const configs = {
+      languageOptions: { ecmaVersion: 2022, sourceType: "module" },
+      plugins: { refill: { rules: { refill: refillRule } } },
+      rules: {
+        "refill/refill": ["error", { maxLength: 100 }],
+        "no-control-regex": "error",
+      },
+    };
+    const out = linter.verifyAndFix(code, configs, "test.js");
+    if (out.output !== code) {
+      throw new Error(
+        `expected the eslint-disable comment and the code around it to be byte-identical, got:\n${out.output}`,
+      );
+    }
+    if (out.messages.length !== 0) {
+      throw new Error(
+        `expected zero remaining messages, got: ${JSON.stringify(out.messages)}`,
+      );
+    }
+  });
+});

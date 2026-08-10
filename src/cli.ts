@@ -1,39 +1,34 @@
 /**
- * Single CLI entry point: `generate` and `check` subcommands parsed with
- * node:util parseArgs — no CLI framework (dependency-footprint constraint).
- * This module is the only place that owns process exit codes.
+ * Single CLI entry point: `generate` and `check` subcommands parsed with node:util parseArgs - no
+ * CLI framework (dependency-footprint constraint). This module is the only place that owns process
+ * exit codes.
  *
  * Generate modes:
- * - `--repo-root <path>` (default: cwd) — discovery mode: every lockfile
- *   target under the root is scanned sequentially in sorted identity order and
- *   folded into one merged document.
- * - `--target <path>` — single-target debugging; flows through the same
- *   dispatch loop, so a Yarn-4 target produces identical rows either way.
- * - `--exclude <glob>` — repeatable; matched against target identities.
- * - `--policy <path>` — optional TOML policy: validated before any scan
- *   (fail-fast), verdicts surfaced on stderr, in the dump-model output, and in
- *   the rendered PolicyView document; the document is always written whatever
- *   the verdicts say — the CI gate is check, never generate.
- * - `--notices <path>` — the THIRD_PARTY_NOTICES.md companion is always
- *   written; defaults to THIRD_PARTY_NOTICES.md beside the output.
- * - `--cyclonedx <path>` — optional CycloneDX 1.6 export.
+ * - `--repo-root <path>` (default: cwd) - discovery mode: every lockfile target under the root is
+ *   scanned sequentially in sorted identity order and folded into one merged document.
+ * - `--target <path>` - single-target debugging; flows through the same dispatch loop, so a Yarn-4
+ *   target produces identical rows either way.
+ * - `--exclude <glob>` - repeatable; matched against target identities.
+ * - `--policy <path>` - optional TOML policy: validated before any scan (fail-fast), verdicts
+ *   surfaced on stderr, in the dump-model output, and in the rendered PolicyView document; the
+ *   document is always written whatever the verdicts say - the CI gate is check, never generate.
+ * - `--notices <path>` - the THIRD_PARTY_NOTICES.md companion is always written; defaults to
+ *   THIRD_PARTY_NOTICES.md beside the output.
+ * - `--cyclonedx <path>` - optional CycloneDX 1.6 export.
  *
- * Architecture: the write-free pipeline core lives in src/pipeline/
- * (buildOutputs renders in memory; runGenerate holds the only file-write calls
- * in the cli/pipeline/gate trio); the check comparison and its exit mapping
- * live in src/gate/check.ts.
+ * Architecture: the write-free pipeline core lives in src/pipeline/ (buildOutputs renders in
+ * memory; runGenerate holds the only file-write calls in the cli/pipeline/gate trio); the check
+ * comparison and its exit mapping live in src/gate/check.ts.
  *
  * Exit-code taxonomy:
- *   0  success / check clean
- *   1  check: at least one policy fail verdict (priority over stale). Warn
- *      verdicts and unused-policy-entry warnings print but never gate — only
- *      fail verdicts reach this code.
- *   2  check: at least one stale or missing committed output
- *   3  tool/config error (>2): unknown subcommand, conflicting flags, pipeline
- *      failure, coverage assertion, invalid policy file (TomlError/PolicyError
- *      messages printed verbatim), --dump-model on check. Codes 1 and 2 come
- *      only from check's structured-result mapping — exceptions can never
- *      surface as 0/1/2.
+ *   0 success / check clean 1 check: at least one policy fail verdict (priority over stale). Warn
+ *      verdicts and unused-policy-entry warnings print but never gate - only fail verdicts reach
+ *      this code.
+ *   2 check: at least one stale or missing committed output 3 tool/config error (>2): unknown
+ *   subcommand, conflicting flags, pipeline
+ *      failure, coverage assertion, invalid policy file (TomlError/PolicyError messages printed
+ *      verbatim), --dump-model on check. Codes 1 and 2 come only from check's structured-result
+ *      mapping - exceptions can never surface as 0/1/2.
  */
 
 import { existsSync } from "node:fs";
@@ -96,9 +91,9 @@ function fail(message: string): never {
 }
 
 /**
- * Print the cache-integrity audit to stderr (the tool's message channel; the
- * exit code is the machine signal). Each mismatch names the purl, the committed
- * value, the registry's current answer, and why they diverge.
+ * Print the cache-integrity audit to stderr (the tool's message channel; the exit code is the
+ * machine signal). Each mismatch names the purl, the committed value, the registry's current
+ * answer, and why they diverge.
  */
 function reportVerifyCache(result: VerifyResult): void {
   const line = (text: string): void => {
@@ -148,37 +143,34 @@ interface CliValues {
   /** Repeatable --image refs for generate-docker-sbom (the image lane). */
   image?: string[];
   /**
-   * Repeatable --dockerfile paths for generate-docker-sbom (the targeted build
-   * lane): build the shipped image of each named Dockerfile and scan it.
-   * Base-dir-resolved.
+   * Repeatable --dockerfile paths for generate-docker-sbom (the targeted build lane): build the
+   * shipped image of each named Dockerfile and scan it. Base-dir-resolved.
    */
   dockerfile?: string[];
   /** generate-docker-sbom output path; base-dir-resolved like every artifact. */
   "docker-sbom"?: string;
   /**
-   * generate-docker-sbom --list-dockerfiles: print the tool policy-aware
-   * discovered Dockerfile identities to stdout, one per line, and exit --
-   * scans nothing, writes nothing. Requires --repo-root.
+   * generate-docker-sbom --list-dockerfiles: print the tool policy-aware discovered Dockerfile
+   * identities to stdout, one per line, and exit -- scans nothing, writes nothing. Requires
+   * --repo-root.
    */
   "list-dockerfiles"?: boolean;
   /**
-   * generate --intensive: opt-in ScanCode assessment over the FULL package
-   * set — the in-depth source scan that outranks the registry answer where
-   * present, memo-gated so an already-analysed version is never re-scanned.
-   * GENERATE-ONLY — check rejects it outright (gate/check.ts). No `default`
-   * here: absent must stay absent, never coerced to false, so optionsFrom's
-   * own-property spread can gate the intensive lane on mere presence.
+   * generate --intensive: opt-in ScanCode assessment over the FULL package set - the in-depth
+   * source scan that outranks the registry answer where present, memo-gated so an already-analysed
+   * version is never re-scanned. GENERATE-ONLY - check rejects it outright (gate/check.ts). No
+   * `default` here: absent must stay absent, never coerced to false, so optionsFrom's own-property
+   * spread can gate the intensive lane on mere presence.
    */
   intensive?: boolean;
 }
 
 /**
- * The recommended default policy file. When --policy is omitted, a
- * .sbomlet.policy.toml at the repo root is adopted automatically; an absent
- * default is silently skipped (no policy means no gate). An explicit --policy
- * always wins, and errors if its file is missing. The anchor is the repo root
- * (not --base-dir), so the default is found in the scanned repo, including from
- * the GitHub Action, which runs from its own directory.
+ * The recommended default policy file. When --policy is omitted, a .sbomlet.policy.toml at the repo
+ * root is adopted automatically; an absent default is silently skipped (no policy means no gate).
+ * An explicit --policy always wins, and errors if its file is missing. The anchor is the repo root
+ * (not --base-dir), so the default is found in the scanned repo, including from the GitHub Action,
+ * which runs from its own directory.
  */
 const DEFAULT_POLICY = ".sbomlet.policy.toml";
 
@@ -189,9 +181,8 @@ function discoverDefaultPolicy(values: CliValues): string | undefined {
 }
 
 /**
- * Validate the shared flag constraints and assemble the pipeline options —
- * generate and check parse the same flags, so the comparison set is exactly
- * the configured output set.
+ * Validate the shared flag constraints and assemble the pipeline options - generate and check parse
+ * the same flags, so the comparison set is exactly the configured output set.
  */
 export function optionsFrom(values: CliValues): GenerateOptions {
   if (values.target !== undefined && values["repo-root"] !== undefined) {
@@ -213,25 +204,22 @@ export function optionsFrom(values: CliValues): GenerateOptions {
     enrichmentCachePath: values["enrichment-cache"],
     scancodeCachePath: values["scancode-cache"],
     verbose: values.verbose ?? false,
-    // Absent-not-false: own-property spread so a default generate
-    // never sets this key at all, and check's runCheck rejection reads
-    // opts.intensive === true, never a coerced false.
+    // Absent-not-false: own-property spread so a default generate never sets this key at all, and
+    // check's runCheck rejection reads opts.intensive === true, never a coerced false.
     ...(values.intensive === true ? { intensive: true } : {}),
   };
 }
 
 /**
- * Compute the first generate-docker-sbom mode-conflict message, or undefined
- * when the requested lane combination is valid. THE THREE LANES ARE PAIRWISE
- * MUTUALLY EXCLUSIVE: exactly one of --dockerfile (build named
- * Dockerfiles) / --repo-root (discover + build) / --image (scan pre-existing
- * images). --list-dockerfiles is discovery-listing support: it never combines
- * with a build/scan lane and REQUIRES --repo-root (the walk root the listing
- * reads). A bare invocation —
- * no lane, no listing — is a usage error naming the three lanes: there is no
- * default image set. Pair checks are walked as a table rather than an if-ladder
- * to keep this function under the complexity bound. Extracted from
- * dockerSbomOptionsFrom to keep that function under the complexity bound.
+ * Compute the first generate-docker-sbom mode-conflict message, or undefined when the requested
+ * lane combination is valid. THE THREE LANES ARE PAIRWISE MUTUALLY EXCLUSIVE: exactly one of
+ * --dockerfile (build named Dockerfiles) / --repo-root (discover + build) / --image (scan
+ * pre-existing images). --list-dockerfiles is discovery-listing support: it never combines with a
+ * build/scan lane and REQUIRES --repo-root (the walk root the listing reads). A bare invocation
+ * - no lane, no listing - is a usage error naming the three lanes: there is no default image set.
+ * Pair checks are walked as a table rather than an if-ladder to keep this function under the
+ * complexity bound. Extracted from dockerSbomOptionsFrom to keep that function under the complexity
+ * bound.
  */
 export function dockerSbomModeConflict(values: CliValues): string | undefined {
   const hasImage = values.image !== undefined && values.image.length > 0;
@@ -240,9 +228,8 @@ export function dockerSbomModeConflict(values: CliValues): string | undefined {
     values.dockerfile !== undefined && values.dockerfile.length > 0;
   const hasListDockerfiles = values["list-dockerfiles"] === true;
   const pairs: Array<[boolean, boolean, string]> = [
-    // --list-dockerfiles never combines with a build/scan lane (checked first so
-    // the message names --list-dockerfiles even when --repo-root is also set as
-    // its required walk root).
+    // --list-dockerfiles never combines with a build/scan lane (checked first so the message names
+    // --list-dockerfiles even when --repo-root is also set as its required walk root).
     [
       hasListDockerfiles,
       hasImage,
@@ -253,7 +240,7 @@ export function dockerSbomModeConflict(values: CliValues): string | undefined {
       hasDockerfile,
       "--list-dockerfiles and --dockerfile are mutually exclusive",
     ],
-    // The three lanes are pairwise mutually exclusive — choose one way in.
+    // The three lanes are pairwise mutually exclusive - choose one way in.
     [
       hasDockerfile,
       hasRepoRoot,
@@ -279,8 +266,8 @@ export function dockerSbomModeConflict(values: CliValues): string | undefined {
   if (hasListDockerfiles && !hasRepoRoot) {
     return "--list-dockerfiles requires --repo-root <dir>";
   }
-  // No lane and no listing — there is no default image set, so a bare
-  // invocation is a usage error naming the three ways in.
+  // No lane and no listing - there is no default image set, so a bare invocation is a usage error
+  // naming the three ways in.
   if (!hasImage && !hasRepoRoot && !hasDockerfile && !hasListDockerfiles) {
     return (
       "generate-docker-sbom requires one lane: --dockerfile <path>... (build " +
@@ -297,11 +284,10 @@ function hasValues(list: string[] | undefined): boolean {
 }
 
 /**
- * Assemble the generate-docker-sbom options for one of the three lanes. The
- * lane exclusivity is validated first via {@link dockerSbomModeConflict} (a bad
- * combination, or a bare no-lane invocation, exits 3 with the usage). Mode-flag
- * computation is routed through {@link hasValues} to keep this function under
- * the complexity bound.
+ * Assemble the generate-docker-sbom options for one of the three lanes. The lane exclusivity is
+ * validated first via {@link dockerSbomModeConflict} (a bad combination, or a bare no-lane
+ * invocation, exits 3 with the usage). Mode-flag computation is routed through {@link hasValues} to
+ * keep this function under the complexity bound.
  */
 export function dockerSbomOptionsFrom(
   values: CliValues,
@@ -313,8 +299,8 @@ export function dockerSbomOptionsFrom(
   const hasImage = hasValues(values.image);
   const hasRepoRoot = values["repo-root"] !== undefined;
   const hasDockerfile = hasValues(values.dockerfile);
-  // Discover the policy even without --policy so its `[cache] dir` steers the
-  // committed-SBOM output to the same cache dir generate/check read from.
+  // Discover the policy even without --policy so its `[cache] dir` steers the committed-SBOM output
+  // to the same cache dir generate/check read from.
   const policyPath = values.policy ?? discoverDefaultPolicy(values);
   return {
     ...(hasImage ? { images: values.image } : {}),
@@ -323,10 +309,11 @@ export function dockerSbomOptionsFrom(
     ...(values["list-dockerfiles"] === true ? { listDockerfiles: true } : {}),
     ...(values.exclude !== undefined ? { excludes: values.exclude } : {}),
     ...(policyPath !== undefined ? { policyPath } : {}),
-    // The tool's OWN directory, so Dockerfile discovery prunes it from the walk
-    // exactly as lockfile discovery does (targets.ts). cli.ts lives in src/,
-
-    // so one level up is the tool root. Computed with zero hardcoded paths.
+    /**
+     * The tool's OWN directory, so Dockerfile discovery prunes it from the walk exactly as lockfile
+     * discovery does (targets.ts). cli.ts lives in src/, so one level up is the tool root. Computed
+     * with zero hardcoded paths.
+     */
     toolDir: join(import.meta.dir, ".."),
     dockerSbomPath: values["docker-sbom"],
     baseDir: values["base-dir"],
@@ -344,9 +331,8 @@ async function runGenerateCommand(values: CliValues): Promise<void> {
 }
 
 /**
- * Run `generate-docker-sbom`. MAINTAINER-ONLY: requires a docker daemon. The
- * only subcommand that touches docker/syft; a scan/build/daemon failure is a
- * tool error (exit 3), never a gate verdict.
+ * Run `generate-docker-sbom`. MAINTAINER-ONLY: requires a docker daemon. The only subcommand that
+ * touches docker/syft; a scan/build/daemon failure is a tool error (exit 3), never a gate verdict.
  */
 async function runGenerateDockerSbomCommand(values: CliValues): Promise<void> {
   try {
@@ -357,8 +343,8 @@ async function runGenerateDockerSbomCommand(values: CliValues): Promise<void> {
 }
 
 /**
- * Run `check`, the CI gate. Exit codes 1 and 2 come ONLY from the structured
- * result via exitCodeFor — never from a throw (an exception stays on 3+).
+ * Run `check`, the CI gate. Exit codes 1 and 2 come ONLY from the structured result via exitCodeFor
+ * - never from a throw (an exception stays on 3+).
  */
 async function runCheckCommand(values: CliValues): Promise<never> {
   let result: CheckResult;
@@ -371,9 +357,9 @@ async function runCheckCommand(values: CliValues): Promise<never> {
 }
 
 /**
- * Run `verify-cache`, the online integrity audit. Like check, the gate verdict
- * (exit 1) comes ONLY from the structured result; a network or malformed-cache
- * failure stays on the 3+ throw path, never a false "all match".
+ * Run `verify-cache`, the online integrity audit. Like check, the gate verdict (exit 1) comes ONLY
+ * from the structured result; a network or malformed-cache failure stays on the 3+ throw path,
+ * never a false "all match".
  */
 async function runVerifyCacheCommand(values: CliValues): Promise<never> {
   let result: VerifyResult;
@@ -443,9 +429,9 @@ async function main(argv: string[]): Promise<void> {
 }
 
 // import.meta.main is true only when this file is the process entry point,
-// so tests can import the pipeline without triggering the CLI. Supported by
-// Bun natively; the repo-root mise pins node 24, where import.meta.main
-// also exists (Node >=22.16) for the Node-fallback reader.
+// so tests can import the pipeline without triggering the CLI. Supported by Bun natively; the
+// repo-root mise pins node 24, where import.meta.main also exists (Node >=22.16) for the
+// Node-fallback reader.
 if (import.meta.main) {
   await main(process.argv.slice(2));
 }

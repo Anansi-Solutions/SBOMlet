@@ -12,6 +12,7 @@ import {
 } from "../src/model/dependencies";
 import { leafIds, type ExpressionNode } from "../src/normalize/expression";
 import { annotateFindings } from "../src/normalize/normalize";
+import { renderMarkdown } from "../src/render/markdown";
 import { renderNotices } from "../src/render/notices";
 
 // ---------------------------------------------------------------------------
@@ -346,6 +347,30 @@ describe("renderNotices — unknown-license packages", () => {
     };
     const output = renderNotices(model);
     expect(output.includes("## Packages with unknown licenses")).toBe(false);
+  });
+});
+
+describe("renderNotices/renderMarkdown agreement — LicenseRef-only unknown lane", () => {
+  test("a LicenseRef-only package rows in NOTICES' unknown section and counts under LICENSES' Unknown license line", () => {
+    const model: CanonicalDependencies = {
+      packages: [
+        entry({
+          purl: "pkg:npm/ref-only-pkg@1.0.0",
+          name: "ref-only-pkg",
+          version: "1.0.0",
+          finding: exactFinding("LicenseRef-proprietary-eula"),
+        }),
+      ],
+    };
+    const notices = renderNotices(model);
+    const licenses = renderMarkdown(model);
+    expect(notices.includes("## Packages with unknown licenses")).toBe(true);
+    expect(
+      notices.includes(
+        "- ref-only-pkg@1.0.0 — unknown license, no text included",
+      ),
+    ).toBe(true);
+    expect(licenses.includes("- Unknown license: 1")).toBe(true);
   });
 });
 

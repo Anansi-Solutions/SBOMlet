@@ -10,7 +10,7 @@ bun = "1.3.14"
 # CI; see docs/explanation/adr/0019-scancode-senior-assessment.md), but it
 # is still a DEPENDENCY like every other tool here, so it is pinned and
 # installed the same way: `mise install`. The version MUST match
-# SCANCODE_TOOL.version in src/enrich/scancode.ts. mise's pipx backend
+# SCANCODE_TOOL.version in src/enrich/scancode/invocation.ts. mise's pipx backend
 # strips the `[full]` extra before invoking pipx -- harmless at this
 # version, since scancode-toolkit's own metadata already lists `[full]`'s
 # two extras-gated deps (typecode[full], extractcode[full]) as unconditional

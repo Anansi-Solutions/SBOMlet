@@ -1,17 +1,15 @@
 /**
- * Post-process pass that aligns the columns of every GFM table in a rendered
- * document, so the committed THIRD_PARTY_LICENSES.md reads cleanly as raw text.
+ * Post-process pass that aligns the columns of every GFM table in a rendered document, so the
+ * committed THIRD_PARTY_LICENSES.md reads cleanly as raw text.
  *
- * Runs AFTER renderMarkdown, on the pipeline's single output-production point, so
- * generate and check both align identically and the byte-compare gate stays
- * consistent. The renderer itself stays unaligned — its golden and inline tests
- * are unaffected.
+ * Runs AFTER renderMarkdown, on the pipeline's single output-production point, so generate and
+ * check both align identically and the byte-compare gate stays consistent. The renderer itself
+ * stays unaligned - its golden and inline tests are unaffected.
  *
- * Bounded, NOT a general markdown parser: it only re-pads blocks that are
- * unambiguously GFM tables (a row immediately followed by a `| --- | --- |`
- * separator), leaves fenced code blocks untouched, and splits cells on UNESCAPED
- * pipes only (the renderer escapes a literal `|` in a cell to `\|`). Deterministic
- * and idempotent.
+ * Bounded, NOT a general markdown parser: it only re-pads blocks that are unambiguously GFM tables
+ * (a row immediately followed by a `| --- | --- |` separator), leaves fenced code blocks untouched,
+ * and splits cells on UNESCAPED pipes only (the renderer escapes a literal `|` in a cell to `\|`).
+ * Deterministic and idempotent.
  */
 
 const FENCE = /^\s*```/;

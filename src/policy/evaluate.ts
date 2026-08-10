@@ -1,63 +1,56 @@
 /**
  * Pure policy engine: evaluate(model, policy) → Verdict[].
  *
- * Pure fold over the model — no I/O, no fs/process, no logging, no CycloneDX
- * knowledge; the CLI owns file reads and stderr. Identical model + policy
- * always produce the identical Verdict[], sorted compareCodeUnits on (purl,
- * occurrenceTarget).
+ * Pure fold over the model - no I/O, no fs/process, no logging, no CycloneDX knowledge; the CLI
+ * owns file reads and stderr. Identical model + policy always produce the identical Verdict[],
+ * sorted compareCodeUnits on (purl, occurrenceTarget).
  *
- * Precondition: model.packages carry `finding` (annotateFindings ran). A
- * missing finding is treated as unknown — defensive, never throws.
+ * Precondition: model.packages carry `finding` (annotateFindings ran). A missing finding is treated
+ * as unknown - defensive, never throws.
  *
  * Precedence per (package × occurrence), highest → lowest:
- *   0. DENY — denyRuleFor matches the finding's expression (license
- *      mode, OR-election over the UNION of all license deny allowlists so an OR
- *      across SEPARATE deny entries is denied; an OR finding with a branch
- *      electable out of the union is NOT denied) or the package name (name mode,
- *      for non-SPDX use-restriction riders like Commons-Clause) → fail,
- *      denied[i], TERMINAL. Deny ALSO consults the PRE-OVERRIDE observed
- *      expression (finding.observedExpression): if EITHER the observed or
- *      the possibly-overridden finding expression is denied, deny fires, so a
- *      denied OBSERVED license can never be licensed back in by an override that
- *      rewrites it. Deny sits above EVERY accept lever AND above the
- *      stale-override lane: a use-restricted / source-available license can
- *      never be licensed back in by a compatible rule, a workspace suppression,
- *      the dev-scope downgrade, a stale override, OR a successfully-applied
- *      override. Name-mode deny does not require a parseable expression, so an
- *      unknown-finding rider still fails.
- *   1. compatible match="package" (exact name, exact version when the rule
- *      pins one) → ok, compatible[i] — excluded from copyleft flagging
- *      everywhere.
- *   2. compatible match="license": satisfies(finding.expression,
- *      rule.allowlist) against the pre-decomposed allowlist from schema
- *      validation → ok, compatible[i].
- *   3. copyleft-flagged (isCopyleft on the elected branch — an OR with a
- *      permissive branch elects the permissive branch and is not copyleft) and
- *      the occurrence target is or is under a suppressed path and the
- *      suppression is family-justified (the elected expression satisfies the
- *      workspace's declared license, or every copyleft leaf in it is in a
- *      finding-family the workspace license family ABSORBS per the literal
- *      WORKSPACE_ABSORBS relation — an AGPL-3.0 workspace absorbs GNU-family
- *      GPL/LGPL deps AND MPL deps it bundles, but never SSPL or CC-BY-SA) →
- *      suppressed, workspace.copyleft_suppressed[i]. A path match without family
+ *   0. Deny - denyRuleFor matches the finding's expression (license mode, electing over the union
+ *      of all license deny allowlists - see docs/glossary.md#election - so an OR across separate
+ *      deny entries is denied; an OR finding with a branch electable out of the union is not
+ *      denied) or the package name (name mode, for non-SPDX use-restriction riders like
+ *      Commons-Clause) → fail, denied[i], terminal. Deny also consults the pre-override observed
+ *      expression (finding.observedExpression): if either the observed or the possibly-overridden
+ *      finding expression is denied, deny fires, so a denied observed license can never be licensed
+ *      back in by an override that rewrites it. Deny sits above every accept lever, and above the
+ *      stale-override lane: a use-restricted / source-available license can never be licensed back
+ *      in by a compatible rule, a workspace suppression, the dev-scope downgrade, a stale override,
+ *      or a successfully-applied override. Name-mode deny does not require a parseable expression,
+ *      so an unknown-finding rider still fails.
+ *   1. compatible match="package" (exact name, exact version when the rule pins one) → ok,
+ *      compatible[i] - excluded from copyleft flagging everywhere.
+ *   2. compatible match="license": satisfies(finding.expression, rule.allowlist) against the
+ *      pre-decomposed allowlist from schema validation → ok, compatible[i].
+ *   3. copyleft-flagged (isCopyleft on the elected branch - an OR with a permissive branch elects
+ *      the permissive branch and is not copyleft) and the occurrence target is or is under a
+ *      suppressed path and the suppression is family-justified (the elected expression satisfies
+ *      the workspace's declared license, or every copyleft leaf in it is in a finding-family the
+ *      workspace license family absorbs per the literal WORKSPACE_ABSORBS relation - an AGPL-3.0
+ *      workspace absorbs GNU-family GPL/LGPL deps and MPL deps it bundles, but never SSPL or
+ *      CC-BY-SA) → suppressed, workspace.copyleft_suppressed[i]. A path match without family
  *      justification falls through to the normal default chain.
- *   4. Defaults: copyleft → fail (default:copyleft, reason names the elected
- *      expression and the occurrence target); unknown finding →
- *      policy.unknownHandling as warn or fail (default:unknown); otherwise ok
- *      (default:ok).
- *   Clarify sits above all of these by having already replaced the finding in
- *   annotateFindings; a clarified package whose verdict falls through to
+ *   4. Defaults: copyleft → fail (default:copyleft, reason names the elected expression and the
+ *      occurrence target); unknown finding → policy.unknownHandling as warn or fail
+ *      (default:unknown); elected content that still carries a LicenseRef-/DocumentRef- leaf after
+ *      election (a bare ref, or an AND that keeps one alongside a known conjunct) → same
+ *      default:unknown handling, never default:ok - its content is unknowable to the tool;
+ *      otherwise ok (default:ok).
+ *   Clarify sits above all of these by having already replaced the finding in annotateFindings; a
+ *   clarified package whose verdict falls through to
  *   default:ok cites clarify[i] instead, so usage stays visible.
  *
- * Every verdict-affecting match is exact-ID or satisfies-based — package rules
- * compare name/version by string equality, license rules go through
- * spdx-satisfies on validated allowlists (never re-parsed, never
- * substring-matched), suppression paths match segment-aware
- * (`target === path || target.startsWith(path + "/")`), and every verdict
- * carries a machine-readable rule id plus a reason naming the deciding input.
+ * Every verdict-affecting match is exact-ID or satisfies-based - package rules compare name/version
+ * by string equality, license rules go through spdx-satisfies on validated allowlists (never
+ * re-parsed, never substring-matched), suppression paths match segment-aware (`target === path ||
+ * target.startsWith(path + "/")`), and every verdict carries a machine-readable rule id plus a
+ * reason naming the deciding input.
  *
- * The normative decision tree is docs/reference/dependency-classification.md
- * — update both together.
+ * The normative decision tree is docs/reference/dependency-classification.md - update both
+ * together.
  */
 import parseSpdx from "spdx-expression-parse";
 import satisfies from "spdx-satisfies";
@@ -72,6 +65,7 @@ import {
 import {
   copyleftLeafIds,
   elect,
+  hasRefLeaf,
   isCopyleft,
   renderNode,
   type ExpressionNode,
@@ -97,14 +91,17 @@ interface Assessment {
   expression: string | null;
   /** Rendered elected branch; null when unknown/imprecise. */
   elected: string | null;
-  /** Elected AST node (suppression walks its copyleft leaves). */
+  /**
+   * Elected AST node (suppression walks its copyleft leaves; the verdict walk also checks it for a
+   * surviving LicenseRef-/DocumentRef- leaf).
+   */
   electedNode: ExpressionNode | null;
-  /** isCopyleft on the elected node — the elected branch decides. */
+  /** isCopyleft on the elected node - the elected branch decides. */
   copyleft: boolean;
   /**
-   * The imprecise family token when the finding is imprecise, else
-   * undefined. An imprecise finding has expression null so it never reaches
-   * satisfies(); this field routes it to the present-but-needs-clarify lane.
+   * The imprecise family token when the finding is imprecise, else undefined. An imprecise finding
+   * has expression null so it never reaches satisfies(); this field routes it to the
+   * present-but-needs-clarify lane.
    */
   impreciseFamily?: string;
 }
@@ -117,15 +114,15 @@ const UNKNOWN_ASSESSMENT: Assessment = {
 };
 
 /**
- * Parse the finding's expression once and derive election + copyleft flag.
- * The expression was produced by the normalizer (or validated policy schema
- * via clarify), so it parses by construction; the defensive catch keeps the
- * never-throws posture by degrading to unknown instead of crashing the run.
+ * Parse the finding's expression once and derive election + copyleft flag. The expression was
+ * produced by the normalizer (or validated policy schema via clarify), so it parses by
+ * construction; the defensive catch keeps the never-throws posture by degrading to unknown instead
+ * of crashing the run.
  *
- * An imprecise finding (confidence "imprecise", expression null) branches out
- * BEFORE the null-expression unknown fallback so its family is carried to the
- * present-but-needs-clarify lane — it must never be conflated with genuine
- * unknown and never reach satisfies() (it has no valid expression).
+ * An imprecise finding (confidence "imprecise", expression null) branches out before the
+ * null-expression unknown fallback so its family is carried to the present-but-needs-clarify lane
+ * - it must never be conflated with genuine unknown and never reach satisfies() (it has no valid
+ * expression).
  */
 function assessPackage(entry: PackageEntry): Assessment {
   const finding = entry.finding;
@@ -154,22 +151,20 @@ interface IndexedRule<T> {
 }
 
 /**
- * Segment-aware identity-prefix match: a target matches a path only when it IS
- * the path or sits under it as a whole segment — "apps/scratch-helper" never
- * matches "apps/scratch". This is the only prefix comparison in the engine —
- * suppression paths and compatible `where` scopes both delegate here; license
- * values are never substring-matched anywhere. Both directions matter: the
- * scope "docker:a" covers every target under it ("docker:a/Dockerfile"), while
- * the scope "docker:a/Dockerfile" never covers the SHORTER target "docker:a"
- * (the fail-safe direction).
+ * Segment-aware identity-prefix match: a target matches a path only when it is the path or sits
+ * under it as a whole segment - "apps/scratch-helper" never matches "apps/scratch". This is the
+ * only prefix comparison in the engine - suppression paths and compatible `where` scopes both
+ * delegate here; license values are never substring-matched anywhere. Both directions matter: the
+ * scope "docker:a" covers every target under it ("docker:a/Dockerfile"), while the scope
+ * "docker:a/Dockerfile" never covers the shorter target "docker:a" (the fail-safe direction).
  */
 function matchesIdentityPrefix(target: string, path: string): boolean {
   return target === path || target.startsWith(path + "/");
 }
 
 /**
- * A compatible rule applies at a target iff it is unscoped or some `where`
- * entry covers the target as an identity prefix.
+ * A compatible rule applies at a target iff it is unscoped or some `where` entry covers the target
+ * as an identity prefix.
  */
 function appliesAt(rule: CompatibleRule, target: string): boolean {
   return (
@@ -179,8 +174,8 @@ function appliesAt(rule: CompatibleRule, target: string): boolean {
 }
 
 /**
- * First compatible package rule matching exact name (+ version when pinned)
- * whose `where` scope, when present, covers the occurrence target.
+ * First compatible package rule matching exact name (+ version when pinned) whose `where` scope,
+ * when present, covers the occurrence target.
  */
 function packageRuleFor(
   entry: PackageEntry,
@@ -201,10 +196,9 @@ function packageRuleFor(
 }
 
 /**
- * First compatible license rule whose pre-decomposed allowlist satisfies the
- * finding's expression and whose `where` scope, when present, covers the
- * occurrence target. The allowlist was validated and decomposed by the
- * schema — the pattern is never re-parsed here; the catch is purely defensive
+ * First compatible license rule whose pre-decomposed allowlist satisfies the finding's expression
+ * and whose `where` scope, when present, covers the occurrence target. The allowlist was validated
+ * and decomposed by the schema - the pattern is never re-parsed here; the catch is purely defensive
  * (never-throws posture).
  */
 function licenseRuleFor(
@@ -226,8 +220,8 @@ function licenseRuleFor(
 }
 
 /**
- * Segment-aware suppression match (delegates to matchesIdentityPrefix — the
- * same comparison compatible `where` scopes use).
+ * Segment-aware suppression match (delegates to matchesIdentityPrefix - the same comparison
+ * compatible `where` scopes use).
  */
 function suppressionFor(
   target: string,
@@ -242,26 +236,24 @@ function suppressionFor(
 }
 
 /**
- * Family-aware suppression justification: a path match alone is not enough —
- * the finding's copyleft obligations must be ABSORBABLE by the workspace's own
- * declared license. Returns the verified-relationship text for the audit-trail
- * reason, or undefined when suppression is unjustified (the verdict then falls
- * through the normal default chain).
+ * Family-aware suppression justification: a path match alone is not enough - the finding's copyleft
+ * obligations must be absorbable by the workspace's own declared license. Returns the
+ * verified-relationship text for the audit-trail reason, or undefined when suppression is
+ * unjustified (the verdict then falls through the normal default chain).
  *
  * Minimal sound rule, two branches:
  *   (a) the elected expression satisfies the workspace license itself
  *       (spdx-satisfies against the single-ID allowlist [rule.license]);
- *   (b) ABSORB-ALL: every copyleft leaf of the elected expression
- *       is in a finding-family the workspace's license family ABSORBS, per the
- *       literal WORKSPACE_ABSORBS relation (COPYLEFT_FAMILY exact-ID lookups,
- *       never substring). A workspace re-released under strong copyleft absorbs
- *       the inbound-compatible weaker copyleft it bundles — an AGPL-3.0-only
- *       (GNU-family) workspace absorbs GNU (GPL/LGPL/AGPL) AND MPL findings, but
- *       the SAFETY FLOOR (absence from the absorbed set) still excludes SSPL and
- *       CC-BY-SA. Absorption is directional/declared, not symmetric: a non-AGPL
- *       workspace family absorbs only what WORKSPACE_ABSORBS declares for it.
- * The catches are defensive (never-throws posture); rule.license was validated
- * as a single SPDX ID by the schema.
+ *   (b) absorb-all: every copyleft leaf of the elected expression
+ *       is in a finding-family the workspace's license family absorbs, per the literal
+ *       WORKSPACE_ABSORBS relation (COPYLEFT_FAMILY exact-ID lookups, never substring). A workspace
+ *       re-released under strong copyleft absorbs the inbound-compatible weaker copyleft it bundles
+ *       - an AGPL-3.0-only (GNU-family) workspace absorbs GNU (GPL/LGPL/AGPL) and MPL findings, but
+ *       the safety floor (absence from the absorbed set) still excludes SSPL and CC-BY-SA.
+ *       Absorption is directional/declared, not symmetric: a non-AGPL workspace family absorbs only
+ *       what WORKSPACE_ABSORBS declares for it.
+ * The catches are defensive (never-throws posture); rule.license was validated as a single SPDX ID
+ * by the schema.
  */
 function suppressionJustification(
   electedNode: ExpressionNode,
@@ -320,26 +312,23 @@ function clarifyIndexFor(entry: PackageEntry, policy: Policy): number {
 }
 
 /**
- * Verdict for an imprecise finding. It never reached satisfies() (null
- * expression) and is never default:copyleft (no parseable leaf). Routing is by
- * the LITERAL COULD_BE_COPYLEFT_FAMILIES token set — NOT a COPYLEFT_FAMILY
- * lookup, which is keyed by exact SPDX ids and returns undefined for a bare
- * family token (silently mis-classifying it as permissive):
- *   - os-scope (a container SYSTEM package, the OS-ecosystem allowlist) AND
- *     family is the bare "AGPL" token → fail, rule "default:agpl-container"
- *     (checked first — the imprecise mirror of the elected-AGPL escalation
- *     in copyleftVerdict; a bare AGPL label could carry the same
- *     network-copyleft obligation and must never be parked at a warn). An
- *     application-ecosystem container package is scope "app" here (re-keyed
- *     upstream) and falls through to the next branch instead.
- *   - family IN the set (bare GPL/AGPL/LGPL) → flagged-for-review, a warn that
- *     surfaces, rule "default:imprecise-copyleft". Conservative: an imprecise
- *     copyleft family is never silently passed.
- *   - family NOT in the set (a known-permissive family like BSD) → a non-gating
- *     warn, rule "default:imprecise". Surfaced for optional `[[clarify]]`
- *     disambiguation, but never a hard fail purely for being imprecise.
- * The latter two are status "warn": visible in the summary, non-gating by
- * default.
+ * Verdict for an imprecise finding. It never reached satisfies() (null expression) and is never
+ * default:copyleft (no parseable leaf). Routing is by the literal COULD_BE_COPYLEFT_FAMILIES token
+ * set, not a COPYLEFT_FAMILY lookup, which is keyed by exact SPDX ids and returns undefined for a
+ * bare family token (silently mis-classifying it as permissive):
+ *   - os-scope (a container system package, the OS-ecosystem allowlist) and family is the bare
+ *     "AGPL" token → fail, rule "default:agpl-container" (checked first - the imprecise mirror of
+ *     the elected-AGPL escalation in copyleftVerdict; a bare AGPL label could carry the same
+ *     network-copyleft obligation and must never be parked at a warn). An application-ecosystem
+ *     container package is scope "app" here (re-keyed upstream) and falls through to the next
+ *     branch instead.
+ *   - family in the set (bare GPL/AGPL/LGPL) → flagged-for-review, a warn that surfaces, rule
+ *     "default:imprecise-copyleft". Conservative: an imprecise copyleft family is never silently
+ *     passed.
+ *   - family not in the set (a known-permissive family like BSD) → a non-gating warn, rule
+ *     "default:imprecise". Surfaced for optional `[[clarify]]` disambiguation, but never a hard
+ *     fail purely for being imprecise.
+ * The latter two are status "warn": visible in the summary, non-gating by default.
  */
 function impreciseVerdict(
   base: { purl: string; occurrenceTarget: string },
@@ -372,14 +361,12 @@ function impreciseVerdict(
 }
 
 /**
- * A STALE override FAILS the gate loudly before any other lane: the
- * override's `expects` precondition no longer matches the package's observed
- * signal, so an old assertion could be masking a relicense. The reason names
- * the package, the expected value, and the now-observed value; the rule id is
- * distinct and actionable ("override:stale[clarify|builtin]") telling the
- * maintainer to update or remove the override. Mapped to exit 1 (a
- * compliance-relevant gate failure) via the violations → exitCodeFor mapping —
- * the stale assertion is NEVER applied.
+ * A stale override fails the gate loudly before any other lane: the override's `expects`
+ * precondition no longer matches the package's observed signal, so an old assertion could be
+ * masking a relicense. The reason names the package, the expected value, and the now-observed
+ * value; the rule id is distinct and actionable ("override:stale[clarify|builtin]") telling the
+ * maintainer to update or remove the override. Mapped to exit 1 (a compliance-relevant gate
+ * failure) via the violations → exitCodeFor mapping - the stale assertion is never applied.
  */
 function staleVerdict(
   base: { purl: string; occurrenceTarget: string },
@@ -401,18 +388,15 @@ function staleVerdict(
 }
 
 /**
- * An unresolved ScanCode-vs-quick-check disagreement FAILS the
- * gate. The in-depth assessment and the declared/registry answer disagree, and
- * human involvement is NECESSARY: a warn is ignorable, which recreates
- * the silent-absorption failure mode this verdict exists to prevent — a fail,
- * not a warn. It sits below deny (terminal) and stale (a stale override is
- * strictly more urgent) and ABOVE compatible (a compatible rule must never
- * auto-absorb a disputed answer). The reason names the package, the in-depth
- * assessed expression, the disagreeing quick-check values, and the [[clarify]]
- * remedy; a `fail` mapped to exit 1 by the violations -> exitCodeFor mapping.
- * The reason is plain single-line text routed through the same downstream
- * sanitization as sibling verdicts (escapeCell in render, sanitizeForLog on
- * stderr) — no channel of its own.
+ * An unresolved ScanCode-vs-quick-check disagreement fails the gate. The in-depth assessment and
+ * the declared/registry answer disagree, and human involvement is necessary: a warn is ignorable,
+ * which recreates the silent-absorption failure mode this verdict exists to prevent - a fail, not a
+ * warn. It sits below deny (terminal) and stale (a stale override is strictly more urgent) and
+ * above compatible (a compatible rule must never auto-absorb a disputed answer). The reason names
+ * the package, the in-depth assessed expression, the disagreeing quick-check values, and the
+ * [[clarify]] remedy; a `fail` mapped to exit 1 by the violations -> exitCodeFor mapping. The
+ * reason is plain single-line text routed through the same downstream sanitization as sibling
+ * verdicts (escapeCell in render, sanitizeForLog on stderr) - no channel of its own.
  */
 function conflictVerdict(
   base: { purl: string; occurrenceTarget: string },
@@ -435,11 +419,10 @@ function conflictVerdict(
 }
 
 /**
- * Citation for an override that fell through to the default:ok lane.
- * A project clarify (clarifyIndexFor !== -1) keeps its "clarify[i]" citation; a
- * tool-level builtin (no clarify entry) cites the distinct "override:builtin[i]"
- * rule id it carries — never plain default:ok, so a shipped disambiguation
- * stays auditable. Returns undefined when this is not an override-decided
+ * Citation for an override that fell through to the default:ok lane. A project clarify
+ * (clarifyIndexFor !== -1) keeps its "clarify[i]" citation; a tool-level builtin (no clarify entry)
+ * cites the distinct "override:builtin[i]" rule id it carries - never plain default:ok, so a
+ * shipped disambiguation stays auditable. Returns undefined when this is not an override-decided
  * verdict (the caller then falls through to default:ok).
  */
 function overrideCitation(
@@ -475,18 +458,18 @@ function overrideCitation(
 }
 
 /**
- * Per-occurrence dev-scope downgrade, applied ONLY to a verdict that
- * would otherwise be a default FAIL (default:copyleft, or default:unknown when
- * unknownHandling="fail"). Keyed STRICTLY on occurrence.isDevDependency:
- *   - a PRODUCTION occurrence → the fail is returned UNCHANGED (the load-bearing
- *     safety property — a shipped copyleft/unknown can never be dev-downgraded).
- *   - a DEV occurrence branches on policy.devDependencies:
+ * Per-occurrence dev-scope downgrade, applied only to a verdict that would otherwise be a default
+ * fail (default:copyleft, or default:unknown when unknownHandling="fail"). Keyed strictly on
+ * occurrence.isDevDependency:
+ *   - a production occurrence → the fail is returned unchanged (the load-bearing safety property
+ *     - a shipped copyleft/unknown can never be dev-downgraded).
+ *   - a dev occurrence branches on policy.devDependencies:
  *       "fail"   → no downgrade (gate dev exactly like prod).
  *       "warn"   → status "warn", reason appends the auditable dev-only cause,
- *                  rule id PRESERVED so the origin stays traceable.
+ *                  rule id preserved so the origin stays traceable.
  *       "ignore" → status "ok", reason names the explicit dev-only opt-out.
- * Higher-precedence lanes (suppression, compatible, clarify, stale, imprecise)
- * never reach this helper — it sits at the would-be default-FAIL terminals only.
+ * Higher-precedence lanes (suppression, compatible, clarify, stale, imprecise) never reach this
+ * helper - it sits at the would-be default-fail terminals only.
  */
 function applyDevScope(
   failVerdict: Verdict,
@@ -511,23 +494,21 @@ function applyDevScope(
 }
 
 /**
- * Package-level os-scope downgrade, applied ONLY to a verdict that
- * would otherwise be a default FAIL (default:copyleft, or default:unknown when
- * unknownHandling="fail"). Keyed STRICTLY on the PACKAGE-level entry.scope ===
- * "os" (distinct from applyDevScope's occurrence-level isDevDependency) —
- * the container re-scope transform (pipeline.ts) keeps this "os" iff the
- * package is on the OS-ecosystem allowlist, so this check is now
- * ecosystem-accurate: a container SYSTEM package, never an application
- * dependency baked into an image:
- *   - an APP-scope package → the fail is returned UNCHANGED (the os knob never
- *     touches app dependencies, container or not).
- *   - an OS-scope package branches on policy.osDependencies:
+ * Package-level os-scope downgrade, applied only to a verdict that would otherwise be a default
+ * fail (default:copyleft, or default:unknown when unknownHandling="fail"). Keyed strictly on the
+ * package-level entry.scope === "os" (distinct from applyDevScope's occurrence-level
+ * isDevDependency) - the container re-scope transform (pipeline.ts) keeps this "os" iff the package
+ * is on the OS-ecosystem allowlist, so this check is now ecosystem-accurate: a container system
+ * package, never an application dependency baked into an image:
+ *   - an app-scope package → the fail is returned unchanged (the os knob never touches app
+ *     dependencies, container or not).
+ *   - an os-scope package branches on policy.osDependencies:
  *       "fail"   → no downgrade (an os-scope copyleft gates like an app one).
  *       "warn"   → status "warn", reason appends the auditable os-scope cause,
- *                  rule id PRESERVED so the origin stays traceable.
+ *                  rule id preserved so the origin stays traceable.
  *       "ignore" → status "ok", reason names the explicit os-only opt-out.
- * Deny is terminal-0 above this helper (denyVerdict returns first in
- * verdictFor), so a denied OS package is never reached here.
+ * Deny is terminal-0 above this helper (denyVerdict returns first in verdictFor), so a denied os
+ * package is never reached here.
  */
 function applyOsScope(
   failVerdict: Verdict,
@@ -552,13 +533,12 @@ function applyOsScope(
 }
 
 /**
- * Compose the two scope downgraders at a would-be-default-FAIL terminal. The os
- * lane runs FIRST so an os-scope package is owned by os_dependencies; the dev
- * lane runs on the result, but the two never interact: an os-scope package is
- * never a dev OCCURRENCE in the app sense, and an app package never routes
- * through the os lane. Applying os-then-dev keeps an os-scope copyleft at warn
- * even under dev_dependencies=fail (W1): once os downgrades the fail to warn,
- * applyDevScope's "fail" branch returns that warn unchanged.
+ * Compose the two scope downgraders at a would-be-default-fail terminal. The os lane runs first so
+ * an os-scope package is owned by os_dependencies; the dev lane runs on the result, but the two
+ * never interact: an os-scope package is never a dev occurrence in the app sense, and an app
+ * package never routes through the os lane. Applying os-then-dev keeps an os-scope copyleft at warn
+ * even under dev_dependencies=fail: once os downgrades the fail to warn, applyDevScope's "fail"
+ * branch returns that warn unchanged.
  */
 function applyScopeDowngrades(
   failVerdict: Verdict,
@@ -574,19 +554,16 @@ function applyScopeDowngrades(
 }
 
 /**
- * Terminal-0 deny resolution. Returns the first
- * matching deny rule, checking, in order:
- *   1. the COMBINED assessment expression (name-mode also matches entry.name) —
- *      OR-election over the union of license deny allowlists;
- *   2. the PRE-OVERRIDE observedExpression — a denied observed license an
+ * Terminal-0 deny resolution. Returns the first matching deny rule, checking, in order:
+ *   1. the combined assessment expression (name-mode also matches entry.name) -
+ *      electing over the union of license deny allowlists;
+ *   2. the pre-override observedExpression - a denied observed license an
  *      override rewrote can never be licensed back in;
- *   3. EVERY observed per-claim precise expression — a denied member
- *      combineKnown dropped via imprecise-family election / unknown collapse is
- *      still seen, in every scope.
- * Checks 2–3 pass null as the name so they consult the LICENSE allowlist only
- * (name-mode already had its chance against entry.name in check 1) — a per-claim
- * expression must never re-trigger a name-mode rule. Defensive: a finding with no
- * observed expressions simply skips check 3.
+ *   3. every observed per-claim precise expression - a denied member combineKnown dropped via
+ *      imprecise-family election / unknown collapse is still seen, in every scope.
+ * Checks 2–3 pass null as the name so they consult the license allowlist only (name-mode already
+ * had its chance against entry.name in check 1) - a per-claim expression must never re-trigger a
+ * name-mode rule. Defensive: a finding with no observed expressions simply skips check 3.
  */
 function firstDeny(
   policy: Policy,
@@ -608,12 +585,11 @@ function firstDeny(
 }
 
 /**
- * Terminal-0 deny verdict. A matched deny rule force-fails the package
- * with the `denied[i]` rule id and a reason naming the matched license/pattern
- * and the source-available rationale. It is a `fail` → mapped to a violation
- * (exit 1) by the existing violations → exitCodeFor mapping. This sits ABOVE
- * every other lane (incl. stale), so applyDevScope is never reached for a denied
- * verdict — a dev-only occurrence of a denied license still FAILS.
+ * Terminal-0 deny verdict. A matched deny rule force-fails the package with the `denied[i]` rule id
+ * and a reason naming the matched license/pattern and the source-available rationale. It is a
+ * `fail` → mapped to a violation (exit 1) by the existing violations → exitCodeFor mapping. This
+ * sits above every other lane (incl. stale), so applyDevScope is never reached for a denied verdict
+ * - a dev-only occurrence of a denied license still fails.
  */
 function denyVerdict(
   base: { purl: string; occurrenceTarget: string },
@@ -637,14 +613,13 @@ function denyVerdict(
 }
 
 /**
- * Source-available exemption (ADR-0013). When the terminal-0 deny that matched is
- * a SHIPPED source-available default (cited default:source-available — NOT the
- * consumer's own [[deny]]) AND the consumer listed that licence under
- * [[allow_source_available]], the package is NOT force-failed: it surfaces as a
- * WARN citing the exemption, so an accepted source-available licence stays visible
- * rather than silently passing. An explicit [[deny]] still wins — denyRuleFor
- * attributes a policy deny first (policy-first order), so denyRule is never the
- * builtin id when the consumer also denied the licence themselves.
+ * Source-available exemption (ADR-0013). When the terminal-0 deny that matched is a shipped
+ * source-available default (cited default:source-available - not the consumer's own [[deny]]) and
+ * the consumer listed that licence under [[allow_source_available]], the package is not
+ * force-failed: it surfaces as a warn citing the exemption, so an accepted source-available licence
+ * stays visible rather than silently passing. An explicit [[deny]] still wins - denyRuleFor
+ * attributes a policy deny first (policy-first order), so denyRule is never the builtin id when the
+ * consumer also denied the licence themselves.
  */
 function sourceAvailableExemption(
   policy: Policy,
@@ -681,10 +656,10 @@ function exemptionVerdict(
 }
 
 /**
- * Terminal-0 verdict for a matched deny: a force-fail, UNLESS the match is a
- * shipped source-available default the consumer exempted (ADR-0013), which
- * surfaces as a warn instead. An explicit [[deny]] is never the builtin id (it is
- * attributed first), so this never softens a deny the consumer authored.
+ * Terminal-0 verdict for a matched deny: a force-fail, unless the match is a shipped
+ * source-available default the consumer exempted (ADR-0013), which surfaces as a warn instead. An
+ * explicit [[deny]] is never the builtin id (it is attributed first), so this never softens a deny
+ * the consumer authored.
  */
 function denyOrExemptVerdict(
   base: { purl: string; occurrenceTarget: string },
@@ -697,9 +672,36 @@ function denyOrExemptVerdict(
 }
 
 /**
- * Default:unknown verdict for a null-expression finding. The dev-scope
- * downgrade applies ONLY to a would-be FAIL: a default:unknown already "warn"
- * (unknownHandling="warn") is non-gating and is never downgraded.
+ * Default:unknown verdict for elected content that still carries a LicenseRef-/DocumentRef- leaf
+ * after election. The OR tie-break in elect() already prefers a known assessable branch when one
+ * exists (an ordinary "MIT OR LicenseRef-x" elects MIT and never reaches this function) - a ref
+ * surviving election means either the finding is the ref, or an AND kept it alongside a known
+ * conjunct. Reuses the "default:unknown" rule id and [unknown] handling verbatim: the reference's
+ * content is unknowable to the tool, so a confident default:ok would misrepresent an assessment
+ * that never happened. Same dev/os downgrade semantics as unknownVerdict.
+ */
+function refUnknownVerdict(
+  base: { purl: string; occurrenceTarget: string },
+  entry: PackageEntry,
+  occurrence: Occurrence,
+  assessment: Assessment,
+  policy: Policy,
+): Verdict {
+  const verdict: Verdict = {
+    ...base,
+    status: policy.unknownHandling,
+    rule: "default:unknown",
+    reason: `elected "${assessment.elected}" for "${entry.name}@${entry.version}" in "${occurrence.target}" carries an unassessed LicenseRef/DocumentRef reference whose content is unknowable to the tool ([unknown] handling = "${policy.unknownHandling}")`,
+  };
+  return policy.unknownHandling === "fail"
+    ? applyScopeDowngrades(verdict, entry, occurrence, policy)
+    : verdict;
+}
+
+/**
+ * Default:unknown verdict for a null-expression finding. The dev-scope downgrade applies only to a
+ * would-be fail: a default:unknown already "warn" (unknownHandling="warn") is non-gating and is
+ * never downgraded.
  */
 function unknownVerdict(
   base: { purl: string; occurrenceTarget: string },
@@ -719,16 +721,14 @@ function unknownVerdict(
 }
 
 /**
- * Container AGPL escalation: an os-scope SYSTEM package (the OS-ecosystem
- * allowlist — an application-ecosystem container package is re-keyed to
- * scope "app" upstream and never reaches this branch) whose ELECTED
- * expression carries an AGPL leaf is a REAL fail, never the routine
- * os-downgraded warn — network copyleft (AGPL section 13) applies to
- * server-side container use, so it must not be softened by
- * os_dependencies="warn"/"ignore" the way ordinary base-image GPL/LGPL is.
- * Bypasses applyScopeDowngrades entirely (both the os and dev lanes); the
- * reason names the elected expression, the container target, the
- * network-interaction rationale, and the scoped `[[compatible]]` remedy.
+ * Container AGPL escalation: an os-scope system package (the OS-ecosystem allowlist - an
+ * application-ecosystem container package is re-keyed to scope "app" upstream and never reaches
+ * this branch) whose elected expression carries an AGPL leaf is a real fail, never the routine
+ * os-downgraded warn - network copyleft (AGPL section 13) applies to server-side container use, so
+ * it must not be softened by os_dependencies="warn"/"ignore" the way ordinary base-image GPL/LGPL
+ * is. Bypasses applyScopeDowngrades entirely (both the os and dev lanes); the reason names the
+ * elected expression, the container target, the network-interaction rationale, and the scoped
+ * `[[compatible]]` remedy.
  */
 function agplContainerVerdict(
   base: { purl: string; occurrenceTarget: string },
@@ -744,15 +744,14 @@ function agplContainerVerdict(
 }
 
 /**
- * Copyleft lane: a copyleft elected branch is SUPPRESSED when its occurrence
- * sits in a family-justified suppressed workspace; otherwise an os-scope
- * package whose elected expression carries an AGPL leaf escalates to a REAL
- * fail (agplContainerVerdict, checked BEFORE the scope downgraders so
- * os_dependencies can never soften it); otherwise it is a would-be
- * default:copyleft FAIL routed through the scope downgraders.
- * Split out of verdictFor to keep the precedence walk within the complexity
- * budget; the behavior is unchanged — it runs only when assessment.copyleft is
- * true, below compatible and above the imprecise/unknown lanes.
+ * Copyleft lane: a copyleft elected branch is suppressed when its occurrence sits in a
+ * family-justified suppressed workspace; otherwise an os-scope package whose elected expression
+ * carries an AGPL leaf escalates to a real fail (agplContainerVerdict, checked before the scope
+ * downgraders so os_dependencies can never soften it); otherwise it is a would-be
+ * default:copyleft fail routed through the scope downgraders.
+ * Split out of verdictFor to keep the precedence walk within the complexity budget; the behavior is
+ * unchanged - it runs only when assessment.copyleft is true, below compatible and above the
+ * imprecise/unknown lanes.
  */
 function copyleftVerdict(
   base: { purl: string; occurrenceTarget: string },
@@ -817,9 +816,9 @@ function verdictFor(
   const target = occurrence.target;
   const base = { purl: entry.purl, occurrenceTarget: target };
 
-  // Terminal-0: a denied license/rider can never be licensed back in — UNLESS the
-  // matched deny is a shipped source-available default the consumer exempted via
-  // [[allow_source_available]] (ADR-0013), which surfaces as a warn instead.
+  // Terminal-0: a denied license/rider can never be licensed back in - unless the matched deny is a
+  // shipped source-available default the consumer exempted via [[allow_source_available]]
+  // (ADR-0013), which surfaces as a warn instead.
   if (denyRule !== undefined) {
     return denyOrExemptVerdict(base, policy, denyRule);
   }
@@ -827,12 +826,10 @@ function verdictFor(
   const stale = entry.finding?.staleOverride;
   if (stale !== undefined) return staleVerdict(base, entry, stale);
 
-  // conflict:scancode sits directly below stale and ABOVE compatible — a fail,
-  // not a warn, because human involvement is NECESSARY and a warn is
-
-  // ignorable (rationale on conflictVerdict). A stale override is strictly more
-  // urgent so it fires first; no compatible rule may auto-absorb a disputed
-  // answer, so this precedes the compatible lanes.
+  // conflict:scancode sits directly below stale and above compatible - a fail, not a warn, because
+  // human involvement is necessary and a warn is ignorable (rationale on conflictVerdict). A stale
+  // override is strictly more urgent so it fires first; no compatible rule may auto-absorb a
+  // disputed answer, so this precedes the compatible lanes.
   const conflict = entry.finding?.conflict;
   if (conflict !== undefined) return conflictVerdict(base, entry, conflict);
 
@@ -883,6 +880,16 @@ function verdictFor(
   );
   if (citation !== undefined) return citation;
 
+  // A LicenseRef-/DocumentRef- leaf that survived election is unassessed content, not a clean
+  // permissive finding - route it through the same [unknown] handling as a genuine unknown rather
+  // than a confident
+  // default:ok. elect()'s OR tie-break already moved a known branch out from
+  // under a sibling ref when one was electable, so anything reaching here either is the ref or is
+  // an AND that keeps one alongside a known conjunct.
+  if (assessment.electedNode !== null && hasRefLeaf(assessment.electedNode)) {
+    return refUnknownVerdict(base, entry, occurrence, assessment, policy);
+  }
+
   return {
     ...base,
     status: "ok",
@@ -892,10 +899,9 @@ function verdictFor(
 }
 
 /**
- * Pure. Precondition: model.packages carry `finding` (annotateFindings ran); a
- * missing finding is treated as unknown — defensive, documented. Returns one
- * verdict per (package × occurrence), sorted compareCodeUnits on (purl,
- * occurrenceTarget).
+ * Pure. Precondition: model.packages carry `finding` (annotateFindings ran); a missing finding is
+ * treated as unknown - defensive, documented. Returns one verdict per (package × occurrence),
+ * sorted compareCodeUnits on (purl, occurrenceTarget).
  */
 export function evaluate(
   model: CanonicalDependencies,
@@ -904,33 +910,32 @@ export function evaluate(
   const verdicts: Verdict[] = [];
   for (const entry of model.packages) {
     const assessment = assessPackage(entry);
-    // Terminal-0 deny match computed once per package: license-mode reads the
-    // assessment expression (OR-election), name-mode the package name (works
-    // even when the expression is null — the use-restriction rider case).
+    // Terminal-0 deny match computed once per package: license-mode reads the assessment
+    // expression, electing over the deny allowlists (see docs/glossary.md#election); name-mode
+    // reads the package name (works even when the expression is null - the use-restriction rider
+    // case).
     //
-    // Deny is terminal OVER overrides: an override may have rewritten a
-    // denied OBSERVED license (e.g. BUSL-1.1 → MIT) into the assessment
-    // expression. Deny must ALSO consult the PRE-OVERRIDE observed expression;
-    // if EITHER the observed or the (possibly-overridden) finding expression is
-    // denied, deny fires. A denied observed license can never be licensed back
-    // in by any override (deny is terminal over overrides).
+    // Deny is terminal over overrides: an override may have rewritten a denied observed license
+    // (e.g. BUSL-1.1 → MIT) into the assessment
+    // expression. Deny must also consult the pre-override observed expression;
+    // if either the observed or the (possibly-overridden) finding expression is denied, deny fires.
+    // A denied observed license can never be licensed back in by any override (deny is terminal
+    // over overrides).
     //
-    // Deny sees EVERY observed claim: combineKnown elects an
-    // imprecise family / collapses to unknown BEFORE a precise non-copyleft
-    // DENIED member (BUSL-1.1, Elastic-2.0 — source-available) when an imprecise
-    // family token or an unknown token co-exists, so the combined expression is
-    // null/imprecise and the two checks above never see the denied member. Deny
-    // therefore ALSO consults the SET of every observed per-claim precise
-    // expression (finding.observedExpressions): if ANY observed expression is
-    // denied, deny fires — regardless of how combine rendered the finding
-    // (precise/imprecise/unknown), in EVERY scope. Name-mode (passed null here)
-    // is inert per observed expression — it already matched via entry.name above.
+    // Deny sees every observed claim: combineKnown elects an imprecise family, or collapses to
+    // unknown, before a precise non-copyleft denied member (BUSL-1.1, Elastic-2.0
+    // - source-available) when an imprecise family token or an unknown token co-exists, so the
+    // combined expression is null/imprecise and the two checks above never see the denied member.
+    // Deny therefore also consults the set of every observed per-claim precise expression
+    // (finding.observedExpressions): if any observed expression is denied, deny fires - regardless
+    // of how combine rendered the finding (precise/imprecise/unknown), in every scope. Name-mode
+    // (passed null here) is inert per observed expression - it already matched via entry.name
+    // above.
     const denyRule = firstDeny(policy, entry, assessment.expression);
     for (const occurrence of entry.occurrences) {
-      // Compatible matches are PER OCCURRENCE: an unscoped rule
-      // accepts the package at every occurrence; a `where`-scoped rule only
-      // at the occurrences its identity prefixes cover. First match in TOML
-      // order wins per occurrence, package form before license form.
+      // Compatible matches are per occurrence: an unscoped rule accepts the package at every
+      // occurrence; a `where`-scoped rule only at the occurrences its identity prefixes cover.
+      // First match in TOML order wins per occurrence, package form before license form.
       const packageRule = packageRuleFor(entry, occurrence.target, policy);
       const licenseRule =
         packageRule === undefined && assessment.expression !== null
@@ -957,15 +962,13 @@ export function evaluate(
 }
 
 /**
- * One accepted-AGPL container obligation: an os-scope (container SYSTEM
- * package) occurrence whose elected license carries the AGPL network-copyleft
- * obligation (precise: an AGPL_IDS leaf in the elected expression; imprecise:
- * the bare "AGPL" family token, the SAME predicates agplContainerVerdict and
- * impreciseVerdict already gate on) but whose verdict at that occurrence is an
- * ACCEPTANCE — status "ok" via a `[[compatible]]` rule — rather than the
+ * One accepted-AGPL container obligation: an os-scope (container system package) occurrence whose
+ * elected license carries the AGPL network-copyleft obligation (precise: an AGPL_IDS leaf in the
+ * elected expression; imprecise: the bare "AGPL" family token, the same predicates
+ * agplContainerVerdict and impreciseVerdict already gate on) but whose verdict at that occurrence
+ * is an acceptance - status "ok" via a `[[compatible]]` rule - rather than the
  * default:agpl-container fail. Surfaced as a non-blocking special notice
- * (render/markdown.ts) instead of vanishing: the obligation is accepted, not
- * absent.
+ * (render/markdown.ts) instead of vanishing: the obligation is accepted, not absent.
  */
 export interface AcceptedContainerNotice {
   readonly purl: string;
@@ -982,10 +985,9 @@ export interface AcceptedContainerNotice {
 }
 
 /**
- * An assessment carries the AGPL network-copyleft obligation — precise (an
- * AGPL_IDS leaf in the elected expression) or imprecise (the bare "AGPL"
- * family token) — the exact two predicates agplContainerVerdict and
- * impreciseVerdict already gate os-scope escalation on, reused here so
+ * An assessment carries the AGPL network-copyleft obligation - precise (an AGPL_IDS leaf in the
+ * elected expression) or imprecise (the bare "AGPL" family token) - the exact two predicates
+ * agplContainerVerdict and impreciseVerdict already gate os-scope escalation on, reused here so
  * detection can never drift from the escalation itself.
  */
 function carriesAgplObligation(assessment: Assessment): boolean {
@@ -999,15 +1001,13 @@ function carriesAgplObligation(assessment: Assessment): boolean {
 }
 
 /**
- * Accepted-AGPL container notices: one entry per os-scope package carrying
- * the AGPL obligation with at least one occurrence whose verdict is an
- * acceptance (status "ok", rule cites a `compatible[i]` entry — the ONLY
- * lever above the AGPL-container escalation in the precedence walk). A
- * package with no accepted occurrence contributes nothing; a package also
- * carrying a fail elsewhere is still returned here — the render layer applies
- * the Problematic dedup, matching how the flagged-copyleft rows dedup today.
- * Sorted by purl (compareCodeUnits) for determinism; each notice's targets are
- * deduped and sorted the same way.
+ * Accepted-AGPL container notices: one entry per os-scope package carrying the AGPL obligation with
+ * at least one occurrence whose verdict is an acceptance (status "ok", rule cites a `compatible[i]`
+ * entry - the only lever above the AGPL-container escalation in the precedence walk). A package
+ * with no accepted occurrence contributes nothing; a package also carrying a fail elsewhere is
+ * still returned here - the render layer applies the Problematic dedup, matching how the
+ * flagged-copyleft rows dedup today. Sorted by purl (compareCodeUnits) for determinism; each
+ * notice's targets are deduped and sorted the same way.
  */
 export function acceptedContainerNotices(
   model: CanonicalDependencies,
@@ -1065,12 +1065,12 @@ export function acceptedContainerNotices(
 }
 
 /**
- * Rule ids of compatible/clarify entries that never decided anything —
+ * Rule ids of compatible/clarify entries that never decided anything -
  * stale-policy hygiene. Compatible usage is read from cited verdict rules;
- * clarify usage comes from annotateFindings' usedClarifyIndices (a clarify rule
- * is "used" when it replaced a finding, even if a higher-precedence compatible
- * rule decided the final verdict). Suppression entries are never reported.
- * Returned in TOML array order: compatible first, then clarify.
+ * clarify usage comes from annotateFindings' usedClarifyIndices (a clarify rule is "used" when it
+ * replaced a finding, even if a higher-precedence compatible rule decided the final verdict).
+ * Suppression entries are never reported. Returned in TOML array order: compatible first, then
+ * clarify.
  */
 export function unusedRuleIds(
   policy: Policy,

@@ -1,28 +1,24 @@
 /**
  * TOML policy text → validated Policy.
  *
- * Validation rejects — never skips — with every semantic problem collected
- * into one PolicyError, each problem naming its table path and key (the
- * opposite tolerance posture from merge.ts, which skips malformed SBOM
- * entries). TOML syntax errors propagate smol-toml's TomlError untouched: its
+ * Validation rejects - never skips - with every semantic problem collected into one PolicyError,
+ * each problem naming its table path and key (the opposite tolerance posture from merge.ts, which
+ * skips malformed SBOM entries). TOML syntax errors propagate smol-toml's TomlError untouched: its
  * message already embeds line, column, and a caret-annotated source line.
  *
- * Every SPDX pattern, clarify expression, and workspace license is parsed
- * eagerly here so evaluate() never sees an unparseable rule. Compatible license
- * patterns are pre-decomposed into spdx-satisfies-safe OR-leaf allowlists via
- * orLeaves; AND-containing patterns are rejected up-front because satisfies
- * throws on AND allowlist entries. No substring matching on license values
- * anywhere — patterns flow through spdx-expression-parse + orLeaves only.
+ * Every SPDX pattern, clarify expression, and workspace license is parsed eagerly here so
+ * evaluate() never sees an unparseable rule. Compatible license patterns are pre-decomposed into
+ * spdx-satisfies-safe OR-leaf allowlists via orLeaves; AND-containing patterns are rejected
+ * up-front because satisfies throws on AND allowlist entries. No substring matching on license
+ * values anywhere - patterns flow through spdx-expression-parse + orLeaves only.
  *
- * Policy text is untrusted config (repo-tampered or user-authored).
- * Suppression paths are validated — non-empty, forward slashes only, no ".."
- * segments, no leading/trailing slash — so a crafted path can never suppress
- * everything or escape the target namespace; compatible `where` scopes reuse
- * the same validation, so a crafted scope cannot escape the identity
- * namespace either. smol-toml is a spec-compliant TOML 1.0 parser with no
- * eval; duplicate tables throw per spec.
+ * Policy text is untrusted config (repo-tampered or user-authored). Suppression paths are validated
+ * - non-empty, forward slashes only, no ".." segments, no leading/trailing slash - so a crafted
+ * path can never suppress everything or escape the target namespace; compatible `where` scopes
+ * reuse the same validation, so a crafted scope cannot escape the identity namespace either.
+ * smol-toml is a spec-compliant TOML 1.0 parser with no eval; duplicate tables throw per spec.
  *
- * Pure function: no I/O, no logging — the CLI reads the file and owns stderr.
+ * Pure function: no I/O, no logging - the CLI reads the file and owns stderr.
  */
 import { type } from "arktype";
 import { parse as parseToml } from "smol-toml";
@@ -40,10 +36,9 @@ export interface SuppressedWorkspace {
   /** Repo-relative target-identity prefix, e.g. "apps/scratch". */
   path: string;
   /**
-   * SPDX ID the workspace itself is distributed under. Validated to be a single
-   * license id (leaf, optionally WITH/+) — never a compound expression: this
-   * field is verdict-affecting (the family-aware suppression check compares it
-   * to the finding's copyleft obligations).
+   * SPDX ID the workspace itself is distributed under. Validated to be a single license id (leaf,
+   * optionally WITH/+) - never a compound expression: this field is verdict-affecting (the
+   * family-aware suppression check compares it to the finding's copyleft obligations).
    */
   license: string;
   /** Mandatory documentation: why suppression is justified. */
@@ -55,17 +50,15 @@ export interface CompatibleLicenseRule {
   /** The pattern exactly as written in the policy file. */
   pattern: string;
   /**
-   * Pre-decomposed satisfies allowlist: rendered OR-leaves of the pattern
-   * (single ID, optionally WITH ⇒ one entry). Computed at validation time,
-   * never at evaluate time.
+   * Pre-decomposed satisfies allowlist: rendered OR-leaves of the pattern (single ID, optionally
+   * WITH ⇒ one entry). Computed at validation time, never at evaluate time.
    */
   allowlist: ReadonlyArray<string>;
   reason: string;
   /**
-   * Optional occurrence scope: identity prefixes the rule is limited
-   * to, matched with the same segment-aware prefix comparison as suppression
-   * paths. Materialized present-only — an absent key means the rule applies
-   * at every occurrence (the pre-scoping behavior).
+   * Optional occurrence scope: identity prefixes the rule is limited to, matched with the same
+   * segment-aware prefix comparison as suppression paths. Materialized present-only - an absent key
+   * means the rule applies at every occurrence (the pre-scoping behavior).
    */
   where?: ReadonlyArray<string>;
 }
@@ -75,7 +68,7 @@ export interface CompatiblePackageRule {
   name: string;
   version?: string;
   reason: string;
-  /** Optional occurrence scope — see CompatibleLicenseRule.where. */
+  /** Optional occurrence scope - see CompatibleLicenseRule.where. */
   where?: ReadonlyArray<string>;
 }
 
@@ -85,53 +78,50 @@ export interface ClarifyRule {
   name: string;
   version?: string;
   /**
-   * Optional staleness precondition: the pre-override observed license
-   * value this clarify disambiguates FROM. When present, the engine applies the
-   * `expression` ONLY if the dependency's currently-observed signal still
-   * matches `expects` — a mismatch is a STALE override that fails the gate
-   * loudly (it must never silently mask a relicense). OPTIONAL for backward
-   * compatibility: the existing Phase-3 misdetection-correction clarify (e.g.
+   * Optional staleness precondition: the pre-override observed license value this clarify
+   * disambiguates FROM. When present, the engine applies the `expression` ONLY if the dependency's
+   * currently-observed signal still matches `expects` - a mismatch is a STALE override that fails
+   * the gate loudly (it must never silently mask a relicense). OPTIONAL for backward compatibility:
+   * the existing Phase-3 misdetection-correction clarify (e.g.
    * jsonify → Unlicense) keeps working WITHOUT it, applying blindly as before;
    * `expects` is the precondition for the new staleness-guarded disambiguation.
    */
   expects?: string;
-  /** A valid SPDX expression — parsed eagerly here. */
+  /** A valid SPDX expression - parsed eagerly here. */
   expression: string;
   reason: string;
 }
 
 /**
- * How a would-be default-FAIL verdict is treated on a DEV-only occurrence.
- * Per-occurrence, never package-level — a package that is
- * dev in one workspace and prod in another still FAILS on the prod occurrence.
- *   "warn"   — a dev would-be-fail downgrades to warn (the default).
- *   "fail"   — NO downgrade; dev gates exactly like prod (strict).
- *   "ignore" — a dev would-be-fail becomes ok (an EXPLICIT, documented opt-out).
- * A PRODUCTION occurrence ALWAYS fails under "warn"/"ignore" — a shipped
- * copyleft can never be dev-downgraded.
+ * How a would-be default-FAIL verdict is treated on a DEV-only occurrence. Per-occurrence, never
+ * package-level - a package that is dev in one workspace and prod in another still FAILS on the
+ * prod occurrence.
+ *   "warn"   - a dev would-be-fail downgrades to warn (the default).
+ *   "fail"   - NO downgrade; dev gates exactly like prod (strict).
+ *   "ignore" - a dev would-be-fail becomes ok (an EXPLICIT, documented opt-out).
+ * A PRODUCTION occurrence ALWAYS fails under "warn"/"ignore" - a shipped copyleft can never be
+ * dev-downgraded.
  */
 export type DevDependencyHandling = "warn" | "fail" | "ignore";
 
 /**
- * The [os_dependencies] knob, mirroring DevDependencyHandling. It
- * governs a would-be-FAIL on a PACKAGE-level os-scope dependency (a pkg:deb /
- * pkg:apk row from the Docker base image):
- *   "warn"   — an os would-be-fail downgrades to warn (the default): expected
- *              base-image copyleft (glibc/bash GPL/LGPL, satisfied by shipping
- *              the image) LISTS, not fails.
- *   "fail"   — NO downgrade; an os-scope copyleft gates exactly like an app one.
- *   "ignore" — an os would-be-fail becomes ok (an EXPLICIT, documented opt-out).
- * A DENIED (source-available) license in an OS package STILL FAILS regardless —
- * deny is terminal-0 above the os downgrade.
+ * The [os_dependencies] knob, mirroring DevDependencyHandling. It governs a would-be-FAIL on a
+ * PACKAGE-level os-scope dependency (a pkg:deb / pkg:apk row from the Docker base image):
+ *   "warn"   - an os would-be-fail downgrades to warn (the default): expected
+ *              base-image copyleft (glibc/bash GPL/LGPL, satisfied by shipping the image) LISTS,
+ *              not fails.
+ *   "fail"   - NO downgrade; an os-scope copyleft gates exactly like an app one.
+ *   "ignore" - an os would-be-fail becomes ok (an EXPLICIT, documented opt-out).
+ * A DENIED (source-available) license in an OS package STILL FAILS regardless - deny is terminal-0
+ * above the os downgrade.
  */
 export type OsDependencyHandling = "warn" | "fail" | "ignore";
 
 /**
- * The optional [document] table: author-supplied presentation prose for
- * the LICENSES document only (never the notices companion). Both keys are
- * OPTIONAL; when present each must be a non-empty string. The render layer
- * treats `title` as a heading and `preamble` as verbatim author markdown — both
- * at the policy-file trust boundary, so neither is escapeCell'd.
+ * The optional [document] table: author-supplied presentation prose for the LICENSES document only
+ * (never the notices companion). Both keys are OPTIONAL; when present each must be a non-empty
+ * string. The render layer treats `title` as a heading and `preamble` as verbatim author markdown
+ * - both at the policy-file trust boundary, so neither is escapeCell'd.
  */
 export interface DocumentConfig {
   /** Replaces the default "Third-Party Licenses" H1 when present. */
@@ -141,19 +131,17 @@ export interface DocumentConfig {
 }
 
 /**
- * One [[docker.development]] entry: marks every container whose Dockerfile
- * identity matches `source` as development-only (never shipped).
+ * One [[docker.development]] entry: marks every container whose Dockerfile identity matches
+ * `source` as development-only (never shipped).
  */
 export interface DockerDevelopmentEntry {
   /**
-   * Repo-relative glob over Dockerfile identities, in the EXACT same dialect
-   * as `[docker].ignore` (globToRegExp in targets/discover.ts: `*` within a
-   * segment, `**` across segments, case-insensitive, anchored — a literal
-   * path is a valid glob). Here the pattern is only validated and stored
-   * verbatim; matching against discovered containers happens where the
-   * report is rendered. A matching container's packages are listed under
-   * Development-only in the report — placement only, it never affects a
-   * verdict.
+   * Repo-relative glob over Dockerfile identities, in the EXACT same dialect as `[docker].ignore`
+   * (globToRegExp in targets/discover.ts: `*` within a segment, `**` across segments,
+   * case-insensitive, anchored - a literal path is a valid glob). Here the pattern is only
+   * validated and stored verbatim; matching against discovered containers happens where the report
+   * is rendered. A matching container's packages are listed under Development-only in the report
+   * - placement only, it never affects a verdict.
    */
   source: string;
   /** Mandatory documentation: why this container never ships. */
@@ -161,18 +149,15 @@ export interface DockerDevelopmentEntry {
 }
 
 /**
- * The optional [docker] table: Dockerfile-discovery exclusion globs plus
- * per-container development marking.
- * When `generate-docker-sbom --repo-root` discovers Dockerfiles, every
- * Dockerfile whose repo-relative forward-slash identity matches an `ignore`
- * glob is EXCLUDED ENTIRELY — its base image is never derived, never scanned.
- * `ignore` defaults to [] when the [docker] table is present without the key,
- * and the whole table is undefined when absent. Each glob is validated with the
- * SAME posture as suppression paths (forward slashes only, no ".." segments, no
- * leading/trailing slash) so a crafted glob can never escape the repo namespace.
- * `development` defaults to [] the same way; every analyzed container is
- * production unless a `[[docker.development]]` entry's `source` glob matches
- * it — the conservative default.
+ * The optional [docker] table: Dockerfile-discovery exclusion globs plus per-container development
+ * marking. When `generate-docker-sbom --repo-root` discovers Dockerfiles, every Dockerfile whose
+ * repo-relative forward-slash identity matches an `ignore` glob is EXCLUDED ENTIRELY - its base
+ * image is never derived, never scanned. `ignore` defaults to [] when the [docker] table is present
+ * without the key, and the whole table is undefined when absent. Each glob is validated with the
+ * SAME posture as suppression paths (forward slashes only, no ".." segments, no leading/trailing
+ * slash) so a crafted glob can never escape the repo namespace. `development` defaults to [] the
+ * same way; every analyzed container is production unless a `[[docker.development]]` entry's
+ * `source` glob matches it - the conservative default.
  */
 export interface DockerConfig {
   /** Repo-relative forward-slash globs; a matching Dockerfile is excluded. */
@@ -182,14 +167,13 @@ export interface DockerConfig {
 }
 
 /**
- * The optional [cache] table: the directory holding all tool-generated committed
- * artifacts (the enrichment cache, the Docker OS SBOM, and any added later), so
- * they live in one place instead of scattering across the repo root. `dir` is a
- * repo-root-relative forward-slash path, validated like a suppression path (no
- * "..", no leading/trailing slash) so a committed artifact directory can never
- * escape the repo: a project that keeps its root clean can point it at e.g.
- * "eng/.sbomlet.cache". An absent table, or an absent `dir`, falls back to the
- * DEFAULT_CACHE_DIR default at resolution time.
+ * The optional [cache] table: the directory holding all tool-generated committed artifacts (the
+ * enrichment cache, the Docker OS SBOM, and any added later), so they live in one place instead of
+ * scattering across the repo root. `dir` is a repo-root-relative forward-slash path, validated like
+ * a suppression path (no "..", no leading/trailing slash) so a committed artifact directory can
+ * never escape the repo: a project that keeps its root clean can point it at e.g.
+ * "eng/.sbomlet.cache". An absent table, or an absent `dir`, falls back to the DEFAULT_CACHE_DIR
+ * default at resolution time.
  */
 export interface CacheConfig {
   /** Repo-root-relative dir for committed artifacts; default applies when absent. */
@@ -197,9 +181,9 @@ export interface CacheConfig {
 }
 
 /**
- * One [[allow_source_available]] exemption (ADR-0013): a built-in
- * source-available licence the consumer has explicitly, auditably accepted, so it
- * surfaces as a warn instead of failing the gate by default.
+ * One [[allow_source_available]] exemption (ADR-0013): a built-in source-available licence the
+ * consumer has explicitly, auditably accepted, so it surfaces as a warn instead of failing the gate
+ * by default.
  */
 export interface AllowSourceAvailable {
   /** A built-in source-available SPDX id (BUSL-1.1, SSPL-1.0, Elastic-2.0). */
@@ -219,32 +203,30 @@ export interface Policy {
   compatible: ReadonlyArray<CompatibleRule>;
   clarify: ReadonlyArray<ClarifyRule>;
   /**
-   * Terminal deny-list: the HIGHEST-precedence lane. A matching
-   * package FORCE-FAILS regardless of compatible/suppression/dev-scope. Absent
-   * [[deny]] table yields [].
+   * Terminal deny-list: the HIGHEST-precedence lane. A matching package FORCE-FAILS regardless of
+   * compatible/suppression/dev-scope. Absent [[deny]] table yields [].
    */
   deny: ReadonlyArray<DenyRule>;
   /**
-   * Per-licence exemptions from the shipped source-available deny defaults
-   * (ADR-0013). A listed licence is no longer force-failed by the default — the
-   * package surfaces as a WARN citing the exemption, never silently. Does NOT
-   * affect a consumer's own [[deny]] (an explicit deny still wins). Absent → [].
+   * Per-licence exemptions from the shipped source-available deny defaults (ADR-0013). A listed
+   * licence is no longer force-failed by the default - the package surfaces as a WARN citing the
+   * exemption, never silently. Does NOT affect a consumer's own [[deny]] (an explicit deny still
+   * wins). Absent → [].
    */
   allowSourceAvailable: ReadonlyArray<AllowSourceAvailable>;
   /**
-   * Author-supplied document presentation. Absent [document] table
-   * yields undefined; an empty [document] yields {} (both keys optional).
+   * Author-supplied document presentation. Absent [document] table yields undefined; an empty
+   * [document] yields {} (both keys optional).
    */
   document?: DocumentConfig;
   /**
-   * Dockerfile-discovery exclusion globs. Absent [docker] table yields
-   * undefined; a present [docker] (with or without `ignore`) yields a
-   * DockerConfig whose `ignore` defaults to [].
+   * Dockerfile-discovery exclusion globs. Absent [docker] table yields undefined; a present
+   * [docker] (with or without `ignore`) yields a DockerConfig whose `ignore` defaults to [].
    */
   docker?: DockerConfig;
   /**
-   * Where tool-generated committed artifacts live (the enrichment cache, the
-   * Docker OS SBOM, and any added later). Absent maps to DEFAULT_CACHE_DIR.
+   * Where tool-generated committed artifacts live (the enrichment cache, the Docker OS SBOM, and
+   * any added later). Absent maps to DEFAULT_CACHE_DIR.
    */
   cache?: CacheConfig;
 }
@@ -274,8 +256,8 @@ function checkKeys(
 }
 
 /**
- * Mandatory non-empty string field. Reasons and descriptions are
- * documentation — an empty or whitespace-only value does not count.
+ * Mandatory non-empty string field. Reasons and descriptions are documentation - an empty or
+ * whitespace-only value does not count.
  */
 function requireText(
   entry: Record<string, unknown>,
@@ -300,9 +282,9 @@ function requireText(
 }
 
 /**
- * OPTIONAL non-empty string field of [document]. Absent → undefined, no
- * problem. Present but non-string or empty/whitespace-only → undefined + a
- * problem (mirroring requireText's posture for the present-and-invalid case).
+ * OPTIONAL non-empty string field of [document]. Absent → undefined, no problem. Present but
+ * non-string or empty/whitespace-only → undefined + a problem (mirroring requireText's posture for
+ * the present-and-invalid case).
  */
 function optionalText(
   entry: Record<string, unknown>,
@@ -325,10 +307,9 @@ function optionalText(
 
 /**
  * Parse the optional [document] table: an absent table yields undefined;
- * a non-table value rejects; an empty table yields {}; title/preamble are each
- * OPTIONAL but, when present, must be a non-empty string (optionalText). Unknown
- * keys reject via checkKeys. Only present-and-valid keys are materialized so the
- * "absent key" state stays observable.
+ * a non-table value rejects; an empty table yields {}; title/preamble are each OPTIONAL but, when
+ * present, must be a non-empty string (optionalText). Unknown keys reject via checkKeys. Only
+ * present-and-valid keys are materialized so the "absent key" state stays observable.
  */
 function validateDocument(
   root: Record<string, unknown>,
@@ -351,23 +332,21 @@ function validateDocument(
 
 /**
  * Parse the optional [docker] table: an absent table yields undefined;
- * a non-table value rejects; a present table (with or without `ignore`) yields
- * a DockerConfig whose `ignore` defaults to []. Each ignore entry must be a
- * non-empty string and a repo-relative forward-slash glob — reusing validatePath
- * EXACTLY (no backslashes, no ".." segments, no leading/trailing slash, no
- * empty/"."/whitespace-padded segments) so a crafted glob can never escape the
- * repo namespace. Unknown keys reject via checkKeys. A malformed entry pushes
- * the aggregated PolicyError message naming docker.ignore[i]; only a fully-valid
- * table materializes (matching the present-key idiom elsewhere).
+ * a non-table value rejects; a present table (with or without `ignore`) yields a DockerConfig whose
+ * `ignore` defaults to []. Each ignore entry must be a non-empty string and a repo-relative
+ * forward-slash glob - reusing validatePath EXACTLY (no backslashes, no ".." segments, no
+ * leading/trailing slash, no empty/"."/whitespace-padded segments) so a crafted glob can never
+ * escape the repo namespace. Unknown keys reject via checkKeys. A malformed entry pushes the
+ * aggregated PolicyError message naming docker.ignore[i]; only a fully-valid table materializes
+ * (matching the present-key idiom elsewhere).
  */
 /**
- * Parse one [[docker.development]] entry: `source` must be a valid glob
- * (validatePath — the same posture as a docker.ignore entry) that does not
+ * Parse one [[docker.development]] entry: `source` must be a valid glob (validatePath - the same
+ * posture as a docker.ignore entry) that does not
  * start with "docker:" (the table already scopes the Dockerfile identity;
- * the prefix would double up and could never match); `reason` is mandatory
- * documentation. `seen` collects already-accepted source strings so a
- * duplicate pattern — silently dead, since only the first entry could ever
- * decide anything — is rejected too.
+ * the prefix would double up and could never match); `reason` is mandatory documentation. `seen`
+ * collects already-accepted source strings so a duplicate pattern - silently dead, since only the
+ * first entry could ever decide anything - is rejected too.
  */
 function validateDockerDevelopmentEntry(
   rawEntry: unknown,
@@ -402,8 +381,8 @@ function validateDockerDevelopmentEntry(
 }
 
 /**
- * Parse the optional `development` array inside [docker]: each entry marks a
- * glob-matched container as development-only. Absent → []. Every malformed
+ * Parse the optional `development` array inside [docker]: each entry marks a glob-matched container
+ * as development-only. Absent → []. Every malformed
  * entry pushes the aggregated PolicyError message naming docker.development[i];
  * only fully-valid entries materialize.
  */
@@ -471,12 +450,11 @@ function validateDocker(
 }
 
 /**
- * Parse the optional [cache] table: an absent table yields undefined; a non-table
- * rejects; a present table with no `dir` yields {} (the default applies later).
- * `dir`, when present, must be a non-empty repo-root-relative forward-slash path
- * (validatePath: no "..", no leading/trailing slash), so a committed artifact
- * directory can never escape the repo. A malformed `dir` drops to {} after
- * recording the aggregated PolicyError naming cache.dir.
+ * Parse the optional [cache] table: an absent table yields undefined; a non-table rejects; a
+ * present table with no `dir` yields {} (the default applies later). `dir`, when present, must be a
+ * non-empty repo-root-relative forward-slash path (validatePath: no "..", no leading/trailing
+ * slash), so a committed artifact directory can never escape the repo. A malformed `dir` drops to
+ * {} after recording the aggregated PolicyError naming cache.dir.
  */
 function validateCache(
   root: Record<string, unknown>,
@@ -513,20 +491,17 @@ function parseSpdxChecked(
 }
 
 /**
- * Suppression path rules: forward-slash repo-relative identity prefix. Empty
- * paths are rejected by requireText (an empty prefix would suppress
- * everything); ".." segments, backslashes, and leading/trailing slashes can
- * never appear in target identities, so a path carrying them is a policy bug,
- * not a match candidate. The same goes for empty ("a//b"), "." ("a/./b"), and
- * whitespace-padded ("a /b") segments: target identities are normalized
- * segment text, so such a path can never match — and because suppression
- * entries are excluded from unused-rule reporting, a typo here would otherwise
- * be silently dead forever.
+ * Suppression path rules: forward-slash repo-relative identity prefix. Empty paths are rejected by
+ * requireText (an empty prefix would suppress everything); ".." segments, backslashes, and
+ * leading/trailing slashes can never appear in target identities, so a path carrying them is a
+ * policy bug, not a match candidate. The same goes for empty ("a//b"), "." ("a/./b"), and
+ * whitespace-padded ("a /b") segments: target identities are normalized segment text, so such a
+ * path can never match - and because suppression entries are excluded from unused-rule reporting, a
+ * typo here would otherwise be silently dead forever.
  *
- * Shared by every path-shaped policy field — a "docker:"-prefixed path is
- * fine here (a [[compatible]] `where` scope deliberately targets a container
- * occurrence). The suppression-only "docker:" fence lives in
- * validateSuppressions instead, since only a workspace suppression must
+ * Shared by every path-shaped policy field - a "docker:"-prefixed path is fine here (a
+ * [[compatible]] `where` scope deliberately targets a container occurrence). The suppression-only
+ * "docker:" fence lives in validateSuppressions instead, since only a workspace suppression must
  * never absorb a container.
  */
 function validatePath(path: string, where: string, problems: string[]): void {
@@ -599,8 +574,8 @@ function validateSuppressions(
         if ("license" in node) {
           licenseValid = true;
         } else {
-          // Verdict-affecting — a compound expression has no single
-          // family/identity to verify suppression against.
+          // Verdict-affecting - a compound expression has no single family/identity to verify
+          // suppression against.
           problems.push(
             `${where}: license "${license}" must be a single SPDX license ID (the workspace's own distribution license), not a compound expression`,
           );
@@ -620,14 +595,12 @@ function validateSuppressions(
 }
 
 /**
- * Optional `where` scope on a [[compatible]] entry: a non-empty array of
- * occurrence-identity prefixes, each validated exactly like a suppression path
- * (the evaluator applies the same segment-aware prefix comparison to both). An
- * EMPTY array is rejected — a rule that could never match anywhere is a dead
- * rule by construction, the same posture as validatePath's could-never-match
- * segments. `context` is the error-context string (conventionally named
- * `where` elsewhere in this file — renamed here because `where` is the TOML
- * key under validation).
+ * Optional `where` scope on a [[compatible]] entry: a non-empty array of occurrence-identity
+ * prefixes, each validated exactly like a suppression path (the evaluator applies the same
+ * segment-aware prefix comparison to both). An EMPTY array is rejected - a rule that could never
+ * match anywhere is a dead rule by construction, the same posture as validatePath's
+ * could-never-match segments. `context` is the error-context string (conventionally named `where`
+ * elsewhere in this file - renamed here because `where` is the TOML key under validation).
  */
 function validateWhere(
   entry: Record<string, unknown>,
@@ -761,9 +734,9 @@ interface ClarifyPackage {
 }
 
 /**
- * Inline-table { name, version? } extraction for a clarify entry. Extracted
- * to keep validateClarify's loop body within the max-depth bar; messages and
- * push order are unchanged from the inline form.
+ * Inline-table { name, version? } extraction for a clarify entry. Extracted to keep
+ * validateClarify's loop body within the max-depth bar; messages and push order are unchanged from
+ * the inline form.
  */
 function validateClarifyPackage(
   entry: Record<string, unknown>,
@@ -793,10 +766,9 @@ function validateClarifyPackage(
 }
 
 /**
- * Build a ClarifyRule with only the present optional keys materialized
- * (version, expects). Keeping the absent keys OFF the object — rather than
- * `undefined`-but-present — keeps "no precondition" observable and the parsed
- * shape minimal, matching the compatible-package-rule idiom above.
+ * Build a ClarifyRule with only the present optional keys materialized (version, expects). Keeping
+ * the absent keys OFF the object - rather than `undefined`-but-present - keeps "no precondition"
+ * observable and the parsed shape minimal, matching the compatible-package-rule idiom above.
  */
 function makeClarifyRule(
   name: string,
@@ -843,10 +815,9 @@ function validateClarify(
       where,
       problems,
     );
-    // `expects` is OPTIONAL (backward-compat) but, when present, must be a
-    // non-empty string — a blank precondition could never match an observed
-    // signal and would be silently dead. requireText records the existing
-    // aggregated-PolicyError messages naming clarify[i].
+    // `expects` is OPTIONAL (backward-compat) but, when present, must be a non-empty string - a
+    // blank precondition could never match an observed signal and would be silently dead.
+    // requireText records the existing aggregated-PolicyError messages naming clarify[i].
     let expects: string | undefined;
     let expectsValid = true;
     if ("expects" in entry) {
@@ -876,11 +847,10 @@ function validateClarify(
 }
 
 /**
- * One [[deny]] entry → a DenyRule, mirroring validateCompatible EXACTLY. A
- * license-mode entry pre-decomposes its pattern via orLeaves into a satisfies
- * allowlist (AND patterns rejected up front, same as compatible — satisfies
- * cannot hold AND allowlist entries); a name-mode entry stores the verbatim
- * pattern. Every malformed field pushes the aggregated PolicyError message
+ * One [[deny]] entry → a DenyRule, mirroring validateCompatible EXACTLY. A license-mode entry
+ * pre-decomposes its pattern via orLeaves into a satisfies allowlist (AND patterns rejected up
+ * front, same as compatible - satisfies cannot hold AND allowlist entries); a name-mode entry
+ * stores the verbatim pattern. Every malformed field pushes the aggregated PolicyError message
  * naming `deny[i]`.
  */
 function validateDenyEntry(
@@ -941,16 +911,16 @@ function validateDeny(
   return deny;
 }
 
-/** The shipped source-available licence ids — the only ones an exemption may name. */
+/** The shipped source-available licence ids - the only ones an exemption may name. */
 const BUILTIN_DENY_PATTERNS: ReadonlyArray<string> = BUILTIN_DENY_RULES.filter(
   (rule) => rule.match === "license",
 ).map((rule) => rule.pattern);
 
 /**
- * Parse [[allow_source_available]] (ADR-0013 opt-out): each entry exempts ONE
- * built-in source-available licence from the shipped deny default. `license` must
- * be one of the shipped patterns (a consumer's own [[deny]] is absolute and not
- * exempted here); `reason` is mandatory documentation. An absent table yields [].
+ * Parse [[allow_source_available]] (ADR-0013 opt-out): each entry exempts ONE built-in
+ * source-available licence from the shipped deny default. `license` must be one of the shipped
+ * patterns (a consumer's own [[deny]] is absolute and not exempted here); `reason` is mandatory
+ * documentation. An absent table yields [].
  */
 function validateAllowSourceAvailable(
   root: Record<string, unknown>,
@@ -1011,10 +981,10 @@ function validateUnknown(
 }
 
 /**
- * Parse the [dev_dependencies] knob, mirroring validateUnknown EXACTLY:
- * an absent table defaults to "warn"; a non-table, missing handling, unknown
- * key, or invalid handling value each push the existing aggregated PolicyError
- * message naming the table path. The three valid values are warn|fail|ignore.
+ * Parse the [dev_dependencies] knob, mirroring validateUnknown EXACTLY: an absent table defaults to
+ * "warn"; a non-table, missing handling, unknown key, or invalid handling value each push the
+ * existing aggregated PolicyError message naming the table path. The three valid values are
+ * warn|fail|ignore.
  */
 function validateDevDependencies(
   root: Record<string, unknown>,
@@ -1043,11 +1013,10 @@ function validateDevDependencies(
 }
 
 /**
- * Parse the [os_dependencies] knob, an EXACT mirror of
- * validateDevDependencies: an absent table defaults to "warn"; a non-table,
- * missing handling, unknown key, or invalid handling value each push the
- * aggregated PolicyError message naming the os_dependencies table path. The
- * three valid values are warn|fail|ignore.
+ * Parse the [os_dependencies] knob, an EXACT mirror of validateDevDependencies: an absent table
+ * defaults to "warn"; a non-table, missing handling, unknown key, or invalid handling value each
+ * push the aggregated PolicyError message naming the os_dependencies table path. The three valid
+ * values are warn|fail|ignore.
  */
 function validateOsDependencies(
   root: Record<string, unknown>,
@@ -1076,13 +1045,12 @@ function validateOsDependencies(
 }
 
 /**
- * Parse and validate TOML policy text. smol-toml's TomlError propagates
- * untouched (its message embeds line/column/caret context); every semantic
- * problem is collected and thrown as ONE PolicyError naming table paths.
+ * Parse and validate TOML policy text. smol-toml's TomlError propagates untouched (its message
+ * embeds line/column/caret context); every semantic problem is collected and thrown as ONE
+ * PolicyError naming table paths.
  *
- * PolicyRoot ("+": "reject") narrows the root shape; the unknown-top-level-key
- * message stays hand-written (arktype's text differs from the PolicyError
- * contract).
+ * PolicyRoot ("+": "reject") narrows the root shape; the unknown-top-level-key message stays
+ * hand-written (arktype's text differs from the PolicyError contract).
  */
 export function parsePolicy(text: string): Policy {
   const root = recordOf(parseToml(text)) ?? {};

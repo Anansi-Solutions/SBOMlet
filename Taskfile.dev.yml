@@ -21,6 +21,8 @@ tasks:
       - 'src/**/*.ts'
       - 'test/**/*.ts'
       - 'scripts/**/*.ts'
+      - 'tools/**/*.mjs'
+      - 'tools/**/*.ts'
       - '.github/scripts/**/*.cjs'
       - eslint.config.mjs
       - .prettierrc
@@ -62,8 +64,7 @@ tasks:
     cmds:
       - task: lint
       - task: typecheck
-      # temporarily disabled until we re-enable comment checks
-      # - task: metrics:comments:check
+      - task: metrics:comments:check
 
   test:
     # The label keys the fingerprint per CLI_ARGS value, so a filtered run
@@ -79,6 +80,7 @@ tasks:
       - 'src/**'
       - 'test/**'
       - 'scripts/**'
+      - 'tools/**'
       - '.github/**'
       - Taskfile.yml
       - Taskfile.dev.yml

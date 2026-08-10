@@ -121,8 +121,8 @@ tool already does the job; if you must write one, record why no tool serves in t
 module header, the way the Terraform and `bun.lock` collectors do.
 
 Source: `cli.ts`, `package.json`, `collectors/cdxgen.ts`,
-`collectors/dockerOs.ts` (`SYFT_TOOL`), `enrich/scancode.ts` (`SCANCODE_TOOL`),
-`collectors/terraform.ts`.
+`collectors/dockerOs.ts` (`SYFT_TOOL`),
+`enrich/scancode/invocation.ts` (`SCANCODE_TOOL`), `collectors/terraform.ts`.
 See [ADR-0002](adr/) (orchestrate generators), [ADR-0010](adr/) (JS generator
 routing), [ADR-0011](adr/) (Python via cdxgen), [ADR-0001](adr/) (TypeScript on
 Bun).

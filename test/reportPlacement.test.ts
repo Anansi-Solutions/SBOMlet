@@ -61,6 +61,7 @@ const PLACEMENT_PATHS = [
   "imprecise-copyleft-family-only-imprecise",
   "imprecise-permissive-family",
   "unknown-license-counted",
+  "licenseref-only-unknown",
   "suppressed-workspace-copyleft",
   "denied-license-terminal",
   "system-package-in-dev-container-counts-dev",
@@ -1264,6 +1265,59 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
       appTableOnly(doc, "## Production dependencies").includes("unknown-lib"),
       slug,
       "it still keeps its inventory row in the Production dependencies app table",
+    );
+  },
+
+  "licenseref-only-unknown": () => {
+    const slug = "licenseref-only-unknown";
+    const purl = "pkg:npm/licenseref-only-lib@1.0.0";
+    const { doc, verdicts, scoped } = buildScenario(
+      [
+        {
+          targetIdentity: WORKSPACE,
+          components: [
+            {
+              name: "licenseref-only-lib",
+              purl,
+              license: "LicenseRef-AGPL-3.0-only",
+            },
+          ],
+        },
+      ],
+      UNKNOWN_WARN,
+    );
+    assertClassificationOutcome(
+      scoped,
+      verdicts,
+      purl,
+      WORKSPACE,
+      slug,
+      "app",
+      "warn",
+      "default:unknown",
+    );
+    assertPlacement(
+      doc.includes("- Unknown license: 1"),
+      slug,
+      "a package whose only license content is an opaque LicenseRef counts under Unknown license, exactly like a genuine unknown",
+    );
+    assertPlacement(
+      appTableOnly(doc, "## Production dependencies").includes(
+        "licenseref-only-lib",
+      ),
+      slug,
+      "it still keeps its inventory row in the Production dependencies app table",
+    );
+    assertPlacement(
+      !section(doc, "## Problematic licenses").includes(
+        "licenseref-only-lib",
+      ) &&
+        !section(doc, "## Copyleft and special notices").includes(
+          "licenseref-only-lib",
+        ) &&
+        !doc.includes("## Imprecise licenses (review / disambiguate)"),
+      slug,
+      "an unassessed LicenseRef is a warn under the unknown lane, not a flagged copyleft/imprecise/problematic row — the Problematic/Copyleft sections render their no-findings placeholder and the empty Imprecise section is omitted entirely",
     );
   },
 

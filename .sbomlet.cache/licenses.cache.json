@@ -1272,6 +1272,12 @@
       "resolvable": true,
       "via": "version-license"
     },
+    "pkg:npm/eslint-plugin-no-comment-slop@0.2.0": {
+      "fetchedFrom": "npm",
+      "license": "MIT",
+      "resolvable": true,
+      "via": "version-license"
+    },
     "pkg:npm/eslint-plugin-prettier@5.5.6": {
       "fetchedFrom": "npm",
       "license": "MIT",

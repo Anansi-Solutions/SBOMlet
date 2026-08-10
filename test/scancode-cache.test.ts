@@ -23,7 +23,7 @@ import {
   readScancodeMemo,
   serializeScancodeMemo,
   type ScancodeMemoEntry,
-} from "../src/enrich/scancode-cache";
+} from "../src/enrich/scancode";
 import {
   ENRICHMENT_CACHE_FILE,
   SCANCODE_CACHE_FILE,
