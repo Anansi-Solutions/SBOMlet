@@ -513,16 +513,11 @@ function impreciseSectionLines(sorted: readonly PackageEntry[]): string[] {
 
 /**
  * The dedicated assessment-conflicts review section: every package whose finding carries a conflict
- * marker, unconditionally, and each is a gate failure until a `[[clarify]]` override records the
- * human's decision. Two independent triggers set the marker, each with its own table (mirroring the
- * imprecise-section precedent for placement, not shape - the two conflict kinds compare different
- * things and read better apart): the in-depth ScanCode assessment disagreeing with the
- * declared/registry quick check, and docker occurrences of the SAME purl declaring different
- * licenses (cross-image divergence) - its table names, per package, every diverging image and that
- * image's own claims, so "image A says X, image B says Y" is legible at a glance. The section (and
- * each sub-table) is empty (omitted) when no package carries that kind of marker (absent-not-empty
- * for golden stability). Input is already comparePackages-sorted; every cell routes through
- * escapeCell so a hostile expression string cannot break the table.
+ * marker is a gate failure until a `[[clarify]]` override records the human's decision. The two
+ * independent triggers (ScanCode-vs-quick-check, cross-image claim divergence) get their own
+ * sub-table - they compare different things and read better apart. Cells are escaped since an
+ * expression string could otherwise break the table. Omitted entirely, not rendered empty, when no
+ * package carries that kind of marker (absent-not-empty for golden stability).
  */
 function conflictSectionLines(sorted: readonly PackageEntry[]): string[] {
   const scancodeRows: string[] = [];
@@ -537,9 +532,7 @@ function conflictSectionLines(sorted: readonly PackageEntry[]): string[] {
             `${t.target}: ${t.claims.length > 0 ? t.claims.join(", ") : "(no declared license)"}`,
         )
         .join("; ");
-      crossImageRows.push(
-        `| ${escapeCell(pkg.name)} | ${escapeCell(byImage)} |`,
-      );
+      crossImageRows.push(`| ${escapeCell(pkg.name)} | ${escapeCell(byImage)} |`);
       continue;
     }
     const usedIn = pkg.occurrences.map((o) => o.target).join(", ");

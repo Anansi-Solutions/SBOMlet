@@ -1893,9 +1893,8 @@ describe("mergeSboms — reserved docker: occurrence namespace", () => {
       "docker:a/Dockerfile",
       "docker:postgres:18",
     ]);
-    // Identical claims across images (the wave-8 golden's actual shape) must
-    // never trip the divergence marker — the false-positive hunt this feature
-    // most needs to pass.
+    // Identical claims across images (both inputs reuse the same appDoc fixture) must never trip
+    // the divergence marker — the false-positive hunt this feature most needs to pass.
     expect(model.packages[0]?.dockerClaimDivergence).toBeUndefined();
   });
 });

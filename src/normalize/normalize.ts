@@ -863,19 +863,14 @@ export function applyScancodeAssessment(
 }
 
 /**
- * Overlay a cross-image claim divergence recorded at merge time (mergeSboms) onto a finding that
- * did not already surface a ScanCode assessment conflict. A ScanCode disagreement, when present,
- * keeps the conflict slot - it is the senior in-depth assessment, and a package rarely carries both
- * a scancode disagreement and a cross-image divergence at once. Absent divergence, or a finding
- * that already carries a conflict, is returned unchanged (same reference) so a repository with no
- * docker inputs behaves byte-identically to one where this function does not exist.
+ * Overlay a cross-image claim divergence recorded at merge time onto a finding with no ScanCode
+ * conflict yet - a ScanCode disagreement always keeps the slot. No-op (same reference) otherwise.
  */
 function withCrossImageConflict(
   divergence: CrossImageClaimDivergence | undefined,
   finding: LicenseFinding,
 ): LicenseFinding {
-  if (divergence === undefined || finding.conflict !== undefined)
-    return finding;
+  if (divergence === undefined || finding.conflict !== undefined) return finding;
   return { ...finding, conflict: divergence };
 }
 
@@ -896,60 +891,38 @@ export function annotateFindings(
   builtins: ReadonlyArray<BuiltinOverrideInput> = [],
 ): AnnotatedFindings {
   const usedClarifyIndices = new Set<number>();
-  const packages = model.packages.map(
-    (rawEntry: PackageEntry): PackageEntry => {
-      // dockerClaimDivergence is a merge-time-only carrier (see PackageEntry): folded into
-      // finding.conflict below and never left standing on the returned entry.
-      const { dockerClaimDivergence, ...entry } = rawEntry;
-      const unrefinedBase = findingFromClaims(entry.licenseClaims, entry.scope);
-      // The scancode SENIOR ASSESSMENT runs BEFORE overrides see the finding (clarify/builtin still
-      // decide last). An APPLIED override's finding never carries the conflict marker: the marker
-      // lives on this base only, and overrideFinding builds a fresh object.
-      const scancodeAssessed = applyScancodeAssessment(
-        entry.licenseClaims,
-        unrefinedBase,
-      );
-      // Cross-image divergence overlays LAST so a later scancode/registry stage can never mask it
-      // - it only ever ADDS the marker when scancode did not already claim the conflict slot.
-      const base = withCrossImageConflict(
-        dockerClaimDivergence,
-        scancodeAssessed,
-      );
-      const signal = observedSignal(entry.licenseClaims, base);
-      const overridden = resolveOverride(
-        entry,
-        clarify,
-        builtins,
-        base,
-        signal,
-        usedClarifyIndices,
-      );
-      const finding = overridden ?? base;
-      // Deny terminal over overrides: preserve the PRE-OVERRIDE observed expression whenever an
-      // override REWROTE it (overridden has a different expression than the un-overridden base).
-      // The deny terminal in evaluate consults this so a denied observed license can never be
-      // licensed back in.
-      const rewroteExpression =
-        overridden !== undefined &&
-        base.expression !== null &&
-        overridden.expression !== base.expression;
-      // Deny sees EVERY observed claim: carry every per-claim precise expression so the deny
-      // terminal fires on a denied member combineKnown dropped (imprecise-family election / unknown
-      // collapse). Independent of the Independent of the single observedExpression
-      // (override-rewrite) above
-      // - both feed deny.
-      const observed = observedExpressions(entry.licenseClaims);
-      return {
-        ...entry,
-        finding: {
-          ...finding,
-          ...(rewroteExpression
-            ? { observedExpression: base.expression as string }
-            : {}),
-          ...(observed.length > 0 ? { observedExpressions: observed } : {}),
-        },
-      };
-    },
-  );
+  const packages = model.packages.map((rawEntry: PackageEntry): PackageEntry => {
+    // dockerClaimDivergence is a merge-time-only carrier (see PackageEntry): folded into
+    // finding.conflict below and never left standing on the returned entry.
+    const { dockerClaimDivergence, ...entry } = rawEntry;
+    const unrefinedBase = findingFromClaims(entry.licenseClaims, entry.scope);
+    // The ScanCode assessment runs BEFORE overrides (clarify/builtin decide last).
+    const scancodeAssessed = applyScancodeAssessment(entry.licenseClaims, unrefinedBase);
+    // Cross-image divergence overlays LAST so a later scancode/registry stage can never mask it
+    // - it only ever ADDS the marker when scancode did not already claim the conflict slot.
+    const base = withCrossImageConflict(dockerClaimDivergence, scancodeAssessed);
+    const signal = observedSignal(entry.licenseClaims, base);
+    const overridden = resolveOverride(entry, clarify, builtins, base, signal, usedClarifyIndices);
+    const finding = overridden ?? base;
+    // Deny terminal over overrides: preserve the PRE-OVERRIDE observed expression whenever an
+    // override REWROTE it (overridden has a different expression than the un-overridden base). The
+    // deny terminal in evaluate consults this so a denied observed license can never be licensed
+    // back in.
+    const rewroteExpression =
+      overridden !== undefined &&
+      base.expression !== null &&
+      overridden.expression !== base.expression;
+    // Deny needs every observed claim, not only the combined expression combineKnown may collapse
+    // - independent of observedExpression above; both feed deny.
+    const observed = observedExpressions(entry.licenseClaims);
+    return {
+      ...entry,
+      finding: {
+        ...finding,
+        ...(rewroteExpression ? { observedExpression: base.expression as string } : {}),
+        ...(observed.length > 0 ? { observedExpressions: observed } : {}),
+      },
+    };
+  });
   return { model: { packages }, usedClarifyIndices };
 }

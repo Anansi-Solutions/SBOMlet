@@ -378,21 +378,16 @@ function staleVerdict(
 }
 
 /**
- * An unresolved ScanCode-vs-quick-check disagreement fails the gate. The in-depth assessment and
- * the declared/registry answer disagree, and human involvement is necessary: a warn is ignorable,
- * which recreates the silent-absorption failure mode this verdict exists to prevent - a fail, not a
- * warn. The reason names the package, the in-depth assessed expression, the disagreeing quick-check
- * values, and the [[clarify]] remedy; a `fail` mapped to exit 1 by the violations -> exitCodeFor
- * mapping. The reason is plain single-line text routed through the same downstream sanitization as
- * sibling verdicts (escapeCell in render, sanitizeForLog on stderr) - no channel of its own.
+ * An unresolved ScanCode-vs-quick-check disagreement fails the gate - a warn would recreate the
+ * silent-absorption failure mode this verdict exists to prevent. The reason names the package, the
+ * in-depth assessed expression, the disagreeing quick-check values, and the [[clarify]] remedy.
  */
 function scancodeConflictVerdict(
   base: { purl: string; occurrenceTarget: string },
   entry: PackageEntry,
   conflict: Extract<AssessmentConflict, { kind: "scancode" }>,
 ): Verdict {
-  const disagreeing =
-    conflict.disagreeing.length > 0 ? conflict.disagreeing.join(", ") : "(none)";
+  const disagreeing = conflict.disagreeing.length > 0 ? conflict.disagreeing.join(", ") : "(none)";
   return {
     ...base,
     status: "fail",
@@ -406,11 +401,9 @@ function scancodeConflictVerdict(
 }
 
 /**
- * A cross-image license-claim divergence fails the gate exactly like a ScanCode disagreement:
- * docker occurrences of the SAME purl declared different licenses, and a human must record which is
- * right. The reason names every diverging image and its own claim set (or "no declared license" for
- * an image that attached none), and the [[clarify]] remedy - the same resolution path as the
- * ScanCode conflict lane.
+ * A cross-image license-claim divergence fails the gate exactly like a ScanCode disagreement - a
+ * human must record which image's claim is right. The reason names every diverging image and its
+ * claim set (or "no declared license"), and the [[clarify]] remedy.
  */
 function crossImageConflictVerdict(
   base: { purl: string; occurrenceTarget: string },
@@ -419,8 +412,7 @@ function crossImageConflictVerdict(
 ): Verdict {
   const perImage = conflict.byTarget
     .map(
-      (t) =>
-        `${t.target}: ${t.claims.length > 0 ? t.claims.join(", ") : "(no declared license)"}`,
+      (t) => `${t.target}: ${t.claims.length > 0 ? t.claims.join(", ") : "(no declared license)"}`,
     )
     .join("; ");
   return {
