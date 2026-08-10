@@ -18,6 +18,7 @@ import {
   comparePackages,
   DOCKER_IDENTITY_PREFIX,
   type CanonicalDependencies,
+  type CrossImageClaimDivergence,
   type DependencyIntroduction,
   type LicenseClaim,
   type Occurrence,
@@ -328,6 +329,92 @@ function claimKey(claim: LicenseClaim): string {
 }
 
 /**
+ * Per-(purl, docker target) claim accumulator for cross-image divergence detection - built
+ * alongside byPurl in mergeSboms, from each docker occurrence's OWN claims before they are folded
+ * into the package-wide licenseClaims union. Never read outside this module.
+ */
+type DockerClaimsByTarget = Map<string, Map<string, LicenseClaim[]>>;
+
+/**
+ * Union one docker occurrence's claims into the accumulator, deduped by claimKey - the same
+ * same-target fold mergeInto applies to occurrences, kept independent here so a divergence
+ * comparison never depends on mergeInto's own bookkeeping.
+ */
+function recordDockerOccurrenceClaims(
+  acc: DockerClaimsByTarget,
+  purl: string,
+  target: string,
+  claims: ReadonlyArray<LicenseClaim>,
+): void {
+  let byTarget = acc.get(purl);
+  if (byTarget === undefined) {
+    byTarget = new Map();
+    acc.set(purl, byTarget);
+  }
+  const existing = byTarget.get(target);
+  if (existing === undefined) {
+    byTarget.set(target, [...claims]);
+    return;
+  }
+  const seen = new Set(existing.map(claimKey));
+  for (const claim of claims) {
+    const key = claimKey(claim);
+    if (!seen.has(key)) {
+      seen.add(key);
+      existing.push(claim);
+    }
+  }
+}
+
+/** Order/duplicate-insensitive canonical key for one occurrence's claim SET. */
+function claimSetKey(claims: ReadonlyArray<LicenseClaim>): string {
+  return [...new Set(claims.map(claimKey))].sort(compareCodeUnits).join("");
+}
+
+/**
+ * Detect a cross-image license-claim divergence for one merged purl: two or more docker occurrences
+ * whose declared claim SETS differ (order/duplicate-insensitive comparison - listing identical
+ * claims in a different order, or a repeated claim within one image, is never a divergence). An
+ * occurrence with NO claims contributes no signal - it never counts as its own disagreeing set, so
+ * a package one image simply didn't attach license metadata to is never flagged against a sibling
+ * that did.
+ *
+ * Undefined (no divergence) when the purl also carries a non-docker occurrence - a workspace+docker
+ * shared purl is the unrelated app-promotion case (mergeInto's scope reconciliation), left
+ * untouched - or when fewer than two docker occurrences carry a distinct non-empty claim set.
+ */
+function crossImageClaimDivergence(
+  entry: PackageEntry,
+  byTarget: ReadonlyMap<string, LicenseClaim[]> | undefined,
+): CrossImageClaimDivergence | undefined {
+  if (byTarget === undefined || byTarget.size < 2) return undefined;
+  if (
+    !entry.occurrences.every((o) => o.target.startsWith(DOCKER_IDENTITY_PREFIX))
+  ) {
+    return undefined;
+  }
+
+  const distinctSets = new Set<string>();
+  for (const claims of byTarget.values()) {
+    if (claims.length === 0) continue;
+    distinctSets.add(claimSetKey(claims));
+  }
+  if (distinctSets.size < 2) return undefined;
+
+  const sortedTargets = [...byTarget.keys()].sort(compareCodeUnits);
+  return {
+    kind: "cross-image-claims",
+    byTarget: sortedTargets.map((target) => {
+      const claims = byTarget.get(target) as LicenseClaim[];
+      const rawValues = [
+        ...new Set(claims.map((c) => c.raw.trim()).filter((raw) => raw !== "")),
+      ].sort(compareCodeUnits);
+      return { target, claims: rawValues };
+    }),
+  };
+}
+
+/**
  * #7: deterministically reconcile two introductions for the same target+purl (a same-target
  * occurrence fold). Order-independent by construction:
  * - `direct` is ORed (a direct contributor wins - mirrors the prod-wins /
@@ -458,6 +545,9 @@ function assertNotReservedIdentity(input: CollectedSbom): void {
  */
 export function mergeSboms(inputs: ReadonlyArray<CollectedSbom>): CanonicalDependencies {
   const byPurl = new Map<string, PackageEntry>();
+  // Side accumulator for cross-image claim divergence, populated only from docker inputs; consumed
+  // in the finishing pass below and never otherwise exposed.
+  const dockerClaims: DockerClaimsByTarget = new Map();
 
   // Reserved-namespace integrity before any component walks (see assertNotReservedIdentity - a loud
   // throw, never a skip).
@@ -473,11 +563,24 @@ export function mergeSboms(inputs: ReadonlyArray<CollectedSbom>): CanonicalDepen
     const components = doc.components;
     if (components === undefined) continue;
 
+    const isDockerInput = input.targetIdentity.startsWith(
+      DOCKER_IDENTITY_PREFIX,
+    );
+
     for (const raw of components) {
       const component = SbomComponent(raw);
       if (component instanceof type.errors) continue;
       const entry = packageEntryOf(input, component, rootPurl);
       if (entry === undefined) continue;
+
+      if (isDockerInput) {
+        recordDockerOccurrenceClaims(
+          dockerClaims,
+          entry.purl,
+          input.targetIdentity,
+          entry.licenseClaims,
+        );
+      }
 
       const existing = byPurl.get(entry.purl);
       if (existing === undefined) {
@@ -486,6 +589,16 @@ export function mergeSboms(inputs: ReadonlyArray<CollectedSbom>): CanonicalDepen
         mergeInto(existing, entry);
       }
     }
+  }
+
+  // Finishing pass: every purl that touched a docker input is checked for a cross-image claim
+  // divergence now that its full occurrence set is known (workspace+docker exclusion needs the
+  // FINAL occurrence list, not the per-input one).
+  for (const [purl, byTarget] of dockerClaims) {
+    const entry = byPurl.get(purl);
+    if (entry === undefined) continue;
+    const divergence = crossImageClaimDivergence(entry, byTarget);
+    if (divergence !== undefined) entry.dockerClaimDivergence = divergence;
   }
 
   return { packages: [...byPurl.values()].sort(comparePackages) };

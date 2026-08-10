@@ -1440,6 +1440,7 @@ describe("annotateFindings — scancode senior assessment (the re-pinned fill ma
     expect(finding.confidence).toBe("none");
     expect(finding.expression).toBeNull();
     expect(finding.conflict).toEqual({
+      kind: "scancode",
       assessed: "MIT",
       disagreeing: ["total garbage xyz"],
     });
@@ -1467,6 +1468,7 @@ describe("annotateFindings — scancode senior assessment (the re-pinned fill ma
     expect(finding.impreciseFamily).toBe("GPL");
     expect(finding.expression).toBeNull();
     expect(finding.conflict).toEqual({
+      kind: "scancode",
       assessed: "MIT",
       disagreeing: ["GPL"],
     });
@@ -1508,6 +1510,7 @@ describe("annotateFindings — scancode senior assessment (the re-pinned fill ma
     expect(finding.impreciseFamily).toBe("BSD");
     expect(finding.expression).toBeNull();
     expect(finding.conflict).toEqual({
+      kind: "scancode",
       assessed: "0BSD",
       disagreeing: ["BSD"],
     });
@@ -1528,6 +1531,7 @@ describe("annotateFindings — scancode senior assessment (the re-pinned fill ma
     expect(finding.expression).toBe("LGPL-2.1-only");
     expect(finding.confidence).toBe("exact");
     expect(finding.conflict).toEqual({
+      kind: "scancode",
       assessed: "LGPL-2.1-only",
       disagreeing: ["GPL"],
     });
@@ -1545,6 +1549,7 @@ describe("annotateFindings — scancode senior assessment (the re-pinned fill ma
     expect(finding.impreciseFamily).toBe("BSD");
     expect(finding.expression).toBeNull();
     expect(finding.conflict).toEqual({
+      kind: "scancode",
       assessed: "BSD-3-Clause AND MIT",
       disagreeing: ["BSD"],
     });
@@ -1584,6 +1589,7 @@ describe("annotateFindings — scancode senior assessment (the re-pinned fill ma
     expect(finding.expression).toBe("Apache-2.0 AND MIT");
     expect(finding.source).not.toBe("scancode");
     expect(finding.conflict).toEqual({
+      kind: "scancode",
       assessed: "MIT",
       disagreeing: ["Apache-2.0"],
     });
@@ -1620,6 +1626,7 @@ describe("annotateFindings — scancode senior assessment (the re-pinned fill ma
     const differingFinding = annotateFindings(modelOf(differing), []).model.packages[0]!.finding!;
     expect(differingFinding.source).not.toBe("scancode");
     expect(differingFinding.conflict).toEqual({
+      kind: "scancode",
       assessed: "MIT AND Apache-2.0",
       disagreeing: ["MIT"],
     });
@@ -1635,6 +1642,7 @@ describe("annotateFindings — scancode senior assessment (the re-pinned fill ma
     expect(finding.expression).toBe("GPL-3.0-only");
     expect(finding.confidence).toBe("exact");
     expect(finding.conflict).toEqual({
+      kind: "scancode",
       assessed: "Apache",
       disagreeing: ["GPL-3.0-only"],
     });
@@ -1678,6 +1686,7 @@ describe("annotateFindings — scancode senior assessment (the re-pinned fill ma
     expect(finding.confidence).toBe("imprecise");
     expect(finding.impreciseFamily).toBe("BSD");
     expect(finding.conflict).toEqual({
+      kind: "scancode",
       assessed: "MIT",
       disagreeing: ["Apache-2.0", "BSD"],
     });
@@ -1706,6 +1715,7 @@ describe("annotateFindings — scancode senior assessment (the re-pinned fill ma
     const finding = model.packages[0]!.finding!;
     expect(finding.staleOverride).toBeDefined();
     expect(finding.conflict).toEqual({
+      kind: "scancode",
       assessed: "MIT",
       disagreeing: ["Apache-2.0"],
     });
@@ -1741,6 +1751,89 @@ describe("annotateFindings — scancode senior assessment (the re-pinned fill ma
     expect(finding.source).toBe("scancode");
     expect(finding.expression).toBe("MIT");
     expect(finding.observedExpressions).toContain("BUSL-1.1 OR MIT");
+  });
+});
+
+/** A docker occurrence (see osPkg) carrying a merge-time cross-image claim divergence marker. */
+const dockerPkgWithDivergence = (
+  name: string,
+  version: string,
+  byTarget: ReadonlyArray<{ target: string; claims: readonly string[] }>,
+): PackageEntry => ({
+  ...osPkg(name, version, []),
+  occurrences: byTarget.map((t) => ({
+    target: t.target,
+    isDevDependency: false,
+  })),
+  dockerClaimDivergence: { kind: "cross-image-claims", byTarget },
+});
+
+describe("annotateFindings — cross-image claim divergence overlay", () => {
+  test("a package carrying dockerClaimDivergence and no scancode conflict surfaces it as finding.conflict, and the merge-only field is stripped from the entry", () => {
+    const entry = dockerPkgWithDivergence("busybox", "1.37.0-r20", [
+      { target: "docker:image-a", claims: ["MIT"] },
+      { target: "docker:image-b", claims: ["Apache-2.0"] },
+    ]);
+    const { model } = annotateFindings(modelOf(entry), []);
+    const resultEntry = model.packages[0]!;
+    expect(resultEntry.finding!.conflict).toEqual({
+      kind: "cross-image-claims",
+      byTarget: [
+        { target: "docker:image-a", claims: ["MIT"] },
+        { target: "docker:image-b", claims: ["Apache-2.0"] },
+      ],
+    });
+    expect(resultEntry).not.toHaveProperty("dockerClaimDivergence");
+  });
+
+  test("no divergence recorded → finding.conflict stays undefined (a repo with no docker inputs is unaffected)", () => {
+    const entry = pkg("no-divergence-pkg", "1.0.0", [claim("MIT")]);
+    const { model } = annotateFindings(modelOf(entry), []);
+    expect(model.packages[0]!.finding!.conflict).toBeUndefined();
+  });
+
+  test("a ScanCode assessment conflict takes the conflict slot over a co-present cross-image divergence — the senior in-depth assessment wins the shared slot", () => {
+    const entry: PackageEntry = {
+      ...dockerPkgWithDivergence("both-conflicts-pkg", "1.0.0", [
+        { target: "docker:image-a", claims: ["MIT"] },
+        { target: "docker:image-b", claims: ["Apache-2.0"] },
+      ]),
+      licenseClaims: [claim("Apache-2.0"), scancodeClaim("MIT")],
+    };
+    const { model } = annotateFindings(modelOf(entry), []);
+    const conflict = model.packages[0]!.finding!.conflict!;
+    expect(conflict.kind).toBe("scancode");
+  });
+
+  test("resolution: a [[clarify]] override on a cross-image conflict decides the finding and clears the marker — same resolution path as a ScanCode conflict", () => {
+    const entry = dockerPkgWithDivergence("clarified-divergent-pkg", "1.0.0", [
+      { target: "docker:image-a", claims: ["MIT"] },
+      { target: "docker:image-b", claims: ["Apache-2.0"] },
+    ]);
+    const clarify: ClarifyInput[] = [
+      { name: "clarified-divergent-pkg", expression: "MIT" },
+    ];
+    const { model } = annotateFindings(modelOf(entry), clarify);
+    const finding = model.packages[0]!.finding!;
+    expect(finding.source).toBe("override");
+    expect(finding.expression).toBe("MIT");
+    expect(finding.conflict).toBeUndefined();
+  });
+
+  test("an image with no declared claim is carried losslessly in the marker as an empty claims array, never dropped", () => {
+    const entry = dockerPkgWithDivergence("partial-claim-pkg", "1.0.0", [
+      { target: "docker:image-a", claims: [] },
+      { target: "docker:image-b", claims: ["MIT"] },
+    ]);
+    const { model } = annotateFindings(modelOf(entry), []);
+    const conflict = model.packages[0]!.finding!.conflict!;
+    expect(conflict.kind).toBe("cross-image-claims");
+    if (conflict.kind === "cross-image-claims") {
+      expect(conflict.byTarget).toEqual([
+        { target: "docker:image-a", claims: [] },
+        { target: "docker:image-b", claims: ["MIT"] },
+      ]);
+    }
   });
 });
 

@@ -167,9 +167,12 @@ function conflictModel(): CanonicalDependencies {
 describe("renderMarkdown — assessment conflicts section", () => {
   test("a conflicted package renders the dedicated section naming the in-depth value, the quick-check value, and where it is used", () => {
     const out = renderMarkdown(conflictModel());
-    expect(out.includes("## Assessment conflicts (in-depth scan vs quick check)")).toBe(true);
+    expect(out.includes("## Assessment conflicts")).toBe(true);
+    expect(out.includes("### ScanCode assessment vs quick check")).toBe(true);
     // row shape: Package | In-depth (ScanCode) | Quick check | Used in
     expect(out.includes("| disputed-pkg | MIT | Apache-2.0 | apps/synthetic |")).toBe(true);
+    // the cross-image sub-table never appears when there is no such conflict
+    expect(out.includes("### Cross-image license claims")).toBe(false);
   });
 
   test("the same conflict also surfaces as a row in the Problematic licenses table (free, via the fail-verdict grouping) — no separate wiring", () => {
@@ -214,6 +217,7 @@ describe("renderMarkdown — assessment conflicts section", () => {
             source: "generator",
             confidence: "exact",
             conflict: {
+              kind: "scancode",
               assessed: "MIT | `evil`",
               disagreeing: ["Apache-2.0 | `x`"],
             },
@@ -230,6 +234,112 @@ describe("renderMarkdown — assessment conflicts section", () => {
   test("determinism: two renders of a conflicted model are byte-identical, conflict section included", () => {
     const model = conflictModel();
     expect(renderMarkdown(model)).toBe(renderMarkdown(model));
+  });
+
+  test("determinism: two renders of a cross-image conflicted model are byte-identical", () => {
+    const model: CanonicalDependencies = {
+      packages: [
+        {
+          purl: "pkg:apk/alpine/busybox@1.37.0-r20",
+          name: "busybox",
+          version: "1.37.0-r20",
+          occurrences: [
+            { target: "docker:image-a", isDevDependency: false },
+            { target: "docker:image-b", isDevDependency: false },
+          ],
+          licenseClaims: [],
+          scope: "os",
+          finding: {
+            expression: "MIT AND Apache-2.0",
+            elected: "MIT AND Apache-2.0",
+            source: "generator",
+            confidence: "exact",
+            conflict: {
+              kind: "cross-image-claims",
+              byTarget: [
+                { target: "docker:image-a", claims: ["MIT"] },
+                { target: "docker:image-b", claims: ["Apache-2.0"] },
+              ],
+            },
+          },
+        },
+      ],
+    };
+    expect(renderMarkdown(model)).toBe(renderMarkdown(model));
+  });
+
+  test("a cross-image claim divergence renders its own sub-table naming every diverging image and its own claims", () => {
+    const model: CanonicalDependencies = {
+      packages: [
+        {
+          purl: "pkg:apk/alpine/busybox@1.37.0-r20",
+          name: "busybox",
+          version: "1.37.0-r20",
+          occurrences: [
+            { target: "docker:image-a", isDevDependency: false },
+            { target: "docker:image-b", isDevDependency: false },
+          ],
+          licenseClaims: [],
+          scope: "os",
+          finding: {
+            expression: "MIT AND Apache-2.0",
+            elected: "MIT AND Apache-2.0",
+            source: "generator",
+            confidence: "exact",
+            conflict: {
+              kind: "cross-image-claims",
+              byTarget: [
+                { target: "docker:image-a", claims: ["MIT"] },
+                { target: "docker:image-b", claims: ["Apache-2.0"] },
+              ],
+            },
+          },
+        },
+      ],
+    };
+    const out = renderMarkdown(model);
+    expect(out.includes("## Assessment conflicts")).toBe(true);
+    expect(out.includes("### Cross-image license claims")).toBe(true);
+    expect(out.includes("| busybox | docker:image-a: MIT; docker:image-b: Apache-2.0 |")).toBe(
+      true,
+    );
+    // the ScanCode sub-table never appears when there is no such conflict
+    expect(out.includes("### ScanCode assessment vs quick check")).toBe(false);
+  });
+
+  test("a cross-image image with no declared claim renders as '(no declared license)', never a blank cell", () => {
+    const model: CanonicalDependencies = {
+      packages: [
+        {
+          purl: "pkg:apk/alpine/busybox@1.37.0-r20",
+          name: "busybox",
+          version: "1.37.0-r20",
+          occurrences: [
+            { target: "docker:image-a", isDevDependency: false },
+            { target: "docker:image-b", isDevDependency: false },
+          ],
+          licenseClaims: [],
+          scope: "os",
+          finding: {
+            expression: null,
+            elected: null,
+            source: "generator",
+            confidence: "none",
+            conflict: {
+              kind: "cross-image-claims",
+              byTarget: [
+                { target: "docker:image-a", claims: [] },
+                { target: "docker:image-b", claims: ["MIT"] },
+              ],
+            },
+          },
+        },
+      ],
+    };
+    const out = renderMarkdown(model);
+    expect(
+      out.includes("| busybox | docker:image-a: (no declared license); docker:image-b: MIT |"),
+    ).toBe(true);
   });
 });
 

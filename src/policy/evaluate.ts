@@ -57,6 +57,7 @@ import satisfies from "spdx-satisfies";
 
 import {
   compareCodeUnits,
+  type AssessmentConflict,
   type CanonicalDependencies,
   type Occurrence,
   type PackageEntry,
@@ -380,30 +381,71 @@ function staleVerdict(
  * An unresolved ScanCode-vs-quick-check disagreement fails the gate. The in-depth assessment and
  * the declared/registry answer disagree, and human involvement is necessary: a warn is ignorable,
  * which recreates the silent-absorption failure mode this verdict exists to prevent - a fail, not a
- * warn. It sits below deny (terminal) and stale (a stale override is strictly more urgent) and
- * above compatible (a compatible rule must never auto-absorb a disputed answer). The reason names
- * the package, the in-depth assessed expression, the disagreeing quick-check values, and the
- * [[clarify]] remedy; a `fail` mapped to exit 1 by the violations -> exitCodeFor mapping. The
- * reason is plain single-line text routed through the same downstream sanitization as sibling
- * verdicts (escapeCell in render, sanitizeForLog on stderr) - no channel of its own.
+ * warn. The reason names the package, the in-depth assessed expression, the disagreeing quick-check
+ * values, and the [[clarify]] remedy; a `fail` mapped to exit 1 by the violations -> exitCodeFor
+ * mapping. The reason is plain single-line text routed through the same downstream sanitization as
+ * sibling verdicts (escapeCell in render, sanitizeForLog on stderr) - no channel of its own.
  */
-function conflictVerdict(
+function scancodeConflictVerdict(
   base: { purl: string; occurrenceTarget: string },
   entry: PackageEntry,
-  conflict: NonNullable<PackageEntry["finding"]>["conflict"],
+  conflict: Extract<AssessmentConflict, { kind: "scancode" }>,
 ): Verdict {
-  const c = conflict as NonNullable<typeof conflict>;
-  const disagreeing = c.disagreeing.length > 0 ? c.disagreeing.join(", ") : "(none)";
+  const disagreeing =
+    conflict.disagreeing.length > 0 ? conflict.disagreeing.join(", ") : "(none)";
   return {
     ...base,
     status: "fail",
     rule: "conflict:scancode",
     reason:
       `ASSESSMENT CONFLICT on "${entry.name}@${entry.version}": the in-depth ` +
-      `ScanCode assessment found "${c.assessed}" but the declared/registry ` +
+      `ScanCode assessment found "${conflict.assessed}" but the declared/registry ` +
       `answer says "${disagreeing}" — resolve via a [[clarify]] override ` +
       `recording your decision (question the quick check, or re-assess).`,
   };
+}
+
+/**
+ * A cross-image license-claim divergence fails the gate exactly like a ScanCode disagreement:
+ * docker occurrences of the SAME purl declared different licenses, and a human must record which is
+ * right. The reason names every diverging image and its own claim set (or "no declared license" for
+ * an image that attached none), and the [[clarify]] remedy - the same resolution path as the
+ * ScanCode conflict lane.
+ */
+function crossImageConflictVerdict(
+  base: { purl: string; occurrenceTarget: string },
+  entry: PackageEntry,
+  conflict: Extract<AssessmentConflict, { kind: "cross-image-claims" }>,
+): Verdict {
+  const perImage = conflict.byTarget
+    .map(
+      (t) =>
+        `${t.target}: ${t.claims.length > 0 ? t.claims.join(", ") : "(no declared license)"}`,
+    )
+    .join("; ");
+  return {
+    ...base,
+    status: "fail",
+    rule: "conflict:cross-image-claims",
+    reason:
+      `CROSS-IMAGE LICENSE CONFLICT on "${entry.name}@${entry.version}": docker ` +
+      `images disagree on its declared license — ${perImage} — resolve via a ` +
+      `[[clarify]] override recording your decision.`,
+  };
+}
+
+/**
+ * Dispatch to the matching conflict verdict builder. Both conflict sources share this one gate slot
+ * (see verdictFor) - a fail, not a warn, because either kind needs a human decision.
+ */
+function conflictVerdict(
+  base: { purl: string; occurrenceTarget: string },
+  entry: PackageEntry,
+  conflict: AssessmentConflict,
+): Verdict {
+  return conflict.kind === "cross-image-claims"
+    ? crossImageConflictVerdict(base, entry, conflict)
+    : scancodeConflictVerdict(base, entry, conflict);
 }
 
 /**

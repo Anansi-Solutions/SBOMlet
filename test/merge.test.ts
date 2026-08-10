@@ -1893,5 +1893,220 @@ describe("mergeSboms — reserved docker: occurrence namespace", () => {
       "docker:a/Dockerfile",
       "docker:postgres:18",
     ]);
+    // Identical claims across images (the wave-8 golden's actual shape) must
+    // never trip the divergence marker — the false-positive hunt this feature
+    // most needs to pass.
+    expect(model.packages[0]?.dockerClaimDivergence).toBeUndefined();
+  });
+});
+
+// Cross-image license-claim divergence: two or more docker occurrences of the
+// SAME purl declaring different licenses. Comparison is claim-SET based
+// (order/duplicate-insensitive); a workspace+docker shared purl is the
+// unrelated app-promotion case (untouched here).
+describe("mergeSboms — cross-image claim divergence (dockerClaimDivergence)", () => {
+  const SHARED = "pkg:apk/alpine/busybox@1.37.0-r20";
+
+  function dockerDoc(licenseIds: string[]): unknown {
+    return {
+      bomFormat: "CycloneDX",
+      specVersion: "1.6",
+      components: [
+        {
+          type: "library",
+          name: "busybox",
+          version: "1.37.0-r20",
+          purl: SHARED,
+          licenses: licenseIds.map((id) => ({ license: { id } })),
+        },
+      ],
+    };
+  }
+
+  test("two images with the SAME claim → no divergence marker", () => {
+    const model = mergeSboms([
+      {
+        sbom: dockerDoc(["GPL-2.0-only"]),
+        targetIdentity: "docker:image-a",
+        scope: "os",
+      },
+      {
+        sbom: dockerDoc(["GPL-2.0-only"]),
+        targetIdentity: "docker:image-b",
+        scope: "os",
+      },
+    ]);
+    const pkg = model.packages.find((p) => p.purl === SHARED);
+    expect(pkg?.dockerClaimDivergence).toBeUndefined();
+  });
+
+  test("two images with DIFFERENT claims → a divergence marker naming both images and both claim sets", () => {
+    const model = mergeSboms([
+      {
+        sbom: dockerDoc(["MIT"]),
+        targetIdentity: "docker:image-a",
+        scope: "os",
+      },
+      {
+        sbom: dockerDoc(["Apache-2.0"]),
+        targetIdentity: "docker:image-b",
+        scope: "os",
+      },
+    ]);
+    const pkg = model.packages.find((p) => p.purl === SHARED);
+    expect(pkg?.dockerClaimDivergence).toEqual({
+      kind: "cross-image-claims",
+      byTarget: [
+        { target: "docker:image-a", claims: ["MIT"] },
+        { target: "docker:image-b", claims: ["Apache-2.0"] },
+      ],
+    });
+  });
+
+  test("order-insensitive: the same two licenses in a different order across images is NOT a divergence", () => {
+    const model = mergeSboms([
+      {
+        sbom: dockerDoc(["MIT", "Apache-2.0"]),
+        targetIdentity: "docker:image-a",
+        scope: "os",
+      },
+      {
+        sbom: dockerDoc(["Apache-2.0", "MIT"]),
+        targetIdentity: "docker:image-b",
+        scope: "os",
+      },
+    ]);
+    const pkg = model.packages.find((p) => p.purl === SHARED);
+    expect(pkg?.dockerClaimDivergence).toBeUndefined();
+  });
+
+  test("duplicate-insensitive: a repeated claim in one image's own list is NOT a divergence against a single-claim image", () => {
+    const model = mergeSboms([
+      {
+        sbom: dockerDoc(["MIT", "MIT"]),
+        targetIdentity: "docker:image-a",
+        scope: "os",
+      },
+      {
+        sbom: dockerDoc(["MIT"]),
+        targetIdentity: "docker:image-b",
+        scope: "os",
+      },
+    ]);
+    const pkg = model.packages.find((p) => p.purl === SHARED);
+    expect(pkg?.dockerClaimDivergence).toBeUndefined();
+  });
+
+  test("an image with NO declared claim contributes no signal — not a divergence against a single claiming image", () => {
+    const model = mergeSboms([
+      {
+        sbom: dockerDoc([]),
+        targetIdentity: "docker:image-a",
+        scope: "os",
+      },
+      {
+        sbom: dockerDoc(["MIT"]),
+        targetIdentity: "docker:image-b",
+        scope: "os",
+      },
+    ]);
+    const pkg = model.packages.find((p) => p.purl === SHARED);
+    expect(pkg?.dockerClaimDivergence).toBeUndefined();
+  });
+
+  test("three images, one pairwise divergence → ONE conflict marker carrying all three targets (not N pairwise findings)", () => {
+    const model = mergeSboms([
+      {
+        sbom: dockerDoc(["MIT"]),
+        targetIdentity: "docker:image-a",
+        scope: "os",
+      },
+      {
+        sbom: dockerDoc(["MIT"]),
+        targetIdentity: "docker:image-b",
+        scope: "os",
+      },
+      {
+        sbom: dockerDoc(["Apache-2.0"]),
+        targetIdentity: "docker:image-c",
+        scope: "os",
+      },
+    ]);
+    const pkg = model.packages.find((p) => p.purl === SHARED);
+    expect(pkg?.dockerClaimDivergence?.byTarget).toEqual([
+      { target: "docker:image-a", claims: ["MIT"] },
+      { target: "docker:image-b", claims: ["MIT"] },
+      { target: "docker:image-c", claims: ["Apache-2.0"] },
+    ]);
+  });
+
+  test("a workspace+docker shared purl is NOT this finding: diverging docker claims never trip the marker when a workspace occurrence also exists (app-promotion case, untouched)", () => {
+    const workspaceDoc = {
+      bomFormat: "CycloneDX",
+      specVersion: "1.6",
+      components: [
+        {
+          type: "library",
+          name: "busybox",
+          version: "1.37.0-r20",
+          purl: SHARED,
+          licenses: [{ license: { id: "0BSD" } }],
+        },
+      ],
+    };
+    const model = mergeSboms([
+      { sbom: workspaceDoc, targetIdentity: "apps/backend" },
+      {
+        sbom: dockerDoc(["MIT"]),
+        targetIdentity: "docker:image-a",
+        scope: "os",
+      },
+      {
+        sbom: dockerDoc(["Apache-2.0"]),
+        targetIdentity: "docker:image-b",
+        scope: "os",
+      },
+    ]);
+    const pkg = model.packages.find((p) => p.purl === SHARED);
+    expect(pkg?.scope).toBe("app"); // the existing app-wins promotion, unchanged
+    expect(pkg?.dockerClaimDivergence).toBeUndefined();
+  });
+
+  test("determinism: the marker's byTarget order is canonical (sorted by target) regardless of input image order", () => {
+    const forward = mergeSboms([
+      {
+        sbom: dockerDoc(["MIT"]),
+        targetIdentity: "docker:image-a",
+        scope: "os",
+      },
+      {
+        sbom: dockerDoc(["Apache-2.0"]),
+        targetIdentity: "docker:image-b",
+        scope: "os",
+      },
+    ]);
+    const reversed = mergeSboms([
+      {
+        sbom: dockerDoc(["Apache-2.0"]),
+        targetIdentity: "docker:image-b",
+        scope: "os",
+      },
+      {
+        sbom: dockerDoc(["MIT"]),
+        targetIdentity: "docker:image-a",
+        scope: "os",
+      },
+    ]);
+    const forwardDivergence = forward.packages.find(
+      (p) => p.purl === SHARED,
+    )?.dockerClaimDivergence;
+    const reversedDivergence = reversed.packages.find(
+      (p) => p.purl === SHARED,
+    )?.dockerClaimDivergence;
+    expect(forwardDivergence).toEqual(reversedDivergence);
+    expect(forwardDivergence?.byTarget.map((t) => t.target)).toEqual([
+      "docker:image-a",
+      "docker:image-b",
+    ]);
   });
 });

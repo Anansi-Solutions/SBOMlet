@@ -701,6 +701,15 @@ interface PackageSpec {
    * conflict marker. Absent = the common quick-check-only case.
    */
   scancode?: string;
+  /**
+   * A merge-time cross-image claim divergence (mergeSboms' dockerClaimDivergence carrier) —
+   * threaded straight onto the built PackageEntry so annotateFindings overlays it exactly as the
+   * live pipeline does. Absent = the common no-docker-divergence case.
+   */
+  dockerClaimDivergence?: {
+    target: string;
+    claims: readonly string[];
+  }[];
 }
 
 /**
@@ -736,6 +745,14 @@ function makeModel(specs: ReadonlyArray<PackageSpec>): CanonicalDependencies {
           : []),
       ],
       scope: spec.scope ?? "app",
+      ...(spec.dockerClaimDivergence !== undefined
+        ? {
+            dockerClaimDivergence: {
+              kind: "cross-image-claims" as const,
+              byTarget: spec.dockerClaimDivergence,
+            },
+          }
+        : {}),
     })),
   };
 }
@@ -1733,6 +1750,104 @@ describe("evaluate — conflict:scancode fail verdict", () => {
     const agreed = runEngine([scanPkgSpec("agree-pkg", "MIT", "MIT", ["backend"])], "").verdicts;
     expect(agreed.every((v) => v.rule !== "conflict:scancode")).toBe(true);
     expect(agreed[0].status).toBe("ok");
+  });
+});
+
+// ===========================================================================
+// The conflict:cross-image-claims fail verdict. Two or more docker
+// occurrences of the SAME purl declaring different licenses (marker set at
+// merge time, threaded via PackageSpec.dockerClaimDivergence) share the
+// conflict:scancode lane (verdictFor) — a fail, not a warn, for the same
+// reason: human involvement is necessary. Exit 1 is automatic, no new
+// machinery in exitCodeFor.
+// ===========================================================================
+
+/** Shorthand for a docker-vs-docker cross-image claim divergence spec. */
+function crossImagePkgSpec(
+  name: string,
+  byTarget: ReadonlyArray<{ target: string; claims: readonly string[] }>,
+  version = "1.0.0",
+): PackageSpec {
+  return {
+    purl: `pkg:apk/alpine/${name}@${version}`,
+    name,
+    version,
+    claims: [],
+    occurrences: byTarget.map((t) => t.target),
+    scope: "os",
+    dockerClaimDivergence: [...byTarget],
+  };
+}
+
+describe("evaluate — conflict:cross-image-claims fail verdict", () => {
+  test("HEADLINE: two docker occurrences declaring different licenses FAILS conflict:cross-image-claims, naming every image and the clarify remedy", () => {
+    const { verdicts } = runEngine(
+      [
+        crossImagePkgSpec("busybox", [
+          { target: "docker:image-a", claims: ["MIT"] },
+          { target: "docker:image-b", claims: ["Apache-2.0"] },
+        ]),
+      ],
+      "",
+    );
+    expect(verdicts).toHaveLength(2); // one verdict per occurrence
+    for (const v of verdicts) {
+      expect(v.status).toBe("fail"); // → exitCodeFor violation → exit 1
+      expect(v.rule).toBe("conflict:cross-image-claims");
+      expect(v.reason).toContain("busybox");
+      expect(v.reason).toContain("docker:image-a: MIT");
+      expect(v.reason).toContain("docker:image-b: Apache-2.0");
+      expect(v.reason).toContain("[[clarify]]"); // the remedy
+    }
+  });
+
+  test("an image with no declared claim renders '(no declared license)' in the reason, never a blank", () => {
+    const { verdicts } = runEngine(
+      [
+        crossImagePkgSpec("partial-claim-pkg", [
+          { target: "docker:image-a", claims: [] },
+          { target: "docker:image-b", claims: ["MIT"] },
+        ]),
+      ],
+      "",
+    );
+    expect(verdicts[0].reason).toContain("docker:image-a: (no declared license)");
+  });
+
+  test("resolution: a [[clarify]] override APPLIES, clears the conflict, and the verdict is clarify[0] ok (exit 0) — the same remedy path as a ScanCode conflict", () => {
+    const policyText = [
+      "[[clarify]]",
+      'package = { name = "busybox" }',
+      'expression = "MIT"',
+      'reason = "reviewed: image-a is correct"',
+    ].join("\n");
+    const { verdicts } = runEngine(
+      [
+        crossImagePkgSpec("busybox", [
+          { target: "docker:image-a", claims: ["MIT"] },
+          { target: "docker:image-b", claims: ["Apache-2.0"] },
+        ]),
+      ],
+      policyText,
+    );
+    for (const v of verdicts) {
+      expect(v.status).toBe("ok");
+      expect(v.rule).toBe("clarify[0]");
+      expect(v.rule).not.toBe("conflict:cross-image-claims");
+    }
+  });
+
+  test("without a clarify, the divergence stays a fail deterministically across repeated runs (no flapping)", () => {
+    const spec = [
+      crossImagePkgSpec("busybox", [
+        { target: "docker:image-a", claims: ["MIT"] },
+        { target: "docker:image-b", claims: ["Apache-2.0"] },
+      ]),
+    ];
+    const a = runEngine(spec, "").verdicts;
+    const b = runEngine(spec, "").verdicts;
+    expect(a).toEqual(b);
+    expect(a.every((v) => v.rule === "conflict:cross-image-claims")).toBe(true);
   });
 });
 

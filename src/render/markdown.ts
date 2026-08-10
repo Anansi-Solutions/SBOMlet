@@ -512,36 +512,74 @@ function impreciseSectionLines(sorted: readonly PackageEntry[]): string[] {
 }
 
 /**
- * The dedicated assessment-conflicts review section: every package whose in-depth ScanCode
- * assessment disagrees with the declared/registry quick check carries a conflict marker (set by
- * applyScancodeAssessment), and each is a gate failure until a `[[clarify]]` override records the
- * human's decision. The section names, per package, the in-depth (ScanCode) value, the disagreeing
- * quick-check value(s), and where the package is used - mirroring the imprecise-section precedent.
- * Empty (omitted) when no package carries a conflict marker (absent-not-empty for golden
- * stability). Input is already comparePackages-sorted; every cell routes through escapeCell so a
- * hostile expression string cannot break the table.
+ * The dedicated assessment-conflicts review section: every package whose finding carries a conflict
+ * marker, unconditionally, and each is a gate failure until a `[[clarify]]` override records the
+ * human's decision. Two independent triggers set the marker, each with its own table (mirroring the
+ * imprecise-section precedent for placement, not shape - the two conflict kinds compare different
+ * things and read better apart): the in-depth ScanCode assessment disagreeing with the
+ * declared/registry quick check, and docker occurrences of the SAME purl declaring different
+ * licenses (cross-image divergence) - its table names, per package, every diverging image and that
+ * image's own claims, so "image A says X, image B says Y" is legible at a glance. The section (and
+ * each sub-table) is empty (omitted) when no package carries that kind of marker (absent-not-empty
+ * for golden stability). Input is already comparePackages-sorted; every cell routes through
+ * escapeCell so a hostile expression string cannot break the table.
  */
 function conflictSectionLines(sorted: readonly PackageEntry[]): string[] {
-  const rows: string[] = [];
+  const scancodeRows: string[] = [];
+  const crossImageRows: string[] = [];
   for (const pkg of sorted) {
     const conflict = pkg.finding?.conflict;
     if (conflict === undefined) continue;
+    if (conflict.kind === "cross-image-claims") {
+      const byImage = conflict.byTarget
+        .map(
+          (t) =>
+            `${t.target}: ${t.claims.length > 0 ? t.claims.join(", ") : "(no declared license)"}`,
+        )
+        .join("; ");
+      crossImageRows.push(
+        `| ${escapeCell(pkg.name)} | ${escapeCell(byImage)} |`,
+      );
+      continue;
+    }
     const usedIn = pkg.occurrences.map((o) => o.target).join(", ");
-    rows.push(
+    scancodeRows.push(
       `| ${escapeCell(pkg.name)} | ${escapeCell(conflict.assessed)} | ${escapeCell(conflict.disagreeing.join(", "))} | ${escapeCell(usedIn)} |`,
     );
   }
-  if (rows.length === 0) return [];
-  return [
-    "## Assessment conflicts (in-depth scan vs quick check)",
+  if (scancodeRows.length === 0 && crossImageRows.length === 0) return [];
+
+  const lines: string[] = [
+    "## Assessment conflicts",
     "",
-    "For these packages the in-depth ScanCode assessment disagrees with the declared/registry quick check. Each is a gate failure until a policy `[[clarify]]` override records the decision — accept the in-depth value, or re-assess.",
-    "",
-    "| Package | In-depth (ScanCode) | Quick check | Used in |",
-    "| --- | --- | --- | --- |",
-    ...rows,
+    "For these packages a license disagreement was found automatically and needs a human decision. Each is a gate failure until a policy `[[clarify]]` override records it.",
     "",
   ];
+  if (scancodeRows.length > 0) {
+    lines.push(
+      "### ScanCode assessment vs quick check",
+      "",
+      "The in-depth ScanCode assessment disagrees with the declared/registry quick check — accept the in-depth value, or re-assess.",
+      "",
+      "| Package | In-depth (ScanCode) | Quick check | Used in |",
+      "| --- | --- | --- | --- |",
+      ...scancodeRows,
+      "",
+    );
+  }
+  if (crossImageRows.length > 0) {
+    lines.push(
+      "### Cross-image license claims",
+      "",
+      "Docker occurrences of the same package declared different licenses — decide which is right.",
+      "",
+      "| Package | Claims by image |",
+      "| --- | --- |",
+      ...crossImageRows,
+      "",
+    );
+  }
+  return lines;
 }
 
 /**

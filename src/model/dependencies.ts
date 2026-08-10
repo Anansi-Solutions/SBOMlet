@@ -90,13 +90,15 @@ export interface LicenseFinding {
    */
   staleOverride?: StaleOverride;
   /**
-   * A senior-assessment disagreement: the in-depth ScanCode answer conflicts with at least one
-   * quick-check claim (declared metadata or a registry answer). Set by applyScancodeAssessment on
-   * the UN-OVERRIDDEN base finding - the base stands in full and the disagreement is surfaced,
-   * never absorbed in either direction - and cleared when an override (project clarify or
-   * tool-level builtin) DECIDES the finding: an applied override is the human resolution, so it
-   * never carries the marker. Absent when no scancode claim exists or the assessment agrees
-   * (absent-not-empty for golden stability).
+   * A senior-assessment disagreement OR a cross-image license-claim divergence - two peer conflict
+   * sources that share one gate lane (see evaluate.ts's verdictFor): the in-depth ScanCode answer
+   * disagreeing with the quick check, or two docker occurrences of the same purl declaring
+   * different licenses. Set on the UN-OVERRIDDEN base finding - the base stands in full and the
+   * disagreement is surfaced, never absorbed in either direction - and cleared when an override
+   * (project clarify or tool-level builtin) DECIDES the finding: an applied override is the human
+   * resolution, so it never carries the marker. Absent when neither source fires (absent-not-empty
+   * for golden stability). A ScanCode disagreement takes the slot first when both are present - see
+   * withCrossImageConflict.
    */
   conflict?: AssessmentConflict;
   /**
@@ -154,7 +156,8 @@ export interface StaleOverride {
 }
 
 /** A senior-assessment disagreement surfaced to the policy engine. */
-export interface AssessmentConflict {
+export interface ScancodeAssessmentConflict {
+  kind: "scancode";
   /**
    * The in-depth assessed value: the ScanCode-elected normalized SPDX expression, or the bare
    * family token when the assessment itself is imprecise.
@@ -166,6 +169,31 @@ export interface AssessmentConflict {
    */
   disagreeing: ReadonlyArray<string>;
 }
+
+/**
+ * A cross-image license-claim divergence: two or more docker occurrences of the SAME purl declared
+ * different license claims. Comparison is claim-SET based (order/duplicate-insensitive)
+ * - listing identical claims in a different order across images is never a divergence. Carries
+ * every docker occurrence's own claim set losslessly, so no image's assertion is dropped the way
+ * the pre-conflict merge silently favored whichever image sorted first (ADR-0021).
+ */
+export interface CrossImageClaimDivergence {
+  kind: "cross-image-claims";
+  /**
+   * Every docker occurrence of this purl, sorted by target. `claims` are that image's own raw
+   * declared license strings (deduped, sorted); empty when the image declared no license claim for
+   * this purl at all.
+   */
+  byTarget: ReadonlyArray<{ target: string; claims: readonly string[] }>;
+}
+
+/**
+ * The two peer conflict sources sharing evaluate.ts's conflict lane and the finding's `conflict`
+ * slot.
+ */
+export type AssessmentConflict =
+  | ScancodeAssessmentConflict
+  | CrossImageClaimDivergence;
 
 export type VerdictStatus = "ok" | "warn" | "fail" | "suppressed";
 
@@ -303,6 +331,15 @@ export interface PackageEntry {
    * goldens stay byte-identical.
    */
   attribution?: PackageAttribution;
+  /**
+   * MERGE-TIME ONLY carrier for a detected cross-image claim divergence (mergeSboms) - absorbed
+   * into `finding.conflict` by annotateFindings and stripped from the entry there, so it never
+   * survives into a produced model (which always passes through annotateFindings, policy run or
+   * not). Set only when the purl's occurrences are ALL docker occurrences (a workspace+docker
+   * shared purl is the unrelated app-promotion case) and at least two of them declare distinct
+   * non-empty claim sets.
+   */
+  dockerClaimDivergence?: CrossImageClaimDivergence;
 }
 
 /** Invariant: `packages` is sorted by {@link comparePackages}. */
