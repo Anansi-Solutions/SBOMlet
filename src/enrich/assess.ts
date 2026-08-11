@@ -97,11 +97,17 @@ export async function assessPackages(
   const memo = readScancodeMemo(opts.memoPath);
   const packages = [...model.packages];
 
-  // Scan pass FIRST so a freshly-memoized positive replays in this same run;
-  // gated on generate --intensive. The memo is materialized once at the end.
+  // Scan pass FIRST so a freshly-memoized positive replays in this same run; gated on generate
+  // --intensive. The write lives in a finally so a fatal abort (a broken local tool install - see
+  // ScanContext.scanOpts / analyzeOne) still persists every completed scan from this run, not just
+  // a clean full-set pass; see persistMemo for the merge-on-write contract that makes that write
+  // safe.
   if (opts.mode === "generate" && opts.intensive !== undefined) {
-    await scanFullSet(packages, memo, opts.intensive, opts);
-    writeArtifact(opts.memoPath, serializeScancodeMemo(memo));
+    try {
+      await scanFullSet(packages, memo, opts.intensive, opts);
+    } finally {
+      persistMemo(opts.memoPath, memo);
+    }
   }
 
   // Replay pass: unconditional, EVERY package (a memoized answer must land on a precisely-declared
@@ -109,6 +115,29 @@ export async function assessPackages(
   replayMemo(packages, memo);
 
   return { model: { packages } };
+}
+
+/**
+ * Write the memo, MERGED with whatever is on disk at this instant - never a blind overwrite of this
+ * run's in-memory Map. The scan loop can run for a long time (an hours-long backfill), so the
+ * committed file is re-read right before the write: another writer (a concurrent run, a stale
+ * checkout being refreshed behind this one) may have added entries since this run's OWN initial
+ * read at the top of assessPackages. Unioning against that fresh read, rather than the stale
+ * initial one, means this run's write can only ADD entries to what is on disk, never discard ones
+ * it never saw. On a same-purl collision the IN-MEMORY entry wins: memo hits are skipped before a
+ * scan is ever attempted (analyzeOne), so a collision means this run scanned a purl the on-disk
+ * file has ALSO gained since - the freshest analysis for a purl this run actually visited beats a
+ * disk entry it never touched.
+ */
+function persistMemo(path: string, memo: Map<string, ScancodeMemoEntry>): void {
+  const onDisk = readScancodeMemo(path);
+  const merged = new Map(onDisk);
+
+  for (const [purl, entry] of memo) {
+    merged.set(purl, entry);
+  }
+
+  writeArtifact(path, serializeScancodeMemo(merged));
 }
 
 /** Append the memo's positive answers as ScanCode claims across ALL packages. */
