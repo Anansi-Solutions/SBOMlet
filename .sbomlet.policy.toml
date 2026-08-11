@@ -107,8 +107,9 @@ reason = "MIT AND BSD-2-Clause AND GPL-2.0-or-later; the GPL part covers unmodif
 
 [[clarify]]
 package = { name = "spdx-ranges", version = "2.1.1" }
+expects = "(MIT AND CC-BY-3.0)"
 expression = "(MIT AND CC-BY-3.0)"
-reason = "The npm registry declares (MIT AND CC-BY-3.0); the in-depth scan read only the root LICENSE and saw MIT, missing the CC-BY-3.0 that covers the bundled SPDX range data this package ships. I record the broader registry reading so that data obligation stays on the inventory."
+reason = "The npm registry declares (MIT AND CC-BY-3.0); the in-depth scan read only the root LICENSE and saw MIT, missing the CC-BY-3.0 that covers the bundled SPDX range data this package ships. I record the broader registry reading so that data obligation stays on the inventory. expects locks this to the exact compound claim, so a future upstream relicense reopens it for review instead of silently continuing to apply."
 
 [[clarify]]
 package = { name = "uri-js", version = "4.4.1" }

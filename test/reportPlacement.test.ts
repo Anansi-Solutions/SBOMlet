@@ -1448,12 +1448,8 @@ describe("cross-document invariants — LICENSES and NOTICES agree on one shared
       "known-mit (known) and imprecise-bsd (imprecise, present-but-ambiguous) must not count; only unknown-null and unknown-ref should",
     );
     assertStructural(
-      notices.includes(
-        "- unknown-null@1.0.0 — unknown license, no text included",
-      ) &&
-        notices.includes(
-          "- unknown-ref@1.0.0 — unknown license, no text included",
-        ),
+      notices.includes("- unknown-null@1.0.0 — unknown license, no text included") &&
+        notices.includes("- unknown-ref@1.0.0 — unknown license, no text included"),
       "NOTICES unknown section vs the two genuinely-unknown packages",
       "both unknown-null (no claim) and unknown-ref (LicenseRef-only) must row in NOTICES' unknown section",
     );
@@ -1466,9 +1462,9 @@ describe("cross-document invariants — LICENSES and NOTICES agree on one shared
 
   test("every package NOTICES' unknown section lists also has an inventory row in LICENSES", () => {
     const { doc, notices } = buildUnknownAdjacentScenario();
-    const unknownEntries = [
-      ...notices.matchAll(/^- (\S+)@\S+ — unknown license/gm),
-    ].map((m) => m[1]);
+    const unknownEntries = [...notices.matchAll(/^- (\S+)@\S+ — unknown license/gm)].map(
+      (m) => m[1],
+    );
     assertStructural(
       unknownEntries.length === 2,
       "NOTICES unknown section entry count",
