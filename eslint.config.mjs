@@ -1,5 +1,6 @@
 import js from "@eslint/js";
 import tseslint from "typescript-eslint";
+import stylistic from "@stylistic/eslint-plugin";
 import importX from "eslint-plugin-import-x";
 import tsdoc from "eslint-plugin-tsdoc";
 import commentLength from "eslint-plugin-comment-length";
@@ -71,8 +72,19 @@ export default tseslint.config(
   ...tseslint.configs.recommended,
   {
     files: ["**/*.ts"],
-    plugins: { "import-x": importX },
+    plugins: { "import-x": importX, "@stylistic": stylistic },
     rules: {
+      // Repo-wide vertical-spacing guardrail: every option here comes from a repo-wide --fix
+      // probe (see PR description) - each candidate beyond these three (always before return,
+      // always before block-like, always between exports/functions) fought a tight, deliberate
+      // idiom already in the codebase (guard-clause "check; return;" pairs, barrel re-export
+      // lists, comment-grouped one-line const groups) and was dropped.
+      "@stylistic/padding-line-between-statements": [
+        "error",
+        { blankLine: "always", prev: "block-like", next: "*" },
+        { blankLine: "always", prev: ["const", "let", "var"], next: "*" },
+        { blankLine: "any", prev: ["const", "let", "var"], next: ["const", "let", "var"] },
+      ],
       "@typescript-eslint/explicit-function-return-type": "error",
       "@typescript-eslint/no-explicit-any": "error",
       "@typescript-eslint/no-unused-vars": [
@@ -195,6 +207,10 @@ export default tseslint.config(
   },
   // Last — disables ESLint's own formatting rules (eslint-config-prettier) and
   // reports Prettier differences as `prettier/prettier` errors, so `lint` is the
-  // single formatting gate and `lint:fix` rewrites.
+  // single formatting gate and `lint:fix` rewrites. It also turns off
+  // @stylistic/lines-around-comment (a known Prettier conflict); left off here too -
+  // forcing it back on flags this codebase's field-level JSDoc idiom and comments
+  // that sit directly above the one object property or spread they explain, and
+  // neither has a matching allowlist option in the rule.
   eslintPluginPrettierRecommended,
 );
