@@ -57,9 +57,9 @@ tasks:
                      local sources with ScanCode — slow, occasional-run cost.
                      A package that times out or otherwise fails is skipped
                      and retried next run, never aborting the rest of the scan
-        SCANCODE_TIMEOUT  with INTENSIVE=1 — per-package ScanCode wall-clock
-                     limit in MINUTES; --scancode-timeout is passed only when
-                     set (default: 10)
+        PACKAGE_TIMEOUT_MINS  with INTENSIVE=1 — per-package wall-clock limit
+                     in MINUTES for each ScanCode invocation;
+                     --package-timeout-mins is passed only when set (default: 10)
         DOCKER       set (DOCKER=1) to build and scan the repository's
                      Dockerfiles and refresh the committed docker SBOM before
                      generating; needs a Docker daemon
@@ -70,7 +70,7 @@ tasks:
     deps: [install]
     cmds:
       - task: '{{if .DOCKER}}generate:docker{{end}}'
-      - mise x -- bun src/cli.ts generate --base-dir {{.USER_WORKING_DIR | q}} --repo-root {{.REPO_ROOT | q}} --output {{.OUTPUT | q}} --notices {{.NOTICES | q}}{{if .POLICY}} --policy {{.POLICY | q}}{{end}}{{if .CYCLONEDX}} --cyclonedx {{.CYCLONEDX | q}}{{end}}{{if .INTENSIVE}} --intensive{{end}}{{if .SCANCODE_TIMEOUT}} --scancode-timeout {{.SCANCODE_TIMEOUT | q}}{{end}}
+      - mise x -- bun src/cli.ts generate --base-dir {{.USER_WORKING_DIR | q}} --repo-root {{.REPO_ROOT | q}} --output {{.OUTPUT | q}} --notices {{.NOTICES | q}}{{if .POLICY}} --policy {{.POLICY | q}}{{end}}{{if .CYCLONEDX}} --cyclonedx {{.CYCLONEDX | q}}{{end}}{{if .INTENSIVE}} --intensive{{end}}{{if .PACKAGE_TIMEOUT_MINS}} --package-timeout-mins {{.PACKAGE_TIMEOUT_MINS | q}}{{end}}
 
   check:
     desc: 'CI gate — exit 0 clean, 1 policy violation (beats stale), 2 stale/missing output, 3+ tool error'

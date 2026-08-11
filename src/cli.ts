@@ -47,7 +47,7 @@ const USAGE =
   "[--policy <path>] [--output <path>] [--notices <path>] " +
   "[--cyclonedx <path>] [--dump-model <path>] [--base-dir <path>] " +
   "[--enrichment-cache <path>] [--scancode-cache <path>] [--intensive] " +
-  "[--scancode-timeout <minutes>] [--verbose]\n" +
+  "[--package-timeout-mins <minutes>] [--verbose]\n" +
   "           --intensive: assess the FULL package set with ScanCode, an " +
   "in-depth source scan that outranks the registry answer where present and " +
   "flags any disagreement as a conflict to resolve; skips versions already " +
@@ -55,8 +55,8 @@ const USAGE =
   "only; meant for occasional runs, not the default fast path). A per-package " +
   "scan that times out or otherwise fails is skipped and reported, never " +
   "aborting the rest of the run, and is retried on the next scan.\n" +
-  "           --scancode-timeout <minutes>: per-package wall-clock limit for " +
-  "each ScanCode invocation under --intensive (default: 10).\n" +
+  "           --package-timeout-mins <minutes>: per-package wall-clock limit " +
+  "for each ScanCode invocation under --intensive (default: 10).\n" +
   "  check    same flags as generate (minus --dump-model, minus --intensive) — regenerates in " +
   "memory and byte-compares every configured output; writes nothing\n" +
   "           exit codes: 0 clean, 1 policy violation (beats stale), " +
@@ -176,13 +176,14 @@ interface CliValues {
   intensive?: boolean;
   /**
    * generate --intensive's per-package wall-clock timeout, in MINUTES (the CLI's unit; converted to
-   * milliseconds in optionsFrom for GenerateOptions.scancodeTimeoutMs, matching
+   * milliseconds in optionsFrom for GenerateOptions.packageTimeoutMs, matching
    * IntensiveOptions.timeoutMs / DEFAULT_SCAN_TIMEOUT_MS internally). Minutes, not milliseconds, to
    * match this repo's own `timeout-minutes` convention (intensive-scan.yml) rather than exposing an
-   * internal millisecond unit at the operator boundary. Inert without --intensive: check never
-   * scans, so passing it there is accepted but unread.
+   * internal millisecond unit at the operator boundary. Named for the operator's mental model
+   * (running an intensive scan of packages), not the scanner behind it. Inert without --intensive:
+   * check never scans, so passing it there is accepted but unread.
    */
-  "scancode-timeout"?: string;
+  "package-timeout-mins"?: string;
 }
 
 /**
@@ -202,14 +203,14 @@ function discoverDefaultPolicy(values: CliValues): string | undefined {
 }
 
 /**
- * Parse --scancode-timeout's minutes string into milliseconds, or undefined when the flag is absent
- * - own-property-gated the same way --intensive is, so a default generate never sets
- * GenerateOptions.scancodeTimeoutMs and the tool default (DEFAULT_SCAN_TIMEOUT_MS) applies
+ * Parse --package-timeout-mins's minutes string into milliseconds, or undefined when the flag is
+ * absent - own-property-gated the same way --intensive is, so a default generate never sets
+ * GenerateOptions.packageTimeoutMs and the tool default (DEFAULT_SCAN_TIMEOUT_MS) applies
  * untouched. A non-positive or unparseable value is a config error (exit 3), same posture as the
  * mutually-exclusive-flags check above - caught before any target resolution or scan, never a
  * confusing failure minutes into a scan.
  */
-function parseScancodeTimeoutMs(raw: string | undefined): number | undefined {
+function parsePackageTimeoutMs(raw: string | undefined): number | undefined {
   if (raw === undefined) {
     return undefined;
   }
@@ -218,7 +219,7 @@ function parseScancodeTimeoutMs(raw: string | undefined): number | undefined {
 
   if (!Number.isFinite(minutes) || minutes <= 0) {
     fail(
-      `--scancode-timeout must be a positive number of minutes, got ${JSON.stringify(raw)}\n${USAGE}`,
+      `--package-timeout-mins must be a positive number of minutes, got ${JSON.stringify(raw)}\n${USAGE}`,
     );
   }
 
@@ -235,7 +236,7 @@ export function optionsFrom(values: CliValues): GenerateOptions {
   }
 
   const outputPath = values.output ?? "THIRD_PARTY_LICENSES.md";
-  const scancodeTimeoutMs = parseScancodeTimeoutMs(values["scancode-timeout"]);
+  const packageTimeoutMs = parsePackageTimeoutMs(values["package-timeout-mins"]);
 
   return {
     targetArg: values.target,
@@ -253,7 +254,7 @@ export function optionsFrom(values: CliValues): GenerateOptions {
     // Absent-not-false: own-property spread so a default generate never sets this key at all, and
     // check's runCheck rejection reads opts.intensive === true, never a coerced false.
     ...(values.intensive === true ? { intensive: true } : {}),
-    ...(scancodeTimeoutMs !== undefined ? { scancodeTimeoutMs } : {}),
+    ...(packageTimeoutMs !== undefined ? { packageTimeoutMs } : {}),
   };
 }
 
@@ -457,7 +458,7 @@ async function main(argv: string[]): Promise<void> {
         "docker-sbom": { type: "string" },
         "list-dockerfiles": { type: "boolean", default: false },
         intensive: { type: "boolean" },
-        "scancode-timeout": { type: "string" },
+        "package-timeout-mins": { type: "string" },
       },
       allowPositionals: true,
     }));

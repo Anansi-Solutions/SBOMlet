@@ -38,7 +38,7 @@ export const MAX_SCANCODE_OUTPUT_BYTES = 64 * 1024 * 1024;
  * Wall-clock timeout per package scan. ScanCode's OWN per-file `--timeout` stays at its 120s
  * default - deliberately not passed here, since it bounds a single file's matching, not the whole
  * run. 10 minutes is generous headroom for even a large vendored bundle, but not every bundle: the
- * CLI's `--scancode-timeout <minutes>` flag overrides this default per invocation
+ * CLI's `--package-timeout-mins <minutes>` flag overrides this default per invocation
  * (IntensiveOptions.timeoutMs), for a package or an environment that needs more.
  */
 export const DEFAULT_SCAN_TIMEOUT_MS = 10 * 60 * 1000;

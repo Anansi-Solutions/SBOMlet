@@ -337,7 +337,7 @@ later `generate` and `check` reuses the answer without scanning again.
 ### A slow or broken package never derails the backfill
 
 Each package is scanned under its own wall-clock limit
-(`--scancode-timeout`, 10 minutes by default). A package that exceeds it, or
+(`--package-timeout-mins`, 10 minutes by default). A package that exceeds it, or
 fails to scan for any other reason, is skipped and reported on stderr the same
 way an absent local install is — never memoized, so the next run retries it —
 and the assessment continues with the rest of the set. Every result already

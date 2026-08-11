@@ -40,7 +40,7 @@ jobs:
         # timeout: CI runners are slower than a local machine, and a package
         # that still exceeds this is skipped and retried next run rather than
         # aborting the whole job (the job ceiling above stays the backstop).
-        run: mise x -- task generate INTENSIVE=1 SCANCODE_TIMEOUT=30
+        run: mise x -- task generate INTENSIVE=1 PACKAGE_TIMEOUT_MINS=30
 
       - name: Open a PR with refreshed cache entries
         uses: actions/github-script@v8

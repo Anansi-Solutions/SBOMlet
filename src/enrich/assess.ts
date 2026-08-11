@@ -118,16 +118,10 @@ export async function assessPackages(
 }
 
 /**
- * Write the memo, MERGED with whatever is on disk at this instant - never a blind overwrite of this
- * run's in-memory Map. The scan loop can run for a long time (an hours-long backfill), so the
- * committed file is re-read right before the write: another writer (a concurrent run, a stale
- * checkout being refreshed behind this one) may have added entries since this run's OWN initial
- * read at the top of assessPackages. Unioning against that fresh read, rather than the stale
- * initial one, means this run's write can only ADD entries to what is on disk, never discard ones
- * it never saw. On a same-purl collision the IN-MEMORY entry wins: memo hits are skipped before a
- * scan is ever attempted (analyzeOne), so a collision means this run scanned a purl the on-disk
- * file has ALSO gained since - the freshest analysis for a purl this run actually visited beats a
- * disk entry it never touched.
+ * Write the memo merged with whatever is on disk at write time, never a blind overwrite of this
+ * run's in-memory Map. The merge only protects against clobbering entries present on disk at that
+ * instant; it is not cross-process synchronization, so two writers racing on the same purl can
+ * still each drop the other's addition. On a same-purl collision the in-memory entry wins.
  */
 function persistMemo(path: string, memo: Map<string, ScancodeMemoEntry>): void {
   const onDisk = readScancodeMemo(path);

@@ -360,7 +360,7 @@ describe("memo persistence across a fatal abort (assessPackages's finally-block 
   });
 });
 
-describe("merge-on-write: the committed memo write NEVER overrides pre-existing data", () => {
+describe("merge-on-write: unrelated entries always survive; on a same-purl collision this run wins", () => {
   let repoDir: string | undefined;
   let memoDir: string | undefined;
 
@@ -538,9 +538,10 @@ describe("merge-on-write: the committed memo write NEVER overrides pre-existing 
   });
 });
 
-describe("--scancode-timeout end-to-end: CLI minutes -> GenerateOptions ms -> IntensiveOptions -> execTool spawn opts", () => {
+describe("--package-timeout-mins end-to-end: CLI minutes -> GenerateOptions ms -> IntensiveOptions -> execTool spawn opts", () => {
   let repoDir: string | undefined;
   let capturedTimeoutMs: (number | undefined)[] = [];
+  let scanTempDirs: string[] = [];
 
   const BAIT_SBOM = {
     bomFormat: "CycloneDX",
@@ -561,6 +562,8 @@ describe("--scancode-timeout end-to-end: CLI minutes -> GenerateOptions ms -> In
       ...REAL_CDXGEN,
       collectWithCdxgen: async (): Promise<cdxgenModule.CollectorSbomFile> => {
         const tempDir = mkdtempSync(join(tmpdir(), "resilience-timeout-scan-"));
+
+        scanTempDirs.push(tempDir);
         const sbomPath = join(tempDir, "bom.json");
 
         writeFileSync(sbomPath, JSON.stringify(BAIT_SBOM));
@@ -572,6 +575,11 @@ describe("--scancode-timeout end-to-end: CLI minutes -> GenerateOptions ms -> In
   afterAll(() => {
     mock.module("../src/collectors/cdxgen", () => REAL_CDXGEN);
     mock.module("../src/collectors/exec", () => REAL_EXEC);
+    for (const dir of scanTempDirs) {
+      rmSync(dir, { recursive: true, force: true });
+    }
+
+    scanTempDirs = [];
   });
 
   afterEach(() => {
@@ -622,7 +630,7 @@ describe("--scancode-timeout end-to-end: CLI minutes -> GenerateOptions ms -> In
     const cacheDir = mkdtempSync(join(tmpdir(), "resilience-timeout-cache-"));
 
     try {
-      const options = optionsFrom({ intensive: true, "scancode-timeout": "42" });
+      const options = optionsFrom({ intensive: true, "package-timeout-mins": "42" });
 
       await runGenerate({
         ...options,
@@ -646,7 +654,7 @@ describe("--scancode-timeout end-to-end: CLI minutes -> GenerateOptions ms -> In
     }
   });
 
-  test("--intensive WITHOUT --scancode-timeout keeps the tool default (10 minutes) - the flag is absent-not-zero, never coerced", async () => {
+  test("--intensive WITHOUT --package-timeout-mins keeps the tool default (10 minutes) - the flag is absent-not-zero, never coerced", async () => {
     mock.module("../src/collectors/exec", () => ({
       ...REAL_EXEC,
       execTool: (
@@ -674,7 +682,7 @@ describe("--scancode-timeout end-to-end: CLI minutes -> GenerateOptions ms -> In
     try {
       const options = optionsFrom({ intensive: true });
 
-      expect(Object.prototype.hasOwnProperty.call(options, "scancodeTimeoutMs")).toBe(false);
+      expect(Object.prototype.hasOwnProperty.call(options, "packageTimeoutMs")).toBe(false);
 
       await runGenerate({
         ...options,
