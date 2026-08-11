@@ -73,6 +73,7 @@ export function serializeScancodeMemo(memo: Map<string, ScancodeMemoEntry>): str
     version: MEMO_VERSION,
     entries: Object.fromEntries(memo),
   };
+
   return toSortedJson(file);
 }
 
@@ -89,7 +90,10 @@ export function putMemoEntry(
   entry: ScancodeMemoEntry,
   now: () => Date = defaultNow,
 ): void {
-  if (memo.has(purl)) return;
+  if (memo.has(purl)) {
+    return;
+  }
+
   memo.set(purl, {
     ...entry,
     ...(entry.scannedAt === undefined ? { scannedAt: now().toISOString() } : {}),

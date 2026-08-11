@@ -55,15 +55,18 @@ interface LockDirOptions {
 function makeLockDir(lockText: string, options: LockDirOptions = {}): string {
   const { modulesJson, terraformDir = "none" } = options;
   const dir = mkdtempSync(join(tmpdir(), "licenses-cov-"));
+
   tempDirs.push(dir);
   writeFileSync(join(dir, ".terraform.lock.hcl"), lockText);
   if (modulesJson !== undefined) {
     const modulesDir = join(dir, ".terraform", "modules");
+
     mkdirSync(modulesDir, { recursive: true });
     writeFileSync(join(modulesDir, "modules.json"), modulesJson);
   } else if (terraformDir === "providers-only") {
     mkdirSync(join(dir, ".terraform", "providers"), { recursive: true });
   }
+
   return dir;
 }
 
@@ -98,6 +101,7 @@ const LOCAL_ONLY_MODULES_JSON = JSON.stringify({
 describe("coverageSkipReason — terraform arm (filesystem-signal gate)", () => {
   test("ABSENT modules.json + no `.terraform/` dir routes to the collect path (undefined, not a skip)", () => {
     const dir = makeLockDir(PROVIDER_LOCK); // no modules.json, no .terraform/
+
     expect(coverageSkipReason(".terraform.lock.hcl", PROVIDER_LOCK, dir)).toBeUndefined();
   });
 
@@ -105,11 +109,13 @@ describe("coverageSkipReason — terraform arm (filesystem-signal gate)", () => 
     // The providers-only finding-B shape: tofu init wrote `.terraform/providers/` but
     // no modules.json because there were no module calls to resolve.
     const dir = makeLockDir(PROVIDER_LOCK, { terraformDir: "providers-only" });
+
     expect(coverageSkipReason(".terraform.lock.hcl", PROVIDER_LOCK, dir)).toBeUndefined();
   });
 
   test("ABSENT modules.json + no `.terraform/` dir (init never ran) → route to collect (undefined → loud-fail at collector)", () => {
     const dir = makeLockDir(PROVIDER_LOCK, { terraformDir: "none" });
+
     expect(coverageSkipReason(".terraform.lock.hcl", PROVIDER_LOCK, dir)).toBeUndefined();
   });
 
@@ -118,6 +124,7 @@ describe("coverageSkipReason — terraform arm (filesystem-signal gate)", () => 
       modulesJson: LOCAL_ONLY_MODULES_JSON,
     });
     const reason = coverageSkipReason(".terraform.lock.hcl", ZERO_PROVIDER_LOCK, dir);
+
     expect(reason).toContain("no providers and no external modules");
   });
 
@@ -125,6 +132,7 @@ describe("coverageSkipReason — terraform arm (filesystem-signal gate)", () => 
     const dir = makeLockDir(PROVIDER_LOCK, {
       modulesJson: LOCAL_ONLY_MODULES_JSON,
     });
+
     expect(coverageSkipReason(".terraform.lock.hcl", PROVIDER_LOCK, dir)).toBeUndefined();
   });
 
@@ -132,12 +140,14 @@ describe("coverageSkipReason — terraform arm (filesystem-signal gate)", () => 
     const dir = makeLockDir(ZERO_PROVIDER_LOCK, {
       modulesJson: EXTERNAL_MODULES_JSON,
     });
+
     expect(coverageSkipReason(".terraform.lock.hcl", ZERO_PROVIDER_LOCK, dir)).toBeUndefined();
   });
 
   test("an empty/whitespace lock is the generic empty skip before the terraform arm", () => {
     const dir = makeLockDir("   \n");
     const reason = coverageSkipReason(".terraform.lock.hcl", "   \n", dir);
+
     expect(reason).toContain("empty");
   });
 
@@ -148,6 +158,7 @@ describe("coverageSkipReason — terraform arm (filesystem-signal gate)", () => 
       terraformDir: "providers-only",
     });
     const reason = coverageSkipReason(".terraform.lock.hcl", ZERO_PROVIDER_LOCK, dir);
+
     expect(reason).toContain("no providers and no external modules");
   });
 
@@ -157,6 +168,7 @@ describe("coverageSkipReason — terraform arm (filesystem-signal gate)", () => 
   // loud throw), NOT a raw uncaught EISDIR at the coverage read.
   test("a directory-named modules.json is treated as ABSENT → routed to the gate (throws, not EISDIR)", () => {
     const dir = mkdtempSync(join(tmpdir(), "licenses-cov-"));
+
     tempDirs.push(dir);
     writeFileSync(join(dir, ".terraform.lock.hcl"), PROVIDER_LOCK);
     // providers/ + modules/ exist; modules.json is a DIRECTORY (non-regular).
@@ -174,13 +186,16 @@ describe("coverageSkipReason — terraform arm (filesystem-signal gate)", () => 
   // modules.json, mirroring the collector and the bun.lock precedent.
   test("an oversized modules.json is rejected by the size gate at the coverage read (before any parse)", () => {
     const dir = mkdtempSync(join(tmpdir(), "licenses-cov-"));
+
     tempDirs.push(dir);
     writeFileSync(join(dir, ".terraform.lock.hcl"), PROVIDER_LOCK);
     const modulesDir = join(dir, ".terraform", "modules");
+
     mkdirSync(modulesDir, { recursive: true });
     // Sparse file one byte over the cap — no 32 MiB write, no parse reached.
     const path = join(modulesDir, "modules.json");
     const fd = openSync(path, "w");
+
     ftruncateSync(fd, MAX_TERRAFORM_LOCK_BYTES + 1);
     closeSync(fd);
     expect(() => coverageSkipReason(".terraform.lock.hcl", PROVIDER_LOCK, dir)).toThrow(
@@ -192,6 +207,7 @@ describe("coverageSkipReason — terraform arm (filesystem-signal gate)", () => 
 describe("classifyCoverage — terraform filesystem-signal loud-fail routing", () => {
   test("absent modules.json + no `.terraform/` dir is NOT skip-classified to zero", () => {
     const dir = makeLockDir(PROVIDER_LOCK); // no modules.json, no .terraform/
+
     // componentCount 0 here is irrelevant: init never ran, so it must route to
     // the loud zero-component throw via the collector, never a silent skip.
     expect(() => classifyCoverage("infra", ".terraform.lock.hcl", PROVIDER_LOCK, 0, dir)).toThrow(
@@ -203,6 +219,7 @@ describe("classifyCoverage — terraform filesystem-signal loud-fail routing", (
     const dir = makeLockDir(PROVIDER_LOCK, {
       modulesJson: EXTERNAL_MODULES_JSON,
     });
+
     expect(classifyCoverage("infra", ".terraform.lock.hcl", PROVIDER_LOCK, 2, dir)).toBe("include");
   });
 
@@ -210,6 +227,7 @@ describe("classifyCoverage — terraform filesystem-signal loud-fail routing", (
     // The collector collects providers-only when `.terraform/` exists but no
     // modules.json was written; the coverage policy must include it, not throw.
     const dir = makeLockDir(PROVIDER_LOCK, { terraformDir: "providers-only" });
+
     expect(classifyCoverage("infra", ".terraform.lock.hcl", PROVIDER_LOCK, 1, dir)).toBe("include");
   });
 
@@ -217,6 +235,7 @@ describe("classifyCoverage — terraform filesystem-signal loud-fail routing", (
     const dir = makeLockDir(ZERO_PROVIDER_LOCK, {
       modulesJson: LOCAL_ONLY_MODULES_JSON,
     });
+
     expect(classifyCoverage("infra", ".terraform.lock.hcl", ZERO_PROVIDER_LOCK, 0, dir)).toBe(
       "skip",
     );
@@ -325,6 +344,7 @@ describe("coverageSkipReason — maven.sbom.json arm (strict === 0)", () => {
         },
       },
     });
+
     expect(coverageSkipReason("maven.sbom.json", doc)).toBe(
       "maven.sbom.json has no third-party entries (no components other than its own root, e.g. the reactor aggregator pom)",
     );

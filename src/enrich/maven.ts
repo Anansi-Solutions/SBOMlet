@@ -34,6 +34,7 @@ const NON_STANDARD_SENTINEL = "non-standard";
  */
 export function mavenVersionWithoutQualifiers(version: string): string {
   const qmark = version.indexOf("?");
+
   return qmark === -1 ? version : version.slice(0, qmark);
 }
 
@@ -55,6 +56,7 @@ export function depsDevVersionUrl(encodedName: string, version: string): string 
   const gav = encodeURIComponent(`${group}:${artifact}`);
   const versionOnly = mavenVersionWithoutQualifiers(version);
   const ver = encodeURIComponent(decodeURIComponent(versionOnly));
+
   return `${DEPS_DEV_API_HOST}/v3/systems/MAVEN/packages/${gav}/versions/${ver}`;
 }
 
@@ -75,7 +77,10 @@ export interface MavenResolution {
  */
 export function resolveMavenLicenses(doc: unknown): MavenResolution | null {
   const parsed = narrowDepsDevVersion(doc);
-  if (parsed === undefined || parsed.licenses === undefined) return null;
+
+  if (parsed === undefined || parsed.licenses === undefined) {
+    return null;
+  }
 
   const raws = [
     ...new Set(
@@ -84,6 +89,10 @@ export function resolveMavenLicenses(doc: unknown): MavenResolution | null {
         .filter((license) => license !== "" && license.toLowerCase() !== NON_STANDARD_SENTINEL),
     ),
   ].sort(compareCodeUnits);
-  if (raws.length === 0) return null;
+
+  if (raws.length === 0) {
+    return null;
+  }
+
   return { raws, via: "deps-dev-licenses", confidence: "high" };
 }

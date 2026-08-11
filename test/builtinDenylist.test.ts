@@ -39,6 +39,7 @@ describe("builtin source-available deny defaults", () => {
   test("a source-available license is denied with NO policy authored", () => {
     for (const rule of BUILTIN_DENY_RULES) {
       const hit = denyRuleFor(EMPTY_POLICY, rule.pattern, "some-pkg");
+
       expect(hit).toBeDefined();
       expect(hit?.ruleId).toBe(BUILTIN_DENY_RULE_ID);
     }
@@ -56,6 +57,7 @@ describe("builtin source-available deny defaults", () => {
 
   test("an OR finding denied on every branch IS denied (union across builtins)", () => {
     const hit = denyRuleFor(EMPTY_POLICY, "BUSL-1.1 OR SSPL-1.0", "some-pkg");
+
     expect(hit).toBeDefined();
     expect(hit?.ruleId).toBe(BUILTIN_DENY_RULE_ID);
   });
@@ -73,6 +75,7 @@ describe("builtin source-available deny defaults", () => {
       ],
     };
     const hit = denyRuleFor(policy, "BUSL-1.1", "some-pkg");
+
     expect(hit?.ruleId).toBe("denied[0]");
   });
 });

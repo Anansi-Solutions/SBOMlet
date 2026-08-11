@@ -16,11 +16,19 @@ import type { PackageEntry } from "../model/dependencies";
  */
 export function isUnknownLicense(pkg: PackageEntry): boolean {
   const finding = pkg.finding;
+
   if (finding !== undefined) {
-    if (finding.confidence === "imprecise") return false;
-    if (finding.expression === null) return true;
+    if (finding.confidence === "imprecise") {
+      return false;
+    }
+
+    if (finding.expression === null) {
+      return true;
+    }
+
     return electedIsRefOnly(finding.elected);
   }
+
   return pkg.licenseClaims.length === 0;
 }
 
@@ -30,7 +38,10 @@ export function isUnknownLicense(pkg: PackageEntry): boolean {
  * mirrors the policy engine's never-throws posture rather than crashing report generation.
  */
 function electedIsRefOnly(elected: string | null): boolean {
-  if (elected === null) return false;
+  if (elected === null) {
+    return false;
+  }
+
   try {
     // The narrower allLeavesAreRefs, not hasRefLeaf: an AND that keeps a known conjunct alongside a
     // ref carries real content and must not count as unknown here.

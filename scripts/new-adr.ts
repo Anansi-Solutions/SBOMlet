@@ -14,6 +14,7 @@ const ADR_DIR = join(import.meta.dir, "..", "docs", "explanation", "adr");
 const TEMPLATE = join(ADR_DIR, "0000-template.md");
 
 const title = (process.argv[2] ?? "").trim();
+
 if (title === "") {
   console.error('A title is required: task adr:new TITLE="Short decision title"');
   process.exit(2);

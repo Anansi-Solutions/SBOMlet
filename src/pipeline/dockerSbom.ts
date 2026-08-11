@@ -42,8 +42,14 @@ import { sanitizeForLog } from "./summary";
  * Guards the --image lane, whose refs are passed straight through to syft/docker as operands.
  */
 function isSafeImageRef(ref: string): boolean {
-  if (ref.trim() === "") return false;
-  if (ref.startsWith("-")) return false;
+  if (ref.trim() === "") {
+    return false;
+  }
+
+  if (ref.startsWith("-")) {
+    return false;
+  }
+
   return true;
 }
 
@@ -119,9 +125,11 @@ export function resolveDiscoveredImages(
     `discovered ${build.length} Dockerfile(s) under ${sanitizeForLog(repoRoot)}:`,
     ...build.map((b) => `  ${sanitizeForLog(b.identity)} -> ${b.tag}`),
   ];
+
   for (const id of ignored) {
     summaryParts.push(`  ${sanitizeForLog(id)}: ignored ([docker] ignore)`);
   }
+
   summaryParts.push(
     build.length > 0
       ? `build set (${build.length}): ${build.map((b) => sanitizeForLog(b.identity)).join(", ")}`
@@ -154,6 +162,7 @@ export function dockerfileListing(repoRoot: string, opts: DockerfileListingOptio
     ...(opts.excludes !== undefined ? { excludes: opts.excludes } : {}),
     dockerIgnore: opts.dockerIgnore ?? [],
   });
+
   return dockerfiles.map((d) => d.identity);
 }
 
@@ -201,8 +210,12 @@ export function resolveTargetedDockerfiles(
 
   const seen = new Set<string>();
   const build: DockerfileBuild[] = [];
+
   for (const df of sorted) {
-    if (seen.has(df.identity)) continue;
+    if (seen.has(df.identity)) {
+      continue;
+    }
+
     seen.add(df.identity);
     build.push({
       identity: df.identity,
@@ -215,6 +228,7 @@ export function resolveTargetedDockerfiles(
     `building ${build.length} targeted Dockerfile(s):`,
     ...build.map((b) => `  ${sanitizeForLog(b.identity)} -> ${b.tag}`),
   ];
+
   summaryParts.push(
     build.length > 0
       ? `build set (${build.length}): ${build.map((b) => sanitizeForLog(b.identity)).join(", ")}`
@@ -231,11 +245,13 @@ function dockerIgnoreFromPolicy(
 ): readonly string[] {
   const policyFile = resolveFrom(baseDir, policyPath);
   let policyText: string;
+
   try {
     policyText = readFileSync(policyFile, "utf8");
   } catch {
     throw new Error(`policy file is missing or unreadable: expected ${policyFile}`);
   }
+
   // parsePolicy throws TomlError/PolicyError verbatim - same fail-fast posture as the generate
   // path; an invalid policy aborts before any scan.
   return parsePolicy(policyText).docker?.ignore ?? [];
@@ -316,9 +332,11 @@ export async function buildImages(
   exec: ExecFn = execTool,
 ): Promise<string[]> {
   const tags: string[] = [];
+
   for (const identity of identities) {
     tags.push(await buildImage(identity, exec, { verbose, cwd }));
   }
+
   return tags;
 }
 
@@ -335,6 +353,7 @@ async function scanAndWrite(
   verbose: boolean,
 ): Promise<void> {
   const { doc } = await collectDockerOsSbom(images, { verbose });
+
   writeArtifact(outputPath, doc);
   process.stderr.write(`wrote ${sanitizeForLog(outputPath)} (${images.length} image(s) scanned)\n`);
 }
@@ -355,6 +374,7 @@ async function runTargetedBuildLane(
     path: resolveFrom(opts.baseDir, p),
   }));
   const { build, summary } = resolveTargetedDockerfiles(targeted);
+
   process.stderr.write(`${summary}\n`);
   // No cwd: an explicit --dockerfile path is relative to the caller's own cwd, so the build must
   // resolve it against process.cwd(), not any repo anchor.
@@ -391,6 +411,7 @@ async function runDiscoveryBuildLane(
     ...(opts.excludes !== undefined ? { excludes: opts.excludes } : {}),
     dockerIgnore,
   });
+
   process.stderr.write(`${summary}\n`);
   if (build.length === 0) {
     throw new Error(
@@ -399,6 +420,7 @@ async function runDiscoveryBuildLane(
         `(${ignored.length} ignored); nothing to scan`,
     );
   }
+
   // Anchor the buildx cwd to the resolved repo root: discovery identities are repo-relative, so the
   // repo-relative -f/context in buildImageArgs resolve against repoRoot regardless of the tool's
   // process cwd. Without this a consumer invoking from a subdir (e.g. tools/sbomlet) hits "unable
@@ -426,6 +448,7 @@ async function runDiscoveryBuildLane(
  */
 async function runImageLane(opts: GenerateDockerSbomOptions, outputPath: string): Promise<void> {
   const requested = safeLiveScanImages(opts.images ?? []);
+
   if (requested.length === 0) {
     throw new Error(
       "no safe image refs to scan — every --image ref was empty, " +
@@ -433,6 +456,7 @@ async function runImageLane(opts: GenerateDockerSbomOptions, outputPath: string)
         "can never be parsed by syft/docker as a flag)",
     );
   }
+
   process.stderr.write(
     `scanning ${requested.length} image(s): ${requested.map(sanitizeForLog).join(", ")}\n`,
   );
@@ -463,6 +487,7 @@ export async function runGenerateDockerSbom(opts: GenerateDockerSbomOptions): Pr
     if (opts.repoRoot === undefined) {
       throw new Error("--list-dockerfiles requires a repo root");
     }
+
     const repoRoot = resolveFrom(opts.baseDir, opts.repoRoot);
     const dockerIgnore =
       opts.policyPath !== undefined ? dockerIgnoreFromPolicy(opts.policyPath, opts.baseDir) : [];
@@ -471,9 +496,11 @@ export async function runGenerateDockerSbom(opts: GenerateDockerSbomOptions): Pr
       ...(opts.excludes !== undefined ? { excludes: opts.excludes } : {}),
       dockerIgnore,
     });
+
     for (const identity of identities) {
       process.stdout.write(`${identity}\n`);
     }
+
     return;
   }
 

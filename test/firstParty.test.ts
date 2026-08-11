@@ -210,6 +210,7 @@ describe("pythonThirdPartyEntryCount — poetry/uv [[package]] tables", () => {
       'type = "directory"',
       'url = "../local-dep"',
     ].join("\n");
+
     expect(pythonThirdPartyEntryCount(lockfile)).toBe(1);
   });
 });
@@ -315,6 +316,7 @@ describe("nugetThirdPartyEntryCount — entries with type !== 'Project' across a
         },
       },
     });
+
     expect(nugetThirdPartyEntryCount(lock)).toBe(1);
   });
 
@@ -326,6 +328,7 @@ describe("nugetThirdPartyEntryCount — entries with type !== 'Project' across a
         "net9.0": { "Pkg.B": { type: "Direct", resolved: "2.0.0" } },
       },
     });
+
     expect(nugetThirdPartyEntryCount(lock)).toBe(2);
   });
 
@@ -589,6 +592,7 @@ describe("yarnWorkspaceMembers — @workspace: resolution body lines", () => {
     ].join("\n");
 
     const members = yarnWorkspaceMembers(lockfile);
+
     expect(members).toEqual([{ name: "backend", relPath: "backend", hasDependencies: false }]);
     expect(members.some((m) => m.relPath === "^")).toBe(false);
   });
@@ -639,6 +643,7 @@ describe("yarnWorkspaceMembers — @workspace: resolution body lines", () => {
     ].join("\n");
 
     const members = yarnWorkspaceMembers(lockfile);
+
     expect(members.find((m) => m.name === "frontend")?.hasDependencies).toBe(false);
   });
 
@@ -881,6 +886,7 @@ describe("mavenThirdPartyEntryCount — components count excluding the doc's own
         },
       ],
     });
+
     expect(mavenThirdPartyEntryCount(doc)).toBe(1);
   });
 
@@ -909,6 +915,7 @@ describe("mavenThirdPartyEntryCount — components count excluding the doc's own
       metadata: { component: { purl: "pkg:npm/not-maven-at-all@1.0.0" } },
       components: [],
     });
+
     expect(mavenThirdPartyEntryCount(doc)).toBeUndefined();
   });
 
@@ -921,16 +928,19 @@ describe("mavenThirdPartyEntryCount — components count excluding the doc's own
         },
       },
     });
+
     expect(mavenThirdPartyEntryCount(doc)).toBe(0);
   });
 
   test("missing metadata.component.purl entirely -> undefined", () => {
     const doc = JSON.stringify({ bomFormat: "CycloneDX", components: [] });
+
     expect(mavenThirdPartyEntryCount(doc)).toBeUndefined();
   });
 
   test("counter/collector agreement: a doc missing bomFormat is never a positively-determined zero (15-05 finding class)", () => {
     const doc = JSON.stringify({ components: [] });
+
     expect(mavenThirdPartyEntryCount(doc)).toBeUndefined();
   });
 });

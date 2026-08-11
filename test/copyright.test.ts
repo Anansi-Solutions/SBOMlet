@@ -106,9 +106,11 @@ describe("extractCopyrightLines — dedup and cap", () => {
 
   test("a pathological file with 50 distinct copyright lines caps at 20", () => {
     const lines: string[] = [];
+
     for (let i = 0; i < 50; i++) {
       lines.push(`Copyright (c) ${1970 + i} Holder ${i}`);
     }
+
     const result = extractCopyrightLines(lines.join("\n"));
 
     expect(result.length).toBe(20);
@@ -122,12 +124,15 @@ describe("extractCopyrightLines — dedup and cap", () => {
     // dedup-while-collecting the duplicates fill the 20-line cap and the
     // distinct lines are dropped.
     const lines: string[] = [];
+
     for (let i = 0; i < 30; i++) {
       lines.push("Copyright (c) 2015 Repeated Header Corp");
     }
+
     for (let i = 0; i < 5; i++) {
       lines.push(`Copyright (c) ${2000 + i} Distinct Holder ${i}`);
     }
+
     const result = extractCopyrightLines(lines.join("\n"));
 
     expect(result.length).toBe(6);

@@ -16,11 +16,13 @@ export const UnknownRecord = type("Record<string, unknown>").narrow(
  */
 export function recordOf(value: unknown): Record<string, unknown> | undefined {
   const result = UnknownRecord(value);
+
   return result instanceof type.errors ? undefined : result;
 }
 
 /** Option-returning string narrow - a non-string yields undefined. */
 export function stringOf(value: unknown): string | undefined {
   const result = type("string")(value);
+
   return result instanceof type.errors ? undefined : result;
 }

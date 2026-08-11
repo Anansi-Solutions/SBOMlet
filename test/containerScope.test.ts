@@ -29,6 +29,7 @@ describe("applyContainerScopes — system ecosystems stay routine", () => {
       const pkg = entry({ purl, name: "sys-pkg", version: "1.0.0" });
       const model: CanonicalDependencies = { packages: [pkg] };
       const result = applyContainerScopes(model, new Set());
+
       expect(result.packages[0]!.scope).toBe("os");
       expect(result.packages[0]!.occurrences).toEqual(pkg.occurrences);
     }
@@ -48,6 +49,7 @@ describe("applyContainerScopes — application ecosystems re-key to app", () => 
       const pkg = entry({ purl, name: "app-pkg", version: "1.0.0" });
       const model: CanonicalDependencies = { packages: [pkg] };
       const result = applyContainerScopes(model, new Set());
+
       expect(result.packages[0]!.scope).toBe("app");
     }
   });
@@ -59,6 +61,7 @@ describe("applyContainerScopes — application ecosystems re-key to app", () => 
       version: "1.0.0",
     });
     const result = applyContainerScopes({ packages: [pkg] }, new Set());
+
     expect(result.packages[0]!.scope).toBe("app");
     expect(result.packages[0]!.occurrences[0]!.isDevDependency).toBe(false);
   });
@@ -70,6 +73,7 @@ describe("applyContainerScopes — application ecosystems re-key to app", () => 
       version: "1.0.0",
     });
     const result = applyContainerScopes({ packages: [pkg] }, new Set([API_CONTAINER]));
+
     expect(result.packages[0]!.scope).toBe("app");
     expect(result.packages[0]!.occurrences[0]!.isDevDependency).toBe(true);
   });
@@ -86,6 +90,7 @@ describe("applyContainerScopes — application ecosystems re-key to app", () => 
     });
     const result = applyContainerScopes({ packages: [pkg] }, new Set([BUILD_CONTAINER]));
     const [atApi, atBuild] = result.packages[0]!.occurrences;
+
     expect(atApi!.target).toBe(API_CONTAINER);
     expect(atApi!.isDevDependency).toBe(false);
     expect(atBuild!.target).toBe(BUILD_CONTAINER);
@@ -103,6 +108,7 @@ describe("applyContainerScopes — application ecosystems re-key to app", () => 
       ],
     });
     const result = applyContainerScopes({ packages: [pkg] }, new Set());
+
     expect(result.packages[0]!.scope).toBe("app");
     for (const occurrence of result.packages[0]!.occurrences) {
       expect(occurrence.isDevDependency).toBe(false);
@@ -124,8 +130,10 @@ describe("applyContainerScopes — an already-app package still dev-marks its do
       scope: "app",
     };
     const result = applyContainerScopes({ packages: [pkg] }, new Set([BUILD_CONTAINER]));
+
     expect(result.packages[0]!.scope).toBe("app");
     const [atApp, atBuild] = result.packages[0]!.occurrences;
+
     expect(atApp!.target).toBe("apps/web");
     expect(atApp!.isDevDependency).toBe(false);
     expect(atBuild!.target).toBe(BUILD_CONTAINER);
@@ -142,6 +150,7 @@ describe("applyContainerScopes — an already-app package still dev-marks its do
       scope: "app",
     };
     const result = applyContainerScopes({ packages: [pkg] }, new Set());
+
     expect(result.packages[0]).toBe(pkg);
   });
 });
@@ -161,6 +170,7 @@ describe("applyContainerScopes — determinism", () => {
     const developmentContainers = new Set([BUILD_CONTAINER]);
     const first = applyContainerScopes(model, developmentContainers);
     const second = applyContainerScopes(model, developmentContainers);
+
     expect(second).toEqual(first);
   });
 });
@@ -174,6 +184,7 @@ describe("applyContainerScopes — os-scope-implies-docker-only invariant", () =
       occurrences: [{ target: "apps/web", isDevDependency: false }],
     });
     const model: CanonicalDependencies = { packages: [pkg] };
+
     expect(() => applyContainerScopes(model, new Set())).toThrow(
       /pkg:apk\/alpine\/musl@1\.2\.4-r2/,
     );
@@ -191,6 +202,7 @@ describe("applyContainerScopes — os-scope-implies-docker-only invariant", () =
       ],
     });
     const model: CanonicalDependencies = { packages: [pkg] };
+
     expect(() => applyContainerScopes(model, new Set())).toThrow(/apps\/web/);
   });
 
@@ -205,6 +217,7 @@ describe("applyContainerScopes — os-scope-implies-docker-only invariant", () =
       version: "1.2.4-r2",
     });
     const model: CanonicalDependencies = { packages: [pkg] };
+
     expect(() => applyContainerScopes(model, new Set())).not.toThrow();
   });
 });

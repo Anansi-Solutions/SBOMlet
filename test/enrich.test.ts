@@ -47,6 +47,7 @@ function knownSpdxIds(): Set<string> {
   const dataDir = join(import.meta.dir, "..", "node_modules", "spdx-license-ids");
   const current = JSON.parse(readFileSync(join(dataDir, "index.json"), "utf8")) as string[];
   const deprecated = JSON.parse(readFileSync(join(dataDir, "deprecated.json"), "utf8")) as string[];
+
   return new Set([...current, ...deprecated]);
 }
 
@@ -91,6 +92,7 @@ describe("trove classifier -> SPDX map", () => {
   test("every SPDX value in the map is a real SPDX id (typo-proof)", () => {
     const known = knownSpdxIds();
     const typos = TROVE_TO_SPDX.map(([, spdx]) => spdx).filter((spdx) => !known.has(spdx));
+
     expect(typos).toEqual([]);
   });
 });
@@ -104,6 +106,7 @@ describe("PyPI response narrow (tolerant)", () => {
         classifiers: ["License :: OSI Approved :: MIT License", "Programming Language :: Python"],
       },
     });
+
     expect(info?.licenseExpression).toBe("MIT");
     expect(info?.license).toBe("MIT License");
     expect(info?.classifiers).toEqual([
@@ -114,6 +117,7 @@ describe("PyPI response narrow (tolerant)", () => {
 
   test("info: null narrows to undefined fields, never throws", () => {
     const info = narrowPypiResponse({ info: null });
+
     expect(info).toBeDefined();
     expect(info?.licenseExpression).toBeUndefined();
     expect(info?.license).toBeUndefined();
@@ -128,6 +132,7 @@ describe("PyPI response narrow (tolerant)", () => {
         classifiers: "not-an-array",
       },
     });
+
     expect(info?.licenseExpression).toBeUndefined();
     expect(info?.license).toBeUndefined();
     expect(info?.classifiers).toBeUndefined();
@@ -139,6 +144,7 @@ describe("PyPI response narrow (tolerant)", () => {
         classifiers: ["License :: OSI Approved :: MIT License", 5, null],
       },
     });
+
     expect(info?.classifiers).toEqual(["License :: OSI Approved :: MIT License"]);
   });
 
@@ -158,6 +164,7 @@ describe("npm packument narrow (tolerant)", () => {
         "1.0.0": { license: "Apache-2.0" },
       },
     });
+
     expect(doc?.license).toBe("ISC");
     expect(doc?.versions?.["1.2.3"]?.license).toBe("MIT");
   });
@@ -167,6 +174,7 @@ describe("npm packument narrow (tolerant)", () => {
       license: { type: "MIT" },
       licenses: [{ type: "MIT" }, { type: "Apache-2.0" }],
     });
+
     expect(doc?.licenseObject?.type).toBe("MIT");
     expect(doc?.licensesArray?.map((l) => l.type)).toEqual(["MIT", "Apache-2.0"]);
   });
@@ -178,6 +186,7 @@ describe("npm packument narrow (tolerant)", () => {
         "2.0.0": { licenses: [{ type: "MIT" }, { type: "Apache-2.0" }] },
       },
     });
+
     expect(doc?.versions?.["1.0.0"]?.licenseObject?.type).toBe("ISC");
     expect(doc?.versions?.["2.0.0"]?.licensesArray?.map((l) => l.type)).toEqual([
       "MIT",
@@ -187,6 +196,7 @@ describe("npm packument narrow (tolerant)", () => {
 
   test("versions: null narrows to absent, never throws", () => {
     const doc = narrowNpmPackument({ versions: null, license: "MIT" });
+
     expect(doc).toBeDefined();
     expect(doc?.versions).toBeUndefined();
     expect(doc?.license).toBe("MIT");
@@ -196,6 +206,7 @@ describe("npm packument narrow (tolerant)", () => {
     const doc = narrowNpmPackument({
       versions: { "1.0.0": 5, "2.0.0": { license: "MIT" } },
     });
+
     expect(doc?.versions?.["1.0.0"]?.license).toBeUndefined();
     expect(doc?.versions?.["2.0.0"]?.license).toBe("MIT");
   });
@@ -219,6 +230,7 @@ describe("mapLimit", () => {
       active -= 1;
       return n * 2;
     });
+
     expect(peak).toBeLessThanOrEqual(3);
     expect(results).toEqual(items.map((n) => n * 2));
   });
@@ -229,12 +241,14 @@ describe("mapLimit", () => {
       await new Promise((res) => setTimeout(res, n * 10));
       return `v${n}`;
     });
+
     expect(results).toEqual(["v3", "v1", "v2"]);
   });
 
   test("limit greater than item count spawns no idle over-workers", async () => {
     let started = 0;
     const items = [1, 2];
+
     await mapLimit(items, 8, async (n) => {
       started += 1;
       return n;
@@ -247,6 +261,7 @@ describe("fetchJson", () => {
   type FetchImpl = (url: string, init?: RequestInit) => Promise<Response>;
   function withFetch<T>(impl: FetchImpl, run: () => Promise<T>): Promise<T> {
     const orig = globalThis.fetch;
+
     globalThis.fetch = impl as unknown as typeof fetch;
     return run().finally(() => {
       globalThis.fetch = orig;
@@ -265,6 +280,7 @@ describe("fetchJson", () => {
       async () => jsonResponse({ ok: true }),
       () => fetchJson("https://registry.example/x"),
     );
+
     expect(body).toEqual({ ok: true });
   });
 
@@ -277,6 +293,7 @@ describe("fetchJson", () => {
       },
       () => fetchJson("https://registry.example/retry", fastBackoff),
     );
+
     expect(calls).toBe(3);
     expect(body).toEqual({ ok: true });
   });
@@ -284,6 +301,7 @@ describe("fetchJson", () => {
   test("throws a loud error naming status + URL on persistent 500", async () => {
     let calls = 0;
     const url = "https://registry.example/boom";
+
     await expect(
       withFetch(
         async () => {
@@ -307,6 +325,7 @@ describe("fetchJson", () => {
 
   test("sends no custom Accept header (the npm 406 gotcha)", async () => {
     let seen: HeadersInit | undefined;
+
     await withFetch(
       async (_url: string, init?: RequestInit) => {
         seen = init?.headers;
@@ -315,6 +334,7 @@ describe("fetchJson", () => {
       () => fetchJson("https://registry.example/headers"),
     );
     const headers = new Headers(seen);
+
     expect(headers.has("accept")).toBe(false);
     expect(headers.get("user-agent")).toContain("sbom-license-tool");
   });
@@ -323,6 +343,7 @@ describe("fetchJson", () => {
 describe("PyPI 3-layer resolver", () => {
   test("Layer 1: license_expression wins, raw verbatim, via license-expression HIGH", () => {
     const result = resolvePypiLicense(registryFixture("pypi-anyio.json"));
+
     expect(result).toEqual({
       raw: "MIT",
       via: "license-expression",
@@ -334,6 +355,7 @@ describe("PyPI 3-layer resolver", () => {
     const result = resolvePypiLicense({
       info: { license_expression: "", license: "MPL 2.0", classifiers: [] },
     });
+
     expect(result).toEqual({
       raw: "MPL 2.0",
       via: "license-field",
@@ -345,6 +367,7 @@ describe("PyPI 3-layer resolver", () => {
     // The comm fixture carries the full BSD-3 license TEXT in info.license and
     // an ambiguous BSD classifier — the field must NOT be treated as an id.
     const result = resolvePypiLicense(registryFixture("pypi-comm-fulltext.json"));
+
     expect(result).toEqual({
       raw: "BSD License",
       via: "classifier",
@@ -357,11 +380,13 @@ describe("PyPI 3-layer resolver", () => {
     const result = resolvePypiLicense({
       info: { license: long, classifiers: [] },
     });
+
     expect(result).toBeNull();
   });
 
   test("Layer 3: an ambiguous BSD classifier (jinja2) resolves raw via the label, tagged LOW", () => {
     const result = resolvePypiLicense(registryFixture("pypi-jinja2-classifier.json"));
+
     expect(result).toEqual({
       raw: "BSD License",
       via: "classifier",
@@ -375,6 +400,7 @@ describe("PyPI 3-layer resolver", () => {
         classifiers: ["License :: OSI Approved :: MIT License"],
       },
     });
+
     expect(result).toEqual({
       raw: "MIT",
       via: "classifier",
@@ -390,6 +416,7 @@ describe("PyPI 3-layer resolver", () => {
         classifiers: ["Programming Language :: Python :: 3"],
       },
     });
+
     expect(result).toBeNull();
   });
 
@@ -403,6 +430,7 @@ describe("PyPI 3-layer resolver", () => {
 describe("npm packument resolver", () => {
   test("versions[version].license wins over top-level (color-convert)", () => {
     const result = resolveNpmLicense(registryFixture("npm-color-convert.json"), "1.9.3");
+
     expect(result).toEqual({ raw: "MIT", via: "version-license" });
   });
 
@@ -410,6 +438,7 @@ describe("npm packument resolver", () => {
     // The *-cjs alias packument: the exact version omits license, but the
     // top-level legacy { type } object resolves it via the packument path.
     const result = resolveNpmLicense(registryFixture("npm-cjs-alias.json"), "8.1.1");
+
     expect(result).toEqual({ raw: "ISC", via: "top-license-object" });
   });
 
@@ -418,6 +447,7 @@ describe("npm packument resolver", () => {
       { license: { type: "ISC" }, versions: { "1.0.0": {} } },
       "1.0.0",
     );
+
     expect(result).toEqual({ raw: "ISC", via: "top-license-object" });
   });
 
@@ -429,6 +459,7 @@ describe("npm packument resolver", () => {
       },
       "1.0.0",
     );
+
     expect(result).toEqual({
       raw: "(MIT OR Apache-2.0)",
       via: "top-licenses-array",
@@ -440,6 +471,7 @@ describe("npm packument resolver", () => {
       { licenses: [{ type: "MIT" }], versions: { "1.0.0": {} } },
       "1.0.0",
     );
+
     expect(result).toEqual({ raw: "MIT", via: "top-licenses-array" });
   });
 
@@ -448,6 +480,7 @@ describe("npm packument resolver", () => {
       { license: "BSD-3-Clause", versions: { "2.0.0": {} } },
       "2.0.0",
     );
+
     expect(result).toEqual({ raw: "BSD-3-Clause", via: "top-license" });
   });
 
@@ -463,6 +496,7 @@ describe("npm packument resolver", () => {
       },
       "1.2.1",
     );
+
     expect(result).toEqual({ raw: "MIT", via: "version-licenses-array" });
   });
 
@@ -471,6 +505,7 @@ describe("npm packument resolver", () => {
       { versions: { "1.0.0": { license: { type: "ISC" } } } },
       "1.0.0",
     );
+
     expect(result).toEqual({ raw: "ISC", via: "version-license-object" });
   });
 
@@ -483,6 +518,7 @@ describe("npm packument resolver", () => {
       },
       "1.0.0",
     );
+
     expect(result).toEqual({
       raw: "(MIT OR Apache-2.0)",
       via: "version-licenses-array",
@@ -498,6 +534,7 @@ describe("npm packument resolver", () => {
       },
       "1.0.0",
     );
+
     expect(result).toEqual({ raw: "MIT", via: "version-license" });
   });
 
@@ -509,16 +546,19 @@ describe("npm packument resolver", () => {
       },
       "1.0.0",
     );
+
     expect(result).toEqual({ raw: "MIT", via: "version-licenses-array" });
   });
 
   test("an empty-license packument everywhere (node-clone) → null", () => {
     const result = resolveNpmLicense(registryFixture("npm-node-clone-null.json"), "0.1.1");
+
     expect(result).toBeNull();
   });
 
   test("an unknown version with no top-level license → null", () => {
     const result = resolveNpmLicense({ versions: { "1.0.0": { license: "MIT" } } }, "9.9.9");
+
     expect(result).toBeNull();
   });
 
@@ -549,11 +589,13 @@ describe("committed purl-keyed cache", () => {
 
   test("serializeCache is deterministic: sorted keys, indent 2, LF, trailing newline, no timestamp", () => {
     const cache = new Map<string, CacheEntry>();
+
     // Insert out of sorted order to prove the serializer sorts.
     putEntry(cache, "pkg:npm/node-clone@0.1.1", negative);
     putEntry(cache, "pkg:pypi/anyio@4.12.1", positive);
 
     const bytes = serializeCache(cache);
+
     expect(bytes.endsWith("\n")).toBe(true);
     expect(bytes.includes("\r")).toBe(false);
     expect(bytes).not.toMatch(/timestamp|fetchedAt|\d{4}-\d{2}-\d{2}T/);
@@ -568,14 +610,17 @@ describe("committed purl-keyed cache", () => {
 
   test("a round-trip through serialize → readCache is lossless for positive and negative entries", () => {
     const dir = tempDir();
+
     try {
       const path = join(dir, "enrichment-cache.json");
       const cache = new Map<string, CacheEntry>();
+
       putEntry(cache, "pkg:pypi/anyio@4.12.1", positive);
       putEntry(cache, "pkg:npm/node-clone@0.1.1", negative);
       writeFileSync(path, serializeCache(cache));
 
       const loaded = readCache(path);
+
       expect(getEntry(loaded, "pkg:pypi/anyio@4.12.1")).toEqual(positive);
       expect(getEntry(loaded, "pkg:npm/node-clone@0.1.1")).toEqual(negative);
     } finally {
@@ -585,14 +630,17 @@ describe("committed purl-keyed cache", () => {
 
   test("a verbatim URL-encoded purl key (%40babel/core) round-trips intact", () => {
     const dir = tempDir();
+
     try {
       const path = join(dir, "enrichment-cache.json");
       const key = "pkg:npm/%40babel/core@7.27.7";
       const cache = new Map<string, CacheEntry>();
+
       putEntry(cache, key, { ...positive, fetchedFrom: "npm" });
       writeFileSync(path, serializeCache(cache));
 
       const loaded = readCache(path);
+
       expect(getEntry(loaded, key)?.license).toBe("MIT");
     } finally {
       rmSync(dir, { recursive: true, force: true });
@@ -601,11 +649,13 @@ describe("committed purl-keyed cache", () => {
 
   test("readCache on a missing file yields an empty cache, never throws", () => {
     const loaded = readCache(join(tmpdir(), "definitely-absent-cache.json"));
+
     expect(loaded.size).toBe(0);
   });
 
   test("getEntry returns the entry on a hit and undefined on a miss (zero I/O)", () => {
     const cache = new Map<string, CacheEntry>();
+
     putEntry(cache, "pkg:pypi/anyio@4.12.1", positive);
     expect(getEntry(cache, "pkg:pypi/anyio@4.12.1")).toEqual(positive);
     expect(getEntry(cache, "pkg:pypi/absent@1.0.0")).toBeUndefined();
@@ -613,13 +663,16 @@ describe("committed purl-keyed cache", () => {
 
   test("a negative entry is distinguishable from a positive one after a round-trip", () => {
     const dir = tempDir();
+
     try {
       const path = join(dir, "enrichment-cache.json");
       const cache = new Map<string, CacheEntry>();
+
       putEntry(cache, "pkg:npm/node-clone@0.1.1", negative);
       writeFileSync(path, serializeCache(cache));
 
       const entry = getEntry(readCache(path), "pkg:npm/node-clone@0.1.1");
+
       expect(entry?.resolvable).toBe(false);
       expect(entry?.license).toBeNull();
     } finally {
@@ -629,8 +682,10 @@ describe("committed purl-keyed cache", () => {
 
   test("a malformed envelope throws loudly (a poisoned cache is a config error, not silent)", () => {
     const dir = tempDir();
+
     try {
       const path = join(dir, "enrichment-cache.json");
+
       writeFileSync(path, "{ not valid json ");
       expect(() => readCache(path)).toThrow();
 
@@ -646,23 +701,29 @@ describe("committed purl-keyed cache", () => {
 
   test("a cache serialized WITHOUT copyrights contains no 'copyrights' key (optional-field zero-churn)", () => {
     const cache = new Map<string, CacheEntry>();
+
     putEntry(cache, "pkg:npm/node-clone@0.1.1", negative);
     putEntry(cache, "pkg:pypi/anyio@4.12.1", positive);
     const bytes = serializeCache(cache);
+
     expect(bytes).not.toContain("copyrights");
   });
 
   test("an existing registry-shaped envelope (no copyrights) reads and re-serializes byte-identically (regression)", () => {
     const dir = tempDir();
+
     try {
       const path = join(dir, "enrichment-cache.json");
       const cache = new Map<string, CacheEntry>();
+
       putEntry(cache, "pkg:npm/node-clone@0.1.1", negative);
       putEntry(cache, "pkg:pypi/anyio@4.12.1", positive);
       const bytes = serializeCache(cache);
+
       writeFileSync(path, bytes);
 
       const loaded = readCache(path);
+
       expect(serializeCache(loaded)).toBe(bytes);
     } finally {
       rmSync(dir, { recursive: true, force: true });
@@ -713,6 +774,7 @@ describe("enrichUnknowns orchestrator (cache-first, generate-fetch, check-stale)
 
   function tempCachePath(): { dir: string; path: string } {
     const dir = mkdtempSync(join(tmpdir(), "enrich-orch-"));
+
     return { dir, path: join(dir, "enrichment-cache.json") };
   }
 
@@ -724,18 +786,21 @@ describe("enrichUnknowns orchestrator (cache-first, generate-fetch, check-stale)
     const calls: string[] = [];
     const impl = (async (input: string | URL | Request): Promise<Response> => {
       const url = typeof input === "string" ? input : input.toString();
+
       calls.push(url);
       return new Response(JSON.stringify(bodyFor(url)), {
         status: 200,
         headers: { "content-type": "application/json" },
       });
     }) as typeof fetch;
+
     return { fetch: impl, calls };
   }
 
   /** Run `fn` with globalThis.fetch swapped, always restored in finally. */
   async function withFetch<T>(impl: typeof fetch, fn: () => Promise<T>): Promise<T> {
     const original = globalThis.fetch;
+
     globalThis.fetch = impl;
     try {
       return await fn();
@@ -751,6 +816,7 @@ describe("enrichUnknowns orchestrator (cache-first, generate-fetch, check-stale)
 
   test("a package with a usable claim is untouched (never enriched, zero fetch)", async () => {
     const { dir, path } = tempCachePath();
+
     try {
       const { fetch, calls } = fetchReturning(() => ({}));
       const result = await withFetch(fetch, () =>
@@ -760,9 +826,11 @@ describe("enrichUnknowns orchestrator (cache-first, generate-fetch, check-stale)
           verbose: false,
         }),
       );
+
       expect(calls).toEqual([]);
       expect(result.staleUnknowns).toEqual([]);
       const pkg = result.model.packages[0];
+
       expect(registryClaim(pkg)).toBeUndefined();
       expect(pkg?.licenseClaims).toHaveLength(1);
     } finally {
@@ -772,8 +840,10 @@ describe("enrichUnknowns orchestrator (cache-first, generate-fetch, check-stale)
 
   test("a cache HIT appends the registry claim with zero fetch (either mode)", async () => {
     const { dir, path } = tempCachePath();
+
     try {
       const cache = new Map<string, CacheEntry>();
+
       putEntry(cache, "pkg:npm/no-claims@2.0.0", {
         license: "MIT",
         fetchedFrom: "npm",
@@ -791,9 +861,11 @@ describe("enrichUnknowns orchestrator (cache-first, generate-fetch, check-stale)
             verbose: false,
           }),
         );
+
         expect(calls).toEqual([]);
         expect(result.staleUnknowns).toEqual([]);
         const claim = registryClaim(result.model.packages[0]);
+
         expect(claim).toEqual({
           raw: "MIT",
           kind: "expression",
@@ -807,8 +879,10 @@ describe("enrichUnknowns orchestrator (cache-first, generate-fetch, check-stale)
 
   test("a NEGATIVE cache hit leaves the package unknown with no fetch (either mode)", async () => {
     const { dir, path } = tempCachePath();
+
     try {
       const cache = new Map<string, CacheEntry>();
+
       putEntry(cache, "pkg:npm/no-claims@2.0.0", {
         license: null,
         fetchedFrom: "npm",
@@ -826,6 +900,7 @@ describe("enrichUnknowns orchestrator (cache-first, generate-fetch, check-stale)
             verbose: false,
           }),
         );
+
         expect(calls).toEqual([]);
         expect(result.staleUnknowns).toEqual([]);
         expect(registryClaim(result.model.packages[0])).toBeUndefined();
@@ -837,6 +912,7 @@ describe("enrichUnknowns orchestrator (cache-first, generate-fetch, check-stale)
 
   test("generate + miss: fetches npm packument, appends claim, records a positive cache entry", async () => {
     const { dir, path } = tempCachePath();
+
     try {
       const { fetch, calls } = fetchReturning((url) => {
         expect(url).toBe("https://registry.npmjs.org/no-claims");
@@ -849,6 +925,7 @@ describe("enrichUnknowns orchestrator (cache-first, generate-fetch, check-stale)
           verbose: false,
         }),
       );
+
       expect(calls).toHaveLength(1);
       expect(registryClaim(result.model.packages[0])).toEqual({
         raw: "MIT",
@@ -857,6 +934,7 @@ describe("enrichUnknowns orchestrator (cache-first, generate-fetch, check-stale)
       });
       // Recorded a positive entry to the committed cache.
       const recorded = getEntry(readCache(path), "pkg:npm/no-claims@2.0.0");
+
       expect(recorded?.resolvable).toBe(true);
       expect(recorded?.license).toBe("MIT");
       expect(recorded?.fetchedFrom).toBe("npm");
@@ -867,6 +945,7 @@ describe("enrichUnknowns orchestrator (cache-first, generate-fetch, check-stale)
 
   test("generate + miss: fetches the PyPI JSON URL and records the resolution", async () => {
     const { dir, path } = tempCachePath();
+
     try {
       const { fetch, calls } = fetchReturning((url) => {
         expect(url).toBe("https://pypi.org/pypi/anyio/4.12.1/json");
@@ -879,9 +958,11 @@ describe("enrichUnknowns orchestrator (cache-first, generate-fetch, check-stale)
           verbose: false,
         }),
       );
+
       expect(calls).toEqual(["https://pypi.org/pypi/anyio/4.12.1/json"]);
       expect(registryClaim(result.model.packages[0])?.raw).toBe("MIT");
       const recorded = getEntry(readCache(path), "pkg:pypi/anyio@4.12.1");
+
       expect(recorded?.fetchedFrom).toBe("pypi");
       expect(recorded?.license).toBe("MIT");
     } finally {
@@ -891,6 +972,7 @@ describe("enrichUnknowns orchestrator (cache-first, generate-fetch, check-stale)
 
   test("a scoped npm purl (%40babel/core) fetches the URL-encoded packument name", async () => {
     const { dir, path } = tempCachePath();
+
     try {
       const scoped: PackageEntry = {
         purl: "pkg:npm/%40babel/core@7.27.7",
@@ -903,6 +985,7 @@ describe("enrichUnknowns orchestrator (cache-first, generate-fetch, check-stale)
       const { fetch, calls } = fetchReturning(() => ({
         versions: { "7.27.7": { license: "MIT" } },
       }));
+
       await withFetch(fetch, () =>
         enrichUnknowns(model(scoped), {
           mode: "generate",
@@ -918,6 +1001,7 @@ describe("enrichUnknowns orchestrator (cache-first, generate-fetch, check-stale)
 
   test("generate + clean 200-empty answer: records a NEGATIVE entry (resolvable:false)", async () => {
     const { dir, path } = tempCachePath();
+
     try {
       // A clean 200 with no license anywhere → the resolver returns null.
       const { fetch } = fetchReturning(() => ({
@@ -930,10 +1014,12 @@ describe("enrichUnknowns orchestrator (cache-first, generate-fetch, check-stale)
           verbose: false,
         }),
       );
+
       // Package stays unknown (no registry claim appended).
       expect(registryClaim(result.model.packages[0])).toBeUndefined();
       // But the clean-empty answer IS cached as a negative entry.
       const recorded = getEntry(readCache(path), "pkg:npm/no-claims@2.0.0");
+
       expect(recorded?.resolvable).toBe(false);
       expect(recorded?.license).toBeNull();
     } finally {
@@ -943,6 +1029,7 @@ describe("enrichUnknowns orchestrator (cache-first, generate-fetch, check-stale)
 
   test("an npm package absent from the registry (404) resolves to an honest unknown, never a throw", async () => {
     const { dir, path } = tempCachePath();
+
     try {
       const impl = (async (): Promise<Response> => {
         return new Response(JSON.stringify({}), { status: 404 });
@@ -954,11 +1041,13 @@ describe("enrichUnknowns orchestrator (cache-first, generate-fetch, check-stale)
           verbose: false,
         }),
       );
+
       // The run COMPLETES — no throw — and the package stays unknown.
       expect(registryClaim(result.model.packages[0])).toBeUndefined();
       // A definitive negative is recorded, exactly like a clean 200-empty
       // answer, so a later run doesn't re-fetch the same non-existent package.
       const recorded = getEntry(readCache(path), "pkg:npm/no-claims@2.0.0");
+
       expect(recorded?.resolvable).toBe(false);
       expect(recorded?.license).toBeNull();
       expect(recorded?.fetchedFrom).toBe("npm");
@@ -969,6 +1058,7 @@ describe("enrichUnknowns orchestrator (cache-first, generate-fetch, check-stale)
 
   test("a pypi package absent from the registry (404) resolves to an honest unknown, never a throw", async () => {
     const { dir, path } = tempCachePath();
+
     try {
       const impl = (async (): Promise<Response> => {
         return new Response(JSON.stringify({}), { status: 404 });
@@ -980,8 +1070,10 @@ describe("enrichUnknowns orchestrator (cache-first, generate-fetch, check-stale)
           verbose: false,
         }),
       );
+
       expect(registryClaim(result.model.packages[0])).toBeUndefined();
       const recorded = getEntry(readCache(path), "pkg:pypi/anyio@4.12.1");
+
       expect(recorded?.resolvable).toBe(false);
       expect(recorded?.license).toBeNull();
       expect(recorded?.fetchedFrom).toBe("pypi");
@@ -992,10 +1084,12 @@ describe("enrichUnknowns orchestrator (cache-first, generate-fetch, check-stale)
 
   test("a persistent 5xx on the npm/pypi path still throws loudly and writes NO cache entry (404 tolerance does not weaken the transient-failure gate)", async () => {
     const { dir, path } = tempCachePath();
+
     try {
       const impl = (async (): Promise<Response> => {
         return new Response(JSON.stringify({}), { status: 503 });
       }) as unknown as typeof fetch;
+
       await expect(
         withFetch(impl, () =>
           enrichUnknowns(model(unknownNpm()), {
@@ -1015,10 +1109,12 @@ describe("enrichUnknowns orchestrator (cache-first, generate-fetch, check-stale)
 
   test("generate + fetch FAILURE: raises loudly and writes NO cache entry (never a false negative)", async () => {
     const { dir, path } = tempCachePath();
+
     try {
       const failing = (async (): Promise<Response> => {
         throw new Error("NETWORK DOWN");
       }) as unknown as typeof fetch;
+
       await expect(
         withFetch(failing, () =>
           enrichUnknowns(model(unknownNpm()), {
@@ -1039,6 +1135,7 @@ describe("enrichUnknowns orchestrator (cache-first, generate-fetch, check-stale)
 
   test("check + miss: NO fetch, NO write — returns the purl as a stale unknown", async () => {
     const { dir, path } = tempCachePath();
+
     try {
       const { fetch, calls } = fetchReturning(() => ({}));
       const result = await withFetch(fetch, () =>
@@ -1048,6 +1145,7 @@ describe("enrichUnknowns orchestrator (cache-first, generate-fetch, check-stale)
           verbose: false,
         }),
       );
+
       expect(calls).toEqual([]);
       expect(result.staleUnknowns).toEqual(["pkg:npm/no-claims@2.0.0"]);
       expect(registryClaim(result.model.packages[0])).toBeUndefined();
@@ -1060,12 +1158,14 @@ describe("enrichUnknowns orchestrator (cache-first, generate-fetch, check-stale)
 
   test("the input model is never mutated (claims appended via spread)", async () => {
     const { dir, path } = tempCachePath();
+
     try {
       const input = model(unknownNpm());
       const before = input.packages[0]!.licenseClaims;
       const { fetch } = fetchReturning(() => ({
         versions: { "2.0.0": { license: "MIT" } },
       }));
+
       await withFetch(fetch, () =>
         enrichUnknowns(input, {
           mode: "generate",
@@ -1083,6 +1183,7 @@ describe("enrichUnknowns orchestrator (cache-first, generate-fetch, check-stale)
 
   test("one packument fetch is reused across multiple versions of the same npm name", async () => {
     const { dir, path } = tempCachePath();
+
     try {
       const v1: PackageEntry = {
         ...unknownNpm(),
@@ -1094,6 +1195,7 @@ describe("enrichUnknowns orchestrator (cache-first, generate-fetch, check-stale)
         purl: "pkg:npm/dup@2.0.0",
         version: "2.0.0",
       };
+
       v1.name = "dup";
       v2.name = "dup";
       const { fetch, calls } = fetchReturning(() => ({
@@ -1109,9 +1211,11 @@ describe("enrichUnknowns orchestrator (cache-first, generate-fetch, check-stale)
           verbose: false,
         }),
       );
+
       // Exactly ONE packument fetch served both versions.
       expect(calls).toEqual(["https://registry.npmjs.org/dup"]);
       const claims = result.model.packages.map((p) => registryClaim(p)?.raw);
+
       expect(claims).toEqual(["MIT", "ISC"]);
     } finally {
       rmSync(dir, { recursive: true, force: true });
@@ -1125,8 +1229,10 @@ describe("enrichUnknowns orchestrator (cache-first, generate-fetch, check-stale)
   // BSD-3-Clause. No override is authored here.
   test("a cached BSD-label entry resolves to imprecise-BSD (never BSD-2-Clause) end-to-end", async () => {
     const { dir, path } = tempCachePath();
+
     try {
       const cache = new Map<string, CacheEntry>();
+
       // The exact committed-cache shape for a Jupyter BSD row: raw label "BSD
       // License", resolved via the ambiguous classifier.
       putEntry(cache, "pkg:pypi/colorama@0.4.6", {
@@ -1151,6 +1257,7 @@ describe("enrichUnknowns orchestrator (cache-first, generate-fetch, check-stale)
           { mode: "check", cachePath: path, verbose: false },
         ),
       );
+
       // Cache hit — zero fetch — appended the raw "BSD License" claim.
       expect(calls).toEqual([]);
       expect(registryClaim(result.model.packages[0])?.raw).toBe("BSD License");
@@ -1158,6 +1265,7 @@ describe("enrichUnknowns orchestrator (cache-first, generate-fetch, check-stale)
       // The finding INTERPRETS that raw as imprecise-BSD.
       const { model: annotated } = annotateFindings(result.model, []);
       const finding = annotated.packages[0]!.finding!;
+
       expect(finding.confidence).toBe("imprecise");
       expect(finding.impreciseFamily).toBe("BSD");
       expect(finding.expression).toBeNull();
@@ -1180,6 +1288,7 @@ describe("enrichUnknowns terraform/github (version-tag, transient-vs-definitive,
 
   function tempCachePath(): { dir: string; path: string } {
     const dir = mkdtempSync(join(tmpdir(), "enrich-tf-"));
+
     return { dir, path: join(dir, "enrichment-cache.json") };
   }
 
@@ -1223,9 +1332,11 @@ describe("enrichUnknowns terraform/github (version-tag, transient-vs-definitive,
     const calls: string[] = [];
     const impl = (async (input: string | URL | Request): Promise<Response> => {
       const url = typeof input === "string" ? input : input.toString();
+
       calls.push(url);
       return responder(url);
     }) as typeof fetch;
+
     return { fetch: impl, calls };
   }
 
@@ -1238,6 +1349,7 @@ describe("enrichUnknowns terraform/github (version-tag, transient-vs-definitive,
 
   async function withFetch<T>(impl: typeof fetch, fn: () => Promise<T>): Promise<T> {
     const original = globalThis.fetch;
+
     globalThis.fetch = impl;
     try {
       return await fn();
@@ -1248,6 +1360,7 @@ describe("enrichUnknowns terraform/github (version-tag, transient-vs-definitive,
 
   test("a fresh pkg:terraform unknown with NO cache entry is STALE in check (exit 2)", async () => {
     const { dir, path } = tempCachePath();
+
     try {
       const { fetch, calls } = fetchByUrl(() => jsonResponse({}));
       const result = await withFetch(fetch, () =>
@@ -1257,6 +1370,7 @@ describe("enrichUnknowns terraform/github (version-tag, transient-vs-definitive,
           verbose: false,
         }),
       );
+
       // The load-bearing parsePurl edit: terraform is now in the allow-list, so
       // the miss is COUNTED stale (before the fix it was silently skipped → a
       // missing license slipped past check).
@@ -1273,6 +1387,7 @@ describe("enrichUnknowns terraform/github (version-tag, transient-vs-definitive,
 
   test("generate + provider miss: resolves MPL-2.0 at the v<version> ref, positive entry with fetchedFrom:github + fetchedAt", async () => {
     const { dir, path } = tempCachePath();
+
     try {
       const expectedUrl =
         "https://api.github.com/repos/hashicorp/terraform-provider-aws/license?ref=v6.42.0";
@@ -1292,6 +1407,7 @@ describe("enrichUnknowns terraform/github (version-tag, transient-vs-definitive,
           now: fixedClock,
         }),
       );
+
       expect(calls).toEqual([expectedUrl]); // first ref won, no fallback
       expect(registryClaim(result.model.packages[0])?.raw).toBe("MPL-2.0");
 
@@ -1299,6 +1415,7 @@ describe("enrichUnknowns terraform/github (version-tag, transient-vs-definitive,
         readCache(path),
         "pkg:terraform/registry.opentofu.org/hashicorp/aws@6.42.0",
       );
+
       expect(recorded?.resolvable).toBe(true);
       expect(recorded?.license).toBe("MPL-2.0");
       expect(recorded?.fetchedFrom).toBe("github");
@@ -1311,6 +1428,7 @@ describe("enrichUnknowns terraform/github (version-tag, transient-vs-definitive,
 
   test("module resolves Apache-2.0 (terraform-aws-modules → terraform-aws-vpc)", async () => {
     const { dir, path } = tempCachePath();
+
     try {
       const expectedUrl =
         "https://api.github.com/repos/terraform-aws-modules/terraform-aws-vpc/license?ref=v5.1.2";
@@ -1327,6 +1445,7 @@ describe("enrichUnknowns terraform/github (version-tag, transient-vs-definitive,
           now: fixedClock,
         }),
       );
+
       expect(registryClaim(result.model.packages[0])?.raw).toBe("Apache-2.0");
     } finally {
       rmSync(dir, { recursive: true, force: true });
@@ -1335,14 +1454,20 @@ describe("enrichUnknowns terraform/github (version-tag, transient-vs-definitive,
 
   test("ref fallback: v<version> 404 → <version> 200 selects the SECOND ref", async () => {
     const { dir, path } = tempCachePath();
+
     try {
       const { fetch, calls } = fetchByUrl((url) => {
-        if (url.endsWith("?ref=v6.42.0")) return jsonResponse({}, 404);
+        if (url.endsWith("?ref=v6.42.0")) {
+          return jsonResponse({}, 404);
+        }
+
         if (url.endsWith("?ref=6.42.0")) {
           return jsonResponse({ license: { spdx_id: "MPL-2.0" } });
         }
+
         throw new Error(`unexpected url ${url}`);
       });
+
       await withFetch(fetch, () =>
         enrichUnknowns(model(unknownProvider()), {
           mode: "generate",
@@ -1360,6 +1485,7 @@ describe("enrichUnknowns terraform/github (version-tag, transient-vs-definitive,
         readCache(path),
         "pkg:terraform/registry.opentofu.org/hashicorp/aws@6.42.0",
       );
+
       expect(recorded?.via).toBe("github-license@6.42.0");
     } finally {
       rmSync(dir, { recursive: true, force: true });
@@ -1368,12 +1494,16 @@ describe("enrichUnknowns terraform/github (version-tag, transient-vs-definitive,
 
   test("W#4: both version tags 404 → NO default-branch fetch, recorded as a definitive negative (no wrong-version license)", async () => {
     const { dir, path } = tempCachePath();
+
     try {
       const { fetch, calls } = fetchByUrl((url) => {
         // Both v<version> and <version> tags 404; a no-?ref request (the old
         // default-branch fallback) would return MPL-2.0 — but it must NEVER be
         // issued now, so this branch is unreachable in the fixed behavior.
-        if (url.includes("?ref=")) return jsonResponse({}, 404);
+        if (url.includes("?ref=")) {
+          return jsonResponse({}, 404);
+        }
+
         return jsonResponse({ license: { spdx_id: "MPL-2.0" } });
       });
       const result = await withFetch(fetch, () =>
@@ -1385,6 +1515,7 @@ describe("enrichUnknowns terraform/github (version-tag, transient-vs-definitive,
           now: fixedClock,
         }),
       );
+
       // NO call is the bare (no-?ref) default-branch URL — every fetch carries ?ref=.
       expect(
         calls.some(
@@ -1396,6 +1527,7 @@ describe("enrichUnknowns terraform/github (version-tag, transient-vs-definitive,
         readCache(path),
         "pkg:terraform/registry.opentofu.org/hashicorp/aws@6.42.0",
       );
+
       // A definitive negative (no license) — never the default-branch MPL-2.0.
       expect(recorded?.license).toBeNull();
       expect(recorded?.resolvable).toBe(false);
@@ -1407,8 +1539,10 @@ describe("enrichUnknowns terraform/github (version-tag, transient-vs-definitive,
 
   test("TRANSIENT 403 on a needed miss HARD-FAILS the run loudly and writes NO entry", async () => {
     const { dir, path } = tempCachePath();
+
     try {
       const { fetch } = fetchByUrl(() => jsonResponse({}, 403));
+
       await expect(
         withFetch(fetch, () =>
           enrichUnknowns(model(unknownProvider()), {
@@ -1428,10 +1562,12 @@ describe("enrichUnknowns terraform/github (version-tag, transient-vs-definitive,
 
   test("a network error (after retries) on a needed miss HARD-FAILS and writes NO entry", async () => {
     const { dir, path } = tempCachePath();
+
     try {
       const failing = (async (): Promise<Response> => {
         throw new Error("NETWORK DOWN");
       }) as unknown as typeof fetch;
+
       await expect(
         withFetch(failing, () =>
           enrichUnknowns(model(unknownProvider()), {
@@ -1450,8 +1586,10 @@ describe("enrichUnknowns terraform/github (version-tag, transient-vs-definitive,
 
   test("a persistent 5xx on a needed miss HARD-FAILS and writes NO entry", async () => {
     const { dir, path } = tempCachePath();
+
     try {
       const { fetch } = fetchByUrl(() => jsonResponse({}, 503));
+
       await expect(
         withFetch(fetch, () =>
           enrichUnknowns(model(unknownProvider()), {
@@ -1470,6 +1608,7 @@ describe("enrichUnknowns terraform/github (version-tag, transient-vs-definitive,
 
   test("a clean 404 across ALL candidate refs writes a NEGATIVE entry → unknown", async () => {
     const { dir, path } = tempCachePath();
+
     try {
       const { fetch, calls } = fetchByUrl(() => jsonResponse({}, 404));
       const result = await withFetch(fetch, () =>
@@ -1481,6 +1620,7 @@ describe("enrichUnknowns terraform/github (version-tag, transient-vs-definitive,
           now: fixedClock,
         }),
       );
+
       // Both version-tag refs tried, all 404 (no default-branch ref — W#4).
       expect(calls).toHaveLength(2);
       expect(registryClaim(result.model.packages[0])).toBeUndefined();
@@ -1488,6 +1628,7 @@ describe("enrichUnknowns terraform/github (version-tag, transient-vs-definitive,
         readCache(path),
         "pkg:terraform/registry.opentofu.org/hashicorp/aws@6.42.0",
       );
+
       expect(recorded?.resolvable).toBe(false);
       expect(recorded?.license).toBeNull();
       expect(recorded?.fetchedFrom).toBe("github");
@@ -1499,6 +1640,7 @@ describe("enrichUnknowns terraform/github (version-tag, transient-vs-definitive,
 
   test("a NOASSERTION body across all refs writes a NEGATIVE entry → unknown", async () => {
     const { dir, path } = tempCachePath();
+
     try {
       const { fetch } = fetchByUrl(() => jsonResponse({ license: { spdx_id: "NOASSERTION" } }));
       const result = await withFetch(fetch, () =>
@@ -1509,11 +1651,13 @@ describe("enrichUnknowns terraform/github (version-tag, transient-vs-definitive,
           backoffBaseMs: fastBackoff,
         }),
       );
+
       expect(registryClaim(result.model.packages[0])).toBeUndefined();
       const recorded = getEntry(
         readCache(path),
         "pkg:terraform/registry.opentofu.org/hashicorp/aws@6.42.0",
       );
+
       expect(recorded?.resolvable).toBe(false);
     } finally {
       rmSync(dir, { recursive: true, force: true });
@@ -1522,9 +1666,11 @@ describe("enrichUnknowns terraform/github (version-tag, transient-vs-definitive,
 
   test("a cache HIT never refetches and a warm second generate is BYTE-IDENTICAL (fetchedAt unchanged)", async () => {
     const { dir, path } = tempCachePath();
+
     try {
       // First generate stamps fetchedAt from the fixed clock.
       const { fetch: fetch1 } = fetchByUrl(() => jsonResponse({ license: { spdx_id: "MPL-2.0" } }));
+
       await withFetch(fetch1, () =>
         enrichUnknowns(model(unknownProvider()), {
           mode: "generate",
@@ -1562,6 +1708,7 @@ describe("enrichUnknowns terraform/github (version-tag, transient-vs-definitive,
 
   test("GITHUB_TOKEN is sent as a Bearer header when set; absent header when unset", async () => {
     const { dir, path } = tempCachePath();
+
     try {
       const seen: { auth: string | null } = { auth: "sentinel" };
       const impl = (async (
@@ -1573,6 +1720,7 @@ describe("enrichUnknowns terraform/github (version-tag, transient-vs-definitive,
       }) as typeof fetch;
 
       const prior = process.env.GITHUB_TOKEN;
+
       try {
         process.env.GITHUB_TOKEN = "ghp_test_token";
         await withFetch(impl, () =>
@@ -1590,6 +1738,7 @@ describe("enrichUnknowns terraform/github (version-tag, transient-vs-definitive,
         delete process.env.GITHUB_TOKEN;
         seen.auth = "sentinel";
         const { dir: dir2, path: path2 } = tempCachePath();
+
         try {
           await withFetch(impl, () =>
             enrichUnknowns(model(unknownProvider()), {
@@ -1605,8 +1754,11 @@ describe("enrichUnknowns terraform/github (version-tag, transient-vs-definitive,
           rmSync(dir2, { recursive: true, force: true });
         }
       } finally {
-        if (prior === undefined) delete process.env.GITHUB_TOKEN;
-        else process.env.GITHUB_TOKEN = prior;
+        if (prior === undefined) {
+          delete process.env.GITHUB_TOKEN;
+        } else {
+          process.env.GITHUB_TOKEN = prior;
+        }
       }
     } finally {
       rmSync(dir, { recursive: true, force: true });
@@ -1615,6 +1767,7 @@ describe("enrichUnknowns terraform/github (version-tag, transient-vs-definitive,
 
   test("a malformed terraform purl (wrong segment count) resolves to a NEGATIVE entry with no fetch", async () => {
     const { dir, path } = tempCachePath();
+
     try {
       // encodedName has only 2 segments (<host>/<one>) — neither a 3-segment
       // provider nor a 4-segment module → null repo → never a fetch.
@@ -1636,9 +1789,11 @@ describe("enrichUnknowns terraform/github (version-tag, transient-vs-definitive,
           backoffBaseMs: fastBackoff,
         }),
       );
+
       expect(calls).toEqual([]); // never a wrong guess, no fetch attempted
       expect(registryClaim(result.model.packages[0])).toBeUndefined();
       const recorded = getEntry(readCache(path), malformedPurl);
+
       expect(recorded?.resolvable).toBe(false);
     } finally {
       rmSync(dir, { recursive: true, force: true });
@@ -1650,6 +1805,7 @@ describe("fetchJsonOr404 (fetchJson posture, 404 as a value)", () => {
   type FetchImpl = (url: string, init?: RequestInit) => Promise<Response>;
   function withFetch<T>(impl: FetchImpl, run: () => Promise<T>): Promise<T> {
     const orig = globalThis.fetch;
+
     globalThis.fetch = impl as unknown as typeof fetch;
     return run().finally(() => {
       globalThis.fetch = orig;
@@ -1668,6 +1824,7 @@ describe("fetchJsonOr404 (fetchJson posture, 404 as a value)", () => {
       async () => jsonResponse({ ok: true }),
       () => fetchJsonOr404("https://api.nuget.org/v3/x"),
     );
+
     expect(result).toEqual({ status: 200, body: { ok: true } });
   });
 
@@ -1676,6 +1833,7 @@ describe("fetchJsonOr404 (fetchJson posture, 404 as a value)", () => {
       async () => jsonResponse({}, 404),
       () => fetchJsonOr404("https://api.nuget.org/v3/missing"),
     );
+
     expect(result).toEqual({ status: 404 });
   });
 
@@ -1688,12 +1846,14 @@ describe("fetchJsonOr404 (fetchJson posture, 404 as a value)", () => {
       },
       () => fetchJsonOr404("https://api.nuget.org/v3/retry", fastBackoff),
     );
+
     expect(calls).toBe(3);
     expect(result).toEqual({ status: 200, body: { ok: true } });
   });
 
   test("persistent 5xx throws the loud registry error (fetchJson parity)", async () => {
     let calls = 0;
+
     await expect(
       withFetch(
         async () => {
@@ -1719,6 +1879,7 @@ describe("fetchJsonOr404 (fetchJson posture, 404 as a value)", () => {
 
   test("sends the User-Agent and NO custom Accept (the fetchJson contract)", async () => {
     let seen: HeadersInit | undefined;
+
     await withFetch(
       async (_url: string, init?: RequestInit) => {
         seen = init?.headers;
@@ -1727,6 +1888,7 @@ describe("fetchJsonOr404 (fetchJson posture, 404 as a value)", () => {
       () => fetchJsonOr404("https://api.nuget.org/v3/headers"),
     );
     const headers = new Headers(seen);
+
     expect(headers.has("accept")).toBe(false);
     expect(headers.get("user-agent")).toContain("sbom-license-tool");
   });
@@ -1937,6 +2099,7 @@ describe("nuget narrows (tolerant)", () => {
       licenseFile: "LICENSE.txt",
       licenseUrl: "https://licenses.nuget.org/MIT",
     });
+
     expect(entry).toEqual({
       licenseExpression: "MIT",
       licenseFile: "LICENSE.txt",
@@ -1950,6 +2113,7 @@ describe("nuget narrows (tolerant)", () => {
       licenseFile: { nested: true },
       licenseUrl: ["array"],
     });
+
     expect(entry?.licenseExpression).toBeUndefined();
     expect(entry?.licenseFile).toBeUndefined();
     expect(entry?.licenseUrl).toBeUndefined();
@@ -1972,6 +2136,7 @@ describe("enrichUnknowns nuget (two-step fetch, negative discipline, offline che
 
   function tempCachePath(): { dir: string; path: string } {
     const dir = mkdtempSync(join(tmpdir(), "enrich-nuget-"));
+
     return { dir, path: join(dir, "enrichment-cache.json") };
   }
 
@@ -2005,9 +2170,11 @@ describe("enrichUnknowns nuget (two-step fetch, negative discipline, offline che
     const calls: string[] = [];
     const impl = (async (input: string | URL | Request): Promise<Response> => {
       const url = typeof input === "string" ? input : input.toString();
+
       calls.push(url);
       return responder(url);
     }) as typeof fetch;
+
     return { fetch: impl, calls };
   }
 
@@ -2020,6 +2187,7 @@ describe("enrichUnknowns nuget (two-step fetch, negative discipline, offline che
 
   async function withFetch<T>(impl: typeof fetch, fn: () => Promise<T>): Promise<T> {
     const original = globalThis.fetch;
+
     globalThis.fetch = impl;
     try {
       return await fn();
@@ -2030,15 +2198,20 @@ describe("enrichUnknowns nuget (two-step fetch, negative discipline, offline che
 
   test("positive path: leaf → catalogEntry (expression class) → registry claim + positive entry keyed by the VERBATIM purl, NO fetchedAt", async () => {
     const { dir, path } = tempCachePath();
+
     try {
       const { fetch, calls } = fetchByUrl((url) => {
-        if (url === LEAF_URL) return jsonResponse({ catalogEntry: CATALOG_URL });
+        if (url === LEAF_URL) {
+          return jsonResponse({ catalogEntry: CATALOG_URL });
+        }
+
         if (url === CATALOG_URL) {
           return jsonResponse({
             licenseExpression: "MIT",
             licenseUrl: "https://licenses.nuget.org/MIT",
           });
         }
+
         throw new Error(`unexpected url ${url}`);
       });
       const result = await withFetch(fetch, () =>
@@ -2049,6 +2222,7 @@ describe("enrichUnknowns nuget (two-step fetch, negative discipline, offline che
           backoffBaseMs: fastBackoff,
         }),
       );
+
       // Both fetches hit the LOWERCASED api.nuget.org URLs, in two-step order.
       expect(calls).toEqual([LEAF_URL, CATALOG_URL]);
       expect(registryClaim(result.model.packages[0])).toEqual({
@@ -2058,6 +2232,7 @@ describe("enrichUnknowns nuget (two-step fetch, negative discipline, offline che
       });
       // Cache keyed by the VERBATIM mixed-case purl (never the lowercase URL id).
       const recorded = getEntry(readCache(path), "pkg:nuget/Newtonsoft.Json@13.0.4");
+
       expect(recorded).toEqual({
         license: "MIT",
         fetchedFrom: "nuget",
@@ -2074,6 +2249,7 @@ describe("enrichUnknowns nuget (two-step fetch, negative discipline, offline che
 
   test("private-feed path: leaf 404 → a governed NEGATIVE entry, package stays unknown, generate does NOT throw", async () => {
     const { dir, path } = tempCachePath();
+
     try {
       const { fetch, calls } = fetchByUrl(() => jsonResponse({}, 404));
       const result = await withFetch(fetch, () =>
@@ -2084,9 +2260,11 @@ describe("enrichUnknowns nuget (two-step fetch, negative discipline, offline che
           backoffBaseMs: fastBackoff,
         }),
       );
+
       expect(calls).toEqual([LEAF_URL]); // the leaf 404 is terminal — no second hop
       expect(registryClaim(result.model.packages[0])).toBeUndefined();
       const recorded = getEntry(readCache(path), "pkg:nuget/Newtonsoft.Json@13.0.4");
+
       expect(recorded).toEqual({
         license: null,
         fetchedFrom: "nuget",
@@ -2100,6 +2278,7 @@ describe("enrichUnknowns nuget (two-step fetch, negative discipline, offline che
 
   test("catalogEntry 404 → NEGATIVE (definitive, same as the leaf)", async () => {
     const { dir, path } = tempCachePath();
+
     try {
       const { fetch, calls } = fetchByUrl((url) =>
         url === LEAF_URL ? jsonResponse({ catalogEntry: CATALOG_URL }) : jsonResponse({}, 404),
@@ -2112,9 +2291,11 @@ describe("enrichUnknowns nuget (two-step fetch, negative discipline, offline che
           backoffBaseMs: fastBackoff,
         }),
       );
+
       expect(calls).toEqual([LEAF_URL, CATALOG_URL]);
       expect(registryClaim(result.model.packages[0])).toBeUndefined();
       const recorded = getEntry(readCache(path), "pkg:nuget/Newtonsoft.Json@13.0.4");
+
       expect(recorded?.resolvable).toBe(false);
       expect(recorded?.license).toBeNull();
     } finally {
@@ -2124,6 +2305,7 @@ describe("enrichUnknowns nuget (two-step fetch, negative discipline, offline che
 
   test("clean-empty: a none-class catalogEntry (no license fields) → NEGATIVE", async () => {
     const { dir, path } = tempCachePath();
+
     try {
       const { fetch } = fetchByUrl((url) =>
         url === LEAF_URL
@@ -2138,8 +2320,10 @@ describe("enrichUnknowns nuget (two-step fetch, negative discipline, offline che
           backoffBaseMs: fastBackoff,
         }),
       );
+
       expect(registryClaim(result.model.packages[0])).toBeUndefined();
       const recorded = getEntry(readCache(path), "pkg:nuget/Newtonsoft.Json@13.0.4");
+
       expect(recorded?.resolvable).toBe(false);
     } finally {
       rmSync(dir, { recursive: true, force: true });
@@ -2148,6 +2332,7 @@ describe("enrichUnknowns nuget (two-step fetch, negative discipline, offline che
 
   test("a leaf with a MISSING catalogEntry → NEGATIVE after ONE fetch (malformed = clean no-answer)", async () => {
     const { dir, path } = tempCachePath();
+
     try {
       const { fetch, calls } = fetchByUrl(() => jsonResponse({ listed: true }));
       const result = await withFetch(fetch, () =>
@@ -2158,6 +2343,7 @@ describe("enrichUnknowns nuget (two-step fetch, negative discipline, offline che
           backoffBaseMs: fastBackoff,
         }),
       );
+
       expect(calls).toEqual([LEAF_URL]); // never a second hop without a pinned URL
       expect(registryClaim(result.model.packages[0])).toBeUndefined();
       expect(getEntry(readCache(path), "pkg:nuget/Newtonsoft.Json@13.0.4")?.resolvable).toBe(false);
@@ -2168,10 +2354,14 @@ describe("enrichUnknowns nuget (two-step fetch, negative discipline, offline che
 
   test("a leaf whose catalogEntry points at a FOREIGN host → NEGATIVE, and the stub saw NO request to the evil host (SSRF pin)", async () => {
     const { dir, path } = tempCachePath();
+
     try {
       const evil = "https://evil.example/catalog.json";
       const { fetch, calls } = fetchByUrl((url) => {
-        if (url === LEAF_URL) return jsonResponse({ catalogEntry: evil });
+        if (url === LEAF_URL) {
+          return jsonResponse({ catalogEntry: evil });
+        }
+
         throw new Error(`unexpected url ${url}`);
       });
       const result = await withFetch(fetch, () =>
@@ -2182,6 +2372,7 @@ describe("enrichUnknowns nuget (two-step fetch, negative discipline, offline che
           backoffBaseMs: fastBackoff,
         }),
       );
+
       expect(calls).toEqual([LEAF_URL]);
       expect(calls.some((u) => u.includes("evil.example"))).toBe(false);
       expect(registryClaim(result.model.packages[0])).toBeUndefined();
@@ -2193,8 +2384,10 @@ describe("enrichUnknowns nuget (two-step fetch, negative discipline, offline che
 
   test("TRANSIENT: a persistent 500 on the leaf THROWS loudly and writes NO entry (negative-poison impossible)", async () => {
     const { dir, path } = tempCachePath();
+
     try {
       const { fetch } = fetchByUrl(() => jsonResponse({}, 500));
+
       await expect(
         withFetch(fetch, () =>
           enrichUnknowns(model(unknownNuget()), {
@@ -2226,12 +2419,20 @@ describe("enrichUnknowns nuget (two-step fetch, negative discipline, offline che
     };
     const GOOD_LEAF = "https://api.nuget.org/v3/registration5-gz-semver2/good.package/1.0.0.json";
     const GOOD_CATALOG = "https://api.nuget.org/v3/catalog0/good.json";
+
     try {
       const { fetch } = fetchByUrl((url) => {
-        if (url === GOOD_LEAF) return jsonResponse({ catalogEntry: GOOD_CATALOG });
-        if (url === GOOD_CATALOG) return jsonResponse({ licenseExpression: "MIT" });
+        if (url === GOOD_LEAF) {
+          return jsonResponse({ catalogEntry: GOOD_CATALOG });
+        }
+
+        if (url === GOOD_CATALOG) {
+          return jsonResponse({ licenseExpression: "MIT" });
+        }
+
         return jsonResponse({}, 503); // the OTHER miss — persistent transient
       });
+
       await expect(
         withFetch(fetch, () =>
           enrichUnknowns(model(good, unknownNuget()), {
@@ -2250,8 +2451,10 @@ describe("enrichUnknowns nuget (two-step fetch, negative discipline, offline che
 
   test("a pre-seeded POSITIVE nuget entry resolves with ZERO fetches", async () => {
     const { dir, path } = tempCachePath();
+
     try {
       const cache = new Map<string, CacheEntry>();
+
       putEntry(cache, "pkg:nuget/Newtonsoft.Json@13.0.4", {
         license: "MIT",
         fetchedFrom: "nuget",
@@ -2268,6 +2471,7 @@ describe("enrichUnknowns nuget (two-step fetch, negative discipline, offline che
           verbose: false,
         }),
       );
+
       expect(calls).toEqual([]);
       expect(registryClaim(result.model.packages[0])?.raw).toBe("MIT");
     } finally {
@@ -2277,8 +2481,10 @@ describe("enrichUnknowns nuget (two-step fetch, negative discipline, offline che
 
   test("a pre-seeded NEGATIVE nuget entry stays unknown with ZERO fetches", async () => {
     const { dir, path } = tempCachePath();
+
     try {
       const cache = new Map<string, CacheEntry>();
+
       putEntry(cache, "pkg:nuget/Newtonsoft.Json@13.0.4", {
         license: null,
         fetchedFrom: "nuget",
@@ -2295,6 +2501,7 @@ describe("enrichUnknowns nuget (two-step fetch, negative discipline, offline che
           verbose: false,
         }),
       );
+
       expect(calls).toEqual([]);
       expect(registryClaim(result.model.packages[0])).toBeUndefined();
       expect(result.staleUnknowns).toEqual([]);
@@ -2305,6 +2512,7 @@ describe("enrichUnknowns nuget (two-step fetch, negative discipline, offline che
 
   test("check mode: a nuget unknown with NO cache entry is a stale unknown — NO network, NO cache write (offline check)", async () => {
     const { dir, path } = tempCachePath();
+
     try {
       const throwingFetch = (async (): Promise<Response> => {
         throw new Error("check must never fetch");
@@ -2316,6 +2524,7 @@ describe("enrichUnknowns nuget (two-step fetch, negative discipline, offline che
           verbose: false,
         }),
       );
+
       expect(result.staleUnknowns).toEqual(["pkg:nuget/Newtonsoft.Json@13.0.4"]);
       expect(registryClaim(result.model.packages[0])).toBeUndefined();
       expect(readCache(path).size).toBe(0); // no file was ever written
@@ -2326,6 +2535,7 @@ describe("enrichUnknowns nuget (two-step fetch, negative discipline, offline che
 
   test("mixed misses: pypi + npm + nuget unknowns all resolve through their own arms in one run", async () => {
     const { dir, path } = tempCachePath();
+
     try {
       const pypiUnknown: PackageEntry = {
         purl: "pkg:pypi/anyio@4.12.1",
@@ -2347,13 +2557,19 @@ describe("enrichUnknowns nuget (two-step fetch, negative discipline, offline che
         if (url === "https://pypi.org/pypi/anyio/4.12.1/json") {
           return jsonResponse({ info: { license_expression: "MIT" } });
         }
+
         if (url === "https://registry.npmjs.org/no-claims") {
           return jsonResponse({ versions: { "2.0.0": { license: "ISC" } } });
         }
-        if (url === LEAF_URL) return jsonResponse({ catalogEntry: CATALOG_URL });
+
+        if (url === LEAF_URL) {
+          return jsonResponse({ catalogEntry: CATALOG_URL });
+        }
+
         if (url === CATALOG_URL) {
           return jsonResponse({ licenseExpression: "Apache-2.0" });
         }
+
         throw new Error(`unexpected url ${url}`);
       });
       const result = await withFetch(fetch, () =>
@@ -2364,10 +2580,13 @@ describe("enrichUnknowns nuget (two-step fetch, negative discipline, offline che
           backoffBaseMs: fastBackoff,
         }),
       );
+
       expect(calls).toHaveLength(4);
       const claims = result.model.packages.map((p) => registryClaim(p)?.raw);
+
       expect(claims).toEqual(["MIT", "ISC", "Apache-2.0"]);
       const loaded = readCache(path);
+
       expect(getEntry(loaded, "pkg:nuget/Newtonsoft.Json@13.0.4")?.via).toBe("license-expression");
       expect(loaded.size).toBe(3);
     } finally {
@@ -2402,6 +2621,7 @@ describe("maven deps.dev URL builder (qualifier stripping + SSRF pin)", () => {
 
   test("an attacker-shaped group/artifact (embedded slash, @, percent-escapes) can never change the host or path root", () => {
     const url = depsDevVersionUrl("evil.example%2Fsteal/lib%40x", "1.0.0?type=jar");
+
     expect(url.startsWith(`${DEPS_DEV_API_HOST}/v3/systems/MAVEN/packages/`)).toBe(true);
     // A decoded "/" is re-encoded, never becoming a real path boundary.
     expect(url).not.toContain("evil.example/steal");
@@ -2414,6 +2634,7 @@ describe("maven deps.dev URL builder (qualifier stripping + SSRF pin)", () => {
       "org.example/querydsl-apt",
       "5.0.0?classifier=jakarta&type=jar",
     );
+
     expect(plain).toBe(classified);
   });
 });
@@ -2492,6 +2713,7 @@ describe("enrichUnknowns maven (deps.dev single fetch, honest sentinel, 404-defi
 
   function tempCachePath(): { dir: string; path: string } {
     const dir = mkdtempSync(join(tmpdir(), "enrich-maven-"));
+
     return { dir, path: join(dir, "enrichment-cache.json") };
   }
 
@@ -2521,9 +2743,11 @@ describe("enrichUnknowns maven (deps.dev single fetch, honest sentinel, 404-defi
     const calls: string[] = [];
     const impl = (async (input: string | URL | Request): Promise<Response> => {
       const url = typeof input === "string" ? input : input.toString();
+
       calls.push(url);
       return responder(url);
     }) as typeof fetch;
+
     return { fetch: impl, calls };
   }
 
@@ -2536,6 +2760,7 @@ describe("enrichUnknowns maven (deps.dev single fetch, honest sentinel, 404-defi
 
   async function withFetch<T>(impl: typeof fetch, fn: () => Promise<T>): Promise<T> {
     const original = globalThis.fetch;
+
     globalThis.fetch = impl;
     try {
       return await fn();
@@ -2546,9 +2771,13 @@ describe("enrichUnknowns maven (deps.dev single fetch, honest sentinel, 404-defi
 
   test("resolved: a single licenses entry → ONE registry claim + a positive entry keyed by the VERBATIM (qualifier-bearing) purl", async () => {
     const { dir, path } = tempCachePath();
+
     try {
       const { fetch, calls } = fetchByUrl((url) => {
-        if (url === VERSION_URL) return jsonResponse({ licenses: ["Apache-2.0"] });
+        if (url === VERSION_URL) {
+          return jsonResponse({ licenses: ["Apache-2.0"] });
+        }
+
         throw new Error(`unexpected url ${url}`);
       });
       const result = await withFetch(fetch, () =>
@@ -2559,11 +2788,13 @@ describe("enrichUnknowns maven (deps.dev single fetch, honest sentinel, 404-defi
           backoffBaseMs: fastBackoff,
         }),
       );
+
       expect(calls).toEqual([VERSION_URL]);
       expect(registryClaims(result.model.packages[0])).toEqual([
         { raw: "Apache-2.0", kind: "expression", source: "registry" },
       ]);
       const recorded = getEntry(readCache(path), "pkg:maven/com.example/lib@2.0.0?type=jar");
+
       expect(recorded).toEqual({
         license: "Apache-2.0",
         fetchedFrom: "deps-dev",
@@ -2577,6 +2808,7 @@ describe("enrichUnknowns maven (deps.dev single fetch, honest sentinel, 404-defi
 
   test('sentinel: "non-standard" → NO registry claim, a governed NEGATIVE entry (a definitive answer, not a retry)', async () => {
     const { dir, path } = tempCachePath();
+
     try {
       const { fetch } = fetchByUrl(() => jsonResponse({ licenses: ["non-standard"] }));
       const result = await withFetch(fetch, () =>
@@ -2587,8 +2819,10 @@ describe("enrichUnknowns maven (deps.dev single fetch, honest sentinel, 404-defi
           backoffBaseMs: fastBackoff,
         }),
       );
+
       expect(registryClaims(result.model.packages[0])).toEqual([]);
       const recorded = getEntry(readCache(path), "pkg:maven/com.example/lib@2.0.0?type=jar");
+
       expect(recorded).toEqual({
         license: null,
         fetchedFrom: "deps-dev",
@@ -2602,6 +2836,7 @@ describe("enrichUnknowns maven (deps.dev single fetch, honest sentinel, 404-defi
 
   test("multi-entry licenses array → MULTIPLE separate registry claims, cache stores the sorted array (never a joined/guessed compound)", async () => {
     const { dir, path } = tempCachePath();
+
     try {
       const { fetch } = fetchByUrl(() =>
         jsonResponse({
@@ -2616,12 +2851,14 @@ describe("enrichUnknowns maven (deps.dev single fetch, honest sentinel, 404-defi
           backoffBaseMs: fastBackoff,
         }),
       );
+
       expect(registryClaims(result.model.packages[0])).toEqual([
         { raw: "GPL-3.0-only", kind: "expression", source: "registry" },
         { raw: "LGPL-3.0-only", kind: "expression", source: "registry" },
         { raw: "MPL-1.1", kind: "expression", source: "registry" },
       ]);
       const recorded = getEntry(readCache(path), "pkg:maven/com.example/lib@2.0.0?type=jar");
+
       expect(recorded?.license).toEqual(["GPL-3.0-only", "LGPL-3.0-only", "MPL-1.1"]);
     } finally {
       rmSync(dir, { recursive: true, force: true });
@@ -2630,6 +2867,7 @@ describe("enrichUnknowns maven (deps.dev single fetch, honest sentinel, 404-defi
 
   test("404: DEFINITIVE negative — no registry presence — package stays unknown, generate does NOT throw", async () => {
     const { dir, path } = tempCachePath();
+
     try {
       const { fetch, calls } = fetchByUrl(() => jsonResponse({}, 404));
       const result = await withFetch(fetch, () =>
@@ -2640,9 +2878,11 @@ describe("enrichUnknowns maven (deps.dev single fetch, honest sentinel, 404-defi
           backoffBaseMs: fastBackoff,
         }),
       );
+
       expect(calls).toEqual([VERSION_URL]);
       expect(registryClaims(result.model.packages[0])).toEqual([]);
       const recorded = getEntry(readCache(path), "pkg:maven/com.example/lib@2.0.0?type=jar");
+
       expect(recorded).toEqual({
         license: null,
         fetchedFrom: "deps-dev",
@@ -2656,8 +2896,10 @@ describe("enrichUnknowns maven (deps.dev single fetch, honest sentinel, 404-defi
 
   test("TRANSIENT: a persistent 500 THROWS loudly and writes NO entry (negative-poison impossible)", async () => {
     const { dir, path } = tempCachePath();
+
     try {
       const { fetch } = fetchByUrl(() => jsonResponse({}, 500));
+
       await expect(
         withFetch(fetch, () =>
           enrichUnknowns(model(unknownMaven()), {
@@ -2676,10 +2918,12 @@ describe("enrichUnknowns maven (deps.dev single fetch, honest sentinel, 404-defi
 
   test("a network error after retries throws loudly, writes NOTHING", async () => {
     const { dir, path } = tempCachePath();
+
     try {
       const throwingFetch = (async (): Promise<Response> => {
         throw new Error("NETWORK DOWN");
       }) as unknown as typeof fetch;
+
       await expect(
         withFetch(throwingFetch, () =>
           enrichUnknowns(model(unknownMaven()), {
@@ -2698,8 +2942,10 @@ describe("enrichUnknowns maven (deps.dev single fetch, honest sentinel, 404-defi
 
   test("a pre-seeded POSITIVE maven entry (single string) resolves with ZERO fetches", async () => {
     const { dir, path } = tempCachePath();
+
     try {
       const cache = new Map<string, CacheEntry>();
+
       putEntry(cache, "pkg:maven/com.example/lib@2.0.0?type=jar", {
         license: "Apache-2.0",
         fetchedFrom: "deps-dev",
@@ -2716,6 +2962,7 @@ describe("enrichUnknowns maven (deps.dev single fetch, honest sentinel, 404-defi
           verbose: false,
         }),
       );
+
       expect(calls).toEqual([]);
       expect(registryClaims(result.model.packages[0])).toEqual([
         { raw: "Apache-2.0", kind: "expression", source: "registry" },
@@ -2727,8 +2974,10 @@ describe("enrichUnknowns maven (deps.dev single fetch, honest sentinel, 404-defi
 
   test("a pre-seeded POSITIVE maven entry (multi-value array) replays as MULTIPLE claims with ZERO fetches", async () => {
     const { dir, path } = tempCachePath();
+
     try {
       const cache = new Map<string, CacheEntry>();
+
       putEntry(cache, "pkg:maven/com.example/lib@2.0.0?type=jar", {
         license: ["GPL-3.0-only", "LGPL-3.0-only", "MPL-1.1"],
         fetchedFrom: "deps-dev",
@@ -2745,6 +2994,7 @@ describe("enrichUnknowns maven (deps.dev single fetch, honest sentinel, 404-defi
           verbose: false,
         }),
       );
+
       expect(calls).toEqual([]);
       expect(registryClaims(result.model.packages[0]).map((c) => c.raw)).toEqual([
         "GPL-3.0-only",
@@ -2758,8 +3008,10 @@ describe("enrichUnknowns maven (deps.dev single fetch, honest sentinel, 404-defi
 
   test("a pre-seeded NEGATIVE maven entry stays unknown with ZERO fetches", async () => {
     const { dir, path } = tempCachePath();
+
     try {
       const cache = new Map<string, CacheEntry>();
+
       putEntry(cache, "pkg:maven/com.example/lib@2.0.0?type=jar", {
         license: null,
         fetchedFrom: "deps-dev",
@@ -2776,6 +3028,7 @@ describe("enrichUnknowns maven (deps.dev single fetch, honest sentinel, 404-defi
           verbose: false,
         }),
       );
+
       expect(calls).toEqual([]);
       expect(registryClaims(result.model.packages[0])).toEqual([]);
       expect(result.staleUnknowns).toEqual([]);
@@ -2786,6 +3039,7 @@ describe("enrichUnknowns maven (deps.dev single fetch, honest sentinel, 404-defi
 
   test("check mode: a maven unknown with NO cache entry is a stale unknown — NO network, NO cache write (offline check)", async () => {
     const { dir, path } = tempCachePath();
+
     try {
       const throwingFetch = (async (): Promise<Response> => {
         throw new Error("check must never fetch");
@@ -2797,6 +3051,7 @@ describe("enrichUnknowns maven (deps.dev single fetch, honest sentinel, 404-defi
           verbose: false,
         }),
       );
+
       expect(result.staleUnknowns).toEqual(["pkg:maven/com.example/lib@2.0.0?type=jar"]);
       expect(registryClaims(result.model.packages[0])).toEqual([]);
       expect(readCache(path).size).toBe(0);
@@ -2807,8 +3062,10 @@ describe("enrichUnknowns maven (deps.dev single fetch, honest sentinel, 404-defi
 
   test("check mode: a WARM committed cache performs ZERO fetches (the maven arm never touches the network in check — MVN-02 offline)", async () => {
     const { dir, path } = tempCachePath();
+
     try {
       const cache = new Map<string, CacheEntry>();
+
       putEntry(cache, "pkg:maven/com.example/lib@2.0.0?type=jar", {
         license: "Apache-2.0",
         fetchedFrom: "deps-dev",
@@ -2827,6 +3084,7 @@ describe("enrichUnknowns maven (deps.dev single fetch, honest sentinel, 404-defi
           verbose: false,
         }),
       );
+
       expect(result.staleUnknowns).toEqual([]);
       expect(registryClaims(result.model.packages[0])).toEqual([
         { raw: "Apache-2.0", kind: "expression", source: "registry" },
@@ -2848,11 +3106,13 @@ describe("enrichUnknowns maven (deps.dev single fetch, honest sentinel, 404-defi
     };
     const CLASSIFIER_URL =
       "https://api.deps.dev/v3/systems/MAVEN/packages/org.example%3Aquerydsl-apt/versions/5.0.0";
+
     try {
       const { fetch, calls } = fetchByUrl((url) => {
         if (url === CLASSIFIER_URL) {
           return jsonResponse({ licenses: ["Apache-2.0"] });
         }
+
         throw new Error(`unexpected url ${url}`);
       });
       const result = await withFetch(fetch, () =>
@@ -2863,11 +3123,13 @@ describe("enrichUnknowns maven (deps.dev single fetch, honest sentinel, 404-defi
           backoffBaseMs: fastBackoff,
         }),
       );
+
       expect(calls).toEqual([CLASSIFIER_URL]);
       const recorded = getEntry(
         readCache(path),
         "pkg:maven/org.example/querydsl-apt@5.0.0?classifier=jakarta&type=jar",
       );
+
       expect(recorded?.license).toBe("Apache-2.0");
       expect(registryClaims(result.model.packages[0])).toEqual([
         { raw: "Apache-2.0", kind: "expression", source: "registry" },
@@ -2879,6 +3141,7 @@ describe("enrichUnknowns maven (deps.dev single fetch, honest sentinel, 404-defi
 
   test("mixed misses: pypi + maven unknowns resolve through their own arms in one run", async () => {
     const { dir, path } = tempCachePath();
+
     try {
       const pypiUnknown: PackageEntry = {
         purl: "pkg:pypi/anyio@4.12.1",
@@ -2892,9 +3155,11 @@ describe("enrichUnknowns maven (deps.dev single fetch, honest sentinel, 404-defi
         if (url === "https://pypi.org/pypi/anyio/4.12.1/json") {
           return jsonResponse({ info: { license_expression: "MIT" } });
         }
+
         if (url === VERSION_URL) {
           return jsonResponse({ licenses: ["Apache-2.0"] });
         }
+
         throw new Error(`unexpected url ${url}`);
       });
       const result = await withFetch(fetch, () =>
@@ -2905,10 +3170,13 @@ describe("enrichUnknowns maven (deps.dev single fetch, honest sentinel, 404-defi
           backoffBaseMs: fastBackoff,
         }),
       );
+
       expect(calls).toHaveLength(2);
       const claims = result.model.packages.map((p) => registryClaims(p)[0]?.raw);
+
       expect(claims).toEqual(["MIT", "Apache-2.0"]);
       const loaded = readCache(path);
+
       expect(loaded.size).toBe(2);
     } finally {
       rmSync(dir, { recursive: true, force: true });

@@ -418,6 +418,7 @@ describe("comment-refill/refill option schema", () => {
   it("rejects configuration with no options object at all", () => {
     const linter = new Linter();
     let threw = false;
+
     try {
       linter.verify("// a\n", {
         languageOptions: { ecmaVersion: 2022, sourceType: "module" },
@@ -427,6 +428,7 @@ describe("comment-refill/refill option schema", () => {
     } catch {
       threw = true;
     }
+
     if (!threw) {
       throw new Error("expected a configuration error when maxLength is omitted entirely");
     }
@@ -435,6 +437,7 @@ describe("comment-refill/refill option schema", () => {
   it("rejects configuration with an options object missing maxLength", () => {
     const linter = new Linter();
     let threw = false;
+
     try {
       linter.verify("// a\n", {
         languageOptions: { ecmaVersion: 2022, sourceType: "module" },
@@ -444,6 +447,7 @@ describe("comment-refill/refill option schema", () => {
     } catch {
       threw = true;
     }
+
     if (!threw) {
       throw new Error(
         "expected a configuration error when maxLength is missing from the options object",
@@ -459,6 +463,7 @@ describe("comment-refill/refill option schema", () => {
       rules: { "refill/refill": ["error", { maxLength: 80 }] },
     });
     const fatal = messages.find((m) => m.fatal);
+
     if (fatal) {
       throw new Error(`did not expect a fatal error, got: ${fatal.message}`);
     }
@@ -490,11 +495,13 @@ describe("comment-refill/refill leaves structural tool directives alone", () => 
       },
     };
     const out = linter.verifyAndFix(code, configs, "test.js");
+
     if (out.output !== code) {
       throw new Error(
         `expected the eslint-disable comment and the code around it to be byte-identical, got:\n${out.output}`,
       );
     }
+
     if (out.messages.length !== 0) {
       throw new Error(`expected zero remaining messages, got: ${JSON.stringify(out.messages)}`);
     }

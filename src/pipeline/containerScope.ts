@@ -50,7 +50,11 @@ export function applyContainerScopes(
   developmentContainers: ReadonlySet<string>,
 ): CanonicalDependencies {
   const packages = model.packages.map((pkg) => rescoped(pkg, developmentContainers));
-  for (const pkg of packages) assertOsScopeIsDockerOnly(pkg);
+
+  for (const pkg of packages) {
+    assertOsScopeIsDockerOnly(pkg);
+  }
+
   return { packages };
 }
 
@@ -66,7 +70,10 @@ export function applyContainerScopes(
  * target.
  */
 function assertOsScopeIsDockerOnly(pkg: PackageEntry): void {
-  if (pkg.scope !== "os") return;
+  if (pkg.scope !== "os") {
+    return;
+  }
+
   for (const occurrence of pkg.occurrences) {
     if (!occurrence.target.startsWith(DOCKER_IDENTITY_PREFIX)) {
       throw new Error(
@@ -90,13 +97,18 @@ function rescoped(pkg: PackageEntry, developmentContainers: ReadonlySet<string>)
   if (pkg.scope === "os" && OS_PACKAGE_ECOSYSTEMS.has(purlEcosystem(pkg.purl))) {
     return pkg;
   }
+
   const occurrences = pkg.occurrences.map((occurrence) =>
     rescopedOccurrence(occurrence, developmentContainers),
   );
   const occurrencesChanged = occurrences.some(
     (occurrence, index) => occurrence !== pkg.occurrences[index],
   );
-  if (pkg.scope === "app" && !occurrencesChanged) return pkg;
+
+  if (pkg.scope === "app" && !occurrencesChanged) {
+    return pkg;
+  }
+
   return { ...pkg, scope: "app", occurrences };
 }
 
@@ -109,7 +121,13 @@ function rescopedOccurrence(
   occurrence: Occurrence,
   developmentContainers: ReadonlySet<string>,
 ): Occurrence {
-  if (occurrence.isDevDependency) return occurrence;
-  if (!developmentContainers.has(occurrence.target)) return occurrence;
+  if (occurrence.isDevDependency) {
+    return occurrence;
+  }
+
+  if (!developmentContainers.has(occurrence.target)) {
+    return occurrence;
+  }
+
   return { ...occurrence, isDevDependency: true };
 }

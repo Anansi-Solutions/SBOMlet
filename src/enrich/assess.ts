@@ -47,6 +47,7 @@ import {
   readScancodeMemo,
   scanPackageSources,
   serializeScancodeMemo,
+  ScancodeEnvironmentError,
   SCANCODE_TOOL,
   sourceDirsFor,
   type IntensiveOptions,
@@ -96,11 +97,17 @@ export async function assessPackages(
   const memo = readScancodeMemo(opts.memoPath);
   const packages = [...model.packages];
 
-  // Scan pass FIRST so a freshly-memoized positive replays in this same run;
-  // gated on generate --intensive. The memo is materialized once at the end.
+  // Scan pass FIRST so a freshly-memoized positive replays in this same run; gated on generate
+  // --intensive. The write lives in a finally so a fatal abort (a broken local tool install - see
+  // ScanContext.scanOpts / analyzeOne) still persists every completed scan from this run, not just
+  // a clean full-set pass; see persistMemo for the merge-on-write contract that makes that write
+  // safe.
   if (opts.mode === "generate" && opts.intensive !== undefined) {
-    await scanFullSet(packages, memo, opts.intensive, opts);
-    writeArtifact(opts.memoPath, serializeScancodeMemo(memo));
+    try {
+      await scanFullSet(packages, memo, opts.intensive, opts);
+    } finally {
+      persistMemo(opts.memoPath, memo);
+    }
   }
 
   // Replay pass: unconditional, EVERY package (a memoized answer must land on a precisely-declared
@@ -110,14 +117,36 @@ export async function assessPackages(
   return { model: { packages } };
 }
 
+/**
+ * Write the memo merged with whatever is on disk at write time, never a blind overwrite of this
+ * run's in-memory Map. The merge only protects against clobbering entries present on disk at that
+ * instant; it is not cross-process synchronization, so two writers racing on the same purl can
+ * still each drop the other's addition. On a same-purl collision the in-memory entry wins.
+ */
+function persistMemo(path: string, memo: Map<string, ScancodeMemoEntry>): void {
+  const onDisk = readScancodeMemo(path);
+  const merged = new Map(onDisk);
+
+  for (const [purl, entry] of memo) {
+    merged.set(purl, entry);
+  }
+
+  writeArtifact(path, serializeScancodeMemo(merged));
+}
+
 /** Append the memo's positive answers as ScanCode claims across ALL packages. */
 function replayMemo(packages: PackageEntry[], memo: Map<string, ScancodeMemoEntry>): void {
   packages.forEach((entry, index) => {
     const memoEntry = getMemoEntry(memo, entry.purl);
+
     // A no-result entry (license null) appends nothing - a scan-skip marker, never a disagreement
     // with a positive registry answer.
-    if (memoEntry === undefined || memoEntry.license === null) return;
+    if (memoEntry === undefined || memoEntry.license === null) {
+      return;
+    }
+
     const withClaim = withCacheClaim(entry, memoEntry.license, "scancode");
+
     packages[index] = withReplayAttribution(withClaim, memoEntry);
   });
 }
@@ -128,6 +157,13 @@ interface ScanCounts {
   hits: number;
   noLocalSources: number;
   unsupported: number;
+  /**
+   * A per-package scan that rejected (timeout, non-zero exit with no usable output, oversized or
+   * malformed output) and was CONTAINED rather than aborting the run - see {@link
+   * ScancodeEnvironmentError} for the fatal class this excludes. Never memoized, so the package is
+   * retried on the next run.
+   */
+  failed: number;
 }
 
 /** Everything analyzeOne needs, bundled so the per-package call stays readable. */
@@ -156,9 +192,13 @@ async function scanFullSet(
     scanOpts: scanOptionsFrom(intensive),
     now: opts.now ?? defaultNow,
     verbose: opts.verbose,
-    counts: { scanned: 0, hits: 0, noLocalSources: 0, unsupported: 0 },
+    counts: { scanned: 0, hits: 0, noLocalSources: 0, unsupported: 0, failed: 0 },
   };
-  for (const entry of packages) await analyzeOne(entry, ctx);
+
+  for (const entry of packages) {
+    await analyzeOne(entry, ctx);
+  }
+
   reportCounts(ctx.counts);
 }
 
@@ -166,18 +206,30 @@ async function scanFullSet(
  * Classify one package into the analysis partition and, when it is a fresh scannable target, run
  * the scan and memoize the outcome. A memo hit is skipped; an unsupported ecosystem or an absent
  * local tree is counted and reported but NEVER memoized (a memo entry means the tree was analyzed).
+ *
+ * A per-package scan failure is CONTAINED, never memoized (retried next run), and reported by name
+ * unconditionally on stderr - not gated on --verbose like the routine no-local-sources skip above,
+ * because an unexpected rejection (a timeout, a crash) is exceptional and must stay visible even in
+ * a quiet run. A {@link ScancodeEnvironmentError} - the local tool install itself is broken - is
+ * the one exception: it is NOT a per-package condition, so it propagates uncaught and aborts the
+ * whole scan pass (scanFullSet's loop, and assessPackages's finally, still persist every entry
+ * already memoized before the abort).
  */
 async function analyzeOne(entry: PackageEntry, ctx: ScanContext): Promise<void> {
   if (getMemoEntry(ctx.memo, entry.purl) !== undefined) {
     ctx.counts.hits += 1;
     return;
   }
+
   const parsed = parsePurl(entry.purl);
+
   if (parsed === undefined || (parsed.type !== "npm" && parsed.type !== "pypi")) {
     ctx.counts.unsupported += 1;
     return;
   }
+
   const dirs = sourceDirsFor(entry.purl, ctx.intensive.targetDirs);
+
   if (dirs.length === 0) {
     ctx.counts.noLocalSources += 1;
     if (ctx.verbose) {
@@ -185,11 +237,36 @@ async function analyzeOne(entry: PackageEntry, ctx: ScanContext): Promise<void> 
         `intensive skip: ${sanitizeForLog(entry.purl)} — ` + `sources not locally present\n`,
       );
     }
+
     return;
   }
-  const resolved = await scanDirs(dirs, ctx.scanOpts);
+
+  let resolved: ScancodeResolution | null;
+
+  try {
+    resolved = await scanDirs(dirs, ctx.scanOpts);
+  } catch (error) {
+    if (error instanceof ScancodeEnvironmentError) {
+      throw error;
+    }
+
+    ctx.counts.failed += 1;
+    process.stderr.write(
+      `intensive failed: ${sanitizeForLog(entry.purl)} — ${scanFailureReason(error)}\n`,
+    );
+
+    return;
+  }
+
   ctx.counts.scanned += 1;
   putMemoEntry(ctx.memo, entry.purl, memoEntryFor(resolved), ctx.now);
+}
+
+/**
+ * The one-line reason a contained scan rejection prints, mirroring the tool's error-message idiom.
+ */
+function scanFailureReason(error: unknown): string {
+  return error instanceof Error ? error.message.split("\n")[0]! : String(error);
 }
 
 /** Scan the ordered candidate dirs, returning the first positive answer, or null. */
@@ -199,8 +276,12 @@ async function scanDirs(
 ): Promise<ScancodeResolution | null> {
   for (const dir of dirs) {
     const resolved = await scanPackageSources(dir, scanOpts);
-    if (resolved !== null) return resolved;
+
+    if (resolved !== null) {
+      return resolved;
+    }
   }
+
   return null;
 }
 
@@ -216,6 +297,7 @@ function memoEntryFor(resolved: ScancodeResolution | null): ScancodeMemoEntry {
       via: `${SCANCODE_TOOL.name}@${SCANCODE_TOOL.version}/no-answer`,
     };
   }
+
   return {
     license: resolved.raw,
     via: resolved.via,
@@ -237,6 +319,6 @@ function reportCounts(counts: ScanCounts): void {
   process.stderr.write(
     `intensive: scanned ${counts.scanned}, memoized ${counts.hits} (hits), ` +
       `no local sources ${counts.noLocalSources}, ` +
-      `unsupported ${counts.unsupported}\n`,
+      `unsupported ${counts.unsupported}, failed ${counts.failed}\n`,
   );
 }

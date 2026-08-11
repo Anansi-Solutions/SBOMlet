@@ -68,14 +68,23 @@ function attribution(partial: Partial<PackageAttribution>): PackageAttribution {
 function headingsOutsideFences(output: string): string[] {
   const result: string[] = [];
   let openFence: string | null = null;
+
   for (const line of output.split("\n")) {
     if (/^`{3,}$/.test(line)) {
-      if (openFence === null) openFence = line;
-      else if (line === openFence) openFence = null;
+      if (openFence === null) {
+        openFence = line;
+      } else if (line === openFence) {
+        openFence = null;
+      }
+
       continue;
     }
-    if (openFence === null && line.startsWith("#")) result.push(line);
+
+    if (openFence === null && line.startsWith("#")) {
+      result.push(line);
+    }
   }
+
   return result;
 }
 
@@ -106,6 +115,7 @@ describe("renderNotices — appendix dedup and expression decomposition", () => 
   test("two MIT packages produce exactly ONE '### MIT' appendix entry with the canonical text", () => {
     const output = renderNotices(model);
     const lines = output.split("\n");
+
     expect(lines.filter((line) => line === "### MIT").length).toBe(1);
     // Distinctive canonical-MIT substring from spdx-license-list/full.
     expect(output.includes("Permission is hereby granted, free of charge")).toBe(true);
@@ -114,10 +124,12 @@ describe("renderNotices — appendix dedup and expression decomposition", () => 
   test("an 'MIT OR Apache-2.0' package contributes BOTH ids to the appendix, sorted compareCodeUnits", () => {
     const output = renderNotices(model);
     const lines = output.split("\n");
+
     expect(lines.filter((line) => line === "### Apache-2.0").length).toBe(1);
     // Distinctive canonical-Apache substring.
     expect(output.includes("Version 2.0, January 2004")).toBe(true);
     const appendixStart = output.indexOf("## License texts");
+
     expect(appendixStart).toBeGreaterThan(-1);
     expect(output.indexOf("### Apache-2.0", appendixStart)).toBeLessThan(
       output.indexOf("### MIT", appendixStart),
@@ -126,6 +138,7 @@ describe("renderNotices — appendix dedup and expression decomposition", () => 
 
   test("leafIds decomposes an OR expression into both leaf ids (no exceptions)", () => {
     const result = leafIds(parse("MIT OR Apache-2.0") as ExpressionNode);
+
     expect([...result.ids].sort()).toEqual(["Apache-2.0", "MIT"]);
     expect(result.exceptions).toEqual([]);
   });
@@ -156,6 +169,7 @@ describe("renderNotices — canonical marker honesty", () => {
   test("every canonical appendix entry carries the exact marker as its own line", () => {
     const output = renderNotices(model);
     const lines = output.split("\n");
+
     // Two referenced ids (Apache-2.0, MIT) → two canonical entries → two
     // standalone marker lines.
     expect(lines.filter((line) => line === MARKER).length).toBe(2);
@@ -163,6 +177,7 @@ describe("renderNotices — canonical marker honesty", () => {
 
   test("a package with copyrightLines gets a per-package section instead of relying silently on the appendix", () => {
     const output = renderNotices(model);
+
     expect(output.includes("### acme-pkg@1.0.0")).toBe(true);
     expect(output.includes("- Copyright (c) 2020 Acme Corp")).toBe(true);
     // The attribution-less package gets NO section.
@@ -220,6 +235,7 @@ describe("renderNotices — per-package sections", () => {
 
   test("only packages with copyright lines, NOTICE texts, author, or verbatim texts get sections", () => {
     const output = renderNotices(model);
+
     expect(output.includes("### author-pkg@1.0.0")).toBe(true);
     expect(output.includes("### copyright-pkg@1.0.0")).toBe(true);
     expect(output.includes("### notice-pkg@2.0.0")).toBe(true);
@@ -232,12 +248,14 @@ describe("renderNotices — per-package sections", () => {
     const author = output.indexOf("### author-pkg@1.0.0");
     const copyright = output.indexOf("### copyright-pkg@1.0.0");
     const notice = output.indexOf("### notice-pkg@2.0.0");
+
     expect(author).toBeLessThan(copyright);
     expect(copyright).toBeLessThan(notice);
   });
 
   test("copyright lines render as escaped bullet lines", () => {
     const output = renderNotices(model);
+
     expect(output.includes("- Copyright (c) 2020 Pipe\\|Corp")).toBe(true);
     expect(output.includes("Pipe|Corp")).toBe(false);
   });
@@ -247,6 +265,7 @@ describe("renderNotices — per-package sections", () => {
     const start = output.indexOf("### author-pkg@1.0.0");
     const end = output.indexOf("### ", start + 1);
     const section = output.slice(start, end);
+
     expect(section.includes("Author: Sam Solo")).toBe(true);
     expect(/copyright/i.test(section)).toBe(false);
   });
@@ -256,9 +275,11 @@ describe("renderNotices — per-package sections", () => {
     const start = output.indexOf("### notice-pkg@2.0.0");
     const end = output.indexOf("\n## ", start);
     const section = output.slice(start, end);
+
     expect(section.includes("NOTICE:")).toBe(true);
     const noticeAt = section.indexOf("NOTICE:");
     const fenceAt = section.indexOf("```", noticeAt);
+
     expect(fenceAt).toBeGreaterThan(noticeAt);
     expect(section.indexOf("Notice Product")).toBeGreaterThan(fenceAt);
   });
@@ -283,6 +304,7 @@ describe("renderNotices — injection-proof fencing", () => {
   test("a 5-backtick run renders inside a fence of at least 6 backticks", () => {
     const output = renderNotices(model);
     const openFence = output.split("\n").find((line) => /^`{3,}$/.test(line));
+
     expect(openFence).toBeDefined();
     expect((openFence as string).length).toBeGreaterThanOrEqual(6);
   });
@@ -290,6 +312,7 @@ describe("renderNotices — injection-proof fencing", () => {
   test("a crafted '## Fake heading' stays inside the fence — the document's own heading set is unchanged", () => {
     const output = renderNotices(model);
     const outside = headingsOutsideFences(output);
+
     expect(outside.includes("## Fake heading")).toBe(false);
     expect(outside).toEqual([
       "# Third-Party Notices",
@@ -320,6 +343,7 @@ describe("renderNotices — unknown-license packages", () => {
       ],
     };
     const output = renderNotices(model);
+
     expect(output.includes("## Packages with unknown licenses")).toBe(true);
     expect(output.includes("- mystery-pkg@1.0.0 — unknown license, no text included")).toBe(true);
     expect(output.includes("- known-pkg@")).toBe(false);
@@ -337,6 +361,7 @@ describe("renderNotices — unknown-license packages", () => {
       ],
     };
     const output = renderNotices(model);
+
     expect(output.includes("## Packages with unknown licenses")).toBe(false);
   });
 });
@@ -355,6 +380,7 @@ describe("renderNotices/renderMarkdown agreement — LicenseRef-only unknown lan
     };
     const notices = renderNotices(model);
     const licenses = renderMarkdown(model);
+
     expect(notices.includes("## Packages with unknown licenses")).toBe(true);
     expect(notices.includes("- ref-only-pkg@1.0.0 — unknown license, no text included")).toBe(true);
     expect(licenses.includes("- Unknown license: 1")).toBe(true);
@@ -381,9 +407,11 @@ describe("renderNotices — WITH exceptions and unlisted ids (Test 6, A3)", () =
 
   test("a WITH expression renders the license-part canonical text plus a flagged note naming the exception", () => {
     const output = renderNotices(model);
+
     expect(output.includes("### GPL-2.0-only")).toBe(true);
     expect(output.includes("GNU GENERAL PUBLIC LICENSE")).toBe(true);
     const lines = output.split("\n");
+
     expect(
       lines.some(
         (line) =>
@@ -394,8 +422,10 @@ describe("renderNotices — WITH exceptions and unlisted ids (Test 6, A3)", () =
 
   test("an id absent from spdx-license-list yields a flagged 'no canonical text' note instead of a crash", () => {
     const output = renderNotices(model);
+
     expect(output.includes("### LicenseRef-custom-thing")).toBe(true);
     const lines = output.split("\n");
+
     expect(
       lines.some(
         (line) => line.includes("no canonical text") && line.includes("LicenseRef-custom-thing"),
@@ -429,6 +459,7 @@ describe("renderNotices — imprecise label honesty", () => {
       ],
     };
     const output = renderNotices(model);
+
     // The per-package License line is honest: family + marker, never BSD-2-Clause.
     expect(output.includes("License: BSD (imprecise)")).toBe(true);
     expect(output.includes("BSD-2-Clause")).toBe(false);
@@ -449,6 +480,7 @@ describe("renderNotices — golden byte equality", () => {
     const model = mergeSboms([{ sbom: evidenceDoc, targetIdentity: "libraries/evidence-target" }]);
     const annotated = annotateFindings(model, []).model;
     const golden = readFileSync(join(import.meta.dir, "golden", "notices.md"), "utf-8");
+
     expect(renderNotices(annotated)).toBe(golden);
   });
 });
@@ -481,16 +513,19 @@ describe("renderNotices — determinism contract", () => {
     };
     const a = renderNotices(model);
     const b = renderNotices(reversed);
+
     expect(a).toBe(b);
     expect(renderNotices(model)).toBe(a);
   });
 
   test("no CR, exactly one trailing LF, dateless header", () => {
     const output = renderNotices(model);
+
     expect(output.includes("\r")).toBe(false);
     expect(output.endsWith("\n")).toBe(true);
     expect(output.endsWith("\n\n")).toBe(false);
     const lines = output.split("\n");
+
     expect(lines[0]).toBe("# Third-Party Notices");
     expect(lines[2]).toBe("<!-- AUTO-GENERATED - do not edit. Regenerate with: task generate -->");
     expect(/\b20\d\d\b.*generated/i.test(output)).toBe(false);

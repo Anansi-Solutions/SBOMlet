@@ -618,6 +618,12 @@
       "resolvable": true,
       "via": "version-license"
     },
+    "pkg:npm/%40stylistic/eslint-plugin@5.10.0": {
+      "fetchedFrom": "npm",
+      "license": "MIT",
+      "resolvable": true,
+      "via": "version-license"
+    },
     "pkg:npm/%40tybys/wasm-util@0.10.2": {
       "fetchedFrom": "npm",
       "license": "MIT",
@@ -1308,6 +1314,12 @@
       "resolvable": true,
       "via": "version-license"
     },
+    "pkg:npm/eslint-visitor-keys@4.2.1": {
+      "fetchedFrom": "npm",
+      "license": "Apache-2.0",
+      "resolvable": true,
+      "via": "version-license"
+    },
     "pkg:npm/eslint-visitor-keys@5.0.1": {
       "fetchedFrom": "npm",
       "license": "Apache-2.0",
@@ -1317,6 +1329,12 @@
     "pkg:npm/eslint@10.7.0": {
       "fetchedFrom": "npm",
       "license": "MIT",
+      "resolvable": true,
+      "via": "version-license"
+    },
+    "pkg:npm/espree@10.4.0": {
+      "fetchedFrom": "npm",
+      "license": "BSD-2-Clause",
       "resolvable": true,
       "via": "version-license"
     },

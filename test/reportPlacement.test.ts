@@ -66,6 +66,7 @@ const PLACEMENT_PATHS = [
   "suppressed-workspace-copyleft",
   "denied-license-terminal",
   "system-package-in-dev-container-counts-dev",
+  "cross-image-claim-divergence",
 ] as const;
 
 type PlacementPath = (typeof PLACEMENT_PATHS)[number];
@@ -88,12 +89,16 @@ function placementDivergence(slug: string, expectation: string): string {
 
 /** Throws a classificationDivergence message naming `slug` when `condition` is false. */
 function assertClassification(condition: boolean, slug: string, expectation: string): void {
-  if (!condition) throw new Error(classificationDivergence(slug, expectation));
+  if (!condition) {
+    throw new Error(classificationDivergence(slug, expectation));
+  }
 }
 
 /** Throws a placementDivergence message naming `slug` when `condition` is false. */
 function assertPlacement(condition: boolean, slug: string, expectation: string): void {
-  if (!condition) throw new Error(placementDivergence(slug, expectation));
+  if (!condition) {
+    throw new Error(placementDivergence(slug, expectation));
+  }
 }
 
 /** Structural (cross-page) drift: names which two id sets disagree, and how. */
@@ -117,14 +122,21 @@ function readReportPlacementDoc(): string {
 function parseDocPathIndexIds(doc: string, docLabel: string): Set<string> {
   const heading = "## Path index (verified end to end)";
   const start = doc.indexOf(heading);
+
   if (start === -1) {
     throw new Error(`${docLabel} is missing its "${heading}" section`);
   }
+
   const ids = new Set<string>();
+
   for (const row of doc.slice(start).split(/\r?\n/)) {
     const match = /^\|\s*`([a-z0-9-]+)`\s*\|/.exec(row);
-    if (match?.[1] !== undefined) ids.add(match[1]);
+
+    if (match?.[1] !== undefined) {
+      ids.add(match[1]);
+    }
   }
+
   return ids;
 }
 
@@ -138,6 +150,7 @@ function assertSlugSetsMatch(
   const aOnly = [...a].filter((id) => !b.has(id));
   const bOnly = [...b].filter((id) => !a.has(id));
   const subject = `${aLabel} vs ${bLabel}`;
+
   assertStructural(
     aOnly.length === 0,
     subject,
@@ -176,6 +189,7 @@ function sbomComponent(spec: ComponentSpec): Record<string, unknown> {
       : spec.licenseName !== undefined
         ? [{ license: { name: spec.licenseName } }]
         : undefined;
+
   return {
     type: "library",
     name: spec.name,
@@ -219,6 +233,7 @@ function resolveDevelopmentContainers(
   policy: Policy,
 ): ReadonlySet<string> {
   const sources = new Set<string>();
+
   for (const pkg of model.packages) {
     for (const occurrence of pkg.occurrences) {
       if (occurrence.target.startsWith(DOCKER_IDENTITY_PREFIX)) {
@@ -226,13 +241,19 @@ function resolveDevelopmentContainers(
       }
     }
   }
+
   const resolved = new Set<string>();
+
   for (const devEntry of policy.docker?.development ?? []) {
     const matcher = globToRegExp(devEntry.source);
+
     for (const source of sources) {
-      if (matcher.test(source)) resolved.add(`${DOCKER_IDENTITY_PREFIX}${source}`);
+      if (matcher.test(source)) {
+        resolved.add(`${DOCKER_IDENTITY_PREFIX}${source}`);
+      }
     }
   }
+
   return resolved;
 }
 
@@ -257,6 +278,7 @@ function buildScenario(inputs: ReadonlyArray<ScenarioInput>, policyToml: string)
     developmentContainers,
     acceptedContainerNotices: acceptedContainerNotices(scoped, verdicts),
   };
+
   return {
     doc: alignTables(renderMarkdown(scoped, policyView)),
     verdicts,
@@ -294,12 +316,14 @@ function assertClassificationOutcome(
   expectedRule: string,
 ): void {
   const scope = findScope(scoped, purl);
+
   assertClassification(
     scope === expectedScope,
     slug,
     `the package's post-transform scope is "${expectedScope}" (found "${scope ?? "none"}")`,
   );
   const verdict = findVerdict(verdicts, purl, occurrenceTarget);
+
   assertClassification(
     verdict?.status === expectedStatus && verdict.rule === expectedRule,
     slug,
@@ -310,9 +334,11 @@ function assertClassificationOutcome(
 /** Slice one "## Heading" section out of the document, up to the next "## ". */
 function section(doc: string, heading: string): string {
   const start = doc.indexOf(heading);
+
   expect(start).toBeGreaterThanOrEqual(0);
   const rest = doc.slice(start + heading.length);
   const nextOffset = rest.indexOf("\n## ");
+
   return nextOffset === -1 ? rest : rest.slice(0, nextOffset);
 }
 
@@ -320,6 +346,7 @@ function section(doc: string, heading: string): string {
 function appTableOnly(doc: string, heading: string): string {
   const full = section(doc, heading);
   const containerOffset = full.search(/\n### Container:/);
+
   return containerOffset === -1 ? full : full.slice(0, containerOffset);
 }
 
@@ -327,9 +354,11 @@ function appTableOnly(doc: string, heading: string): string {
 function containerSubsection(doc: string, identity: string): string {
   const heading = `### Container: ${identity}`;
   const start = doc.indexOf(heading);
+
   expect(start).toBeGreaterThanOrEqual(0);
   const rest = doc.slice(start + heading.length);
   const nextOffset = rest.search(/\n(### Container:|## )/);
+
   return nextOffset === -1 ? rest : rest.slice(0, nextOffset);
 }
 
@@ -339,6 +368,7 @@ function containerPartition(block: string): {
   application: string;
 } {
   const applicationOffset = block.indexOf("**Application packages**");
+
   return applicationOffset === -1
     ? { system: block, application: "" }
     : {
@@ -374,6 +404,7 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
       ],
       UNKNOWN_WARN,
     );
+
     assertClassificationOutcome(scoped, verdicts, purl, WORKSPACE, slug, "app", "ok", "default:ok");
     assertPlacement(
       appTableOnly(doc, "## Production dependencies").includes("permissive-lib"),
@@ -404,6 +435,7 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
       ],
       UNKNOWN_WARN,
     );
+
     assertClassificationOutcome(scoped, verdicts, purl, WORKSPACE, slug, "app", "ok", "default:ok");
     assertPlacement(
       appTableOnly(doc, "## Development-only dependencies").includes("dev-only-lib"),
@@ -439,6 +471,7 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
       ],
       UNKNOWN_WARN,
     );
+
     assertClassificationOutcome(scoped, verdicts, purl, WORKSPACE, slug, "app", "ok", "default:ok");
     assertPlacement(
       appTableOnly(doc, "## Production dependencies").includes("shared-lib"),
@@ -446,6 +479,7 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
       "a package with a workspace occurrence rows in the Production dependencies app table (app wins over os)",
     );
     const { application } = containerPartition(containerSubsection(doc, PROD_CONTAINER));
+
     assertPlacement(
       application.includes("shared-lib"),
       slug,
@@ -466,6 +500,7 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
       ],
       UNKNOWN_WARN,
     );
+
     assertClassificationOutcome(
       scoped,
       verdicts,
@@ -477,6 +512,7 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
       "default:ok",
     );
     const { system } = containerPartition(containerSubsection(doc, PROD_CONTAINER));
+
     assertPlacement(
       system.includes("system-pkg"),
       slug,
@@ -503,6 +539,7 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
       ],
       UNKNOWN_WARN,
     );
+
     assertClassificationOutcome(
       scoped,
       verdicts,
@@ -514,6 +551,7 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
       "default:ok",
     );
     const { application } = containerPartition(containerSubsection(doc, PROD_CONTAINER));
+
     assertPlacement(
       application.includes("baked-npm-lib"),
       slug,
@@ -540,6 +578,7 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
       ],
       UNKNOWN_WARN,
     );
+
     assertClassificationOutcome(
       scoped,
       verdicts,
@@ -556,6 +595,7 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
       'a copyleft package on an unrecognized purl ecosystem baked into a production container fails "default:copyleft" and rows in Problematic (the allowlist fails safe)',
     );
     const { system, application } = containerPartition(containerSubsection(doc, PROD_CONTAINER));
+
     assertPlacement(
       application.includes("mystery-pkg") && !system.includes("mystery-pkg"),
       slug,
@@ -576,6 +616,7 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
       ],
       [UNKNOWN_WARN, "[os_dependencies]", 'handling = "warn"', ""].join("\n"),
     );
+
     assertClassificationOutcome(
       scoped,
       verdicts,
@@ -597,6 +638,7 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
       "routine system copyleft (non-AGPL) is excluded from the Copyleft section regardless of verdict",
     );
     const { system } = containerPartition(containerSubsection(doc, PROD_CONTAINER));
+
     assertPlacement(
       system.includes("gpl-tool"),
       slug,
@@ -617,6 +659,7 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
       ],
       [UNKNOWN_WARN, "[os_dependencies]", 'handling = "fail"', ""].join("\n"),
     );
+
     assertClassificationOutcome(
       scoped,
       verdicts,
@@ -647,6 +690,7 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
       ],
       [UNKNOWN_WARN, "[os_dependencies]", 'handling = "ignore"', ""].join("\n"),
     );
+
     assertClassificationOutcome(
       scoped,
       verdicts,
@@ -664,6 +708,7 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
       "an ignored os-scope copyleft package is neither Problematic nor a Copyleft notice",
     );
     const { system } = containerPartition(containerSubsection(doc, PROD_CONTAINER));
+
     assertPlacement(
       system.includes("gpl-tool"),
       slug,
@@ -684,6 +729,7 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
       ],
       [UNKNOWN_WARN, "[os_dependencies]", 'handling = "warn"', ""].join("\n"),
     );
+
     assertClassificationOutcome(
       scoped,
       verdicts,
@@ -723,6 +769,7 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
       ],
       policy,
     );
+
     assertClassificationOutcome(
       scoped,
       verdicts,
@@ -734,6 +781,7 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
       "compatible[0]",
     );
     const copyleft = section(doc, "## Copyleft and special notices");
+
     assertPlacement(
       copyleft.includes("agpl-daemon") && copyleft.includes("accepted via compatible\\[0\\]"),
       slug,
@@ -770,6 +818,7 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
       ],
       UNKNOWN_WARN,
     );
+
     assertClassificationOutcome(
       scoped,
       verdicts,
@@ -820,6 +869,7 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
       ],
       policy,
     );
+
     assertClassificationOutcome(
       scoped,
       verdicts,
@@ -831,6 +881,7 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
       "compatible[0]",
     );
     const copyleft = section(doc, "## Copyleft and special notices");
+
     assertPlacement(
       copyleft.includes("relay-imprecise") && copyleft.includes("accepted via compatible\\[0\\]"),
       slug,
@@ -875,6 +926,7 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
       ],
       policy,
     );
+
     assertClassificationOutcome(
       scoped,
       verdicts,
@@ -910,6 +962,7 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
       ],
       UNKNOWN_WARN,
     );
+
     assertClassificationOutcome(
       scoped,
       verdicts,
@@ -926,6 +979,7 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
       "a golang copyleft package baked into a production container fails default:copyleft and rows in Problematic",
     );
     const { application } = containerPartition(containerSubsection(doc, PROD_CONTAINER));
+
     assertPlacement(
       application.includes("metrics-tool"),
       slug,
@@ -946,6 +1000,7 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
       ],
       DEV_CONTAINER_POLICY,
     );
+
     assertClassificationOutcome(
       scoped,
       verdicts,
@@ -962,6 +1017,7 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
       "an app-ecosystem copyleft package in a [[docker.development]] container dev-downgrades to a Copyleft flagged row",
     );
     const devSection = section(doc, "## Development-only dependencies");
+
     assertPlacement(
       devSection.includes(`### Container: ${DEV_CONTAINER}`) && devSection.includes("dev-tool-lib"),
       slug,
@@ -988,6 +1044,7 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
       ],
       UNKNOWN_WARN,
     );
+
     assertClassificationOutcome(
       scoped,
       verdicts,
@@ -1027,6 +1084,7 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
       ],
       UNKNOWN_WARN,
     );
+
     assertClassificationOutcome(
       scoped,
       verdicts,
@@ -1066,6 +1124,7 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
       ],
       UNKNOWN_WARN,
     );
+
     assertClassificationOutcome(
       scoped,
       verdicts,
@@ -1100,6 +1159,7 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
       ],
       UNKNOWN_WARN,
     );
+
     assertClassificationOutcome(
       scoped,
       verdicts,
@@ -1135,6 +1195,7 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
       ],
       UNKNOWN_WARN,
     );
+
     assertClassificationOutcome(
       scoped,
       verdicts,
@@ -1175,6 +1236,7 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
       ],
       UNKNOWN_WARN,
     );
+
     assertClassificationOutcome(
       scoped,
       verdicts,
@@ -1231,6 +1293,7 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
       ],
       policy,
     );
+
     assertClassificationOutcome(
       scoped,
       verdicts,
@@ -1242,6 +1305,7 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
       "workspace.copyleft_suppressed[0]",
     );
     const copyleft = section(doc, "## Copyleft and special notices");
+
     assertPlacement(
       copyleft.includes(suppressedWorkspace) && copyleft.includes("AGPL-3.0-only"),
       slug,
@@ -1279,6 +1343,7 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
       ],
       policy,
     );
+
     assertClassificationOutcome(
       scoped,
       verdicts,
@@ -1309,6 +1374,7 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
       ],
       DEV_CONTAINER_POLICY,
     );
+
     assertClassificationOutcome(
       scoped,
       verdicts,
@@ -1325,11 +1391,63 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
       "a system package whose only container is dev-marked counts Development-only via the container's classification",
     );
     const devSection = section(doc, "## Development-only dependencies");
+
     assertPlacement(
       devSection.includes(`### Container: ${DEV_CONTAINER}`) &&
         devSection.includes("sys-in-dev-container"),
       slug,
       "its container's System packages table sits under the Development-only subsection",
+    );
+  },
+
+  "cross-image-claim-divergence": () => {
+    const slug = "cross-image-claim-divergence";
+    const purl = "pkg:apk/alpine/shared-daemon@1.0.0";
+    const { doc, verdicts, scoped } = buildScenario(
+      [
+        {
+          targetIdentity: PROD_CONTAINER,
+          scope: "os",
+          components: [{ name: "shared-daemon", purl, license: "MIT" }],
+        },
+        {
+          targetIdentity: OTHER_CONTAINER,
+          scope: "os",
+          components: [{ name: "shared-daemon", purl, license: "Apache-2.0" }],
+        },
+      ],
+      UNKNOWN_WARN,
+    );
+
+    assertClassificationOutcome(
+      scoped,
+      verdicts,
+      purl,
+      PROD_CONTAINER,
+      slug,
+      "os",
+      "fail",
+      "conflict:cross-image-claims",
+    );
+    assertPlacement(
+      section(doc, "## Problematic licenses").includes("shared-daemon"),
+      slug,
+      "a cross-image claim divergence is a fail verdict, so it rows in Problematic licenses like any other fail",
+    );
+    const conflicts = section(doc, "## Assessment conflicts");
+
+    assertPlacement(
+      conflicts.includes("### Cross-image license claims") && conflicts.includes("shared-daemon"),
+      slug,
+      "the divergence rows in the Assessment conflicts section's Cross-image license claims sub-table",
+    );
+    const prodSystem = containerPartition(containerSubsection(doc, PROD_CONTAINER)).system;
+    const otherSystem = containerPartition(containerSubsection(doc, OTHER_CONTAINER)).system;
+
+    assertPlacement(
+      prodSystem.includes("shared-daemon") && otherSystem.includes("shared-daemon"),
+      slug,
+      "both diverging containers keep their complete inventory row in their own System packages table (inventory is never dropped by a conflict)",
     );
   },
 };
@@ -1341,6 +1459,7 @@ describe("dependency classification and report placement — Path index structur
       "dependency-classification.md",
     );
     const testIds = new Set<string>(PLACEMENT_PATHS);
+
     assertSlugSetsMatch(
       classificationIds,
       "dependency-classification.md",
@@ -1352,6 +1471,7 @@ describe("dependency classification and report placement — Path index structur
   test("report-placement.md's Path index matches the suite", () => {
     const placementIds = parseDocPathIndexIds(readReportPlacementDoc(), "report-placement.md");
     const testIds = new Set<string>(PLACEMENT_PATHS);
+
     assertSlugSetsMatch(
       placementIds,
       "report-placement.md",
@@ -1366,6 +1486,7 @@ describe("dependency classification and report placement — Path index structur
       "dependency-classification.md",
     );
     const placementIds = parseDocPathIndexIds(readReportPlacementDoc(), "report-placement.md");
+
     assertSlugSetsMatch(
       classificationIds,
       "dependency-classification.md",
@@ -1436,6 +1557,7 @@ describe("cross-document invariants — LICENSES and NOTICES agree on one shared
       ],
       UNKNOWN_WARN,
     );
+
     return { doc, notices: renderNotices(scoped), scoped };
   }
 
@@ -1465,6 +1587,7 @@ describe("cross-document invariants — LICENSES and NOTICES agree on one shared
     const unknownEntries = [...notices.matchAll(/^- (\S+)@\S+ — unknown license/gm)].map(
       (m) => m[1],
     );
+
     assertStructural(
       unknownEntries.length === 2,
       "NOTICES unknown section entry count",
@@ -1485,6 +1608,7 @@ describe("cross-document invariants — LICENSES and NOTICES agree on one shared
     const noticesB = renderNotices(scoped);
     const licensesA = renderMarkdown(scoped);
     const licensesB = renderMarkdown(scoped);
+
     assertStructural(
       noticesA === noticesB,
       "renderNotices double-render",

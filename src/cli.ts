@@ -47,12 +47,16 @@ const USAGE =
   "[--policy <path>] [--output <path>] [--notices <path>] " +
   "[--cyclonedx <path>] [--dump-model <path>] [--base-dir <path>] " +
   "[--enrichment-cache <path>] [--scancode-cache <path>] [--intensive] " +
-  "[--verbose]\n" +
+  "[--package-timeout-mins <minutes>] [--verbose]\n" +
   "           --intensive: assess the FULL package set with ScanCode, an " +
   "in-depth source scan that outranks the registry answer where present and " +
   "flags any disagreement as a conflict to resolve; skips versions already " +
   "in the memo and packages whose sources are not locally present (generate-" +
-  "only; meant for occasional runs, not the default fast path).\n" +
+  "only; meant for occasional runs, not the default fast path). A per-package " +
+  "scan that times out or otherwise fails is skipped and reported, never " +
+  "aborting the rest of the run, and is retried on the next scan.\n" +
+  "           --package-timeout-mins <minutes>: per-package wall-clock limit " +
+  "for each ScanCode invocation under --intensive (default: 10).\n" +
   "  check    same flags as generate (minus --dump-model, minus --intensive) — regenerates in " +
   "memory and byte-compares every configured output; writes nothing\n" +
   "           exit codes: 0 clean, 1 policy violation (beats stale), " +
@@ -98,6 +102,7 @@ export function reportVerifyCache(result: VerifyCacheResult): void {
     process.stderr.write(`${text}\n`);
   };
   const noun = result.audited === 1 ? "entry" : "entries";
+
   if (result.mismatches.length === 0) {
     line(
       `verify-cache: audited ${result.audited} cache ${noun} — ` +
@@ -110,13 +115,17 @@ export function reportVerifyCache(result: VerifyCacheResult): void {
       line(`  registry:  ${mismatch.current ?? "(none)"}`);
       line(`  ${mismatch.reason}`);
     }
+
     const verb = result.mismatches.length === 1 ? "diverges from" : "diverge from";
+
     line(
       `verify-cache: ${result.mismatches.length} of ${result.audited} audited cache ${noun} ` +
         `${verb} upstream — investigate before release`,
     );
   }
+
   const memoNoun = result.scancodeMemoEntries === 1 ? "entry" : "entries";
+
   line(
     `scancode memo: ${result.scancodeMemoEntries} ${memoNoun} ` +
       `(not audited: local scan results have no upstream to verify against)`,
@@ -165,6 +174,16 @@ interface CliValues {
    * spread can gate the intensive lane on mere presence.
    */
   intensive?: boolean;
+  /**
+   * generate --intensive's per-package wall-clock timeout, in MINUTES (the CLI's unit; converted to
+   * milliseconds in optionsFrom for GenerateOptions.packageTimeoutMs, matching
+   * IntensiveOptions.timeoutMs / DEFAULT_SCAN_TIMEOUT_MS internally). Minutes, not milliseconds, to
+   * match this repo's own `timeout-minutes` convention (intensive-scan.yml) rather than exposing an
+   * internal millisecond unit at the operator boundary. Named for the operator's mental model
+   * (running an intensive scan of packages), not the scanner behind it. Inert without --intensive:
+   * check never scans, so passing it there is accepted but unread.
+   */
+  "package-timeout-mins"?: string;
 }
 
 /**
@@ -179,7 +198,32 @@ const DEFAULT_POLICY = ".sbomlet.policy.toml";
 function discoverDefaultPolicy(values: CliValues): string | undefined {
   const anchor = resolveFrom(values["base-dir"], values["repo-root"] ?? ".");
   const candidate = resolveFrom(anchor, DEFAULT_POLICY);
+
   return existsSync(candidate) ? candidate : undefined;
+}
+
+/**
+ * Parse --package-timeout-mins's minutes string into milliseconds, or undefined when the flag is
+ * absent - own-property-gated the same way --intensive is, so a default generate never sets
+ * GenerateOptions.packageTimeoutMs and the tool default (DEFAULT_SCAN_TIMEOUT_MS) applies
+ * untouched. A non-positive or unparseable value is a config error (exit 3), same posture as the
+ * mutually-exclusive-flags check above - caught before any target resolution or scan, never a
+ * confusing failure minutes into a scan.
+ */
+function parsePackageTimeoutMs(raw: string | undefined): number | undefined {
+  if (raw === undefined) {
+    return undefined;
+  }
+
+  const minutes = Number(raw);
+
+  if (!Number.isFinite(minutes) || minutes <= 0) {
+    fail(
+      `--package-timeout-mins must be a positive number of minutes, got ${JSON.stringify(raw)}\n${USAGE}`,
+    );
+  }
+
+  return minutes * 60_000;
 }
 
 /**
@@ -190,7 +234,10 @@ export function optionsFrom(values: CliValues): GenerateOptions {
   if (values.target !== undefined && values["repo-root"] !== undefined) {
     fail(`--target and --repo-root are mutually exclusive — pass at most one\n${USAGE}`);
   }
+
   const outputPath = values.output ?? "THIRD_PARTY_LICENSES.md";
+  const packageTimeoutMs = parsePackageTimeoutMs(values["package-timeout-mins"]);
+
   return {
     targetArg: values.target,
     repoRoot: values["repo-root"],
@@ -207,6 +254,7 @@ export function optionsFrom(values: CliValues): GenerateOptions {
     // Absent-not-false: own-property spread so a default generate never sets this key at all, and
     // check's runCheck rejection reads opts.intensive === true, never a coerced false.
     ...(values.intensive === true ? { intensive: true } : {}),
+    ...(packageTimeoutMs !== undefined ? { packageTimeoutMs } : {}),
   };
 }
 
@@ -255,12 +303,17 @@ export function dockerSbomModeConflict(values: CliValues): string | undefined {
         "are mutually exclusive — choose one lane",
     ],
   ];
+
   for (const [left, right, message] of pairs) {
-    if (left && right) return message;
+    if (left && right) {
+      return message;
+    }
   }
+
   if (hasListDockerfiles && !hasRepoRoot) {
     return "--list-dockerfiles requires --repo-root <dir>";
   }
+
   // No lane and no listing - there is no default image set, so a bare invocation is a usage error
   // naming the three ways in.
   if (!hasImage && !hasRepoRoot && !hasDockerfile && !hasListDockerfiles) {
@@ -270,6 +323,7 @@ export function dockerSbomModeConflict(values: CliValues): string | undefined {
       "<ref>... (scan pre-existing images)"
     );
   }
+
   return undefined;
 }
 
@@ -286,15 +340,18 @@ function hasValues(list: string[] | undefined): boolean {
  */
 export function dockerSbomOptionsFrom(values: CliValues): GenerateDockerSbomOptions {
   const conflict = dockerSbomModeConflict(values);
+
   if (conflict !== undefined) {
     fail(`${conflict}\n${USAGE}`);
   }
+
   const hasImage = hasValues(values.image);
   const hasRepoRoot = values["repo-root"] !== undefined;
   const hasDockerfile = hasValues(values.dockerfile);
   // Discover the policy even without --policy so its `[cache] dir` steers the committed-SBOM output
   // to the same cache dir generate/check read from.
   const policyPath = values.policy ?? discoverDefaultPolicy(values);
+
   return {
     ...(hasImage ? { images: values.image } : {}),
     ...(hasRepoRoot ? { repoRoot: values["repo-root"] } : {}),
@@ -341,11 +398,13 @@ async function runGenerateDockerSbomCommand(values: CliValues): Promise<void> {
  */
 async function runCheckCommand(values: CliValues): Promise<never> {
   let result: CheckResult;
+
   try {
     result = await runCheck(optionsFrom(values));
   } catch (error) {
     fail(`${error instanceof Error ? error.message : String(error)}\n`);
   }
+
   process.exit(exitCodeFor(result));
 }
 
@@ -356,6 +415,7 @@ async function runCheckCommand(values: CliValues): Promise<never> {
  */
 async function runVerifyCacheCommand(values: CliValues): Promise<never> {
   let result: VerifyCacheResult;
+
   try {
     result = await runVerifyCache({
       baseDir: values["base-dir"],
@@ -367,6 +427,7 @@ async function runVerifyCacheCommand(values: CliValues): Promise<never> {
   } catch (error) {
     fail(`${error instanceof Error ? error.message : String(error)}\n`);
   }
+
   reportVerifyCache(result);
   process.exit(result.mismatches.length === 0 ? 0 : 1);
 }
@@ -375,6 +436,7 @@ async function main(argv: string[]): Promise<void> {
   const [subcommand, ...rest] = argv;
 
   let values: CliValues;
+
   try {
     ({ values } = parseArgs({
       args: rest,
@@ -396,6 +458,7 @@ async function main(argv: string[]): Promise<void> {
         "docker-sbom": { type: "string" },
         "list-dockerfiles": { type: "boolean", default: false },
         intensive: { type: "boolean" },
+        "package-timeout-mins": { type: "string" },
       },
       allowPositionals: true,
     }));

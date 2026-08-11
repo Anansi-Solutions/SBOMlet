@@ -31,6 +31,7 @@ const REAL_EXEC = { ...execModule };
 
 function makeTarget(yarnLock: string, packageJson: string): Target {
   const dir = mkdtempSync(join(tmpdir(), "licenses-test-"));
+
   writeFileSync(join(dir, "yarn.lock"), yarnLock);
   writeFileSync(join(dir, "package.json"), packageJson);
   return { dir, identity: "test/synthetic" };
@@ -75,6 +76,7 @@ describe("yarnPluginArgs", () => {
 
   test("the literal version tag in the argv equals the YARN_PLUGIN_TOOL pin (Trivy lesson)", () => {
     const args = yarnPluginArgs("/tmp/x/full.json", false);
+
     expect(args).toContain(`${YARN_PLUGIN_TOOL.name}@${YARN_PLUGIN_TOOL.version}`);
   });
 });
@@ -113,6 +115,7 @@ describe("dual-run cache key", () => {
       MANIFESTS,
     );
     const fullOnlyKey = computeCacheKey(target, YARN_PLUGIN_TOOL, fullArgs, MANIFESTS);
+
     expect(dualKey).toMatch(/^[0-9a-f]{64}$/);
     expect(dualKey).not.toBe(fullOnlyKey);
   });
@@ -120,6 +123,7 @@ describe("dual-run cache key", () => {
   test("plugin and cdxgen tool identities produce different keys for identical args", () => {
     const target = makeTarget(YARN_LOCK, PACKAGE_JSON);
     const args = ["same", "args"];
+
     expect(computeCacheKey(target, YARN_PLUGIN_TOOL, args, MANIFESTS)).not.toBe(
       computeCacheKey(target, CDXGEN_TOOL, args, MANIFESTS),
     );
@@ -161,6 +165,7 @@ describe("dual-run cache key", () => {
     // manifest bytes + tool + sentinel argv only.
     const a = makeTarget(YARN_LOCK, PACKAGE_JSON);
     const b = makeTarget(YARN_LOCK, PACKAGE_JSON);
+
     expect(computeCacheKey(a, YARN_PLUGIN_TOOL, yarnPluginCacheArgs(), MANIFESTS)).toBe(
       computeCacheKey(b, YARN_PLUGIN_TOOL, yarnPluginCacheArgs(), MANIFESTS),
     );
@@ -176,14 +181,17 @@ describe("dual-run cache key", () => {
       { file: "yarn.lock", dir: target.dir },
       { file: "package.json", dir: target.dir },
     ]);
+
     expect(objectKey).toBe(stringKey);
   });
 
   test("a workspace-unit key covers root yarn.lock + workspace package.json + root package.json — mutating any ONE changes the key", () => {
     const rootDir = mkdtempSync(join(tmpdir(), "licenses-test-root-"));
+
     writeFileSync(join(rootDir, "yarn.lock"), YARN_LOCK);
     writeFileSync(join(rootDir, "package.json"), '{"name":"root"}\n');
     const unitDir = mkdtempSync(join(tmpdir(), "licenses-test-unit-"));
+
     writeFileSync(join(unitDir, "package.json"), PACKAGE_JSON);
 
     const unit: Target = {
@@ -222,10 +230,12 @@ describe("dual-run cache key", () => {
 
   test("two units with byte-identical workspace package.json under the same root differ ONLY by workspacePath and get DIFFERENT keys", () => {
     const rootDir = mkdtempSync(join(tmpdir(), "licenses-test-root2-"));
+
     writeFileSync(join(rootDir, "yarn.lock"), YARN_LOCK);
     writeFileSync(join(rootDir, "package.json"), '{"name":"root"}\n');
     const unitADir = mkdtempSync(join(tmpdir(), "licenses-test-unitA-"));
     const unitBDir = mkdtempSync(join(tmpdir(), "licenses-test-unitB-"));
+
     writeFileSync(join(unitADir, "package.json"), PACKAGE_JSON);
     writeFileSync(join(unitBDir, "package.json"), PACKAGE_JSON);
 
@@ -258,6 +268,7 @@ describe("dual-run cache key", () => {
       yarnPluginCacheArgs(),
       manifestsFor(unitB),
     );
+
     expect(keyA).not.toBe(keyB);
   });
 
@@ -266,9 +277,11 @@ describe("dual-run cache key", () => {
     // MANIFESTS-based expectations above: this test just asserts the two
     // fields being undefined does not alter today's key for a plain target.
     const target = makeTarget(YARN_LOCK, PACKAGE_JSON);
+
     expect(target.lockfileDir).toBeUndefined();
     expect(target.workspacePath).toBeUndefined();
     const key = computeCacheKey(target, YARN_PLUGIN_TOOL, yarnPluginCacheArgs(), MANIFESTS);
+
     expect(key).toMatch(/^[0-9a-f]{64}$/);
   });
 });
@@ -289,6 +302,7 @@ describe("collectWithYarnPlugin — unit-aware cwd and cache key", () => {
         // Write a minimal valid plugin output at the -o operand so
         // validatePluginOutput passes without a real yarn spawn.
         const outFile = args[args.length - 1] as string;
+
         writeFileSync(outFile, JSON.stringify({ specVersion: "1.6", components: [] }));
         return { stdout: "", stderr: "" };
       },
@@ -301,12 +315,14 @@ describe("collectWithYarnPlugin — unit-aware cwd and cache key", () => {
 
   test("resolves yarn.lock from lockfileDir for the cache key while spawning with cwd = target.dir — no real spawn happens", async () => {
     const rootDir = mkdtempSync(join(tmpdir(), "licenses-test-root-collect-"));
+
     writeFileSync(
       join(rootDir, "yarn.lock"),
       '# synthetic lockfile\n"left-pad@npm:1.3.0":\n  version: 1.3.0\n',
     );
     writeFileSync(join(rootDir, "package.json"), '{"name":"root"}\n');
     const unitDir = mkdtempSync(join(tmpdir(), "licenses-test-unit-collect-"));
+
     // The unit dir intentionally has NO yarn.lock of its own — proving the
     // key and spawn both resolve yarn.lock from lockfileDir, not target.dir.
     writeFileSync(
@@ -344,6 +360,7 @@ describe("collectWithYarnPlugin — unit-aware cwd and cache key", () => {
         { file: "package.json", dir: rootDir },
       ],
     );
+
     expect(result.cacheKey).not.toBe(noDiscriminatorKey);
   });
 });

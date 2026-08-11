@@ -58,14 +58,17 @@ function tempDir(): string {
 describe("scancode memo — envelope, entry shape, deterministic read/write", () => {
   test("a round-trip through serialize → readScancodeMemo is lossless for positive and no-result entries", () => {
     const dir = tempDir();
+
     try {
       const path = join(dir, MEMO_FILE);
       const memo = new Map<string, ScancodeMemoEntry>();
+
       memo.set("pkg:pypi/anyio@4.12.1", positive);
       memo.set("pkg:npm/no-license-pkg@2.0.0", noResult);
       writeFileSync(path, serializeScancodeMemo(memo));
 
       const loaded = readScancodeMemo(path);
+
       expect(getMemoEntry(loaded, "pkg:pypi/anyio@4.12.1")).toEqual(positive);
       expect(getMemoEntry(loaded, "pkg:npm/no-license-pkg@2.0.0")).toEqual(noResult);
     } finally {
@@ -75,11 +78,13 @@ describe("scancode memo — envelope, entry shape, deterministic read/write", ()
 
   test("serialization is deterministic: sorted keys (insertion-order independent), indent 2, LF, trailing newline, no timestamp key; double-serialize byte-identical", () => {
     const memo = new Map<string, ScancodeMemoEntry>();
+
     // Insert out of sorted order to prove the serializer sorts.
     memo.set("pkg:pypi/anyio@4.12.1", positive);
     memo.set("pkg:npm/no-license-pkg@2.0.0", noResult);
 
     const bytes = serializeScancodeMemo(memo);
+
     expect(bytes.endsWith("\n")).toBe(true);
     expect(bytes.includes("\r")).toBe(false);
     expect(bytes).toContain('  "version": 1');
@@ -89,6 +94,7 @@ describe("scancode memo — envelope, entry shape, deterministic read/write", ()
     );
     // Insertion order must not change the bytes.
     const reordered = new Map<string, ScancodeMemoEntry>();
+
     reordered.set("pkg:npm/no-license-pkg@2.0.0", noResult);
     reordered.set("pkg:pypi/anyio@4.12.1", positive);
     expect(serializeScancodeMemo(reordered)).toBe(bytes);
@@ -98,9 +104,11 @@ describe("scancode memo — envelope, entry shape, deterministic read/write", ()
 
   test("readScancodeMemo on a missing file yields an empty memo, never throws, never creates the file", () => {
     const dir = tempDir();
+
     try {
       const path = join(dir, MEMO_FILE);
       const loaded = readScancodeMemo(path);
+
       expect(loaded.size).toBe(0);
       expect(existsSync(path)).toBe(false);
     } finally {
@@ -110,8 +118,10 @@ describe("scancode memo — envelope, entry shape, deterministic read/write", ()
 
   test("a well-formed empty version-1 envelope reads as an empty memo (no throw)", () => {
     const dir = tempDir();
+
     try {
       const path = join(dir, MEMO_FILE);
+
       writeFileSync(path, JSON.stringify({ version: 1, entries: {} }));
       expect(readScancodeMemo(path).size).toBe(0);
     } finally {
@@ -121,6 +131,7 @@ describe("scancode memo — envelope, entry shape, deterministic read/write", ()
 
   test("a malformed envelope throws loudly — truncated JSON, missing entries, non-object entries, and a WRONG schema version each abort, never a silent empty", () => {
     const dir = tempDir();
+
     try {
       const path = join(dir, MEMO_FILE);
 
@@ -142,11 +153,14 @@ describe("scancode memo — envelope, entry shape, deterministic read/write", ()
 
   test("a read-modify-write that adds one entry leaves the existing entry's bytes (including scannedAt) untouched, and stamps ONLY the new entry", () => {
     const dir = tempDir();
+
     try {
       const path = join(dir, MEMO_FILE);
       const memo = new Map<string, ScancodeMemoEntry>();
+
       memo.set("pkg:pypi/anyio@4.12.1", positive);
       const before = serializeScancodeMemo(memo);
+
       writeFileSync(path, before);
 
       // Read-then-write with no mutation is a byte-identical no-op (existing
@@ -155,6 +169,7 @@ describe("scancode memo — envelope, entry shape, deterministic read/write", ()
 
       // Adding a new entry stamps ONLY the new one, via the injectable clock.
       const loaded = readScancodeMemo(path);
+
       putMemoEntry(
         loaded,
         "pkg:npm/added@1.0.0",
@@ -174,8 +189,10 @@ describe("scancode memo — envelope, entry shape, deterministic read/write", ()
 
   test("putMemoEntry never rewrites an existing entry — a second put for the same purl is a no-op (byte stability)", () => {
     const memo = new Map<string, ScancodeMemoEntry>();
+
     memo.set("pkg:pypi/anyio@4.12.1", positive);
     const bytes = serializeScancodeMemo(memo);
+
     putMemoEntry(
       memo,
       "pkg:pypi/anyio@4.12.1",
@@ -188,6 +205,7 @@ describe("scancode memo — envelope, entry shape, deterministic read/write", ()
 
   test("a no-result entry (license null) is stamped like any new entry and carries no resolvable/source/fetchedFrom twin — license:null alone encodes analyzed-no-evidence", () => {
     const memo = new Map<string, ScancodeMemoEntry>();
+
     putMemoEntry(
       memo,
       "pkg:npm/no-license-pkg@2.0.0",
@@ -195,10 +213,12 @@ describe("scancode memo — envelope, entry shape, deterministic read/write", ()
       () => new Date("2026-08-01T04:19:41.000Z"),
     );
     const entry = getMemoEntry(memo, "pkg:npm/no-license-pkg@2.0.0");
+
     expect(entry?.license).toBeNull();
     expect(entry).toEqual(noResult);
 
     const bytes = serializeScancodeMemo(memo);
+
     expect(bytes).not.toContain("resolvable");
     expect(bytes).not.toContain("fetchedFrom");
     expect(bytes).not.toContain('"source"');
@@ -206,14 +226,17 @@ describe("scancode memo — envelope, entry shape, deterministic read/write", ()
 
   test("a verbatim URL-encoded purl key (%40scope) round-trips exactly — keys are opaque, never decoded or split", () => {
     const dir = tempDir();
+
     try {
       const path = join(dir, MEMO_FILE);
       const key = "pkg:npm/%40scope/pkg@1.2.3";
       const memo = new Map<string, ScancodeMemoEntry>();
+
       memo.set(key, positive);
       writeFileSync(path, serializeScancodeMemo(memo));
 
       const loaded = readScancodeMemo(path);
+
       expect(getMemoEntry(loaded, key)).toEqual(positive);
       // The DECODED form is NOT a key — the encoding is preserved verbatim.
       expect(getMemoEntry(loaded, "pkg:npm/@scope/pkg@1.2.3")).toBeUndefined();
@@ -226,6 +249,7 @@ describe("scancode memo — envelope, entry shape, deterministic read/write", ()
 
   test("an entry serialized WITHOUT copyrights contains no 'copyrights' key (optional-field zero-churn)", () => {
     const memo = new Map<string, ScancodeMemoEntry>();
+
     memo.set("pkg:npm/no-license-pkg@2.0.0", noResult);
     expect(serializeScancodeMemo(memo)).not.toContain("copyrights");
   });
@@ -240,6 +264,7 @@ describe("scancode memo path resolution + --scancode-cache flag", () => {
   test("the default memo path is the sibling of licenses.cache.json inside the resolved cache dir", () => {
     const dir = join(tmpdir(), "repo", ".sbomlet.cache");
     const resolved = scancodeCachePath(baseOpts, dir);
+
     expect(basename(resolved)).toBe("scancode.cache.json");
     expect(dirname(resolved)).toBe(dir);
   });
@@ -247,6 +272,7 @@ describe("scancode memo path resolution + --scancode-cache flag", () => {
   test("the memo path honors whatever cache dir it is given — the [cache] dir override mechanism, shared with the enrichment path via cacheDir", () => {
     const overrideDir = join(tmpdir(), "custom-cache-dir");
     const resolved = scancodeCachePath(baseOpts, overrideDir);
+
     expect(dirname(resolved)).toBe(overrideDir);
     expect(basename(resolved)).toBe("scancode.cache.json");
   });
@@ -254,6 +280,7 @@ describe("scancode memo path resolution + --scancode-cache flag", () => {
   test("--scancode-cache <path> overrides the resolved path, symmetric with --enrichment-cache", () => {
     const dir = join(tmpdir(), "repo", ".sbomlet.cache");
     const resolved = scancodeCachePath({ ...baseOpts, scancodeCachePath: "custom/memo.json" }, dir);
+
     expect(basename(resolved)).toBe("memo.json");
     expect(resolved.endsWith(join("custom", "memo.json"))).toBe(true);
   });

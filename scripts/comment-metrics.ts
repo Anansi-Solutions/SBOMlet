@@ -48,6 +48,7 @@ function commentRanges(text: string): Array<{ pos: number; end: number }> {
     collect(ts.getTrailingCommentRanges(text, node.getEnd()));
     node.forEachChild(visit);
   };
+
   visit(sourceFile);
   return ranges.sort((a, b) => a.pos - b.pos);
 }
@@ -61,21 +62,32 @@ export function measureFile(text: string): CommentMetrics {
   // Blank out comment spans (preserving newlines) to see what code remains.
   let codeOnly = text;
   let commentText = "";
+
   for (const { pos, end } of ranges) {
     const span = text.slice(pos, end);
+
     commentText += ` ${span}`;
     codeOnly = codeOnly.slice(0, pos) + span.replace(/[^\n]/g, " ") + codeOnly.slice(end);
   }
+
   const lines = text.split("\n");
   const codeLines = codeOnly.split("\n");
   let totalLines = 0;
   let commentLines = 0;
+
   for (let i = 0; i < lines.length; i++) {
-    if (lines[i]!.trim() === "") continue;
+    if (lines[i]!.trim() === "") {
+      continue;
+    }
+
     totalLines++;
-    if (codeLines[i]!.trim() === "") commentLines++;
+    if (codeLines[i]!.trim() === "") {
+      commentLines++;
+    }
   }
+
   const strippedComment = commentText.replace(/\/\*+|\*+\/|^\s*\*+|\/\//gm, " ");
+
   return {
     totalLines,
     commentLines,
@@ -86,11 +98,17 @@ export function measureFile(text: string): CommentMetrics {
 
 function listSourceFiles(dir: string): string[] {
   const files: string[] = [];
+
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
     const path = join(dir, entry.name);
-    if (entry.isDirectory()) files.push(...listSourceFiles(path));
-    else if (entry.name.endsWith(".ts")) files.push(path);
+
+    if (entry.isDirectory()) {
+      files.push(...listSourceFiles(path));
+    } else if (entry.name.endsWith(".ts")) {
+      files.push(path);
+    }
   }
+
   return files.sort();
 }
 
@@ -104,14 +122,17 @@ export function measureComments(root = "src"): CommentMetrics & {
     totalWords: 0,
     commentWords: 0,
   };
+
   for (const file of listSourceFiles(root)) {
     const metrics = measureFile(readFileSync(file, "utf8"));
+
     files.push({ file, ...metrics });
     total.totalLines += metrics.totalLines;
     total.commentLines += metrics.commentLines;
     total.totalWords += metrics.totalWords;
     total.commentWords += metrics.commentWords;
   }
+
   return { ...total, files };
 }
 
@@ -121,6 +142,7 @@ const pct = (part: number, whole: number): string =>
 if (import.meta.main) {
   const checkOnly = process.argv.includes("--check");
   const { files, ...total } = measureComments();
+
   if (!checkOnly) {
     for (const f of files) {
       console.log(
@@ -130,6 +152,7 @@ if (import.meta.main) {
       );
     }
   }
+
   console.log(
     `comment density: ${pct(total.commentLines, total.totalLines)} lines ` +
       `(${total.commentLines}/${total.totalLines}, budget ` +
@@ -141,6 +164,7 @@ if (import.meta.main) {
   const overBudget =
     total.commentLines > MAX_COMMENT_LINE_RATIO * total.totalLines ||
     total.commentWords > MAX_COMMENT_WORD_RATIO * total.totalWords;
+
   if (overBudget) {
     console.error("comment density exceeds the budget");
     process.exit(1);

@@ -19,6 +19,7 @@ import satisfies from "spdx-satisfies";
 import {
   compareCodeUnits,
   type CanonicalDependencies,
+  type CrossImageClaimDivergence,
   type LicenseClaim,
   type LicenseFinding,
   type PackageEntry,
@@ -179,16 +180,24 @@ function isBareConnective(raw: string): boolean {
  * license-like - and stays correctable.
  */
 function isCommaLicenseList(value: string): boolean {
-  if (!value.includes(",")) return false;
+  if (!value.includes(",")) {
+    return false;
+  }
+
   return value.split(",").every((part) => {
     const candidate = part.trim();
-    if (candidate === "") return false;
+
+    if (candidate === "") {
+      return false;
+    }
+
     try {
       parse(candidate);
       return true;
     } catch {
       /* not an exact id/expression - try correction */
     }
+
     return correct(candidate) !== null;
   });
 }
@@ -213,19 +222,23 @@ export interface NormalizeResult {
  */
 export function normalizeRaw(raw: string): NormalizeResult {
   const trimmed = raw.trim();
+
   if (trimmed === "" || NEVER_CORRECT.some((re) => re.test(trimmed))) {
     return { expression: null, source: "generator" }; // unknown
   }
+
   try {
     parse(trimmed);
     return { expression: trimmed, source: "generator" }; // exact
   } catch {
     /* fall through */
   }
+
   const folded = trimmed.toLowerCase();
   // Intercept an ambiguous family label BEFORE correct() can fabricate a clause count.
   // Present-but-imprecise - never the guess, never unknown.
   const family = AMBIGUOUS_FAMILY.get(folded);
+
   if (family !== undefined) {
     return {
       expression: null,
@@ -234,23 +247,30 @@ export function normalizeRaw(raw: string): NormalizeResult {
       impreciseFamily: family,
     };
   }
+
   // Unambiguous label correct() misses (e.g. "ISC license" → ISC).
   const fixup = PRECISE_LABEL_FIXUP.get(folded);
+
   if (fixup !== undefined) {
     return { expression: fixup, source: "corrected" };
   }
+
   // Debian/DEP-5 copyright shorthands → canonical SPDX. MUST run BEFORE correct(): correct() either
   // drops these to unknown or mis-guesses them (e.g. "GPL-2+" → "GPL-2.0-only", dropping the
   // or-later). Exact-token only,
   // case-folded; bare GPL/LGPL/AGPL already returned above via AMBIGUOUS_FAMILY.
   const debian = DEBIAN_SHORTHAND.get(folded);
+
   if (debian !== undefined) {
     return { expression: debian, source: "corrected" };
   }
+
   if (isCommaLicenseList(trimmed)) {
     return { expression: null, source: "generator" }; // unknown
   }
+
   const fixed = correct(trimmed); // never throws on non-empty input
+
   if (fixed !== null) {
     try {
       parse(fixed); // belt-and-braces: corrected output must parse
@@ -259,6 +279,7 @@ export function normalizeRaw(raw: string): NormalizeResult {
       /* corrected output unparseable - treat as unknown */
     }
   }
+
   return { expression: null, source: "generator" }; // unknown
 }
 
@@ -289,17 +310,25 @@ function findingFromClaims(
 ): LicenseFinding {
   const seen = new Set<string>();
   const distinct: LicenseClaim[] = [];
+
   for (const c of claims) {
     // Drop bare connective syntax artifacts ("AND"/"OR"/"WITH") - they are syft compound-license
     // tokenization noise, never a license claim.
-    if (isBareConnective(c.raw)) continue;
+    if (isBareConnective(c.raw)) {
+      continue;
+    }
+
     const key = `${c.kind}\0${c.raw}`; // NUL-joined: no concatenation ambiguity
+
     if (!seen.has(key)) {
       seen.add(key);
       distinct.push(c);
     }
   }
-  if (distinct.length === 0) return UNKNOWN_FINDING;
+
+  if (distinct.length === 0) {
+    return UNKNOWN_FINDING;
+  }
 
   const results = distinct.map((c) => normalizeRaw(c.raw));
   // A genuinely-unknown claim is expression null AND not imprecise (an imprecise family is its own
@@ -310,9 +339,11 @@ function findingFromClaims(
     .filter(({ result }) => result.expression === null && result.imprecise !== true)
     .map(({ raw }) => raw)
     .filter((raw) => raw !== "");
+
   if (unknownTokens.length > 0) {
     const hasNormalizable = results.some((r) => r.expression !== null);
     const hasImprecise = results.some((r) => r.imprecise === true);
+
     // os-scope partial: build the KNOWN signal (precise OR imprecise) and surface the rest.
     // Requires ≥1 KNOWN member - a precise license OR an imprecise copyleft/permissive family, so
     // the could-be-copyleft review hint survives rather than flattening to plain unknown. An os
@@ -320,8 +351,10 @@ function findingFromClaims(
     // stand on) - exactly the app-scope behavior.
     if (scope === "os" && (hasNormalizable || hasImprecise)) {
       const surfaced = [...new Set(unknownTokens)].sort(compareCodeUnits);
+
       return { ...combineKnown(results), unrecognizedTokens: surfaced };
     }
+
     // Every non-os scope (and os with zero known members): conservative all-or-nothing - a
     // genuinely-unknown claim makes the whole finding unknown so partial knowledge can never hide
     // an obligation.
@@ -353,9 +386,13 @@ function combineKnown(results: ReadonlyArray<NormalizeResult>): LicenseFinding {
   const hasPreciseCopyleft = preciseResults.some((r) =>
     expressionIsCopyleft(r.expression as string),
   );
-  if (hasPreciseCopyleft) return combinePrecise(preciseResults);
+
+  if (hasPreciseCopyleft) {
+    return combinePrecise(preciseResults);
+  }
 
   const impreciseFamily = electImpreciseFamily(results);
+
   if (impreciseFamily !== undefined) {
     return {
       expression: null,
@@ -386,13 +423,19 @@ function expressionIsCopyleft(expression: string): boolean {
  */
 function electImpreciseFamily(results: ReadonlyArray<NormalizeResult>): string | undefined {
   let permissive: string | undefined;
+
   for (const r of results) {
-    if (r.imprecise !== true || r.impreciseFamily === undefined) continue;
+    if (r.imprecise !== true || r.impreciseFamily === undefined) {
+      continue;
+    }
+
     if (COULD_BE_COPYLEFT_FAMILIES.has(r.impreciseFamily)) {
       return r.impreciseFamily; // copyleft family dominates
     }
+
     permissive ??= r.impreciseFamily;
   }
+
   return permissive;
 }
 
@@ -402,8 +445,10 @@ function combinePrecise(preciseResults: ReadonlyArray<NormalizeResult>): License
   // expression.
   const expressions: string[] = [];
   const seenExpressions = new Set<string>();
+
   for (const r of preciseResults) {
     const expression = r.expression as string;
+
     if (!seenExpressions.has(expression)) {
       seenExpressions.add(expression);
       expressions.push(expression);
@@ -412,6 +457,7 @@ function combinePrecise(preciseResults: ReadonlyArray<NormalizeResult>): License
 
   let node = parse(expressions[0] as string) as ExpressionNode;
   let expression = expressions[0] as string; // single claim: raw preserved verbatim
+
   if (expressions.length > 1) {
     for (const next of expressions.slice(1)) {
       node = {
@@ -420,10 +466,12 @@ function combinePrecise(preciseResults: ReadonlyArray<NormalizeResult>): License
         right: parse(next) as ExpressionNode,
       };
     }
+
     expression = renderNode(node); // compound operands parenthesized
   }
 
   const anyCorrected = preciseResults.some((r) => r.source === "corrected");
+
   return {
     expression,
     elected: renderNode(elect(node)),
@@ -473,13 +521,19 @@ function observedSignal(
   baseFinding: LicenseFinding,
 ): string[] {
   const signal = new Set<string>();
+
   for (const c of claims) {
     const trimmed = c.raw.trim();
-    if (trimmed !== "") signal.add(trimmed);
+
+    if (trimmed !== "") {
+      signal.add(trimmed);
+    }
   }
+
   if (baseFinding.impreciseFamily !== undefined) {
     signal.add(baseFinding.impreciseFamily);
   }
+
   return [...signal];
 }
 
@@ -492,16 +546,22 @@ function observedSignal(
  */
 function observedExpressions(claims: ReadonlyArray<LicenseClaim>): readonly string[] {
   const seen = new Set<string>();
+
   for (const c of claims) {
     const precise = normalizeRaw(c.raw).expression;
-    if (precise !== null) seen.add(precise);
+
+    if (precise !== null) {
+      seen.add(precise);
+    }
   }
+
   return [...seen].sort(compareCodeUnits);
 }
 
 /** Case-insensitive, trimmed equality of `expects` against any signal member. */
 function signalMatches(signal: ReadonlyArray<string>, expects: string): boolean {
   const want = expects.trim().toLowerCase();
+
   return signal.some((s) => s.trim().toLowerCase() === want);
 }
 
@@ -524,18 +584,31 @@ function signalContradicts(
   expression: string,
 ): boolean {
   const want = expects.trim().toLowerCase();
+
   for (const member of signal) {
-    if (member.trim().toLowerCase() === want) continue;
+    if (member.trim().toLowerCase() === want) {
+      continue;
+    }
+
     const precise = normalizeRaw(member).expression;
-    if (precise === null) continue; // imprecise/unknown: no precise contradiction
+
+    if (precise === null) {
+      continue;
+    } // imprecise/unknown: no precise contradiction
+
     let ok: boolean;
+
     try {
       ok = satisfies(precise, [expression]);
     } catch {
       ok = false; // unparseable against the assertion → fail closed
     }
-    if (!ok) return true;
+
+    if (!ok) {
+      return true;
+    }
   }
+
   return false;
 }
 
@@ -551,7 +624,10 @@ function signalContradicts(
  * treated as NOT satisfying (fail closed).
  */
 function baseSatisfiesAssertion(base: LicenseFinding, expression: string): boolean {
-  if (base.expression === null) return false; // imprecise/unknown: not redundant
+  if (base.expression === null) {
+    return false;
+  } // imprecise/unknown: not redundant
+
   try {
     return satisfies(base.expression, [expression]);
   } catch {
@@ -562,6 +638,7 @@ function baseSatisfiesAssertion(base: LicenseFinding, expression: string): boole
 /** Build the override finding from a validated SPDX expression. */
 function overrideFinding(expression: string, overrideRule: string | undefined): LicenseFinding {
   const node = parse(expression) as ExpressionNode;
+
   return {
     expression,
     elected: renderNode(elect(node)),
@@ -619,12 +696,16 @@ function applyOverride(
   base: LicenseFinding,
   signal: ReadonlyArray<string>,
 ): LicenseFinding {
-  if (expects === undefined) return overrideFinding(expression, overrideRule);
+  if (expects === undefined) {
+    return overrideFinding(expression, overrideRule);
+  }
+
   if (needsLiteralExpectsMatch(expects, expression)) {
     return signalMatches(signal, expects)
       ? overrideFinding(expression, overrideRule)
       : withStaleOverride(base, { level, expected: expects, observed: signal });
   }
+
   if (signalMatches(signal, expects)) {
     if (!signalContradicts(signal, expects, expression)) {
       return overrideFinding(expression, overrideRule);
@@ -635,6 +716,7 @@ function applyOverride(
     // not stale).
     return base;
   }
+
   return withStaleOverride(base, {
     level,
     expected: expects,
@@ -656,9 +738,11 @@ function resolveOverride(
     (rule) =>
       rule.name === entry.name && (rule.version === undefined || rule.version === entry.version),
   );
+
   if (clarifyIndex !== -1) {
     usedClarifyIndices.add(clarifyIndex);
     const rule = clarify[clarifyIndex] as ClarifyInput;
+
     return applyOverride(
       rule.expects,
       rule.expression,
@@ -668,10 +752,13 @@ function resolveOverride(
       signal,
     );
   }
+
   // Tool-level builtin set, version-agnostic (overrides survive bumps).
   const builtinIndex = builtins.findIndex((o) => o.name === entry.name);
+
   if (builtinIndex !== -1) {
     const o = builtins[builtinIndex] as BuiltinOverrideInput;
+
     return applyOverride(
       o.expects,
       o.expression,
@@ -681,6 +768,7 @@ function resolveOverride(
       signal,
     );
   }
+
   return undefined;
 }
 
@@ -696,6 +784,7 @@ function resolveOverride(
  */
 function everyLeafInFamily(node: ExpressionNode, family: string): boolean {
   const { ids } = leafIds(node);
+
   return ids.every((id) => id === family || id.startsWith(`${family}-`));
 }
 
@@ -722,15 +811,24 @@ function expressionInFamily(expression: string, family: string): boolean {
 function quickCheckClaims(claims: ReadonlyArray<LicenseClaim>): LicenseClaim[] {
   const seen = new Set<string>();
   const distinct: LicenseClaim[] = [];
+
   for (const c of claims) {
-    if (c.source === "scancode") continue;
-    if (c.raw.trim() === "" || isBareConnective(c.raw)) continue;
+    if (c.source === "scancode") {
+      continue;
+    }
+
+    if (c.raw.trim() === "" || isBareConnective(c.raw)) {
+      continue;
+    }
+
     const key = `${c.kind}\0${c.raw}`;
+
     if (!seen.has(key)) {
       seen.add(key);
       distinct.push(c);
     }
   }
+
   return distinct;
 }
 
@@ -746,17 +844,23 @@ function quickCheckClaims(claims: ReadonlyArray<LicenseClaim>): LicenseClaim[] {
  */
 function claimAgreesWithAssessment(claim: LicenseClaim, assessed: string): boolean {
   const result = normalizeRaw(claim.raw);
+
   if (result.expression !== null) {
-    if (result.expression === assessed) return true;
+    if (result.expression === assessed) {
+      return true;
+    }
+
     try {
       return satisfies(result.expression, [assessed]);
     } catch {
       return false; // compound/unparseable allowlist entry → fail closed
     }
   }
+
   if (result.imprecise === true && result.impreciseFamily !== undefined) {
     return expressionInFamily(assessed, result.impreciseFamily);
   }
+
   return false; // genuinely-unknown non-empty claim: a human must look
 }
 
@@ -767,10 +871,15 @@ function claimAgreesWithAssessment(claim: LicenseClaim, assessed: string): boole
  */
 function disagreeingLabel(claim: LicenseClaim): string {
   const result = normalizeRaw(claim.raw);
-  if (result.expression !== null) return result.expression;
+
+  if (result.expression !== null) {
+    return result.expression;
+  }
+
   if (result.imprecise === true && result.impreciseFamily !== undefined) {
     return result.impreciseFamily;
   }
+
   return claim.raw.trim();
 }
 
@@ -788,11 +897,18 @@ function assessPrecise(
   const disagreeing = quickCheckClaims(claims)
     .filter((c) => !claimAgreesWithAssessment(c, assessed))
     .map(disagreeingLabel);
+
   if (disagreeing.length > 0) {
     const members = [...new Set(disagreeing)].sort(compareCodeUnits);
-    return { ...base, conflict: { assessed, disagreeing: members } };
+
+    return {
+      ...base,
+      conflict: { kind: "scancode", assessed, disagreeing: members },
+    };
   }
+
   const node = parse(assessed) as ExpressionNode;
+
   return {
     expression: assessed,
     elected: renderNode(elect(node)),
@@ -812,9 +928,14 @@ function assessImprecise(family: string, base: LicenseFinding): LicenseFinding {
   if (base.expression !== null && !expressionInFamily(base.expression, family)) {
     return {
       ...base,
-      conflict: { assessed: family, disagreeing: [base.expression] },
+      conflict: {
+        kind: "scancode",
+        assessed: family,
+        disagreeing: [base.expression],
+      },
     };
   }
+
   return base;
 }
 
@@ -843,15 +964,37 @@ export function applyScancodeAssessment(
   base: LicenseFinding,
 ): LicenseFinding {
   const scancode = claims.find((c) => c.source === "scancode");
-  if (scancode === undefined) return base;
+
+  if (scancode === undefined) {
+    return base;
+  }
+
   const result = normalizeRaw(scancode.raw);
+
   if (result.expression !== null) {
     return assessPrecise(result.expression, claims, base);
   }
+
   if (result.imprecise === true && result.impreciseFamily !== undefined) {
     return assessImprecise(result.impreciseFamily, base);
   }
+
   return base;
+}
+
+/**
+ * Overlay a cross-image claim divergence recorded at merge time onto a finding with no ScanCode
+ * conflict yet - a ScanCode disagreement always keeps the slot. No-op (same reference) otherwise.
+ */
+function withCrossImageConflict(
+  divergence: CrossImageClaimDivergence | undefined,
+  finding: LicenseFinding,
+): LicenseFinding {
+  if (divergence === undefined || finding.conflict !== undefined) {
+    return finding;
+  }
+
+  return { ...finding, conflict: divergence };
 }
 
 /**
@@ -871,15 +1014,24 @@ export function annotateFindings(
   builtins: ReadonlyArray<BuiltinOverrideInput> = [],
 ): AnnotatedFindings {
   const usedClarifyIndices = new Set<number>();
-  const packages = model.packages.map((entry: PackageEntry): PackageEntry => {
+
+  const packages = model.packages.map((rawEntry: PackageEntry): PackageEntry => {
+    // dockerClaimDivergence is a merge-time-only carrier (see PackageEntry): folded into
+    // finding.conflict below and never left standing on the returned entry.
+    const { dockerClaimDivergence, ...entry } = rawEntry;
     const unrefinedBase = findingFromClaims(entry.licenseClaims, entry.scope);
-    // The scancode SENIOR ASSESSMENT runs BEFORE overrides see the finding (clarify/builtin still
-    // decide last). An APPLIED override's finding never carries the conflict marker: the marker
-    // lives on this base only, and overrideFinding builds a fresh object.
-    const base = applyScancodeAssessment(entry.licenseClaims, unrefinedBase);
+
+    // The ScanCode assessment runs BEFORE overrides (clarify/builtin decide last).
+    const scancodeAssessed = applyScancodeAssessment(entry.licenseClaims, unrefinedBase);
+
+    // Cross-image divergence overlays LAST so a later scancode/registry stage can never mask it
+    // - it only ever ADDS the marker when scancode did not already claim the conflict slot.
+    const base = withCrossImageConflict(dockerClaimDivergence, scancodeAssessed);
+
     const signal = observedSignal(entry.licenseClaims, base);
     const overridden = resolveOverride(entry, clarify, builtins, base, signal, usedClarifyIndices);
     const finding = overridden ?? base;
+
     // Deny terminal over overrides: preserve the PRE-OVERRIDE observed expression whenever an
     // override REWROTE it (overridden has a different expression than the un-overridden base). The
     // deny terminal in evaluate consults this so a denied observed license can never be licensed
@@ -888,11 +1040,11 @@ export function annotateFindings(
       overridden !== undefined &&
       base.expression !== null &&
       overridden.expression !== base.expression;
-    // Deny sees EVERY observed claim: carry every per-claim precise expression so the deny terminal
-    // fires on a denied member combineKnown dropped (imprecise-family election / unknown collapse).
-    // Independent of the Independent of the single observedExpression (override-rewrite) above
-    // - both feed deny.
+
+    // Deny needs every observed claim, not only the combined expression combineKnown may collapse
+    // - independent of observedExpression above; both feed deny.
     const observed = observedExpressions(entry.licenseClaims);
+
     return {
       ...entry,
       finding: {
@@ -902,5 +1054,6 @@ export function annotateFindings(
       },
     };
   });
+
   return { model: { packages }, usedClarifyIndices };
 }

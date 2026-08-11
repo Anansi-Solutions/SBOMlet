@@ -51,6 +51,7 @@ describe("collector registry", () => {
     for (const kind of ALL_KINDS) {
       expect(collectors.get(kind)).toBeDefined();
     }
+
     expect(collectors.size).toBe(ALL_KINDS.length);
   });
 

@@ -30,6 +30,7 @@ describe("execTool", () => {
       timeoutMs: 30000,
       verbose: false,
     });
+
     expect(stdout).toMatch(/\d+\.\d+\.\d+/);
   });
 
@@ -46,6 +47,7 @@ describe("execTool", () => {
       timeoutMs: 30000,
       verbose: false,
     });
+
     expect(stdout).toContain("é世界");
     expect(stdout).not.toContain("�");
   });
@@ -66,6 +68,7 @@ describe("execTool", () => {
   test("rejects with 'timed out' and kills the child when timeoutMs elapses", async () => {
     expect.assertions(2);
     const startedAt = Date.now();
+
     try {
       await execTool(process.execPath, ["-e", "setTimeout(() => {}, 10000)"], {
         timeoutMs: 250,
@@ -98,18 +101,27 @@ describe("execTool", () => {
     ).rejects.toThrow("timed out");
 
     // Wait for the pid file (written well before the 1.5s timeout fires).
-    for (let i = 0; i < 100 && !existsSync(pidFile); i++) await sleep(100);
+    for (let i = 0; i < 100 && !existsSync(pidFile); i++) {
+      await sleep(100);
+    }
+
     expect(existsSync(pidFile)).toBe(true);
     const grandchildPid = Number(readFileSync(pidFile, "utf-8"));
+
     expect(Number.isInteger(grandchildPid)).toBe(true);
 
     // The tree kill is asynchronous (taskkill on win32) — poll until dead.
     let alive = true;
+
     for (let i = 0; i < 100; i++) {
       alive = isAlive(grandchildPid);
-      if (!alive) break;
+      if (!alive) {
+        break;
+      }
+
       await sleep(100);
     }
+
     expect(alive).toBe(false);
   }, 20000);
 
@@ -129,7 +141,11 @@ describe("execTool", () => {
       // PATH because process.execPath is absolute.
       const pathKeys = Object.keys(process.env).filter((key) => key.toUpperCase() === "PATH");
       const saved = pathKeys.map((key) => [key, process.env[key]] as const);
-      for (const key of pathKeys) delete process.env[key];
+
+      for (const key of pathKeys) {
+        delete process.env[key];
+      }
+
       try {
         await expect(
           execTool(process.execPath, ["-e", script], {
@@ -138,19 +154,29 @@ describe("execTool", () => {
           }),
         ).rejects.toThrow("timed out");
       } finally {
-        for (const [key, value] of saved) process.env[key] = value;
+        for (const [key, value] of saved) {
+          process.env[key] = value;
+        }
       }
 
       // The fallback child.kill() must still terminate the direct child.
-      for (let i = 0; i < 100 && !existsSync(pidFile); i++) await sleep(100);
+      for (let i = 0; i < 100 && !existsSync(pidFile); i++) {
+        await sleep(100);
+      }
+
       expect(existsSync(pidFile)).toBe(true);
       const childPid = Number(readFileSync(pidFile, "utf-8"));
       let alive = true;
+
       for (let i = 0; i < 100; i++) {
         alive = isAlive(childPid);
-        if (!alive) break;
+        if (!alive) {
+          break;
+        }
+
         await sleep(100);
       }
+
       expect(alive).toBe(false);
     },
     20000,
@@ -165,6 +191,7 @@ describe("execTool", () => {
       verbose: false,
       env: { ...process.env, LICENSES_TEST_SENTINEL: "round-trip-9f3a1c" },
     });
+
     expect(withVar.stdout).toContain("sentinel=round-trip-9f3a1c");
 
     const withoutVar = await execTool(process.execPath, ["-e", script], {
@@ -173,6 +200,7 @@ describe("execTool", () => {
       // Explicit env WITHOUT the sentinel var (PATH kept so spawn works).
       env: { PATH: process.env.PATH },
     });
+
     expect(withoutVar.stdout).toContain("sentinel=<unset>");
     expect(withoutVar.stdout).not.toContain("round-trip-9f3a1c");
   });

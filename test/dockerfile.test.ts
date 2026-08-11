@@ -10,12 +10,14 @@ const tempRoots: string[] = [];
 
 function makeTempRoot(): string {
   const root = mkdtempSync(join(tmpdir(), "licenses-dockerfile-"));
+
   tempRoots.push(root);
   return root;
 }
 
 function writeFile(root: string, rel: string, content: string): void {
   const full = join(root, ...rel.split("/"));
+
   mkdirSync(join(full, ".."), { recursive: true });
   writeFileSync(full, content);
 }
@@ -35,6 +37,7 @@ afterEach(() => {
 describe("discoverDockerfiles", () => {
   test("finds real Dockerfiles at any depth, excludes node_modules/.terraform", () => {
     const root = makeTempRoot();
+
     writeFile(root, "backend/Dockerfile", "FROM node:22-slim\n");
     writeFile(root, "frontend/Dockerfile", "FROM node:22-slim\n");
     writeFile(root, "docker/nginx.Dockerfile", "FROM nginx:stable-alpine\n");
@@ -43,6 +46,7 @@ describe("discoverDockerfiles", () => {
     writeFile(root, "frontend/node_modules/swagger2openapi/Dockerfile", "FROM node\n");
 
     const result = discoverDockerfiles(root);
+
     expect(result.dockerfiles.map((d) => d.identity)).toEqual([
       "backend/Dockerfile",
       "docker/nginx.Dockerfile",
@@ -52,6 +56,7 @@ describe("discoverDockerfiles", () => {
 
   test("matches *.Dockerfile, Dockerfile.*, *.dockerfile basenames (case-insensitive stem)", () => {
     const root = makeTempRoot();
+
     writeFile(root, "a/Dockerfile", "FROM x\n");
     writeFile(root, "b/app.Dockerfile", "FROM x\n");
     writeFile(root, "c/Dockerfile.prod", "FROM x\n");
@@ -59,6 +64,7 @@ describe("discoverDockerfiles", () => {
     writeFile(root, "e/notADockerfile.txt", "nope\n");
 
     const result = discoverDockerfiles(root);
+
     expect(result.dockerfiles.map((d) => d.identity)).toEqual([
       "a/Dockerfile",
       "b/app.Dockerfile",
@@ -94,27 +100,32 @@ describe("discoverDockerfiles", () => {
 
   test("#4: a Dockerfile.go name-match IS listed (the .go suffix is not blocklisted)", () => {
     const root = makeTempRoot();
+
     // Name-pattern only (.go suffix is not blocklisted), independent of the
     // parent dir. Discovery lists it; the build lane handles it.
     writeFile(root, "ci/Dockerfile.go", "FROM golang:1.22-alpine\n");
     const result = discoverDockerfiles(root);
+
     expect(result.dockerfiles.map((d) => d.identity)).toContain("ci/Dockerfile.go");
   });
 
   test("#5: a matched non-Dockerfile is LISTED, never silently dropped (name-pattern-only contract)", () => {
     const root = makeTempRoot();
+
     writeFile(root, "app/Dockerfile", "FROM alpine:3.20\n");
     // A stray matched name is LISTED (contents are never read); it is a build
     // input that either builds or is [docker]-ignored — never silently dropped.
     writeFile(root, "tools/dockerfile.ts", "export const x = 1;\n");
     const result = discoverDockerfiles(root);
     const identities = result.dockerfiles.map((d) => d.identity);
+
     expect(identities).toContain("tools/dockerfile.ts");
     expect(identities).toContain("app/Dockerfile");
   });
 
   test("#6: the tool's OWN directory is excluded when toolDir is set", () => {
     const root = makeTempRoot();
+
     writeFile(root, "app/Dockerfile", "FROM alpine:3.20\n");
     // Simulate the tool living under src/collectors with its own dockerfile.ts.
     writeFile(root, "tool/src/collectors/dockerfile.ts", "export const x = 1;\n");
@@ -122,6 +133,7 @@ describe("discoverDockerfiles", () => {
 
     const toolDir = join(root, "tool");
     const result = discoverDockerfiles(root, { toolDir });
+
     // The tool dir subtree is pruned; only the consumer Dockerfile remains.
     expect(result.dockerfiles.map((d) => d.identity)).toEqual(["app/Dockerfile"]);
   });
@@ -130,6 +142,7 @@ describe("discoverDockerfiles", () => {
     // build/out/target/vendor are generic source names (an earlier over-broad
     // prune was reverted); only the documented dist/ build-output dir stays excluded.
     const root = makeTempRoot();
+
     writeFile(root, "backend/Dockerfile", "FROM node:22-slim\n");
     writeFile(root, "dist/Dockerfile", "FROM node:22\n");
     writeFile(root, "build/Dockerfile", "FROM node:22\n");
@@ -138,6 +151,7 @@ describe("discoverDockerfiles", () => {
     writeFile(root, "vendor/Dockerfile", "FROM node:22\n");
 
     const result = discoverDockerfiles(root);
+
     expect(result.dockerfiles.map((d) => d.identity)).toEqual([
       "backend/Dockerfile",
       "build/Dockerfile",
@@ -149,22 +163,26 @@ describe("discoverDockerfiles", () => {
 
   test("#3: a Dockerfile under Node_Modules/ (mixed case) is excluded on Windows", () => {
     const root = makeTempRoot();
+
     writeFile(root, "backend/Dockerfile", "FROM node:22-slim\n");
     writeFile(root, "Node_Modules/dep/Dockerfile", "FROM node\n");
     writeFile(root, "NODE_MODULES/dep/Dockerfile", "FROM node\n");
     writeFile(root, "Dist/Dockerfile", "FROM node\n");
 
     const result = discoverDockerfiles(root);
+
     expect(result.dockerfiles.map((d) => d.identity)).toEqual(["backend/Dockerfile"]);
   });
 
   test("#4: Dockerfiles under .docker/ and .devcontainer/ ARE discovered", () => {
     const root = makeTempRoot();
+
     writeFile(root, "backend/Dockerfile", "FROM node:22-slim\n");
     writeFile(root, ".docker/Dockerfile", "FROM alpine:3.20\n");
     writeFile(root, ".devcontainer/Dockerfile", "FROM ubuntu:24.04\n");
 
     const result = discoverDockerfiles(root);
+
     expect(result.dockerfiles.map((d) => d.identity)).toEqual([
       ".devcontainer/Dockerfile",
       ".docker/Dockerfile",
@@ -174,12 +192,14 @@ describe("discoverDockerfiles", () => {
 
   test("#4: Dockerfiles under .git/.terraform/other dot-dirs are STILL excluded", () => {
     const root = makeTempRoot();
+
     writeFile(root, "backend/Dockerfile", "FROM node:22-slim\n");
     writeFile(root, ".git/Dockerfile", "FROM scratch\n");
     writeFile(root, ".terraform/modules/x/Dockerfile", "FROM ubuntu\n");
     writeFile(root, ".cache/Dockerfile", "FROM busybox\n");
 
     const result = discoverDockerfiles(root);
+
     expect(result.dockerfiles.map((d) => d.identity)).toEqual(["backend/Dockerfile"]);
   });
 
@@ -191,6 +211,7 @@ describe("discoverDockerfiles", () => {
     // dir with a `.git` DIRECTORY is unaffected (only the gitlink-FILE case
     // prunes).
     const root = makeTempRoot();
+
     writeFile(root, "backend/Dockerfile", "FROM node:22-slim\n");
     // Submodule root: `.git` is a FILE (gitlink) — its Dockerfile must NOT be found.
     writeFile(root, "vendored/.git", "gitdir: ../.git/modules/vendored\n");
@@ -203,6 +224,7 @@ describe("discoverDockerfiles", () => {
     writeFile(root, "normal/Dockerfile", "FROM alpine:3.20\n");
 
     const result = discoverDockerfiles(root);
+
     expect(result.dockerfiles.map((d) => d.identity)).toEqual([
       "backend/Dockerfile",
       "normal/Dockerfile",
@@ -211,12 +233,14 @@ describe("discoverDockerfiles", () => {
 
   test("[docker] ignore glob excludes a dev Dockerfile entirely", () => {
     const root = makeTempRoot();
+
     writeFile(root, "backend/Dockerfile", "FROM node:22-slim\n");
     writeFile(root, "docker/dev/Dockerfile", "FROM node:22\n");
 
     const result = discoverDockerfiles(root, {
       dockerIgnore: ["docker/dev/**"],
     });
+
     expect(result.dockerfiles.map((d) => d.identity)).toEqual(["backend/Dockerfile"]);
     // The ignored one is surfaced by name (never silently dropped).
     expect(result.ignored).toEqual(["docker/dev/Dockerfile"]);
@@ -224,20 +248,24 @@ describe("discoverDockerfiles", () => {
 
   test("--exclude glob is honored", () => {
     const root = makeTempRoot();
+
     writeFile(root, "backend/Dockerfile", "FROM node:22-slim\n");
     writeFile(root, "legacy/Dockerfile", "FROM node:18\n");
 
     const result = discoverDockerfiles(root, { excludes: ["legacy/**"] });
+
     expect(result.dockerfiles.map((d) => d.identity)).toEqual(["backend/Dockerfile"]);
   });
 
   test("output is deterministically sorted by repo-relative forward-slash path", () => {
     const root = makeTempRoot();
+
     writeFile(root, "z/Dockerfile", "FROM x\n");
     writeFile(root, "a/Dockerfile", "FROM x\n");
     writeFile(root, "m/sub/Dockerfile", "FROM x\n");
 
     const result = discoverDockerfiles(root);
+
     expect(result.dockerfiles.map((d) => d.identity)).toEqual([
       "a/Dockerfile",
       "m/sub/Dockerfile",
@@ -247,10 +275,12 @@ describe("discoverDockerfiles", () => {
 
   test("each discovered Dockerfile carries its repo-relative identity and absolute path (no file read)", () => {
     const root = makeTempRoot();
+
     writeFile(root, "backend/Dockerfile", "FROM node:22-slim\n");
 
     const result = discoverDockerfiles(root);
     const entry = result.dockerfiles.find((d) => d.identity === "backend/Dockerfile");
+
     expect(entry).toBeDefined();
     expect(entry?.path).toBe(join(root, "backend", "Dockerfile"));
     // The entry shape carries identity + path only — no derived base field.

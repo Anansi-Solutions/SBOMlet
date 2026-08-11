@@ -334,6 +334,19 @@ then commits any new memo entries back the same way the Docker scan below does.
 The gate reads the committed memo offline: once a scan assesses a package, every
 later `generate` and `check` reuses the answer without scanning again.
 
+### A slow or broken package never derails the backfill
+
+Each package is scanned under its own wall-clock limit
+(`--package-timeout-mins`, 10 minutes by default). A package that exceeds it, or
+fails to scan for any other reason, is skipped and reported on stderr the same
+way an absent local install is — never memoized, so the next run retries it —
+and the assessment continues with the rest of the set. Every result already
+computed in the run is still committed, even if a later package's failure
+would otherwise have ended the run early. CI runners are typically slower than
+a local machine, so `.github/workflows/intensive-scan.yml` raises the
+per-package limit to 30 minutes; the job's own `timeout-minutes` stays the
+backstop for the run as a whole.
+
 ### A scheduled scan can turn the main gate red
 
 This is by design, and worth expecting. When a scheduled intensive run finds a

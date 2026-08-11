@@ -29,6 +29,7 @@ const LICENSES_NUGET_ORG_PREFIX = "https://licenses.nuget.org/";
 export function nugetRegistrationLeafUrl(encodedName: string, version: string): string {
   const id = encodeURIComponent(decodeURIComponent(encodedName).toLowerCase());
   const ver = encodeURIComponent(decodeURIComponent(version).toLowerCase());
+
   return `${NUGET_API_HOST}/v3/registration5-gz-semver2/${id}/${ver}.json`;
 }
 
@@ -41,9 +42,11 @@ export function nugetRegistrationLeafUrl(encodedName: string, version: string): 
  */
 export function catalogEntryUrlOf(leaf: unknown): string | undefined {
   const url = narrowNugetLeaf(leaf)?.catalogEntry;
+
   if (url === undefined || !url.startsWith(`${NUGET_API_HOST}/`)) {
     return undefined;
   }
+
   return url;
 }
 
@@ -74,23 +77,32 @@ export interface NugetResolution {
  */
 export function resolveNugetCatalogLicense(doc: unknown): NugetResolution | null {
   const entry = narrowNugetCatalogEntry(doc);
-  if (entry === undefined) return null;
+
+  if (entry === undefined) {
+    return null;
+  }
 
   const expression = entry.licenseExpression?.trim();
+
   if (expression !== undefined && expression !== "") {
     return { raw: expression, via: "license-expression", confidence: "high" };
   }
 
   // Embedded file BEFORE licenseUrl: the aka.ms sentinel never reads as a URL.
-  if (entry.licenseFile !== undefined && entry.licenseFile !== "") return null;
+  if (entry.licenseFile !== undefined && entry.licenseFile !== "") {
+    return null;
+  }
 
   const url = entry.licenseUrl;
+
   if (url !== undefined && url.startsWith(LICENSES_NUGET_ORG_PREFIX)) {
     const decoded = decodeSpdxPath(url.slice(LICENSES_NUGET_ORG_PREFIX.length));
+
     if (decoded !== undefined && decoded !== "") {
       return { raw: decoded, via: "license-url-spdx", confidence: "high" };
     }
   }
+
   return null; // url-only (pre-2019) or nothing - honest unknown, never a guess
 }
 
@@ -103,12 +115,17 @@ export function resolveNugetCatalogLicense(doc: unknown): NugetResolution | null
  */
 function decodeSpdxPath(path: string): string | undefined {
   let decoded: string;
+
   try {
     decoded = decodeURIComponent(path);
   } catch {
     return undefined;
   }
+
   // eslint-disable-next-line no-control-regex -- deliberate control-character class: reject, never resolve
-  if (/[\u0000-\u001f\u007f-\u009f]/u.test(decoded)) return undefined;
+  if (/[\u0000-\u001f\u007f-\u009f]/u.test(decoded)) {
+    return undefined;
+  }
+
   return decoded.trim();
 }

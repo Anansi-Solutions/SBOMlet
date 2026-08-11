@@ -61,6 +61,7 @@ let fixtureSbom: unknown = ALL_LICENSED_SBOM;
 async function fakeScanWithCdxgen(): Promise<cdxgenModule.CollectorSbomFile> {
   const tempDir = mkdtempSync(join(tmpdir(), "licenses-cacheregen-scan-"));
   const sbomPath = join(tempDir, "bom.json");
+
   writeFileSync(sbomPath, JSON.stringify(fixtureSbom));
   return { sbomPath, cacheKey: "fake", tool: REAL_CDXGEN.CDXGEN_TOOL };
 }
@@ -74,6 +75,7 @@ const V1_LOCKFILE = ["# yarn lockfile v1", "", "lodash@^4.17.21:", '  version "4
 function makeScannableTree(): { root: string } {
   const root = mkdtempSync(join(tmpdir(), "licenses-cacheregen-"));
   const projDir = join(root, "proj");
+
   mkdirSync(projDir);
   writeFileSync(join(projDir, "package.json"), '{ "name": "proj" }\n');
   writeFileSync(join(projDir, "yarn.lock"), V1_LOCKFILE);
@@ -87,6 +89,7 @@ function makeScannableTree(): { root: string } {
 async function withCapturedStderr(fn: () => Promise<void>): Promise<string> {
   const original = process.stderr.write.bind(process.stderr);
   let captured = "";
+
   process.stderr.write = ((chunk: unknown): boolean => {
     captured += String(chunk);
     return true;
@@ -96,6 +99,7 @@ async function withCapturedStderr(fn: () => Promise<void>): Promise<string> {
   } finally {
     process.stderr.write = original;
   }
+
   return captured;
 }
 
@@ -103,6 +107,7 @@ async function withCapturedStderr(fn: () => Promise<void>): Promise<string> {
 function fetchReturning(bodyFor: (url: string) => unknown): typeof fetch {
   return (async (input: string | URL | Request): Promise<Response> => {
     const url = typeof input === "string" ? input : input.toString();
+
     return new Response(JSON.stringify(bodyFor(url)), {
       status: 200,
       headers: { "content-type": "application/json" },
@@ -149,6 +154,7 @@ describe("enrichment cache creation on generate", () => {
     expect(existsSync(noticesPath)).toBe(true);
 
     const cachePath = join(root, ".sbomlet.cache", "licenses.cache.json");
+
     expect(existsSync(cachePath)).toBe(true);
     expect(readFileSync(cachePath, "utf8")).toBe(serializeCache(new Map()));
   });
@@ -175,6 +181,7 @@ describe("enrichment cache creation on generate", () => {
     });
 
     const cachePath = join(root, ".sbomlet.cache", "licenses.cache.json");
+
     expect(readFileSync(cachePath, "utf8")).toBe(serializeCache(new Map()));
 
     // The consumer's lockfile later adds a dependency needing enrichment,
@@ -183,6 +190,7 @@ describe("enrichment cache creation on generate", () => {
     fixtureSbom = ONE_MISS_SBOM;
 
     let result: Awaited<ReturnType<typeof runCheck>> | undefined;
+
     await withCapturedStderr(async () => {
       result = await runCheck({
         repoRoot: root,
@@ -219,8 +227,10 @@ describe("enrichment cache creation on generate", () => {
     });
 
     const cachePath = join(root, ".sbomlet.cache", "licenses.cache.json");
+
     expect(existsSync(cachePath)).toBe(true);
     const cache = JSON.parse(readFileSync(cachePath, "utf8"));
+
     expect(cache.entries["pkg:npm/no-claims@2.0.0"]).toEqual({
       fetchedFrom: "npm",
       license: "MIT",
@@ -229,6 +239,7 @@ describe("enrichment cache creation on generate", () => {
     });
 
     let result: Awaited<ReturnType<typeof runCheck>> | undefined;
+
     await withCapturedStderr(async () => {
       result = await runCheck({
         repoRoot: root,

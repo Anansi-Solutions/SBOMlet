@@ -59,6 +59,7 @@ export const MAX_BUN_LOCK_BYTES = 32 * 1024 * 1024;
  */
 export function assertBunLockSize(lockPath: string): void {
   const size = statSync(lockPath).size;
+
   if (size > MAX_BUN_LOCK_BYTES) {
     throw new Error(
       `bun.lock at ${lockPath} is ${size} bytes, over the ` +
@@ -100,8 +101,12 @@ function stripTrailingCommas(text: string): string {
 
 /** packages[key] value[0] when it is a string in an array, else undefined. */
 function specOf(value: unknown): string | undefined {
-  if (!Array.isArray(value)) return undefined;
+  if (!Array.isArray(value)) {
+    return undefined;
+  }
+
   const first: unknown = value[0];
+
   return typeof first === "string" ? first : undefined;
 }
 
@@ -118,7 +123,11 @@ function specOf(value: unknown): string | undefined {
  */
 function splitSpec(spec: string): { name: string; version: string } | undefined {
   const at = spec.indexOf("@", spec.startsWith("@") ? 1 : 0);
-  if (at <= 0) return undefined; // no separator, or a bare leading-@ scope
+
+  if (at <= 0) {
+    return undefined;
+  } // no separator, or a bare leading-@ scope
+
   return { name: spec.slice(0, at), version: spec.slice(at + 1) };
 }
 
@@ -130,6 +139,7 @@ function splitSpec(spec: string): { name: string; version: string } | undefined 
 function purlOf(name: string, version: string): string {
   const encodedName = name.startsWith("@") ? `%40${name.slice(1)}` : name;
   const encodedVersion = version.replaceAll("+", "%2B");
+
   return `pkg:npm/${encodedName}@${encodedVersion}`;
 }
 
@@ -142,23 +152,36 @@ function purlOf(name: string, version: string): string {
  */
 export function bunThirdPartyEntryCount(lockfileText: string): number | undefined {
   let parsed: unknown;
+
   try {
     parsed = JSON.parse(stripTrailingCommas(lockfileText));
   } catch {
     return undefined;
   }
+
   // A failed document narrow is the unknown path - same as no packages map.
   const doc = BunLockDocument(parsed);
-  if (doc instanceof type.errors) return undefined;
+
+  if (doc instanceof type.errors) {
+    return undefined;
+  }
+
   const packages = doc.packages;
-  if (packages === undefined) return undefined;
+
+  if (packages === undefined) {
+    return undefined;
+  }
+
   let count = 0;
+
   for (const value of Object.values(packages)) {
     const spec = specOf(value);
+
     if (spec !== undefined && !spec.includes("@workspace:")) {
       count += 1;
     }
   }
+
   return count;
 }
 
@@ -168,12 +191,15 @@ const PROD_DEP_FIELDS = ["dependencies", "optionalDependencies", "peerDependenci
 /** Tolerantly collect dependency names from the given maps of a record. */
 function depNamesOf(record: Record<string, unknown>, fields: readonly string[]): string[] {
   const names: string[] = [];
+
   for (const field of fields) {
     const deps = recordOf(record[field]);
+
     if (deps !== undefined) {
       names.push(...Object.keys(deps));
     }
   }
+
   return names;
 }
 
@@ -214,8 +240,12 @@ function transitiveDevKeys(
   ): readonly string[] | undefined => {
     for (let length = parentChain.length; length >= 0; length -= 1) {
       const chain = [...parentChain.slice(0, length), depName];
-      if (chain.join("/") in packages) return chain;
+
+      if (chain.join("/") in packages) {
+        return chain;
+      }
     }
+
     return undefined;
   };
 
@@ -223,7 +253,11 @@ function transitiveDevKeys(
   const depsOf = (key: string): string[] => {
     const value = packages[key];
     const metadata = Array.isArray(value) ? recordOf(value[2]) : undefined;
-    if (metadata === undefined) return [];
+
+    if (metadata === undefined) {
+      return [];
+    }
+
     return depNamesOf(metadata, PROD_DEP_FIELDS);
   };
 
@@ -232,15 +266,22 @@ function transitiveDevKeys(
   // chain walk degrades to the bare lookup.
   const prodRoots: Array<{ parentChain: readonly string[]; name: string }> = [];
   const devRoots: Array<{ parentChain: readonly string[]; name: string }> = [];
+
   for (const rawImporter of Object.values(workspaces)) {
     const importer = recordOf(rawImporter);
-    if (importer === undefined) continue;
+
+    if (importer === undefined) {
+      continue;
+    }
+
     const rawName = importer["name"];
     const importerName = typeof rawName === "string" ? rawName : undefined;
     const parentChain = importerName === undefined || importerName === "" ? [] : [importerName];
+
     for (const name of depNamesOf(importer, PROD_DEP_FIELDS)) {
       prodRoots.push({ parentChain, name });
     }
+
     for (const name of depNamesOf(importer, ["devDependencies"])) {
       devRoots.push({ parentChain, name });
     }
@@ -254,23 +295,37 @@ function transitiveDevKeys(
   ): void => {
     const queue: Array<readonly string[]> = [];
     const enqueue = (chain: readonly string[] | undefined): void => {
-      if (chain === undefined) return;
+      if (chain === undefined) {
+        return;
+      }
+
       const key = chain.join("/");
-      if (visited.has(key)) return;
+
+      if (visited.has(key)) {
+        return;
+      }
+
       visited.add(key);
-      if (markDev) dev.add(key);
+      if (markDev) {
+        dev.add(key);
+      }
+
       queue.push(chain);
     };
+
     for (const root of roots) {
       enqueue(resolveChain(root.parentChain, root.name));
     }
+
     for (let i = 0; i < queue.length; i += 1) {
       const chain = queue[i] as readonly string[];
+
       for (const depName of depsOf(chain.join("/"))) {
         enqueue(resolveChain(chain, depName));
       }
     }
   };
+
   // Prod first, marking visited; the dev pass then marks only unvisited keys - anything
   // prod-reachable was already fully traversed, so a dev path can never re-mark it
   // (prod-direct-wins).
@@ -299,8 +354,10 @@ function componentsOf(
   workspaces: Record<string, unknown>,
 ): BunComponent[] {
   const memberNames = new Set<string>();
+
   for (const member of Object.values(workspaces)) {
     const name = recordOf(member)?.["name"];
+
     if (typeof name === "string") {
       memberNames.add(name);
     }
@@ -309,22 +366,39 @@ function componentsOf(
   const devKeys = transitiveDevKeys(packages, workspaces);
 
   const components: BunComponent[] = [];
+
   for (const [key, value] of Object.entries(packages)) {
     const spec = specOf(value);
-    if (spec === undefined) continue; // malformed entry - tolerant skip
-    if (spec.includes("@workspace:")) continue; // first-party member
+
+    if (spec === undefined) {
+      continue;
+    } // malformed entry - tolerant skip
+
+    if (spec.includes("@workspace:")) {
+      continue;
+    } // first-party member
+
     const identity = splitSpec(spec);
-    if (identity === undefined) continue; // malformed spec - tolerant skip
-    if (memberNames.has(identity.name)) continue; // belt-and-braces
+
+    if (identity === undefined) {
+      continue;
+    } // malformed spec - tolerant skip
+
+    if (memberNames.has(identity.name)) {
+      continue;
+    } // belt-and-braces
+
     const component: BunComponent = {
       type: "library",
       name: identity.name,
       version: identity.version,
       purl: purlOf(identity.name, identity.version),
     };
+
     if (devKeys.has(key)) {
       component.properties = [{ name: DEV_PROPERTY, value: "true" }];
     }
+
     components.push(component);
   }
 
@@ -358,6 +432,7 @@ export async function collectWithBunLock(
   opts: BunCollectOptions = {},
 ): Promise<CollectorSbomFile> {
   const lockPath = join(target.dir, "bun.lock");
+
   if (!existsSync(lockPath)) {
     throw new Error(`target "${target.identity}" is missing bun.lock: expected ${lockPath}`);
   }
@@ -367,6 +442,7 @@ export async function collectWithBunLock(
 
   const text = readFileSync(lockPath, "utf8");
   let parsed: unknown;
+
   try {
     parsed = JSON.parse(stripTrailingCommas(text));
   } catch (error) {
@@ -395,6 +471,7 @@ export async function collectWithBunLock(
 
   const tempDir = opts.tempDir ?? mkdtempSync(join(tmpdir(), "licenses-"));
   const sbomPath = join(tempDir, "bom.json");
+
   writeFileSync(sbomPath, `${JSON.stringify(doc, null, 2)}\n`);
 
   return {

@@ -140,6 +140,7 @@ describe("renderCyclonedx — license dispatch", () => {
   test("Test 2a: a normalized expression emits a single-item expression tuple with ONLY the expression key", () => {
     const component = byPurl.get("pkg:npm/expr-pkg@3.0.0")!;
     const licenses = component["licenses"] as Array<Record<string, unknown>>;
+
     expect(licenses).toEqual([{ expression: "MIT OR Apache-2.0" }]);
     // The schema's expression object is additionalProperties:false — a stray
     // id/name key would invalidate the document.
@@ -149,11 +150,13 @@ describe("renderCyclonedx — license dispatch", () => {
 
   test("Test 2b: a finding-less package with a named raw emits license.name entries deduped by raw", () => {
     const component = byPurl.get("pkg:npm/jsonify@0.0.1")!;
+
     expect(component["licenses"]).toEqual([{ license: { name: "Public Domain" } }]);
   });
 
   test("Test 2c: a package with neither finding expression nor claims has NO licenses key", () => {
     const component = byPurl.get("pkg:npm/no-license-pkg@1.0.0")!;
+
     expect("licenses" in component).toBe(false);
   });
 
@@ -171,6 +174,7 @@ describe("renderCyclonedx — license dispatch", () => {
       },
     });
     const doc2 = parse(renderCyclonedx({ packages: [unknownFinding] }));
+
     expect(doc2.components[0]!["licenses"]).toEqual([{ license: { name: "Custom License" } }]);
   });
 
@@ -193,6 +197,7 @@ describe("renderCyclonedx — license dispatch", () => {
       },
     });
     const doc2 = parse(renderCyclonedx({ packages: [osPartial] }));
+
     expect(doc2.components[0]!["licenses"]).toEqual([
       { expression: "GPL-2.0-only AND BSD-3-Clause" },
       { license: { name: "Artistic" } },
@@ -216,11 +221,13 @@ describe("renderCyclonedx — license dispatch", () => {
       },
     });
     const doc2 = parse(renderCyclonedx({ packages: [imprecisePartial] }));
+
     expect(doc2.components[0]!["licenses"]).toEqual([{ license: { name: "some-custom-token" } }]);
   });
 
   test("#9: a finding WITHOUT unrecognizedTokens emits exactly the expression tuple (no regression)", () => {
     const component = byPurl.get("pkg:npm/expr-pkg@3.0.0")!;
+
     expect(component["licenses"]).toEqual([{ expression: "MIT OR Apache-2.0" }]);
   });
 });
@@ -246,6 +253,7 @@ describe("renderCyclonedx — component minimum + purl sort", () => {
       expect(typeof component["purl"]).toBe("string");
       expect(component["bom-ref"]).toBe(component["purl"]);
     }
+
     // Shuffled and pre-sorted input emit identical bytes (defensive sort).
     expect(renderCyclonedx(shuffled)).toBe(renderCyclonedx(baseModel));
   });
@@ -256,6 +264,7 @@ describe("renderCyclonedx — licenses-tool: properties", () => {
 
   test("Test 4a: occurrences + scope + verdict/rule properties in deterministic order", () => {
     const doc = parse(renderCyclonedx(model, sharpVerdicts));
+
     expect(doc.components[0]!["properties"]).toEqual([
       { name: "licenses-tool:used-in", value: "backend" },
       { name: "licenses-tool:used-in", value: "frontend" },
@@ -270,9 +279,11 @@ describe("renderCyclonedx — licenses-tool: properties", () => {
 
   test("Test 4b: without verdicts, no verdict/rule properties exist", () => {
     const output = renderCyclonedx(model);
+
     expect(output.includes("licenses-tool:verdict")).toBe(false);
     expect(output.includes("licenses-tool:rule")).toBe(false);
     const doc = parse(output);
+
     expect(doc.components[0]!["properties"]).toEqual([
       { name: "licenses-tool:used-in", value: "backend" },
       { name: "licenses-tool:used-in", value: "frontend" },
@@ -289,6 +300,7 @@ describe("renderCyclonedx — licenses-tool: properties", () => {
       occurrences: [],
     });
     const doc = parse(renderCyclonedx({ packages: [orphan] }));
+
     expect("properties" in doc.components[0]!).toBe(false);
   });
 });
@@ -306,6 +318,7 @@ describe("renderCyclonedx — injection inertness", () => {
       ],
     };
     const doc = parse(renderCyclonedx(model));
+
     // JSON.stringify is the only encoder — the parsed value is the exact
     // original string, proving no concatenation built any JSON fragment.
     expect(doc.components[0]!["name"]).toBe(hostile);
@@ -316,6 +329,7 @@ describe("renderCyclonedx — byte determinism", () => {
   test("Test 6: double emit is byte-identical; no CR; exactly one trailing LF", () => {
     const first = renderCyclonedx(baseModel);
     const second = renderCyclonedx(baseModel);
+
     expect(first).toBe(second);
     expect(first.includes("\r")).toBe(false);
     expect(first.endsWith("\n")).toBe(true);

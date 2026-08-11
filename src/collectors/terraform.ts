@@ -90,6 +90,7 @@ export const MAX_TERRAFORM_LOCK_BYTES = 32 * 1024 * 1024;
  */
 export function assertTerraformLockSize(path: string): void {
   const size = statSync(path).size;
+
   if (size > MAX_TERRAFORM_LOCK_BYTES) {
     throw new Error(
       `Terraform file at ${path} is ${size} bytes, over the ` +
@@ -149,14 +150,21 @@ const PROVIDER_BLOCK = /provider\s+"([^"]+)"\s*\{[^}]*?^[ \t]*version\s*=\s*"([^
  */
 export function parseProviders(lockText: string): TerraformProvider[] {
   const providers: TerraformProvider[] = [];
+
   for (const match of lockText.matchAll(PROVIDER_BLOCK)) {
     const address = match[1] as string;
     const version = match[2] as string;
     const parts = address.split("/");
-    if (parts.length !== 3) continue; // malformed address - tolerant skip
+
+    if (parts.length !== 3) {
+      continue;
+    } // malformed address - tolerant skip
+
     const [host, namespace, name] = parts as [string, string, string];
+
     providers.push({ host, namespace, name, version });
   }
+
   return providers;
 }
 
@@ -211,28 +219,44 @@ function looksLikeHost(segment: string): boolean {
  * carries, and it is split off before host parsing.
  */
 function parseModuleSource(source: string): ParsedModuleSource | undefined {
-  if (source === "") return undefined;
-  if (source.startsWith("./") || source.startsWith("../")) return undefined;
-  if (source.includes("::")) return undefined; // git::/vcs form
+  if (source === "") {
+    return undefined;
+  }
+
+  if (source.startsWith("./") || source.startsWith("../")) {
+    return undefined;
+  }
+
+  if (source.includes("::")) {
+    return undefined;
+  } // git::/vcs form
 
   // Strip an optional `//<submodule-path>` suffix (submodule address).
   const submoduleAt = source.indexOf("//");
   const address = submoduleAt === -1 ? source : source.slice(0, submoduleAt);
 
   const segments = address.split("/");
-  if (segments.some((s) => s.length === 0)) return undefined;
+
+  if (segments.some((s) => s.length === 0)) {
+    return undefined;
+  }
 
   // A leading hostname-looking segment is the optional host prefix; otherwise the whole address
   // must be the bare `<ns>/<name>/<provider>` shorthand.
   let host = DEFAULT_MODULE_HOST;
   let triple = segments;
+
   if (segments.length === 4 && looksLikeHost(segments[0] as string)) {
     host = segments[0] as string;
     triple = segments.slice(1);
   }
-  if (triple.length !== 3) return undefined;
+
+  if (triple.length !== 3) {
+    return undefined;
+  }
 
   const [namespace, name, provider] = triple as [string, string, string];
+
   return { host, namespace, name, provider };
 }
 
@@ -260,8 +284,12 @@ function parseModuleSource(source: string): ParsedModuleSource | undefined {
  */
 export function readExternalModules(modulesJsonText: string): TerraformModule[] {
   // The empty-string sentinel = "no modules.json present" → zero modules.
-  if (modulesJsonText === "") return [];
+  if (modulesJsonText === "") {
+    return [];
+  }
+
   let parsed: unknown;
+
   try {
     parsed = JSON.parse(modulesJsonText);
   } catch (error) {
@@ -271,7 +299,9 @@ export function readExternalModules(modulesJsonText: string): TerraformModule[] 
       { cause: error },
     );
   }
+
   const doc = ModulesDocument(parsed);
+
   if (doc instanceof type.errors) {
     // A present `Modules` key that is not an array (the narrow's only failure mode here) is
     // structurally invalid → loud scan failure.
@@ -279,19 +309,32 @@ export function readExternalModules(modulesJsonText: string): TerraformModule[] 
       "modules.json scan failed: a present `Modules` key is not an array " + `(${doc.summary})`,
     );
   }
+
   const modules: TerraformModule[] = [];
+
   for (const raw of doc.Modules ?? []) {
     const entry = recordOf(raw);
-    if (entry === undefined) continue;
+
+    if (entry === undefined) {
+      continue;
+    }
+
     const source = stringOf(entry["Source"]);
     const version = stringOf(entry["Version"]);
+
     if (source === undefined || version === undefined || version === "") {
       continue;
     }
+
     const parsed = parseModuleSource(source);
-    if (parsed === undefined) continue;
+
+    if (parsed === undefined) {
+      continue;
+    }
+
     modules.push({ ...parsed, version });
   }
+
   return modules;
 }
 
@@ -365,15 +408,19 @@ export function absentModulesJsonShouldFail(dir: string): boolean {
     //     (tofu writes modules.json the instant it processes module blocks) → incoherent, fail
     //     loud.
     const providersDir = join(dir, ".terraform", "providers");
+
     if (!existsSync(providersDir) || !statSync(providersDir).isDirectory()) {
       return true; // no real providers artifact → init not proven → fail loud
     }
+
     const modulesDir = join(dir, ".terraform", "modules");
+
     if (existsSync(modulesDir)) {
       // A `.terraform/modules/` without modules.json (the caller only reaches here when
       // modules.json is absent) is a stale/partial install.
       return true;
     }
+
     return false; // providers/ present, modules/ absent → providers-only collect
   } catch {
     return true; // unreadable → cannot prove init ran → fail loud
@@ -390,7 +437,10 @@ export function absentModulesJsonShouldFail(dir: string): boolean {
  * diverge.
  */
 export function modulesJsonIsPresentFile(modulesJsonPath: string): boolean {
-  if (!existsSync(modulesJsonPath)) return false;
+  if (!existsSync(modulesJsonPath)) {
+    return false;
+  }
+
   try {
     return statSync(modulesJsonPath).isFile();
   } catch {
@@ -408,6 +458,7 @@ interface TerraformComponent {
 /** Provider → component: `pkg:terraform/<host>/<ns>/<name>@<v>`, no group. */
 function providerComponent(provider: TerraformProvider): TerraformComponent {
   const name = `${provider.namespace}/${provider.name}`;
+
   return {
     type: "library",
     name,
@@ -425,6 +476,7 @@ function providerComponent(provider: TerraformProvider): TerraformComponent {
  */
 function moduleComponent(module: TerraformModule): TerraformComponent {
   const name = `${module.namespace}/${module.name}/${module.provider}`;
+
   return {
     type: "library",
     name,
@@ -440,14 +492,19 @@ function moduleComponent(module: TerraformModule): TerraformComponent {
  */
 function componentsOf(lockText: string, modulesJsonText: string): TerraformComponent[] {
   const byPurl = new Map<string, TerraformComponent>();
+
   for (const component of [
     ...parseProviders(lockText).map(providerComponent),
     ...readExternalModules(modulesJsonText).map(moduleComponent),
   ]) {
     // First-wins keying by purl: identical-purl submodules merge to one row.
-    if (!byPurl.has(component.purl)) byPurl.set(component.purl, component);
+    if (!byPurl.has(component.purl)) {
+      byPurl.set(component.purl, component);
+    }
   }
+
   const components = [...byPurl.values()];
+
   // compareCodeUnits by purl - the whole emission is a pure function of bytes.
   components.sort((a, b) => (a.purl < b.purl ? -1 : a.purl > b.purl ? 1 : 0));
   return components;
@@ -499,11 +556,13 @@ export async function collectWithTerraform(
   opts: TerraformCollectOptions = {},
 ): Promise<CollectorSbomFile> {
   const lockPath = join(target.dir, ".terraform.lock.hcl");
+
   if (!existsSync(lockPath)) {
     throw new Error(
       `target "${target.identity}" is missing .terraform.lock.hcl: ` + `expected ${lockPath}`,
     );
   }
+
   // Size gate first - before any read or parse (DoS bound).
   assertTerraformLockSize(lockPath);
   const lockText = readFileSync(lockPath, "utf8");
@@ -515,6 +574,7 @@ export async function collectWithTerraform(
   // fail. No `.tf`/HCL is parsed (see {@link absentModulesJsonShouldFail}).
   const modulesJsonPath = join(target.dir, ".terraform", "modules", "modules.json");
   let modulesJsonText = "";
+
   if (modulesJsonIsPresentFile(modulesJsonPath)) {
     assertTerraformLockSize(modulesJsonPath);
     modulesJsonText = readFileSync(modulesJsonPath, "utf8");
@@ -538,6 +598,7 @@ export async function collectWithTerraform(
 
   const tempDir = opts.tempDir ?? mkdtempSync(join(tmpdir(), "licenses-"));
   const sbomPath = join(tempDir, "bom.json");
+
   writeFileSync(sbomPath, `${JSON.stringify(doc, null, 2)}\n`);
 
   return {

@@ -43,9 +43,15 @@ function normalizePep503(name: string): string {
  * package. Shared by the legacy main table and every dependency-group table.
  */
 function addTableNames(roots: Set<string>, table: Record<string, unknown> | undefined): void {
-  if (table === undefined) return;
+  if (table === undefined) {
+    return;
+  }
+
   for (const name of Object.keys(table)) {
-    if (name.toLowerCase() === "python") continue; // the interpreter, not a dep
+    if (name.toLowerCase() === "python") {
+      continue;
+    } // the interpreter, not a dep
+
     roots.add(normalizePep503(name));
   }
 }
@@ -69,24 +75,37 @@ function addTableNames(roots: Set<string>, table: Record<string, unknown> | unde
 function declaredRootNames(pyprojectText: string): Set<string> {
   const roots = new Set<string>();
   let parsed: unknown;
+
   try {
     parsed = parseToml(pyprojectText);
   } catch {
     return roots;
   }
+
   const doc = recordOf(parsed);
-  if (doc === undefined) return roots;
+
+  if (doc === undefined) {
+    return roots;
+  }
 
   // PEP 621: [project].dependencies = ["name (constraint)", ...]
   const project = recordOf(doc["project"]);
   const pep621 = project?.["dependencies"];
   const hasPep621Main = Array.isArray(pep621);
+
   if (hasPep621Main) {
     for (const raw of pep621) {
       const spec = stringOf(raw);
-      if (spec === undefined) continue;
+
+      if (spec === undefined) {
+        continue;
+      }
+
       const name = pep621Name(spec);
-      if (name !== undefined) roots.add(normalizePep503(name));
+
+      if (name !== undefined) {
+        roots.add(normalizePep503(name));
+      }
     }
   }
 
@@ -102,9 +121,11 @@ function declaredRootNames(pyprojectText: string): Set<string> {
   // EVERY [tool.poetry.group.<name>.dependencies] table is ALWAYS a root source, independent of the
   // main-deps mode/precedence above.
   const groups = recordOf(poetry?.["group"]);
+
   if (groups !== undefined) {
     for (const groupName of Object.keys(groups)) {
       const group = recordOf(groups[groupName]);
+
       addTableNames(roots, recordOf(group?.["dependencies"]));
     }
   }
@@ -119,6 +140,7 @@ function declaredRootNames(pyprojectText: string): Set<string> {
  */
 function pep621Name(spec: string): string | undefined {
   const match = /^([A-Za-z0-9._-]+)/.exec(spec.trim());
+
   return match?.[1];
 }
 
@@ -138,28 +160,45 @@ interface LockPackage {
  */
 function parseLockPackages(lockfileText: string): LockPackage[] {
   let parsed: unknown;
+
   try {
     parsed = parseToml(lockfileText);
   } catch {
     return [];
   }
+
   const doc = recordOf(parsed);
   const packages = doc?.["package"];
-  if (!Array.isArray(packages)) return [];
+
+  if (!Array.isArray(packages)) {
+    return [];
+  }
+
   const out: LockPackage[] = [];
+
   for (const raw of packages) {
     const pkg = recordOf(raw);
-    if (pkg === undefined) continue;
+
+    if (pkg === undefined) {
+      continue;
+    }
+
     const name = stringOf(pkg["name"]);
     const version = stringOf(pkg["version"]);
-    if (name === undefined || version === undefined) continue;
+
+    if (name === undefined || version === undefined) {
+      continue;
+    }
+
     const normalizedName = normalizePep503(name);
+
     out.push({
       purl: `pkg:pypi/${normalizedName}@${version}`,
       normalizedName,
       dependencies: recordOf(pkg["dependencies"]) ?? {},
     });
   }
+
   return out;
 }
 
@@ -186,10 +225,17 @@ function ingestPackageEdges(
 ): void {
   for (const depName of Object.keys(pkg.dependencies)) {
     const childPurl = precisePurlByName.get(normalizePep503(depName));
+
     // A name resolving to no purl (absent) OR to MORE THAN ONE purl (multi-version / collision) is
     // ambiguous - fabricate no edge.
-    if (childPurl === undefined) continue;
-    if (childPurl === pkg.purl) continue;
+    if (childPurl === undefined) {
+      continue;
+    }
+
+    if (childPurl === pkg.purl) {
+      continue;
+    }
+
     addToSetMap(edges.edgeSets, pkg.purl, childPurl);
     addToSetMap(edges.parentSets, childPurl, pkg.purl);
   }
@@ -229,13 +275,18 @@ function buildPurlGraph(
   // lock purl; multi-version names are dropped (ambiguous).
   const purlsByName = new Map<string, Set<string>>();
   const nodes = new Set<string>();
+
   for (const pkg of packages) {
     addToSetMap(purlsByName, pkg.normalizedName, pkg.purl);
     nodes.add(pkg.purl);
   }
+
   const precisePurlByName = new Map<string, string>();
+
   for (const [name, purls] of purlsByName) {
-    if (purls.size === 1) precisePurlByName.set(name, [...purls][0]!);
+    if (purls.size === 1) {
+      precisePurlByName.set(name, [...purls][0]!);
+    }
   }
 
   const edges: EdgeAccumulators = {
@@ -243,6 +294,7 @@ function buildPurlGraph(
     parentSets: new Map<string, Set<string>>(),
   };
   const rootChildren = new Set<string>();
+
   for (const pkg of packages) {
     // A declared-root NAME marks a purl direct ONLY when that name maps to exactly one lock purl
     // - a multi-version root name cannot identify WHICH version is the real direct without PEP-440,
@@ -253,8 +305,10 @@ function buildPurlGraph(
     ) {
       rootChildren.add(pkg.purl);
     }
+
     ingestPackageEdges(edges, precisePurlByName, pkg);
   }
+
   const { edgeSets, parentSets } = edges;
 
   return {
@@ -275,8 +329,13 @@ export function poetryIntroductions(
   pyprojectText: string,
 ): ReadonlyMap<string, DependencyIntroduction> {
   const packages = parseLockPackages(lockfileText);
-  if (packages.length === 0) return new Map();
+
+  if (packages.length === 0) {
+    return new Map();
+  }
+
   const rootNames = declaredRootNames(pyprojectText);
   const graph = buildPurlGraph(packages, rootNames);
+
   return deriveIntroductions(graph);
 }

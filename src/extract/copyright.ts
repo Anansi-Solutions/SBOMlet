@@ -49,12 +49,25 @@ const MAX_LINES = 20;
  */
 export function extractCopyrightLines(text: string): string[] {
   const out = new Set<string>();
+
   for (const line of text.split(/\r?\n/)) {
-    if (!CLAIM_MARKER.test(line)) continue;
-    if (!CONCRETE_MARKER.test(line)) continue;
-    if (TEMPLATE_PLACEHOLDER.test(line)) continue;
+    if (!CLAIM_MARKER.test(line)) {
+      continue;
+    }
+
+    if (!CONCRETE_MARKER.test(line)) {
+      continue;
+    }
+
+    if (TEMPLATE_PLACEHOLDER.test(line)) {
+      continue;
+    }
+
     out.add(line.trim());
-    if (out.size >= MAX_LINES) break;
+    if (out.size >= MAX_LINES) {
+      break;
+    }
   }
+
   return [...out];
 }

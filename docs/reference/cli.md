@@ -46,6 +46,7 @@ is evaluated and its verdicts print to stderr, but the gate is `check`, never
 | `--enrichment-cache <path>` | Where to read and write the enrichment cache. | tool default |
 | `--scancode-cache <path>` | Where to read and write the ScanCode assessment memo (`scancode.cache.json`). | tool default |
 | `--intensive` | Assess every package with ScanCode, an in-depth source scan that outranks the registry answer where present; a disagreement fails the gate as a conflict. Generate-only; for occasional, scheduled CI, not every build. | off |
+| `--package-timeout-mins <minutes>` | Per-package wall-clock limit for each ScanCode invocation under `--intensive`. | 10 |
 | `--verbose` | Print per-stage progress to stderr. | off |
 
 `--target` and `--repo-root` are mutually exclusive; pass at most one. With
@@ -67,9 +68,12 @@ priority over the declared and registry answer for that package. A `[[clarify]]`
 override still outranks it, since that is where you record a human decision. When
 ScanCode disagrees with the registry answer, neither is taken automatically — the
 package fails the gate as a distinct `conflict:scancode` finding, and the
-document grows an "Assessment conflicts (in-depth scan vs quick check)" section
-naming both readings. You resolve it with a `[[clarify]]` entry recording which
-to trust. For a package the registry calls `MIT` while ScanCode reads
+document grows an "Assessment conflicts" section, naming both readings in its
+"ScanCode assessment vs quick check" sub-table (a second, independent
+sub-table covers cross-image license-claim divergences — see
+[output-format.md](./output-format.md#assessment-conflicts)). You resolve it
+with a `[[clarify]]` entry recording which to trust. For a package the
+registry calls `MIT` while ScanCode reads
 `BSD-3-Clause`, trusting the scan:
 
 ```toml
@@ -93,8 +97,16 @@ already-assessed version is never re-scanned. A package whose sources are not
 present locally is skipped and reported on stderr, never memoised, so a later
 install can still scan it.
 
-When `--intensive` is requested but the scanner isn't on `PATH`, the run fails
-loudly rather than skipping the scan silently:
+A package that times out or otherwise fails to scan (each bounded by
+`--package-timeout-mins`, 10 minutes by default) is skipped and reported the same
+way, and retried on the next run — one slow or broken package never aborts the
+rest of the assessment. Every result already computed in the run is still
+committed, even when a later package's failure would otherwise have aborted it.
+
+When `--intensive` is requested but the scanner isn't on `PATH`, or scancode's
+own reported version drifts from the pin, the run fails loudly rather than
+skipping the scan silently — that failure is the local tool install itself,
+not one package, so it is not retried on its own:
 
 ```
 scancode binary not found on PATH — run mise install

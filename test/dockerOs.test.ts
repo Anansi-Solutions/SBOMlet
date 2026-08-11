@@ -53,6 +53,7 @@ describe("syftArgs (argv lock)", () => {
   test("the image operand is placed AFTER the -- end-of-options separator (#7)", () => {
     const args = syftArgs("registry/app:1.2.3", "/tmp/out.json");
     const sepIndex = args.indexOf("--");
+
     expect(sepIndex).toBeGreaterThanOrEqual(0);
     // The operand is the LAST token, strictly after the separator.
     expect(args[sepIndex + 1]).toBe("registry/app:1.2.3");
@@ -64,6 +65,7 @@ describe("dockerInspectArgs (argv lock)", () => {
   test("the image operand is placed AFTER a `--` end-of-options separator", () => {
     const args = dockerInspectArgs("postgres:18");
     const sepIndex = args.indexOf("--");
+
     expect(sepIndex).toBeGreaterThanOrEqual(0);
     // A dash-prefixed operand can no longer be parsed by docker inspect as a flag.
     expect(args[sepIndex + 1]).toBe("postgres:18");
@@ -90,6 +92,7 @@ describe("dockerPullArgs (argv lock, implicit probe-first pull)", () => {
   test("the image operand is placed AFTER a `--` end-of-options separator", () => {
     const args = dockerPullArgs("postgres:18");
     const sepIndex = args.indexOf("--");
+
     expect(sepIndex).toBeGreaterThanOrEqual(0);
     // A dash-prefixed operand can never be parsed by docker pull as a flag.
     expect(args[sepIndex + 1]).toBe("postgres:18");
@@ -126,6 +129,7 @@ describe("filterOsComponents (image-contents purl filter, all ecosystems)", () =
       ],
     };
     const kept = filterOsComponents(mixed);
+
     // purl-sorted (apk < deb < npm); noise + empty-version entries dropped.
     expect(kept.map((c) => c.purl)).toEqual([
       "pkg:apk/musl@1",
@@ -143,6 +147,7 @@ describe("filterOsComponents (image-contents purl filter, all ecosystems)", () =
 
     // adduser carries TWO license.id entries (GPL-2.0-only / GPL-2.0-or-later).
     const adduser = byName.get("adduser");
+
     expect(adduser?.licenses).toEqual([
       { license: { id: "GPL-2.0-only" } },
       { license: { id: "GPL-2.0-or-later" } },
@@ -150,6 +155,7 @@ describe("filterOsComponents (image-contents purl filter, all ecosystems)", () =
 
     // base-files mixes license.id and license.name shapes — both survive.
     const baseFiles = byName.get("base-files");
+
     expect(baseFiles?.licenses).toEqual([
       { license: { id: "GPL-2.0-or-later" } },
       { license: { name: "GPL" } },
@@ -158,6 +164,7 @@ describe("filterOsComponents (image-contents purl filter, all ecosystems)", () =
 
     // gcc-14 carries NO licenses in the fixture — the field is omitted, not [].
     const gcc = byName.get("gcc-14");
+
     expect(gcc).toBeDefined();
     expect("licenses" in (gcc as object)).toBe(false);
   });
@@ -199,6 +206,7 @@ describe("filterOsComponents (image-contents purl filter, all ecosystems)", () =
       ],
     };
     const [c] = filterOsComponents(shuffled);
+
     // Canonical sort key: id < name < expression discriminator + value, all
     // compared as their JSON string. The exact order is locked here so the
     // determinism contract is explicit.
@@ -229,6 +237,7 @@ describe("filterOsComponents (image-contents purl filter, all ecosystems)", () =
       ],
     };
     const [c] = filterOsComponents(withJunk);
+
     expect(c?.licenses).toEqual([{ license: { id: "MIT" } }]);
   });
 
@@ -236,6 +245,7 @@ describe("filterOsComponents (image-contents purl filter, all ecosystems)", () =
     const os = filterOsComponents(postgresFixture);
     const purls = os.map((c) => c.purl);
     const sorted = [...purls].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
+
     expect(purls).toEqual(sorted);
   });
 
@@ -250,6 +260,7 @@ describe("filterOsComponents (image-contents purl filter, all ecosystems)", () =
       ],
     };
     const os = filterOsComponents(dup);
+
     expect(os.map((c) => c.purl)).toEqual(["pkg:deb/a@1", "pkg:deb/b@2", "pkg:npm/lp@1"]);
   });
 });
@@ -259,9 +270,11 @@ describe("filterOsComponents (full image contents by default)", () => {
     const full = filterOsComponents(builtFixture);
     const purls = full.map((c) => c.purl);
     const sorted = [...purls].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
+
     expect(purls).toEqual(sorted);
 
     const byName = new Map(full.map((c) => [c.name, c]));
+
     expect(byName.get("musl")?.purl).toBe(
       "pkg:apk/alpine/musl@1.2.5-r9?arch=x86_64&distro=alpine-3.23.4",
     );
@@ -270,14 +283,17 @@ describe("filterOsComponents (full image contents by default)", () => {
     );
     // Scoped npm component, purl-encoded, licenses preserved through narrowLicense.
     const scoped = byName.get("@scope/pkg");
+
     expect(scoped?.purl).toBe("pkg:npm/%40scope/pkg@1.0.0");
     expect(scoped?.licenses).toEqual([{ license: { id: "MIT" } }]);
     // Unscoped npm component.
     const leftPad = byName.get("left-pad");
+
     expect(leftPad?.purl).toBe("pkg:npm/left-pad@1.3.0");
     expect(leftPad?.licenses).toEqual([{ license: { id: "MIT" } }]);
     // pypi component (hyphenated PEP-503 form).
     const pypi = byName.get("typing-extensions");
+
     expect(pypi?.purl).toBe("pkg:pypi/typing-extensions@4.12.2");
     expect(pypi?.licenses).toEqual([{ license: { name: "PSF-2.0" } }]);
   });
@@ -285,6 +301,7 @@ describe("filterOsComponents (full image contents by default)", () => {
   test("drops purl-less noise and empty-name/version/purl entries", () => {
     const full = filterOsComponents(builtFixture);
     const names = full.map((c) => c.name);
+
     // syft's purl-less file/operating-system noise never survives.
     expect(names).not.toContain("/etc/os-release");
     expect(names).not.toContain("alpine");
@@ -320,6 +337,7 @@ describe("filterOsComponents (full image contents by default)", () => {
     ];
     const first = emitDockerOsDoc(full, digests);
     const second = emitDockerOsDoc(full, digests);
+
     expect(first).toBe(second);
     expect(first).not.toContain("serialNumber");
     expect(first).not.toContain("timestamp");
@@ -375,6 +393,7 @@ describe("unionOsComponents (cross-image membership union, sidecar v2)", () => {
       { image: "img/b", components: sharedInB },
     ]);
     const busybox = merged.find((c) => c.name === "busybox");
+
     expect(busybox?.images).toEqual(["img/a", "img/b"]);
     // One row per purl — the dedup posture is unchanged, only more visible.
     expect(merged.filter((c) => c.name === "busybox")).toHaveLength(1);
@@ -387,6 +406,7 @@ describe("unionOsComponents (cross-image membership union, sidecar v2)", () => {
       { image: "img/a", components: sharedInA },
       { image: "img/b", components: sharedInB },
     ]);
+
     expect(merged.find((c) => c.name === "musl")?.images).toEqual(["img/a"]);
     expect(merged.find((c) => c.name === "zlib")?.images).toEqual(["img/b"]);
   });
@@ -396,6 +416,7 @@ describe("unionOsComponents (cross-image membership union, sidecar v2)", () => {
       { image: "img/b", components: sharedInB },
       { image: "img/a", components: sharedInA },
     ]);
+
     expect(merged.find((c) => c.name === "busybox")?.images).toEqual(["img/a", "img/b"]);
   });
 
@@ -404,6 +425,7 @@ describe("unionOsComponents (cross-image membership union, sidecar v2)", () => {
       { image: "img/a", components: sharedInA },
       { image: "img/a", components: sharedInA },
     ]);
+
     expect(merged.find((c) => c.name === "busybox")?.images).toEqual(["img/a"]);
   });
 
@@ -414,6 +436,7 @@ describe("unionOsComponents (cross-image membership union, sidecar v2)", () => {
     ]);
     const purls = merged.map((c) => c.purl);
     const sorted = [...purls].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
+
     expect(purls).toEqual(sorted);
   });
 });
@@ -426,6 +449,7 @@ describe("emitDockerOsDoc (deterministic emit, sidecar v2)", () => {
   test("emits ONLY {bomFormat, specVersion, components, dockerImages}", () => {
     const json = emitDockerOsDoc(postgresAttributed(), DIGESTS);
     const doc = JSON.parse(json) as Record<string, unknown>;
+
     expect(new Set(Object.keys(doc))).toEqual(
       new Set(["bomFormat", "specVersion", "components", "dockerImages"]),
     );
@@ -443,6 +467,7 @@ describe("emitDockerOsDoc (deterministic emit, sidecar v2)", () => {
     const doc = JSON.parse(json) as {
       components: Array<{ images?: unknown }>;
     };
+
     expect(doc.components.length).toBeGreaterThan(0);
     // Single-image doc: every component's membership is exactly that image.
     expect(
@@ -468,6 +493,7 @@ describe("emitDockerOsDoc (deterministic emit, sidecar v2)", () => {
     const doc = JSON.parse(json) as {
       dockerImages: { image: string; digest: string; source: string }[];
     };
+
     expect(doc.dockerImages).toEqual([
       {
         image: "nginx:stable-alpine",
@@ -492,6 +518,7 @@ describe("emitDockerOsDoc (deterministic emit, sidecar v2)", () => {
         source: "nginx:stable-alpine",
       },
     ];
+
     expect(emitDockerOsDoc(components, digests)).toBe(emitDockerOsDoc(components, digests));
   });
 
@@ -504,6 +531,7 @@ describe("emitDockerOsDoc (deterministic emit, sidecar v2)", () => {
       }>;
     };
     const adduser = doc.components.find((c) => c.name === "adduser");
+
     expect(adduser?.licenses).toEqual([
       { license: { id: "GPL-2.0-only" } },
       { license: { id: "GPL-2.0-or-later" } },
@@ -522,6 +550,7 @@ describe("assertSyftSbomSize (DoS size gate)", () => {
   test("a file under the cap passes the gate", () => {
     const dir = mkdtempSync(join(tmpdir(), "licenses-syft-test-"));
     const path = join(dir, "small.json");
+
     writeFileSync(path, "{}\n");
     expect(() => assertSyftSbomSize(path)).not.toThrow();
   });
@@ -531,6 +560,7 @@ describe("assertSyftSbomSize (DoS size gate)", () => {
     const path = join(dir, "huge.json");
     // Sparse file: ftruncate to one byte over the cap without writing 64 MiB.
     const fd = openSync(path, "w");
+
     ftruncateSync(fd, MAX_SYFT_SBOM_BYTES + 1);
     closeSync(fd);
     expect(() => assertSyftSbomSize(path)).toThrow(/cap|bytes/i);
@@ -551,6 +581,7 @@ describe("selectDigest (deterministic RepoDigest selection)", () => {
   test("a two-element RepoDigests array yields the SAME digest in BOTH daemon orders", () => {
     const a = "registry-a.io/app@sha256:" + "a".repeat(64);
     const b = "registry-b.io/app@sha256:" + "b".repeat(64);
+
     // The same SET in opposite daemon-emission orders must select identically.
     expect(selectDigest("app", [a, b])).toBe(selectDigest("app", [b, a]));
   });
@@ -560,12 +591,14 @@ describe("selectDigest (deterministic RepoDigest selection)", () => {
     const b = "registry-b.io/app@sha256:" + "2".repeat(64);
     const fwd = selectDigest("app", parseRepoDigests(JSON.stringify([a, b]), ""));
     const rev = selectDigest("app", parseRepoDigests(JSON.stringify([b, a]), ""));
+
     expect(fwd).toBe(rev);
   });
 
   test("prefers the digest whose repository matches the requested image ref", () => {
     const matching = "docker.io/library/nginx@sha256:" + "c".repeat(64);
     const other = "ghcr.io/acme/nginx@sha256:" + "d".repeat(64);
+
     // Requested by the docker.io repo path → that digest is selected regardless
     // of array order, even though "ghcr.io/..." sorts smaller.
     expect(selectDigest("docker.io/library/nginx", [other, matching])).toBe(matching);
@@ -575,6 +608,7 @@ describe("selectDigest (deterministic RepoDigest selection)", () => {
   test("with no repo match, falls back to the compareCodeUnits-smallest digest", () => {
     const z = "z-registry.io/app@sha256:" + "e".repeat(64);
     const a = "a-registry.io/app@sha256:" + "f".repeat(64);
+
     // No requested-repo match → smallest by code units ("a-..." < "z-...").
     expect(selectDigest("unrelated:tag", [z, a])).toBe(a);
     expect(selectDigest("unrelated:tag", [a, z])).toBe(a);
@@ -582,6 +616,7 @@ describe("selectDigest (deterministic RepoDigest selection)", () => {
 
   test("the single-element common case is identical to the prior digests[0]", () => {
     const only = "postgres@sha256:" + "0".repeat(64);
+
     expect(selectDigest("postgres:18", [only])).toBe(only);
   });
 

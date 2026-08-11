@@ -90,13 +90,9 @@ export interface LicenseFinding {
    */
   staleOverride?: StaleOverride;
   /**
-   * A senior-assessment disagreement: the in-depth ScanCode answer conflicts with at least one
-   * quick-check claim (declared metadata or a registry answer). Set by applyScancodeAssessment on
-   * the UN-OVERRIDDEN base finding - the base stands in full and the disagreement is surfaced,
-   * never absorbed in either direction - and cleared when an override (project clarify or
-   * tool-level builtin) DECIDES the finding: an applied override is the human resolution, so it
-   * never carries the marker. Absent when no scancode claim exists or the assessment agrees
-   * (absent-not-empty for golden stability).
+   * A conflict marker: either a ScanCode-vs-quick-check disagreement (see applyScancodeAssessment)
+   * or a cross-image license-claim divergence (see withCrossImageConflict), sharing evaluate.ts's
+   * one gate lane. Absent when neither source fires (absent-not-empty for golden stability).
    */
   conflict?: AssessmentConflict;
   /**
@@ -153,8 +149,9 @@ export interface StaleOverride {
   observed: ReadonlyArray<string>;
 }
 
-/** A senior-assessment disagreement surfaced to the policy engine. */
-export interface AssessmentConflict {
+/** A ScanCode-vs-quick-check disagreement surfaced to the policy engine. */
+export interface ScancodeAssessmentConflict {
+  kind: "scancode";
   /**
    * The in-depth assessed value: the ScanCode-elected normalized SPDX expression, or the bare
    * family token when the assessment itself is imprecise.
@@ -166,6 +163,26 @@ export interface AssessmentConflict {
    */
   disagreeing: ReadonlyArray<string>;
 }
+
+/**
+ * A cross-image license-claim divergence: two or more docker occurrences of the SAME purl declared
+ * different license claims.
+ */
+export interface CrossImageClaimDivergence {
+  kind: "cross-image-claims";
+  /**
+   * Every docker occurrence of this purl, sorted by target. `claims` are that image's own raw
+   * declared license strings (deduped, sorted); empty when the image declared no license claim for
+   * this purl at all.
+   */
+  byTarget: ReadonlyArray<{ target: string; claims: readonly string[] }>;
+}
+
+/**
+ * The two peer conflict sources sharing evaluate.ts's conflict lane and the finding's `conflict`
+ * slot.
+ */
+export type AssessmentConflict = ScancodeAssessmentConflict | CrossImageClaimDivergence;
 
 export type VerdictStatus = "ok" | "warn" | "fail" | "suppressed";
 
@@ -303,6 +320,10 @@ export interface PackageEntry {
    * goldens stay byte-identical.
    */
   attribution?: PackageAttribution;
+  /**
+   * cross-image license claim divergence for this package
+   */
+  dockerClaimDivergence?: CrossImageClaimDivergence;
 }
 
 /** Invariant: `packages` is sorted by {@link comparePackages}. */
@@ -345,6 +366,7 @@ export function comparePackages(a: PackageEntry, b: PackageEntry): number {
 export function purlEcosystem(purl: string): string {
   const rest = purl.startsWith("pkg:") ? purl.slice(4) : purl;
   const slash = rest.indexOf("/");
+
   return slash === -1 ? rest : rest.slice(0, slash);
 }
 
@@ -359,6 +381,7 @@ export function sortedKeyReplacer(_key: string, value: unknown): unknown {
       Object.entries(value as Record<string, unknown>).sort(([a], [b]) => compareCodeUnits(a, b)),
     );
   }
+
   return value;
 }
 

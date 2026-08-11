@@ -67,8 +67,14 @@ page states only where a package lands.
   above by design: a bare-`AGPL` system package that fails
   `default:agpl-container` still rows here too.
 - **Assessment conflicts** — every package whose finding carries a conflict
-  marker, unconditionally. Exempt from the Problematic dedup: a package here
-  also rows in Problematic, since a conflict is always a fail.
+  marker, unconditionally, from either trigger (the ScanCode disagreement, or
+  a cross-image license-claim divergence). Exempt from the Problematic dedup:
+  a package here also rows in Problematic, since a conflict is always a fail.
+  Each trigger renders its own sub-table (a ScanCode conflict's In-depth/Quick
+  check columns and a cross-image divergence's per-image claims name different
+  things and never share a row shape); a purl with a cross-image divergence
+  also keeps its complete inventory row in every diverging container's
+  subsection, same as any other package.
 
 ### Inventory sections (placement-driven, complete — nothing is ever dropped)
 
@@ -128,7 +134,7 @@ helpers).
 
 ## Path index (verified end to end)
 
-The same 25 paths as
+The same 26 paths as
 [dependency-classification.md](./dependency-classification.md#path-index-verified-end-to-end),
 one row each, stating where the package lands in the markdown report instead
 of its Stage-1/Stage-2 outcome — the two tables share one slug set, verified
@@ -161,3 +167,4 @@ by the same suite (`test/reportPlacement.test.ts`).
 | `suppressed-workspace-copyleft` | family-justified `[[workspace.copyleft_suppressed]]` | suppressed-workspaces list in Copyleft and special notices; no flagged row |
 | `denied-license-terminal` | a `[[deny]]` match with a `[[compatible]]` rule that would otherwise accept it | Problematic licenses (deny is terminal) |
 | `system-package-in-dev-container-counts-dev` | apk permissive package whose only container is dev-marked | counted Development-only (via the container's classification); System packages table under the Development-only subsection |
+| `cross-image-claim-divergence` | apk purl baked into two prod containers with different declared licenses | Problematic licenses + Assessment conflicts (Cross-image license claims sub-table) + both containers' System packages tables |

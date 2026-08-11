@@ -46,6 +46,7 @@ const fixture = JSON.parse(fixtureRaw) as {
 
 function build(): { md: string; dump: string } {
   const model = mergeSboms([{ sbom: JSON.parse(fixtureRaw), targetIdentity: TARGET }]);
+
   return { md: renderMarkdown(model), dump: toSortedDependenciesJson(model) };
 }
 
@@ -53,12 +54,14 @@ describe("determinism — double-render byte-identity", () => {
   test("building and rendering twice yields strictly equal strings", () => {
     const first = build();
     const second = build();
+
     expect(first.md).toBe(second.md);
   });
 
   test("toSortedDependenciesJson twice yields strictly equal strings", () => {
     const first = build();
     const second = build();
+
     expect(first.dump).toBe(second.dump);
   });
 
@@ -78,6 +81,7 @@ describe("determinism — double-render byte-identity", () => {
     ];
     const a = renderCyclonedx(first, verdicts);
     const b = renderCyclonedx(second, verdicts);
+
     expect(a).toBe(b);
 
     // The verdict path is actually exercised (not vacuously equal).
@@ -107,18 +111,21 @@ describe("determinism — multi-target merge", () => {
       },
       { sbom: JSON.parse(fixtureRaw), targetIdentity: "b" },
     ]);
+
     return { md: renderMarkdown(model), dump: toSortedDependenciesJson(model) };
   }
 
   test("multi-target build twice yields byte-equal model JSON and markdown", () => {
     const first = buildMulti();
     const second = buildMulti();
+
     expect(first.dump).toBe(second.dump);
     expect(first.md).toBe(second.md);
   });
 
   test("occurrence objects carry per-target dev flags in the dump", () => {
     const { dump } = buildMulti();
+
     expect(dump.includes('"isDevDependency"')).toBe(true);
     // Target "a" (empty prod set) occurrences are all dev=true; the same
     // purl's target "b" occurrence keeps its own property-derived flag.
@@ -128,8 +135,10 @@ describe("determinism — multi-target merge", () => {
       }>;
     };
     const sharedPackage = parsed.packages.find((pkg) => pkg.occurrences.length === 2);
+
     expect(sharedPackage).toBeDefined();
     const byTarget = new Map(sharedPackage!.occurrences.map((o) => [o.target, o.isDevDependency]));
+
     expect(byTarget.get("a")).toBe(true);
   });
 });
@@ -167,12 +176,14 @@ describe("determinism — policy-annotated dump", () => {
       packages: annotated.packages,
       verdicts,
     };
+
     return toSortedDependenciesJson(evaluated);
   }
 
   test("double-build of the policy-annotated dump is byte-identical", () => {
     const first = buildAnnotated();
     const second = buildAnnotated();
+
     expect(first).toBe(second);
 
     // The new surface is actually populated (not vacuously equal).
@@ -183,6 +194,7 @@ describe("determinism — policy-annotated dump", () => {
 
   test("annotated dump keeps the LF contract: no CR, exactly one trailing LF", () => {
     const dump = buildAnnotated();
+
     expect(dump.includes("\r")).toBe(false);
     expect(dump.endsWith("\n")).toBe(true);
     expect(dump.endsWith("\n\n")).toBe(false);
@@ -203,6 +215,7 @@ describe("determinism — LF and no-date contract", () => {
   test("the fixture's serialNumber UUID never reaches the output", () => {
     // Strip the urn:uuid: prefix so the assertion targets the UUID itself.
     const uuid = fixture.serialNumber.replace(/^urn:uuid:/, "");
+
     expect(uuid.length).toBeGreaterThan(0);
     expect(md.includes(uuid)).toBe(false);
     expect(dump.includes(uuid)).toBe(false);
@@ -271,6 +284,7 @@ afterAll(() => {
 /** Writes the fixture lockfile + manifest into a fresh temp project dir. */
 function makeBunFixtureTarget(): Target {
   const dir = mkdtempSync(join(tmpdir(), "licenses-det-bun-"));
+
   collectorTempDirs.push(dir);
   writeFileSync(join(dir, "bun.lock"), BUN_DET_LOCK);
   writeFileSync(join(dir, "package.json"), '{ "name": "det-root", "private": true }\n');
@@ -280,8 +294,10 @@ function makeBunFixtureTarget(): Target {
 /** One collector run into its own fresh temp dir; returns the raw bom bytes. */
 async function collectBomText(target: Target): Promise<string> {
   const tempDir = mkdtempSync(join(tmpdir(), "licenses-det-out-"));
+
   collectorTempDirs.push(tempDir);
   const result = await collectWithBunLock(target, { tempDir });
+
   return readFileSync(result.sbomPath, "utf-8");
 }
 
@@ -290,6 +306,7 @@ describe("determinism — bun collector double-run byte-identity", () => {
     const target = makeBunFixtureTarget();
     const first = await collectBomText(target);
     const second = await collectBomText(target);
+
     expect(first).toBe(second);
 
     // Volatile-field absence contract extended to the collector's raw
@@ -304,6 +321,7 @@ describe("determinism — bun collector double-run byte-identity", () => {
       const model = mergeSboms([
         { sbom: JSON.parse(bomText), targetIdentity: BUN_TARGET_IDENTITY },
       ]);
+
       return {
         md: renderMarkdown(model),
         dump: toSortedDependenciesJson(model),
@@ -311,6 +329,7 @@ describe("determinism — bun collector double-run byte-identity", () => {
     };
     const first = build();
     const second = build();
+
     expect(first.md).toBe(second.md);
     expect(first.dump).toBe(second.dump);
 
@@ -337,6 +356,7 @@ describe("determinism — bun collector double-run byte-identity", () => {
         { sbom: JSON.parse(bomText), targetIdentity: BUN_TARGET_IDENTITY },
         { sbom: JSON.parse(npmRaw), targetIdentity: "fixtures/npm-scope" },
       ]);
+
       return {
         md: renderMarkdown(model),
         dump: toSortedDependenciesJson(model),
@@ -344,6 +364,7 @@ describe("determinism — bun collector double-run byte-identity", () => {
     };
     const first = build();
     const second = build();
+
     expect(first.md).toBe(second.md);
     expect(first.dump).toBe(second.dump);
 
@@ -406,6 +427,7 @@ const NUGET_TARGET_IDENTITY = "fixtures/nuget-det";
 /** Writes the fixture lockfile into a fresh temp project dir. */
 function makeNugetFixtureTarget(): Target {
   const dir = mkdtempSync(join(tmpdir(), "licenses-det-nuget-"));
+
   collectorTempDirs.push(dir);
   writeFileSync(join(dir, "packages.lock.json"), NUGET_DET_LOCK);
   return { dir, identity: NUGET_TARGET_IDENTITY };
@@ -414,8 +436,10 @@ function makeNugetFixtureTarget(): Target {
 /** One collector run into its own fresh temp dir; returns the raw bom bytes. */
 async function collectNugetBomText(target: Target): Promise<string> {
   const tempDir = mkdtempSync(join(tmpdir(), "licenses-det-out-"));
+
   collectorTempDirs.push(tempDir);
   const result = await collectWithNugetLock(target, { tempDir });
+
   return readFileSync(result.sbomPath, "utf-8");
 }
 
@@ -424,6 +448,7 @@ describe("determinism — nuget collector double-run byte-identity", () => {
     const target = makeNugetFixtureTarget();
     const first = await collectNugetBomText(target);
     const second = await collectNugetBomText(target);
+
     expect(first).toBe(second);
 
     // Volatile-field absence contract on the collector's raw output bytes:
@@ -442,6 +467,7 @@ describe("determinism — nuget collector double-run byte-identity", () => {
       const model = mergeSboms([
         { sbom: JSON.parse(bomText), targetIdentity: NUGET_TARGET_IDENTITY },
       ]);
+
       return {
         md: renderMarkdown(model),
         dump: toSortedDependenciesJson(model),
@@ -449,6 +475,7 @@ describe("determinism — nuget collector double-run byte-identity", () => {
     };
     const first = build();
     const second = build();
+
     expect(first.md).toBe(second.md);
     expect(first.dump).toBe(second.dump);
 
@@ -517,6 +544,7 @@ const MAVEN_TARGET_IDENTITY = "fixtures/maven-det";
 /** Writes the fixture sidecar into a fresh temp project dir. */
 function makeMavenFixtureTarget(): Target {
   const dir = mkdtempSync(join(tmpdir(), "licenses-det-maven-"));
+
   collectorTempDirs.push(dir);
   writeFileSync(join(dir, "maven.sbom.json"), MAVEN_DET_SBOM);
   return { dir, identity: MAVEN_TARGET_IDENTITY };
@@ -525,8 +553,10 @@ function makeMavenFixtureTarget(): Target {
 /** One collector run into its own fresh temp dir; returns the raw bom bytes. */
 async function collectMavenBomText(target: Target): Promise<string> {
   const tempDir = mkdtempSync(join(tmpdir(), "licenses-det-out-"));
+
   collectorTempDirs.push(tempDir);
   const result = await collectWithMavenSbom(target, { tempDir });
+
   return readFileSync(result.sbomPath, "utf-8");
 }
 
@@ -535,6 +565,7 @@ describe("determinism — maven collector double-run byte-identity", () => {
     const target = makeMavenFixtureTarget();
     const first = await collectMavenBomText(target);
     const second = await collectMavenBomText(target);
+
     expect(first).toBe(second);
 
     // Verbatim pass-through is exercised on both the classifier purl and the
@@ -549,6 +580,7 @@ describe("determinism — maven collector double-run byte-identity", () => {
       const model = mergeSboms([
         { sbom: JSON.parse(bomText), targetIdentity: MAVEN_TARGET_IDENTITY },
       ]);
+
       return {
         md: renderMarkdown(model),
         dump: toSortedDependenciesJson(model),
@@ -556,6 +588,7 @@ describe("determinism — maven collector double-run byte-identity", () => {
     };
     const first = build();
     const second = build();
+
     expect(first.md).toBe(second.md);
     expect(first.dump).toBe(second.dump);
 
@@ -622,6 +655,7 @@ describe("determinism — maven collector double-run byte-identity", () => {
 
     function makeDualMavenFixtureTarget(): Target {
       const dir = mkdtempSync(join(tmpdir(), "licenses-det-maven-dual-"));
+
       collectorTempDirs.push(dir);
       writeFileSync(join(dir, "maven.sbom.json"), DUAL_DET_DEFAULT_SBOM);
       writeFileSync(join(dir, "maven.test.sbom.json"), DUAL_DET_TEST_SBOM);
@@ -632,6 +666,7 @@ describe("determinism — maven collector double-run byte-identity", () => {
       const target = makeDualMavenFixtureTarget();
       const first = await collectMavenBomText(target);
       const second = await collectMavenBomText(target);
+
       expect(first).toBe(second);
       expect(first).toContain("dual-compile-lib");
       expect(first).toContain("dual-test-only-lib");
@@ -640,6 +675,7 @@ describe("determinism — maven collector double-run byte-identity", () => {
     test("double-build double-render of the composed dual-doc bom, with prodPurlSet threaded, is byte-identical", async () => {
       const buildOnce = async (): Promise<{ md: string; dump: string }> => {
         const tempDir = mkdtempSync(join(tmpdir(), "licenses-det-out-"));
+
         collectorTempDirs.push(tempDir);
         const result = await collectWithMavenSbom(makeDualMavenFixtureTarget(), { tempDir });
         const sbom = JSON.parse(readFileSync(result.sbomPath, "utf-8"));
@@ -650,6 +686,7 @@ describe("determinism — maven collector double-run byte-identity", () => {
             prodPurlSet: result.prodPurlSet,
           },
         ]);
+
         return {
           md: renderMarkdown(model),
           dump: toSortedDependenciesJson(model),
@@ -657,6 +694,7 @@ describe("determinism — maven collector double-run byte-identity", () => {
       };
       const first = await buildOnce();
       const second = await buildOnce();
+
       expect(first.md).toBe(second.md);
       expect(first.dump).toBe(second.dump);
 
@@ -683,6 +721,7 @@ describe("determinism — maven collector double-run byte-identity", () => {
         { sbom: JSON.parse(bomText), targetIdentity: BUN_TARGET_IDENTITY },
         { sbom: JSON.parse(npmRaw), targetIdentity: "fixtures/npm-scope" },
       ]);
+
       return {
         md: renderMarkdown(model),
         dump: toSortedDependenciesJson(model),
@@ -690,6 +729,7 @@ describe("determinism — maven collector double-run byte-identity", () => {
     };
     const first = build();
     const second = build();
+
     expect(first.md).toBe(second.md);
     expect(first.dump).toBe(second.dump);
 

@@ -10,6 +10,7 @@ export { electCopyrights, electExpression } from "./election";
 export {
   scancodeArgs,
   scanPackageSources,
+  ScancodeEnvironmentError,
   type IntensiveOptions,
   type ScancodeResolution,
   type ScancodeScanOptions,

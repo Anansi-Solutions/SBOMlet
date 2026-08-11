@@ -35,9 +35,13 @@ function makeRecorder(fail = false): {
     _opts: ExecOptions,
   ): Promise<{ stdout: string; stderr: string }> => {
     invocations.push([cmd, ...args]);
-    if (fail) return Promise.reject(new Error("buildx exit 1"));
+    if (fail) {
+      return Promise.reject(new Error("buildx exit 1"));
+    }
+
     return Promise.resolve({ stdout: "", stderr: "" });
   };
+
   return { invocations, exec };
 }
 
@@ -65,6 +69,7 @@ describe("imageTag (deterministic tag lock)", () => {
     // the two never collide onto one tag.
     const mixed = imageTag("A/B/Dockerfile");
     const lower = imageTag("a/b/Dockerfile");
+
     expect(mixed).not.toBe(lower);
     // Same sanitized prefix, distinct 8-hex suffix.
     expect(mixed.slice(0, "sbomlet-scan/a-b-dockerfile-".length)).toBe(
@@ -103,6 +108,7 @@ describe("buildImage (execTool seam)", () => {
   test("records exactly `docker buildx build --load --provenance=false -f P -t T dir(P)`", async () => {
     const { invocations, exec } = makeRecorder();
     const tag = await buildImage("examples/docker-scan/Dockerfile", exec);
+
     expect(tag).toBe("sbomlet-scan/examples-docker-scan-dockerfile-82bd3b3b");
     expect(invocations).toEqual([
       [
@@ -122,6 +128,7 @@ describe("buildImage (execTool seam)", () => {
 
   test("a nonzero buildx exit throws naming the Dockerfile and returns no tag", async () => {
     const { exec } = makeRecorder(true);
+
     await expect(buildImage("examples/docker-scan/Dockerfile", exec)).rejects.toThrow(
       "examples/docker-scan/Dockerfile",
     );
@@ -131,11 +138,17 @@ describe("buildImage (execTool seam)", () => {
     const paths = ["a/Dockerfile", "b/Dockerfile"];
     const first = makeRecorder();
     const tags1: string[] = [];
-    for (const p of paths) tags1.push(await buildImage(p, first.exec));
+
+    for (const p of paths) {
+      tags1.push(await buildImage(p, first.exec));
+    }
 
     const second = makeRecorder();
     const tags2: string[] = [];
-    for (const p of paths) tags2.push(await buildImage(p, second.exec));
+
+    for (const p of paths) {
+      tags2.push(await buildImage(p, second.exec));
+    }
 
     expect(tags1).toEqual(tags2);
     expect(first.invocations).toEqual(second.invocations);
@@ -158,6 +171,7 @@ describe("buildImage (cwd threading — repo-root anchoring)", () => {
       seen.push(opts);
       return Promise.resolve({ stdout: "", stderr: "" });
     };
+
     await buildImage("examples/docker-scan/Dockerfile", exec, {
       cwd: "/some/repo/root",
     });
@@ -178,6 +192,7 @@ describe("buildImage (cwd threading — repo-root anchoring)", () => {
       seen.push(opts);
       return Promise.resolve({ stdout: "", stderr: "" });
     };
+
     await buildImage("examples/docker-scan/Dockerfile", exec);
     expect(seen).toHaveLength(1);
     expect(seen[0]?.cwd).toBeUndefined();

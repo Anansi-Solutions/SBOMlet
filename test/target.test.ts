@@ -10,6 +10,7 @@ const tempRoots: string[] = [];
 
 function makeTempRoot(): string {
   const root = mkdtempSync(join(tmpdir(), "licenses-target-"));
+
   tempRoots.push(root);
   return root;
 }
@@ -29,8 +30,10 @@ afterEach(() => {
 describe("resolveTarget", () => {
   test("returns forward-slash identity relative to the .git directory root", () => {
     const root = makeTempRoot();
+
     mkdirSync(join(root, ".git"));
     const targetDir = join(root, "libraries", "iframe-rpc");
+
     makeYarnProject(targetDir);
 
     const target = resolveTarget(targetDir);
@@ -42,8 +45,10 @@ describe("resolveTarget", () => {
 
   test("treats a .git FILE the same as a .git directory (worktrees)", () => {
     const root = makeTempRoot();
+
     writeFileSync(join(root, ".git"), "gitdir: /elsewhere/.git/worktrees/x\n");
     const targetDir = join(root, "libraries", "iframe-rpc");
+
     makeYarnProject(targetDir);
 
     const target = resolveTarget(targetDir);
@@ -53,8 +58,10 @@ describe("resolveTarget", () => {
 
   test("resolves a relative target argument against the provided cwd", () => {
     const root = makeTempRoot();
+
     mkdirSync(join(root, ".git"));
     const targetDir = join(root, "libraries", "iframe-rpc");
+
     makeYarnProject(targetDir);
 
     const target = resolveTarget(join("libraries", "iframe-rpc"), root);
@@ -65,8 +72,10 @@ describe("resolveTarget", () => {
 
   test("throws an error naming yarn.lock and the offending path when the lockfile is missing", () => {
     const root = makeTempRoot();
+
     mkdirSync(join(root, ".git"));
     const targetDir = join(root, "libraries", "no-lockfile");
+
     mkdirSync(targetDir, { recursive: true });
     writeFileSync(join(targetDir, "package.json"), "{}\n");
 
@@ -80,8 +89,10 @@ describe("resolveTarget", () => {
     // misleading hint that adding a package.json would help. The error must
     // name the actual expectation (yarn-only debug mode) and the way out.
     const root = makeTempRoot();
+
     mkdirSync(join(root, ".git"));
     const targetDir = join(root, "apps", "pyproj");
+
     mkdirSync(targetDir, { recursive: true });
     writeFileSync(join(targetDir, "pyproject.toml"), "[project]\n");
     writeFileSync(join(targetDir, "poetry.lock"), '[[package]]\nname = "x"\n');
@@ -101,6 +112,7 @@ describe("resolveTarget", () => {
   test("falls back to the directory basename when no .git ancestor exists", () => {
     const root = makeTempRoot();
     const targetDir = join(root, "standalone-project");
+
     makeYarnProject(targetDir);
 
     const target = resolveTarget(targetDir);

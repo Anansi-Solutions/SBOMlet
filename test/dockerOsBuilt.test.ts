@@ -40,6 +40,7 @@ let invocations: string[][] = [];
 /** The syft output-target operand a `cyclonedx-json=<file>` argv carries, else undefined. */
 function syftOutFile(args: string[]): string | undefined {
   const arg = args.find((a) => a.startsWith("cyclonedx-json="));
+
   return arg === undefined ? undefined : arg.slice("cyclonedx-json=".length);
 }
 
@@ -52,10 +53,12 @@ function syftOutFile(args: string[]): string | undefined {
 function fakeExecTool(cmd: string, args: string[]): Promise<ExecResult> {
   invocations.push([cmd, ...args]);
   const outFile = syftOutFile(args);
+
   if (outFile !== undefined) {
     copyFileSync(FIXTURE, outFile);
     return Promise.resolve({ stdout: "", stderr: "" });
   }
+
   return Promise.resolve({ stdout: "[]", stderr: "" });
 }
 
@@ -67,16 +70,19 @@ function makePinnedExec(digestRef: string): ExecFn {
   return (cmd, args) => {
     invocations.push([cmd, ...args]);
     const outFile = syftOutFile(args);
+
     if (outFile !== undefined) {
       copyFileSync(FIXTURE, outFile);
       return Promise.resolve({ stdout: "", stderr: "" });
     }
+
     if (args[0] === "inspect") {
       return Promise.resolve({
         stdout: JSON.stringify([digestRef]),
         stderr: "",
       });
     }
+
     return Promise.resolve({ stdout: "", stderr: "" });
   };
 }
@@ -89,27 +95,34 @@ function makePinnedExec(digestRef: string): ExecFn {
  */
 function makeAbsentThenPresentExec(digestRef: string): ExecFn {
   const pulled = new Set<string>();
+
   return (cmd, args) => {
     invocations.push([cmd, ...args]);
     const outFile = syftOutFile(args);
+
     if (outFile !== undefined) {
       copyFileSync(FIXTURE, outFile);
       return Promise.resolve({ stdout: "", stderr: "" });
     }
+
     const image = args[args.length - 1] as string;
+
     if (args[0] === "inspect") {
       if (!pulled.has(image)) {
         return Promise.reject(new Error("docker inspect: No such object"));
       }
+
       return Promise.resolve({
         stdout: JSON.stringify([digestRef]),
         stderr: "",
       });
     }
+
     if (args[0] === "pull") {
       pulled.add(image);
       return Promise.resolve({ stdout: "", stderr: "" });
     }
+
     return Promise.resolve({ stdout: "", stderr: "" });
   };
 }
@@ -125,9 +138,11 @@ function makeFailingPullExec(): ExecFn {
     if (args[0] === "inspect") {
       return Promise.reject(new Error("docker inspect: No such object"));
     }
+
     if (args[0] === "pull") {
       return Promise.reject(new Error("docker pull: access denied"));
     }
+
     return Promise.resolve({ stdout: "", stderr: "" });
   };
 }
@@ -142,6 +157,7 @@ function makePerImageExecTool(licenseByImage: Readonly<Record<string, string>>):
   return (cmd, args) => {
     invocations.push([cmd, ...args]);
     const outFile = syftOutFile(args);
+
     if (outFile !== undefined) {
       const image = args[args.length - 1] as string;
       const doc = {
@@ -157,9 +173,11 @@ function makePerImageExecTool(licenseByImage: Readonly<Record<string, string>>):
           },
         ],
       };
+
       writeFileSync(outFile, JSON.stringify(doc));
       return Promise.resolve({ stdout: "", stderr: "" });
     }
+
     return Promise.resolve({ stdout: "[]", stderr: "" });
   };
 }
@@ -175,18 +193,23 @@ function makeFixtureByImageExec(fixtureByImage: Readonly<Record<string, string>>
   return (cmd, args) => {
     invocations.push([cmd, ...args]);
     const outFile = syftOutFile(args);
+
     if (outFile !== undefined) {
       const image = args[args.length - 1] as string;
       const fixture = fixtureByImage[image];
+
       if (fixture === undefined) {
         return Promise.reject(new Error(`unexpected syft operand: ${image}`));
       }
+
       copyFileSync(fixture, outFile);
       return Promise.resolve({ stdout: "", stderr: "" });
     }
+
     if (args[0] === "buildx") {
       return Promise.resolve({ stdout: "", stderr: "" });
     }
+
     return Promise.resolve({ stdout: "[]", stderr: "" });
   };
 }
@@ -215,7 +238,10 @@ describe("collectDockerOsSbom one posture (full contents, generalized digest, pr
   afterEach(() => {
     invocations = [];
     currentExec = fakeExecTool;
-    if (tempDir !== undefined) rmSync(tempDir, { recursive: true, force: true });
+    if (tempDir !== undefined) {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+
     tempDir = undefined;
   });
 
@@ -233,6 +259,7 @@ describe("collectDockerOsSbom one posture (full contents, generalized digest, pr
     const parsed = JSON.parse(doc) as {
       dockerImages: { image: string; digest: string; source: string }[];
     };
+
     // Absent RepoDigests → the generalized digest-less identity, sorted by image.
     expect(parsed.dockerImages).toEqual([
       { image: "local/scan-a", digest: "", source: "local/scan-a" },
@@ -248,6 +275,7 @@ describe("collectDockerOsSbom one posture (full contents, generalized digest, pr
       tempDir,
     });
     const parsed = JSON.parse(doc) as { components: { purl: string }[] };
+
     expect(parsed.components.some((c) => c.purl.startsWith("pkg:npm/"))).toBe(true);
     expect(parsed.components.some((c) => c.purl.startsWith("pkg:apk/"))).toBe(true);
   });
@@ -256,6 +284,7 @@ describe("collectDockerOsSbom one posture (full contents, generalized digest, pr
     tempDir = mkdtempSync(join(tmpdir(), "licenses-docker-posture-"));
     await collectDockerOsSbom(refs("local/scan-a"), { tempDir });
     const argv = argvStrings();
+
     // The presence probe ran (inspect) and the scan ran (syft), but no pull.
     expect(argv.some((s) => s.includes("inspect"))).toBe(true);
     expect(argv.some((s) => s.includes("cyclonedx-json="))).toBe(true);
@@ -264,6 +293,7 @@ describe("collectDockerOsSbom one posture (full contents, generalized digest, pr
 
   test("present RepoDigests pin the digest via selectDigest (generalized posture)", async () => {
     const digestRef = "docker.io/library/scan-a@sha256:" + "a".repeat(64);
+
     currentExec = makePinnedExec(digestRef);
     tempDir = mkdtempSync(join(tmpdir(), "licenses-docker-posture-"));
     const { doc } = await collectDockerOsSbom(refs("docker.io/library/scan-a"), {
@@ -272,6 +302,7 @@ describe("collectDockerOsSbom one posture (full contents, generalized digest, pr
     const parsed = JSON.parse(doc) as {
       dockerImages: { image: string; digest: string; source: string }[];
     };
+
     expect(parsed.dockerImages).toEqual([
       {
         image: "docker.io/library/scan-a",
@@ -284,6 +315,7 @@ describe("collectDockerOsSbom one posture (full contents, generalized digest, pr
 
   test("an absent ref is pulled then scanned (probe-first): pull argv precedes the syft scan", async () => {
     const digestRef = "registry.example.com/absent@sha256:" + "b".repeat(64);
+
     currentExec = makeAbsentThenPresentExec(digestRef);
     tempDir = mkdtempSync(join(tmpdir(), "licenses-docker-posture-"));
     const { doc } = await collectDockerOsSbom(refs("registry.example.com/absent:1"), {
@@ -292,6 +324,7 @@ describe("collectDockerOsSbom one posture (full contents, generalized digest, pr
     const argv = argvStrings();
     const firstPull = argv.findIndex((s) => s.includes("pull"));
     const firstScan = argv.findIndex((s) => s.includes("cyclonedx-json="));
+
     // The pull happened, before the scan (the image is fetched, then inventoried).
     expect(firstPull).toBeGreaterThanOrEqual(0);
     expect(firstScan).toBeGreaterThan(firstPull);
@@ -299,6 +332,7 @@ describe("collectDockerOsSbom one posture (full contents, generalized digest, pr
     const parsed = JSON.parse(doc) as {
       dockerImages: { image: string; digest: string }[];
     };
+
     expect(parsed.dockerImages[0]?.digest).toBe(digestRef);
   });
 
@@ -320,18 +354,21 @@ describe("collectDockerOsSbom one posture (full contents, generalized digest, pr
       "local/scan-mit": "MIT",
       "local/scan-gpl": "GPL-3.0-only",
     };
+
     currentExec = makePerImageExecTool(licenseByImage);
 
     const dirAB = mkdtempSync(join(tmpdir(), "licenses-docker-posture-"));
     const { doc: docAB } = await collectDockerOsSbom(refs("local/scan-mit", "local/scan-gpl"), {
       tempDir: dirAB,
     });
+
     rmSync(dirAB, { recursive: true, force: true });
 
     const dirBA = mkdtempSync(join(tmpdir(), "licenses-docker-posture-"));
     const { doc: docBA } = await collectDockerOsSbom(refs("local/scan-gpl", "local/scan-mit"), {
       tempDir: dirBA,
     });
+
     rmSync(dirBA, { recursive: true, force: true });
 
     const licenseOf = (doc: string): unknown => {
@@ -341,6 +378,7 @@ describe("collectDockerOsSbom one posture (full contents, generalized digest, pr
           licenses?: { license?: { id?: string } }[];
         }[];
       };
+
       return parsed.components.find((c) => c.purl === "pkg:npm/shared@1.0.0")?.licenses?.[0]
         ?.license?.id;
     };
@@ -353,8 +391,10 @@ describe("collectDockerOsSbom one posture (full contents, generalized digest, pr
   // rides the --image lane through the orchestrator.
   test("runGenerateDockerSbom writes the committed doc via the --image lane, digest-pinned, LF-only", async () => {
     const digestRef = "docker.io/library/scan-a@sha256:" + "c".repeat(64);
+
     currentExec = makePinnedExec(digestRef);
     const outDir = mkdtempSync(join(tmpdir(), "licenses-docker-image-e2e-"));
+
     try {
       await runGenerateDockerSbom({
         images: ["docker.io/library/scan-a"],
@@ -366,6 +406,7 @@ describe("collectDockerOsSbom one posture (full contents, generalized digest, pr
         components: { purl: string }[];
         dockerImages: { image: string; digest: string; source: string }[];
       };
+
       // Image lane: the source identity is the requested ref VERBATIM.
       expect(parsed.dockerImages).toEqual([
         {
@@ -396,6 +437,7 @@ describe("collectDockerOsSbom one posture (full contents, generalized digest, pr
     });
 
     const argv = argvStrings();
+
     // Each Dockerfile was built (buildx build -f <path> -t <tag> <context>).
     expect(argv.some((s) => s.includes("buildx build") && s.includes("a.Dockerfile"))).toBe(true);
     expect(argv.some((s) => s.includes("buildx build") && s.includes("b.Dockerfile"))).toBe(true);
@@ -416,6 +458,7 @@ describe("collectDockerOsSbom one posture (full contents, generalized digest, pr
         digest: "",
         source: identity,
       }));
+
     expect(doc.dockerImages).toEqual(expected);
   });
 
@@ -449,6 +492,7 @@ describe("collectDockerOsSbom one posture (full contents, generalized digest, pr
 
     // The build -f operand is the discovery identity string (forward-slash).
     const argv = argvStrings();
+
     expect(argv.some((s) => s.includes("buildx build") && s.includes("svc/Dockerfile"))).toBe(true);
     // The tag scanned equals imageTag of the DISCOVERY identity — the exact
     // string that produces today's committed sidecar identity.
@@ -456,6 +500,7 @@ describe("collectDockerOsSbom one posture (full contents, generalized digest, pr
     const doc = JSON.parse(readFileSync(out, "utf8")) as {
       dockerImages: { image: string; digest: string; source: string }[];
     };
+
     // Discovery posture: the source is the repo-relative discovery identity —
     // the exact string --list-dockerfiles prints.
     expect(doc.dockerImages).toEqual([{ image: tag, digest: "", source: "svc/Dockerfile" }]);
@@ -478,6 +523,7 @@ describe("collectDockerOsSbom one posture (full contents, generalized digest, pr
     });
 
     const argv = argvStrings();
+
     expect(argv.some((s) => s.includes("buildx build") && s.includes("keep/Dockerfile"))).toBe(
       true,
     );
@@ -523,6 +569,7 @@ describe("collectDockerOsSbom one posture (full contents, generalized digest, pr
 
     const a = readFileSync(out1, "utf8");
     const b = readFileSync(out2, "utf8");
+
     expect(a).toBe(b);
     expect(a.includes("\r")).toBe(false);
   });
@@ -541,6 +588,7 @@ describe("collectDockerOsSbom one posture (full contents, generalized digest, pr
     writeFileSync(join(tempDir, "b", "Dockerfile"), "FROM alpine:3.23\n");
     const tagA = imageTag("a/Dockerfile");
     const tagB = imageTag("b/Dockerfile");
+
     currentExec = makeFixtureByImageExec({
       [tagA]: FIXTURE_A,
       [tagB]: FIXTURE_B,
@@ -559,6 +607,7 @@ describe("collectDockerOsSbom one posture (full contents, generalized digest, pr
     };
     const membership = (name: string): string[] | undefined =>
       doc.components.find((c) => c.name === name)?.images;
+
     // busybox is in BOTH images: one row, membership unioned and sorted...
     expect(membership("busybox")).toEqual([tagA, tagB].sort(compareCodeUnits));
     expect(doc.components.filter((c) => c.name === "busybox")).toHaveLength(1);
@@ -577,12 +626,14 @@ describe("collectDockerOsSbom one posture (full contents, generalized digest, pr
         digest: "",
         source: identity,
       }));
+
     expect(doc.dockerImages).toEqual(expected);
   });
 
   test("pair input order never changes the emitted bytes (sorted-scan determinism with sources)", async () => {
     const imageA = "local/scan-imagea";
     const imageB = "local/scan-imageb";
+
     currentExec = makeFixtureByImageExec({
       [imageA]: FIXTURE_A,
       [imageB]: FIXTURE_B,
@@ -596,12 +647,14 @@ describe("collectDockerOsSbom one posture (full contents, generalized digest, pr
     const { doc: docAB } = await collectDockerOsSbom(pairs, {
       tempDir: dirAB,
     });
+
     rmSync(dirAB, { recursive: true, force: true });
 
     const dirBA = mkdtempSync(join(tmpdir(), "licenses-docker-posture-"));
     const { doc: docBA } = await collectDockerOsSbom([...pairs].reverse(), {
       tempDir: dirBA,
     });
+
     rmSync(dirBA, { recursive: true, force: true });
 
     expect(docAB).toBe(docBA);

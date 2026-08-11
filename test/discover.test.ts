@@ -17,6 +17,7 @@ const tempRoots: string[] = [];
 
 function makeTempRoot(): string {
   const root = mkdtempSync(join(tmpdir(), "licenses-discover-"));
+
   tempRoots.push(root);
   return root;
 }
@@ -103,6 +104,7 @@ afterEach(() => {
 describe("discoverTargets", () => {
   test("finds yarn/poetry/uv lockfiles at any depth with sorted forward-slash identities", () => {
     const root = makeTempRoot();
+
     makeYarnProject(join(root, "a"));
     makeYarnProject(join(root, "a", "b", "c"));
     makePoetryProject(join(root, "py"));
@@ -116,11 +118,13 @@ describe("discoverTargets", () => {
 
   test("skips node_modules, .git, hidden directories, and the configured toolDir", () => {
     const root = makeTempRoot();
+
     makeYarnProject(join(root, "app"));
     makeYarnProject(join(root, "app", "node_modules", "dep"));
     makeYarnProject(join(root, ".git", "hooks"));
     makeYarnProject(join(root, ".cache", "stuff"));
     const toolDir = join(root, "tools", "licenses");
+
     makeYarnProject(toolDir);
 
     const targets = discoverTargets(root, { toolDir });
@@ -135,6 +139,7 @@ describe("discoverTargets", () => {
     // (under-coverage). Reverted: only `dist` (the documented, low-ambiguity
     // build-output dir) and node_modules/.git stay pruned.
     const root = makeTempRoot();
+
     makeYarnProject(join(root, "app"));
     makeYarnProject(join(root, "build", "pkg"));
     makeYarnProject(join(root, "out", "pkg"));
@@ -156,6 +161,7 @@ describe("discoverTargets", () => {
 
   test("#2: node_modules, .git, and dist are STILL pruned after the revert", () => {
     const root = makeTempRoot();
+
     makeYarnProject(join(root, "app"));
     makeYarnProject(join(root, "node_modules", "dep"));
     makeYarnProject(join(root, ".git", "hooks"));
@@ -173,6 +179,7 @@ describe("discoverTargets", () => {
     // shouldDescendDir now detects the gitlink FILE and prunes descent, covering
     // BOTH lanes. A sibling normal dir with a `.git` DIRECTORY is unaffected.
     const root = makeTempRoot();
+
     makeYarnProject(join(root, "app"));
     // Submodule root: `.git` is a FILE (gitlink) → its lockfile must NOT be found.
     makeYarnProject(join(root, "vendored"));
@@ -190,6 +197,7 @@ describe("discoverTargets", () => {
 
   test("#3: case-insensitive exclusion prunes Node_Modules / NODE_MODULES / Dist on Windows", () => {
     const root = makeTempRoot();
+
     makeYarnProject(join(root, "app"));
     makeYarnProject(join(root, "Node_Modules", "dep"));
     makeYarnProject(join(root, "NODE_MODULES", "dep"));
@@ -202,12 +210,14 @@ describe("discoverTargets", () => {
 
   test("--exclude globs match case-INSENSITIVELY (Windows on-disk identity parity)", () => {
     const root = makeTempRoot();
+
     makeYarnProject(join(root, "app"));
     // A real source dir whose on-disk name differs in case from the glob.
     makeYarnProject(join(root, "Cased", "pkg"));
 
     // A mis-cased glob `CASED/**` must still exclude the on-disk `Cased/pkg`.
     const excluded = discoverTargets(root, { excludes: ["CASED/**"] });
+
     expect(excluded.map((t) => t.identity)).toEqual(["app"]);
   });
 
@@ -215,6 +225,7 @@ describe("discoverTargets", () => {
     // The Dockerfile-lane dot-dir allowlist must not bleed into lockfile
     // discovery: a lockfile under .docker/ or .devcontainer/ stays excluded.
     const root = makeTempRoot();
+
     makeYarnProject(join(root, "app"));
     makeYarnProject(join(root, ".docker", "pkg"));
     makeYarnProject(join(root, ".devcontainer", "pkg"));
@@ -226,6 +237,7 @@ describe("discoverTargets", () => {
 
   test("identities never contain a backslash, even on Windows", () => {
     const root = makeTempRoot();
+
     makeYarnProject(join(root, "deep", "nested", "project"));
     makePoetryProject(join(root, "py", "pkg"));
 
@@ -239,24 +251,29 @@ describe("discoverTargets", () => {
 
   test("excludes: exact match, single-segment *, and cross-segment **", () => {
     const root = makeTempRoot();
+
     makeYarnProject(join(root, "a"));
     makeYarnProject(join(root, "a", "b"));
     makeYarnProject(join(root, "a", "b", "c"));
 
     const exact = discoverTargets(root, { excludes: ["a/b/c"] });
+
     expect(exact.map((t) => t.identity)).toEqual(["a", "a/b"]);
 
     // "*" matches within a single path segment: removes "a/b" but NOT "a/b/c".
     const single = discoverTargets(root, { excludes: ["a/*"] });
+
     expect(single.map((t) => t.identity)).toEqual(["a", "a/b/c"]);
 
     // "**" crosses segments: removes everything under "a" (but not "a" itself).
     const cross = discoverTargets(root, { excludes: ["a/**"] });
+
     expect(cross.map((t) => t.identity)).toEqual(["a"]);
   });
 
   test('a lockfile directly in repoRoot yields identity "."', () => {
     const root = makeTempRoot();
+
     makeYarnProject(root);
 
     const targets = discoverTargets(root);
@@ -268,6 +285,7 @@ describe("discoverTargets", () => {
   test("a directory with both yarn.lock and poetry.lock yields two targets, sorted by (identity, kind)", () => {
     const root = makeTempRoot();
     const dual = join(root, "dual");
+
     makeYarnProject(dual);
     makePoetryProject(dual);
 
@@ -280,6 +298,7 @@ describe("discoverTargets", () => {
 
   test("a repoRoot with no lockfiles returns an empty array (CLI owns the zero-targets error)", () => {
     const root = makeTempRoot();
+
     mkdirSync(join(root, "src"), { recursive: true });
     writeFileSync(join(root, "src", "index.ts"), "export {};\n");
 
@@ -290,6 +309,7 @@ describe("discoverTargets", () => {
 describe("discoverTargets — npm/pnpm/bun lockfile kinds", () => {
   test("package-lock.json / pnpm-lock.yaml / bun.lock each alone yield one target of the right kind", () => {
     const root = makeTempRoot();
+
     makeNpmProject(join(root, "npm-app"));
     makePnpmProject(join(root, "pnpm-app"));
     makeBunProject(join(root, "bun-app"));
@@ -304,6 +324,7 @@ describe("discoverTargets — npm/pnpm/bun lockfile kinds", () => {
 describe("discoverTargets — terraform lockfile kind", () => {
   test(".terraform.lock.hcl is discovered (hidden FILE, not a hidden dir)", () => {
     const root = makeTempRoot();
+
     makeTerraformProject(join(root, "infra"));
 
     const targets = discoverTargets(root);
@@ -315,6 +336,7 @@ describe("discoverTargets — terraform lockfile kind", () => {
   test("a dir with both .terraform.lock.hcl and yarn.lock yields TWO targets (coexist, no collision)", () => {
     const root = makeTempRoot();
     const dir = join(root, "mixed");
+
     makeTerraformProject(dir);
     makeYarnProject(dir);
 
@@ -336,6 +358,7 @@ describe("discoverTargetsWithWarnings — same-dir JS collision resolution", () 
   test("bun.lock + package-lock.json collapse to one bun target with a warning naming both", () => {
     const root = makeTempRoot();
     const dir = join(root, "app");
+
     makeBunProject(dir);
     makeNpmProject(dir);
 
@@ -351,6 +374,7 @@ describe("discoverTargetsWithWarnings — same-dir JS collision resolution", () 
   test("pnpm-lock.yaml + package-lock.json collapse to pnpm", () => {
     const root = makeTempRoot();
     const dir = join(root, "app");
+
     makePnpmProject(dir);
     makeNpmProject(dir);
 
@@ -365,6 +389,7 @@ describe("discoverTargetsWithWarnings — same-dir JS collision resolution", () 
   test("yarn.lock + package-lock.json collapse to yarn", () => {
     const root = makeTempRoot();
     const dir = join(root, "app");
+
     makeYarnProject(dir);
     makeNpmProject(dir);
 
@@ -379,6 +404,7 @@ describe("discoverTargetsWithWarnings — same-dir JS collision resolution", () 
   test("all four JS lockfiles in one dir collapse to bun; warning names every ignored lockfile compareCodeUnits-sorted", () => {
     const root = makeTempRoot();
     const dir = join(root, "app");
+
     makeBunProject(dir);
     makePnpmProject(dir);
     makeYarnProject(dir);
@@ -395,6 +421,7 @@ describe("discoverTargetsWithWarnings — same-dir JS collision resolution", () 
   test("a JS lockfile and a python lockfile in one dir still yield TWO targets (cross-ecosystem)", () => {
     const root = makeTempRoot();
     const dir = join(root, "dual");
+
     makeBunProject(dir);
     makePoetryProject(dir);
 
@@ -408,6 +435,7 @@ describe("discoverTargetsWithWarnings — same-dir JS collision resolution", () 
 
   test("collision output stays (identity, kind) sorted across multiple directories", () => {
     const root = makeTempRoot();
+
     makeBunProject(join(root, "b-app"));
     makeNpmProject(join(root, "b-app"));
     makeYarnProject(join(root, "a-app"));
@@ -423,6 +451,7 @@ describe("discoverTargetsWithWarnings — same-dir JS collision resolution", () 
 describe("discoverTargetsWithWarnings — binary bun.lockb handling", () => {
   test("bun.lockb alone yields zero targets plus a warning naming the migration command and identity", () => {
     const root = makeTempRoot();
+
     writeBunLockb(join(root, "legacy"));
 
     const { targets, warnings } = discoverTargetsWithWarnings(root);
@@ -436,6 +465,7 @@ describe("discoverTargetsWithWarnings — binary bun.lockb handling", () => {
   test("bun.lockb beside bun.lock proceeds silently with the bun.lock target", () => {
     const root = makeTempRoot();
     const dir = join(root, "migrated");
+
     makeBunProject(dir);
     writeBunLockb(dir);
 
@@ -447,6 +477,7 @@ describe("discoverTargetsWithWarnings — binary bun.lockb handling", () => {
 
   test("an excluded identity produces neither targets nor bun.lockb warnings", () => {
     const root = makeTempRoot();
+
     writeBunLockb(join(root, "skipme"));
     makeBunProject(join(root, "skipme"));
     makeNpmProject(join(root, "skipme"));
@@ -463,6 +494,7 @@ describe("discoverTargetsWithWarnings — binary bun.lockb handling", () => {
 describe("discoverTargetsWithWarnings — csproj sighted without packages.lock.json", () => {
   test("a lockless csproj dir yields zero targets and ONE aggregated warning naming the property, the command, and the directory", () => {
     const root = makeTempRoot();
+
     writeCsproj(join(root, "App"));
 
     const { targets, warnings } = discoverTargetsWithWarnings(root);
@@ -481,6 +513,7 @@ describe("discoverTargetsWithWarnings — csproj sighted without packages.lock.j
 
   test("two lockless dirs AGGREGATE into one summary warning naming both, sorted (never a per-directory wall)", () => {
     const root = makeTempRoot();
+
     writeCsproj(join(root, "b-lib"), "BLib");
     writeCsproj(join(root, "a-lib"), "ALib");
 
@@ -497,6 +530,7 @@ describe("discoverTargetsWithWarnings — csproj sighted without packages.lock.j
 
   test("past the example limit the aggregate truncates to e.g. plus the --verbose hint", () => {
     const root = makeTempRoot();
+
     for (const name of ["p1", "p2", "p3", "p4", "p5"]) {
       writeCsproj(join(root, name), "Proj");
     }
@@ -514,6 +548,7 @@ describe("discoverTargetsWithWarnings — csproj sighted without packages.lock.j
 
   test("verbose emits one warning per directory instead of the aggregate, sorted deterministically", () => {
     const root = makeTempRoot();
+
     writeCsproj(join(root, "b-lib"), "BLib");
     writeCsproj(join(root, "a-lib"), "ALib");
 
@@ -534,6 +569,7 @@ describe("discoverTargetsWithWarnings — csproj sighted without packages.lock.j
   test("csproj beside packages.lock.json proceeds silently with one nuget target (same-directory suppression)", () => {
     const root = makeTempRoot();
     const dir = join(root, "locked");
+
     writeCsproj(dir);
     makeNugetProject(dir);
 
@@ -546,6 +582,7 @@ describe("discoverTargetsWithWarnings — csproj sighted without packages.lock.j
 
   test("suppression is per-directory: a lockless sibling still counts while the locked dir stays silent", () => {
     const root = makeTempRoot();
+
     writeCsproj(join(root, "locked"));
     makeNugetProject(join(root, "locked"));
     writeCsproj(join(root, "lockless"), "Lib");
@@ -564,6 +601,7 @@ describe("discoverTargetsWithWarnings — csproj sighted without packages.lock.j
   test("multiple csproj files in ONE directory count that directory once", () => {
     const root = makeTempRoot();
     const dir = join(root, "multi");
+
     writeCsproj(dir, "App");
     writeCsproj(dir, "App.Tests");
 
@@ -575,6 +613,7 @@ describe("discoverTargetsWithWarnings — csproj sighted without packages.lock.j
 
   test("an excluded identity produces neither targets nor csproj warnings (bun.lockb parity)", () => {
     const root = makeTempRoot();
+
     writeCsproj(join(root, "skipme"));
 
     const { targets, warnings } = discoverTargetsWithWarnings(root, {
@@ -592,6 +631,7 @@ describe("discoverTargetsWithWarnings — csproj sighted without packages.lock.j
     // already warns via its csproj dirs.
     const root = makeTempRoot();
     const dir = join(root, "cpm");
+
     mkdirSync(dir, { recursive: true });
     writeFileSync(join(dir, "Directory.Packages.props"), "<Project />\n");
 
@@ -604,6 +644,7 @@ describe("discoverTargetsWithWarnings — csproj sighted without packages.lock.j
   test("same-dir package-lock.json + packages.lock.json yield TWO targets (cross-ecosystem coexistence)", () => {
     const root = makeTempRoot();
     const dir = join(root, "x");
+
     makeNpmProject(dir);
     makeNugetProject(dir);
 
@@ -618,6 +659,7 @@ describe("discoverTargetsWithWarnings — csproj sighted without packages.lock.j
 
   test("a csproj at the repo ROOT warns with the '.' identity (never an empty or garbled name)", () => {
     const root = makeTempRoot();
+
     writeCsproj(root);
 
     const { targets, warnings } = discoverTargetsWithWarnings(root);
@@ -639,6 +681,7 @@ describe("discoverTargetsWithWarnings — csproj sighted without packages.lock.j
     const controlChars = /[\u0000-\u001f\u007f-\u009f]/;
     const [aggregated] = csprojNoLockWarnings([hostile], false);
     const [verbose] = csprojNoLockWarnings([hostile], true);
+
     expect(aggregated).toBeDefined();
     expect(verbose).toBeDefined();
     expect(aggregated).not.toMatch(controlChars);
@@ -652,6 +695,7 @@ describe("discoverTargetsWithWarnings — csproj sighted without packages.lock.j
 describe("discoverTargetsWithWarnings — pom.xml sighted without maven.sbom.json", () => {
   test("a sidecar-less pom dir yields zero maven targets and ONE aggregated warning naming the plugin, the file, and the directory", () => {
     const root = makeTempRoot();
+
     writePom(join(root, "App"));
 
     const { targets, warnings } = discoverTargetsWithWarnings(root);
@@ -671,6 +715,7 @@ describe("discoverTargetsWithWarnings — pom.xml sighted without maven.sbom.jso
   test("pom.xml beside maven.sbom.json proceeds silently with one maven target (same-directory suppression)", () => {
     const root = makeTempRoot();
     const dir = join(root, "app");
+
     makeMavenProject(dir);
 
     const { targets, warnings } = discoverTargetsWithWarnings(root);
@@ -682,6 +727,7 @@ describe("discoverTargetsWithWarnings — pom.xml sighted without maven.sbom.jso
 
   test("reactor: root pom.xml + two modules, only one module has a sidecar — warning counts the ROOT and the sidecar-less module, the covered module is silent", () => {
     const root = makeTempRoot();
+
     writePom(root);
     makeMavenProject(join(root, "liba"));
     writePom(join(root, "libb"));
@@ -699,6 +745,7 @@ describe("discoverTargetsWithWarnings — pom.xml sighted without maven.sbom.jso
 
   test("five sidecar-less pom dirs AGGREGATE into one summary warning naming exactly 3 sorted examples, past-limit truncated with the --verbose hint", () => {
     const root = makeTempRoot();
+
     for (const name of ["p1", "p2", "p3", "p4", "p5"]) {
       writePom(join(root, name));
     }
@@ -716,6 +763,7 @@ describe("discoverTargetsWithWarnings — pom.xml sighted without maven.sbom.jso
 
   test("verbose emits one warning per directory instead of the aggregate, sorted deterministically", () => {
     const root = makeTempRoot();
+
     writePom(join(root, "b-mod"));
     writePom(join(root, "a-mod"));
 
@@ -735,6 +783,7 @@ describe("discoverTargetsWithWarnings — pom.xml sighted without maven.sbom.jso
 
   test("suppression is per-directory: a sidecar-less sibling still counts while the covered dir stays silent", () => {
     const root = makeTempRoot();
+
     makeMavenProject(join(root, "covered"));
     writePom(join(root, "uncovered"));
 
@@ -751,6 +800,7 @@ describe("discoverTargetsWithWarnings — pom.xml sighted without maven.sbom.jso
 
   test("an excluded identity produces neither targets nor pom warnings (csproj/bun.lockb parity)", () => {
     const root = makeTempRoot();
+
     writePom(join(root, "skipme"));
 
     const { targets, warnings } = discoverTargetsWithWarnings(root, {
@@ -763,6 +813,7 @@ describe("discoverTargetsWithWarnings — pom.xml sighted without maven.sbom.jso
 
   test("a pom.xml at the repo ROOT warns with the '.' identity (never an empty or garbled name)", () => {
     const root = makeTempRoot();
+
     writePom(root);
 
     const { targets, warnings } = discoverTargetsWithWarnings(root);
@@ -794,6 +845,7 @@ describe("discoverTargetsWithWarnings — pom.xml sighted without maven.sbom.jso
     );
     const [aggregated] = pomNoSidecarWarnings([hostile], false);
     const [verbose] = pomNoSidecarWarnings([hostile], true);
+
     expect(aggregated).toBeDefined();
     expect(verbose).toBeDefined();
     expect(aggregated).not.toMatch(controlChars);
@@ -804,6 +856,7 @@ describe("discoverTargetsWithWarnings — pom.xml sighted without maven.sbom.jso
 
   test("walk-skip dirs (node_modules, .git, dot-dirs) never trigger the warning", () => {
     const root = makeTempRoot();
+
     writePom(join(root, "node_modules", "dep"));
     writePom(join(root, ".git", "hooks"));
     writePom(join(root, ".cache", "stuff"));
@@ -846,6 +899,7 @@ describe("discoverTargetsWithWarnings — maven.test.sbom.json without maven.sbo
   test("a dir with BOTH docs yields exactly ONE maven target and no orphan warning", () => {
     const root = makeTempRoot();
     const dir = join(root, "app");
+
     makeMavenProject(dir);
     addMavenTestSbom(dir);
 
@@ -858,6 +912,7 @@ describe("discoverTargetsWithWarnings — maven.test.sbom.json without maven.sbo
 
   test("a lone maven.test.sbom.json (no maven.sbom.json) yields NO maven target and ONE aggregated orphan warning", () => {
     const root = makeTempRoot();
+
     writeMavenTestSbomOnly(join(root, "app"));
 
     const { targets, warnings } = discoverTargetsWithWarnings(root);
@@ -873,6 +928,7 @@ describe("discoverTargetsWithWarnings — maven.test.sbom.json without maven.sbo
 
   test("suppression is per-directory: a lone test doc beside a covered dir stays independent", () => {
     const root = makeTempRoot();
+
     makeMavenProject(join(root, "covered"));
     writeMavenTestSbomOnly(join(root, "uncovered"));
 
@@ -889,6 +945,7 @@ describe("discoverTargetsWithWarnings — maven.test.sbom.json without maven.sbo
 
   test("verbose emits one warning per directory instead of the aggregate, sorted deterministically", () => {
     const root = makeTempRoot();
+
     writeMavenTestSbomOnly(join(root, "b-mod"));
     writeMavenTestSbomOnly(join(root, "a-mod"));
 
@@ -906,6 +963,7 @@ describe("discoverTargetsWithWarnings — maven.test.sbom.json without maven.sbo
 
   test("an excluded identity produces neither targets nor the orphan warning", () => {
     const root = makeTempRoot();
+
     writeMavenTestSbomOnly(join(root, "skipme"));
 
     const { targets, warnings } = discoverTargetsWithWarnings(root, {
@@ -932,6 +990,7 @@ describe("discoverTargetsWithWarnings — maven.test.sbom.json without maven.sbo
     );
     const [aggregated] = mavenTestSbomOrphanWarnings([hostile], false);
     const [verbose] = mavenTestSbomOrphanWarnings([hostile], true);
+
     expect(aggregated).toBeDefined();
     expect(verbose).toBeDefined();
     expect(controlChars.test(aggregated as string)).toBe(false);

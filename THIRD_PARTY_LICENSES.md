@@ -6,12 +6,12 @@ Copyleft notice rules are configured in .sbomlet.policy.toml.
 
 **Package counts:**
 
-- Total packages: 423
+- Total packages: 426
 - apk: 17
-- npm: 405
+- npm: 408
 - pypi: 1
 - Production packages: 15
-- Development-only packages: 408
+- Development-only packages: 411
 - Container packages: 19
 - Unknown license: 0
 
@@ -164,6 +164,7 @@ The packages listed below carry copyleft or special license obligations in at le
 | @napi-rs/wasm-runtime                             | npm       | 1.1.5   | MIT                  | .       |
 | @package-json/types                               | npm       | 0.0.12  | MIT                  | .       |
 | @pkgr/core                                        | npm       | 0.3.6   | MIT                  | .       |
+| @stylistic/eslint-plugin                          | npm       | 5.10.0  | MIT                  | .       |
 | @tybys/wasm-util                                  | npm       | 0.10.2  | MIT                  | .       |
 | @types/bun                                        | npm       | 1.3.14  | MIT                  | .       |
 | @types/debug                                      | npm       | 4.1.13  | MIT                  | .       |
@@ -277,7 +278,9 @@ The packages listed below carry copyleft or special license obligations in at le
 | eslint-plugin-write-good-comments-2               | npm       | 1.2.7   | MIT                  | .       |
 | eslint-scope                                      | npm       | 9.1.2   | BSD-2-Clause         | .       |
 | eslint-visitor-keys                               | npm       | 3.4.3   | Apache-2.0           | .       |
+| eslint-visitor-keys                               | npm       | 4.2.1   | Apache-2.0           | .       |
 | eslint-visitor-keys                               | npm       | 5.0.1   | Apache-2.0           | .       |
+| espree                                            | npm       | 10.4.0  | BSD-2-Clause         | .       |
 | espree                                            | npm       | 11.2.0  | BSD-2-Clause         | .       |
 | esprima                                           | npm       | 4.0.1   | BSD-2-Clause         | .       |
 | esquery                                           | npm       | 1.7.0   | BSD-3-Clause         | .       |

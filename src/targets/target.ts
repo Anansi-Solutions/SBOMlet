@@ -39,14 +39,18 @@ export interface Target {
  */
 function findRepoRoot(startDir: string): string | undefined {
   let current = startDir;
+
   for (;;) {
     if (existsSync(join(current, ".git"))) {
       return current;
     }
+
     const parent = dirname(current);
+
     if (parent === current) {
       return undefined;
     }
+
     current = parent;
   }
 }
@@ -67,6 +71,7 @@ export function resolveTarget(targetArg: string, cwd?: string): Target {
         `(expected ${join(dir, "yarn.lock")}) — use --repo-root for poetry/uv targets`,
     );
   }
+
   // The cache key reads both manifest files, so package.json presence is validated up front too.
   if (!existsSync(join(dir, "package.json"))) {
     throw new Error(

@@ -22,13 +22,18 @@ function isTableRow(line: string): boolean {
 /** Split a table row into trimmed cells, honoring escaped pipes (`\|`). */
 function splitCells(row: string): string[] {
   const inner = row.trim().replace(/^\|/, "").replace(/\|$/, "");
+
   return inner.split(/(?<!\\)\|/).map((cell) => cell.trim());
 }
 
 /** A separator row: every cell is GFM dashes (optionally colon-aligned). */
 function isSeparatorRow(line: string): boolean {
-  if (!isTableRow(line)) return false;
+  if (!isTableRow(line)) {
+    return false;
+  }
+
   const cells = splitCells(line);
+
   return cells.length > 0 && cells.every((cell) => /^:?-+:?$/.test(cell));
 }
 
@@ -37,20 +42,30 @@ function formatTable(block: readonly string[]): string[] {
   const rows = block.map(splitCells);
   const columns = Math.max(...rows.map((cells) => cells.length));
   const widths: number[] = [];
+
   for (let column = 0; column < columns; column += 1) {
     let width = 3; // a separator needs at least "---"
+
     rows.forEach((cells, rowIndex) => {
       // the separator row is regenerated, never measured
-      if (rowIndex !== 1) width = Math.max(width, (cells[column] ?? "").length);
+      if (rowIndex !== 1) {
+        width = Math.max(width, (cells[column] ?? "").length);
+      }
     });
     widths.push(width);
   }
+
   return rows.map((cells, rowIndex) => {
     const padded = widths.map((width, column) => {
-      if (rowIndex === 1) return "-".repeat(width);
+      if (rowIndex === 1) {
+        return "-".repeat(width);
+      }
+
       const cell = cells[column] ?? "";
+
       return cell + " ".repeat(width - cell.length);
     });
+
     return `| ${padded.join(" | ")} |`;
   });
 }
@@ -61,26 +76,34 @@ export function alignTables(markdown: string): string {
   const out: string[] = [];
   let inFence = false;
   let i = 0;
+
   while (i < lines.length) {
     const line = lines[i]!;
+
     if (FENCE.test(line)) {
       inFence = !inFence;
       out.push(line);
       i += 1;
       continue;
     }
+
     const next = lines[i + 1];
+
     if (!inFence && isTableRow(line) && next !== undefined && isSeparatorRow(next)) {
       const block: string[] = [];
+
       while (i < lines.length && !FENCE.test(lines[i]!) && isTableRow(lines[i]!)) {
         block.push(lines[i]!);
         i += 1;
       }
+
       out.push(...formatTable(block));
       continue;
     }
+
     out.push(line);
     i += 1;
   }
+
   return out.join("\n");
 }

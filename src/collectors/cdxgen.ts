@@ -136,25 +136,32 @@ export function computeCacheKey(
   manifestFiles: readonly ManifestEntry[],
 ): string {
   const hash = createHash("sha256");
+
   for (const entry of manifestFiles) {
     const file = typeof entry === "string" ? entry : entry.file;
     const dir = typeof entry === "string" ? target.dir : entry.dir;
     const path = join(dir, file);
+
     // Python targets bypass resolveTarget's yarn-manifest validation, so a missing pyproject.toml
     // first surfaces here - name the target identity and the expected absolute path.
     if (!existsSync(path)) {
       throw new Error(`target "${target.identity}" is missing ${file}: expected ${path}`);
     }
+
     const bytes = readFileSync(path);
+
     hash.update(`file:${file}:${bytes.length}\0`).update(bytes);
   }
+
   if (target.workspacePath !== undefined) {
     hash.update(`workspace:${target.workspacePath}\0`);
   }
+
   hash.update(`tool:${tool.name}\0${tool.version}\0`);
   for (const arg of args) {
     hash.update(`arg:${arg}\0`);
   }
+
   return hash.digest("hex");
 }
 
@@ -185,12 +192,15 @@ export async function collectWithCdxgen(
   if (!existsSync(outFile)) {
     throw new Error(`cdxgen produced no output file at ${outFile}\n` + `invocation: ${invocation}`);
   }
+
   // Read outside the parse try: an I/O failure (permissions, transient Windows lock) must surface
   // as itself, not as a misleading "not valid JSON" message.
   const rawOutput = readFileSync(outFile, "utf8");
   let specVersion: unknown;
+
   try {
     const parsed: unknown = JSON.parse(rawOutput);
+
     specVersion = (parsed as { specVersion?: unknown }).specVersion;
   } catch (error) {
     throw new Error(
@@ -199,6 +209,7 @@ export async function collectWithCdxgen(
       { cause: error },
     );
   }
+
   if (specVersion !== "1.6") {
     throw new Error(
       `cdxgen output specVersion is ${JSON.stringify(specVersion)}, expected "1.6" — ` +

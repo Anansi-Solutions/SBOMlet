@@ -82,6 +82,7 @@ describe("npmIntroductions", () => {
 
   test("direct deps are marked direct with empty introducedBy and no path", () => {
     const a = intro.get("pkg:npm/a@1.0.0");
+
     expect(a).toBeDefined();
     expect(a!.direct).toBe(true);
     expect(a!.introducedBy).toEqual([]);
@@ -91,6 +92,7 @@ describe("npmIntroductions", () => {
 
   test("a transitive's introducedBy is the sorted-unique SET of direct parents (multi-parent)", () => {
     const c = intro.get("pkg:npm/c@3.0.0");
+
     expect(c).toBeDefined();
     expect(c!.direct).toBe(false);
     // c is reached via a AND b (and via a's dup-purl variant, which unions to a)
@@ -99,21 +101,25 @@ describe("npmIntroductions", () => {
 
   test("transitive path is a deterministic tie-broken shortest root→purl chain", () => {
     const c = intro.get("pkg:npm/c@3.0.0");
+
     // shortest paths root→a→c and root→b→c tie at length 3; tie-break expands
     // frontier in compareCodeUnits purl order, so a (< b) wins.
     expect(c!.path).toEqual(["pkg:npm/a@1.0.0", "pkg:npm/c@3.0.0"]);
     const d = intro.get("pkg:npm/d@4.0.0");
+
     expect(d!.path).toEqual(["pkg:npm/a@1.0.0", "pkg:npm/c@3.0.0", "pkg:npm/d@4.0.0"]);
   });
 
   test("dup-purl bom-refs union to one purl node — no self-loop, no duplicate entry", () => {
     // a appears under two bom-refs; the provenance map has exactly one a entry.
     const a = intro.get("pkg:npm/a@1.0.0");
+
     expect(a!.introducedBy).not.toContain("pkg:npm/a@1.0.0");
   });
 
   test("cycle is bounded: d→a→c→d does not loop and a never appears in its own path", () => {
     const d = intro.get("pkg:npm/d@4.0.0");
+
     expect(d!.path).not.toContain("pkg:npm/d@4.0.0"[0]); // sanity
     // d's introducedBy is c only (the cycle d→a does not make a a parent OF d)
     expect(d!.introducedBy).toEqual(["pkg:npm/c@3.0.0"]);
@@ -128,6 +134,7 @@ describe("npmIntroductions", () => {
     const b = npmIntroductions(SYNTH_BOM);
     const serialize = (m: ReadonlyMap<string, unknown>): string =>
       JSON.stringify([...m.entries()].sort());
+
     expect(serialize(a)).toBe(serialize(b));
   });
 
@@ -141,6 +148,7 @@ describe("npmIntroductions", () => {
     };
     const serialize = (m: ReadonlyMap<string, unknown>): string =>
       JSON.stringify([...m.entries()].sort());
+
     expect(serialize(npmIntroductions(reordered))).toBe(serialize(npmIntroductions(SYNTH_BOM)));
   });
 
@@ -172,6 +180,7 @@ describe("npmIntroductions", () => {
     };
     const intro = npmIntroductions(dupBom);
     const n = intro.get("pkg:npm/n@1");
+
     expect(n).toBeDefined();
     // The emitted path must be the REAL chain [y, p, n]; never [x, p, n].
     expect(n!.path).toEqual(["pkg:npm/y@1", "pkg:npm/p@1", "pkg:npm/n@1"]);
@@ -179,6 +188,7 @@ describe("npmIntroductions", () => {
     expect(n!.introducedBy).toEqual(["pkg:npm/p@1"]);
     // m is reached only via p1; its path is the real [x, p, m].
     const m = intro.get("pkg:npm/m@1");
+
     expect(m!.path).toEqual(["pkg:npm/x@1", "pkg:npm/p@1", "pkg:npm/m@1"]);
   });
 
@@ -210,6 +220,7 @@ describe("npmIntroductions", () => {
     };
     const serialize = (m: ReadonlyMap<string, unknown>): string =>
       JSON.stringify([...m.entries()].sort());
+
     expect(serialize(npmIntroductions(reordered))).toBe(serialize(npmIntroductions(dupBom)));
   });
 
@@ -254,6 +265,7 @@ describe("npmIntroductions", () => {
     };
     const serialize = (m: ReadonlyMap<string, unknown>): string =>
       JSON.stringify([...m.entries()].sort());
+
     expect(serialize(npmIntroductions(permuted))).toBe(serialize(npmIntroductions(dupRefBom)));
   });
 
@@ -305,6 +317,7 @@ describe("npmIntroductions", () => {
     };
     const intro = npmIntroductions(trimmedBom);
     const p = intro.get("pkg:npm/p@1");
+
     expect(p).toBeDefined();
     // p is a true orphan: no path (op unreachable) AND no introducedBy.
     expect(p!.path).toBeUndefined();
@@ -318,6 +331,7 @@ describe("npmIntroductions", () => {
     // Sanity: when the parent IS reachable, introducedBy + path both stand.
     const intro = npmIntroductions(SYNTH_BOM);
     const c = intro.get("pkg:npm/c@3.0.0");
+
     expect(c!.introducedBy).toEqual(["pkg:npm/a@1.0.0", "pkg:npm/b@2.0.0"]);
     expect(c!.path).toEqual(["pkg:npm/a@1.0.0", "pkg:npm/c@3.0.0"]);
   });
@@ -388,6 +402,7 @@ describe("npmIntroductions", () => {
     };
     const intro = npmIntroductions(dupReachBom);
     const x = intro.get("pkg:npm/x@1.0.0");
+
     expect(x).toBeDefined();
     // introducedBy must be [b] only — NOT [b, p]. The p→x edge is on a
     // root-disconnected variant (P_p2); p is not a REAL introducer of x.
@@ -397,6 +412,7 @@ describe("npmIntroductions", () => {
     expect(x!.direct).toBe(false);
     // p stays a normal root-reachable transitive (introduced by a, via P_p1).
     const p = intro.get("pkg:npm/p@1.0.0");
+
     expect(p!.direct).toBe(false);
     expect(p!.introducedBy).toEqual(["pkg:npm/a@1.0.0"]);
     expect(p!.path).toEqual(["pkg:npm/a@1.0.0", "pkg:npm/p@1.0.0"]);
@@ -427,6 +443,7 @@ describe("npmIntroductions", () => {
     };
     const intro = npmIntroductions(partialBom);
     const t = intro.get("pkg:npm/t@1");
+
     expect(t).toBeDefined();
     // b dropped (root-disconnected); only the reachable parent a survives.
     expect(t!.introducedBy).toEqual(["pkg:npm/a@1"]);
@@ -470,6 +487,7 @@ describe("npmIntroductions", () => {
       ],
     };
     const intro = npmIntroductions(noRootBomRef);
+
     // ABSTAIN: empty map → every package renders the honest "—" residual.
     expect(intro.size).toBe(0);
     // Specifically, a (a TRUE direct dep) must NOT be present as a mislabeled
@@ -499,6 +517,7 @@ describe("npmIntroductions", () => {
       ],
     };
     const intro = npmIntroductions(rootBomRefNotAnchored);
+
     expect(intro.size).toBe(0);
     expect(intro.get("pkg:npm/a@1")).toBeUndefined();
   });
@@ -524,6 +543,7 @@ describe("npmIntroductions", () => {
       ],
     };
     const intro = npmIntroductions(wellFormed);
+
     expect(intro.size).toBe(2);
     expect(intro.get("pkg:npm/a@1")!.direct).toBe(true);
     expect(intro.get("pkg:npm/b@1")!.direct).toBe(false);
