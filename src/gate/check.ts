@@ -39,9 +39,11 @@ export async function runCheck(opts: GenerateOptions): Promise<CheckResult> {
   if (opts.intensive === true) {
     throw new Error("check never scans — --intensive is only valid on generate");
   }
+
   if (opts.dumpModelPath !== undefined) {
     throw new Error("check performs no writes — --dump-model is only valid on generate");
   }
+
   // Force check mode so the ENRICH stage NEVER fetches or writes: a miss that needs enrichment is a
   // stale condition (exit 2), never a network call. This is the zero-network clause - buildOutputs
   // stays hermetic against the committed cache. (runGenerate forces generate; the shared
@@ -55,14 +57,17 @@ export async function runCheck(opts: GenerateOptions): Promise<CheckResult> {
     [resolveFrom(opts.baseDir, opts.outputPath), outputs.licensesMd],
     [resolveFrom(opts.baseDir, opts.noticesPath), outputs.noticesMd],
   ];
+
   if (opts.cyclonedxPath !== undefined && outputs.cyclonedxJson !== undefined) {
     pairs.push([resolveFrom(opts.baseDir, opts.cyclonedxPath), outputs.cyclonedxJson]);
   }
 
   // Locked stderr report shapes; every path through sanitizeForLog.
   const staleFiles: string[] = [];
+
   for (const [path, rendered] of pairs) {
     let committed: string;
+
     try {
       committed = readFileSync(path, "utf8");
     } catch {
@@ -70,6 +75,7 @@ export async function runCheck(opts: GenerateOptions): Promise<CheckResult> {
       process.stderr.write(`check stale: ${sanitizeForLog(path)} is missing\n`);
       continue;
     }
+
     // Normalize the committed text only: the in-memory render is LF by
     // construction and never touches disk on the comparison path.
     if (committed.replaceAll("\r\n", "\n") !== rendered) {
@@ -97,6 +103,7 @@ export async function runCheck(opts: GenerateOptions): Promise<CheckResult> {
   if (staleFiles.length === 0) {
     process.stderr.write(`check: ok (${pairs.length} outputs verified)\n`);
   }
+
   return { violations, staleFiles };
 }
 

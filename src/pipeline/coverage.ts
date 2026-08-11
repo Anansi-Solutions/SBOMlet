@@ -51,6 +51,7 @@ function terraformSkipReason(
 ): string | undefined {
   if (lockfileDir === undefined) return undefined;
   const modulesJsonPath = join(lockfileDir, ".terraform", "modules", "modules.json");
+
   // The PRESENCE check requires a REGULAR FILE: a directory-named modules.json is treated as
   // ABSENT, routing to the filesystem-signal gate (which fails loud) instead of a raw EISDIR read.
   // Mirrors the collector via the shared {@link modulesJsonIsPresentFile} verb.
@@ -64,16 +65,20 @@ function terraformSkipReason(
     if (terraformComponentCount(lockfileText, "") === 0) {
       return `${lockfileName} has no providers and no external modules`;
     }
+
     return undefined;
   }
+
   // Size gate FIRST - before the read, mirroring the collector at terraform.ts and the bun.lock
   // precedent so the "size gate fires before any read, both files, every entry point" invariant is
   // exact.
   assertTerraformLockSize(modulesJsonPath);
   const modulesJsonText = readFileSync(modulesJsonPath, "utf8");
+
   if (terraformComponentCount(lockfileText, modulesJsonText) === 0) {
     return `${lockfileName} has no providers and no external modules`;
   }
+
   return undefined;
 }
 
@@ -132,15 +137,19 @@ export function coverageSkipReason(
   if (isLockfileEmpty(lockfileText)) {
     return `${lockfileName} is empty (whitespace only)`;
   }
+
   if (lockfileName === ".terraform.lock.hcl") {
     return terraformSkipReason(lockfileName, lockfileText, lockfileDir);
   }
+
   // Strict === 0 on a number|undefined counter: undefined (v1/garbage - unknown count) falls
   // through to the scan, where the collector's loud throw or the zero-component hard-fail fires.
   const arm = ZERO_THIRD_PARTY_ARMS.get(lockfileName);
+
   if (arm !== undefined && arm.count(lockfileText) === 0) {
     return `${lockfileName} has no third-party entries (${arm.reason})`;
   }
+
   return undefined;
 }
 
@@ -217,12 +226,14 @@ export function classifyCoverage(
   if (coverageSkipReason(lockfileName, lockfileText, lockfileDir) !== undefined) {
     return "skip";
   }
+
   if (componentCount === 0) {
     throw new Error(
       `target ${identity}: ${lockfileName} is non-empty but the scan ` +
         `produced zero components — coverage assertion failed`,
     );
   }
+
   return "include";
 }
 
@@ -231,6 +242,7 @@ export function componentCountOf(sbom: unknown): number {
   // Derive the count from the shared SbomDocument boundary (which already owns the "components?":
   // "unknown[]" shape) instead of a fourth ad-hoc narrow.
   const doc = SbomDocument(sbom);
+
   if (doc instanceof type.errors) return 0;
   return doc.components?.length ?? 0;
 }

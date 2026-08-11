@@ -68,10 +68,13 @@ const SPDX_FULL = spdxFullData as Record<string, SpdxListEntry>;
 function fencedBlock(content: string): string[] {
   const normalized = content.replace(/\r\n|\r/g, "\n").replace(/\n+$/, "");
   let longestRun = 0;
+
   for (const run of normalized.match(/`+/g) ?? []) {
     if (run.length > longestRun) longestRun = run.length;
   }
+
   const fence = "`".repeat(Math.max(3, longestRun + 1));
+
   return [fence, ...normalized.split("\n"), fence];
 }
 
@@ -86,8 +89,10 @@ function licenseLabelOf(pkg: PackageEntry): string {
     if (pkg.finding.confidence === "imprecise") {
       return `${pkg.finding.impreciseFamily ?? "unknown"} (imprecise)`;
     }
+
     return pkg.finding.expression ?? "unknown";
   }
+
   return pkg.licenseClaims.length === 0
     ? "unknown"
     : [...new Set(pkg.licenseClaims.map((claim) => claim.raw))].join(", ");
@@ -101,6 +106,7 @@ function licenseLabelOf(pkg: PackageEntry): string {
  */
 function qualifiesForSection(pkg: PackageEntry): boolean {
   const attribution = pkg.attribution;
+
   if (attribution === undefined) return false;
   return (
     attribution.copyrightLines.length > 0 ||
@@ -126,33 +132,41 @@ function packageAttributionLines(
     `License: ${escapeCell(licenseLabelOf(pkg))}`,
     "",
   ];
+
   if (attribution.copyrightLines.length > 0) {
     for (const line of attribution.copyrightLines) {
       lines.push(`- ${escapeCell(line)}`);
     }
+
     lines.push("");
   } else if (attribution.author !== undefined) {
     // Author fallback only when no copyright line was located - and it is attribution, never a
     // copyright claim we did not find.
     lines.push(`Author: ${escapeCell(attribution.author)}`, "");
   }
+
   for (const notice of attribution.noticeTexts) {
     lines.push("NOTICE:", "", ...fencedBlock(notice), "");
   }
+
   for (const text of attribution.verbatimTexts ?? []) {
     lines.push("Verbatim license text:", "", ...fencedBlock(text), "");
   }
+
   return lines;
 }
 
 /** Per-package attribution sections. */
 function renderPackageSections(sorted: readonly PackageEntry[]): string[] {
   const lines: string[] = ["## Package attributions", ""];
+
   for (const pkg of sorted) {
     const attribution = pkg.attribution;
+
     if (attribution === undefined || !qualifiesForSection(pkg)) continue;
     lines.push(...packageAttributionLines(pkg, attribution));
   }
+
   return lines;
 }
 
@@ -162,6 +176,7 @@ function renderPackageSections(sorted: readonly PackageEntry[]): string[] {
  */
 function renderUnknownSection(sorted: readonly PackageEntry[]): string[] {
   const unknown = sorted.filter(isUnknownLicense);
+
   if (unknown.length === 0) return [];
   const lines: string[] = [
     "## Packages with unknown licenses",
@@ -169,11 +184,13 @@ function renderUnknownSection(sorted: readonly PackageEntry[]): string[] {
     "No license could be determined for these packages; no license text is included:",
     "",
   ];
+
   for (const pkg of unknown) {
     lines.push(
       `- ${escapeCell(pkg.name)}@${escapeCell(pkg.version)} — unknown license, no text included`,
     );
   }
+
   lines.push("");
   return lines;
 }
@@ -185,20 +202,26 @@ function collectReferencedLicenses(sorted: readonly PackageEntry[]): {
 } {
   const ids = new Set<string>();
   const exceptions = new Set<string>();
+
   for (const pkg of sorted) {
     const expression = pkg.finding?.expression;
+
     if (expression === undefined || expression === null) continue;
     let node: ExpressionNode;
+
     try {
       node = parse(expression) as ExpressionNode;
     } catch {
       // Normalized expressions always parse; skip-don't-throw on the tolerance path.
       continue;
     }
+
     const leaves = leafIds(node);
+
     for (const id of leaves.ids) ids.add(id);
     for (const exception of leaves.exceptions) exceptions.add(exception);
   }
+
   return { ids, exceptions };
 }
 
@@ -210,9 +233,11 @@ function collectReferencedLicenses(sorted: readonly PackageEntry[]): {
 function renderLicenseTextsSection(sorted: readonly PackageEntry[]): string[] {
   const { ids, exceptions } = collectReferencedLicenses(sorted);
   const lines: string[] = ["## License texts", ""];
+
   for (const id of [...ids].sort(compareCodeUnits)) {
     lines.push(`### ${escapeCell(id)}`, "");
     const entry = SPDX_FULL[id];
+
     if (entry === undefined) {
       lines.push(
         `Flagged: no canonical text is available for license identifier ${escapeCell(id)}.`,
@@ -220,14 +245,17 @@ function renderLicenseTextsSection(sorted: readonly PackageEntry[]): string[] {
       );
       continue;
     }
+
     lines.push(...fencedBlock(entry.licenseText), "", CANONICAL_MARKER, "");
   }
+
   for (const exception of [...exceptions].sort(compareCodeUnits)) {
     lines.push(
       `Flagged: license exception ${escapeCell(exception)} is referenced by a package license expression; the SPDX license list carries no exception texts — review the package's license files.`,
       "",
     );
   }
+
   return lines;
 }
 

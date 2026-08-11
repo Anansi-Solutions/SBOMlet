@@ -15,9 +15,11 @@ import { type Policy } from "../policy/schema";
  */
 function unusedRuleReason(policy: Policy, ruleId: string): string {
   const match = /^(compatible|clarify)\[(\d+)\]$/.exec(ruleId);
+
   if (match === null) return "";
   const index = Number(match[2]);
   const rule = match[1] === "compatible" ? policy.compatible[index] : policy.clarify[index];
+
   return rule?.reason ?? "";
 }
 
@@ -44,6 +46,7 @@ export function sanitizeForLog(value: string): string {
     /[\u0000-\u001f\u007f-\u009f]/g,
     " ",
   );
+
   return flattened.length > MAX_LOG_FIELD
     ? `${flattened.slice(0, MAX_LOG_FIELD)} ...[truncated]`
     : flattened;
@@ -68,6 +71,7 @@ export function writePolicySummary(
   usedClarifyIndices: ReadonlySet<number>,
 ): void {
   const counts = { ok: 0, warn: 0, fail: 0, suppressed: 0 };
+
   for (const verdict of verdicts) counts[verdict.status] += 1;
   process.stderr.write(
     `policy: ${counts.fail} fail, ${counts.warn} warn, ` +
@@ -84,23 +88,27 @@ export function writePolicySummary(
   // mirrors the counts-line above so the denominator is unambiguous and never read as a package
   // count.
   const impreciseCount = verdicts.filter((v) => v.rule.startsWith("default:imprecise")).length;
+
   if (impreciseCount > 0) {
     process.stderr.write(
       `policy: ${impreciseCount} imprecise (review / disambiguate via ` +
         `[[clarify]]) (${impreciseCount} verdicts)\n`,
     );
   }
+
   // Surface the assessment-conflict count on its OWN line (the counts-line shape above is
   // unchanged). A conflict:scancode verdict is a FAIL (a subset of the fail count) - the in-depth
   // scan disagrees with the quick check and a human must resolve it via [[clarify]]. Printed only
   // when any exist, so policies with no conflicts keep byte-identical output.
   const conflictCount = verdicts.filter((v) => v.rule === "conflict:scancode").length;
+
   if (conflictCount > 0) {
     process.stderr.write(
       `policy: ${conflictCount} assessment conflict(s) — resolve via ` +
         `[[clarify]] (${conflictCount} verdicts)\n`,
     );
   }
+
   // Surface how many would-be fails were dev-downgraded to warn on their own line (the counts-line
   // shape above is unchanged). These are a subset of the warn count - a build-time-only
   // copyleft/unknown that carries no distribution obligation. Printed only when any exist, so
@@ -109,12 +117,14 @@ export function writePolicySummary(
   const devDowngradedCount = verdicts.filter(
     (v) => v.status === "warn" && v.reason.includes("downgraded to warn: dev-only occurrence"),
   ).length;
+
   if (devDowngradedCount > 0) {
     process.stderr.write(
       `policy: ${devDowngradedCount} dev-downgraded (would-be fail on a ` +
         `dev-only occurrence → warn) (${devDowngradedCount} verdicts)\n`,
     );
   }
+
   // Verdicts are already sorted compareCodeUnits on (purl, occurrenceTarget) - print fail/warn
   // lines in that deterministic order.
   for (const verdict of verdicts) {
@@ -126,6 +136,7 @@ export function writePolicySummary(
       );
     }
   }
+
   for (const ruleId of unusedRuleIds(policy, verdicts, usedClarifyIndices)) {
     process.stderr.write(
       `policy warning: unused entry ${sanitizeForLog(ruleId)} — ` +

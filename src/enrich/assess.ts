@@ -114,10 +114,12 @@ export async function assessPackages(
 function replayMemo(packages: PackageEntry[], memo: Map<string, ScancodeMemoEntry>): void {
   packages.forEach((entry, index) => {
     const memoEntry = getMemoEntry(memo, entry.purl);
+
     // A no-result entry (license null) appends nothing - a scan-skip marker, never a disagreement
     // with a positive registry answer.
     if (memoEntry === undefined || memoEntry.license === null) return;
     const withClaim = withCacheClaim(entry, memoEntry.license, "scancode");
+
     packages[index] = withReplayAttribution(withClaim, memoEntry);
   });
 }
@@ -158,6 +160,7 @@ async function scanFullSet(
     verbose: opts.verbose,
     counts: { scanned: 0, hits: 0, noLocalSources: 0, unsupported: 0 },
   };
+
   for (const entry of packages) await analyzeOne(entry, ctx);
   reportCounts(ctx.counts);
 }
@@ -172,12 +175,16 @@ async function analyzeOne(entry: PackageEntry, ctx: ScanContext): Promise<void> 
     ctx.counts.hits += 1;
     return;
   }
+
   const parsed = parsePurl(entry.purl);
+
   if (parsed === undefined || (parsed.type !== "npm" && parsed.type !== "pypi")) {
     ctx.counts.unsupported += 1;
     return;
   }
+
   const dirs = sourceDirsFor(entry.purl, ctx.intensive.targetDirs);
+
   if (dirs.length === 0) {
     ctx.counts.noLocalSources += 1;
     if (ctx.verbose) {
@@ -185,9 +192,12 @@ async function analyzeOne(entry: PackageEntry, ctx: ScanContext): Promise<void> 
         `intensive skip: ${sanitizeForLog(entry.purl)} — ` + `sources not locally present\n`,
       );
     }
+
     return;
   }
+
   const resolved = await scanDirs(dirs, ctx.scanOpts);
+
   ctx.counts.scanned += 1;
   putMemoEntry(ctx.memo, entry.purl, memoEntryFor(resolved), ctx.now);
 }
@@ -199,8 +209,10 @@ async function scanDirs(
 ): Promise<ScancodeResolution | null> {
   for (const dir of dirs) {
     const resolved = await scanPackageSources(dir, scanOpts);
+
     if (resolved !== null) return resolved;
   }
+
   return null;
 }
 
@@ -216,6 +228,7 @@ function memoEntryFor(resolved: ScancodeResolution | null): ScancodeMemoEntry {
       via: `${SCANCODE_TOOL.name}@${SCANCODE_TOOL.version}/no-answer`,
     };
   }
+
   return {
     license: resolved.raw,
     via: resolved.via,

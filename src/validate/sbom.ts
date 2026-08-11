@@ -35,6 +35,7 @@ const SbomRootPurl = type({
 /** The root component purl, or undefined for any absent/malformed metadata. */
 export function rootPurlOf(sbom: unknown): string | undefined {
   const result = SbomRootPurl(sbom);
+
   return result instanceof type.errors ? undefined : result;
 }
 
@@ -62,7 +63,9 @@ const EvidenceOrAbsent = type("unknown").pipe((value): { licenses?: unknown[] } 
   if (value === null || typeof value !== "object" || Array.isArray(value)) {
     return undefined;
   }
+
   const licenses = (value as { licenses?: unknown }).licenses;
+
   return Array.isArray(licenses) ? { licenses } : {};
 });
 

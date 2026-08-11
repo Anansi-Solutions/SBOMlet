@@ -253,10 +253,12 @@ afterEach(() => {
 /** Writes the given files into a fresh temp dir and returns it as a Target. */
 function makeTargetWithFiles(files: Record<string, string>): Target {
   const dir = mkdtempSync(join(tmpdir(), "licenses-test-"));
+
   tempDirs.push(dir);
   for (const [name, content] of Object.entries(files)) {
     writeFileSync(join(dir, name), content);
   }
+
   return { dir, identity: "test/synthetic" };
 }
 
@@ -266,6 +268,7 @@ function makeNugetTarget(lock: string): Target {
 
 function makeOutDir(): string {
   const dir = mkdtempSync(join(tmpdir(), "licenses-test-out-"));
+
   tempDirs.push(dir);
   return dir;
 }
@@ -286,6 +289,7 @@ async function scanLock(lock: string): Promise<ScannedDoc> {
   const raw = readFileSync(result.sbomPath, "utf8");
   const doc = JSON.parse(raw) as Record<string, unknown>;
   const components = (doc["components"] ?? []) as Array<Record<string, unknown>>;
+
   return { target, ...result, raw, doc, components };
 }
 
@@ -301,11 +305,13 @@ describe("collectWithNugetLock — determinism", () => {
   test("two runs over the same lockfile produce byte-identical bom.json", async () => {
     const first = await scanLock(V1_LOCK);
     const second = await scanLock(V1_LOCK);
+
     expect(first.raw).toBe(second.raw);
   });
 
   test("the document is exactly { bomFormat, specVersion, components } with no volatile fields", async () => {
     const { doc, raw } = await scanLock(V1_LOCK);
+
     expect(Object.keys(doc)).toEqual(["bomFormat", "specVersion", "components"]);
     expect(doc["bomFormat"]).toBe("CycloneDX");
     expect(doc["specVersion"]).toBe("1.6");
@@ -317,17 +323,20 @@ describe("collectWithNugetLock — determinism", () => {
     const { components } = await scanLock(MULTI_SECTION_LOCK);
     const purls = componentPurls(components);
     const sorted = [...purls].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
+
     expect(purls).toEqual(sorted);
   });
 
   test("a key-order-permuted lock emits byte-identical output (sort happens after the walk)", async () => {
     const original = await scanLock(V1_LOCK);
     const permuted = await scanLock(V1_LOCK_PERMUTED);
+
     expect(permuted.raw).toBe(original.raw);
   });
 
   test("the serialized document ends with a trailing LF", async () => {
     const { raw } = await scanLock(V1_LOCK);
+
     expect(raw.endsWith("\n")).toBe(true);
   });
 });
@@ -352,6 +361,7 @@ describe("NUGET_COLLECTOR_TOOL", () => {
 describe("collectWithNugetLock — identity and emission", () => {
   test("a v1 lock emits exactly its non-Project entries as pkg:nuget purls", async () => {
     const { components } = await scanLock(V1_LOCK);
+
     expect(componentPurls(components)).toEqual([
       "pkg:nuget/Microsoft.NETCore.Platforms@1.1.0",
       "pkg:nuget/Newtonsoft.Json@13.0.4",
@@ -363,6 +373,7 @@ describe("collectWithNugetLock — identity and emission", () => {
   test("id casing is VERBATIM from the lock key; version is resolved, never requested", async () => {
     const { components } = await scanLock(V1_LOCK);
     const json = components.find((c) => c["name"] === "Newtonsoft.Json");
+
     expect(json).toMatchObject({
       type: "library",
       name: "Newtonsoft.Json",
@@ -375,6 +386,7 @@ describe("collectWithNugetLock — identity and emission", () => {
 
   test("a v2 CPM lock emits Direct and CentralTransitive entries alike", async () => {
     const { components } = await scanLock(V2_CPM_LOCK);
+
     expect(componentPurls(components)).toEqual([
       "pkg:nuget/Microsoft.Extensions.Logging@9.0.9",
       "pkg:nuget/Newtonsoft.Json@13.0.4",
@@ -383,17 +395,20 @@ describe("collectWithNugetLock — identity and emission", () => {
 
   test("type Project entries are excluded — no version-less first-party purl ever exists", async () => {
     const { components, raw } = await scanLock(V2_CPM_LOCK);
+
     expect(components.some((c) => c["name"] === "fixture.lib")).toBe(false);
     expect(raw.includes("fixture.lib")).toBe(false);
   });
 
   test("an UNKNOWN entry type emits (exclusion is type === 'Project' only)", async () => {
     const { components } = await scanLock(TOLERANT_LOCK);
+
     expect(componentPurls(components)).toContain("pkg:nuget/Future.Kind@1.2.3");
   });
 
   test("distinct (id, resolved) pairs across ALL sections emit once each; a two-version id emits twice", async () => {
     const { components } = await scanLock(MULTI_SECTION_LOCK);
+
     expect(componentPurls(components)).toEqual([
       "pkg:nuget/Multi.Version@1.0.0",
       "pkg:nuget/Multi.Version@2.0.0",
@@ -404,6 +419,7 @@ describe("collectWithNugetLock — identity and emission", () => {
 
   test("malformed entries and non-record sections are skipped silently (tolerant walk)", async () => {
     const { components } = await scanLock(TOLERANT_LOCK);
+
     expect(componentPurls(components)).toEqual([
       "pkg:nuget/Future.Kind@1.2.3",
       "pkg:nuget/Good.Package@2.0.0",
@@ -414,6 +430,7 @@ describe("collectWithNugetLock — identity and emission", () => {
   test("build-metadata versions percent-encode + as %2B in the purl", async () => {
     const { components } = await scanLock(TOLERANT_LOCK);
     const meta = components.find((c) => c["name"] === "Meta.Package");
+
     expect(meta).toMatchObject({
       name: "Meta.Package",
       version: "1.0.0+build.5",
@@ -434,6 +451,7 @@ describe("collectWithNugetLock — identity and emission", () => {
       },
     });
     const { components } = await scanLock(lock);
+
     expect(componentPurls(components)).toEqual(["pkg:nuget/Rid.Only@1.0.0"]);
   });
 
@@ -448,6 +466,7 @@ describe("collectWithNugetLock — identity and emission", () => {
       },
     });
     const { components } = await scanLock(lock);
+
     expect(componentPurls(components)).toEqual(["pkg:nuget/Cpm.A@1.0.0", "pkg:nuget/Cpm.B@2.0.0"]);
   });
 
@@ -461,6 +480,7 @@ describe("collectWithNugetLock — identity and emission", () => {
       },
     });
     const { components } = await scanLock(lock);
+
     expect(componentPurls(components)).toEqual(["pkg:nuget/Ünïcode.Päckage@1.0.0"]);
   });
 
@@ -475,6 +495,7 @@ describe("collectWithNugetLock — identity and emission", () => {
       },
     });
     const { components } = await scanLock(lock);
+
     expect(componentPurls(components)).toEqual(["pkg:nuget/Shared.Name@1.0.0"]);
   });
 });
@@ -487,6 +508,7 @@ describe("nuget registry collector — CollectedSbom shape", () => {
   test("returns { sbom, targetIdentity } ONLY: no prodPurlSet, no firstPartyNames", async () => {
     const target = makeNugetTarget(V2_CPM_LOCK);
     const collector = collectors.get("nuget");
+
     expect(collector).toBeDefined();
     const result = await collector!.collect(
       { ...target, lockfile: "nuget" },
@@ -496,6 +518,7 @@ describe("nuget registry collector — CollectedSbom shape", () => {
         log: () => {},
       },
     );
+
     expect(Object.keys(result).sort()).toEqual(["sbom", "targetIdentity"]);
     expect("prodPurlSet" in result).toBe(false);
     expect("firstPartyNames" in result).toBe(false);
@@ -512,6 +535,7 @@ describe("collectWithNugetLock — contract and cache key", () => {
     const target = makeNugetTarget(V1_LOCK);
     const outDir = makeOutDir();
     const result = await collectWithNugetLock(target, { tempDir: outDir });
+
     expect(result.sbomPath).toBe(join(outDir, "bom.json"));
     expect(result.tool).toEqual(NUGET_COLLECTOR_TOOL);
     expect(typeof result.cacheKey).toBe("string");
@@ -522,6 +546,7 @@ describe("collectWithNugetLock — contract and cache key", () => {
     const result = await collectWithNugetLock(target, {
       tempDir: makeOutDir(),
     });
+
     expect(result.cacheKey).toBe(
       computeCacheKey(target, NUGET_COLLECTOR_TOOL, ["nuget-collector-v1"], ["packages.lock.json"]),
     );
@@ -535,6 +560,7 @@ describe("collectWithNugetLock — contract and cache key", () => {
 describe("collectWithNugetLock — failure modes", () => {
   test("missing packages.lock.json throws the target.ts-shaped error", async () => {
     const target = makeTargetWithFiles({});
+
     await expect(collectWithNugetLock(target, { tempDir: makeOutDir() })).rejects.toThrow(
       /missing packages\.lock\.json/,
     );
@@ -546,11 +572,13 @@ describe("collectWithNugetLock — failure modes", () => {
     // failure can only come from the size gate, not the parser.
     const oversize = `{${" ".repeat(cap)}}`;
     const target = makeNugetTarget(oversize);
+
     expect.assertions(3);
     try {
       await collectWithNugetLock(target, { tempDir: makeOutDir() });
     } catch (error) {
       const message = String(error);
+
       expect(message).toContain(join(target.dir, "packages.lock.json"));
       expect(message).toContain(String(cap + 2)); // actual size
       expect(message).toContain(String(cap)); // the cap
@@ -559,11 +587,13 @@ describe("collectWithNugetLock — failure modes", () => {
 
   test("non-JSON garbage fails loudly naming the path (the scan-failure path)", async () => {
     const target = makeNugetTarget("this is not json {{{");
+
     expect.assertions(2);
     try {
       await collectWithNugetLock(target, { tempDir: makeOutDir() });
     } catch (error) {
       const message = String(error);
+
       expect(message).toContain("not valid JSON");
       expect(message).toContain(join(target.dir, "packages.lock.json"));
     }
@@ -571,6 +601,7 @@ describe("collectWithNugetLock — failure modes", () => {
 
   test("an unsupported lock version throws naming it", async () => {
     const target = makeNugetTarget(V3_LOCK);
+
     await expect(collectWithNugetLock(target, { tempDir: makeOutDir() })).rejects.toThrow(
       /version 3 is not supported/,
     );

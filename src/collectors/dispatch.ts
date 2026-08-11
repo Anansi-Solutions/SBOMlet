@@ -34,25 +34,33 @@ const HEAD_LINES = 20;
  */
 export function selectJsGenerator(lockfileText: string): JsGenerator {
   const lines = lockfileText.split(/\r?\n/, HEAD_LINES);
+
   for (let i = 0; i < lines.length; i += 1) {
     const line = lines[i] as string;
+
     if (!/^"?__metadata"?:\s*$/.test(line)) {
       continue;
     }
+
     // Inside the __metadata block: indented lines only; the block ends at the first non-indented
     // line (the next top-level entry).
     for (let j = i + 1; j < lines.length; j += 1) {
       const inner = lines[j] as string;
+
       if (!/^[ \t]/.test(inner)) {
         break;
       }
+
       const match = /^[ \t]+version:[ \t]*(\d+)[ \t]*$/.exec(inner);
+
       if (match !== null) {
         return Number(match[1]) >= 8 ? "yarn-plugin" : "cdxgen";
       }
     }
+
     return "cdxgen"; // __metadata block without a parseable version
   }
+
   return "cdxgen"; // no __metadata block (empty, garbage, Yarn 1, ...)
 }
 

@@ -269,15 +269,19 @@ function requireText(
     problems.push(`${where}: missing required key "${key}"`);
     return undefined;
   }
+
   const value = stringOf(entry[key]);
+
   if (value === undefined) {
     problems.push(`${where}: key "${key}" must be a string`);
     return undefined;
   }
+
   if (value.trim() === "") {
     problems.push(`${where}: key "${key}" must be a non-empty string`);
     return undefined;
   }
+
   return value;
 }
 
@@ -294,14 +298,17 @@ function optionalText(
 ): string | undefined {
   if (!(key in entry)) return undefined;
   const value = stringOf(entry[key]);
+
   if (value === undefined) {
     problems.push(`${where}: key "${key}" must be a string`);
     return undefined;
   }
+
   if (value.trim() === "") {
     problems.push(`${where}: key "${key}" must be a non-empty string`);
     return undefined;
   }
+
   return value;
 }
 
@@ -317,13 +324,16 @@ function validateDocument(
 ): DocumentConfig | undefined {
   if (!("document" in root)) return undefined;
   const table = recordOf(root["document"]);
+
   if (table === undefined) {
     problems.push("document: must be a table ([document])");
     return undefined;
   }
+
   checkKeys(table, ["title", "preamble"], "document", problems);
   const title = optionalText(table, "title", "document", problems);
   const preamble = optionalText(table, "preamble", "document", problems);
+
   return {
     ...(title !== undefined ? { title } : {}),
     ...(preamble !== undefined ? { preamble } : {}),
@@ -355,26 +365,32 @@ function validateDockerDevelopmentEntry(
   problems: string[],
 ): DockerDevelopmentEntry | undefined {
   const entry = recordOf(rawEntry);
+
   if (entry === undefined) {
     problems.push(`${where}: must be a table`);
     return undefined;
   }
+
   checkKeys(entry, ["source", "reason"], where, problems);
   const source = requireText(entry, "source", where, problems);
   const reason = requireText(entry, "reason", where, problems);
+
   if (source === undefined || reason === undefined) return undefined;
   const before = problems.length;
+
   validatePath(source, where, problems);
   if (source.startsWith("docker:")) {
     problems.push(
       `${where}: source "${source}" must not start with "docker:" (the table already scopes the Dockerfile identity; the prefix would double up and could never match)`,
     );
   }
+
   if (seen.has(source)) {
     problems.push(
       `${where}: source "${source}" duplicates an earlier [[docker.development]] entry (the first match wins; the duplicate would be dead)`,
     );
   }
+
   if (problems.length !== before) return undefined;
   seen.add(source);
   return { source, reason };
@@ -392,12 +408,15 @@ function validateDockerDevelopment(
 ): DockerDevelopmentEntry[] {
   if (!("development" in table)) return [];
   const raw = table["development"];
+
   if (!Array.isArray(raw)) {
     problems.push("docker.development: must be an array of tables ([[docker.development]])");
     return [];
   }
+
   const development: DockerDevelopmentEntry[] = [];
   const seen = new Set<string>();
+
   raw.forEach((rawEntry, index) => {
     const entry = validateDockerDevelopmentEntry(
       rawEntry,
@@ -405,6 +424,7 @@ function validateDockerDevelopment(
       seen,
       problems,
     );
+
     if (entry !== undefined) development.push(entry);
   });
   return development;
@@ -416,31 +436,41 @@ function validateDocker(
 ): DockerConfig | undefined {
   if (!("docker" in root)) return undefined;
   const table = recordOf(root["docker"]);
+
   if (table === undefined) {
     problems.push("docker: must be a table ([docker])");
     return undefined;
   }
+
   checkKeys(table, ["ignore", "development"], "docker", problems);
   const development = validateDockerDevelopment(table, problems);
+
   if (!("ignore" in table)) return { ignore: [], development };
   const raw = table["ignore"];
+
   if (!Array.isArray(raw)) {
     problems.push("docker.ignore: must be an array of strings");
     return { ignore: [], development };
   }
+
   const ignore: string[] = [];
+
   raw.forEach((rawEntry, index) => {
     const where = `docker.ignore[${index}]`;
     const value = stringOf(rawEntry);
+
     if (value === undefined) {
       problems.push(`${where}: must be a string`);
       return;
     }
+
     if (value.trim() === "") {
       problems.push(`${where}: must be a non-empty string`);
       return;
     }
+
     const before = problems.length;
+
     validatePath(value, where, problems);
     if (problems.length === before) ignore.push(value);
   });
@@ -457,15 +487,19 @@ function validateDocker(
 function validateCache(root: Record<string, unknown>, problems: string[]): CacheConfig | undefined {
   if (!("cache" in root)) return undefined;
   const table = recordOf(root["cache"]);
+
   if (table === undefined) {
     problems.push("cache: must be a table ([cache])");
     return undefined;
   }
+
   checkKeys(table, ["dir"], "cache", problems);
   if (!("dir" in table)) return {};
   const dir = requireText(table, "dir", "cache", problems);
+
   if (dir === undefined) return {};
   const before = problems.length;
+
   validatePath(dir, "cache.dir", problems);
   if (problems.length !== before) return {};
   return { dir };
@@ -505,13 +539,17 @@ function validatePath(path: string, where: string, problems: string[]): void {
       `${where}: path "${path}" must use forward slashes only (target identities are forward-slash)`,
     );
   }
+
   if (path.startsWith("/") || path.endsWith("/")) {
     problems.push(`${where}: path "${path}" must not have a leading or trailing slash`);
   }
+
   const segments = path.split("/");
+
   if (segments.includes("..")) {
     problems.push(`${where}: path "${path}" must not contain ".." segments`);
   }
+
   if (segments.some((s) => s === "" || s === "." || s !== s.trim())) {
     problems.push(
       `${where}: path "${path}" contains an empty, ".", or whitespace-padded segment (it could never match a target identity)`,
@@ -524,16 +562,20 @@ function validateSuppressions(
   problems: string[],
 ): SuppressedWorkspace[] {
   const suppressed: SuppressedWorkspace[] = [];
+
   if (!("workspace" in root)) return suppressed;
   const workspace = recordOf(root["workspace"]);
+
   if (workspace === undefined) {
     problems.push(
       "workspace: must be a table containing [[workspace.copyleft_suppressed]] entries",
     );
     return suppressed;
   }
+
   checkKeys(workspace, ["copyleft_suppressed"], "workspace", problems);
   const entries = workspace["copyleft_suppressed"];
+
   if (entries === undefined) return suppressed;
   if (!Array.isArray(entries)) {
     problems.push(
@@ -541,17 +583,21 @@ function validateSuppressions(
     );
     return suppressed;
   }
+
   entries.forEach((raw, index) => {
     const where = `workspace.copyleft_suppressed[${index}]`;
     const entry = recordOf(raw);
+
     if (entry === undefined) {
       problems.push(`${where}: must be a table`);
       return;
     }
+
     checkKeys(entry, ["path", "license", "description"], where, problems);
     const path = requireText(entry, "path", where, problems);
     const license = requireText(entry, "license", where, problems);
     const description = requireText(entry, "description", where, problems);
+
     if (path !== undefined) {
       validatePath(path, where, problems);
       if (path.startsWith("docker:")) {
@@ -560,9 +606,12 @@ function validateSuppressions(
         );
       }
     }
+
     let licenseValid = false;
+
     if (license !== undefined) {
       const node = parseSpdxChecked(license, `${where}: license`, problems);
+
       if (node !== undefined) {
         if ("license" in node) {
           licenseValid = true;
@@ -575,6 +624,7 @@ function validateSuppressions(
         }
       }
     }
+
     if (path !== undefined && license !== undefined && licenseValid && description !== undefined) {
       suppressed.push({ path, license, description });
     }
@@ -597,20 +647,25 @@ function validateWhere(
 ): { where?: ReadonlyArray<string>; valid: boolean } {
   if (!("where" in entry)) return { valid: true };
   const raw = entry["where"];
+
   if (!Array.isArray(raw) || raw.length === 0) {
     problems.push(
       `${context}: key "where" must be a non-empty array of occurrence-identity prefixes`,
     );
     return { valid: false };
   }
+
   const before = problems.length;
   const scope: string[] = [];
+
   raw.forEach((value, index) => {
     const text = stringOf(value);
+
     if (text === undefined) {
       problems.push(`${context}: where[${index}] must be a string`);
       return;
     }
+
     validatePath(text, `${context}.where[${index}]`, problems);
     scope.push(text);
   });
@@ -621,24 +676,31 @@ function validateWhere(
 function validateCompatible(root: Record<string, unknown>, problems: string[]): CompatibleRule[] {
   const compatible: CompatibleRule[] = [];
   const raw = root["compatible"];
+
   if (raw === undefined) return compatible;
   if (!Array.isArray(raw)) {
     problems.push("compatible: must be an array of tables ([[compatible]])");
     return compatible;
   }
+
   raw.forEach((rawEntry, index) => {
     const where = `compatible[${index}]`;
     const entry = recordOf(rawEntry);
+
     if (entry === undefined) {
       problems.push(`${where}: must be a table`);
       return;
     }
+
     const match = stringOf(entry["match"]);
+
     if (match === "license") {
       const rule = validateCompatibleLicense(entry, where, problems);
+
       if (rule !== undefined) compatible.push(rule);
     } else if (match === "package") {
       const rule = validateCompatiblePackage(entry, where, problems);
+
       if (rule !== undefined) compatible.push(rule);
     } else {
       problems.push(`${where}: key "match" must be "license" or "package"`);
@@ -657,16 +719,20 @@ function validateCompatibleLicense(
   const pattern = requireText(entry, "pattern", where, problems);
   const reason = requireText(entry, "reason", where, problems);
   const scope = validateWhere(entry, where, problems);
+
   if (pattern === undefined) return undefined;
   const node = parseSpdxChecked(pattern, `${where}: pattern`, problems);
+
   if (node === undefined) return undefined;
   const allowlist = orLeaves(node);
+
   if (allowlist === null) {
     problems.push(
       `${where}: pattern "${pattern}" must be a license ID or an OR of license IDs (AND is not allowed — satisfies allowlists cannot hold AND expressions)`,
     );
     return undefined;
   }
+
   if (reason === undefined || !scope.valid) return undefined;
   return {
     match: "license",
@@ -688,6 +754,7 @@ function validateCompatiblePackage(
   const reason = requireText(entry, "reason", where, problems);
   const scope = validateWhere(entry, where, problems);
   let version: string | undefined;
+
   if ("version" in entry) {
     version = stringOf(entry["version"]);
     if (version === undefined) {
@@ -695,9 +762,11 @@ function validateCompatiblePackage(
       return undefined;
     }
   }
+
   if (name === undefined || reason === undefined || !scope.valid) {
     return undefined;
   }
+
   return {
     match: "package",
     name,
@@ -727,19 +796,25 @@ function validateClarifyPackage(
     problems.push(`${where}: missing required key "package"`);
     return { versionValid: true };
   }
+
   const pkg = recordOf(entry["package"]);
+
   if (pkg === undefined) {
     problems.push(`${where}: key "package" must be an inline table { name, version? }`);
     return { versionValid: true };
   }
+
   checkKeys(pkg, ["name", "version"], `${where}: package`, problems);
   const name = requireText(pkg, "name", `${where}: package`, problems);
+
   if (!("version" in pkg)) return { name, versionValid: true };
   const version = stringOf(pkg["version"]);
+
   if (version === undefined) {
     problems.push(`${where}: package key "version" must be a string`);
     return { name, versionValid: false };
   }
+
   return { name, version, versionValid: true };
 }
 
@@ -767,18 +842,22 @@ function makeClarifyRule(
 function validateClarify(root: Record<string, unknown>, problems: string[]): ClarifyRule[] {
   const clarify: ClarifyRule[] = [];
   const raw = root["clarify"];
+
   if (raw === undefined) return clarify;
   if (!Array.isArray(raw)) {
     problems.push("clarify: must be an array of tables ([[clarify]])");
     return clarify;
   }
+
   raw.forEach((rawEntry, index) => {
     const where = `clarify[${index}]`;
     const entry = recordOf(rawEntry);
+
     if (entry === undefined) {
       problems.push(`${where}: must be a table`);
       return;
     }
+
     checkKeys(entry, ["package", "expects", "expression", "reason"], where, problems);
     const { name, version, versionValid } = validateClarifyPackage(entry, where, problems);
     // `expects` is OPTIONAL (backward-compat) but, when present, must be a non-empty string - a
@@ -786,17 +865,22 @@ function validateClarify(root: Record<string, unknown>, problems: string[]): Cla
     // requireText records the existing aggregated-PolicyError messages naming clarify[i].
     let expects: string | undefined;
     let expectsValid = true;
+
     if ("expects" in entry) {
       expects = requireText(entry, "expects", `${where}: expects`, problems);
       expectsValid = expects !== undefined;
     }
+
     const expression = requireText(entry, "expression", where, problems);
     let expressionValid = false;
+
     if (expression !== undefined) {
       expressionValid =
         parseSpdxChecked(expression, `${where}: expression`, problems) !== undefined;
     }
+
     const reason = requireText(entry, "reason", where, problems);
+
     if (
       name !== undefined &&
       versionValid &&
@@ -824,30 +908,38 @@ function validateDenyEntry(
   problems: string[],
 ): DenyRule | undefined {
   const match = stringOf(entry["match"]);
+
   if (match === "license") {
     checkKeys(entry, ["match", "pattern", "reason"], where, problems);
     const pattern = requireText(entry, "pattern", where, problems);
     const reason = requireText(entry, "reason", where, problems);
+
     if (pattern === undefined) return undefined;
     const node = parseSpdxChecked(pattern, `${where}: pattern`, problems);
+
     if (node === undefined) return undefined;
     const allowlist = orLeaves(node);
+
     if (allowlist === null) {
       problems.push(
         `${where}: pattern "${pattern}" must be a license ID or an OR of license IDs (AND is not allowed — satisfies allowlists cannot hold AND expressions)`,
       );
       return undefined;
     }
+
     if (reason === undefined) return undefined;
     return { match: "license", pattern, allowlist, reason };
   }
+
   if (match === "name") {
     checkKeys(entry, ["match", "pattern", "reason"], where, problems);
     const pattern = requireText(entry, "pattern", where, problems);
     const reason = requireText(entry, "reason", where, problems);
+
     if (pattern === undefined || reason === undefined) return undefined;
     return { match: "name", pattern, reason };
   }
+
   problems.push(`${where}: key "match" must be "license" or "name"`);
   return undefined;
 }
@@ -855,19 +947,24 @@ function validateDenyEntry(
 function validateDeny(root: Record<string, unknown>, problems: string[]): DenyRule[] {
   const deny: DenyRule[] = [];
   const raw = root["deny"];
+
   if (raw === undefined) return deny;
   if (!Array.isArray(raw)) {
     problems.push("deny: must be an array of tables ([[deny]])");
     return deny;
   }
+
   raw.forEach((rawEntry, index) => {
     const where = `deny[${index}]`;
     const entry = recordOf(rawEntry);
+
     if (entry === undefined) {
       problems.push(`${where}: must be a table`);
       return;
     }
+
     const rule = validateDenyEntry(entry, where, problems);
+
     if (rule !== undefined) deny.push(rule);
   });
   return deny;
@@ -890,6 +987,7 @@ function validateAllowSourceAvailable(
 ): AllowSourceAvailable[] {
   const exemptions: AllowSourceAvailable[] = [];
   const raw = root["allow_source_available"];
+
   if (raw === undefined) return exemptions;
   if (!Array.isArray(raw)) {
     problems.push(
@@ -897,22 +995,27 @@ function validateAllowSourceAvailable(
     );
     return exemptions;
   }
+
   raw.forEach((rawEntry, index) => {
     const where = `allow_source_available[${index}]`;
     const entry = recordOf(rawEntry);
+
     if (entry === undefined) {
       problems.push(`${where}: must be a table`);
       return;
     }
+
     checkKeys(entry, ["license", "reason"], where, problems);
     const license = requireText(entry, "license", where, problems);
     const reason = requireText(entry, "reason", where, problems);
+
     if (license !== undefined && !BUILTIN_DENY_PATTERNS.includes(license)) {
       problems.push(
         `${where}: license "${license}" is not a built-in source-available default — only ${BUILTIN_DENY_PATTERNS.join(", ")} can be exempted (a consumer's own [[deny]] is absolute and not exempted here)`,
       );
       return;
     }
+
     if (license !== undefined && reason !== undefined) {
       exemptions.push({ license, reason });
     }
@@ -922,18 +1025,23 @@ function validateAllowSourceAvailable(
 
 function validateUnknown(root: Record<string, unknown>, problems: string[]): "warn" | "fail" {
   const raw = root["unknown"];
+
   if (raw === undefined) return "warn"; // absent table defaults to warn
   const table = recordOf(raw);
+
   if (table === undefined) {
     problems.push("unknown: must be a table ([unknown])");
     return "warn";
   }
+
   checkKeys(table, ["handling"], "unknown", problems);
   if (!("handling" in table)) {
     problems.push('unknown: missing required key "handling"');
     return "warn";
   }
+
   const handling = stringOf(table["handling"]);
+
   if (handling === "warn" || handling === "fail") return handling;
   problems.push('unknown.handling: must be "warn" or "fail"');
   return "warn";
@@ -950,21 +1058,27 @@ function validateDevDependencies(
   problems: string[],
 ): DevDependencyHandling {
   const raw = root["dev_dependencies"];
+
   if (raw === undefined) return "warn"; // absent table defaults to warn
   const table = recordOf(raw);
+
   if (table === undefined) {
     problems.push("dev_dependencies: must be a table ([dev_dependencies])");
     return "warn";
   }
+
   checkKeys(table, ["handling"], "dev_dependencies", problems);
   if (!("handling" in table)) {
     problems.push('dev_dependencies: missing required key "handling"');
     return "warn";
   }
+
   const handling = stringOf(table["handling"]);
+
   if (handling === "warn" || handling === "fail" || handling === "ignore") {
     return handling;
   }
+
   problems.push('dev_dependencies.handling: must be "warn", "fail", or "ignore"');
   return "warn";
 }
@@ -980,21 +1094,27 @@ function validateOsDependencies(
   problems: string[],
 ): OsDependencyHandling {
   const raw = root["os_dependencies"];
+
   if (raw === undefined) return "warn"; // absent table defaults to warn
   const table = recordOf(raw);
+
   if (table === undefined) {
     problems.push("os_dependencies: must be a table ([os_dependencies])");
     return "warn";
   }
+
   checkKeys(table, ["handling"], "os_dependencies", problems);
   if (!("handling" in table)) {
     problems.push('os_dependencies: missing required key "handling"');
     return "warn";
   }
+
   const handling = stringOf(table["handling"]);
+
   if (handling === "warn" || handling === "fail" || handling === "ignore") {
     return handling;
   }
+
   problems.push('os_dependencies.handling: must be "warn", "fail", or "ignore"');
   return "warn";
 }
@@ -1012,8 +1132,10 @@ export function parsePolicy(text: string): Policy {
   const problems: string[] = [];
 
   const narrowed = PolicyRoot(root);
+
   if (narrowed instanceof type.errors) {
     const accepted: readonly string[] = TOP_LEVEL_KEYS;
+
     for (const key of Object.keys(root)) {
       if (!accepted.includes(key)) {
         problems.push(`unknown top-level key "${key}"`);

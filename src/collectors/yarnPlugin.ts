@@ -94,6 +94,7 @@ export function pluginEnv(
   base: NodeJS.ProcessEnv = process.env,
 ): NodeJS.ProcessEnv {
   const env = { ...base };
+
   delete env.NODE_ENV;
   env.YARN_INSTALL_STATE_PATH = join(tempDir, "install-state.gz");
   return env;
@@ -119,10 +120,13 @@ function validatePluginOutput(outFile: string, invocation: string): void {
       `yarn-plugin-cyclonedx produced no output file at ${outFile}\n` + `invocation: ${invocation}`,
     );
   }
+
   const rawOutput = readFileSync(outFile, "utf8");
   let specVersion: unknown;
+
   try {
     const parsed: unknown = JSON.parse(rawOutput);
+
     specVersion = (parsed as { specVersion?: unknown }).specVersion;
   } catch (error) {
     throw new Error(
@@ -131,6 +135,7 @@ function validatePluginOutput(outFile: string, invocation: string): void {
       { cause: error },
     );
   }
+
   if (specVersion !== "1.6") {
     throw new Error(
       `yarn-plugin-cyclonedx output specVersion is ${JSON.stringify(specVersion)}, expected "1.6" — ` +
@@ -149,6 +154,7 @@ function manifestEntriesFor(target: Target): readonly ManifestEntry[] {
   if (target.lockfileDir === undefined) {
     return ["yarn.lock", "package.json"];
   }
+
   return [
     { file: "yarn.lock", dir: target.lockfileDir },
     { file: "package.json", dir: target.dir },
@@ -180,6 +186,7 @@ export async function collectWithYarnPlugin(
     [prodArgs, prodPath],
   ] as const) {
     const invocation = `${runner} ${args.join(" ")}`;
+
     await execTool(runner, args, {
       timeoutMs: opts.timeoutMs,
       verbose: opts.verbose,

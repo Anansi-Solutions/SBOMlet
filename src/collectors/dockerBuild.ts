@@ -49,6 +49,7 @@ const DEFAULT_BUILD_TIMEOUT_MS = 20 * 60 * 1000;
 export function imageTag(dockerfilePath: string): string {
   const sanitized = dockerfilePath.toLowerCase().replace(/[^a-z0-9._-]/g, "-");
   const hash = createHash("sha256").update(dockerfilePath).digest("hex").slice(0, 8);
+
   return `sbomlet-scan/${sanitized}-${hash}`;
 }
 
@@ -107,6 +108,7 @@ export async function buildImage(
   const tag = imageTag(dockerfilePath);
   const dockerBin = opts.dockerBin ?? "docker";
   const args = buildImageArgs(dockerfilePath, tag);
+
   try {
     await exec(dockerBin, args, {
       timeoutMs: opts.timeoutMs ?? DEFAULT_BUILD_TIMEOUT_MS,
@@ -119,5 +121,6 @@ export async function buildImage(
       { cause: error },
     );
   }
+
   return tag;
 }

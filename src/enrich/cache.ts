@@ -87,6 +87,7 @@ export function readEnvelope<T>(
 
   const raw = readFileSync(path, "utf8");
   let parsed: unknown;
+
   try {
     parsed = JSON.parse(raw);
   } catch (error) {
@@ -96,6 +97,7 @@ export function readEnvelope<T>(
   }
 
   const entries = envelopeEntries<T>(parsed, path, label);
+
   if (
     expectedVersion !== undefined &&
     (parsed as { version?: unknown }).version !== expectedVersion
@@ -104,6 +106,7 @@ export function readEnvelope<T>(
       `malformed ${label} (unsupported schema version, expected ${expectedVersion}): ${path}`,
     );
   }
+
   return new Map(Object.entries(entries));
 }
 
@@ -117,10 +120,13 @@ function envelopeEntries<T>(parsed: unknown, path: string, label: string): Recor
   ) {
     throw new Error(`malformed ${label} (missing {version,entries} envelope): ${path}`);
   }
+
   const entries = (parsed as { entries: unknown }).entries;
+
   if (entries === null || typeof entries !== "object" || Array.isArray(entries)) {
     throw new Error(`malformed ${label} (entries is not an object): ${path}`);
   }
+
   return entries as Record<string, T>;
 }
 
@@ -134,6 +140,7 @@ export function serializeCache(cache: Map<string, CacheEntry>): string {
     version: CACHE_VERSION,
     entries: Object.fromEntries(cache),
   };
+
   return toSortedJson(file);
 }
 

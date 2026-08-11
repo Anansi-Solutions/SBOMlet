@@ -287,6 +287,7 @@ function resolveDevelopmentContainersForTest(
   policy: Policy,
 ): ReadonlySet<string> {
   const sources = new Set<string>();
+
   for (const pkg of model.packages) {
     for (const occurrence of pkg.occurrences) {
       if (occurrence.target.startsWith(DOCKER_IDENTITY_PREFIX)) {
@@ -294,13 +295,17 @@ function resolveDevelopmentContainersForTest(
       }
     }
   }
+
   const resolved = new Set<string>();
+
   for (const devEntry of policy.docker?.development ?? []) {
     const matcher = globToRegExp(devEntry.source);
+
     for (const source of sources) {
       if (matcher.test(source)) resolved.add(`${DOCKER_IDENTITY_PREFIX}${source}`);
     }
   }
+
   return resolved;
 }
 
@@ -323,6 +328,7 @@ function renderScenario(): string {
     developmentContainers,
     acceptedContainerNotices: acceptedContainerNotices(scoped, verdicts),
   };
+
   return alignTables(renderMarkdown(scoped, policyView));
 }
 
@@ -336,9 +342,11 @@ const squish = (s: string): string => s.replace(/ {2,}/g, " ");
 /** Slice one "## Heading" section out of the document, up to the next "## ". */
 function section(doc: string, heading: string): string {
   const start = doc.indexOf(heading);
+
   expect(start).toBeGreaterThanOrEqual(0);
   const rest = doc.slice(start + heading.length);
   const nextHeadingOffset = rest.indexOf("\n## ");
+
   return nextHeadingOffset === -1 ? rest : rest.slice(0, nextHeadingOffset);
 }
 
@@ -354,6 +362,7 @@ describe("containerReport — multi-container golden scenario", () => {
   describe("invariant: at-most-once across {Problematic, Copyleft}", () => {
     test("the precise-AGPL container package is in Problematic and NOT in Copyleft", () => {
       const doc = renderScenario();
+
       expect(section(doc, "## Problematic licenses").includes("metrics-daemon")).toBe(true);
       expect(section(doc, "## Copyleft and special notices").includes("metrics-daemon")).toBe(
         false,
@@ -375,10 +384,12 @@ describe("containerReport — multi-container golden scenario", () => {
       const relayAgentVerdict = evaluate(scoped, policy).find(
         (v) => v.purl === "pkg:golang/relay-agent@0.4.0",
       );
+
       expect(relayAgentVerdict?.status).toBe("warn");
       expect(relayAgentVerdict?.rule).toBe("default:imprecise-copyleft");
 
       const doc = renderScenario();
+
       expect(section(doc, "## Problematic licenses").includes("relay-agent")).toBe(false);
       // Not in the detailed Copyleft table either (that table is scoped to
       // rule === "default:copyleft" exactly) — it surfaces in the dedicated
@@ -388,12 +399,14 @@ describe("containerReport — multi-container golden scenario", () => {
 
     test("the app-level copyleft failure is in Problematic and NOT in Copyleft", () => {
       const doc = renderScenario();
+
       expect(section(doc, "## Problematic licenses").includes("chart-render")).toBe(true);
       expect(section(doc, "## Copyleft and special notices").includes("chart-render")).toBe(false);
     });
 
     test("the app-level dev-only warn stays in Copyleft and is NOT in Problematic", () => {
       const doc = renderScenario();
+
       expect(section(doc, "## Copyleft and special notices").includes("doc-gen")).toBe(true);
       expect(section(doc, "## Problematic licenses").includes("doc-gen")).toBe(false);
     });
@@ -402,6 +415,7 @@ describe("containerReport — multi-container golden scenario", () => {
       const doc = renderScenario();
       const copyleft = section(doc, "## Copyleft and special notices");
       const problematic = section(doc, "## Problematic licenses");
+
       for (const name of ["bash", "libc6"]) {
         expect(copyleft.includes(name)).toBe(false);
         expect(problematic.includes(name)).toBe(false);
@@ -410,12 +424,14 @@ describe("containerReport — multi-container golden scenario", () => {
 
     test("the system-package AGPL (diag-tools) is in Problematic and NOT in Copyleft", () => {
       const doc = renderScenario();
+
       expect(section(doc, "## Problematic licenses").includes("diag-tools")).toBe(true);
       expect(section(doc, "## Copyleft and special notices").includes("diag-tools")).toBe(false);
     });
 
     test("the dev-marked application-ecosystem copyleft (cache-relay) is in Copyleft and NOT in Problematic", () => {
       const doc = renderScenario();
+
       expect(section(doc, "## Copyleft and special notices").includes("cache-relay")).toBe(true);
       expect(section(doc, "## Problematic licenses").includes("cache-relay")).toBe(false);
     });
@@ -425,6 +441,7 @@ describe("containerReport — multi-container golden scenario", () => {
     test("the precise-AGPL accepted system package (licensed-daemon) is a Copyleft-section notice, NOT in Problematic, and NOT in the flagged copyleft table", () => {
       const doc = renderScenario();
       const copyleft = section(doc, "## Copyleft and special notices");
+
       expect(copyleft.includes("licensed-daemon")).toBe(true);
       expect(section(doc, "## Problematic licenses").includes("licensed-daemon")).toBe(false);
       // Not a flagged-copyleft ROW (that table is scoped to rule ===
@@ -435,6 +452,7 @@ describe("containerReport — multi-container golden scenario", () => {
     test("the imprecise-AGPL accepted system package (licensed-relay) is ALSO a Copyleft-section notice, NOT in Problematic", () => {
       const doc = renderScenario();
       const copyleft = section(doc, "## Copyleft and special notices");
+
       expect(copyleft.includes("licensed-relay")).toBe(true);
       expect(section(doc, "## Problematic licenses").includes("licensed-relay")).toBe(false);
       expect(copyleft.includes("accepted via compatible\\[2\\]")).toBe(true);
@@ -443,6 +461,7 @@ describe("containerReport — multi-container golden scenario", () => {
     test("an accepted container AGPL notice does NOT count toward the copyleft warning roll-up (the roll-up count is unchanged by adding two accepted-ok packages)", () => {
       const doc = renderScenario();
       const problematic = section(doc, "## Problematic licenses");
+
       // Same "5 copyleft warning(s)" total as before the two accepted AGPL
       // packages were added — their verdict status is "ok", never "warn".
       expect(problematic.includes("5 copyleft warning(s)")).toBe(true);
@@ -457,6 +476,7 @@ describe("containerReport — multi-container golden scenario", () => {
       );
       const verdicts = evaluate(scoped, policy);
       const notices = acceptedContainerNotices(scoped, verdicts);
+
       // Sorted by purl: "pkg:apk/..." < "pkg:deb/..." (apk before deb).
       expect(notices.map((n) => n.name)).toEqual(["licensed-relay", "licensed-daemon"]);
       expect(notices.every((n) => n.rule.startsWith("compatible["))).toBe(true);
@@ -467,12 +487,14 @@ describe("containerReport — multi-container golden scenario", () => {
     test("the precise-AGPL package still rows in the api container's subsection", () => {
       const doc = renderScenario();
       const apiSection = section(doc, `### Container: ${API_CONTAINER}`);
+
       expect(apiSection.includes("metrics-daemon")).toBe(true);
     });
 
     test("the imprecise-AGPL package rows in the build container's subsection AND the Imprecise review section", () => {
       const doc = renderScenario();
       const buildSection = section(doc, `### Container: ${BUILD_CONTAINER}`);
+
       expect(buildSection.includes("relay-agent")).toBe(true);
       expect(
         section(doc, "## Imprecise licenses (review / disambiguate)").includes("relay-agent"),
@@ -481,12 +503,14 @@ describe("containerReport — multi-container golden scenario", () => {
 
     test("the app-level failure still rows in the Production dependencies table", () => {
       const doc = renderScenario();
+
       expect(section(doc, "## Production dependencies").includes("chart-render")).toBe(true);
     });
 
     test("routine GPL packages row only in their container subsection, never in a summary table", () => {
       const doc = renderScenario();
       const apiSection = section(doc, `### Container: ${API_CONTAINER}`);
+
       expect(apiSection.includes("bash")).toBe(true);
       expect(apiSection.includes("coreutils")).toBe(true);
       // The [[compatible]] escape hatch renders ok, and the package still
@@ -500,6 +524,7 @@ describe("containerReport — multi-container golden scenario", () => {
       const coreutilsVerdict = evaluate(annotated, policy).find(
         (v) => v.purl === "pkg:deb/coreutils@9.1-1",
       );
+
       expect(coreutilsVerdict?.status).toBe("ok");
       expect(coreutilsVerdict?.rule).toBe("compatible[0]");
     });
@@ -508,6 +533,7 @@ describe("containerReport — multi-container golden scenario", () => {
       const doc = renderScenario();
       const apiSection = section(doc, `### Container: ${API_CONTAINER}`);
       const buildSection = section(doc, `### Container: ${BUILD_CONTAINER}`);
+
       expect(apiSection.includes("zlib1g")).toBe(true);
       expect(buildSection.includes("zlib1g")).toBe(true);
     });
@@ -518,6 +544,7 @@ describe("containerReport — multi-container golden scenario", () => {
       const systemPos = apiSection.indexOf("**System packages**");
       const applicationPos = apiSection.indexOf("**Application packages**");
       const systemBlock = apiSection.slice(systemPos, applicationPos);
+
       expect(systemBlock.includes("diag-tools")).toBe(true);
       expect(section(doc, "## Problematic licenses").includes("diag-tools")).toBe(true);
     });
@@ -527,6 +554,7 @@ describe("containerReport — multi-container golden scenario", () => {
       const buildSection = section(doc, `### Container: ${BUILD_CONTAINER}`);
       const applicationPos = buildSection.indexOf("**Application packages**");
       const applicationBlock = buildSection.slice(applicationPos);
+
       expect(applicationBlock.includes("cache-relay")).toBe(true);
       expect(section(doc, "## Copyleft and special notices").includes("cache-relay")).toBe(true);
     });
@@ -545,6 +573,7 @@ describe("containerReport — multi-container golden scenario", () => {
       const metricsDaemonVerdict = verdicts.find(
         (v) => v.purl === "pkg:golang/metrics-daemon@1.2.0",
       );
+
       expect(diagToolsVerdict?.status).toBe("fail");
       expect(diagToolsVerdict?.rule).toBe("default:agpl-container");
       expect(metricsDaemonVerdict?.status).toBe("fail");
@@ -557,6 +586,7 @@ describe("containerReport — multi-container golden scenario", () => {
       const applicationPos = apiSection.indexOf("**Application packages**");
       const systemBlock = apiSection.slice(systemPos, applicationPos);
       const applicationBlock = apiSection.slice(applicationPos);
+
       expect(systemBlock.includes("diag-tools")).toBe(true);
       expect(systemBlock.includes("metrics-daemon")).toBe(false);
       expect(applicationBlock.includes("metrics-daemon")).toBe(true);
@@ -572,10 +602,12 @@ describe("containerReport — multi-container golden scenario", () => {
       const applicationPos = apiSection.indexOf("**Application packages**");
       const systemBlock = apiSection.slice(systemPos, applicationPos);
       const applicationBlock = apiSection.slice(applicationPos);
+
       for (const name of ["bash", "coreutils", "libc6", "zlib1g", "diag-tools"]) {
         expect(systemBlock.includes(name)).toBe(true);
         expect(applicationBlock.includes(name)).toBe(false);
       }
+
       expect(applicationBlock.includes("metrics-daemon")).toBe(true);
       expect(systemBlock.includes("metrics-daemon")).toBe(false);
     });
@@ -587,6 +619,7 @@ describe("containerReport — multi-container golden scenario", () => {
       const applicationPos = buildSection.indexOf("**Application packages**");
       const systemBlock = buildSection.slice(systemPos, applicationPos);
       const applicationBlock = buildSection.slice(applicationPos);
+
       expect(systemBlock.includes("zlib1g")).toBe(true);
       expect(systemBlock.includes("relay-agent")).toBe(false);
       expect(systemBlock.includes("cache-relay")).toBe(false);
@@ -600,14 +633,17 @@ describe("containerReport — multi-container golden scenario", () => {
   test("the Containers index names both identities, the glob-resolved classification, and a package count", () => {
     const doc = renderScenario();
     const containers = squish(section(doc, "## Containers"));
+
     expect(containers.includes(`| ${API_CONTAINER} | production | 8 |`)).toBe(true);
     expect(containers.includes(`| ${BUILD_CONTAINER} | development | 3 |`)).toBe(true);
   });
 
   test("the dev container's packages fold under Development-only, not a standalone Docker section", () => {
     const doc = renderScenario();
+
     expect(doc.includes("## Docker image packages")).toBe(false);
     const devSection = section(doc, "## Development-only dependencies");
+
     expect(devSection.includes(`### Container: ${BUILD_CONTAINER}`)).toBe(true);
     expect(devSection.includes("relay-agent")).toBe(true);
     expect(devSection.includes("cache-relay")).toBe(true);
@@ -674,6 +710,7 @@ describe("a shared workspace+docker package through the real merge/scope/evaluat
       verdicts,
       developmentContainers,
     };
+
     return {
       doc: alignTables(renderMarkdown(scoped, policyView)),
       prodContainerVerdict: verdicts.find((v) => v.occurrenceTarget === BUILD_CONTAINER),
@@ -689,22 +726,26 @@ describe("a shared workspace+docker package through the real merge/scope/evaluat
         scope: "os",
       },
     ]);
+
     expect(merged.packages).toHaveLength(1);
     expect(merged.packages[0]!.scope).toBe("app");
   });
 
   test("the docker occurrence in the dev-marked container WARNS (dev-downgraded), not FAILS", () => {
     const { prodContainerVerdict } = buildSharedScenario();
+
     expect(prodContainerVerdict?.status).toBe("warn");
     expect(prodContainerVerdict?.rule).toBe("default:copyleft");
   });
 
   test("the package renders in BOTH its app Production table AND the container's Application sub-table", () => {
     const { doc } = buildSharedScenario();
+
     expect(section(doc, "## Production dependencies").includes("shared-workspace-and-image")).toBe(
       true,
     );
     const containerSection = section(doc, `### Container: ${BUILD_CONTAINER}`);
+
     expect(containerSection.includes("shared-workspace-and-image")).toBe(true);
   });
 });

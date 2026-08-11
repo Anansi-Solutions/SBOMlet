@@ -44,6 +44,7 @@ const RootBomRef = type({
 
 function rootBomRefOf(sbom: unknown): string | undefined {
   const result = RootBomRef(sbom);
+
   return result instanceof type.errors ? undefined : result;
 }
 
@@ -54,6 +55,7 @@ const RootPurl = type({
 
 function rootPurlOf(sbom: unknown): string | undefined {
   const result = RootPurl(sbom);
+
   return result instanceof type.errors ? undefined : result;
 }
 
@@ -69,25 +71,32 @@ function buildBomRefJoin(
 ): { bomRefToPurl: Map<string, string>; componentPurls: Set<string> } {
   const bomRefToPurl = new Map<string, string>();
   const componentPurls = new Set<string>();
+
   for (const raw of components) {
     const component = SbomComponent(raw);
+
     if (component instanceof type.errors) continue;
     const bomRef = component["bom-ref"];
     const purl = component.purl;
+
     if (bomRef === undefined || purl === undefined) continue;
     // MALFORMED dup bom-ref with a DIFFERENT purl: last-wins would make the join - and every
     // direct/introducedBy edge that translates through it - depend on components[] order. Resolve
     // deterministically: keep the compareCodeUnits-smaller purl so the output is order-independent.
     // Real generators never emit dup bom-refs; the tolerant posture stays deterministic regardless.
     const existing = bomRefToPurl.get(bomRef);
+
     if (existing === undefined || compareCodeUnits(purl, existing) < 0) {
       bomRefToPurl.set(bomRef, purl);
     }
+
     componentPurls.add(purl);
   }
+
   if (rootBomRef !== undefined && rootPurl !== undefined) {
     bomRefToPurl.set(rootBomRef, rootPurl);
   }
+
   return { bomRefToPurl, componentPurls };
 }
 
@@ -121,9 +130,11 @@ function ingestEdge(
 ): void {
   const isRootEdge = ref === rootBomRef;
   const parentPurl = bomRefToPurl.get(ref);
+
   for (const rawTarget of dependsOn) {
     if (typeof rawTarget !== "string") continue;
     const childPurl = bomRefToPurl.get(rawTarget);
+
     if (childPurl === undefined) continue;
     // Real bom-ref edge: recorded for every join-resolvable edge, including the root edge, so the
     // bom-ref BFS can start at the root.
@@ -133,6 +144,7 @@ function ingestEdge(
       if (childPurl !== rootPurl) acc.rootChildren.add(childPurl);
       continue;
     }
+
     if (parentPurl === undefined || childPurl === parentPurl) continue;
     addToSetMap(acc.edgeSets, parentPurl, childPurl);
     addToSetMap(acc.parentSets, childPurl, parentPurl);
@@ -157,9 +169,11 @@ interface NpmGraph {
 function hasRootAnchorEdge(dependencies: readonly unknown[], rootBomRef: string): boolean {
   for (const raw of dependencies) {
     const edge = SbomDependencyEdge(raw);
+
     if (edge instanceof type.errors) continue;
     if (edge.ref === rootBomRef) return true;
   }
+
   return false;
 }
 
@@ -183,12 +197,15 @@ function hasRootAnchorEdge(dependencies: readonly unknown[], rootBomRef: string)
  */
 function buildNpmGraph(sbom: unknown): NpmGraph | undefined {
   const doc = SbomDocument(sbom);
+
   if (doc instanceof type.errors) return undefined;
   const components = doc.components;
   const dependencies = doc.dependencies;
+
   if (components === undefined || dependencies === undefined) return undefined;
 
   const rootBomRef = rootBomRefOf(sbom);
+
   // (a) No locatable root bom-ref → abstain (never mislabel real directs).
   if (rootBomRef === undefined) return undefined;
   // (b) Root bom-ref present but no edge anchors it → abstain (root unanchored).
@@ -196,6 +213,7 @@ function buildNpmGraph(sbom: unknown): NpmGraph | undefined {
 
   const rootPurl = rootPurlOf(sbom);
   const { bomRefToPurl, componentPurls } = buildBomRefJoin(components, rootBomRef, rootPurl);
+
   if (componentPurls.size === 0) return undefined;
 
   const acc: EdgeAccumulator = {
@@ -204,8 +222,10 @@ function buildNpmGraph(sbom: unknown): NpmGraph | undefined {
     rootChildren: new Set<string>(),
     refEdges: new Map<string, Set<string>>(),
   };
+
   for (const raw of dependencies) {
     const edge = SbomDependencyEdge(raw);
+
     if (edge instanceof type.errors || edge.ref === undefined) continue;
     ingestEdge(acc, bomRefToPurl, edge.ref, edge.dependsOn ?? [], rootBomRef, rootPurl);
   }
@@ -216,6 +236,7 @@ function buildNpmGraph(sbom: unknown): NpmGraph | undefined {
     rootChildren: acc.rootChildren,
     nodes: componentPurls,
   };
+
   return {
     graph,
     refEdges: sortSetMap(acc.refEdges),
@@ -249,15 +270,18 @@ function expandRefLevel(
   visited: Set<string>,
 ): RefBfsNode[] {
   const next: RefBfsNode[] = [];
+
   for (const node of frontier) {
     for (const child of npm.refEdges.get(node.ref) ?? []) {
       if (visited.has(child)) continue;
       visited.add(child);
       const purl = npm.bomRefToPurl.get(child);
+
       if (purl === undefined) continue;
       next.push({ ref: child, path: [...node.path, purl] });
     }
   }
+
   return sortRefFrontier(next);
 }
 
@@ -274,6 +298,7 @@ function expandReachableRefs(
   reachable: Set<string>,
 ): string[] {
   const next: string[] = [];
+
   for (const ref of frontier) {
     for (const child of npm.refEdges.get(ref) ?? []) {
       if (reachable.has(child)) continue;
@@ -281,17 +306,21 @@ function expandReachableRefs(
       next.push(child);
     }
   }
+
   return next;
 }
 
 function reachableRefsFromRoot(npm: NpmGraph): Set<string> {
   const { rootBomRef } = npm;
+
   if (rootBomRef === undefined) return new Set();
   const reachable = new Set<string>([rootBomRef]);
   let frontier: string[] = [rootBomRef];
+
   while (frontier.length > 0) {
     frontier = expandReachableRefs(npm, frontier, reachable);
   }
+
   return reachable;
 }
 
@@ -309,6 +338,7 @@ function hasReachableChildPurl(
     if (!reachableRefs.has(childRef)) continue;
     if (bomRefToPurl.get(childRef) === targetPurl) return true;
   }
+
   return false;
 }
 
@@ -332,14 +362,17 @@ function realIntroducerPurls(
 ): string[] {
   const { bomRefToPurl, rootBomRef } = npm;
   const introducers = new Set<string>();
+
   for (const [parentRef, children] of npm.refEdges) {
     if (!reachableRefs.has(parentRef) || parentRef === rootBomRef) continue;
     const parentPurl = bomRefToPurl.get(parentRef);
+
     if (parentPurl === undefined || parentPurl === targetPurl) continue;
     if (hasReachableChildPurl(bomRefToPurl, children, reachableRefs, targetPurl)) {
       introducers.add(parentPurl);
     }
   }
+
   return [...introducers].sort(compareCodeUnits);
 }
 
@@ -353,16 +386,20 @@ function realIntroducerPurls(
  */
 function realShortestPath(npm: NpmGraph, targetPurl: string): string[] | undefined {
   const { bomRefToPurl, rootBomRef } = npm;
+
   if (rootBomRef === undefined) return undefined;
   const visited = new Set<string>([rootBomRef]);
   const seed: RefBfsNode = { ref: rootBomRef, path: [] };
   let frontier = expandRefLevel(npm, [seed], visited);
+
   while (frontier.length > 0) {
     for (const node of frontier) {
       if (bomRefToPurl.get(node.ref) === targetPurl) return node.path;
     }
+
     frontier = expandRefLevel(npm, frontier, visited);
   }
+
   return undefined;
 }
 
@@ -389,12 +426,15 @@ function realShortestPath(npm: NpmGraph, targetPurl: string): string[] | undefin
  */
 export function npmIntroductions(sbom: unknown): ReadonlyMap<string, DependencyIntroduction> {
   const npm = buildNpmGraph(sbom);
+
   if (npm === undefined) return new Map();
   const introductions = deriveIntroductions(npm.graph);
   const reachableRefs = reachableRefsFromRoot(npm);
+
   for (const [purl, introduction] of introductions) {
     if (introduction.direct) continue;
     const realPath = realShortestPath(npm, purl);
+
     if (realPath === undefined) {
       // No real root-reachable chain → the purl-space introducedBy names only disconnected parents.
       // Drop BOTH so the node is a true orphan, never a fabricated introducer.
@@ -402,6 +442,7 @@ export function npmIntroductions(sbom: unknown): ReadonlyMap<string, DependencyI
       introduction.introducedBy = [];
       continue;
     }
+
     introduction.path = realPath;
     // Tighten the all-or-nothing orphan guard above into a PER-PARENT real root-reachability
     // filter. The purl-space introducedBy (deriveIntroductions) can name a parent whose only edge
@@ -412,5 +453,6 @@ export function npmIntroductions(sbom: unknown): ReadonlyMap<string, DependencyI
     // rendered cell and --dump-model.
     introduction.introducedBy = realIntroducerPurls(npm, purl, reachableRefs);
   }
+
   return introductions;
 }

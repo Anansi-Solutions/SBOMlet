@@ -59,10 +59,12 @@ function electFromPattern(
 ): { raw: string; via: string } | undefined {
   for (const entry of entries) {
     const path = entry.path;
+
     if (typeof path !== "string") continue;
     if (!isRootLevelPath(path)) continue;
     if (!pattern.test(basename(path))) continue;
     const expression = entry.detected_license_expression_spdx;
+
     if (typeof expression !== "string" || expression.length === 0) continue;
     if (isLicenseRefNoise(expression)) continue;
     return {
@@ -70,6 +72,7 @@ function electFromPattern(
       via: `${SCANCODE_TOOL.name}@${SCANCODE_TOOL.version}/${lane}`,
     };
   }
+
   return undefined;
 }
 
@@ -88,6 +91,7 @@ export function electExpression(files: unknown): { raw: string; via: string } | 
   const entries = files.filter(isRawScancodeFile);
 
   const legal = electFromPattern(entries, LEGAL_FILE_PATTERN, "license-file");
+
   if (legal !== undefined) return legal;
 
   return electFromPattern(entries, MANIFEST_FILE_PATTERN, "manifest");
@@ -107,18 +111,22 @@ interface RawCopyrightEntry {
 export function electCopyrights(files: unknown): string[] {
   if (!Array.isArray(files)) return [];
   const seen = new Set<string>();
+
   for (const raw of files) {
     if (!isRawScancodeFile(raw)) continue;
     const copyrights = (raw as { copyrights?: unknown }).copyrights;
+
     if (!Array.isArray(copyrights)) continue;
     for (const entry of copyrights) {
       // Tolerant narrowing, matching the rest of this parse path: a null or mistyped element is
       // skipped, never a TypeError mid-scan.
       if (typeof entry !== "object" || entry === null) continue;
       const text = (entry as RawCopyrightEntry).copyright;
+
       if (typeof text !== "string" || text.length === 0) continue;
       seen.add(sanitizeEvidenceText(text));
     }
   }
+
   return [...seen].sort(compareCodeUnits).slice(0, MAX_SCANCODE_COPYRIGHT_LINES);
 }

@@ -96,22 +96,29 @@ const PYPROJECT_GROUP_PROPERTY = "cdx:pyproject:group";
 /** License claim extraction (all three CycloneDX shapes). */
 function licenseClaimsOf(component: SbomComponentShape): LicenseClaim[] {
   const licenses = component.licenses;
+
   if (licenses === undefined) return [];
   return licenses.flatMap((raw): LicenseClaim[] => {
     // The three claim shapes are tried in order; a mistyped field falls through to the next shape,
     // and an entry matching none is skipped.
     const expression = SbomExpressionClaim(raw);
+
     if (!(expression instanceof type.errors)) {
       return [{ raw: expression.expression, kind: "expression", source: "generator" }];
     }
+
     const id = SbomIdClaim(raw);
+
     if (!(id instanceof type.errors)) {
       return [{ raw: id.license.id, kind: "spdx-id", source: "generator" }];
     }
+
     const name = SbomNameClaim(raw);
+
     if (!(name instanceof type.errors)) {
       return [{ raw: name.license.name, kind: "name", source: "generator" }];
     }
+
     return [];
   });
 }
@@ -166,13 +173,16 @@ interface EvidenceAttachment {
  */
 function evidenceAttachmentsOf(component: SbomComponentShape): EvidenceAttachment[] {
   const licenses = component.evidence?.licenses;
+
   if (licenses === undefined) return [];
   const out: EvidenceAttachment[] = [];
+
   for (const raw of licenses) {
     if (out.length >= MAX_EVIDENCE_ENTRIES) break;
     // Any deviation from the exact verified shape skips the entry - the same continue every failed
     // step of the old guard chain took.
     const entry = SbomEvidenceEntry(raw);
+
     if (entry instanceof type.errors) continue;
     const { name, text } = entry.license;
     const fileName = name.startsWith("file: ") ? name.slice("file: ".length) : name;
@@ -181,10 +191,13 @@ function evidenceAttachmentsOf(component: SbomComponentShape): EvidenceAttachmen
     // entries are skipped without decoding.
     const padding = content.endsWith("==") ? 2 : content.endsWith("=") ? 1 : 0;
     const decodedBytes = Math.floor((content.length * 3) / 4) - padding;
+
     if (decodedBytes > MAX_EVIDENCE_DECODED_BYTES) continue;
     const decoded = Buffer.from(content, "base64").toString("utf8");
+
     out.push({ fileName, text: sanitizeEvidenceText(decoded) });
   }
+
   return out;
 }
 
@@ -211,12 +224,14 @@ function attributionOf(
   claims: ReadonlyArray<LicenseClaim>,
 ): PackageAttribution | undefined {
   const attachments = evidenceAttachmentsOf(component);
+
   if (attachments.length === 0) return undefined;
 
   const copyright = new Set<string>();
   const noticeTexts: string[] = [];
   const licenseTexts: string[] = [];
   let hasVerbatimText = false;
+
   for (const attachment of attachments) {
     if (NOTICE_FILE_RE.test(attachment.fileName)) {
       noticeTexts.push(attachment.text);
@@ -224,6 +239,7 @@ function attributionOf(
       hasVerbatimText = true;
       licenseTexts.push(attachment.text);
     }
+
     for (const line of extractCopyrightLines(attachment.text)) {
       if (copyright.size >= MAX_COPYRIGHT_LINES) break;
       copyright.add(line);
@@ -236,13 +252,16 @@ function attributionOf(
     hasVerbatimText,
   };
   const author = component.author;
+
   if (author !== undefined) attribution.author = author;
   const hasParseableClaim = claims.some(
     (claim) => claim.kind === "spdx-id" || claim.kind === "expression",
   );
+
   if (!hasParseableClaim && licenseTexts.length > 0) {
     attribution.verbatimTexts = licenseTexts;
   }
+
   return attribution;
 }
 
@@ -262,12 +281,15 @@ function attributionOf(
  */
 function propertyDevMarker(component: SbomComponentShape): boolean {
   const properties = component.properties;
+
   if (properties === undefined) return false;
   let jsDevelopment = false;
   let jsOptional = false;
   let pyprojectDev = false;
+
   for (const raw of properties) {
     const property = SbomPropertyEntry(raw);
+
     if (property instanceof type.errors) continue;
     if (property.name === DEV_PROPERTY && property.value === "true") {
       jsDevelopment = true;
@@ -277,6 +299,7 @@ function propertyDevMarker(component: SbomComponentShape): boolean {
       pyprojectDev = true;
     }
   }
+
   return pyprojectDev || (jsDevelopment && !jsOptional);
 }
 
@@ -293,9 +316,11 @@ const IS_WORKSPACE_PROPERTY = "cdx:npm:isWorkspace";
  */
 function hasWorkspaceMarker(component: SbomComponentShape): boolean {
   const properties = component.properties;
+
   if (properties === undefined) return false;
   return properties.some((raw) => {
     const property = SbomPropertyEntry(raw);
+
     return (
       !(property instanceof type.errors) &&
       property.name === IS_WORKSPACE_PROPERTY &&
@@ -311,12 +336,15 @@ function hasWorkspaceMarker(component: SbomComponentShape): boolean {
 export function purlSetOf(sbom: unknown): Set<string> {
   const purls = new Set<string>();
   const doc = SbomDocument(sbom);
+
   if (doc instanceof type.errors) return purls;
   for (const raw of doc.components ?? []) {
     const component = SbomComponent(raw);
+
     if (component instanceof type.errors) continue;
     if (component.purl !== undefined) purls.add(component.purl);
   }
+
   return purls;
 }
 
@@ -347,18 +375,24 @@ function recordDockerOccurrenceClaims(
   claims: ReadonlyArray<LicenseClaim>,
 ): void {
   let byTarget = acc.get(purl);
+
   if (byTarget === undefined) {
     byTarget = new Map();
     acc.set(purl, byTarget);
   }
+
   const existing = byTarget.get(target);
+
   if (existing === undefined) {
     byTarget.set(target, [...claims]);
     return;
   }
+
   const seen = new Set(existing.map(claimKey));
+
   for (const claim of claims) {
     const key = claimKey(claim);
+
     if (!seen.has(key)) {
       seen.add(key);
       existing.push(claim);
@@ -389,13 +423,16 @@ function crossImageClaimDivergence(
   }
 
   const distinctSets = new Set<string>();
+
   for (const claims of byTarget.values()) {
     if (claims.length === 0) continue;
     distinctSets.add(claimSetKey(claims));
   }
+
   if (distinctSets.size < 2) return undefined;
 
   const sortedTargets = [...byTarget.keys()].sort(compareCodeUnits);
+
   return {
     kind: "cross-image-claims",
     byTarget: sortedTargets.map((target) => {
@@ -403,6 +440,7 @@ function crossImageClaimDivergence(
       const rawValues = [
         ...new Set(claims.map((c) => c.raw.trim()).filter((raw) => raw !== "")),
       ].sort(compareCodeUnits);
+
       return { target, claims: rawValues };
     }),
   };
@@ -449,6 +487,7 @@ function reconcileIntroductions(
   // Smallest path by compareCodeUnits over the joined chain (NUL-joined so a shorter prefix can
   // never tie a longer chain by concatenation ambiguity).
   const paths = [a.path, b.path].filter((p): p is readonly string[] => p !== undefined);
+
   if (paths.length > 0) {
     reconciled.path = paths.reduce((best, candidate) =>
       compareCodeUnits(candidate.join("\0"), best.join("\0")) < 0 ? candidate : best,
@@ -468,8 +507,10 @@ function mergeInto(existing: PackageEntry, incoming: PackageEntry): void {
   // masked to dev. It matches the package-level rule in render/markdown.ts isDevelopmentOnly.
   // Distinct targets keep their flags independently.
   const byTarget = new Map<string, Occurrence>();
+
   for (const occurrence of [...existing.occurrences, ...incoming.occurrences]) {
     const present = byTarget.get(occurrence.target);
+
     if (present === undefined) {
       byTarget.set(occurrence.target, { ...occurrence });
     } else {
@@ -481,6 +522,7 @@ function mergeInto(existing: PackageEntry, incoming: PackageEntry): void {
       present.introduction = reconcileIntroductions(present.introduction, occurrence.introduction);
     }
   }
+
   existing.occurrences = [...byTarget.values()].sort((a, b) =>
     compareCodeUnits(a.target, b.target),
   );
@@ -489,13 +531,16 @@ function mergeInto(existing: PackageEntry, incoming: PackageEntry): void {
   // intact because the dedup key includes kind and source, so a generator claim never swallows a
   // curated/override claim with the same raw value.
   const seen = new Set(existing.licenseClaims.map(claimKey));
+
   for (const claim of incoming.licenseClaims) {
     const key = claimKey(claim);
+
     if (!seen.has(key)) {
       seen.add(key);
       existing.licenseClaims.push(claim);
     }
   }
+
   // Reconcile scope on a purl collision - the gating "app" scope wins over the non-gating "os"
   // scope. Without this, a purl shared between an app input and an os input is silently demoted to
   // "os" purely by merge order (the os input arriving first), moving a real dependency out of the
@@ -504,9 +549,11 @@ function mergeInto(existing: PackageEntry, incoming: PackageEntry): void {
   if (existing.scope === "os" && incoming.scope === "app") {
     existing.scope = "app";
   }
+
   if (existing.rawScope === undefined && incoming.rawScope !== undefined) {
     existing.rawScope = incoming.rawScope;
   }
+
   // First-seen attribution wins, matching the claims posture: the same purl from two targets
   // carries identical tarball contents, so re-folding would only duplicate lines. A stored
   // attribution is never mutated by a later target.
@@ -523,6 +570,7 @@ function mergeInto(existing: PackageEntry, incoming: PackageEntry): void {
 function assertNotReservedIdentity(input: CollectedSbom): void {
   if ((input.scope ?? "app") === "os") return;
   const id = input.targetIdentity;
+
   if (id.startsWith(DOCKER_IDENTITY_PREFIX)) {
     throw new Error(
       `target "${id}" collides with the reserved docker occurrence namespace "${DOCKER_IDENTITY_PREFIX}*" — rename or exclude the directory; a workspace can never impersonate a docker image occurrence`,
@@ -550,19 +598,23 @@ export function mergeSboms(inputs: ReadonlyArray<CollectedSbom>): CanonicalDepen
   for (const input of inputs) {
     // A malformed document is skipped, never thrown on.
     const doc = SbomDocument(input.sbom);
+
     if (doc instanceof type.errors) continue;
     // The scanned root's purl excludes first-party leaks - read via an independent tolerant narrow,
     // so malformed metadata leaves the root simply absent (every component still walks and emits).
     const rootPurl = rootPurlOf(input.sbom);
     const components = doc.components;
+
     if (components === undefined) continue;
 
     const isDockerInput = input.targetIdentity.startsWith(DOCKER_IDENTITY_PREFIX);
 
     for (const raw of components) {
       const component = SbomComponent(raw);
+
       if (component instanceof type.errors) continue;
       const entry = packageEntryOf(input, component, rootPurl);
+
       if (entry === undefined) continue;
 
       if (isDockerInput) {
@@ -575,6 +627,7 @@ export function mergeSboms(inputs: ReadonlyArray<CollectedSbom>): CanonicalDepen
       }
 
       const existing = byPurl.get(entry.purl);
+
       if (existing === undefined) {
         byPurl.set(entry.purl, entry);
       } else {
@@ -588,8 +641,10 @@ export function mergeSboms(inputs: ReadonlyArray<CollectedSbom>): CanonicalDepen
   // FINAL occurrence list, not the per-input one).
   for (const [purl, byTarget] of dockerClaims) {
     const entry = byPurl.get(purl);
+
     if (entry === undefined) continue;
     const divergence = crossImageClaimDivergence(entry, byTarget);
+
     if (divergence !== undefined) entry.dockerClaimDivergence = divergence;
   }
 
@@ -622,11 +677,13 @@ function packageEntryOf(
   rootPurl: string | undefined,
 ): PackageEntry | undefined {
   const { purl, name, version } = component;
+
   // Malformed entries are skipped, never thrown on - the required purl/name/version triple gate
   // stays explicit.
   if (purl === undefined || name === undefined || version === undefined) {
     return undefined;
   }
+
   // The scanned root never appears in the inventory.
   if (rootPurl !== undefined && purl === rootPurl) return undefined;
 
@@ -634,9 +691,11 @@ function packageEntryOf(
   // cdxgen emits group: "" for ungrouped npm packages; treating the empty string as a real group
   // would compose leading-slash names like "/abab", so an empty-string group is treated as absent.
   const displayName = group !== undefined && group !== "" ? `${group}/${name}` : name;
+
   if (isFirstPartyMember(input, component, displayName, version)) {
     return undefined;
   }
+
   const occurrence: Occurrence = {
     target: input.targetIdentity,
     /**
@@ -651,6 +710,7 @@ function packageEntryOf(
   // cross-purl reconciliation). A purl absent from the map (or no map at all) leaves introduction
   // undefined - the honest residual - so goldens predating provenance stay byte-identical.
   const introduction = input.introductions?.get(purl);
+
   if (introduction !== undefined) occurrence.introduction = introduction;
   const entry: PackageEntry = {
     purl,
@@ -661,10 +721,12 @@ function packageEntryOf(
     scope: input.scope ?? "app", // per-input scope; the docker sidecar inputs set "os"
   };
   const rawScope = component.scope;
+
   if (rawScope !== undefined) entry.rawScope = rawScope;
   // Evidence-derived attribution - set only when at least one usable evidence entry survived the
   // caps (absent, never empty).
   const attribution = attributionOf(component, entry.licenseClaims);
+
   if (attribution !== undefined) entry.attribution = attribution;
   return entry;
 }

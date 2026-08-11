@@ -49,23 +49,30 @@ function isProdGroups(groups: unknown): boolean {
 export function poetryProdPurlSet(lockfileText: string): ReadonlySet<string> {
   const purls = new Set<string>();
   let parsed: unknown;
+
   try {
     parsed = parseToml(lockfileText);
   } catch {
     return purls;
   }
+
   const doc = recordOf(parsed);
+
   if (doc === undefined) return purls;
   const packages = doc["package"];
+
   if (!Array.isArray(packages)) return purls;
   for (const raw of packages) {
     const pkg = recordOf(raw);
+
     if (pkg === undefined) continue;
     if (!isProdGroups(pkg["groups"])) continue;
     const name = stringOf(pkg["name"]);
     const version = stringOf(pkg["version"]);
+
     if (name === undefined || version === undefined) continue;
     purls.add(`pkg:pypi/${normalizePep503(name)}@${version}`);
   }
+
   return purls;
 }

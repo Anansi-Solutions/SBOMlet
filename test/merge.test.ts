@@ -27,6 +27,7 @@ const poetryGroupsDoc = loadFixture("poetry-groups.json");
 
 function shapesByPurl(): Map<string, PackageEntry> {
   const model = mergeSboms([{ sbom: shapesDoc, targetIdentity: SYNTHETIC_TARGET }]);
+
   return new Map(model.packages.map((p) => [p.purl, p]));
 }
 
@@ -168,11 +169,13 @@ describe("mergeSboms — purl-keyed dedup and root exclusion", () => {
 
   test("a components[] entry whose purl equals metadata.component.purl is excluded", () => {
     const entries = shapesByPurl();
+
     expect(entries.has("pkg:npm/synthetic-root@1.0.0")).toBe(false);
   });
 
   test("metadata.component itself never becomes a package", () => {
     const model = mergeSboms([{ sbom: trimmedDoc, targetIdentity: TARGET }]);
+
     expect(model.packages.some((p) => p.purl === "pkg:npm/iframe-rpc")).toBe(false);
     expect(model.packages.some((p) => p.name === "iframe-rpc")).toBe(false);
   });
@@ -199,6 +202,7 @@ describe("mergeSboms — dev marker, scope, and display name", () => {
 
   test("scope taxonomy is 'app' for every entry this phase", () => {
     const model = mergeSboms([{ sbom: trimmedDoc, targetIdentity: TARGET }]);
+
     expect(model.packages.length).toBeGreaterThan(0);
     expect(model.packages.every((p) => p.scope === "app")).toBe(true);
   });
@@ -271,6 +275,7 @@ describe("mergeSboms — ordering, occurrences, and malformed entries", () => {
 
   test("each entry's occurrences equal [targetIdentity]", () => {
     const model = mergeSboms([{ sbom: trimmedDoc, targetIdentity: TARGET }]);
+
     expect(model.packages.length).toBeGreaterThan(0);
     expect(model.packages.every((p) => p.occurrences.length === 1)).toBe(true);
     expect(model.packages.every((p) => p.occurrences[0]?.target === TARGET)).toBe(true);
@@ -342,6 +347,7 @@ describe("mergeSboms — field-level tolerance at the boundary (C1, W1, I1)", ()
 
       expect(model.packages.length).toBe(1);
       const pkg = model.packages[0];
+
       // Wrong-typed group → displayName falls back to the bare name.
       expect(pkg?.name).toBe("kept-pkg");
       // Wrong-typed scope → no rawScope recorded.
@@ -553,12 +559,14 @@ describe("mergeSboms — CollectedSbom.scope threading", () => {
     const model = mergeSboms([
       { sbom: osDoc, targetIdentity: "docker:img/Dockerfile", scope: "os" },
     ]);
+
     expect(model.packages.length).toBe(2);
     expect(model.packages.every((p) => p.scope === "os")).toBe(true);
   });
 
   test('absent scope still defaults to "app" (regression — existing entries unchanged)', () => {
     const model = mergeSboms([{ sbom: osDoc, targetIdentity: "backend" }]);
+
     expect(model.packages.length).toBe(2);
     expect(model.packages.every((p) => p.scope === "app")).toBe(true);
   });
@@ -570,6 +578,7 @@ describe("mergeSboms — CollectedSbom.scope threading", () => {
     ]);
     const os = model.packages.filter((p) => p.scope === "os");
     const app = model.packages.filter((p) => p.scope === "app");
+
     expect(os.map((p) => p.purl).sort()).toEqual([
       "pkg:apk/alpine/musl@1.2.4-r2",
       "pkg:deb/debian/libc6@2.36-9",
@@ -596,6 +605,7 @@ describe("mergeSboms — CollectedSbom.scope threading", () => {
         { sbom: appDoc, targetIdentity: "backend" },
       ]);
       const shared = model.packages.find((p) => p.purl === SHARED);
+
       expect(shared?.scope).toBe("app");
     });
 
@@ -605,6 +615,7 @@ describe("mergeSboms — CollectedSbom.scope threading", () => {
         { sbom: osDoc, targetIdentity: "docker:img/Dockerfile", scope: "os" },
       ]);
       const shared = model.packages.find((p) => p.purl === SHARED);
+
       expect(shared?.scope).toBe("app");
     });
 
@@ -613,6 +624,7 @@ describe("mergeSboms — CollectedSbom.scope threading", () => {
         { sbom: osDoc, targetIdentity: "docker:img/Dockerfile", scope: "os" },
       ]);
       const musl = model.packages.find((p) => p.purl === "pkg:apk/alpine/musl@1.2.4-r2");
+
       expect(musl?.scope).toBe("os");
     });
   });
@@ -788,6 +800,7 @@ describe("mergeSboms — plugin dual-run prod diff", () => {
   // dev = full-run purls ∖ production-run purls.
   function pluginModel(prodPurlSet: ReadonlySet<string>): Map<string, PackageEntry> {
     const model = mergeSboms([{ sbom: pluginFullDoc, targetIdentity: TARGET, prodPurlSet }]);
+
     return new Map(model.packages.map((p) => [p.purl, p]));
   }
 
@@ -818,6 +831,7 @@ describe("mergeSboms — plugin dual-run prod diff", () => {
     for (const pkg of byPurl.values()) {
       expect(pkg.occurrences).toEqual([{ target: TARGET, isDevDependency: true }]);
     }
+
     expect(byPurl.size).toBeGreaterThan(0);
   });
 
@@ -1113,6 +1127,7 @@ describe("mergeSboms — npm optional guard on the dev property", () => {
 
   function scopeByPurl(): Map<string, PackageEntry> {
     const model = mergeSboms([{ sbom: scopePropsDoc, targetIdentity: NPM_TARGET }]);
+
     return new Map(model.packages.map((p) => [p.purl, p]));
   }
 
@@ -1368,6 +1383,7 @@ describe("mergeSboms — evidence parsing into attribution", () => {
 
   function evidenceByPurl(): Map<string, PackageEntry> {
     const model = mergeSboms([{ sbom: evidenceDoc, targetIdentity: EV_TARGET }]);
+
     return new Map(model.packages.map((p) => [p.purl, p]));
   }
 
@@ -1377,9 +1393,11 @@ describe("mergeSboms — evidence parsing into attribution", () => {
     const stripped = loadFixture("plugin-evidence.json") as {
       components: Array<Record<string, unknown>>;
     };
+
     for (const component of stripped.components) {
       delete component["evidence"];
     }
+
     const withEvidence = mergeSboms([{ sbom: evidenceDoc, targetIdentity: EV_TARGET }]);
     const claimsOnly = mergeSboms([{ sbom: stripped, targetIdentity: EV_TARGET }]);
     const claimsOf = (
@@ -1412,6 +1430,7 @@ describe("mergeSboms — evidence parsing into attribution", () => {
 
     // (d) two evidence files: copyright lines union across files.
     const dual = byPurl.get("pkg:npm/dual-file-pkg@4.0.0");
+
     expect(dual?.attribution?.copyrightLines).toEqual([
       "Copyright (c) 2018 Dual Author",
       "Copyright 2019 Dual Author Apache",
@@ -1419,6 +1438,7 @@ describe("mergeSboms — evidence parsing into attribution", () => {
 
     // (e) author but no evidence → attribution key entirely absent.
     const authorOnly = byPurl.get("pkg:npm/author-only-pkg@5.0.0");
+
     expect(authorOnly?.attribution).toBeUndefined();
   });
 
@@ -1464,6 +1484,7 @@ describe("mergeSboms — evidence parsing into attribution", () => {
     const dump = toSortedDependenciesJson(
       mergeSboms([{ sbom: evidenceDoc, targetIdentity: EV_TARGET }]),
     );
+
     expect(dump.includes("Oversize Hacker")).toBe(false);
   });
 
@@ -1482,12 +1503,14 @@ describe("mergeSboms — evidence parsing into attribution", () => {
       ...(ctrl?.attribution?.noticeTexts ?? []),
       ...(ctrl?.attribution?.verbatimTexts ?? []),
     ].join("");
+
     // eslint-disable-next-line no-control-regex -- deliberate control-character class: sanitizer boundary assert
     expect(/[\u0000-\u0008\u000b-\u001f\u007f-\u009f]/.test(stored)).toBe(false);
   });
 
   test("Test 4c: at most 8 evidence entries are folded per package", () => {
     const entries = [];
+
     for (let i = 1; i <= 10; i++) {
       entries.push({
         license: {
@@ -1502,6 +1525,7 @@ describe("mergeSboms — evidence parsing into attribution", () => {
         },
       });
     }
+
     const doc = {
       components: [
         {
@@ -1652,6 +1676,7 @@ describe("mergeSboms — dependency provenance threading", () => {
     const model = mergeSboms([{ sbom: PROV_DOC, targetIdentity: "apps/x", introductions }]);
     const a = model.packages.find((p) => p.purl === "pkg:npm/a@1.0.0");
     const b = model.packages.find((p) => p.purl === "pkg:npm/b@2.0.0");
+
     expect(a?.occurrences[0]?.introduction).toEqual({
       direct: true,
       introducedBy: [],
@@ -1672,11 +1697,13 @@ describe("mergeSboms — dependency provenance threading", () => {
       },
     ]);
     const b = model.packages.find((p) => p.purl === "pkg:npm/b@2.0.0");
+
     expect(b?.occurrences[0]?.introduction).toBeUndefined();
   });
 
   test("no introductions map at all → no occurrence carries introduction (byte-identical residual)", () => {
     const model = mergeSboms([{ sbom: PROV_DOC, targetIdentity: "apps/x" }]);
+
     for (const pkg of model.packages) {
       for (const occurrence of pkg.occurrences) {
         expect(occurrence.introduction).toBeUndefined();
@@ -1700,6 +1727,7 @@ describe("mergeSboms — dependency provenance threading", () => {
       },
     ]);
     const b = model.packages.find((p) => p.purl === "pkg:npm/b@2.0.0");
+
     // Two occurrences, sorted by target; each keeps its own introduction
     // unchanged through the merge (no cross-target reconciliation).
     expect(b?.occurrences).toEqual([
@@ -1750,6 +1778,7 @@ describe("mergeSboms — dependency provenance threading", () => {
         { sbom: PROV_DOC, targetIdentity: "apps/x", introductions: second },
       ]);
       const b = model.packages.find((p) => p.purl === "pkg:npm/b@2.0.0");
+
       return b?.occurrences[0]?.introduction;
     };
     const expected = {
@@ -1759,6 +1788,7 @@ describe("mergeSboms — dependency provenance threading", () => {
       // smallest path by compareCodeUnits: p1 < p2
       path: ["pkg:npm/p1@1.0.0", "pkg:npm/b@2.0.0"],
     };
+
     expect(reconcile(introA, introB)).toEqual(expected);
     // BOTH input orders → identical reconciled result.
     expect(reconcile(introB, introA)).toEqual(expected);
@@ -1777,9 +1807,11 @@ describe("mergeSboms — dependency provenance threading", () => {
         { sbom: PROV_DOC, targetIdentity: "apps/x", introductions: first },
         { sbom: PROV_DOC, targetIdentity: "apps/x", introductions: second },
       ]);
+
       return model.packages.find((p) => p.purl === "pkg:npm/b@2.0.0")?.occurrences[0]?.introduction;
     };
     const direct = fold(introTransitive, introDirect) as { direct: boolean };
+
     expect(direct.direct).toBe(true);
     expect((fold(introDirect, introTransitive) as { direct: boolean }).direct).toBe(true);
   });
@@ -1810,9 +1842,11 @@ describe("mergeSboms — dependency provenance threading", () => {
         { sbom: PROV_DOC, targetIdentity: "apps/x", introductions: first },
         { sbom: PROV_DOC, targetIdentity: "apps/x", introductions: second },
       ]);
+
       return model.packages.find((p) => p.purl === "pkg:npm/b@2.0.0")?.occurrences[0]?.introduction;
     };
     const expected = { direct: true, introducedBy: [] };
+
     // No `path` key, no introducer — a direct dep has no parent chain.
     expect(fold(introDirect, introTransitive)).toEqual(expected);
     // Order-independent.
@@ -1876,6 +1910,7 @@ describe("mergeSboms — reserved docker: occurrence namespace", () => {
 
   test('an identity merely CONTAINING "docker:" elsewhere passes', () => {
     const model = mergeSboms([{ sbom: appDoc, targetIdentity: "apps/docker:tools" }]);
+
     expect(model.packages.length).toBe(1);
   });
 
@@ -1888,6 +1923,7 @@ describe("mergeSboms — reserved docker: occurrence namespace", () => {
         scope: "os",
       },
     ]);
+
     expect(model.packages.length).toBe(1);
     expect(model.packages[0]?.occurrences.map((o) => o.target)).toEqual([
       "docker:a/Dockerfile",
@@ -1936,6 +1972,7 @@ describe("mergeSboms — cross-image claim divergence (dockerClaimDivergence)", 
       },
     ]);
     const pkg = model.packages.find((p) => p.purl === SHARED);
+
     expect(pkg?.dockerClaimDivergence).toBeUndefined();
   });
 
@@ -1953,6 +1990,7 @@ describe("mergeSboms — cross-image claim divergence (dockerClaimDivergence)", 
       },
     ]);
     const pkg = model.packages.find((p) => p.purl === SHARED);
+
     expect(pkg?.dockerClaimDivergence).toEqual({
       kind: "cross-image-claims",
       byTarget: [
@@ -1976,6 +2014,7 @@ describe("mergeSboms — cross-image claim divergence (dockerClaimDivergence)", 
       },
     ]);
     const pkg = model.packages.find((p) => p.purl === SHARED);
+
     expect(pkg?.dockerClaimDivergence).toBeUndefined();
   });
 
@@ -1993,6 +2032,7 @@ describe("mergeSboms — cross-image claim divergence (dockerClaimDivergence)", 
       },
     ]);
     const pkg = model.packages.find((p) => p.purl === SHARED);
+
     expect(pkg?.dockerClaimDivergence).toBeUndefined();
   });
 
@@ -2010,6 +2050,7 @@ describe("mergeSboms — cross-image claim divergence (dockerClaimDivergence)", 
       },
     ]);
     const pkg = model.packages.find((p) => p.purl === SHARED);
+
     expect(pkg?.dockerClaimDivergence).toBeUndefined();
   });
 
@@ -2032,6 +2073,7 @@ describe("mergeSboms — cross-image claim divergence (dockerClaimDivergence)", 
       },
     ]);
     const pkg = model.packages.find((p) => p.purl === SHARED);
+
     expect(pkg?.dockerClaimDivergence?.byTarget).toEqual([
       { target: "docker:image-a", claims: ["MIT"] },
       { target: "docker:image-b", claims: ["MIT"] },
@@ -2067,6 +2109,7 @@ describe("mergeSboms — cross-image claim divergence (dockerClaimDivergence)", 
       },
     ]);
     const pkg = model.packages.find((p) => p.purl === SHARED);
+
     expect(pkg?.scope).toBe("app"); // the existing app-wins promotion, unchanged
     expect(pkg?.dockerClaimDivergence).toBeUndefined();
   });
@@ -2102,6 +2145,7 @@ describe("mergeSboms — cross-image claim divergence (dockerClaimDivergence)", 
     const reversedDivergence = reversed.packages.find(
       (p) => p.purl === SHARED,
     )?.dockerClaimDivergence;
+
     expect(forwardDivergence).toEqual(reversedDivergence);
     expect(forwardDivergence?.byTarget.map((t) => t.target)).toEqual([
       "docker:image-a",

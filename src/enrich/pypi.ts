@@ -36,16 +36,20 @@ function isLicenseId(value: string): boolean {
 function resolveFromClassifiers(classifiers: readonly string[]): PypiResolution | null {
   for (const classifier of classifiers) {
     const spdx = troveToSpdx(classifier);
+
     if (spdx !== undefined) {
       return { raw: spdx, via: "classifier", confidence: "high" };
     }
+
     if (isAmbiguousTroveClassifier(classifier)) {
       // The label after "OSI Approved :: " is the raw correct() resolves downstream ("BSD License"
       // → BSD-2-Clause), flagged LOW because the classifier alone cannot pin the precise variant.
       const label = classifier.split(" :: ").at(-1) ?? classifier;
+
       return { raw: label, via: "classifier", confidence: "low" };
     }
   }
+
   return null;
 }
 
@@ -55,14 +59,17 @@ function resolveFromClassifiers(classifiers: readonly string[]): PypiResolution 
  */
 export function resolvePypiLicense(response: unknown): PypiResolution | null {
   const info = narrowPypiResponse(response);
+
   if (info === undefined) return null;
 
   const expression = info.licenseExpression?.trim();
+
   if (expression !== undefined && expression !== "") {
     return { raw: expression, via: "license-expression", confidence: "high" };
   }
 
   const field = info.license?.trim();
+
   if (field !== undefined && field !== "" && isLicenseId(field)) {
     return { raw: field, via: "license-field", confidence: "high" };
   }

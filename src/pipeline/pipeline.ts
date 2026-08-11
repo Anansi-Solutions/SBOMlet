@@ -210,14 +210,17 @@ function narrowSidecarImages(value: unknown): Array<{ image: string; source: str
   if (!Array.isArray(value)) return undefined;
   const entries: Array<{ image: string; source: string }> = [];
   const seen = new Set<string>();
+
   for (const raw of value) {
     if (typeof raw !== "object" || raw === null) return undefined;
     const { image, source } = raw as { image?: unknown; source?: unknown };
+
     if (!isNonEmptyString(image) || !isNonEmptyString(source)) return undefined;
     if (seen.has(image)) return undefined;
     seen.add(image);
     entries.push({ image, source });
   }
+
   return entries;
 }
 
@@ -233,20 +236,25 @@ function narrowSidecarComponents(
 ): AttributedSidecarComponent[] | undefined {
   if (!Array.isArray(value)) return undefined;
   const components: AttributedSidecarComponent[] = [];
+
   for (const raw of value) {
     if (typeof raw !== "object" || raw === null) return undefined;
     const images = (raw as { images?: unknown }).images;
+
     if (!Array.isArray(images) || images.length === 0) return undefined;
     const memberships: string[] = [];
+
     for (const entry of images) {
       if (!isNonEmptyString(entry) || !listed.has(entry)) return undefined;
       memberships.push(entry);
     }
+
     components.push({
       ...(raw as Record<string, unknown>),
       images: memberships,
     });
   }
+
   return components;
 }
 
@@ -259,11 +267,14 @@ function narrowAttributedSidecar(parsed: unknown): AttributedSidecar | undefined
   if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
     return undefined;
   }
+
   const doc = parsed as Record<string, unknown>;
   const images = narrowSidecarImages(doc["dockerImages"]);
+
   if (images === undefined) return undefined;
   const listed = new Set(images.map((entry) => entry.image));
   const components = narrowSidecarComponents(doc["components"], listed);
+
   if (components === undefined) return undefined;
   return { doc, components, images };
 }
@@ -290,6 +301,7 @@ function readCommittedDockerSbom(opts: GenerateOptions, dir: string): CollectedS
     opts.dockerSbomPath !== undefined
       ? resolveFrom(resolvedRepoRoot(opts) ?? opts.baseDir, opts.dockerSbomPath)
       : resolveFrom(dir, DOCKER_SBOM_FILE);
+
   if (!existsSync(osSbomPath)) {
     // Not a compatibility read - the legacy file's CONTENT is never used. Its presence without the
     // current file means the repo predates the rename, and returning undefined here would silently
@@ -304,18 +316,22 @@ function readCommittedDockerSbom(opts: GenerateOptions, dir: string): CollectedS
           `the legacy file`,
       );
     }
+
     return undefined;
   }
+
   // Size gate BEFORE read: a committed artifact must never balloon a run.
   assertSyftSbomSize(osSbomPath);
   const parsed: unknown = JSON.parse(readFileSync(osSbomPath, "utf8"));
   const attributed = narrowAttributedSidecar(parsed);
+
   if (attributed === undefined) {
     throw new Error(
       `${osSbomPath} is not a per-image attributed docker SBOM — ` +
         `re-run the docker scan (task generate DOCKER=1) to regenerate it`,
     );
   }
+
   return attributed.images.map(({ image, source }) => ({
     sbom: {
       ...attributed.doc,
@@ -335,6 +351,7 @@ function readCommittedDockerSbom(opts: GenerateOptions, dir: string): CollectedS
 function policyPointerPath(opts: GenerateOptions): string {
   const policyFile = resolveFrom(opts.baseDir, opts.policyPath!);
   const repoRoot = resolvedRepoRoot(opts);
+
   if (repoRoot === undefined) return basename(policyFile);
   return relative(repoRoot, policyFile).replaceAll("\\", "/");
 }
@@ -378,12 +395,15 @@ export function resolveCacheDir(opts: {
   const repoRoot =
     opts.repoRoot === undefined ? undefined : resolveFrom(opts.baseDir, opts.repoRoot);
   let dirSetting: string | undefined;
+
   if (opts.policyPath !== undefined) {
     const file = resolveFrom(opts.baseDir, opts.policyPath);
+
     if (existsSync(file)) {
       dirSetting = parsePolicy(readFileSync(file, "utf8")).cache?.dir;
     }
   }
+
   return resolveFrom(repoRoot ?? opts.baseDir, dirSetting ?? DEFAULT_CACHE_DIR);
 }
 
@@ -438,12 +458,14 @@ function intensiveOptionsFor(
  */
 function analyzedContainerSources(model: CanonicalDependencies): ReadonlySet<string> {
   const sources = new Set<string>();
+
   for (const pkg of model.packages) {
     for (const occurrence of pkg.occurrences) {
       if (!occurrence.target.startsWith(DOCKER_IDENTITY_PREFIX)) continue;
       sources.add(occurrence.target.slice(DOCKER_IDENTITY_PREFIX.length));
     }
   }
+
   return sources;
 }
 
@@ -466,18 +488,22 @@ function resolveDevelopmentContainers(
   policy: Policy | undefined,
 ): ReadonlySet<string> {
   const entries = policy?.docker?.development ?? [];
+
   if (entries.length === 0) return new Set();
   const sources = analyzedContainerSources(model);
   const resolved = new Set<string>();
+
   for (const entry of entries) {
     const matcher = globToRegExp(entry.source);
     let matched = false;
+
     for (const source of sources) {
       if (matcher.test(source)) {
         resolved.add(`${DOCKER_IDENTITY_PREFIX}${source}`);
         matched = true;
       }
     }
+
     if (!matched) {
       process.stderr.write(
         `policy: [[docker.development]] "${sanitizeForLog(entry.source)}" ` +
@@ -485,6 +511,7 @@ function resolveDevelopmentContainers(
       );
     }
   }
+
   return resolved;
 }
 
@@ -526,18 +553,21 @@ export async function buildOutputs(opts: GenerateOptions): Promise<BuiltOutputs>
   // (caret-annotated syntax message) and PolicyError (aggregated table-path problems) propagate
   // verbatim to main()'s catch → fail().
   let policy: Policy | undefined;
+
   if (opts.policyPath !== undefined) {
     // Read from the base-dir-resolved path and name the resolved absolute path on failure - a
     // relative path in the error would read as repo-root-relative while the file was searched
     // elsewhere.
     const policyFile = resolveFrom(opts.baseDir, opts.policyPath);
     let policyText: string;
+
     try {
       policyText = readFileSync(policyFile, "utf8");
     } catch {
       // ENOENT and friends → the target.ts error idiom naming the path.
       throw new Error(`policy file is missing or unreadable: expected ${policyFile}`);
     }
+
     policy = parsePolicy(policyText);
   }
 
@@ -556,6 +586,7 @@ export async function buildOutputs(opts: GenerateOptions): Promise<BuiltOutputs>
   // attributed image. A missing file is the offline cache-miss equivalent - no os entries, no
   // docker, no syft.
   const osInputs = readCommittedDockerSbom(opts, dir);
+
   if (osInputs !== undefined) inputs.push(...osInputs);
 
   // One merged model from all targets: shared packages appear once with every consumer in their
@@ -614,6 +645,7 @@ export async function buildOutputs(opts: GenerateOptions): Promise<BuiltOutputs>
   // through escapeCell inside the renderers.
   let verdicts: Verdict[] | undefined;
   let policyView: PolicyView | undefined;
+
   if (policy !== undefined && opts.policyPath !== undefined) {
     verdicts = evaluate(scoped, policy);
     writePolicySummary(policy, verdicts, usedClarifyIndices);
@@ -666,15 +698,19 @@ export async function runGenerate(opts: GenerateOptions): Promise<string> {
 
   // Write the exact rendered strings - the renderers own the bytes.
   const outputPath = resolveFrom(opts.baseDir, opts.outputPath);
+
   writeFileSync(outputPath, outputs.licensesMd);
   process.stderr.write(`wrote ${sanitizeForLog(outputPath)} (${outputs.packageCount} packages)\n`);
   const noticesPath = resolveFrom(opts.baseDir, opts.noticesPath);
+
   writeFileSync(noticesPath, outputs.noticesMd);
   process.stderr.write(`wrote ${sanitizeForLog(noticesPath)}\n`);
   if (opts.cyclonedxPath !== undefined && outputs.cyclonedxJson !== undefined) {
     const cyclonedxPath = resolveFrom(opts.baseDir, opts.cyclonedxPath);
+
     writeFileSync(cyclonedxPath, outputs.cyclonedxJson);
     process.stderr.write(`wrote ${sanitizeForLog(cyclonedxPath)}\n`);
   }
+
   return outputs.licensesMd;
 }

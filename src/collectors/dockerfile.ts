@@ -79,6 +79,7 @@ export interface DiscoverDockerfilesResult {
  */
 export function isDockerfileName(name: string): boolean {
   const lower = name.toLowerCase();
+
   if (lower === "dockerfile") return true;
   if (lower.endsWith(".dockerfile")) return true;
   if (lower.startsWith("dockerfile.")) return true;
@@ -112,6 +113,7 @@ export function discoverDockerfiles(
     // followed/read - no cycle traversal, no escape from repoRoot.
     for (const entry of readdirSync(dir, { withFileTypes: true })) {
       const sub = join(dir, entry.name);
+
       if (entry.isDirectory()) {
         // Dockerfile lane: pass the dot-dir allowlist so .docker/.devcontainer (conventional
         // Dockerfile homes) are descended while .git/.terraform and every other dot-dir stay
@@ -119,10 +121,13 @@ export function discoverDockerfiles(
         if (shouldDescendDir(sub, entry.name, toolDir, DOCKERFILE_DOT_DIR_ALLOWLIST)) {
           walk(sub);
         }
+
         continue;
       }
+
       if (!entry.isFile() || !isDockerfileName(entry.name)) continue;
       const identity = identityOf(sub);
+
       // --exclude prunes silently (a generic walk filter); a [docker] ignore is a deliberate user
       // exclusion the summary surfaces by name.
       if (isExcluded(identity, excludeMatchers)) continue;
@@ -130,6 +135,7 @@ export function discoverDockerfiles(
         ignored.push(identity);
         continue;
       }
+
       found.push({ identity, path: sub });
     }
   };

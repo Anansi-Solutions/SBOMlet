@@ -66,12 +66,16 @@ export function githubRepoFor(parsed: ParsedTerraformPurl): GithubTarget | null 
 
   if (segments.length === 3) {
     const [, namespace, name] = segments as [string, string, string];
+
     return target(namespace, `terraform-provider-${name}`);
   }
+
   if (segments.length === 4) {
     const [, namespace, name, provider] = segments as [string, string, string, string];
+
     return target(namespace, `terraform-${provider}-${name}`);
   }
+
   return null;
 }
 
@@ -96,9 +100,11 @@ export function githubLicenseRefsFor(version: string): Array<string> {
  */
 export function resolveGithubLicense(body: unknown): GithubResolution | null {
   const narrowed = narrowGithubLicense(body);
+
   if (narrowed === undefined) return null;
 
   const spdxId = narrowed.spdxId?.trim();
+
   if (spdxId === undefined || spdxId === "" || spdxId === "NOASSERTION") {
     return null;
   }

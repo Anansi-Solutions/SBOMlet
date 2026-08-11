@@ -98,6 +98,7 @@ export function reportVerifyCache(result: VerifyCacheResult): void {
     process.stderr.write(`${text}\n`);
   };
   const noun = result.audited === 1 ? "entry" : "entries";
+
   if (result.mismatches.length === 0) {
     line(
       `verify-cache: audited ${result.audited} cache ${noun} — ` +
@@ -179,6 +180,7 @@ const DEFAULT_POLICY = ".sbomlet.policy.toml";
 function discoverDefaultPolicy(values: CliValues): string | undefined {
   const anchor = resolveFrom(values["base-dir"], values["repo-root"] ?? ".");
   const candidate = resolveFrom(anchor, DEFAULT_POLICY);
+
   return existsSync(candidate) ? candidate : undefined;
 }
 
@@ -190,7 +192,9 @@ export function optionsFrom(values: CliValues): GenerateOptions {
   if (values.target !== undefined && values["repo-root"] !== undefined) {
     fail(`--target and --repo-root are mutually exclusive — pass at most one\n${USAGE}`);
   }
+
   const outputPath = values.output ?? "THIRD_PARTY_LICENSES.md";
+
   return {
     targetArg: values.target,
     repoRoot: values["repo-root"],
@@ -255,12 +259,15 @@ export function dockerSbomModeConflict(values: CliValues): string | undefined {
         "are mutually exclusive — choose one lane",
     ],
   ];
+
   for (const [left, right, message] of pairs) {
     if (left && right) return message;
   }
+
   if (hasListDockerfiles && !hasRepoRoot) {
     return "--list-dockerfiles requires --repo-root <dir>";
   }
+
   // No lane and no listing - there is no default image set, so a bare invocation is a usage error
   // naming the three ways in.
   if (!hasImage && !hasRepoRoot && !hasDockerfile && !hasListDockerfiles) {
@@ -270,6 +277,7 @@ export function dockerSbomModeConflict(values: CliValues): string | undefined {
       "<ref>... (scan pre-existing images)"
     );
   }
+
   return undefined;
 }
 
@@ -286,15 +294,18 @@ function hasValues(list: string[] | undefined): boolean {
  */
 export function dockerSbomOptionsFrom(values: CliValues): GenerateDockerSbomOptions {
   const conflict = dockerSbomModeConflict(values);
+
   if (conflict !== undefined) {
     fail(`${conflict}\n${USAGE}`);
   }
+
   const hasImage = hasValues(values.image);
   const hasRepoRoot = values["repo-root"] !== undefined;
   const hasDockerfile = hasValues(values.dockerfile);
   // Discover the policy even without --policy so its `[cache] dir` steers the committed-SBOM output
   // to the same cache dir generate/check read from.
   const policyPath = values.policy ?? discoverDefaultPolicy(values);
+
   return {
     ...(hasImage ? { images: values.image } : {}),
     ...(hasRepoRoot ? { repoRoot: values["repo-root"] } : {}),
@@ -341,11 +352,13 @@ async function runGenerateDockerSbomCommand(values: CliValues): Promise<void> {
  */
 async function runCheckCommand(values: CliValues): Promise<never> {
   let result: CheckResult;
+
   try {
     result = await runCheck(optionsFrom(values));
   } catch (error) {
     fail(`${error instanceof Error ? error.message : String(error)}\n`);
   }
+
   process.exit(exitCodeFor(result));
 }
 
@@ -367,6 +380,7 @@ async function runVerifyCacheCommand(values: CliValues): Promise<never> {
   } catch (error) {
     fail(`${error instanceof Error ? error.message : String(error)}\n`);
   }
+
   reportVerifyCache(result);
   process.exit(result.mismatches.length === 0 ? 0 : 1);
 }
@@ -375,6 +389,7 @@ async function main(argv: string[]): Promise<void> {
   const [subcommand, ...rest] = argv;
 
   let values: CliValues;
+
   try {
     ({ values } = parseArgs({
       args: rest,

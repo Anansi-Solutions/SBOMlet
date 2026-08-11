@@ -56,6 +56,7 @@ const FIXTURE_SBOM = {
 async function fakeScanWithCdxgen(): Promise<cdxgenModule.CollectorSbomFile> {
   const tempDir = mkdtempSync(join(tmpdir(), "licenses-check-scan-"));
   const sbomPath = join(tempDir, "bom.json");
+
   writeFileSync(sbomPath, JSON.stringify(FIXTURE_SBOM));
   return { sbomPath, cacheKey: "fake", tool: REAL_CDXGEN.CDXGEN_TOOL };
 }
@@ -69,6 +70,7 @@ const V1_LOCKFILE = ["# yarn lockfile v1", "", "lodash@^4.17.21:", '  version "4
 function makeScannableTree(): { root: string } {
   const root = mkdtempSync(join(tmpdir(), "licenses-check-"));
   const projDir = join(root, "proj");
+
   mkdirSync(projDir);
   writeFileSync(join(projDir, "package.json"), '{ "name": "proj" }\n');
   writeFileSync(join(projDir, "yarn.lock"), V1_LOCKFILE);
@@ -78,6 +80,7 @@ function makeScannableTree(): { root: string } {
 /** Write `text` as a policy file inside `root`; returns its path. */
 function writePolicy(root: string, text: string): string {
   const policyPath = join(root, "policy.toml");
+
   writeFileSync(policyPath, text);
   return policyPath;
 }
@@ -89,6 +92,7 @@ function writePolicy(root: string, text: string): string {
 async function withCapturedStderr(fn: () => Promise<void>): Promise<string> {
   const original = process.stderr.write.bind(process.stderr);
   let captured = "";
+
   process.stderr.write = ((chunk: unknown): boolean => {
     captured += String(chunk);
     return true;
@@ -98,6 +102,7 @@ async function withCapturedStderr(fn: () => Promise<void>): Promise<string> {
   } finally {
     process.stderr.write = original;
   }
+
   return captured;
 }
 
@@ -111,10 +116,12 @@ function snapshotTree(root: string): Record<string, string> {
   const walk = (dir: string): void => {
     for (const entry of readdirSync(dir, { withFileTypes: true })) {
       const path = join(dir, entry.name);
+
       if (entry.isDirectory()) walk(path);
       else out[relative(root, path)] = readFileSync(path).toString("base64");
     }
   };
+
   walk(root);
   return out;
 }
@@ -173,6 +180,7 @@ describe("runCheck + exitCodeFor — the CI gate", () => {
   // null) — generate writes a negative cache entry into the tree, check reads
   // it offline, and every existing golden/count is byte-identical.
   let originalFetch: typeof fetch;
+
   beforeAll(() => {
     originalFetch = globalThis.fetch;
     globalThis.fetch = (async (): Promise<Response> =>
@@ -194,6 +202,7 @@ describe("runCheck + exitCodeFor — the CI gate", () => {
   test("Test 1: clean tree — zero violations, zero stale, exit 0", async () => {
     const { root } = makeScannableTree();
     const paths = pathsFor(root, false);
+
     await withCapturedStderr(async () => {
       await runGenerate({ repoRoot: root, ...paths, verbose: false });
     });
@@ -214,11 +223,13 @@ describe("runCheck + exitCodeFor — the CI gate", () => {
     for (const editTarget of ["outputPath", "noticesPath", "cyclonedxPath"] as const) {
       const { root } = makeScannableTree();
       const paths = pathsFor(root, true);
+
       await withCapturedStderr(async () => {
         await runGenerate({ repoRoot: root, ...paths, verbose: false });
       });
 
       const editedPath = paths[editTarget]!;
+
       writeFileSync(editedPath, readFileSync(editedPath, "utf8") + "x");
 
       let result: Awaited<ReturnType<typeof runCheck>> | undefined;
@@ -235,6 +246,7 @@ describe("runCheck + exitCodeFor — the CI gate", () => {
   test("Test 3: a missing committed output is stale by definition — exit 2", async () => {
     const { root } = makeScannableTree();
     const paths = pathsFor(root, false);
+
     await withCapturedStderr(async () => {
       await runGenerate({ repoRoot: root, ...paths, verbose: false });
     });
@@ -253,16 +265,19 @@ describe("runCheck + exitCodeFor — the CI gate", () => {
   test("Test 4: a CRLF-checked-out committed file still checks clean", async () => {
     const { root } = makeScannableTree();
     const paths = pathsFor(root, false);
+
     await withCapturedStderr(async () => {
       await runGenerate({ repoRoot: root, ...paths, verbose: false });
     });
 
     // Simulate an unpinned autocrlf checkout: same content, CRLF endings.
     const lf = readFileSync(paths.outputPath, "utf8");
+
     expect(lf).toContain("\n");
     writeFileSync(paths.outputPath, lf.replaceAll("\n", "\r\n"));
 
     let result: Awaited<ReturnType<typeof runCheck>> | undefined;
+
     await withCapturedStderr(async () => {
       result = await runCheck({ repoRoot: root, ...paths, verbose: false });
     });
@@ -277,6 +292,7 @@ describe("runCheck + exitCodeFor — the CI gate", () => {
     const paths = pathsFor(root, false);
     // Minimal policy: AGPL has no covering rule and no suppression -> fail.
     const policyPath = writePolicy(root, '[unknown]\nhandling = "warn"\n');
+
     await withCapturedStderr(async () => {
       await runGenerate({
         repoRoot: root,
@@ -310,6 +326,7 @@ describe("runCheck + exitCodeFor — the CI gate", () => {
     const { root } = makeScannableTree();
     const paths = pathsFor(root, false);
     const policyPath = writePolicy(root, WARN_ONLY_POLICY);
+
     await withCapturedStderr(async () => {
       await runGenerate({
         repoRoot: root,
@@ -343,6 +360,7 @@ describe("runCheck + exitCodeFor — the CI gate", () => {
   test("Test 7: check without --policy performs staleness only", async () => {
     const { root } = makeScannableTree();
     const paths = pathsFor(root, false);
+
     await withCapturedStderr(async () => {
       await runGenerate({ repoRoot: root, ...paths, verbose: false });
     });
@@ -352,6 +370,7 @@ describe("runCheck + exitCodeFor — the CI gate", () => {
     const stderrClean = await withCapturedStderr(async () => {
       clean = await runCheck({ repoRoot: root, ...paths, verbose: false });
     });
+
     expect(clean!.violations).toBe(0);
     expect(exitCodeFor(clean!)).toBe(0);
     expect(stderrClean).not.toContain("policy");
@@ -359,6 +378,7 @@ describe("runCheck + exitCodeFor — the CI gate", () => {
     // Edited file -> 2 (staleness still gates without a policy).
     writeFileSync(paths.noticesPath, readFileSync(paths.noticesPath, "utf8") + "x");
     let stale: Awaited<ReturnType<typeof runCheck>> | undefined;
+
     await withCapturedStderr(async () => {
       stale = await runCheck({ repoRoot: root, ...paths, verbose: false });
     });
@@ -369,6 +389,7 @@ describe("runCheck + exitCodeFor — the CI gate", () => {
     const { root } = makeScannableTree();
     const paths = pathsFor(root, true);
     const policyPath = writePolicy(root, '[unknown]\nhandling = "warn"\n');
+
     await withCapturedStderr(async () => {
       await runGenerate({
         repoRoot: root,
@@ -379,6 +400,7 @@ describe("runCheck + exitCodeFor — the CI gate", () => {
     });
 
     const before = snapshotTree(root);
+
     await withCapturedStderr(async () => {
       await runCheck({ repoRoot: root, ...paths, policyPath, verbose: false });
     });
@@ -404,6 +426,7 @@ describe("runCheck + exitCodeFor — the CI gate", () => {
     const { root } = makeScannableTree();
     const paths = pathsFor(root, true);
     const policyPath = writePolicy(root, '[unknown]\nhandling = "warn"\n');
+
     await withCapturedStderr(async () => {
       await runGenerate({
         repoRoot: root,
@@ -414,6 +437,7 @@ describe("runCheck + exitCodeFor — the CI gate", () => {
     });
 
     const before = snapshotTree(root);
+
     // Passing --intensive to check is a config error: it throws (-> main's
     // catch -> fail() -> exit 3 path) and never reaches exitCodeFor. This is
     // the FIRST guard, checked before the dump-model one, in runCheck.
@@ -446,6 +470,7 @@ describe("runCheck + exitCodeFor — the CI gate", () => {
     const { root } = makeScannableTree();
     const paths = pathsFor(root, false);
     const brokenPolicy = writePolicy(root, "[unknown\nhandling =\n");
+
     await withCapturedStderr(async () => {
       await expect(
         runCheck({
@@ -470,6 +495,7 @@ describe("runCheck + exitCodeFor — the CI gate", () => {
 /** Run `fn` with globalThis.fetch swapped, always restored in finally. */
 async function withFetch<T>(impl: typeof fetch, fn: () => Promise<T>): Promise<T> {
   const original = globalThis.fetch;
+
   globalThis.fetch = impl;
   try {
     return await fn();
@@ -505,6 +531,7 @@ describe("offline check contract — enrichment staleness", () => {
   test("a no-cache-entry unknown is exit-2 stale naming the purl + the regenerate remedy", async () => {
     const { root } = makeScannableTree();
     const paths = pathsFor(root, false);
+
     // Generate the committed outputs with a stub that resolves no-claims, then
     // DELETE the committed cache so the outputs match but the cache lacks the
     // unknown's entry — exactly the "cache fell behind the lockfile" condition.
@@ -535,6 +562,7 @@ describe("offline check contract — enrichment staleness", () => {
   test("a populated committed cache makes a fetch-stubbed-to-throw check pass clean (hermetic, zero fetch)", async () => {
     const { root } = makeScannableTree();
     const paths = pathsFor(root, false);
+
     // Generate WITH the network (resolving stub) → committed cache + outputs
     // both carry the resolved no-claims license.
     await withFetch(RESOLVING_FETCH, async () => {
@@ -561,6 +589,7 @@ describe("offline check contract — enrichment staleness", () => {
   test("check is write-free against the committed cache — byte-identical tree before/after", async () => {
     const { root } = makeScannableTree();
     const paths = pathsFor(root, true);
+
     await withFetch(RESOLVING_FETCH, async () => {
       await withCapturedStderr(async () => {
         await runGenerate({ repoRoot: root, ...paths, verbose: false });
@@ -568,6 +597,7 @@ describe("offline check contract — enrichment staleness", () => {
     });
 
     const before = snapshotTree(root);
+
     await withFetch(THROWING_FETCH, () =>
       withCapturedStderr(async () => {
         await runCheck({ repoRoot: root, ...paths, verbose: false });
@@ -640,11 +670,13 @@ describe("the committed docker.sbom.json as a scope:os merge input", () => {
 
   test("a committed docker.sbom.json at the repo root threads os-scope deb/apk entries into the merged model", async () => {
     const { root } = makeScannableTree();
+
     mkdirSync(join(root, ".sbomlet.cache"), { recursive: true });
     writeFileSync(join(root, ".sbomlet.cache", "docker.sbom.json"), JSON.stringify(DOCKER_SBOM));
     const paths = pathsFor(root, false);
 
     let outputs: Awaited<ReturnType<typeof buildOutputs>> | undefined;
+
     await withFetch(EMPTY_FETCH, () =>
       withCapturedStderr(async () => {
         outputs = await buildOutputs({
@@ -660,8 +692,10 @@ describe("the committed docker.sbom.json as a scope:os merge input", () => {
     // deb/apk rows — proof the committed SBOM crossed into the merge as
     // scope:os. The occurrence identity is per-image (image lane → the ref).
     const md = outputs!.licensesMd;
+
     expect(md.includes("### Container: docker:postgres:18")).toBe(true);
     const containerSection = squish(md.slice(md.indexOf("### Container: docker:postgres:18")));
+
     expect(containerSection.includes("| libc6 | deb | 2.36-9 |")).toBe(true);
     expect(containerSection.includes("| musl | apk | 1.2.4-r2 |")).toBe(true);
   });
@@ -672,11 +706,13 @@ describe("the committed docker.sbom.json as a scope:os merge input", () => {
     // base-dir is NOT the scanned repo; the consumer commits the SBOM at
     // THEIR repo root.
     const baseDir = mkdtempSync(join(tmpdir(), "licenses-check-basedir-"));
+
     mkdirSync(join(root, ".sbomlet.cache"), { recursive: true });
     writeFileSync(join(root, ".sbomlet.cache", "docker.sbom.json"), JSON.stringify(DOCKER_SBOM));
     const paths = pathsFor(root, false);
 
     let outputs: Awaited<ReturnType<typeof buildOutputs>> | undefined;
+
     await withFetch(EMPTY_FETCH, () =>
       withCapturedStderr(async () => {
         outputs = await buildOutputs({
@@ -691,8 +727,10 @@ describe("the committed docker.sbom.json as a scope:os merge input", () => {
     // Read from the repo root, so the container's subsection and deb/apk
     // rows are present.
     const md = outputs!.licensesMd;
+
     expect(md.includes("### Container: docker:postgres:18")).toBe(true);
     const containerSection = squish(md.slice(md.indexOf("### Container: docker:postgres:18")));
+
     expect(containerSection.includes("| libc6 | deb | 2.36-9 |")).toBe(true);
     expect(containerSection.includes("| musl | apk | 1.2.4-r2 |")).toBe(true);
   });
@@ -700,6 +738,7 @@ describe("the committed docker.sbom.json as a scope:os merge input", () => {
   test("a docker.sbom.json beside the base dir is IGNORED when the base dir differs from the repo root (no base-dir leakage)", async () => {
     const { root } = makeScannableTree();
     const baseDir = mkdtempSync(join(tmpdir(), "licenses-check-basedir-"));
+
     // A cache dir in the invocation dir (e.g. the action's own checkout) must
     // NOT leak into a scan of a different repo root.
     mkdirSync(join(baseDir, ".sbomlet.cache"), { recursive: true });
@@ -707,6 +746,7 @@ describe("the committed docker.sbom.json as a scope:os merge input", () => {
     const paths = pathsFor(root, false);
 
     let outputs: Awaited<ReturnType<typeof buildOutputs>> | undefined;
+
     await withFetch(EMPTY_FETCH, () =>
       withCapturedStderr(async () => {
         outputs = await buildOutputs({
@@ -719,6 +759,7 @@ describe("the committed docker.sbom.json as a scope:os merge input", () => {
     );
 
     const md = outputs!.licensesMd;
+
     // The base-dir SBOM did NOT leak in: no container subsection renders at
     // all (there is nothing to analyze), and the count is zero.
     expect(md.includes("### Container:")).toBe(false);
@@ -733,6 +774,7 @@ describe("the committed docker.sbom.json as a scope:os merge input", () => {
     const paths = pathsFor(root, false);
 
     let outputs: Awaited<ReturnType<typeof buildOutputs>> | undefined;
+
     await withFetch(EMPTY_FETCH, () =>
       withCapturedStderr(async () => {
         outputs = await buildOutputs({
@@ -745,6 +787,7 @@ describe("the committed docker.sbom.json as a scope:os merge input", () => {
     );
 
     const md = outputs!.licensesMd;
+
     // No container was analyzed, so no "### Container:" subsection renders
     // anywhere (there is nothing to group).
     expect(md.includes("### Container:")).toBe(false);
@@ -758,6 +801,7 @@ describe("the committed docker.sbom.json as a scope:os merge input", () => {
 
   test("a LEGACY docker-os.sbom.json without the current file fails LOUDLY naming the remedy", async () => {
     const { root } = makeScannableTree();
+
     mkdirSync(join(root, ".sbomlet.cache"), { recursive: true });
     // A repo generated before the rename: only the old filename exists.
     writeFileSync(join(root, ".sbomlet.cache", "docker-os.sbom.json"), JSON.stringify(DOCKER_SBOM));
@@ -779,6 +823,7 @@ describe("the committed docker.sbom.json as a scope:os merge input", () => {
 
   test("a lingering legacy file beside the current docker.sbom.json is ignored — its content is never read", async () => {
     const { root } = makeScannableTree();
+
     mkdirSync(join(root, ".sbomlet.cache"), { recursive: true });
     writeFileSync(join(root, ".sbomlet.cache", "docker.sbom.json"), JSON.stringify(DOCKER_SBOM));
     // Deliberately unparseable: reading it would throw, proving it is not read.
@@ -786,6 +831,7 @@ describe("the committed docker.sbom.json as a scope:os merge input", () => {
     const paths = pathsFor(root, false);
 
     let outputs: Awaited<ReturnType<typeof buildOutputs>> | undefined;
+
     await withFetch(EMPTY_FETCH, () =>
       withCapturedStderr(async () => {
         outputs = await buildOutputs({
@@ -800,20 +846,24 @@ describe("the committed docker.sbom.json as a scope:os merge input", () => {
     const containerSection = squish(
       outputs!.licensesMd.slice(outputs!.licensesMd.indexOf("### Container: docker:postgres:18")),
     );
+
     expect(containerSection.includes("| libc6 | deb | 2.36-9 |")).toBe(true);
   });
 
   test("an explicit --docker-sbom override reads that file only — no legacy-file guard", async () => {
     const { root } = makeScannableTree();
+
     mkdirSync(join(root, ".sbomlet.cache"), { recursive: true });
     // Legacy file present at the default location, but the caller names an
     // explicit path: the override wins and the guard stays silent.
     writeFileSync(join(root, ".sbomlet.cache", "docker-os.sbom.json"), "not json");
     const override = join(root, "custom.sbom.json");
+
     writeFileSync(override, JSON.stringify(DOCKER_SBOM));
     const paths = pathsFor(root, false);
 
     let outputs: Awaited<ReturnType<typeof buildOutputs>> | undefined;
+
     await withFetch(EMPTY_FETCH, () =>
       withCapturedStderr(async () => {
         outputs = await buildOutputs({
@@ -829,6 +879,7 @@ describe("the committed docker.sbom.json as a scope:os merge input", () => {
     const containerSection = squish(
       outputs!.licensesMd.slice(outputs!.licensesMd.indexOf("### Container: docker:postgres:18")),
     );
+
     expect(containerSection.includes("| libc6 | deb | 2.36-9 |")).toBe(true);
   });
 });
@@ -927,6 +978,7 @@ async function buildAgainst(
       });
     }),
   );
+
   return { outputs: outputs!, stderr };
 }
 
@@ -943,6 +995,7 @@ describe("sidecar fan-out and the malformed-sidecar failure", () => {
 
   test("the sidecar fans out per image: a shared purl rows in EACH container's own subsection, unique purls one each", async () => {
     const { root } = makeScannableTree();
+
     writeSidecar(root, TWO_IMAGE_SIDECAR);
 
     const { outputs } = await buildAgainst(root);
@@ -950,10 +1003,12 @@ describe("sidecar fan-out and the malformed-sidecar failure", () => {
     const md = outputs.licensesMd;
     const aPos = md.indexOf("### Container: docker:a/Dockerfile");
     const bPos = md.indexOf("### Container: docker:b/Dockerfile");
+
     expect(aPos).toBeGreaterThan(-1);
     expect(bPos).toBeGreaterThan(aPos);
     const aSection = squish(md.slice(aPos, bPos));
     const bSection = squish(md.slice(bPos));
+
     // The shared purl crossed the untouched merge as TWO occurrences, and
     // rows in EACH container's own subsection (no Used-in column here — the
     // heading already scopes the row).
@@ -1030,6 +1085,7 @@ describe("sidecar fan-out and the malformed-sidecar failure", () => {
   for (const { label, doc } of MALFORMED_VARIANTS) {
     test(`a malformed sidecar (${label}) fails LOUDLY — never a partial model, never dropped inventory`, async () => {
       const { root } = makeScannableTree();
+
       writeSidecar(root, doc);
 
       await expect(buildAgainst(root)).rejects.toThrow(/re-run the docker scan/);
@@ -1038,6 +1094,7 @@ describe("sidecar fan-out and the malformed-sidecar failure", () => {
 
   test("a compatible rule scoped to a per-image occurrence matches — not unused", async () => {
     const { root } = makeScannableTree();
+
     writeSidecar(root, DOCKER_SBOM);
     const policyPath = writePolicy(root, SCOPED_DOCKER_POLICY);
 
@@ -1049,6 +1106,7 @@ describe("sidecar fan-out and the malformed-sidecar failure", () => {
 
   test("double-read determinism: two builds over one sidecar are byte-identical", async () => {
     const { root } = makeScannableTree();
+
     writeSidecar(root, TWO_IMAGE_SIDECAR);
 
     const first = await buildAgainst(root);
@@ -1152,6 +1210,7 @@ describe("the two-Dockerfile scenario end-to-end", () => {
 
   test("scoped acceptance: busybox ok via compatible[0] at image A ONLY; the B occurrence WARNS visibly in render and stderr", async () => {
     const { root } = makeScannableTree();
+
     writeSidecar(root, SCENARIO_SIDECAR);
     const policyPath = writePolicy(root, scenarioPolicy("warn", true));
 
@@ -1165,6 +1224,7 @@ describe("the two-Dockerfile scenario end-to-end", () => {
     const atB = verdicts.find(
       (v) => v.purl === BUSYBOX_PURL && v.occurrenceTarget === "docker:b/Dockerfile",
     )!;
+
     expect(atA.status).toBe("ok");
     expect(atA.rule).toBe("compatible[0]");
     expect(atB.status).toBe("warn");
@@ -1183,6 +1243,7 @@ describe("the two-Dockerfile scenario end-to-end", () => {
     const copyleft = squish(
       md.slice(md.indexOf("## Copyleft and special notices"), md.indexOf("## Containers")),
     );
+
     expect(copyleft.includes("| busybox |")).toBe(false);
     expect(
       copyleft.includes("✅ No package carries copyleft or special license obligations."),
@@ -1194,15 +1255,18 @@ describe("the two-Dockerfile scenario end-to-end", () => {
     // narrows).
     const aSection = squish(md.slice(md.indexOf("### Container: docker:a/Dockerfile")));
     const bSection = squish(md.slice(md.indexOf("### Container: docker:b/Dockerfile")));
+
     expect(aSection.includes("| busybox | apk | 1.37.0-r19 | GPL-2.0-only |")).toBe(true);
     expect(bSection.includes("| busybox | apk | 1.37.0-r19 | GPL-2.0-only |")).toBe(true);
   });
 
   test('with [os_dependencies] handling="fail" the B occurrence FAILS — exit 1, blocking table names the B target', async () => {
     const { root } = makeScannableTree();
+
     writeSidecar(root, SCENARIO_SIDECAR);
     const policyPath = writePolicy(root, scenarioPolicy("fail", true));
     const paths = pathsFor(root, false);
+
     await withFetch(EMPTY_FETCH, () =>
       withCapturedStderr(async () => {
         await runGenerate({
@@ -1237,6 +1301,7 @@ describe("the two-Dockerfile scenario end-to-end", () => {
         md.indexOf("## Copyleft and special notices"),
       ),
     );
+
     expect(problematic.includes("| fail | default:copyleft | busybox |")).toBe(true);
     expect(problematic.includes("docker:b/Dockerfile")).toBe(true);
     expect(problematic.includes("docker:a/Dockerfile")).toBe(false);
@@ -1244,6 +1309,7 @@ describe("the two-Dockerfile scenario end-to-end", () => {
 
   test("UNSCOPED variant: dropping where accepts busybox at BOTH occurrences (narrowing is opt-in)", async () => {
     const { root } = makeScannableTree();
+
     writeSidecar(root, SCENARIO_SIDECAR);
     const policyPath = writePolicy(root, scenarioPolicy("warn", false));
 
@@ -1252,6 +1318,7 @@ describe("the two-Dockerfile scenario end-to-end", () => {
     const busybox = outputs
       .verdicts!.filter((v) => v.purl === BUSYBOX_PURL)
       .map((v) => [v.occurrenceTarget, v.status, v.rule]);
+
     expect(busybox).toEqual([
       ["docker:a/Dockerfile", "ok", "compatible[0]"],
       ["docker:b/Dockerfile", "ok", "compatible[0]"],
@@ -1344,6 +1411,7 @@ describe("the container re-scope transform end to end (buildOutputs)", () => {
 
   test("an application-ecosystem copyleft package in a PRODUCTION container FAILS via default:copyleft", async () => {
     const { root } = makeScannableTree();
+
     writeSidecar(root, ECOSYSTEM_SIDECAR);
     const policyPath = writePolicy(root, ecosystemPolicy("warn", "warn"));
 
@@ -1353,12 +1421,14 @@ describe("the container re-scope transform end to end (buildOutputs)", () => {
       (v) =>
         v.purl === "pkg:pypi/pip-copyleft@1.0.0" && v.occurrenceTarget === "docker:prod/Dockerfile",
     );
+
     expect(verdict?.status).toBe("fail");
     expect(verdict?.rule).toBe("default:copyleft");
   });
 
   test("the SAME application-ecosystem package in a DEV-marked container dev-downgrades to warn (dev_dependencies=warn)", async () => {
     const { root } = makeScannableTree();
+
     writeSidecar(root, ECOSYSTEM_SIDECAR);
     const policyPath = writePolicy(root, ecosystemPolicy("warn", "warn"));
 
@@ -1368,18 +1438,21 @@ describe("the container re-scope transform end to end (buildOutputs)", () => {
       (v) =>
         v.purl === "pkg:pypi/pip-copyleft@1.0.0" && v.occurrenceTarget === "docker:dev/Dockerfile",
     );
+
     expect(verdict?.status).toBe("warn");
     expect(verdict?.rule).toBe("default:copyleft");
   });
 
   test("a deb (OS-allowlist) GPL package in a production container still os-downgrades to warn under os_dependencies=warn — routine behavior unchanged", async () => {
     const { root } = makeScannableTree();
+
     writeSidecar(root, ECOSYSTEM_SIDECAR);
     const policyPath = writePolicy(root, ecosystemPolicy("warn", "warn"));
 
     const { outputs } = await buildAgainst(root, policyPath);
 
     const verdict = outputs.verdicts!.find((v) => v.purl === "pkg:deb/debian/sys-gpl@1.0.0");
+
     expect(verdict?.status).toBe("warn");
     expect(verdict?.rule).toBe("default:copyleft");
   });
@@ -1387,12 +1460,14 @@ describe("the container re-scope transform end to end (buildOutputs)", () => {
   test("a deb (OS-allowlist) AGPL package FAILS via default:agpl-container under os_dependencies warn/fail/ignore — system-package escalation unchanged", async () => {
     for (const osHandling of ["warn", "fail", "ignore"]) {
       const { root } = makeScannableTree();
+
       writeSidecar(root, ECOSYSTEM_SIDECAR);
       const policyPath = writePolicy(root, ecosystemPolicy(osHandling, "warn"));
 
       const { outputs } = await buildAgainst(root, policyPath);
 
       const verdict = outputs.verdicts!.find((v) => v.purl === "pkg:deb/debian/sys-agpl@1.0.0");
+
       expect(verdict?.status).toBe("fail");
       expect(verdict?.rule).toBe("default:agpl-container");
     }
@@ -1400,18 +1475,21 @@ describe("the container re-scope transform end to end (buildOutputs)", () => {
 
   test("a golang (application-ecosystem) AGPL package in a production container FAILS via the normal copyleft path (default:copyleft), not default:agpl-container", async () => {
     const { root } = makeScannableTree();
+
     writeSidecar(root, ECOSYSTEM_SIDECAR);
     const policyPath = writePolicy(root, ecosystemPolicy("warn", "warn"));
 
     const { outputs } = await buildAgainst(root, policyPath);
 
     const verdict = outputs.verdicts!.find((v) => v.purl === "pkg:golang/go-agpl@1.0.0");
+
     expect(verdict?.status).toBe("fail");
     expect(verdict?.rule).toBe("default:copyleft");
   });
 
   test("the [[docker.development]] dead-pattern warning still fires per unmatched pattern; the resolved set drives BOTH the transform and the render from ONE resolution", async () => {
     const { root } = makeScannableTree();
+
     writeSidecar(root, ECOSYSTEM_SIDECAR);
     const policyPath = writePolicy(
       root,
@@ -1447,6 +1525,7 @@ describe("the container re-scope transform end to end (buildOutputs)", () => {
       (v) =>
         v.purl === "pkg:pypi/pip-copyleft@1.0.0" && v.occurrenceTarget === "docker:dev/Dockerfile",
     );
+
     expect(devVerdict?.status).toBe("warn");
     expect(squish(outputs.licensesMd).includes("| docker:dev/Dockerfile | development | 1 |")).toBe(
       true,
@@ -1506,6 +1585,7 @@ describe("PolicyView.developmentContainers — pipeline glob resolution", () => 
 
   test('a `**` glob matches ACROSS segments: "tools/**" marks the nested container development; the sibling stays production', async () => {
     const { root } = makeScannableTree();
+
     writeSidecar(root, GLOB_SIDECAR);
     const policyPath = writePolicy(root, developmentGlobPolicy("tools/**"));
 
@@ -1515,12 +1595,14 @@ describe("PolicyView.developmentContainers — pipeline glob resolution", () => 
     const containers = squish(
       md.slice(md.indexOf("## Containers"), md.indexOf("## Production dependencies")),
     );
+
     expect(containers.includes("| docker:tools/build/Dockerfile | development | 1 |")).toBe(true);
     expect(containers.includes("| docker:a/Dockerfile | production | 1 |")).toBe(true);
   });
 
   test('a `*` glob does NOT cross segments: "tools/*" leaves "tools/build/Dockerfile" production (the ignore matcher\'s documented semantics)', async () => {
     const { root } = makeScannableTree();
+
     writeSidecar(root, GLOB_SIDECAR);
     const policyPath = writePolicy(root, developmentGlobPolicy("tools/*"));
 
@@ -1530,12 +1612,14 @@ describe("PolicyView.developmentContainers — pipeline glob resolution", () => 
     const containers = squish(
       md.slice(md.indexOf("## Containers"), md.indexOf("## Production dependencies")),
     );
+
     expect(containers.includes("| docker:tools/build/Dockerfile | production | 1 |")).toBe(true);
     expect(containers.includes("| docker:a/Dockerfile | production | 1 |")).toBe(true);
   });
 
   test("a literal source matches exactly", async () => {
     const { root } = makeScannableTree();
+
     writeSidecar(root, GLOB_SIDECAR);
     const policyPath = writePolicy(root, developmentGlobPolicy("a/Dockerfile"));
 
@@ -1545,12 +1629,14 @@ describe("PolicyView.developmentContainers — pipeline glob resolution", () => 
     const containers = squish(
       md.slice(md.indexOf("## Containers"), md.indexOf("## Production dependencies")),
     );
+
     expect(containers.includes("| docker:a/Dockerfile | development | 1 |")).toBe(true);
     expect(containers.includes("| docker:tools/build/Dockerfile | production | 1 |")).toBe(true);
   });
 
   test("two patterns matching the SAME container mark it once (idempotent)", async () => {
     const { root } = makeScannableTree();
+
     writeSidecar(root, GLOB_SIDECAR);
     const policyPath = writePolicy(
       root,
@@ -1580,6 +1666,7 @@ describe("PolicyView.developmentContainers — pipeline glob resolution", () => 
     const containers = squish(
       md.slice(md.indexOf("## Containers"), md.indexOf("## Production dependencies")),
     );
+
     // Exactly ONE row for the doubly-matched container, still development.
     expect((containers.match(/docker:tools\/build\/Dockerfile/g) ?? []).length).toBe(1);
     expect(containers.includes("| docker:tools/build/Dockerfile | development | 1 |")).toBe(true);
@@ -1587,6 +1674,7 @@ describe("PolicyView.developmentContainers — pipeline glob resolution", () => 
 
   test("no [[docker.development]] entries → every container reads production", async () => {
     const { root } = makeScannableTree();
+
     writeSidecar(root, GLOB_SIDECAR);
     const policyPath = writePolicy(
       root,
@@ -1601,6 +1689,7 @@ describe("PolicyView.developmentContainers — pipeline glob resolution", () => 
     const containers = squish(
       md.slice(md.indexOf("## Containers"), md.indexOf("## Production dependencies")),
     );
+
     expect(containers.includes("| docker:tools/build/Dockerfile | production | 1 |")).toBe(true);
     expect(containers.includes("| docker:a/Dockerfile | production | 1 |")).toBe(true);
   });
@@ -1619,6 +1708,7 @@ describe("PolicyView.developmentContainers — pipeline glob resolution", () => 
         { image: "special-img", digest: "", source: "b?(1)$c/Dockerfile" },
       ],
     );
+
     writeSidecar(root, sidecar);
     const policyPath = writePolicy(
       root,
@@ -1648,6 +1738,7 @@ describe("PolicyView.developmentContainers — pipeline glob resolution", () => 
     const containers = squish(
       md.slice(md.indexOf("## Containers"), md.indexOf("## Production dependencies")),
     );
+
     // "a.c" matches only its own literal source — the dot is escaped, never
     // a regex any-char wildcard, so "abc" stays production.
     expect(containers.includes("| docker:a.c/Dockerfile | development | 1 |")).toBe(true);
@@ -1669,6 +1760,7 @@ describe("PolicyView.developmentContainers — pipeline glob resolution", () => 
         { image: "lower-img", digest: "", source: "a/Dockerfile" },
       ],
     );
+
     writeSidecar(root, sidecar);
     const policyPath = writePolicy(root, developmentGlobPolicy("a/**"));
 
@@ -1681,6 +1773,7 @@ describe("PolicyView.developmentContainers — pipeline glob resolution", () => 
       md.indexOf("## Production dependencies"),
     );
     const containers = squish(containersBlock);
+
     expect(containers.includes("| docker:A/Dockerfile | development | 1 |")).toBe(true);
     expect(containers.includes("| docker:a/Dockerfile | development | 1 |")).toBe(true);
     // Code-unit order: uppercase "A" (0x41) sorts before lowercase "a"
@@ -1714,6 +1807,7 @@ describe("a dead [[docker.development]] pattern warns; the marking never touches
 
   test("a pattern matching no analyzed container warns; a matching pattern is silent", async () => {
     const { root } = makeScannableTree();
+
     writeSidecar(root, GLOB_SIDECAR);
     const policyPath = writePolicy(root, developmentGlobPolicy("no/such/Dockerfile"));
 
@@ -1728,6 +1822,7 @@ describe("a dead [[docker.development]] pattern warns; the marking never touches
 
   test("a matching pattern prints no dead-entry warning", async () => {
     const { root } = makeScannableTree();
+
     writeSidecar(root, GLOB_SIDECAR);
     const policyPath = writePolicy(root, developmentGlobPolicy("tools/**"));
 
@@ -1738,6 +1833,7 @@ describe("a dead [[docker.development]] pattern warns; the marking never touches
 
   test("PER PATTERN: one matching + one dead pattern fires exactly ONE warning, naming the dead one", async () => {
     const { root } = makeScannableTree();
+
     writeSidecar(root, GLOB_SIDECAR);
     const policyPath = writePolicy(
       root,
@@ -1764,6 +1860,7 @@ describe("a dead [[docker.development]] pattern warns; the marking never touches
     const { stderr } = await buildAgainst(root, policyPath);
 
     const warnings = (stderr.match(/policy: \[\[docker\.development\]\]/g) ?? []).length;
+
     expect(warnings).toBe(1);
     expect(
       stderr.includes(
@@ -1775,6 +1872,7 @@ describe("a dead [[docker.development]] pattern warns; the marking never touches
 
   test("two DIFFERENT patterns matching the SAME container fire NO warning at all (idempotent dev marking is legal)", async () => {
     const { root } = makeScannableTree();
+
     writeSidecar(root, GLOB_SIDECAR);
     const policyPath = writePolicy(
       root,
@@ -1805,6 +1903,7 @@ describe("a dead [[docker.development]] pattern warns; the marking never touches
 
   test("render-only contract: [[docker.development]] never changes evaluate's verdict stream", async () => {
     const { root } = makeScannableTree();
+
     writeSidecar(root, GLOB_SIDECAR);
     const baselinePolicy = writePolicy(
       root,
@@ -1815,6 +1914,7 @@ describe("a dead [[docker.development]] pattern warns; the marking never touches
     const { outputs: baseline } = await buildAgainst(root, baselinePolicy);
 
     const { root: root2 } = makeScannableTree();
+
     writeSidecar(root2, GLOB_SIDECAR);
     const markedPolicy = writePolicy(root2, developmentGlobPolicy("a/**"));
     const { outputs: marked } = await buildAgainst(root2, markedPolicy);

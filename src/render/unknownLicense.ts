@@ -16,11 +16,13 @@ import type { PackageEntry } from "../model/dependencies";
  */
 export function isUnknownLicense(pkg: PackageEntry): boolean {
   const finding = pkg.finding;
+
   if (finding !== undefined) {
     if (finding.confidence === "imprecise") return false;
     if (finding.expression === null) return true;
     return electedIsRefOnly(finding.elected);
   }
+
   return pkg.licenseClaims.length === 0;
 }
 

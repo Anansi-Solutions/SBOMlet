@@ -83,6 +83,7 @@ export const MAX_MAVEN_SBOM_BYTES = 32 * 1024 * 1024;
  */
 export function assertMavenSbomSize(sbomPath: string): void {
   const size = statSync(sbomPath).size;
+
   if (size > MAX_MAVEN_SBOM_BYTES) {
     throw new Error(
       `maven.sbom.json at ${sbomPath} is ${size} bytes, over the ` +
@@ -156,6 +157,7 @@ function readAndNarrowMavenSbom(
 ): { text: string; parsed: unknown; rootPurl: string } {
   const text = readFileSync(sbomPath, "utf8");
   let parsed: unknown;
+
   try {
     parsed = JSON.parse(text);
   } catch (error) {
@@ -165,19 +167,23 @@ function readAndNarrowMavenSbom(
   }
 
   const narrowed = MavenSbomDocument(parsed);
+
   if (narrowed instanceof type.errors) {
     throw new Error(
       `${label} at ${sbomPath} does not match the expected ` +
         `CycloneDX shape: ${narrowed.summary}`,
     );
   }
+
   if (narrowed.bomFormat !== "CycloneDX") {
     throw new Error(
       `${label} at ${sbomPath} is not a CycloneDX document ` +
         `(bomFormat: ${JSON.stringify(narrowed.bomFormat)}, expected "CycloneDX")`,
     );
   }
+
   const rootPurl = narrowed.metadata?.component?.purl;
+
   if (rootPurl === undefined || !rootPurl.startsWith("pkg:maven/")) {
     throw new Error(
       `${label} at ${sbomPath} has metadata.component.purl ` +
@@ -185,6 +191,7 @@ function readAndNarrowMavenSbom(
         "committed artifact under this name must be a Maven module's BOM",
     );
   }
+
   return { text, parsed, rootPurl };
 }
 
@@ -198,13 +205,16 @@ function readAndNarrowMavenSbom(
  */
 function composeMavenInventory(testParsed: unknown, defaultParsed: unknown): unknown {
   const testDoc = recordOf(testParsed);
+
   if (testDoc === undefined) return testParsed;
   const testComponents = Array.isArray(testDoc["components"])
     ? (testDoc["components"] as unknown[])
     : [];
   const testPurls = new Set<string>();
+
   for (const raw of testComponents) {
     const purl = recordOf(raw)?.["purl"];
+
     if (typeof purl === "string") testPurls.add(purl);
   }
 
@@ -215,6 +225,7 @@ function composeMavenInventory(testParsed: unknown, defaultParsed: unknown): unk
       : [];
   const residual = defaultComponents.filter((raw) => {
     const purl = recordOf(raw)?.["purl"];
+
     return typeof purl !== "string" || !testPurls.has(purl);
   });
 
@@ -252,6 +263,7 @@ export async function collectWithMavenSbom(
   opts: MavenCollectOptions = {},
 ): Promise<MavenCollectResult> {
   const sbomPath = join(target.dir, "maven.sbom.json");
+
   if (!existsSync(sbomPath)) {
     throw new Error(`target "${target.identity}" is missing maven.sbom.json: expected ${sbomPath}`);
   }
@@ -305,6 +317,7 @@ export async function collectWithMavenSbom(
   // committed artifact is already canonical; rewriting it here would only risk data loss.
   const tempDir = opts.tempDir ?? mkdtempSync(join(tmpdir(), "licenses-"));
   const outPath = join(tempDir, "bom.json");
+
   writeFileSync(outPath, outputText);
 
   return {
@@ -333,12 +346,15 @@ export async function collectWithMavenSbom(
  */
 export function mavenRootPurlOf(text: string): string | undefined {
   let parsed: unknown;
+
   try {
     parsed = JSON.parse(text);
   } catch {
     return undefined;
   }
+
   const narrowed = MavenSbomDocument(parsed);
+
   if (narrowed instanceof type.errors) return undefined;
   if (narrowed.bomFormat !== "CycloneDX") return undefined;
   return narrowed.metadata?.component?.purl;
@@ -361,12 +377,16 @@ export function mavenRootPurlOf(text: string): string | undefined {
  */
 export function excludeMavenFirstParty(sbom: unknown, purls: ReadonlySet<string>): unknown {
   const doc = recordOf(sbom);
+
   if (doc === undefined) return sbom;
   const components = doc["components"];
+
   if (!Array.isArray(components)) return sbom;
   const filtered = components.filter((component) => {
     const purl = recordOf(component)?.["purl"];
+
     return typeof purl !== "string" || !purls.has(purl);
   });
+
   return { ...doc, components: filtered };
 }

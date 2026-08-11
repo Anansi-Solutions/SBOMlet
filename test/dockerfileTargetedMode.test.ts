@@ -10,6 +10,7 @@ const tempRoots: string[] = [];
 
 function makeTempRoot(): string {
   const root = mkdtempSync(join(tmpdir(), "licenses-docker-target-"));
+
   tempRoots.push(root);
   return root;
 }
@@ -17,6 +18,7 @@ function makeTempRoot(): string {
 /** Write `content` at `root/rel` and return the absolute path. */
 function writeFile(root: string, rel: string, content: string): string {
   const full = join(root, ...rel.split("/"));
+
   mkdirSync(join(full, ".."), { recursive: true });
   writeFileSync(full, content);
   return full;
@@ -42,6 +44,7 @@ describe("resolveTargetedDockerfiles (targeted build lane, NO docker, NO file re
       { identity: "frontend/Dockerfile", path: b },
       { identity: "db/Dockerfile", path: c },
     ]);
+
     // Sorted by identity; each file → its own imageTag (no base collapse).
     expect(build.map((x) => x.identity)).toEqual([
       "backend/Dockerfile",
@@ -63,6 +66,7 @@ describe("resolveTargetedDockerfiles (targeted build lane, NO docker, NO file re
       { identity: "app/Dockerfile", path: a },
       { identity: "app/Dockerfile", path: a },
     ]);
+
     expect(build.map((x) => x.identity)).toEqual(["app/Dockerfile"]);
   });
 
@@ -75,6 +79,7 @@ describe("resolveTargetedDockerfiles (targeted build lane, NO docker, NO file re
       { identity: "app/Dockerfile", path: a },
       { identity: "db/Dockerfile", path: b },
     ]);
+
     expect(summary).toContain("building 2 targeted Dockerfile(s):");
     expect(summary).toContain(`app/Dockerfile -> ${imageTag("app/Dockerfile")}`);
     expect(summary).toContain(`db/Dockerfile -> ${imageTag("db/Dockerfile")}`);
@@ -83,6 +88,7 @@ describe("resolveTargetedDockerfiles (targeted build lane, NO docker, NO file re
 
   test("an empty targeted list yields an empty build set, announced", () => {
     const { build, summary } = resolveTargetedDockerfiles([]);
+
     expect(build).toEqual([]);
     expect(summary).toContain("build set is EMPTY");
   });
@@ -96,6 +102,7 @@ describe("resolveTargetedDockerfiles (targeted build lane, NO docker, NO file re
     const craftedIdentity = `app${String.fromCharCode(7)}/Dockerfile`; // embedded BEL
 
     const { summary } = resolveTargetedDockerfiles([{ identity: craftedIdentity, path: a }]);
+
     expect(summary).not.toContain(String.fromCharCode(7));
     expect(summary).toContain(`app /Dockerfile -> ${imageTag(craftedIdentity)}`);
   });
@@ -110,6 +117,7 @@ describe("resolveTargetedDockerfiles (targeted build lane, NO docker, NO file re
 
     const { summary } = resolveTargetedDockerfiles([{ identity: craftedIdentity, path: a }]);
     const buildSetLine = summary.split("\n").find((l) => l.includes("build set"));
+
     expect(buildSetLine).toBeDefined();
     expect(buildSetLine).not.toContain(String.fromCharCode(7));
     expect(buildSetLine).toContain("app /Dockerfile");

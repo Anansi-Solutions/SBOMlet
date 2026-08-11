@@ -34,19 +34,23 @@ export interface PurlGraph {
 /** Insert one (key→value) into a Set-of-values map. */
 export function addToSetMap(map: Map<string, Set<string>>, key: string, value: string): void {
   let set = map.get(key);
+
   if (set === undefined) {
     set = new Set<string>();
     map.set(key, set);
   }
+
   set.add(value);
 }
 
 /** Materialize a Set-of-values map into a sorted-array adjacency map. */
 export function sortSetMap(map: Map<string, Set<string>>): Map<string, string[]> {
   const out = new Map<string, string[]>();
+
   for (const [key, set] of map) {
     out.set(key, [...set].sort(compareCodeUnits));
   }
+
   return out;
 }
 
@@ -65,6 +69,7 @@ function expandLevel(
   visited: Set<string>,
 ): BfsNode[] {
   const next: BfsNode[] = [];
+
   for (const node of frontier) {
     for (const child of graph.edges.get(node.purl) ?? []) {
       if (visited.has(child)) continue;
@@ -72,6 +77,7 @@ function expandLevel(
       next.push({ purl: child, path: [...node.path, child] });
     }
   }
+
   return next.sort((a, b) => compareCodeUnits(a.purl, b.purl));
 }
 
@@ -91,17 +97,21 @@ function expandLevel(
 export function shortestPath(graph: PurlGraph, target: string): string[] | undefined {
   const visited = new Set<string>();
   let frontier: BfsNode[] = [];
+
   for (const child of [...graph.rootChildren].sort(compareCodeUnits)) {
     if (visited.has(child)) continue;
     visited.add(child);
     frontier.push({ purl: child, path: [child] });
   }
+
   while (frontier.length > 0) {
     for (const node of frontier) {
       if (node.purl === target) return node.path;
     }
+
     frontier = expandLevel(graph, frontier, visited);
   }
+
   return undefined;
 }
 
@@ -126,6 +136,7 @@ function expandReachable(
   reachable: Set<string>,
 ): string[] {
   const next: string[] = [];
+
   for (const purl of frontier) {
     for (const child of graph.edges.get(purl) ?? []) {
       if (reachable.has(child)) continue;
@@ -133,20 +144,24 @@ function expandReachable(
       next.push(child);
     }
   }
+
   return next;
 }
 
 function reachableFromRoots(graph: PurlGraph): Set<string> {
   const reachable = new Set<string>();
   let frontier: string[] = [];
+
   for (const child of graph.rootChildren) {
     if (reachable.has(child)) continue;
     reachable.add(child);
     frontier.push(child);
   }
+
   while (frontier.length > 0) {
     frontier = expandReachable(graph, frontier, reachable);
   }
+
   return reachable;
 }
 
@@ -174,12 +189,15 @@ function reachableFromRoots(graph: PurlGraph): Set<string> {
 export function deriveIntroductions(graph: PurlGraph): Map<string, DependencyIntroduction> {
   const reachable = reachableFromRoots(graph);
   const result = new Map<string, DependencyIntroduction>();
+
   for (const purl of graph.nodes) {
     const direct = graph.rootChildren.has(purl);
+
     if (direct) {
       result.set(purl, { direct: true, introducedBy: [] });
       continue;
     }
+
     // Intersect the purl-space parent SET with the root-reachable set: a parent unreachable from
     // every declared root cannot be a real introducer (the bad state is unrepresentable). Already
     // sorted (parents is a sorted adjacency), so the filter preserves order.
@@ -189,8 +207,10 @@ export function deriveIntroductions(graph: PurlGraph): Map<string, DependencyInt
       introducedBy,
     };
     const path = shortestPath(graph, purl);
+
     if (path !== undefined) introduction.path = path;
     result.set(purl, introduction);
   }
+
   return result;
 }

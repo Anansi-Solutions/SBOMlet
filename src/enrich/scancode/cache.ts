@@ -73,6 +73,7 @@ export function serializeScancodeMemo(memo: Map<string, ScancodeMemoEntry>): str
     version: MEMO_VERSION,
     entries: Object.fromEntries(memo),
   };
+
   return toSortedJson(file);
 }
 

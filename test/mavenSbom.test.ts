@@ -240,10 +240,12 @@ afterEach(() => {
 /** Writes the given files into a fresh temp dir and returns it as a Target. */
 function makeTargetWithFiles(files: Record<string, string>): Target {
   const dir = mkdtempSync(join(tmpdir(), "licenses-test-"));
+
   tempDirs.push(dir);
   for (const [name, content] of Object.entries(files)) {
     writeFileSync(join(dir, name), content);
   }
+
   return { dir, identity: "test/synthetic" };
 }
 
@@ -253,6 +255,7 @@ function makeMavenTarget(sbom: string): Target {
 
 function makeOutDir(): string {
   const dir = mkdtempSync(join(tmpdir(), "licenses-test-out-"));
+
   tempDirs.push(dir);
   return dir;
 }
@@ -274,6 +277,7 @@ async function scanSbom(sbom: string): Promise<ScannedDoc> {
   const raw = readFileSync(result.sbomPath, "utf8");
   const doc = JSON.parse(raw) as Record<string, unknown>;
   const components = (doc["components"] ?? []) as Array<Record<string, unknown>>;
+
   return { target, ...result, raw, doc, components };
 }
 
@@ -289,16 +293,19 @@ describe("collectWithMavenSbom — determinism", () => {
   test("two runs over the same committed bytes produce byte-identical output", async () => {
     const first = await scanSbom(HAPPY_SBOM);
     const second = await scanSbom(HAPPY_SBOM);
+
     expect(first.raw).toBe(second.raw);
   });
 
   test("the written bytes are the committed bytes VERBATIM — never re-sorted or re-serialized", async () => {
     const { raw } = await scanSbom(HAPPY_SBOM);
+
     expect(raw).toBe(HAPPY_SBOM);
   });
 
   test("the parsed output document deep-equals the committed input document", async () => {
     const { doc } = await scanSbom(HAPPY_SBOM);
+
     expect(doc).toEqual(JSON.parse(HAPPY_SBOM));
   });
 });
@@ -323,6 +330,7 @@ describe("MAVEN_COLLECTOR_TOOL", () => {
 describe("collectWithMavenSbom — identity and emission", () => {
   test("every fixture component's purl passes through verbatim, casing and qualifiers intact", async () => {
     const { components } = await scanSbom(HAPPY_SBOM);
+
     expect(componentPurls(components)).toEqual([
       "pkg:maven/com.example/commons-id@1.2.0?type=jar",
       "pkg:maven/com.example/expr-lib@1.0.0?type=jar",
@@ -336,6 +344,7 @@ describe("collectWithMavenSbom — identity and emission", () => {
   test("an SPDX-id license claim passes through unchanged", async () => {
     const { components } = await scanSbom(HAPPY_SBOM);
     const commons = components.find((c) => c["name"] === "commons-id");
+
     expect(commons).toMatchObject({
       licenses: [{ license: { id: "MIT" } }],
     });
@@ -344,6 +353,7 @@ describe("collectWithMavenSbom — identity and emission", () => {
   test("an expression license claim passes through unchanged", async () => {
     const { components } = await scanSbom(HAPPY_SBOM);
     const expr = components.find((c) => c["name"] === "expr-lib");
+
     expect(expr).toMatchObject({
       licenses: [{ expression: "Apache-2.0 OR MIT" }],
     });
@@ -352,6 +362,7 @@ describe("collectWithMavenSbom — identity and emission", () => {
   test("a MIXED component carries BOTH an id claim and a name claim (never a single-claim shape)", async () => {
     const { components } = await scanSbom(HAPPY_SBOM);
     const mixed = components.find((c) => c["name"] === "mixed-lib");
+
     expect(mixed).toMatchObject({
       licenses: [
         { license: { id: "BSD-3-Clause" } },
@@ -363,6 +374,7 @@ describe("collectWithMavenSbom — identity and emission", () => {
   test("a name-only claim carries the raw name and url untouched", async () => {
     const { components } = await scanSbom(HAPPY_SBOM);
     const nameOnly = components.find((c) => c["name"] === "name-only-lib");
+
     expect(nameOnly).toMatchObject({
       licenses: [
         {
@@ -378,6 +390,7 @@ describe("collectWithMavenSbom — identity and emission", () => {
   test("a no-license synthetic commercial-looking GAV still enters the inventory with zero claims", async () => {
     const { components } = await scanSbom(HAPPY_SBOM);
     const commercial = components.find((c) => c["name"] === "proprietary-lib");
+
     expect(commercial).toBeDefined();
     expect(commercial!["licenses"]).toBeUndefined();
   });
@@ -387,6 +400,7 @@ describe("collectWithMavenSbom — identity and emission", () => {
     const classified = components.find(
       (c) => c["purl"] === "pkg:maven/com.example/lib@2.0.0?classifier=jakarta&type=jar",
     );
+
     expect(classified).toMatchObject({
       hashes: [{ alg: "SHA-256", content: "abcdef1234567890" }],
     });
@@ -394,6 +408,7 @@ describe("collectWithMavenSbom — identity and emission", () => {
 
   test("groupId/artifactId casing is never lowercased (Pitfall 2)", async () => {
     const { raw } = await scanSbom(HAPPY_SBOM);
+
     // The fixture carries no mixed-case ids on purpose (Maven Central
     // convention is lowercase groupIds), so this test instead locks the
     // absence of any case transform: the raw bytes are untouched entirely.
@@ -409,6 +424,7 @@ describe("maven registry collector — CollectedSbom shape", () => {
   test("returns { sbom, targetIdentity } ONLY: no prodPurlSet, no firstPartyNames", async () => {
     const target = makeMavenTarget(HAPPY_SBOM);
     const collector = collectors.get("maven");
+
     expect(collector).toBeDefined();
     const result = await collector!.collect(
       { ...target, lockfile: "maven" },
@@ -418,6 +434,7 @@ describe("maven registry collector — CollectedSbom shape", () => {
         log: () => {},
       },
     );
+
     expect(Object.keys(result).sort()).toEqual(["sbom", "targetIdentity"]);
     expect("prodPurlSet" in result).toBe(false);
     expect("firstPartyNames" in result).toBe(false);
@@ -438,6 +455,7 @@ describe("collectWithMavenSbom — contract and cache key", () => {
     const target = makeMavenTarget(HAPPY_SBOM);
     const outDir = makeOutDir();
     const result = await collectWithMavenSbom(target, { tempDir: outDir });
+
     expect(result.sbomPath).toBe(join(outDir, "bom.json"));
     expect(result.tool).toEqual(MAVEN_COLLECTOR_TOOL);
     expect(typeof result.cacheKey).toBe("string");
@@ -448,6 +466,7 @@ describe("collectWithMavenSbom — contract and cache key", () => {
     const result = await collectWithMavenSbom(target, {
       tempDir: makeOutDir(),
     });
+
     expect(result.cacheKey).toBe(
       computeCacheKey(target, MAVEN_COLLECTOR_TOOL, ["maven-sbom-reader-v1"], ["maven.sbom.json"]),
     );
@@ -461,6 +480,7 @@ describe("collectWithMavenSbom — contract and cache key", () => {
 describe("collectWithMavenSbom — failure modes", () => {
   test("missing maven.sbom.json throws the target.ts-shaped error", async () => {
     const target = makeTargetWithFiles({});
+
     await expect(collectWithMavenSbom(target, { tempDir: makeOutDir() })).rejects.toThrow(
       /missing maven\.sbom\.json/,
     );
@@ -472,11 +492,13 @@ describe("collectWithMavenSbom — failure modes", () => {
     // failure can only come from the size gate, not the parser.
     const oversize = `{${" ".repeat(cap)}}`;
     const target = makeMavenTarget(oversize);
+
     expect.assertions(3);
     try {
       await collectWithMavenSbom(target, { tempDir: makeOutDir() });
     } catch (error) {
       const message = String(error);
+
       expect(message).toContain(join(target.dir, "maven.sbom.json"));
       expect(message).toContain(String(cap + 2)); // actual size
       expect(message).toContain(String(cap)); // the cap
@@ -485,11 +507,13 @@ describe("collectWithMavenSbom — failure modes", () => {
 
   test("non-JSON garbage fails loudly naming the path (the scan-failure path)", async () => {
     const target = makeMavenTarget("this is not json {{{");
+
     expect.assertions(2);
     try {
       await collectWithMavenSbom(target, { tempDir: makeOutDir() });
     } catch (error) {
       const message = String(error);
+
       expect(message).toContain("not valid JSON");
       expect(message).toContain(join(target.dir, "maven.sbom.json"));
     }
@@ -497,6 +521,7 @@ describe("collectWithMavenSbom — failure modes", () => {
 
   test("valid JSON that is not CycloneDX (no bomFormat) throws naming the expectation", async () => {
     const target = makeMavenTarget(NON_CYCLONEDX_JSON);
+
     await expect(collectWithMavenSbom(target, { tempDir: makeOutDir() })).rejects.toThrow(
       /CycloneDX/,
     );
@@ -504,11 +529,13 @@ describe("collectWithMavenSbom — failure modes", () => {
 
   test("a CycloneDX doc whose root purl is not pkg:maven/ throws naming BOTH the found purl and the expected prefix", async () => {
     const target = makeMavenTarget(WRONG_ROOT_PURL_SBOM);
+
     expect.assertions(3);
     try {
       await collectWithMavenSbom(target, { tempDir: makeOutDir() });
     } catch (error) {
       const message = String(error);
+
       expect(message).toContain("pkg:npm/not-maven-at-all@1.0.0"); // found
       expect(message).toContain("pkg:maven/"); // expected
       expect(message).toContain(join(target.dir, "maven.sbom.json"));
@@ -547,6 +574,7 @@ describe("mavenRootPurlOf — pre-pass root purl extraction", () => {
       components: [],
       metadata: { component: { name: "no-purl-here" } },
     });
+
     expect(mavenRootPurlOf(noPurl)).toBeUndefined();
   });
 
@@ -555,6 +583,7 @@ describe("mavenRootPurlOf — pre-pass root purl extraction", () => {
       bomFormat: "CycloneDX",
       components: [],
     });
+
     expect(mavenRootPurlOf(noMetadata)).toBeUndefined();
   });
 });
@@ -569,6 +598,7 @@ describe("excludeMavenFirstParty — reactor sibling exclusion", () => {
     const filtered = excludeMavenFirstParty(JSON.parse(MODULE_B_SBOM), purls) as {
       components: Array<Record<string, unknown>>;
     };
+
     expect(filtered.components.map((c) => c["purl"])).toEqual([
       "pkg:maven/com.example.fixture/commons-lang3@3.12.0?type=jar",
       "pkg:maven/com.example.fixture/gson@2.10.1?type=jar",
@@ -580,6 +610,7 @@ describe("excludeMavenFirstParty — reactor sibling exclusion", () => {
     const filtered = excludeMavenFirstParty(JSON.parse(MODULE_B_SBOM), purls) as {
       components: Array<Record<string, unknown>>;
     };
+
     expect(filtered.components.map((c) => c["purl"])).toEqual([
       "pkg:maven/com.example.fixture/liba@1.0.0?type=jar",
       "pkg:maven/com.example.fixture/commons-lang3@3.12.0?type=jar",
@@ -589,12 +620,14 @@ describe("excludeMavenFirstParty — reactor sibling exclusion", () => {
 
   test("an empty purl set deep-equals the input document", () => {
     const doc = JSON.parse(MODULE_B_SBOM);
+
     expect(excludeMavenFirstParty(doc, new Set())).toEqual(doc);
   });
 
   test("never mutates the input document", () => {
     const doc = JSON.parse(MODULE_B_SBOM) as { components: unknown[] };
     const originalLength = doc.components.length;
+
     excludeMavenFirstParty(doc, new Set(["pkg:maven/com.example.fixture/liba@1.0.0?type=jar"]));
     expect(doc.components.length).toBe(originalLength);
   });
@@ -602,6 +635,7 @@ describe("excludeMavenFirstParty — reactor sibling exclusion", () => {
   test("module A's own inventory is untouched (no sibling purl present)", () => {
     const doc = JSON.parse(MODULE_A_SBOM);
     const purls = new Set(["pkg:maven/com.example.fixture/appb@1.0.0?type=jar"]);
+
     expect(excludeMavenFirstParty(doc, purls)).toEqual(doc);
   });
 
@@ -611,6 +645,7 @@ describe("excludeMavenFirstParty — reactor sibling exclusion", () => {
     const filtered = excludeMavenFirstParty(doc, purls) as {
       components: unknown[];
     };
+
     expect(filtered.components).toEqual([]);
   });
 
@@ -620,6 +655,7 @@ describe("excludeMavenFirstParty — reactor sibling exclusion", () => {
       doc,
       new Set(["pkg:maven/com.example.fixture/liba@1.0.0?type=jar"]),
     ) as { components: Array<Record<string, unknown>> };
+
     expect(filtered.components[0]).toEqual({
       type: "library",
       group: "com.example.fixture",
@@ -834,6 +870,7 @@ describe("collectWithMavenSbom — dual-document composed inventory", () => {
     const doc = JSON.parse(readFileSync(result.sbomPath, "utf8")) as {
       components: Array<Record<string, unknown>>;
     };
+
     expect(componentPurls(doc.components)).toEqual([
       "pkg:maven/com.example.dual/compile-lib@1.0.0?type=jar",
       "pkg:maven/com.example.dual/test-only-lib@1.0.0?type=jar",
@@ -862,6 +899,7 @@ describe("collectWithMavenSbom — dual-document composed inventory", () => {
     const testOnlyLib = model.packages.find(
       (p) => p.purl === "pkg:maven/com.example.dual/test-only-lib@1.0.0?type=jar",
     );
+
     expect(compileLib?.occurrences[0]?.isDevDependency).toBe(false);
     expect(testOnlyLib?.occurrences[0]?.isDevDependency).toBe(true);
   });
@@ -882,6 +920,7 @@ describe("collectWithMavenSbom — dual-document envelope pass-through", () => {
       tempDir: makeOutDir(),
     });
     const doc = JSON.parse(readFileSync(result.sbomPath, "utf8")) as Record<string, unknown>;
+
     expect(doc["specVersion"]).toBe("1.6");
     expect(doc["serialNumber"]).toBe("urn:uuid:22222222-2222-2222-2222-222222222222");
     expect(doc["dependencies"]).toEqual([
@@ -899,6 +938,7 @@ describe("collectWithMavenSbom — dual-document mediation edge cases", () => {
     const doc = JSON.parse(readFileSync(result.sbomPath, "utf8")) as {
       components: Array<Record<string, unknown>>;
     };
+
     expect(componentPurls(doc.components).sort()).toEqual(
       [
         "pkg:maven/com.example.dual/mediated-lib@1.0.0?type=jar",
@@ -918,6 +958,7 @@ describe("collectWithMavenSbom — dual-document mediation edge cases", () => {
     const devVersion = model.packages.find(
       (p) => p.purl === "pkg:maven/com.example.dual/mediated-lib@1.0.0?type=jar",
     );
+
     expect(prodVersion?.occurrences[0]?.isDevDependency).toBe(false);
     expect(devVersion?.occurrences[0]?.isDevDependency).toBe(true);
   });
@@ -930,6 +971,7 @@ describe("collectWithMavenSbom — dual-document mediation edge cases", () => {
     const doc = JSON.parse(readFileSync(result.sbomPath, "utf8")) as {
       components: Array<Record<string, unknown>>;
     };
+
     expect(componentPurls(doc.components)).toEqual([
       "pkg:maven/com.example.dual/shared-scope-lib@1.0.0?type=jar",
     ]);
@@ -943,6 +985,7 @@ describe("collectWithMavenSbom — dual-document mediation edge cases", () => {
     const shared = model.packages.find(
       (p) => p.purl === "pkg:maven/com.example.dual/shared-scope-lib@1.0.0?type=jar",
     );
+
     expect(shared?.occurrences[0]?.isDevDependency).toBe(false);
   });
 
@@ -954,6 +997,7 @@ describe("collectWithMavenSbom — dual-document mediation edge cases", () => {
     const doc = JSON.parse(readFileSync(result.sbomPath, "utf8")) as {
       components: Array<Record<string, unknown>>;
     };
+
     expect(componentPurls(doc.components)).toEqual([
       "pkg:maven/com.example.dual/system-lib@1.0.0?type=jar",
     ]);
@@ -964,11 +1008,13 @@ describe("collectWithMavenSbom — dual-document mediation edge cases", () => {
 
   test("default-doc-only (no test doc): prodPurlSet is undefined — the backward-compat regression lock", async () => {
     const result = await scanSbom(HAPPY_SBOM);
+
     expect(result.prodPurlSet).toBeUndefined();
   });
 
   test("default-doc-only (no test doc): the output bytes are STILL the verbatim committed default doc", async () => {
     const { raw } = await scanSbom(HAPPY_SBOM);
+
     expect(raw).toBe(HAPPY_SBOM);
   });
 });
@@ -976,11 +1022,13 @@ describe("collectWithMavenSbom — dual-document mediation edge cases", () => {
 describe("collectWithMavenSbom — test doc loud narrow", () => {
   test("a present maven.test.sbom.json that is not CycloneDX throws naming the test doc's own path", async () => {
     const target = makeDualMavenTarget(HAPPY_SBOM, NON_CYCLONEDX_JSON);
+
     expect.assertions(2);
     try {
       await collectWithMavenSbom(target, { tempDir: makeOutDir() });
     } catch (error) {
       const message = String(error);
+
       expect(message).toContain("CycloneDX");
       expect(message).toContain(join(target.dir, "maven.test.sbom.json"));
     }
@@ -988,11 +1036,13 @@ describe("collectWithMavenSbom — test doc loud narrow", () => {
 
   test("a present maven.test.sbom.json whose root purl is not pkg:maven/ throws naming both purls", async () => {
     const target = makeDualMavenTarget(HAPPY_SBOM, WRONG_ROOT_PURL_SBOM);
+
     expect.assertions(3);
     try {
       await collectWithMavenSbom(target, { tempDir: makeOutDir() });
     } catch (error) {
       const message = String(error);
+
       expect(message).toContain("pkg:npm/not-maven-at-all@1.0.0");
       expect(message).toContain("pkg:maven/");
       expect(message).toContain(join(target.dir, "maven.test.sbom.json"));
@@ -1016,11 +1066,13 @@ describe("collectWithMavenSbom — test doc loud narrow", () => {
 }
 `;
     const target = makeDualMavenTarget(HAPPY_SBOM, mismatchedRootTestSbom);
+
     expect.assertions(3);
     try {
       await collectWithMavenSbom(target, { tempDir: makeOutDir() });
     } catch (error) {
       const message = String(error);
+
       expect(message).toContain("pkg:maven/com.example/commons-id@1.2.0?type=jar");
       expect(message).toContain("pkg:maven/com.example/app@1.0.0?type=jar");
       expect(message).toContain(join(target.dir, "maven.test.sbom.json"));
@@ -1031,11 +1083,13 @@ describe("collectWithMavenSbom — test doc loud narrow", () => {
     const cap = 32 * 1024 * 1024;
     const oversize = `{${" ".repeat(cap)}}`;
     const target = makeDualMavenTarget(HAPPY_SBOM, oversize);
+
     expect.assertions(2);
     try {
       await collectWithMavenSbom(target, { tempDir: makeOutDir() });
     } catch (error) {
       const message = String(error);
+
       expect(message).toContain(join(target.dir, "maven.test.sbom.json"));
       expect(message).toContain(String(cap + 2));
     }
@@ -1055,6 +1109,7 @@ describe("collectWithMavenSbom — dual-document cache key", () => {
     const withTestResult = await collectWithMavenSbom(withTestTarget, {
       tempDir: makeOutDir(),
     });
+
     expect(noTestResult.cacheKey).not.toBe(withTestResult.cacheKey);
   });
 
@@ -1067,6 +1122,7 @@ describe("collectWithMavenSbom — dual-document cache key", () => {
     const resultB = await collectWithMavenSbom(targetB, {
       tempDir: makeOutDir(),
     });
+
     expect(resultA.cacheKey).not.toBe(resultB.cacheKey);
   });
 
@@ -1078,6 +1134,7 @@ describe("collectWithMavenSbom — dual-document cache key", () => {
     const second = await collectWithMavenSbom(target, {
       tempDir: makeOutDir(),
     });
+
     expect(first.cacheKey).toBe(second.cacheKey);
   });
 
@@ -1086,6 +1143,7 @@ describe("collectWithMavenSbom — dual-document cache key", () => {
     const result = await collectWithMavenSbom(target, {
       tempDir: makeOutDir(),
     });
+
     expect(result.cacheKey).toBe(
       computeCacheKey(target, MAVEN_COLLECTOR_TOOL, ["maven-sbom-reader-v1"], ["maven.sbom.json"]),
     );
@@ -1101,6 +1159,7 @@ describe("collectWithMavenSbom — dual-document determinism", () => {
     const second = await collectWithMavenSbom(target, {
       tempDir: makeOutDir(),
     });
+
     expect(readFileSync(first.sbomPath, "utf8")).toBe(readFileSync(second.sbomPath, "utf8"));
   });
 });
@@ -1113,6 +1172,7 @@ describe("maven registry collector — dual-doc prodPurlSet threading", () => {
       { ...target, lockfile: "maven" },
       { timeoutMs: 0, verbose: false, log: () => {} },
     );
+
     expect(result.prodPurlSet).toEqual(
       new Set(["pkg:maven/com.example.dual/compile-lib@1.0.0?type=jar"]),
     );
@@ -1125,6 +1185,7 @@ describe("maven registry collector — dual-doc prodPurlSet threading", () => {
       { ...target, lockfile: "maven" },
       { timeoutMs: 0, verbose: false, log: () => {} },
     );
+
     expect("prodPurlSet" in result).toBe(false);
   });
 });

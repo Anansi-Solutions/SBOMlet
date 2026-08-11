@@ -116,6 +116,7 @@ describe("renderMarkdown — determinism contract", () => {
     // The title is line 1; the dateless auto-generated comment follows,
     // naming `task generate` as the regenerate command.
     const lines = renderMarkdown(shapesModel).split("\n");
+
     expect(lines[0]).toBe("# Third-Party Licenses");
     expect(lines[2]).toBe("<!-- AUTO-GENERATED - do not edit. Regenerate with: task generate -->");
   });
@@ -124,6 +125,7 @@ describe("renderMarkdown — determinism contract", () => {
 describe("renderMarkdown — cell escaping", () => {
   test("a name containing | and ` renders with both escaped", () => {
     const output = renderMarkdown(shapesModel);
+
     expect(output.includes("pipe\\|tick\\`pkg")).toBe(true);
     // the raw unescaped name must not appear anywhere
     expect(output.includes("pipe|tick`pkg")).toBe(false);
@@ -131,6 +133,7 @@ describe("renderMarkdown — cell escaping", () => {
 
   test("inline HTML and Markdown link syntax are neutralized", () => {
     const output = renderMarkdown(shapesModel);
+
     expect(output.includes("evil&lt;img src=x&gt;\\[click me\\](https://evil.example)pkg")).toBe(
       true,
     );
@@ -167,6 +170,7 @@ function conflictModel(): CanonicalDependencies {
 describe("renderMarkdown — assessment conflicts section", () => {
   test("a conflicted package renders the dedicated section naming the in-depth value, the quick-check value, and where it is used", () => {
     const out = renderMarkdown(conflictModel());
+
     expect(out.includes("## Assessment conflicts")).toBe(true);
     expect(out.includes("### ScanCode assessment vs quick check")).toBe(true);
     // row shape: Package | In-depth (ScanCode) | Quick check | Used in
@@ -192,6 +196,7 @@ describe("renderMarkdown — assessment conflicts section", () => {
     const problematic = renderMarkdown(conflictModel(), view).slice(
       renderMarkdown(conflictModel(), view).indexOf("## Problematic licenses"),
     );
+
     expect(problematic.includes("conflict:scancode")).toBe(true);
     expect(problematic.includes("disputed-pkg")).toBe(true);
   });
@@ -226,6 +231,7 @@ describe("renderMarkdown — assessment conflicts section", () => {
       ],
     };
     const out = renderMarkdown(hostile);
+
     expect(out.includes("MIT \\| \\`evil\\`")).toBe(true);
     // the raw unescaped pipe+backtick payload never appears
     expect(out.includes("MIT | `evil`")).toBe(false);
@@ -233,6 +239,7 @@ describe("renderMarkdown — assessment conflicts section", () => {
 
   test("determinism: two renders of a conflicted model are byte-identical, conflict section included", () => {
     const model = conflictModel();
+
     expect(renderMarkdown(model)).toBe(renderMarkdown(model));
   });
 
@@ -265,6 +272,7 @@ describe("renderMarkdown — assessment conflicts section", () => {
         },
       ],
     };
+
     expect(renderMarkdown(model)).toBe(renderMarkdown(model));
   });
 
@@ -298,6 +306,7 @@ describe("renderMarkdown — assessment conflicts section", () => {
       ],
     };
     const out = renderMarkdown(model);
+
     expect(out.includes("## Assessment conflicts")).toBe(true);
     expect(out.includes("### Cross-image license claims")).toBe(true);
     expect(out.includes("| busybox | docker:image-a: MIT; docker:image-b: Apache-2.0 |")).toBe(
@@ -337,6 +346,7 @@ describe("renderMarkdown — assessment conflicts section", () => {
       ],
     };
     const out = renderMarkdown(model);
+
     expect(
       out.includes("| busybox | docker:image-a: (no declared license); docker:image-b: MIT |"),
     ).toBe(true);
@@ -346,6 +356,7 @@ describe("renderMarkdown — assessment conflicts section", () => {
 describe("renderMarkdown — table content", () => {
   test("a package with zero licenseClaims renders License cell 'unknown'", () => {
     const output = renderMarkdown(trimmedModel);
+
     expect(output.includes("| acorn | npm | 8.11.3 | unknown | libraries/iframe-rpc |")).toBe(true);
   });
 
@@ -387,6 +398,7 @@ describe("renderMarkdown — table content", () => {
       },
     ]);
     const output = renderMarkdown(multi);
+
     expect(
       output.includes("| acorn | npm | 8.11.3 | unknown | apps/example, libraries/iframe-rpc |"),
     ).toBe(true);
@@ -470,6 +482,7 @@ describe("renderMarkdown — table content", () => {
 
   test("renderer re-sorts defensively even when given an unsorted model", () => {
     const reversed = { packages: [...shapesModel.packages].reverse() };
+
     expect(renderMarkdown(reversed)).toBe(renderMarkdown(shapesModel));
   });
 });
@@ -541,6 +554,7 @@ describe("renderMarkdown — the full document", () => {
   test("Test 1: policy render emits the fixed section order with no date", () => {
     const output = renderMarkdown(policyModel, basicView);
     const lines = output.split("\n");
+
     expect(lines[0]).toBe("# Third-Party Licenses");
 
     // Document order: header comment with the regenerate command, policy
@@ -556,6 +570,7 @@ describe("renderMarkdown — the full document", () => {
       "## Development-only dependencies",
     ];
     const positions = markers.map((marker) => output.indexOf(marker));
+
     for (const position of positions) expect(position).toBeGreaterThan(-1);
     expect(positions).toEqual([...positions].sort((a, b) => a - b));
 
@@ -566,6 +581,7 @@ describe("renderMarkdown — the full document", () => {
 
   test("Test 2: no-policy render has no policy pointer and no copyleft section", () => {
     const output = renderMarkdown(policyModel);
+
     expect(output.includes("Copyleft notice rules")).toBe(false);
     expect(output.includes("## Copyleft and special notices")).toBe(false);
     // ...but the header, counts block, and summary are all present.
@@ -615,6 +631,7 @@ describe("renderMarkdown — the full document", () => {
       ],
     };
     const output = renderMarkdown(model);
+
     expect(output.includes("- Total packages: 3")).toBe(true);
     expect(output.includes("- npm: 2")).toBe(true);
     expect(output.includes("- pypi: 1")).toBe(true);
@@ -668,6 +685,7 @@ describe("renderMarkdown — the full document", () => {
       ],
     };
     const output = renderMarkdown(model);
+
     // Full normalized expression — NEVER only the elected branch.
     expect(output.includes("| expr | npm | 1.0.0 | MIT OR Apache-2.0 | apps/a |")).toBe(true);
     expect(output.includes("| expr | npm | 1.0.0 | Apache-2.0 |")).toBe(false);
@@ -789,6 +807,7 @@ describe("renderMarkdown — the full document", () => {
     const output = renderMarkdown(model, view);
     const copyleftStart = output.indexOf("## Copyleft and special notices");
     const summaryStart = output.indexOf("## Production dependencies");
+
     expect(copyleftStart).toBeGreaterThan(-1);
     const copyleftSection = output.slice(copyleftStart, summaryStart);
 
@@ -808,6 +827,7 @@ describe("renderMarkdown — the full document", () => {
     // Inventory completeness: sharp is EXCLUDED from Copyleft but STILL rows
     // in its Production/Development table (the dedup never drops inventory).
     const summary = output.slice(summaryStart);
+
     expect(summary.includes("| sharp | npm | 0.33.0 |")).toBe(true);
     expect(summary.includes("| unknown-pkg |")).toBe(true);
     expect(summary.includes("| suppressed-only |")).toBe(true);
@@ -867,6 +887,7 @@ describe("renderMarkdown — the full document", () => {
     const output = renderMarkdown(model, view);
     const copyleftStart = output.indexOf("## Copyleft and special notices");
     const copyleftSection = output.slice(copyleftStart, output.indexOf("## Containers"));
+
     // Container copyleft is routine — excluded from the detailed table
     // regardless of its warn status.
     expect(copyleftSection.includes("libssl")).toBe(false);
@@ -917,6 +938,7 @@ describe("renderMarkdown — the full document", () => {
     const output = renderMarkdown(model, view);
     const copyleftStart = output.indexOf("## Copyleft and special notices");
     const copyleftSection = output.slice(copyleftStart, output.indexOf("## Containers"));
+
     expect(copyleftSection.includes("agpl-daemon@1.0.0")).toBe(true);
     expect(copyleftSection.includes("accepted via compatible\\[0\\]")).toBe(true);
     // Deduped: the purl with a fail verdict elsewhere never surfaces as a notice.
@@ -947,6 +969,7 @@ describe("renderMarkdown — the full document", () => {
     const output = renderMarkdown(model, view);
     const copyleftStart = output.indexOf("## Copyleft and special notices");
     const copyleftSection = output.slice(copyleftStart, output.indexOf("## Containers"));
+
     expect(copyleftSection.includes("agpl-daemon")).toBe(true);
     expect(
       copyleftSection.includes("✅ No package carries copyleft or special license obligations."),
@@ -966,6 +989,7 @@ describe("renderMarkdown — the full document", () => {
       verdicts: [],
     };
     const output = renderMarkdown(policyModel, view);
+
     // One list line per entry: escaped path, escaped license in parentheses,
     // em-dash, escaped description (newline flattened to a space).
     expect(
@@ -991,6 +1015,7 @@ describe("renderMarkdown — the full document", () => {
     };
     const a = renderMarkdown(twoPkg, basicView);
     const b = renderMarkdown(reversed, basicView);
+
     expect(a).toBe(b);
     expect(a.includes("## Production dependencies")).toBe(true);
     expect(a.includes("\r")).toBe(false);
@@ -1038,6 +1063,7 @@ describe("renderMarkdown — the full document", () => {
       ],
     };
     const output = renderMarkdown(model);
+
     // License cell carries the family + an explicit imprecise marker (never a
     // fabricated precise id, never bare "unknown").
     expect(output.includes("BSD (imprecise)")).toBe(true);
@@ -1050,6 +1076,7 @@ describe("renderMarkdown — the full document", () => {
     const sectionStart = output.indexOf("## Imprecise licenses (review / disambiguate)");
     const summaryStart = output.indexOf("## Production dependencies");
     const section = output.slice(sectionStart, summaryStart);
+
     expect(section.includes("jinja2")).toBe(true);
     expect(section.includes("BSD")).toBe(true);
     // Non-imprecise packages do not appear in the review section.
@@ -1059,6 +1086,7 @@ describe("renderMarkdown — the full document", () => {
 
   test("Test 9: the imprecise review section is omitted when no package is imprecise", () => {
     const output = renderMarkdown(policyModel);
+
     expect(output.includes("## Imprecise licenses (review / disambiguate)")).toBe(false);
   });
 
@@ -1082,6 +1110,7 @@ describe("renderMarkdown — the full document", () => {
     const output = renderMarkdown(model);
     const start = output.indexOf("## Imprecise licenses (review / disambiguate)");
     const section = output.slice(start, output.indexOf("## Production dependencies"));
+
     // Sorted by name (comparePackages): alpha < pipe|x < zeta.
     expect(section.indexOf("alpha")).toBeLessThan(section.indexOf("pipe"));
     expect(section.indexOf("pipe")).toBeLessThan(section.indexOf("zeta"));
@@ -1091,6 +1120,7 @@ describe("renderMarkdown — the full document", () => {
 
   test("escapeCell is exported for notices.ts", async () => {
     const mod = (await import("../src/render/markdown")) as Record<string, unknown>;
+
     expect(typeof mod["escapeCell"]).toBe("function");
   });
 });
@@ -1128,6 +1158,7 @@ describe("renderMarkdown — prod/dev document split", () => {
       output.indexOf("## Development-only dependencies"),
     );
     const dev = output.slice(output.indexOf("## Development-only dependencies"));
+
     // The Used-in cell stays the FULL occurrence list even in Production.
     expect(prod.includes("| mixed | npm | 1.0.0 | MIT | apps/a, apps/b |")).toBe(true);
     expect(prod.includes("dev-only")).toBe(false);
@@ -1144,6 +1175,7 @@ describe("renderMarkdown — prod/dev document split", () => {
       ],
     };
     const output = renderMarkdown(model);
+
     expect(output.includes("- Total packages: 3")).toBe(true);
     expect(output.includes("- Production packages: 2")).toBe(true);
     expect(output.includes("- Development-only packages: 1")).toBe(true);
@@ -1154,6 +1186,7 @@ describe("renderMarkdown — prod/dev document split", () => {
       packages: [pkgWith("p1", [{ target: "apps/a", dev: false }])],
     };
     const output = renderMarkdown(allProd);
+
     expect(output.includes("## Production dependencies")).toBe(true);
     expect(output.includes("## Development-only dependencies")).toBe(true);
     expect(output.includes("- Development-only packages: 0")).toBe(true);
@@ -1196,12 +1229,14 @@ describe("renderMarkdown — per-container Production/Development grouping", () 
 
   test("the standalone Docker section never renders — with or without a policy view", () => {
     const model: CanonicalDependencies = { packages: [appProd, osDeb, osApk] };
+
     expect(renderMarkdown(model).includes(OLD_HEADING)).toBe(false);
     const view: PolicyView = {
       policyPath: "policy.toml",
       suppressedWorkspaces: [],
       verdicts: [],
     };
+
     expect(renderMarkdown(model, view).includes(OLD_HEADING)).toBe(false);
   });
 
@@ -1212,8 +1247,10 @@ describe("renderMarkdown — per-container Production/Development grouping", () 
       output.indexOf("## Production dependencies"),
       output.indexOf("## Development-only dependencies"),
     );
+
     expect(prod.includes(HEADING)).toBe(true);
     const containerSection = output.slice(output.indexOf(HEADING));
+
     expect(containerSection.includes("| libc6 | deb | 2.36-9 | LGPL-2.1-or-later |")).toBe(true);
     expect(containerSection.includes("| musl | apk | 1.2.4-r2 | MIT |")).toBe(true);
     // No Used-in column: the container heading already scopes every row.
@@ -1230,6 +1267,7 @@ describe("renderMarkdown — per-container Production/Development grouping", () 
       output.indexOf(HEADING),
     );
     const dev = output.slice(output.indexOf("## Development-only dependencies"));
+
     // OS rows never leak into the app tables.
     expect(prodTable.includes("libc6")).toBe(false);
     expect(prodTable.includes("musl")).toBe(false);
@@ -1243,6 +1281,7 @@ describe("renderMarkdown — per-container Production/Development grouping", () 
   test("empty container set: Production/Development render exactly the app tables, no stray headings", () => {
     const model: CanonicalDependencies = { packages: [appProd] };
     const output = renderMarkdown(model);
+
     expect(output.includes("### Container:")).toBe(false);
     expect(output.includes(OLD_HEADING)).toBe(false);
   });
@@ -1255,6 +1294,7 @@ describe("renderMarkdown — per-container Production/Development grouping", () 
     const prodPos = output.indexOf("## Production dependencies");
     const devPos = output.indexOf("## Development-only dependencies");
     const containerPos = output.indexOf(HEADING);
+
     expect(prodPos).toBeGreaterThan(-1);
     expect(prodPos).toBeLessThan(containerPos);
     expect(containerPos).toBeLessThan(devPos);
@@ -1270,6 +1310,7 @@ describe("renderMarkdown — per-container Production/Development grouping", () 
       scope: "os",
     });
     const output = renderMarkdown({ packages: [evilOs] });
+
     expect(output.includes("docker:evil\\|pkg\\`x/Dockerfile")).toBe(true);
     expect(output.includes("docker:evil|pkg`x/Dockerfile")).toBe(false);
   });
@@ -1284,6 +1325,7 @@ describe("renderMarkdown — per-container Production/Development grouping", () 
       scope: "os",
     });
     const output = renderMarkdown({ packages: [evilOs] });
+
     expect(output.includes("evil\\|pkg\\`x")).toBe(true);
     expect(output.includes("evil|pkg`x")).toBe(false);
   });
@@ -1293,6 +1335,7 @@ describe("renderMarkdown — per-container Production/Development grouping", () 
       packages: [appProd, osDeb, osApk],
     };
     const output = renderMarkdown(model);
+
     expect(output.includes("- Container packages: 2")).toBe(true);
     // Total still counts every package across scopes.
     expect(output.includes("- Total packages: 3")).toBe(true);
@@ -1314,12 +1357,14 @@ describe("renderMarkdown — per-container Production/Development grouping", () 
     // Deterministic container order: docker:a/Dockerfile before docker:b/Dockerfile.
     const aPos = output.indexOf("### Container: docker:a/Dockerfile");
     const bPos = output.indexOf("### Container: docker:b/Dockerfile");
+
     expect(aPos).toBeGreaterThan(-1);
     expect(bPos).toBeGreaterThan(aPos);
     // ONE row of the 4-column shape in EACH container's own subsection — never
     // a single row with a joined Used-in cell (there is no Used-in column).
     const aSection = output.slice(aPos, bPos);
     const bSection = output.slice(bPos);
+
     expect(aSection.includes("| busybox | apk | 1.37.0-r19 | GPL-2.0-only |")).toBe(true);
     expect(bSection.includes("| busybox | apk | 1.37.0-r19 | GPL-2.0-only |")).toBe(true);
   });
@@ -1338,6 +1383,7 @@ describe("renderMarkdown — per-container Production/Development grouping", () 
       output.indexOf("## Development-only dependencies"),
     );
     const dev = output.slice(output.indexOf("## Development-only dependencies"));
+
     expect(prod.includes(HEADING)).toBe(false);
     expect(dev.includes(HEADING)).toBe(true);
     expect(dev.includes("| libc6 | deb | 2.36-9 | LGPL-2.1-or-later |")).toBe(true);
@@ -1367,6 +1413,7 @@ describe("renderMarkdown — per-container Production/Development grouping", () 
       output.indexOf("## Development-only dependencies"),
     );
     const dev = output.slice(output.indexOf("## Development-only dependencies"));
+
     // Container A (production) still shows the package — marking B development
     // moved nothing of A's.
     expect(prod.includes("### Container: docker:a/Dockerfile")).toBe(true);
@@ -1389,6 +1436,7 @@ describe("renderMarkdown — per-container Production/Development grouping", () 
     });
     const output = renderMarkdown({ packages: [appAtDockerTarget, osDeb] });
     const containerSection = output.slice(output.indexOf(HEADING));
+
     expect(containerSection.includes("app-at-docker-target")).toBe(true);
     // It is EXCLUDED from the app Production table — it has no workspace
     // occurrence of its own.
@@ -1396,6 +1444,7 @@ describe("renderMarkdown — per-container Production/Development grouping", () 
       output.indexOf("## Production dependencies"),
       output.indexOf(HEADING),
     );
+
     expect(prodTable.includes("app-at-docker-target")).toBe(false);
     // Counted as a Container package (npm 1 + deb 1 = 2).
     expect(output.includes("- Container packages: 2")).toBe(true);
@@ -1417,8 +1466,10 @@ describe("renderMarkdown — per-container Production/Development grouping", () 
       output.indexOf("## Production dependencies"),
       output.indexOf(HEADING),
     );
+
     expect(prodTable.includes("shared-app-and-container")).toBe(true);
     const containerSection = output.slice(output.indexOf(HEADING));
+
     expect(containerSection.includes("shared-app-and-container")).toBe(true);
     // Container is the cross-cutting hasContainerOccurrence count, so a
     // package with a non-docker occurrence still counts there once it also
@@ -1435,6 +1486,7 @@ describe("renderMarkdown — per-container Production/Development grouping", () 
     });
     const output = renderMarkdown({ packages: [workspaceOnly, osDeb] });
     const containerSection = output.slice(output.indexOf(HEADING));
+
     expect(containerSection.includes("workspace-only")).toBe(false);
     expect(output.includes("- Container packages: 1")).toBe(true);
   });
@@ -1455,6 +1507,7 @@ describe("renderMarkdown — per-container Production/Development grouping", () 
     const prod = Number(/- Production packages: (\d+)/.exec(output)![1]);
     const devOnly = Number(/- Development-only packages: (\d+)/.exec(output)![1]);
     const container = Number(/- Container packages: (\d+)/.exec(output)![1]);
+
     expect(prod + devOnly).toBe(total);
     // Container is the cross-cutting hasContainerOccurrence count —
     // containerOnly, osDeb, osApk — still 3, and every one of the three is
@@ -1494,12 +1547,14 @@ describe("renderMarkdown — per-container Production/Development grouping", () 
         developmentContainers: new Set(),
       };
       const output = renderMarkdown({ packages: [prodContainerAppPkg] }, view);
+
       expect(output.includes("- Production packages: 1")).toBe(true);
       expect(output.includes("- Development-only packages: 0")).toBe(true);
       // Still a cross-cutting Container subtotal — the fix does not remove
       // it from that count, only stops subtracting it from Production.
       expect(output.includes("- Container packages: 1")).toBe(true);
       const prodSection = output.slice(output.indexOf("## Production dependencies"));
+
       expect(prodSection.includes("prod-container-app")).toBe(true);
     });
 
@@ -1511,10 +1566,12 @@ describe("renderMarkdown — per-container Production/Development grouping", () 
         developmentContainers: new Set([DEV_CONTAINER]),
       };
       const output = renderMarkdown({ packages: [devContainerPkg] }, view);
+
       expect(output.includes("- Production packages: 0")).toBe(true);
       expect(output.includes("- Development-only packages: 1")).toBe(true);
       expect(output.includes("- Container packages: 1")).toBe(true);
       const devSection = output.slice(output.indexOf("## Development-only dependencies"));
+
       expect(devSection.includes("dev-container-only")).toBe(true);
     });
 
@@ -1595,11 +1652,13 @@ describe("renderMarkdown — per-container System/Application split", () => {
     const section = output.slice(output.indexOf(HEADING));
     const systemPos = section.indexOf("**System packages**");
     const applicationPos = section.indexOf("**Application packages**");
+
     expect(systemPos).toBeGreaterThan(-1);
     expect(applicationPos).toBeGreaterThan(systemPos);
     // Every row is in exactly one partition (exhaustive, non-overlapping).
     const systemBlock = section.slice(systemPos, applicationPos);
     const applicationBlock = section.slice(applicationPos);
+
     expect(systemBlock.includes("libc6")).toBe(true);
     expect(systemBlock.includes("app-in-container")).toBe(false);
     expect(applicationBlock.includes("app-in-container")).toBe(true);
@@ -1608,12 +1667,14 @@ describe("renderMarkdown — per-container System/Application split", () => {
     const headCount = section
       .split("\n")
       .filter((line) => line === "| Name | Ecosystem | Version | License |").length;
+
     expect(headCount).toBe(2);
   });
 
   test("a base-image-only container (system rows only) shows just the System table — no empty Application block", () => {
     const output = renderMarkdown({ packages: [systemPkg] });
     const section = output.slice(output.indexOf(HEADING));
+
     expect(section.includes("**System packages**")).toBe(true);
     expect(section.includes("**Application packages**")).toBe(false);
   });
@@ -1621,6 +1682,7 @@ describe("renderMarkdown — per-container System/Application split", () => {
   test("an all-application container shows just the Application table — no empty System block", () => {
     const output = renderMarkdown({ packages: [applicationPkg] });
     const section = output.slice(output.indexOf(HEADING));
+
     expect(section.includes("**Application packages**")).toBe(true);
     expect(section.includes("**System packages**")).toBe(false);
   });
@@ -1657,10 +1719,12 @@ describe("renderMarkdown — per-container System/Application split", () => {
     const applicationPos = section.indexOf("**Application packages**");
     const systemBlock = section.slice(systemPos, applicationPos);
     const applicationBlock = section.slice(applicationPos);
+
     for (const name of ["libc6", "glibc", "pacman"]) {
       expect(systemBlock.includes(name)).toBe(true);
       expect(applicationBlock.includes(name)).toBe(false);
     }
+
     for (const name of ["app-in-container", "app-py"]) {
       expect(applicationBlock.includes(name)).toBe(true);
       expect(systemBlock.includes(name)).toBe(false);
@@ -1679,6 +1743,7 @@ describe("renderMarkdown — per-container System/Application split", () => {
     });
     const output = renderMarkdown({ packages: [appOnly, systemPkg] });
     const section = output.slice(output.indexOf(HEADING));
+
     // Only System renders (both are OS-ecosystem-only here); no Application
     // block and no leakage of the app-only package into the container.
     expect(section.includes("**System packages**")).toBe(true);
@@ -1718,11 +1783,13 @@ describe("renderMarkdown — Containers index", () => {
       ],
     };
     const output = renderMarkdown(model);
+
     expect(output.includes(HEADING)).toBe(true);
     const containersSection = output.slice(
       output.indexOf(HEADING),
       output.indexOf("## Production dependencies"),
     );
+
     expect(containersSection.includes("| Container | Classification | Packages |")).toBe(true);
     // compareCodeUnits-sorted: "docker:a/Dockerfile" before "docker:b/Dockerfile".
     expect(containersSection.indexOf("docker:a/Dockerfile")).toBeLessThan(
@@ -1753,6 +1820,7 @@ describe("renderMarkdown — Containers index", () => {
       output.indexOf(HEADING),
       output.indexOf("## Production dependencies"),
     );
+
     expect(containersSection.includes("| docker:a/Dockerfile | development | 1 |")).toBe(true);
     expect(containersSection.includes("| docker:b/Dockerfile | production | 1 |")).toBe(true);
   });
@@ -1766,6 +1834,7 @@ describe("renderMarkdown — Containers index", () => {
       output.indexOf(HEADING),
       output.indexOf("## Production dependencies"),
     );
+
     expect(containersSection.includes("| docker:a/Dockerfile | production | 1 |")).toBe(true);
   });
 
@@ -1781,8 +1850,10 @@ describe("renderMarkdown — Containers index", () => {
       ],
     };
     const output = renderMarkdown(model);
+
     expect(output.includes(HEADING)).toBe(true);
     const containersSection = output.slice(output.indexOf(HEADING));
+
     expect(containersSection.includes("✅ No containers are currently tracked.")).toBe(true);
     expect(containersSection.includes("| Container | Classification | Packages |")).toBe(false);
   });
@@ -1792,6 +1863,7 @@ describe("renderMarkdown — Containers index", () => {
       packages: [osPkg("evil", "pkg:apk/alpine/evil@1.0.0", ["docker:evil|pkg`x/Dockerfile"])],
     };
     const output = renderMarkdown(model);
+
     expect(output.includes("docker:evil\\|pkg\\`x/Dockerfile")).toBe(true);
     expect(output.includes("docker:evil|pkg`x/Dockerfile")).toBe(false);
   });
@@ -1829,6 +1901,7 @@ describe("renderMarkdown — os-scope partial-license cell", () => {
   test("LOCKED FORMAT: expression (+ remainder) in the License cell", () => {
     const output = renderMarkdown({ packages: [osPartial] });
     const osSection = output.slice(output.indexOf(HEADING));
+
     expect(
       osSection.includes(
         "| os-partial | deb | 1.0 | GPL-2.0-only AND BSD-3-Clause (+ public-domain) |",
@@ -1853,6 +1926,7 @@ describe("renderMarkdown — os-scope partial-license cell", () => {
       },
     });
     const output = renderMarkdown({ packages: [multi] });
+
     expect(output.includes("| MIT (+ Artistic, public-domain) |")).toBe(true);
   });
 
@@ -1873,6 +1947,7 @@ describe("renderMarkdown — os-scope partial-license cell", () => {
       },
     });
     const output = renderMarkdown({ packages: [evil] });
+
     expect(output.includes("MIT (+ evil\\|tok\\`x)")).toBe(true);
     expect(output.includes("evil|tok`x")).toBe(false);
   });
@@ -1898,6 +1973,7 @@ describe("renderMarkdown — os-scope partial-license cell", () => {
       },
     });
     const output = renderMarkdown({ packages: [imprecisePartial] });
+
     expect(output.includes("GPL (imprecise) (+ some-custom-token)")).toBe(true);
   });
 
@@ -1916,6 +1992,7 @@ describe("renderMarkdown — os-scope partial-license cell", () => {
       },
     });
     const output = renderMarkdown({ packages: [impreciseOnly] });
+
     expect(output.includes("BSD (imprecise)")).toBe(true);
     expect(output.includes("(+ ")).toBe(false);
   });
@@ -1934,6 +2011,7 @@ describe("renderMarkdown — os-scope partial-license cell", () => {
       },
     });
     const output = renderMarkdown({ packages: [plain] });
+
     expect(output.includes("| plain | npm | 1.0 | MIT AND Apache-2.0 |")).toBe(true);
     expect(output.includes("(+")).toBe(false);
   });
@@ -2020,10 +2098,12 @@ describe("renderMarkdown — Ecosystem column", () => {
     const headCount = output
       .split("\n")
       .filter((line) => line === "| Name | Ecosystem | Version | License | Used in |").length;
+
     expect(headCount).toBe(1);
     const containerHeadCount = output
       .split("\n")
       .filter((line) => line === "| Name | Ecosystem | Version | License |").length;
+
     expect(containerHeadCount).toBe(1);
     // The OLD 4-column APP head (pre-Ecosystem-column) must never survive
     // anywhere.
@@ -2032,6 +2112,7 @@ describe("renderMarkdown — Ecosystem column", () => {
 
   test("each row's Ecosystem cell is its own raw purl type", () => {
     const output = renderMarkdown(mixed);
+
     // App-scope rows render in the Production table; os rows in their
     // container's own subsection. Each carries its own purl type verbatim.
     expect(output.includes("| npm-pkg | npm | 1.0.0 | MIT |")).toBe(true);
@@ -2057,6 +2138,7 @@ describe("renderMarkdown — Ecosystem column", () => {
       },
     });
     const output = renderMarkdown({ packages: [evil] });
+
     expect(output.includes("| evil-eco | ev\\|il\\`type | 1.0.0 | MIT |")).toBe(true);
     expect(output.includes("ev|il`type")).toBe(false);
   });
@@ -2095,6 +2177,7 @@ describe("renderMarkdown — [document] title + preamble", () => {
   test("a custom title replaces the default H1", () => {
     const output = renderMarkdown(model, viewWith({ title: "Example — TPL" }));
     const lines = output.split("\n");
+
     expect(lines[0]).toBe("# Example — TPL");
     expect(output.includes("# Third-Party Licenses")).toBe(false);
   });
@@ -2106,6 +2189,7 @@ describe("renderMarkdown — [document] title + preamble", () => {
 
   test("a CR/LF in the title collapses to a single space and trims (heading, not a cell)", () => {
     const output = renderMarkdown(model, viewWith({ title: "  Multi\r\nLine  Title  " }));
+
     // CRLF collapses to one space; surrounding whitespace trimmed; the interior
     // double-space is preserved verbatim (only the line break is normalized).
     expect(output.split("\n")[0]).toBe("# Multi Line  Title");
@@ -2114,6 +2198,7 @@ describe("renderMarkdown — [document] title + preamble", () => {
 
   test("the title is NOT escapeCell'd (author prose may contain markdown)", () => {
     const output = renderMarkdown(model, viewWith({ title: "Licenses | v2 `x`" }));
+
     // A pipe/backtick in a TITLE survives verbatim — it is a heading, not a
     // table cell.
     expect(output.split("\n")[0]).toBe("# Licenses | v2 `x`");
@@ -2128,6 +2213,7 @@ describe("renderMarkdown — [document] title + preamble", () => {
     const preambleIdx = output.indexOf("First line.");
     const pointerIdx = output.indexOf("Copyleft notice rules are configured");
     const countsIdx = output.indexOf("**Package counts:**");
+
     expect(headerIdx).toBeGreaterThan(-1);
     expect(preambleIdx).toBeGreaterThan(headerIdx);
     expect(preambleIdx).toBeLessThan(pointerIdx);
@@ -2139,6 +2225,7 @@ describe("renderMarkdown — [document] title + preamble", () => {
 
   test("preamble CRLF/CR is normalized to LF with a trailing blank line", () => {
     const output = renderMarkdown(model, viewWith({ preamble: "alpha\r\nbeta\rgamma" }));
+
     expect(output.includes("alpha\nbeta\ngamma")).toBe(true);
     expect(output.includes("\r")).toBe(false);
     // A blank line separates the preamble block from what follows.
@@ -2147,11 +2234,13 @@ describe("renderMarkdown — [document] title + preamble", () => {
 
   test("a pipe/backtick in the preamble is NOT escaped (intentional author markdown)", () => {
     const output = renderMarkdown(model, viewWith({ preamble: "see `code` and a | pipe" }));
+
     expect(output.includes("see `code` and a | pipe")).toBe(true);
   });
 
   test("no policy view → default title, no preamble, output still has no CR / single trailing LF", () => {
     const output = renderMarkdown(model);
+
     expect(output.split("\n")[0]).toBe("# Third-Party Licenses");
     expect(output.includes("\r")).toBe(false);
     expect(output.endsWith("\n")).toBe(true);
@@ -2264,6 +2353,7 @@ describe("renderMarkdown — Problematic licenses summary", () => {
     };
     const output = renderMarkdown(model, view);
     const section = slice(output);
+
     expect(section.includes(HEADING)).toBe(true);
     // The blocking table head with the fixed column order — now carries the
     // Why column between Used-in and Reason.
@@ -2315,6 +2405,7 @@ describe("renderMarkdown — Problematic licenses summary", () => {
       ],
     };
     const section = slice(renderMarkdown(model, view));
+
     expect(section.includes("✅ No blocking policy violations.")).toBe(true);
     expect(section.includes("_Non-blocking:")).toBe(true);
     expect(section.includes("copyleft")).toBe(true);
@@ -2338,6 +2429,7 @@ describe("renderMarkdown — Problematic licenses summary", () => {
       ],
     };
     const section = slice(renderMarkdown(model, view));
+
     expect(section.includes("✅ No blocking policy violations.")).toBe(true);
     expect(section.includes("_Non-blocking:")).toBe(false);
   });
@@ -2381,6 +2473,7 @@ describe("renderMarkdown — Problematic licenses summary", () => {
       ],
     };
     const section = slice(renderMarkdown(model, view));
+
     // 2 copyleft (copyleft + imprecise-copyleft), 1 unknown, 1 deny.
     expect(section.includes("2 copyleft warning(s)")).toBe(true);
     expect(section.includes("1 unknown warning(s)")).toBe(true);
@@ -2406,12 +2499,14 @@ describe("renderMarkdown — Problematic licenses summary", () => {
     const problIdx = output.indexOf("## Problematic licenses");
     const countsIdx = output.indexOf("**Package counts:**");
     const copyleftIdx = output.indexOf("## Copyleft and special notices");
+
     expect(countsIdx).toBeLessThan(problIdx);
     expect(problIdx).toBeLessThan(copyleftIdx);
     // gpl-pkg carries a fail verdict, so the copyleft-only dedup excludes it
     // from the detailed copyleft table entirely — it stays in Problematic
     // (asserted above by the section ordering) and in its inventory row.
     const copyleftSection = output.slice(copyleftIdx, output.indexOf("## Production dependencies"));
+
     expect(copyleftSection.includes("gpl-pkg")).toBe(false);
     expect(
       copyleftSection.includes("✅ No package carries copyleft or special license obligations."),
@@ -2420,6 +2515,7 @@ describe("renderMarkdown — Problematic licenses summary", () => {
 
   test("(e) no-policy run → the section is omitted entirely", () => {
     const output = renderMarkdown({ packages: [copyleftFail] });
+
     expect(output.includes("## Problematic licenses")).toBe(false);
   });
 
@@ -2438,6 +2534,7 @@ describe("renderMarkdown — Problematic licenses summary", () => {
       ],
     };
     const section = slice(renderMarkdown({ packages: [warnOnly] }, view));
+
     // No package entry for the ghost purl → no row, and zero real fails → ✅.
     expect(section.includes("ghost")).toBe(false);
     expect(section.includes("✅ No blocking policy violations.")).toBe(true);
@@ -2452,6 +2549,7 @@ describe("renderMarkdown — Problematic licenses summary", () => {
         verdicts: [],
       },
     );
+
     expect(output.includes("## Problematic licenses")).toBe(true);
     expect(output.includes("\r")).toBe(false);
   });
@@ -2489,6 +2587,7 @@ describe("renderMarkdown — provenance Why column", () => {
     const output = renderMarkdown(model, view);
     const start = output.indexOf("## Copyleft and special notices");
     const end = output.indexOf("## Production dependencies");
+
     return output.slice(start, end);
   }
 
@@ -2520,6 +2619,7 @@ describe("renderMarkdown — provenance Why column", () => {
       suppressedWorkspaces: [],
       verdicts: [copyleftVerdict("pkg:npm/direct-pkg@1.0.0", "apps/a")],
     };
+
     expect(
       copyleftSectionOf(model, view).includes(
         "| direct-pkg | npm | 1.0.0 | GPL-3.0-only | apps/a | direct |",
@@ -2559,6 +2659,7 @@ describe("renderMarkdown — provenance Why column", () => {
       suppressedWorkspaces: [],
       verdicts: [copyleftVerdict("pkg:npm/trans-pkg@1.0.0", "apps/a")],
     };
+
     expect(
       copyleftSectionOf(model, view).includes(
         "| trans-pkg | npm | 1.0.0 | GPL-3.0-only | apps/a | pkg:npm/parent@2.0.0 → pkg:npm/trans-pkg@1.0.0 |",
@@ -2601,6 +2702,7 @@ describe("renderMarkdown — provenance Why column", () => {
       verdicts: [copyleftVerdict("pkg:pypi/opt-pkg@1.0.0", "apps/py")],
     };
     const section = copyleftSectionOf(model, view);
+
     expect(
       section.includes(
         "| opt-pkg | pypi | 1.0.0 | GPL-3.0-only | apps/py | pkg:pypi/host@2.0.0 → pkg:pypi/opt-pkg@1.0.0 |",
@@ -2635,6 +2737,7 @@ describe("renderMarkdown — provenance Why column", () => {
       suppressedWorkspaces: [],
       verdicts: [copyleftVerdict("pkg:pypi/libssl-bindings@3.0", "apps/py")],
     };
+
     expect(
       copyleftSectionOf(model, view).includes(
         "| libssl-bindings | pypi | 3.0 | GPL-3.0-only | apps/py | — |",
@@ -2680,6 +2783,7 @@ describe("renderMarkdown — provenance Why column", () => {
       ],
     };
     const section = copyleftSectionOf(model, view);
+
     expect(section.includes("| all-direct |")).toBe(true);
     expect(section.includes(" | direct |")).toBe(true);
   });
@@ -2730,6 +2834,7 @@ describe("renderMarkdown — provenance Why column", () => {
       ],
     };
     const section = copyleftSectionOf(model, view);
+
     expect(section.includes("| mixed-pkg |")).toBe(true);
     // The transitive introducer from apps/a is surfaced...
     expect(section.includes("pkg:npm/p@2.0.0 → pkg:npm/mixed-pkg@1.0.0")).toBe(true);
@@ -2778,6 +2883,7 @@ describe("renderMarkdown — provenance Why column", () => {
       verdicts: [copyleftVerdict("pkg:npm/deep@1", "apps/a")],
     };
     const section = copyleftSectionOf(model, view);
+
     // First WHY_MAX_ITEMS (4) purls shown, then a stable "(+2 more)" tail.
     expect(section.includes("(+2 more)")).toBe(true);
     expect(
@@ -2826,6 +2932,7 @@ describe("renderMarkdown — provenance Why column", () => {
       ],
     };
     const output = renderMarkdown(model, view);
+
     expect(
       output.includes(
         "| fail | deny:license\\[0\\] | blocked | npm | 1.0.0 | BUSL-1.1 | apps/a | pkg:npm/intro@2.0.0 → pkg:npm/blocked@1.0.0 | BUSL-1.1 denied |",
@@ -2860,6 +2967,7 @@ describe("renderMarkdown — provenance Why column", () => {
     };
     const first = renderMarkdown(model, view);
     const second = renderMarkdown(model, view);
+
     expect(first).toBe(second); // determinism
     expect(first.includes("| plain | npm | 1.0.0 | GPL-3.0-only | apps/a | — |")).toBe(true);
   });
@@ -2907,6 +3015,7 @@ describe("renderMarkdown — provenance Why column", () => {
       ],
     };
     const section = copyleftSectionOf(model, view);
+
     // The genuine direct is surfaced, NOT hidden behind "—".
     expect(
       section.includes("| realdirect | pypi | 1.0.0 | GPL-3.0-only | ws-a, ws-b | direct |"),
@@ -2953,6 +3062,7 @@ describe("renderMarkdown — provenance Why column", () => {
         copyleftVerdict("pkg:pypi/allorphan@1.0.0", "ws-b"),
       ],
     };
+
     expect(
       copyleftSectionOf(model, view).includes(
         "| allorphan | pypi | 1.0.0 | GPL-3.0-only | ws-a, ws-b | — |",
@@ -3004,6 +3114,7 @@ describe("renderMarkdown — provenance Why column", () => {
       ],
     };
     const section = copyleftSectionOf(model, view);
+
     expect(section.includes("pkg:pypi/host@2.0.0 → pkg:pypi/transorphan@1.0.0")).toBe(true);
     expect(section.includes("| transorphan | pypi | 1.0.0 | GPL-3.0-only")).toBe(true);
   });
@@ -3039,6 +3150,7 @@ describe("renderMarkdown — provenance Why column", () => {
       suppressedWorkspaces: [],
       verdicts: [copyleftVerdict("pkg:npm/orphan@1.0.0", "apps/a")],
     };
+
     expect(
       copyleftSectionOf(model, view).includes(
         "| orphan | npm | 1.0.0 | GPL-3.0-only | apps/a | — |",
@@ -3081,6 +3193,7 @@ describe("renderMarkdown — provenance Why column", () => {
       verdicts: [copyleftVerdict("pkg:npm/emptypath@1.0.0", "apps/a")],
     };
     const section = copyleftSectionOf(model, view);
+
     expect(section.includes("| emptypath | npm | 1.0.0 | GPL-3.0-only | apps/a | — |")).toBe(true);
     // No empty Why cell: the row must NOT end in "| |".
     expect(section.includes("| apps/a |  |")).toBe(false);
@@ -3122,6 +3235,7 @@ describe("renderMarkdown — provenance Why column", () => {
       verdicts: [copyleftVerdict("pkg:npm/emptypathintro@1.0.0", "apps/a")],
     };
     const section = copyleftSectionOf(model, view);
+
     expect(
       section.includes(
         "| emptypathintro | npm | 1.0.0 | GPL-3.0-only | apps/a | pkg:npm/host@2.0.0 |",
@@ -3146,6 +3260,7 @@ describe("renderMarkdown — Why-cell target scoping", () => {
     const output = renderMarkdown(model, view);
     const start = output.indexOf("## Problematic licenses");
     const end = output.indexOf("## Copyleft and special notices");
+
     return output.slice(start, end);
   }
 
@@ -3154,6 +3269,7 @@ describe("renderMarkdown — Why-cell target scoping", () => {
     const output = renderMarkdown(model, view);
     const start = output.indexOf("## Copyleft and special notices");
     const end = output.indexOf("## Production dependencies");
+
     return output.slice(start, end);
   }
 
@@ -3207,6 +3323,7 @@ describe("renderMarkdown — Why-cell target scoping", () => {
       ],
     };
     const section = problematicSectionOf(model, view);
+
     // The flagged-scoped Why is the transitive path through deep@9.9.9.
     expect(
       section.includes("| apps/prod-shipped | pkg:npm/deep@9.9.9 → pkg:npm/agpllib@1.0.0 |"),
@@ -3261,6 +3378,7 @@ describe("renderMarkdown — Why-cell target scoping", () => {
       ],
     };
     const section = copyleftSectionOf(model, view);
+
     expect(section.includes("| shared | npm | 1.0.0 | GPL-3.0-only | apps/flagged | — |")).toBe(
       true,
     );
@@ -3329,6 +3447,7 @@ describe("renderMarkdown — Why-cell target scoping", () => {
       ],
     };
     const section = copyleftSectionOf(model, view);
+
     // The smallest-target occurrence carrying a path is surfaced.
     expect(section.includes("pkg:pypi/pathparent@2.0.0 → pkg:pypi/hr-pkg@1.0.0")).toBe(true);
     // No ", optional" suffix is ever rendered after the descope.

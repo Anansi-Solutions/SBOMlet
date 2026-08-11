@@ -108,10 +108,12 @@ export interface IndexedDenyRule {
  */
 function effectiveDenyRules(policy: Policy): IndexedDenyRule[] {
   const rules: IndexedDenyRule[] = [];
+
   policy.deny.forEach((rule, index) => rules.push({ ruleId: `denied[${index}]`, rule }));
   for (const rule of BUILTIN_DENY_RULES) {
     rules.push({ ruleId: BUILTIN_DENY_RULE_ID, rule });
   }
+
   return rules;
 }
 
@@ -134,6 +136,7 @@ function nodeDenied(node: ExpressionNode, allowlist: ReadonlyArray<string>): boo
   if (node.conjunction === "and") {
     return nodeDenied(node.left, allowlist) || nodeDenied(node.right, allowlist);
   }
+
   return nodeDenied(node.left, allowlist) && nodeDenied(node.right, allowlist);
 }
 
@@ -141,6 +144,7 @@ function nodeDenied(node: ExpressionNode, allowlist: ReadonlyArray<string>): boo
 function renderLeaf(node: { license: string; plus?: true; exception?: string }): string {
   const plus = node.plus === true ? "+" : "";
   const withPart = node.exception !== undefined ? ` WITH ${node.exception}` : "";
+
   return `${node.license}${plus}${withPart}`;
 }
 
@@ -162,17 +166,22 @@ function unionLicenseDeny(
   expression: string,
 ): IndexedDenyRule | undefined {
   const licenseRules = rules.filter((r) => r.rule.match === "license");
+
   if (licenseRules.length === 0) return undefined;
   const union: string[] = [];
+
   for (const r of licenseRules) {
     if (r.rule.match === "license") union.push(...r.rule.allowlist);
   }
+
   let node: ExpressionNode;
+
   try {
     node = parseSpdx(expression) as ExpressionNode;
   } catch {
     return undefined;
   }
+
   if (!nodeDenied(node, union)) return undefined;
   // Attribute to the first license rule that contributes a denied leaf.
   for (const candidate of licenseRules) {
@@ -180,6 +189,7 @@ function unionLicenseDeny(
       return candidate;
     }
   }
+
   return licenseRules[0]; // defensive: denied by the union, attribute to first
 }
 
@@ -202,6 +212,7 @@ export function denyRuleFor(
   const rules = effectiveDenyRules(policy);
   let nameMatch: IndexedDenyRule | undefined;
   let namePosition = -1;
+
   for (const [position, r] of rules.entries()) {
     if (r.rule.match === "name" && r.rule.pattern === name) {
       nameMatch = r;
@@ -209,11 +220,14 @@ export function denyRuleFor(
       break;
     }
   }
+
   const licenseMatch = expression === null ? undefined : unionLicenseDeny(rules, expression);
+
   if (nameMatch === undefined) return licenseMatch;
   if (licenseMatch === undefined) return nameMatch;
   // Both matched: the earlier rule in effective order wins (mirrors the prior lowest-index
   // precedence). licenseMatch is a reference into `rules`.
   const licensePosition = rules.indexOf(licenseMatch);
+
   return namePosition <= licensePosition ? nameMatch : licenseMatch;
 }

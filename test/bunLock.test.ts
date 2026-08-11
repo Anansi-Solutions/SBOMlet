@@ -189,10 +189,12 @@ afterEach(() => {
 /** Writes the given files into a fresh temp dir and returns it as a Target. */
 function makeTargetWithFiles(files: Record<string, string>): Target {
   const dir = mkdtempSync(join(tmpdir(), "licenses-test-"));
+
   tempDirs.push(dir);
   for (const [name, content] of Object.entries(files)) {
     writeFileSync(join(dir, name), content);
   }
+
   return { dir, identity: "test/synthetic" };
 }
 
@@ -202,6 +204,7 @@ function makeBunTarget(bunLock: string): Target {
 
 function makeOutDir(): string {
   const dir = mkdtempSync(join(tmpdir(), "licenses-test-out-"));
+
   tempDirs.push(dir);
   return dir;
 }
@@ -222,6 +225,7 @@ async function scanLock(bunLock: string): Promise<ScannedDoc> {
   const raw = readFileSync(result.sbomPath, "utf8");
   const doc = JSON.parse(raw) as Record<string, unknown>;
   const components = (doc["components"] ?? []) as Array<Record<string, unknown>>;
+
   return { target, ...result, raw, doc, components };
 }
 
@@ -261,6 +265,7 @@ describe("bunThirdPartyEntryCount", () => {
       "workspaces": { "": { "name": "ws-only" } },
       "packages": { "liba": ["liba@workspace:packages/liba"] }
     }`;
+
     expect(bunThirdPartyEntryCount(lock)).toBe(0);
   });
 
@@ -292,6 +297,7 @@ describe("bunThirdPartyEntryCount", () => {
         "left-pad": ["left-pad@1.3.0", {}, "sha"]
       }
     }`;
+
     expect(bunThirdPartyEntryCount(lock)).toBe(2);
   });
 
@@ -303,6 +309,7 @@ describe("bunThirdPartyEntryCount", () => {
         "express": ["express@4.18.2", {}, "sha"]
       }
     }`;
+
     expect(bunThirdPartyEntryCount(lock)).toBe(1);
   });
 });
@@ -314,6 +321,7 @@ describe("bunThirdPartyEntryCount", () => {
 describe("collectWithBunLock — identity and emission", () => {
   test("emits a minimal CycloneDX 1.6 document through the unchanged parse path", async () => {
     const { doc } = await scanLock(WORKSPACE_LOCK);
+
     expect(doc["bomFormat"]).toBe("CycloneDX");
     expect(doc["specVersion"]).toBe("1.6");
     expect(Array.isArray(doc["components"])).toBe(true);
@@ -322,6 +330,7 @@ describe("collectWithBunLock — identity and emission", () => {
   test("identity comes from packages[key][0]: name, version, purl", async () => {
     const { components } = await scanLock(WORKSPACE_LOCK);
     const afi = components.find((c) => c["name"] === "array-find-index");
+
     expect(afi).toMatchObject({
       type: "library",
       name: "array-find-index",
@@ -333,6 +342,7 @@ describe("collectWithBunLock — identity and emission", () => {
   test("scoped names split at the version @ and encode the scope as %40 (cdxgen byte-compat)", async () => {
     const { components } = await scanLock(SCOPED_NESTED_LOCK);
     const scoped = components.find((c) => c["name"] === "@types/bun");
+
     expect(scoped).toMatchObject({
       name: "@types/bun",
       version: "1.3.14",
@@ -342,11 +352,13 @@ describe("collectWithBunLock — identity and emission", () => {
 
   test("nested conflict keys yield identity from value[0], NEVER the key (the trivy failure mode)", async () => {
     const { components } = await scanLock(SCOPED_NESTED_LOCK);
+
     // No component may carry the nested KEY as its name.
     expect(componentNames(components).includes("spdx-compare/spdx-expression-parse")).toBe(false);
     // The nested entry resolves to the same purl as a top-level twin would
     // (the 3-nested-entries-to-1-purl fold happens at merge, not here).
     const v301 = components.filter((c) => c["purl"] === "pkg:npm/spdx-expression-parse@3.0.1");
+
     expect(v301).toHaveLength(1);
     expect(v301[0]).toMatchObject({
       name: "spdx-expression-parse",
@@ -358,16 +370,19 @@ describe("collectWithBunLock — identity and emission", () => {
 
   test("@workspace: entries are never emitted", async () => {
     const { components } = await scanLock(WORKSPACE_LOCK);
+
     expect(componentNames(components)).toEqual(["array-find-index", "smol-toml", "typescript"]);
   });
 
   test("workspaces[*].name members are never emitted even without the @workspace: protocol (belt-and-braces)", async () => {
     const { components } = await scanLock(NAME_ONLY_MEMBER_LOCK);
+
     expect(componentNames(components)).toEqual(["smol-toml"]);
   });
 
   test("malformed individual entries are skipped silently (tolerant walk)", async () => {
     const { components } = await scanLock(MALFORMED_ENTRIES_LOCK);
+
     expect(componentNames(components)).toEqual(["good"]);
     expect(components[0]).toMatchObject({
       name: "good",
@@ -379,6 +394,7 @@ describe("collectWithBunLock — identity and emission", () => {
   test("git-over-ssh resolutions keep the package name intact (split at the first @)", async () => {
     const { components } = await scanLock(NON_REGISTRY_LOCK);
     const ssh = components.find((c) => c["name"] === "ssh-pkg");
+
     expect(ssh).toMatchObject({
       name: "ssh-pkg",
       version: "git+ssh://git@github.com/owner/repo#abc",
@@ -389,6 +405,7 @@ describe("collectWithBunLock — identity and emission", () => {
   test("npm aliases of scoped packages keep the alias name intact", async () => {
     const { components } = await scanLock(NON_REGISTRY_LOCK);
     const alias = components.find((c) => c["name"] === "alias");
+
     expect(alias).toMatchObject({
       name: "alias",
       version: "npm:@scope/real@1.2.3",
@@ -399,6 +416,7 @@ describe("collectWithBunLock — identity and emission", () => {
   test("plain github: protocol resolutions split unchanged", async () => {
     const { components } = await scanLock(NON_REGISTRY_LOCK);
     const gh = components.find((c) => c["name"] === "gh-pkg");
+
     expect(gh).toMatchObject({
       name: "gh-pkg",
       version: "github:user/repo",
@@ -409,6 +427,7 @@ describe("collectWithBunLock — identity and emission", () => {
   test("build-metadata versions percent-encode + as %2B in the purl (IN-02 cdxgen byte-compat)", async () => {
     const { components } = await scanLock(NON_REGISTRY_LOCK);
     const meta = components.find((c) => c["name"] === "meta");
+
     expect(meta).toMatchObject({
       name: "meta",
       version: "1.0.0+build.5",
@@ -424,6 +443,7 @@ describe("collectWithBunLock — identity and emission", () => {
 describe("collectWithBunLock — determinism", () => {
   test("raw bytes carry NO serialNumber and NO timestamp", async () => {
     const { raw } = await scanLock(WORKSPACE_LOCK);
+
     expect(raw.includes("serialNumber")).toBe(false);
     expect(raw.includes("timestamp")).toBe(false);
   });
@@ -432,23 +452,27 @@ describe("collectWithBunLock — determinism", () => {
     const { components } = await scanLock(SCOPED_NESTED_LOCK);
     const purls = components.map((c) => String(c["purl"]));
     const sorted = [...purls].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
+
     expect(purls).toEqual(sorted);
   });
 
   test("two runs over the same lockfile produce byte-identical bom.json", async () => {
     const first = await scanLock(WORKSPACE_LOCK);
     const second = await scanLock(WORKSPACE_LOCK);
+
     expect(first.raw).toBe(second.raw);
   });
 
   test("JSONC (trailing commas) and strict JSON of the same content emit identical bytes", async () => {
     const jsonc = await scanLock(WORKSPACE_LOCK);
     const plain = await scanLock(WORKSPACE_LOCK_PLAIN);
+
     expect(jsonc.raw).toBe(plain.raw);
   });
 
   test("the serialized document ends with a trailing LF", async () => {
     const { raw } = await scanLock(WORKSPACE_LOCK);
+
     expect(raw.endsWith("\n")).toBe(true);
   });
 });
@@ -462,6 +486,7 @@ describe("collectWithBunLock — contract and cache key", () => {
     const target = makeBunTarget(WORKSPACE_LOCK);
     const outDir = makeOutDir();
     const result = await collectWithBunLock(target, { tempDir: outDir });
+
     expect(result.sbomPath).toBe(join(outDir, "bom.json"));
     expect(result.tool).toEqual(BUN_COLLECTOR_TOOL);
     expect(typeof result.cacheKey).toBe("string");
@@ -470,6 +495,7 @@ describe("collectWithBunLock — contract and cache key", () => {
   test("cacheKey reuses computeCacheKey with the locked framing (bun-collector-v1 + bun.lock/package.json)", async () => {
     const target = makeBunTarget(WORKSPACE_LOCK);
     const result = await collectWithBunLock(target, { tempDir: makeOutDir() });
+
     expect(result.cacheKey).toBe(
       computeCacheKey(
         target,
@@ -482,6 +508,7 @@ describe("collectWithBunLock — contract and cache key", () => {
 
   test("missing package.json throws the target.ts-shaped error (from computeCacheKey)", async () => {
     const target = makeTargetWithFiles({ "bun.lock": WORKSPACE_LOCK });
+
     await expect(collectWithBunLock(target, { tempDir: makeOutDir() })).rejects.toThrow(
       /missing package\.json/,
     );
@@ -499,11 +526,13 @@ describe("collectWithBunLock — failure modes", () => {
     // failure can only come from the size gate, not the parser.
     const oversize = `{${" ".repeat(cap)}}`;
     const target = makeBunTarget(oversize);
+
     expect.assertions(3);
     try {
       await collectWithBunLock(target, { tempDir: makeOutDir() });
     } catch (error) {
       const message = String(error);
+
       expect(message).toContain(join(target.dir, "bun.lock"));
       expect(message).toContain(String(cap + 2)); // actual size
       expect(message).toContain(String(cap)); // the cap
@@ -512,11 +541,13 @@ describe("collectWithBunLock — failure modes", () => {
 
   test("non-JSONC garbage fails loudly naming the path (the scan-failure path)", async () => {
     const target = makeBunTarget("this is not jsonc {{{");
+
     expect.assertions(2);
     try {
       await collectWithBunLock(target, { tempDir: makeOutDir() });
     } catch (error) {
       const message = String(error);
+
       expect(message).toContain("not valid JSONC");
       expect(message).toContain(join(target.dir, "bun.lock"));
     }
@@ -537,15 +568,18 @@ const DEV_PROPERTY = "cdx:npm:package:development";
 
 function isDevMarked(component: Record<string, unknown>): boolean {
   const properties = component["properties"];
+
   if (!Array.isArray(properties)) return false;
   return properties.some((raw) => {
     const property = raw as Record<string, unknown>;
+
     return property["name"] === DEV_PROPERTY && property["value"] === "true";
   });
 }
 
 function byPurl(components: Array<Record<string, unknown>>, purl: string): Record<string, unknown> {
   const found = components.find((c) => c["purl"] === purl);
+
   if (found === undefined) throw new Error(`no component with purl ${purl}`);
   return found;
 }
@@ -698,6 +732,7 @@ const CYCLE_LOCK = `{
 describe("collectWithBunLock — transitive dev/prod scope BFS (research A4)", () => {
   test("workspace fixture: typescript dev; smol-toml and array-find-index (via the libb member importer) prod", async () => {
     const { components } = await scanLock(WORKSPACE_LOCK);
+
     expect(isDevMarked(byPurl(components, "pkg:npm/typescript@5.9.3"))).toBe(true);
     expect(isDevMarked(byPurl(components, "pkg:npm/smol-toml@1.6.1"))).toBe(false);
     expect(isDevMarked(byPurl(components, "pkg:npm/array-find-index@1.0.2"))).toBe(false);
@@ -709,6 +744,7 @@ describe("collectWithBunLock — transitive dev/prod scope BFS (research A4)", (
     // Collector origin: twin@1.0.0 surfaces as TWO components (the two nested
     // conflict keys) — exactly one dev-marked, one not.
     const twins = components.filter((c) => c["purl"] === "pkg:npm/twin@1.0.0");
+
     expect(twins.length).toBe(2);
     expect(twins.filter(isDevMarked).length).toBe(1);
 
@@ -717,11 +753,13 @@ describe("collectWithBunLock — transitive dev/prod scope BFS (research A4)", (
     // dev-downgraded out of the gate.
     const model = mergeSboms([{ sbom: doc, targetIdentity: "." }]);
     const twin = model.packages.find((p) => p.purl === "pkg:npm/twin@1.0.0");
+
     expect(twin?.occurrences).toEqual([{ target: ".", isDevDependency: false }]);
   });
 
   test("dev components carry exactly the merge-consumed property; prod components carry none", async () => {
     const { components } = await scanLock(WORKSPACE_LOCK);
+
     expect(byPurl(components, "pkg:npm/typescript@5.9.3")["properties"]).toEqual([
       { name: DEV_PROPERTY, value: "true" },
     ]);
@@ -730,6 +768,7 @@ describe("collectWithBunLock — transitive dev/prod scope BFS (research A4)", (
 
   test("transitive deps of a dev root are dev-marked, including optionalDependencies edges", async () => {
     const { components } = await scanLock(TRANSITIVE_LOCK);
+
     expect(isDevMarked(byPurl(components, "pkg:npm/dev-root@1.0.0"))).toBe(true);
     expect(isDevMarked(byPurl(components, "pkg:npm/dev-leaf@1.0.0"))).toBe(true);
     expect(isDevMarked(byPurl(components, "pkg:npm/dev-opt-leaf@1.0.0"))).toBe(true);
@@ -737,12 +776,14 @@ describe("collectWithBunLock — transitive dev/prod scope BFS (research A4)", (
 
   test("a package reachable from BOTH a prod root and a dev root stays prod (prod wins)", async () => {
     const { components } = await scanLock(TRANSITIVE_LOCK);
+
     expect(isDevMarked(byPurl(components, "pkg:npm/keep-prod@1.0.0"))).toBe(false);
     expect(isDevMarked(byPurl(components, "pkg:npm/shared@1.0.0"))).toBe(false);
   });
 
   test("nested conflict entries are reached via the parent-prefixed lookup and follow the parent's path", async () => {
     const { components } = await scanLock(HOISTING_LOCK);
+
     // The nested entry under the dev parent is dev …
     expect(isDevMarked(byPurl(components, "pkg:npm/shared-dep@2.0.0"))).toBe(true);
     // … while the top-level twin name at another version, reached from the
@@ -754,6 +795,7 @@ describe("collectWithBunLock — transitive dev/prod scope BFS (research A4)", (
 
   test("dep edges resolve through progressively shorter parent prefixes", async () => {
     const { components } = await scanLock(HOISTING_LOCK);
+
     // "inner" is depended on by "dev-parent/shared-dep"; no
     // "dev-parent/shared-dep/inner" key exists, so the walk falls back to
     // the shorter prefix "dev-parent/inner" — still on the dev path.
@@ -762,6 +804,7 @@ describe("collectWithBunLock — transitive dev/prod scope BFS (research A4)", (
 
   test("prod roots include optionalDependencies and peerDependencies of every importer", async () => {
     const { components } = await scanLock(PROD_ROOTS_LOCK);
+
     expect(isDevMarked(byPurl(components, "pkg:npm/opt-pkg@1.0.0"))).toBe(false);
     expect(isDevMarked(byPurl(components, "pkg:npm/peer-pkg@1.0.0"))).toBe(false);
     expect(isDevMarked(byPurl(components, "pkg:npm/dev-pkg@1.0.0"))).toBe(true);
@@ -769,18 +812,21 @@ describe("collectWithBunLock — transitive dev/prod scope BFS (research A4)", (
 
   test("unknown dep names are leaves; unvisited packages stay prod (conservative A4)", async () => {
     const { components } = await scanLock(UNKNOWN_LEAF_LOCK);
+
     expect(isDevMarked(byPurl(components, "pkg:npm/real-dev@1.0.0"))).toBe(true);
     expect(isDevMarked(byPurl(components, "pkg:npm/orphan@1.0.0"))).toBe(false);
   });
 
   test("dependency cycles terminate (visited set — DoS bound)", async () => {
     const { components } = await scanLock(CYCLE_LOCK);
+
     expect(isDevMarked(byPurl(components, "pkg:npm/cyc-a@1.0.0"))).toBe(true);
     expect(isDevMarked(byPurl(components, "pkg:npm/cyc-b@1.0.0"))).toBe(true);
   });
 
   test("hoisting never crosses a scope-name boundary: bare dep of @scope/pkg resolves to y, not @scope/y", async () => {
     const { components } = await scanLock(SCOPE_BOUNDARY_LOCK);
+
     // The dev root and its REAL bare dep are dev-marked …
     expect(isDevMarked(byPurl(components, "pkg:npm/%40scope/pkg@1.0.0"))).toBe(true);
     expect(isDevMarked(byPurl(components, "pkg:npm/y@1.0.0"))).toBe(true);

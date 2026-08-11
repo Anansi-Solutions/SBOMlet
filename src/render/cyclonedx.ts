@@ -54,6 +54,7 @@ interface CdxComponent {
  */
 function unrecognizedLicenses(pkg: PackageEntry): CdxLicense[] {
   const tokens = pkg.finding?.unrecognizedTokens;
+
   if (tokens === undefined || tokens.length === 0) return [];
   return tokens.map((name) => ({ license: { name } }));
 }
@@ -70,13 +71,17 @@ function unrecognizedLicenses(pkg: PackageEntry): CdxLicense[] {
  */
 function licensesOf(pkg: PackageEntry): CdxLicense[] | undefined {
   const extra = unrecognizedLicenses(pkg);
+
   if (pkg.finding !== undefined && pkg.finding.expression !== null) {
     return [{ expression: pkg.finding.expression }, ...extra];
   }
+
   if (pkg.licenseClaims.length > 0) {
     const raws = [...new Set(pkg.licenseClaims.map((claim) => claim.raw))];
+
     return [...raws.map((raw) => ({ license: { name: raw } })), ...extra];
   }
+
   // No expression and no raw claims: an imprecise os-partial may still carry surfaced tokens
   // (expression null, claims empty after connective filtering).
   return extra.length > 0 ? extra : undefined;
@@ -93,18 +98,21 @@ function propertiesOf(
   verdicts: ReadonlyArray<Verdict> | undefined,
 ): CdxProperty[] | undefined {
   const properties: CdxProperty[] = [];
+
   for (const occurrence of pkg.occurrences) {
     properties.push({
       name: "licenses-tool:used-in",
       value: occurrence.target,
     });
   }
+
   for (const occurrence of pkg.occurrences) {
     properties.push({
       name: `licenses-tool:scope:${occurrence.target}`,
       value: occurrence.isDevDependency ? "dev" : "prod",
     });
   }
+
   if (verdicts !== undefined) {
     for (const verdict of verdicts) {
       if (verdict.purl !== pkg.purl) continue;
@@ -118,6 +126,7 @@ function propertiesOf(
       });
     }
   }
+
   return properties.length === 0 ? undefined : properties;
 }
 
@@ -127,6 +136,7 @@ function toComponent(
 ): CdxComponent {
   const licenses = licensesOf(pkg);
   const properties = propertiesOf(pkg, verdicts);
+
   // Keys in the intended emission order; optional keys spread in conditionally so absent values
   // OMIT the key rather than emit null.
   return {
@@ -161,5 +171,6 @@ export function renderCyclonedx(
     },
     components: sorted.map((pkg) => toComponent(pkg, verdicts)),
   };
+
   return JSON.stringify(doc, null, 2) + "\n";
 }

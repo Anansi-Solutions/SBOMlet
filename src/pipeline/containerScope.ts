@@ -90,12 +90,14 @@ function rescoped(pkg: PackageEntry, developmentContainers: ReadonlySet<string>)
   if (pkg.scope === "os" && OS_PACKAGE_ECOSYSTEMS.has(purlEcosystem(pkg.purl))) {
     return pkg;
   }
+
   const occurrences = pkg.occurrences.map((occurrence) =>
     rescopedOccurrence(occurrence, developmentContainers),
   );
   const occurrencesChanged = occurrences.some(
     (occurrence, index) => occurrence !== pkg.occurrences[index],
   );
+
   if (pkg.scope === "app" && !occurrencesChanged) return pkg;
   return { ...pkg, scope: "app", occurrences };
 }

@@ -30,11 +30,14 @@ export function renderNode(node: ExpressionNode): string {
   if ("license" in node) {
     const plus = node.plus === true ? "+" : "";
     const withPart = node.exception !== undefined ? ` WITH ${node.exception}` : "";
+
     return `${node.license}${plus}${withPart}`;
   }
+
   const operand = (child: ExpressionNode): string =>
     "license" in child ? renderNode(child) : `(${renderNode(child)})`;
   const conj = node.conjunction === "or" ? "OR" : "AND";
+
   return `${operand(node.left)} ${conj} ${operand(node.right)}`;
 }
 
@@ -58,6 +61,7 @@ export function copyleftLeafIds(node: ExpressionNode): string[] {
   if ("license" in node) {
     return COPYLEFT_IDS.has(node.license) ? [node.license] : [];
   }
+
   return [...copyleftLeafIds(node.left), ...copyleftLeafIds(node.right)];
 }
 
@@ -77,8 +81,10 @@ export function leafIds(node: ExpressionNode): {
       exceptions: node.exception !== undefined ? [node.exception] : [],
     };
   }
+
   const left = leafIds(node.left);
   const right = leafIds(node.right);
+
   return {
     ids: [...left.ids, ...right.ids],
     exceptions: [...left.exceptions, ...right.exceptions],
@@ -114,12 +120,15 @@ export function elect(node: ExpressionNode): ExpressionNode {
   if ("license" in node) return node;
   const left = elect(node.left);
   const right = elect(node.right);
+
   if (node.conjunction === "and") return { left, conjunction: "and", right };
   const leftCopyleft = isCopyleft(left);
   const rightCopyleft = isCopyleft(right);
+
   if (leftCopyleft !== rightCopyleft) return leftCopyleft ? right : left;
   const leftRef = hasRefLeaf(left);
   const rightRef = hasRefLeaf(right);
+
   if (leftRef !== rightRef) return leftRef ? right : left;
   return compareCodeUnits(renderNode(left), renderNode(right)) <= 0 ? left : right;
 }
@@ -136,9 +145,11 @@ export function orLeaves(node: ExpressionNode): string[] | null {
       leaves.push(renderNode(n));
       return true;
     }
+
     if (n.conjunction === "and") return false;
     return walk(n.left) && walk(n.right);
   };
+
   if (!walk(node)) return null;
   return leaves.sort(compareCodeUnits);
 }

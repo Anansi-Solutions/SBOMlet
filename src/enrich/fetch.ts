@@ -37,13 +37,17 @@ export async function mapLimit<T, R>(
 ): Promise<R[]> {
   const results = new Array<R>(items.length);
   let next = 0;
+
   async function worker(): Promise<void> {
     while (next < items.length) {
       const index = next++;
+
       results[index] = await fn(items[index]!);
     }
   }
+
   const workerCount = Math.max(0, Math.min(limit, items.length));
+
   await Promise.all(Array.from({ length: workerCount }, worker));
   return results;
 }
@@ -78,6 +82,7 @@ export async function fetchJson(
 ): Promise<unknown> {
   const backoffBase = opts.backoffBaseMs ?? BACKOFF_BASE_MS;
   let response: Response;
+
   try {
     response = await fetch(url, {
       headers: { "User-Agent": USER_AGENT }, // NO custom Accept (npm 406)
@@ -88,6 +93,7 @@ export async function fetchJson(
       await sleep(backoffBase * 2 ** attempt);
       return fetchJson(url, opts, attempt + 1);
     }
+
     throw new Error(`registry fetch failed for ${url}`, { cause: error });
   }
 
@@ -95,9 +101,11 @@ export async function fetchJson(
     await sleep(backoffBase * 2 ** attempt);
     return fetchJson(url, opts, attempt + 1);
   }
+
   if (!response.ok) {
     throw new Error(`registry ${response.status} for ${url}`); // loud terminal failure
   }
+
   return response.json();
 }
 
@@ -142,11 +150,13 @@ export async function fetchGithubLicense(
   const backoffBase = opts.backoffBaseMs ?? BACKOFF_BASE_MS;
   const token = process.env.GITHUB_TOKEN;
   const headers: Record<string, string> = { "User-Agent": USER_AGENT };
+
   if (token !== undefined && token !== "") {
     headers["Authorization"] = `Bearer ${token}`;
   }
 
   let response: Response;
+
   try {
     response = await fetch(url, {
       headers,
@@ -157,6 +167,7 @@ export async function fetchGithubLicense(
       await sleep(backoffBase * 2 ** attempt);
       return fetchGithubLicense(url, opts, attempt + 1);
     }
+
     throw new GithubTransientError(`github fetch failed for ${url}`, {
       cause: error,
     });
@@ -165,13 +176,16 @@ export async function fetchGithubLicense(
   if (response.status === 200) {
     return { status: 200, body: await response.json() };
   }
+
   if (response.status === 404) {
     return { status: 404 }; // definitive missing-tag/no-license - caller advances
   }
+
   if (isTransientStatus(response.status) && attempt < MAX_RETRIES) {
     await sleep(backoffBase * 2 ** attempt);
     return fetchGithubLicense(url, opts, attempt + 1);
   }
+
   // 403 rate-limit, persistent 5xx, or any other non-ok → transient/unreachable.
   throw new GithubTransientError(`github ${response.status} for ${url}`);
 }
@@ -199,6 +213,7 @@ export async function fetchJsonOr404(
 ): Promise<JsonOr404> {
   const backoffBase = opts.backoffBaseMs ?? BACKOFF_BASE_MS;
   let response: Response;
+
   try {
     response = await fetch(url, {
       headers: { "User-Agent": USER_AGENT }, // NO custom Accept (fetchJson contract)
@@ -209,18 +224,22 @@ export async function fetchJsonOr404(
       await sleep(backoffBase * 2 ** attempt);
       return fetchJsonOr404(url, opts, attempt + 1);
     }
+
     throw new Error(`registry fetch failed for ${url}`, { cause: error });
   }
 
   if (response.status === 404) {
     return { status: 404 }; // definitive not-on-registry - the caller records the negative
   }
+
   if (isTransientStatus(response.status) && attempt < MAX_RETRIES) {
     await sleep(backoffBase * 2 ** attempt);
     return fetchJsonOr404(url, opts, attempt + 1);
   }
+
   if (!response.ok) {
     throw new Error(`registry ${response.status} for ${url}`); // loud terminal failure
   }
+
   return { status: 200, body: await response.json() };
 }

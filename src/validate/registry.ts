@@ -25,6 +25,7 @@ export interface PypiInfo {
 
 /** Arktype shape just for the response envelope: `info` may be any value. */
 const PypiResponse = type({ "info?": "unknown" });
+
 export type PypiResponseShape = typeof PypiResponse.infer;
 
 /**
@@ -36,8 +37,10 @@ export type PypiResponseShape = typeof PypiResponse.infer;
 export function narrowPypiResponse(value: unknown): PypiInfo | undefined {
   if (recordOf(value) === undefined) return undefined;
   const parsed = PypiResponse(value);
+
   if (parsed instanceof type.errors) return undefined;
   const info = recordOf(parsed.info);
+
   if (info === undefined) return {};
   return {
     licenseExpression: stringOf(info["license_expression"]),
@@ -81,6 +84,7 @@ const NpmDocument = type({
 export function narrowNpmPackument(value: unknown): NpmPackument | undefined {
   if (recordOf(value) === undefined) return undefined;
   const parsed = NpmDocument(value);
+
   if (parsed instanceof type.errors) return undefined;
   return {
     license: stringOf(parsed.license),
@@ -112,8 +116,10 @@ const GithubLicenseDocument = type({
 export function narrowGithubLicense(value: unknown): GithubLicense | undefined {
   if (recordOf(value) === undefined) return undefined;
   const parsed = GithubLicenseDocument(value);
+
   if (parsed instanceof type.errors) return undefined;
   const license = recordOf(parsed.license);
+
   return {
     spdxId: stringOf(license?.["spdx_id"]),
     downloadUrl: stringOf(parsed.download_url),
@@ -136,6 +142,7 @@ const NugetLeafDocument = type({ "catalogEntry?": "unknown" });
 export function narrowNugetLeaf(value: unknown): NugetLeaf | undefined {
   if (recordOf(value) === undefined) return undefined;
   const parsed = NugetLeafDocument(value);
+
   if (parsed instanceof type.errors) return undefined;
   return { catalogEntry: stringOf(parsed.catalogEntry) };
 }
@@ -165,6 +172,7 @@ const NugetCatalogDocument = type({
 export function narrowNugetCatalogEntry(value: unknown): NugetCatalogEntry | undefined {
   if (recordOf(value) === undefined) return undefined;
   const parsed = NugetCatalogDocument(value);
+
   if (parsed instanceof type.errors) return undefined;
   return {
     licenseExpression: stringOf(parsed.licenseExpression),
@@ -190,6 +198,7 @@ const DepsDevVersionDocument = type({ "licenses?": "unknown" });
 export function narrowDepsDevVersion(value: unknown): DepsDevVersion | undefined {
   if (recordOf(value) === undefined) return undefined;
   const parsed = DepsDevVersionDocument(value);
+
   if (parsed instanceof type.errors) return undefined;
   return { licenses: stringArrayOf(parsed.licenses) };
 }
@@ -203,6 +212,7 @@ function stringArrayOf(value: unknown): string[] | undefined {
 /** A legacy `{ type }` license object, or undefined for any other shape. */
 function licenseTypeOf(value: unknown): { type?: string } | undefined {
   const record = recordOf(value);
+
   if (record === undefined) return undefined;
   return { type: stringOf(record["type"]) };
 }
@@ -222,15 +232,19 @@ function licensesArrayOf(value: unknown): Array<{ type?: string }> | undefined {
  */
 function versionsOf(value: unknown): Record<string, NpmVersion> | undefined {
   const record = recordOf(value);
+
   if (record === undefined) return undefined;
   const out: Record<string, NpmVersion> = {};
+
   for (const [version, entry] of Object.entries(record)) {
     const versionRecord = recordOf(entry);
+
     out[version] = {
       license: stringOf(versionRecord?.["license"]),
       licenseObject: licenseTypeOf(versionRecord?.["license"]),
       licensesArray: licensesArrayOf(versionRecord?.["licenses"]),
     };
   }
+
   return out;
 }

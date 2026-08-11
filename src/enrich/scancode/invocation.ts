@@ -93,6 +93,7 @@ interface RawScancodeOutput {
 /** Stat-gate a scancode output path BEFORE any read or parse (DoS bound). */
 export function assertScancodeOutputSize(path: string): void {
   const size = statSync(path).size;
+
   if (size > MAX_SCANCODE_OUTPUT_BYTES) {
     throw new Error(
       `scancode output at ${path} is ${size} bytes, over the ` +
@@ -111,6 +112,7 @@ function assertScancodeVersion(parsed: unknown, invocation: string): void {
     Array.isArray(headers) && headers.length > 0
       ? (headers[0] as { tool_version?: unknown } | undefined)?.tool_version
       : undefined;
+
   if (toolVersion !== SCANCODE_TOOL.version) {
     throw new Error(
       `scancode output tool_version is ${JSON.stringify(toolVersion)}, ` +
@@ -127,6 +129,7 @@ function parseScancodeOutput(
   invocation: string,
 ): RawScancodeOutput {
   let parsed: unknown;
+
   try {
     parsed = JSON.parse(rawOutput);
   } catch (error) {
@@ -136,6 +139,7 @@ function parseScancodeOutput(
       { cause: error },
     );
   }
+
   assertScancodeVersion(parsed, invocation);
   return parsed as RawScancodeOutput;
 }
@@ -145,6 +149,7 @@ function isEnoentError(error: unknown): boolean {
   if (error instanceof Error && "code" in error) {
     return (error as NodeJS.ErrnoException).code === "ENOENT";
   }
+
   return false;
 }
 
@@ -171,6 +176,7 @@ async function runScancode(
         { cause: error },
       );
     }
+
     // ScanCode exits NON-ZERO when SOME files fail to scan - an undecodable or oversized bundled
     // data file (a vendored full license-list JSON, say) -
     // yet still writes a COMPLETE, well-formed result for the rest of the tree;
@@ -186,12 +192,14 @@ async function runScancode(
   if (!existsSync(outFile)) {
     throw new Error(`scancode produced no output file at ${outFile}\ninvocation: ${invocation}`);
   }
+
   // Size gate BEFORE read (DoS bound).
   assertScancodeOutputSize(outFile);
 
   // Read outside the parse try: an I/O failure must surface as itself, not as a misleading "not
   // valid JSON" message (dockerOs.ts idiom).
   const rawOutput = readFileSync(outFile, "utf8");
+
   return parseScancodeOutput(rawOutput, outFile, invocation);
 }
 
@@ -220,6 +228,7 @@ export async function scanPackageSources(
   const ownsTempDir = opts.tempDir === undefined;
   const tempDir = opts.tempDir ?? mkdtempSync(join(tmpdir(), "licenses-scancode-"));
   const outFile = join(tempDir, "scancode-output.json");
+
   rmSync(outFile, { force: true });
 
   try {
@@ -229,6 +238,7 @@ export async function scanPackageSources(
     });
 
     const elected = electExpression(parsed.files);
+
     if (elected === undefined) return null;
 
     return {

@@ -18,6 +18,7 @@ function parsed(
 describe("githubRepoFor — repo-name derivation from the registry convention", () => {
   test("provider <opentofu-host>/<ns>/<name> → <ns>/terraform-provider-<name>", () => {
     const target = githubRepoFor(parsed("registry.opentofu.org/hashicorp/aws", "6.42.0"));
+
     expect(target?.owner).toBe("hashicorp");
     expect(target?.repo).toBe("terraform-provider-aws");
     expect(target?.raw).toBe("github.com/hashicorp/terraform-provider-aws");
@@ -25,6 +26,7 @@ describe("githubRepoFor — repo-name derivation from the registry convention", 
 
   test("provider integrations/github → integrations/terraform-provider-github", () => {
     const target = githubRepoFor(parsed("registry.opentofu.org/integrations/github", "6.12.0"));
+
     expect(target?.owner).toBe("integrations");
     expect(target?.repo).toBe("terraform-provider-github");
   });
@@ -35,6 +37,7 @@ describe("githubRepoFor — repo-name derivation from the registry convention", 
     const target = githubRepoFor(
       parsed("registry.opentofu.org/terraform-aws-modules/alb/aws", "9.17.0"),
     );
+
     expect(target?.owner).toBe("terraform-aws-modules");
     expect(target?.repo).toBe("terraform-aws-alb");
     expect(target?.raw).toBe("github.com/terraform-aws-modules/terraform-aws-alb");
@@ -45,6 +48,7 @@ describe("githubRepoFor — repo-name derivation from the registry convention", 
     const target = githubRepoFor(
       parsed("registry.opentofu.org/terraform-aws-modules/ecs/aws", "7.5.0"),
     );
+
     expect(target?.owner).toBe("terraform-aws-modules");
     expect(target?.repo).toBe("terraform-aws-ecs");
   });
@@ -53,6 +57,7 @@ describe("githubRepoFor — repo-name derivation from the registry convention", 
     // someorg/thing/aws is a 4-segment module; the OLD ns heuristic would have
     // returned null, the count-based one derives someorg/terraform-aws-thing.
     const target = githubRepoFor(parsed("registry.opentofu.org/someorg/thing/aws", "1.0.0"));
+
     expect(target?.owner).toBe("someorg");
     expect(target?.repo).toBe("terraform-aws-thing");
   });
@@ -78,6 +83,7 @@ describe("githubLicenseRefsFor — ordered version-ref candidates (W#4: no defau
 
   test("the undefined default-branch sentinel is NEVER present (W#4)", () => {
     const refs = githubLicenseRefsFor("1.0.0");
+
     expect(refs).not.toContain(undefined);
     expect(refs.every((r) => typeof r === "string")).toBe(true);
   });
@@ -92,6 +98,7 @@ describe("resolveGithubLicense — raw-only contract over an already-fetched bod
       path: "LICENSE",
     };
     const result = resolveGithubLicense(body);
+
     expect(result).toEqual({
       raw: "MPL-2.0",
       via: "github-license",
@@ -105,6 +112,7 @@ describe("resolveGithubLicense — raw-only contract over an already-fetched bod
       license: { spdx_id: "MIT" },
       download_url: "https://example/LICENSE",
     });
+
     expect(result?.raw).toBe("MIT");
     expect(result?.via).toBe("github-license");
   });
@@ -113,6 +121,7 @@ describe("resolveGithubLicense — raw-only contract over an already-fetched bod
     const result = resolveGithubLicense({
       license: { spdx_id: "Apache-2.0" },
     });
+
     expect(result?.raw).toBe("Apache-2.0");
     expect(result?.downloadUrl).toBeUndefined();
   });
@@ -140,6 +149,7 @@ describe("narrowGithubLicense — tolerant boundary (ASVS V5)", () => {
       download_url: "https://example/LICENSE",
       path: "LICENSE",
     });
+
     expect(narrowed?.spdxId).toBe("MPL-2.0");
     expect(narrowed?.downloadUrl).toBe("https://example/LICENSE");
   });
@@ -149,12 +159,14 @@ describe("narrowGithubLicense — tolerant boundary (ASVS V5)", () => {
       license: { spdx_id: 5 },
       download_url: { nested: true },
     });
+
     expect(narrowed?.spdxId).toBeUndefined();
     expect(narrowed?.downloadUrl).toBeUndefined();
   });
 
   test("absent license object → spdxId undefined", () => {
     const narrowed = narrowGithubLicense({ download_url: "https://x/LICENSE" });
+
     expect(narrowed?.spdxId).toBeUndefined();
     expect(narrowed?.downloadUrl).toBe("https://x/LICENSE");
   });

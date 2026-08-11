@@ -56,6 +56,7 @@ function requireLockfileText(ctx: CollectContext): string {
   if (ctx.lockfileText === undefined) {
     throw new Error("collector requires lockfile text but the context provided none");
   }
+
   return ctx.lockfileText;
 }
 
@@ -85,6 +86,7 @@ function readSbom(path: string): unknown {
  */
 function readPyprojectText(target: DiscoveredTarget): string {
   const path = join(target.dir, "pyproject.toml");
+
   if (!existsSync(path)) return "";
   try {
     return readFileSync(path, "utf8");
@@ -111,6 +113,7 @@ function cdxgenCollector(
         ecosystem: ecosystemFor(kind),
         manifestFiles: manifestFilesFor(kind),
       });
+
       return {
         sbom: readSbom(result.sbomPath),
         targetIdentity: target.identity,
@@ -135,9 +138,11 @@ const yarnCollector: Collector = {
     selectJsGenerator(lockfileText) === "yarn-plugin" ? YARN_PLUGIN_TOOL : CDXGEN_TOOL,
   async collect(target, ctx): Promise<CollectedSbom> {
     const lockfileText = requireLockfileText(ctx);
+
     if (selectJsGenerator(lockfileText) !== "yarn-plugin") {
       return yarnCdxgenCollector.collect(target, ctx);
     }
+
     const result = await collectWithYarnPlugin(target, {
       timeoutMs: ctx.timeoutMs,
       verbose: ctx.verbose,
@@ -146,6 +151,7 @@ const yarnCollector: Collector = {
     // graph. npmIntroductions returns an empty map for a graph-less BOM, so a cdxgen-style fallback
     // would simply carry no provenance (the honest residual).
     const sbom = readSbom(result.sbomPath);
+
     return {
       sbom,
       targetIdentity: target.identity,
@@ -170,6 +176,7 @@ const bunCollector: Collector = {
   tool: (): ToolIdentity => BUN_COLLECTOR_TOOL,
   async collect(target): Promise<CollectedSbom> {
     const result = await collectWithBunLock(target, {});
+
     return {
       sbom: readSbom(result.sbomPath),
       targetIdentity: target.identity,
@@ -195,6 +202,7 @@ const poetryCollector: Collector = {
       manifestFiles: manifestFilesFor("poetry"),
     });
     const lockfileText = requireLockfileText(ctx);
+
     return {
       sbom: readSbom(result.sbomPath),
       targetIdentity: target.identity,
@@ -222,6 +230,7 @@ const terraformCollector: Collector = {
   async collect(target, ctx): Promise<CollectedSbom> {
     requireLockfileText(ctx);
     const result = await collectWithTerraform(target, {});
+
     return {
       sbom: readSbom(result.sbomPath),
       targetIdentity: target.identity,
@@ -241,6 +250,7 @@ const nugetCollector: Collector = {
   tool: (): ToolIdentity => NUGET_COLLECTOR_TOOL,
   async collect(target): Promise<CollectedSbom> {
     const result = await collectWithNugetLock(target, {});
+
     return {
       sbom: readSbom(result.sbomPath),
       targetIdentity: target.identity,
@@ -266,6 +276,7 @@ const mavenCollector: Collector = {
   tool: (): ToolIdentity => MAVEN_COLLECTOR_TOOL,
   async collect(target): Promise<CollectedSbom> {
     const result = await collectWithMavenSbom(target, {});
+
     return {
       sbom: readSbom(result.sbomPath),
       targetIdentity: target.identity,

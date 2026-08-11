@@ -87,13 +87,16 @@ export function parsePurl(purl: string): ParsedPurl | undefined {
   if (!purl.startsWith("pkg:")) return undefined;
   const rest = purl.slice("pkg:".length);
   const slash = rest.indexOf("/");
+
   if (slash === -1) return undefined;
   const type = rest.slice(0, slash);
   const nameAtVersion = rest.slice(slash + 1);
   const at = nameAtVersion.lastIndexOf("@");
+
   if (at === -1) return undefined;
   const encodedName = nameAtVersion.slice(0, at);
   const version = nameAtVersion.slice(at + 1);
+
   if (encodedName === "" || version === "") return undefined;
   return { type, encodedName, version };
 }
@@ -106,13 +109,16 @@ export function parsePurl(purl: string): ParsedPurl | undefined {
 function needsEnrichment(entry: PackageEntry): boolean {
   const seen = new Set<string>();
   const distinct: LicenseClaim[] = [];
+
   for (const claim of entry.licenseClaims) {
     const key = `${claim.kind}\0${claim.raw}`;
+
     if (!seen.has(key)) {
       seen.add(key);
       distinct.push(claim);
     }
   }
+
   if (distinct.length === 0) return true;
   return distinct.some((c) => normalizeRaw(c.raw).expression === null);
 }
@@ -125,12 +131,14 @@ export function npmPackumentUrl(encodedName: string): string {
   const pathName = name.startsWith("@")
     ? `@${encodeURIComponent(name.slice(1))}`
     : encodeURIComponent(name);
+
   return `https://registry.npmjs.org/${pathName}`;
 }
 
 /** The PyPI JSON URL for a name + exact version. */
 export function pypiJsonUrl(encodedName: string, version: string): string {
   const name = decodeURIComponent(encodedName);
+
   return `https://pypi.org/pypi/${encodeURIComponent(name)}/${encodeURIComponent(version)}/json`;
 }
 
@@ -141,11 +149,14 @@ export function resolveFromDocument(
 ): { raw: string; via: string; fetchedFrom: "pypi" | "npm" } | null {
   if (parsed.type === "pypi") {
     const resolution = resolvePypiLicense(document);
+
     return resolution === null
       ? null
       : { raw: resolution.raw, via: resolution.via, fetchedFrom: "pypi" };
   }
+
   const resolution = resolveNpmLicense(document, parsed.version);
+
   return resolution === null
     ? null
     : { raw: resolution.raw, via: resolution.via, fetchedFrom: "npm" };
@@ -169,6 +180,7 @@ export function withCacheClaim(
     kind: "expression",
     source,
   }));
+
   return { ...entry, licenseClaims: [...entry.licenseClaims, ...claims] };
 }
 
@@ -188,10 +200,12 @@ export function withReplayAttribution(
   if (hit.copyrights === undefined || hit.copyrights.length === 0) return entry;
 
   const sanitized = new Set<string>();
+
   for (const line of hit.copyrights) {
     if (sanitized.size >= MAX_REPLAY_COPYRIGHT_LINES) break;
     sanitized.add(sanitizeEvidenceText(line));
   }
+
   const copyrightLines = [...sanitized].sort(compareCodeUnits);
 
   return {
@@ -224,9 +238,11 @@ export async function enrichUnknowns(
   // Identify the unknown set up front (parse skips a malformed/unsupported purl - it simply stays
   // unknown, never a crash).
   const unknowns: Unknown[] = [];
+
   model.packages.forEach((entry, index) => {
     if (!needsEnrichment(entry)) return;
     const parsed = parsePurl(entry.purl);
+
     if (parsed === undefined) return;
     if (
       parsed.type !== "pypi" &&
@@ -237,6 +253,7 @@ export async function enrichUnknowns(
     ) {
       return;
     }
+
     unknowns.push({ index, entry, parsed });
   });
 
@@ -247,20 +264,26 @@ export async function enrichUnknowns(
 
   // Cache hits resolve with zero fetch in either mode; collect genuine misses.
   const misses: Unknown[] = [];
+
   for (const unknown of unknowns) {
     const hit = getEntry(cache, unknown.entry.purl);
+
     if (hit !== undefined) {
       if (hit.resolvable && hit.license !== null) {
         const withClaim = withCacheClaim(unknown.entry, hit.license, "registry");
+
         packages[unknown.index] = withClaim;
       }
+
       // A negative hit (resolvable:false) leaves the package unknown, no fetch.
       continue;
     }
+
     if (opts.mode === "check") {
       staleUnknowns.push(unknown.entry.purl);
       continue;
     }
+
     misses.push(unknown);
   }
 
@@ -280,6 +303,7 @@ const GITHUB_API_HOST = "https://api.github.com";
 /** Build the GitHub License API URL for a repo at an optional ref (URL-encoded). */
 export function githubLicenseUrl(owner: string, repo: string, ref: string | undefined): string {
   const base = `${GITHUB_API_HOST}/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/license`;
+
   return ref === undefined ? base : `${base}?ref=${encodeURIComponent(ref)}`;
 }
 
@@ -327,26 +351,32 @@ async function fetchRegistryMisses(
   // One fetch per distinct registry URL: scoped/duplicate npm names and any repeated purl reuse the
   // same document.
   const byUrl = new Map<string, Unknown[]>();
+
   for (const miss of misses) {
     const url =
       miss.parsed.type === "pypi"
         ? pypiJsonUrl(miss.parsed.encodedName, miss.parsed.version)
         : npmPackumentUrl(miss.parsed.encodedName);
     const group = byUrl.get(url);
+
     if (group === undefined) byUrl.set(url, [miss]);
     else group.push(miss);
   }
 
   const urls = [...byUrl.keys()];
+
   await mapLimit(urls, FETCH_CONCURRENCY, async (url): Promise<void> => {
     const result = await fetchJsonOr404(url, fetchOpts);
     const group = byUrl.get(url) ?? [];
+
     if (result.status === 404) {
       for (const miss of group) {
         recordNegative(miss, cache, miss.parsed.type as CacheEntry["fetchedFrom"]);
       }
+
       return;
     }
+
     for (const miss of group) {
       applyResolution(miss, result.body, packages, cache);
     }
@@ -371,6 +401,7 @@ async function fetchTerraformMisses(
 ): Promise<void> {
   await mapLimit(misses, FETCH_CONCURRENCY, async (miss): Promise<void> => {
     const repo = githubRepoFor(miss.parsed);
+
     if (repo === null) {
       // Non-github / non-conventional source → definitive no-license, never a wrong guess (no fetch
       // attempted).
@@ -384,10 +415,13 @@ async function fetchTerraformMisses(
     for (const ref of githubLicenseRefsFor(miss.parsed.version)) {
       const url = githubLicenseUrl(repo.owner, repo.repo, ref);
       const result = await fetchGithubLicense(url, fetchOpts);
+
       if (result.status === 404) continue; // missing tag → next candidate
       const resolved = resolveGithubLicense(result.body);
+
       if (resolved === null) continue; // NOASSERTION/null at this ref → next
       const viaRef = ref ?? "default";
+
       packages[miss.index] = withCacheClaim(miss.entry, resolved.raw, "registry");
       putEntry(cache, miss.entry.purl, {
         license: resolved.raw,
@@ -427,25 +461,33 @@ async function fetchNugetMisses(
       nugetRegistrationLeafUrl(miss.parsed.encodedName, miss.parsed.version),
       fetchOpts,
     );
+
     if (leaf.status === 404) {
       recordNegative(miss, cache, "nuget"); // not on nuget.org - definitive
       return;
     }
+
     const catalogUrl = catalogEntryUrlOf(leaf.body);
+
     if (catalogUrl === undefined) {
       recordNegative(miss, cache, "nuget"); // malformed/foreign host - clean no-answer, NO fetch
       return;
     }
+
     const catalog = await fetchJsonOr404(catalogUrl, fetchOpts);
+
     if (catalog.status === 404) {
       recordNegative(miss, cache, "nuget"); // definitive, same as the leaf
       return;
     }
+
     const resolved = resolveNugetCatalogLicense(catalog.body);
+
     if (resolved === null) {
       recordNegative(miss, cache, "nuget"); // embedded-file / url-only / none - honest unknown
       return;
     }
+
     packages[miss.index] = withCacheClaim(miss.entry, resolved.raw, "registry");
     putEntry(cache, miss.entry.purl, {
       license: resolved.raw,
@@ -475,16 +517,21 @@ async function fetchMavenMisses(
       depsDevVersionUrl(miss.parsed.encodedName, miss.parsed.version),
       fetchOpts,
     );
+
     if (result.status === 404) {
       recordNegative(miss, cache, "deps-dev"); // no registry presence - definitive
       return;
     }
+
     const resolved = resolveMavenLicenses(result.body);
+
     if (resolved === null) {
       recordNegative(miss, cache, "deps-dev"); // non-standard/empty - honest unknown
       return;
     }
+
     const license = resolved.raws.length === 1 ? resolved.raws[0]! : resolved.raws;
+
     packages[miss.index] = withCacheClaim(miss.entry, resolved.raws, "registry");
     putEntry(cache, miss.entry.purl, {
       license,
@@ -522,6 +569,7 @@ function applyResolution(
   cache: Map<string, CacheEntry>,
 ): void {
   const resolved = resolveFromDocument(miss.parsed, document);
+
   if (resolved !== null) {
     packages[miss.index] = withCacheClaim(miss.entry, resolved.raw, "registry");
     putEntry(cache, miss.entry.purl, {
@@ -532,6 +580,7 @@ function applyResolution(
     });
     return;
   }
+
   // A clean 200 with a genuinely empty license → a negative cache entry; the package stays unknown.
   // (A fetch FAILURE never reaches here - fetchJson threw - so a transient outage is never cached.)
   recordNegative(miss, cache, miss.parsed.type === "pypi" ? "pypi" : "npm");

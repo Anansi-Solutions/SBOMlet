@@ -32,6 +32,7 @@ export interface ExecOptions {
  */
 function killProcessTree(child: ChildProcess): void {
   const pid = child.pid;
+
   if (pid === undefined) return; // spawn failed; nothing to kill
   if (process.platform === "win32") {
     // An unspawnable taskkill (PATH without System32 in a stripped container) emits 'error' with
@@ -109,6 +110,7 @@ export function execTool(
         // - never report "exited with code null".
         return;
       }
+
       if (code === 0) {
         resolve({ stdout, stderr });
       } else {
@@ -116,6 +118,7 @@ export function execTool(
           code === null
             ? `was terminated by signal ${signal ?? "unknown"}`
             : `exited with code ${code}`;
+
         reject(new Error(`${cmd} ${reason}\n${stderr.slice(-2000)}`));
       }
     });

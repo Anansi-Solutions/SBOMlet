@@ -60,23 +60,28 @@ async function dotnet(args: string[], cwd: string): Promise<void> {
 /** Restore a pinned probe project and return its project directory. */
 async function restoreProbeProject(scratch: string): Promise<string> {
   const project = join(scratch, "probe");
+
   await dotnet(["new", "classlib", "--output", project, "--no-restore"], scratch);
   for (const { id, version } of PINNED) {
     await dotnet(["add", project, "package", id, "--version", version, "--no-restore"], scratch);
   }
+
   await dotnet(["restore", project, "--use-lock-file"], scratch);
 
   const lockPath = join(project, "packages.lock.json");
+
   if (!existsSync(lockPath)) {
     fail(
       `restore wrote no packages.lock.json at ${lockPath} — ` +
         `the SDK's lockfile opt-in may have changed`,
     );
   }
+
   const lock = JSON.parse(readFileSync(lockPath, "utf8")) as {
     version?: unknown;
     dependencies?: Record<string, unknown>;
   };
+
   console.log(
     `lock format version ${String(lock.version)}; ` +
       `sections: ${Object.keys(lock.dependencies ?? {}).join(", ")}`,
@@ -95,26 +100,31 @@ async function assertCollectorReadsLock(project: string, scratch: string): Promi
     components?: { purl?: string }[];
   };
   const purls = (bom.components ?? []).map((c) => c.purl ?? "");
+
   console.log(`collector emitted ${purls.length} components`);
 
   const expected = PINNED.map(({ id, version }) => `pkg:nuget/${id}@${version}`);
   const missing = expected.filter((purl) => !purls.includes(purl));
+
   if (missing.length > 0) {
     fail(
       `pinned purls missing from the collector output: ` +
         `${missing.join(", ")} (emitted: ${purls.join(", ")})`,
     );
   }
+
   if (!purls.some((purl) => purl.startsWith(TRANSITIVE_PREFIX))) {
     fail(
       `no ${TRANSITIVE_PREFIX}* emitted — Transitive lock entries are not ` +
         `surfacing (emitted: ${purls.join(", ")})`,
     );
   }
+
   // Three pinned directs plus at least the asserted transitive.
   if (purls.length < PINNED.length + 1) {
     fail(`expected at least ${PINNED.length + 1} components, got ${purls.length}`);
   }
+
   console.log("PASS: the collector read the SDK's lockfile and emitted every expected purl");
 }
 
@@ -123,6 +133,7 @@ const sdkVersion = await execTool("dotnet", ["--version"], {
   verbose: false,
   env: DOTNET_ENV,
 }).catch(() => undefined);
+
 if (sdkVersion === undefined) {
   console.error(
     "A .NET SDK is required on PATH (dotnet --version failed) — " +
@@ -130,15 +141,19 @@ if (sdkVersion === undefined) {
   );
   process.exit(2);
 }
+
 const canaryQuality = process.env.DOTNET_CANARY_QUALITY?.trim();
+
 console.log(
   `probing with .NET SDK ${sdkVersion.stdout.trim()}` +
     (canaryQuality ? ` (${canaryQuality} leg)` : ""),
 );
 
 const scratch = mkdtempSync(join(tmpdir(), "dotnet-canary-"));
+
 try {
   const project = await restoreProbeProject(scratch);
+
   await assertCollectorReadsLock(project, scratch);
 } finally {
   rmSync(scratch, { recursive: true, force: true });

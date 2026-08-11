@@ -65,6 +65,7 @@ const DEFAULT_TIMEOUT_MS = 10 * 60 * 1000;
  */
 export function assertSyftSbomSize(path: string): void {
   const size = statSync(path).size;
+
   if (size > MAX_SYFT_SBOM_BYTES) {
     throw new Error(
       `syft SBOM at ${path} is ${size} bytes, over the ` +
@@ -188,17 +189,21 @@ function narrowLicense(raw: unknown): OsLicense | undefined {
     expression?: unknown;
   };
   const license = entry.license;
+
   if (license !== undefined && license !== null) {
     if (typeof license.id === "string" && license.id.length > 0) {
       return { license: { id: license.id } };
     }
+
     if (typeof license.name === "string" && license.name.length > 0) {
       return { license: { name: license.name } };
     }
   }
+
   if (typeof entry.expression === "string" && entry.expression.length > 0) {
     return { expression: entry.expression };
   }
+
   return undefined;
 }
 
@@ -221,8 +226,10 @@ function licenseSortKey(license: OsLicense): string {
  */
 function osLicensesOf(raw: RawComponent): OsLicense[] | undefined {
   const licenses = raw.licenses;
+
   if (!Array.isArray(licenses)) return undefined;
   const narrowed = licenses.map(narrowLicense).filter((l): l is OsLicense => l !== undefined);
+
   if (narrowed.length === 0) return undefined;
   return narrowed.sort((a, b) => compareCodeUnits(licenseSortKey(a), licenseSortKey(b)));
 }
@@ -244,6 +251,7 @@ function isPurlComponent(raw: RawComponent): raw is {
   purl: string;
 } {
   const { name, version, purl } = raw;
+
   if (typeof name !== "string" || name.length === 0) return false;
   if (typeof version !== "string" || version.length === 0) return false;
   if (typeof purl !== "string" || purl.length === 0) return false;
@@ -260,14 +268,17 @@ function isPurlComponent(raw: RawComponent): raw is {
  */
 export function filterOsComponents(sbom: unknown): OsComponent[] {
   const components = (sbom as RawSyftSbom).components;
+
   if (!Array.isArray(components)) return [];
 
   const byPurl = new Map<string, OsComponent>();
+
   for (const raw of components as RawComponent[]) {
     if (!isPurlComponent(raw)) continue;
     // First-wins keying by purl: a duplicate purl collapses to one row.
     if (byPurl.has(raw.purl)) continue;
     const licenses = osLicensesOf(raw);
+
     byPurl.set(raw.purl, {
       type: "library",
       name: raw.name,
@@ -294,9 +305,11 @@ export function unionOsComponents(
   perImage: ReadonlyArray<{ image: string; components: OsComponent[] }>,
 ): AttributedOsComponent[] {
   const byPurl = new Map<string, AttributedOsComponent>();
+
   for (const { image, components } of perImage) {
     for (const component of components) {
       const existing = byPurl.get(component.purl);
+
       if (existing === undefined) {
         byPurl.set(component.purl, { ...component, images: [image] });
       } else if (!existing.images.includes(image)) {
@@ -306,7 +319,9 @@ export function unionOsComponents(
       }
     }
   }
+
   const merged = [...byPurl.values()].sort((a, b) => compareCodeUnits(a.purl, b.purl));
+
   for (const entry of merged) entry.images.sort(compareCodeUnits);
   return merged;
 }
@@ -324,6 +339,7 @@ export function emitDockerOsDoc(
   dockerImages: DockerImageDigest[],
 ): string {
   const sortedImages = [...dockerImages].sort((a, b) => compareCodeUnits(a.image, b.image));
+
   return toSortedJson({
     bomFormat: "CycloneDX",
     specVersion: "1.6",
@@ -374,6 +390,7 @@ async function scanImage(
   if (!existsSync(outFile)) {
     throw new Error(`syft produced no output file at ${outFile}\ninvocation: ${invocation}`);
   }
+
   // Size gate BEFORE read (DoS bound).
   assertSyftSbomSize(outFile);
 
@@ -381,12 +398,14 @@ async function scanImage(
   // valid JSON" message (cdxgen.ts idiom).
   const rawOutput = readFileSync(outFile, "utf8");
   const sbom = parseSyftOutput(rawOutput, outFile, invocation);
+
   return sbom;
 }
 
 /** Parse + specVersion-assert the syft output, naming the invocation on failure. */
 function parseSyftOutput(rawOutput: string, outFile: string, invocation: string): unknown {
   let parsed: unknown;
+
   try {
     parsed = JSON.parse(rawOutput);
   } catch (error) {
@@ -396,13 +415,16 @@ function parseSyftOutput(rawOutput: string, outFile: string, invocation: string)
       { cause: error },
     );
   }
+
   const specVersion = (parsed as RawSyftSbom).specVersion;
+
   if (specVersion !== "1.6") {
     throw new Error(
       `syft output specVersion is ${JSON.stringify(specVersion)}, expected ` +
         `"1.6" — wrong syft version or flags?\ninvocation: ${invocation}`,
     );
   }
+
   return parsed;
 }
 
@@ -429,6 +451,7 @@ async function resolveDigest(
   });
 
   const digests = parseRepoDigests(stdout, invocation);
+
   // Absent RepoDigests → the generalized digest-less identity (a local-only, never-pushed image,
   // e.g. a just-built tag). Never a throw: resolveDigest runs only AFTER a successful scan, so ""
   // can never mask a typo'd ref - an absent ref fails earlier at the pull/scan step.
@@ -456,10 +479,13 @@ export function selectDigest(image: string, digests: readonly string[]): string 
   const sorted = [...digests].sort(compareCodeUnits);
   // Prefer the digest whose repository matches the requested image's repository.
   const wantRepo = repositoryOf(image);
+
   if (wantRepo !== undefined) {
     const match = sorted.find((d) => repositoryOf(d) === wantRepo);
+
     if (match !== undefined) return match;
   }
+
   // No repo match → the code-unit-smallest digest (deterministic over the set).
   return sorted[0];
 }
@@ -481,12 +507,14 @@ function repositoryOf(ref: string): string | undefined {
   const lastSlash = withoutDigest.lastIndexOf("/");
   const lastColon = withoutDigest.lastIndexOf(":");
   const repo = lastColon > lastSlash ? withoutDigest.slice(0, lastColon) : withoutDigest;
+
   return repo === "" ? undefined : repo;
 }
 
 /** Parse the `{{json .RepoDigests}}` stdout into a string array. */
 export function parseRepoDigests(stdout: string, invocation: string): string[] {
   let parsed: unknown;
+
   try {
     parsed = JSON.parse(stdout.trim());
   } catch (error) {
@@ -496,6 +524,7 @@ export function parseRepoDigests(stdout: string, invocation: string): string[] {
       { cause: error },
     );
   }
+
   if (!Array.isArray(parsed)) return [];
   return parsed.filter((d): d is string => typeof d === "string");
 }
@@ -540,9 +569,11 @@ async function collectOneImage(
   if (!(await imageIsPresentLocally(image, opts.dockerBin, opts.spawnOpts))) {
     await execTool(opts.dockerBin, dockerPullArgs(image), opts.spawnOpts);
   }
+
   const sbom = await scanImage(image, outFile, opts.syftBin, opts.spawnOpts);
   const components = filterOsComponents(sbom);
   const digest = await resolveDigest(image, opts.dockerBin, opts.spawnOpts);
+
   return { components, digest, sbomPath: outFile };
 }
 
@@ -582,14 +613,17 @@ export async function collectDockerOsSbom(
 
   const sortedImages = [...images].sort((a, b) => compareCodeUnits(a.image, b.image));
   let index = 0;
+
   for (const { image, source } of sortedImages) {
     const outFile = join(tempDir, `syft-${index}.json`);
+
     index += 1;
     const result = await collectOneImage(image, outFile, {
       syftBin,
       dockerBin,
       spawnOpts,
     });
+
     sbomPaths.push(result.sbomPath);
     perImage.push({ image, components: result.components });
     dockerImages.push({ image, digest: result.digest, source });

@@ -38,8 +38,10 @@ const FIRST_PARTY_RE = /^"?(.+?)@(?:workspace|portal):/;
  */
 export function firstPartyNames(lockfileText: string): Set<string> {
   const names = new Set<string>();
+
   for (const rawLine of lockfileText.split("\n")) {
     const line = rawLine.trimEnd(); // tolerate CRLF lockfiles
+
     if (line.length === 0) continue;
     // Entry headers start in column 0; indented lines are entry bodies.
     if (line[0] === " " || line[0] === "\t") continue;
@@ -47,9 +49,11 @@ export function firstPartyNames(lockfileText: string): Set<string> {
     for (const descriptor of line.split(", ")) {
       const match = FIRST_PARTY_RE.exec(descriptor);
       const name = match?.[1];
+
       if (name !== undefined) names.add(name);
     }
   }
+
   return names;
 }
 
@@ -100,19 +104,23 @@ export function yarnWorkspaceMembers(
     if (candidate !== undefined) {
       members.push({ ...candidate, hasDependencies });
     }
+
     candidate = undefined;
     hasDependencies = false;
   };
 
   for (const rawLine of lockfileText.split("\n")) {
     const line = rawLine.trimEnd(); // tolerate CRLF lockfiles
+
     if (line.length === 0) continue;
     if (line[0] !== " " && line[0] !== "\t") {
       // Column-0 line: a new entry header - flush the previous candidate.
       flush();
       continue;
     }
+
     const match = WORKSPACE_RESOLUTION_RE.exec(line);
+
     if (match !== null) {
       candidate = {
         name: match[1] as string,
@@ -120,10 +128,12 @@ export function yarnWorkspaceMembers(
       };
       continue;
     }
+
     if (DEPENDENCIES_BLOCK_RE.test(line)) {
       hasDependencies = true;
     }
   }
+
   flush();
   return members;
 }
@@ -141,8 +151,10 @@ export function yarnWorkspaceMembers(
  */
 export function thirdPartyEntryCount(lockfileText: string): number {
   let count = 0;
+
   for (const rawLine of lockfileText.split("\n")) {
     const line = rawLine.trimEnd(); // tolerate CRLF lockfiles
+
     if (line.length === 0) continue;
     if (line[0] === " " || line[0] === "\t") continue;
     if (!line.endsWith(":")) continue;
@@ -152,8 +164,10 @@ export function thirdPartyEntryCount(lockfileText: string): number {
     if (line.split(", ").some((descriptor) => FIRST_PARTY_RE.test(descriptor))) {
       continue;
     }
+
     count += 1;
   }
+
   return count;
 }
 
@@ -179,20 +193,24 @@ export function pythonThirdPartyEntryCount(lockfileText: string): number {
   const flush = (): void => {
     if (inPackage && !isLocal) count += 1;
   };
+
   for (const rawLine of lockfileText.split("\n")) {
     const line = rawLine.trimEnd(); // tolerate CRLF lockfiles
+
     if (/^\[\[package\]\]$/.test(line)) {
       flush();
       inPackage = true;
       isLocal = false;
       continue;
     }
+
     // A local-source line inside the current [[package]] block marks the entry first-party (uv's
     // root/workspace self entries).
     if (inPackage && /^source\s*=\s*\{[^}]*\b(?:virtual|editable)\s*=/.test(line)) {
       isLocal = true;
     }
   }
+
   flush();
   return count;
 }
@@ -219,27 +237,35 @@ export function pythonThirdPartyEntryCount(lockfileText: string): number {
  */
 export function npmThirdPartyEntryCount(lockfileText: string): number | undefined {
   let parsed: unknown;
+
   try {
     parsed = JSON.parse(lockfileText);
   } catch {
     return undefined;
   }
+
   // A failed document narrow is the unknown path - same as no packages map.
   const doc = NpmLockDocument(parsed);
   const packages = doc instanceof type.errors ? undefined : doc.packages;
+
   if (packages === undefined) {
     return undefined;
   }
+
   let count = 0;
+
   for (const [key, raw] of Object.entries(packages)) {
     if (!key.includes("node_modules")) {
       continue;
     }
+
     if (recordOf(raw)?.["link"] === true) {
       continue; // workspace link → first-party
     }
+
     count += 1;
   }
+
   return count;
 }
 
@@ -263,25 +289,32 @@ export function npmThirdPartyEntryCount(lockfileText: string): number | undefine
 export function npmFirstPartyNames(lockfileText: string): ReadonlySet<string> {
   const names = new Set<string>();
   let parsed: unknown;
+
   try {
     parsed = JSON.parse(lockfileText);
   } catch {
     return names;
   }
+
   const doc = NpmLockDocument(parsed);
   const packages = doc instanceof type.errors ? undefined : doc.packages;
+
   if (packages === undefined) {
     return names;
   }
+
   for (const [key, raw] of Object.entries(packages)) {
     const entry = recordOf(raw);
+
     if (key.startsWith("node_modules/") && entry?.["link"] === true) {
       names.add(key.slice("node_modules/".length));
     } else if (key !== "" && !key.includes("node_modules")) {
       const name = entry?.["name"];
+
       names.add(typeof name === "string" ? name : key.slice(key.lastIndexOf("/") + 1));
     }
   }
+
   return names;
 }
 
@@ -307,30 +340,39 @@ export function npmFirstPartyNames(lockfileText: string): ReadonlySet<string> {
  */
 export function nugetThirdPartyEntryCount(lockfileText: string): number | undefined {
   let parsed: unknown;
+
   try {
     parsed = JSON.parse(lockfileText);
   } catch {
     return undefined;
   }
+
   // A failed document narrow is the unknown path - same as no dependencies map (the
   // npmThirdPartyEntryCount posture).
   const doc = NugetLockDocument(parsed);
+
   if (doc instanceof type.errors) {
     return undefined;
   }
+
   // The collector accepts lock versions 1 and 2 only (it throws on others). Mirror that acceptance:
   // an unsupported version is unknown, so the target routes to the scan where the collector's loud
   // version error fires - a future-format lock can never take the silent warn+skip branch.
   if (doc.version !== undefined && doc.version !== 1 && doc.version !== 2) {
     return undefined;
   }
+
   const dependencies = doc.dependencies;
+
   if (dependencies === undefined) {
     return undefined;
   }
+
   let count = 0;
+
   for (const rawSection of Object.values(dependencies)) {
     const section = recordOf(rawSection);
+
     if (section === undefined) continue; // non-record section - nothing to count
     for (const rawEntry of Object.values(section)) {
       // Exclusion by type === "Project" only; a malformed (non-record) entry counts too - erring
@@ -338,6 +380,7 @@ export function nugetThirdPartyEntryCount(lockfileText: string): number | undefi
       if (recordOf(rawEntry)?.["type"] !== "Project") count += 1;
     }
   }
+
   return count;
 }
 
@@ -360,21 +403,26 @@ export function nugetThirdPartyEntryCount(lockfileText: string): number | undefi
 export function pnpmThirdPartyEntryCount(lockfileText: string): number {
   let count = 0;
   let section = "";
+
   for (const rawLine of lockfileText.split("\n")) {
     const line = rawLine.trimEnd(); // tolerate CRLF lockfiles
+
     if (line.length === 0) continue;
     if (line[0] !== " " && line[0] !== "\t") {
       // Column-0 line: a new top-level section (importers:, packages:, snapshots:, settings:,
       // lockfileVersion: ...).
       const header = /^([^\s:]+):/.exec(line);
+
       if (header !== null) section = header[1] as string;
       continue;
     }
+
     if (section !== "packages") continue;
     if (/^ {2}\S/.test(line) && line.endsWith(":")) {
       count += 1;
     }
   }
+
   return count;
 }
 
@@ -393,22 +441,29 @@ export function pnpmThirdPartyEntryCount(lockfileText: string): number {
 export function pnpmImporterNames(lockfileText: string): ReadonlySet<string> {
   const names = new Set<string>();
   let section = "";
+
   for (const rawLine of lockfileText.split("\n")) {
     const line = rawLine.trimEnd(); // tolerate CRLF lockfiles
+
     if (line.length === 0) continue;
     if (line[0] !== " " && line[0] !== "\t") {
       const header = /^([^\s:]+):/.exec(line);
+
       if (header !== null) section = header[1] as string;
       continue;
     }
+
     if (section !== "importers") continue;
     const match = /^ {2}(\S+):/.exec(line);
+
     if (match === null) continue;
     // Strip optional surrounding quotes from the importer path key.
     const key = (match[1] as string).replace(/^['"]|['"]$/g, "");
+
     if (key === ".") continue; // the root importer is the target itself
     names.add(key.slice(key.lastIndexOf("/") + 1));
   }
+
   return names;
 }
 
@@ -438,25 +493,34 @@ export function pnpmImporterNames(lockfileText: string): ReadonlySet<string> {
  */
 export function mavenThirdPartyEntryCount(lockfileText: string): number | undefined {
   let parsed: unknown;
+
   try {
     parsed = JSON.parse(lockfileText);
   } catch {
     return undefined;
   }
+
   const doc = MavenSbomDocument(parsed);
+
   if (doc instanceof type.errors) return undefined;
   if (doc.bomFormat !== "CycloneDX") return undefined;
   const rootPurl = doc.metadata?.component?.purl;
+
   if (rootPurl === undefined || !rootPurl.startsWith("pkg:maven/")) {
     return undefined;
   }
+
   const components = doc.components;
+
   if (components === undefined) return 0;
   let count = 0;
+
   for (const raw of components) {
     const purl = recordOf(raw)?.["purl"];
+
     if (typeof purl === "string" && purl === rootPurl) continue;
     count += 1;
   }
+
   return count;
 }

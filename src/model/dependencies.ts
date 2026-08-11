@@ -366,6 +366,7 @@ export function comparePackages(a: PackageEntry, b: PackageEntry): number {
 export function purlEcosystem(purl: string): string {
   const rest = purl.startsWith("pkg:") ? purl.slice(4) : purl;
   const slash = rest.indexOf("/");
+
   return slash === -1 ? rest : rest.slice(0, slash);
 }
 
@@ -380,6 +381,7 @@ export function sortedKeyReplacer(_key: string, value: unknown): unknown {
       Object.entries(value as Record<string, unknown>).sort(([a], [b]) => compareCodeUnits(a, b)),
     );
   }
+
   return value;
 }
 

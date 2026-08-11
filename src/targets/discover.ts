@@ -101,6 +101,7 @@ export function lockfileNameFor(kind: LockfileKind): string {
       return name;
     }
   }
+
   // Unreachable: LockfileKind is a closed union covered by LOCKFILES.
   throw new Error(`unknown lockfile kind: ${kind}`);
 }
@@ -175,9 +176,11 @@ export function shouldDescendDir(
   dotDirAllowlist?: ReadonlySet<string>,
 ): boolean {
   const lower = name.toLowerCase();
+
   if (EXCLUDED_DIR_NAMES.has(name) || EXCLUDED_DIR_NAMES.has(lower)) {
     return false;
   }
+
   if (name.startsWith(".")) {
     // Lockfile lane (no allowlist): every dot-dir is pruned. Dockerfile lane: descend only the
     // explicitly-allowlisted Dockerfile homes.
@@ -185,6 +188,7 @@ export function shouldDescendDir(
       return false;
     }
   }
+
   if (toolDir !== undefined && resolve(sub) === resolve(toolDir)) return false;
   // Git-submodule prune: a `.git` FILE (gitlink) marks a submodule root - vendored third-party code
   // that is not our distribution. Skip descent.
@@ -230,6 +234,7 @@ function isGitSubmoduleRoot(dir: string): boolean {
 export function globToRegExp(glob: string): RegExp {
   let out = "";
   let i = 0;
+
   while (i < glob.length) {
     if (glob.startsWith("**", i)) {
       out += ".*";
@@ -239,10 +244,12 @@ export function globToRegExp(glob: string): RegExp {
       i += 1;
     } else {
       const ch = glob[i] as string;
+
       out += REGEX_SPECIALS.has(ch) ? `\\${ch}` : ch;
       i += 1;
     }
   }
+
   return new RegExp(`^${out}$`, "i");
 }
 
@@ -281,6 +288,7 @@ export function csprojNoLockWarnings(lockless: readonly string[], verbose: boole
         "`dotnet restore`, commit the lockfile, then re-scan",
     );
   }
+
   const count = lockless.length;
   const truncated = count > AGGREGATE_EXAMPLE_LIMIT;
   const examples = lockless
@@ -288,6 +296,7 @@ export function csprojNoLockWarnings(lockless: readonly string[], verbose: boole
     .map((identity) => `"${sanitizeForLog(identity)}"`)
     .join(", ");
   const countPhrase = count === 1 ? "1 directory contains" : `${count} directories contain`;
+
   return [
     `${countPhrase} a .csproj but no packages.lock.json, which is required ` +
       `for .NET scanning (${truncated ? "e.g. " : ""}${examples}) — set ` +
@@ -313,6 +322,7 @@ function locklessCsprojWarnings(
         !targets.some((target) => target.identity === identity && target.lockfile === "nuget"),
     )
     .sort(compareCodeUnits);
+
   return csprojNoLockWarnings(lockless, opts?.verbose ?? false);
 }
 
@@ -339,6 +349,7 @@ export function pomNoSidecarWarnings(unsidecared: readonly string[], verbose: bo
         "goal and commit maven.sbom.json in this directory, then re-scan",
     );
   }
+
   const count = unsidecared.length;
   const truncated = count > AGGREGATE_EXAMPLE_LIMIT;
   const examples = unsidecared
@@ -346,6 +357,7 @@ export function pomNoSidecarWarnings(unsidecared: readonly string[], verbose: bo
     .map((identity) => `"${sanitizeForLog(identity)}"`)
     .join(", ");
   const countPhrase = count === 1 ? "1 directory contains" : `${count} directories contain`;
+
   return [
     `${countPhrase} a pom.xml but no committed maven.sbom.json, which is ` +
       `required for Maven scanning (${truncated ? "e.g. " : ""}${examples}) — ` +
@@ -371,6 +383,7 @@ function unsidecaredPomWarnings(
         !targets.some((target) => target.identity === identity && target.lockfile === "maven"),
     )
     .sort(compareCodeUnits);
+
   return pomNoSidecarWarnings(unsidecared, opts?.verbose ?? false);
 }
 
@@ -401,6 +414,7 @@ export function mavenTestSbomOrphanWarnings(
         "alongside the default one",
     );
   }
+
   const count = orphaned.length;
   const truncated = count > AGGREGATE_EXAMPLE_LIMIT;
   const examples = orphaned
@@ -408,6 +422,7 @@ export function mavenTestSbomOrphanWarnings(
     .map((identity) => `"${sanitizeForLog(identity)}"`)
     .join(", ");
   const countPhrase = count === 1 ? "1 directory contains" : `${count} directories contain`;
+
   return [
     `${countPhrase} a maven.test.sbom.json but no maven.sbom.json ` +
       `(${truncated ? "e.g. " : ""}${examples}) — commit maven.sbom.json ` +
@@ -434,6 +449,7 @@ function orphanedMavenTestSbomWarnings(
         !targets.some((target) => target.identity === identity && target.lockfile === "maven"),
     )
     .sort(compareCodeUnits);
+
   return mavenTestSbomOrphanWarnings(orphaned, opts?.verbose ?? false);
 }
 
@@ -483,6 +499,7 @@ export function discoverTargetsWithWarnings(
     // Identity: forward-slash on every platform - raw path.relative output contains backslashes on
     // Windows.
     const identity = identityOf(dir);
+
     if (isExcluded(identity, matchers)) return;
     found.push({
       dir,
@@ -495,6 +512,7 @@ export function discoverTargetsWithWarnings(
     // Observed, never a target: binary lockfiles are out of scope; the post-step below decides
     // whether the sighting warrants a migration warning.
     const identity = identityOf(dir);
+
     if (isExcluded(identity, matchers)) return;
     bunLockbIdentities.add(identity);
   };
@@ -507,6 +525,7 @@ export function discoverTargetsWithWarnings(
     // otherwise get a spurious root-level warning (the props file's directory typically holds no
     // lock), while a CPM repo WITHOUT locks already warns once per project via its csproj dirs.
     const identity = identityOf(dir);
+
     if (isExcluded(identity, matchers)) return;
     csprojIdentities.add(identity);
   };
@@ -516,6 +535,7 @@ export function discoverTargetsWithWarnings(
     // name "pom.xml", no pattern needed - the committed sidecar is a fixed-name per-module file).
     // The post-step below decides whether the sighting warrants the no-sidecar adoption warning.
     const identity = identityOf(dir);
+
     if (isExcluded(identity, matchers)) return;
     pomIdentities.add(identity);
   };
@@ -525,6 +545,7 @@ export function discoverTargetsWithWarnings(
     // post-step below decides whether a lone sighting (no maven.sbom.json in the same directory)
     // warrants the orphan warning.
     const identity = identityOf(dir);
+
     if (isExcluded(identity, matchers)) return;
     mavenTestSbomIdentities.add(identity);
   };
@@ -535,6 +556,7 @@ export function discoverTargetsWithWarnings(
     for (const entry of readdirSync(dir, { withFileTypes: true })) {
       if (entry.isDirectory()) {
         const sub = join(dir, entry.name);
+
         if (shouldDescend(sub, entry.name)) walk(sub);
       } else if (entry.isFile() && LOCKFILES.has(entry.name)) {
         recordLockfile(dir, entry.name);
@@ -560,18 +582,23 @@ export function discoverTargetsWithWarnings(
   // Post-step 1: collapse same-dir JS lockfile collisions to the single highest-precedence kind.
   // Python kinds in the same directory are untouched - cross-ecosystem pairs remain two targets.
   const jsByIdentity = new Map<string, DiscoveredTarget[]>();
+
   for (const target of sorted) {
     if (JS_PRECEDENCE.has(target.lockfile)) {
       const group = jsByIdentity.get(target.identity) ?? [];
+
       group.push(target);
       jsByIdentity.set(target.identity, group);
     }
   }
+
   const losers = new Set<DiscoveredTarget>();
+
   for (const [identity, group] of jsByIdentity) {
     if (group.length < 2) {
       continue;
     }
+
     const winner = group.reduce((best, candidate) =>
       (JS_PRECEDENCE.get(candidate.lockfile) as number) <
       (JS_PRECEDENCE.get(best.lockfile) as number)
@@ -582,17 +609,20 @@ export function discoverTargetsWithWarnings(
       .filter((target) => target !== winner)
       .map((target) => lockfileNameFor(target.lockfile))
       .sort(compareCodeUnits);
+
     for (const target of group) {
       if (target !== winner) {
         losers.add(target);
       }
     }
+
     warnings.push(
       `target "${identity}" has multiple JS lockfiles — scanning ` +
         `${lockfileNameFor(winner.lockfile)} (precedence bun > pnpm > yarn > npm); ` +
         `ignoring ${ignoredNames.join(", ")}`,
     );
   }
+
   const targets = sorted.filter((target) => !losers.has(target));
 
   // Post-step 2: bun.lockb sightings. Silent when a bun.lock target survived in the same directory
@@ -601,6 +631,7 @@ export function discoverTargetsWithWarnings(
     const hasBunTarget = targets.some(
       (target) => target.identity === identity && target.lockfile === "bun",
     );
+
     if (!hasBunTarget) {
       warnings.push(
         `target "${identity}" has a binary bun.lockb, which is unsupported — ` +

@@ -72,6 +72,7 @@ const NO_DEPS_V8_LOCKFILE = [
 async function withCapturedStderr(fn: () => Promise<void>): Promise<string> {
   const original = process.stderr.write.bind(process.stderr);
   let captured = "";
+
   process.stderr.write = ((chunk: unknown): boolean => {
     captured += String(chunk);
     return true;
@@ -81,6 +82,7 @@ async function withCapturedStderr(fn: () => Promise<void>): Promise<string> {
   } finally {
     process.stderr.write = original;
   }
+
   return captured;
 }
 
@@ -88,6 +90,7 @@ async function withCapturedStderr(fn: () => Promise<void>): Promise<string> {
 function makeEmptyLockfileTree(): { root: string; identity: string } {
   const root = mkdtempSync(join(tmpdir(), "licenses-cli-"));
   const projDir = join(root, "proj");
+
   mkdirSync(projDir);
   writeFileSync(join(projDir, "package.json"), "{}\n");
   writeFileSync(join(projDir, "yarn.lock"), "");
@@ -107,11 +110,13 @@ describe("classifyCoverage — coverage policy (pure)", () => {
 
   test("non-empty lockfile with zero components throws naming target and lockfile", () => {
     let thrown: Error | undefined;
+
     try {
       classifyCoverage("apps/jupyter", "poetry.lock", "[[package]]\n", 0);
     } catch (error) {
       thrown = error as Error;
     }
+
     expect(thrown).toBeDefined();
     expect(thrown!.message).toContain("apps/jupyter");
     expect(thrown!.message).toContain("poetry.lock");
@@ -145,6 +150,7 @@ describe("classifyCoverage — coverage policy (pure)", () => {
     const lockfile = ["[metadata]", 'lock-version = "2.1"', 'python-versions = ">=3.12"', ""].join(
       "\n",
     );
+
     expect(classifyCoverage("apps/pyfree", "poetry.lock", lockfile, 0)).toBe("skip");
   });
 
@@ -158,6 +164,7 @@ describe("classifyCoverage — coverage policy (pure)", () => {
       'source = { virtual = "." }',
       "",
     ].join("\n");
+
     expect(classifyCoverage("apps/uvfree", "uv.lock", lockfile, 0)).toBe("skip");
   });
 
@@ -174,6 +181,7 @@ describe("classifyCoverage — coverage policy (pure)", () => {
       ["poetry.lock", '[metadata]\nlock-version = "2.1"\n'],
       ["uv.lock", 'version = 1\n\n[[package]]\nname = "p"\nsource = { virtual = "." }\n'],
     ];
+
     for (const [lockfileName, lockfileText] of skipClassified) {
       expect(coverageSkipReason(lockfileName, lockfileText)).toBeDefined();
       expect(classifyCoverage("apps/x", lockfileName, lockfileText, 0)).toBe("skip");
@@ -278,6 +286,7 @@ describe("coverageSkipReason — npm/pnpm/bun branches", () => {
 
   test("package-lock.json v3 with only the root entry skips naming the lockfile", () => {
     const reason = coverageSkipReason("package-lock.json", NPM_V3_ROOT_ONLY);
+
     expect(reason).toBeDefined();
     expect(reason).toContain("package-lock.json");
     expect(reason).toContain("no third-party entries");
@@ -303,6 +312,7 @@ describe("coverageSkipReason — npm/pnpm/bun branches", () => {
 
   test("pnpm-lock.yaml importers-only skips naming the lockfile", () => {
     const reason = coverageSkipReason("pnpm-lock.yaml", PNPM_V9_IMPORTERS_ONLY);
+
     expect(reason).toBeDefined();
     expect(reason).toContain("pnpm-lock.yaml");
     expect(reason).toContain("no third-party entries");
@@ -310,6 +320,7 @@ describe("coverageSkipReason — npm/pnpm/bun branches", () => {
 
   test("bun.lock workspace-only skips naming the lockfile", () => {
     const reason = coverageSkipReason("bun.lock", BUN_WORKSPACE_ONLY_LOCK);
+
     expect(reason).toBeDefined();
     expect(reason).toContain("bun.lock");
     expect(reason).toContain("no third-party entries");
@@ -337,6 +348,7 @@ describe("coverageSkipReason — npm/pnpm/bun branches", () => {
       ["pnpm-lock.yaml", PNPM_V9_IMPORTERS_ONLY],
       ["bun.lock", BUN_WORKSPACE_ONLY_LOCK],
     ];
+
     for (const [lockfileName, lockfileText] of skipClassified) {
       expect(coverageSkipReason(lockfileName, lockfileText)).toBeDefined();
       expect(classifyCoverage("apps/x", lockfileName, lockfileText, 0)).toBe("skip");
@@ -354,12 +366,14 @@ describe("sanitizeForLog — stderr injection boundary", () => {
   test("newline injection cannot forge a summary line", () => {
     const forged = "ok\npolicy: 0 fail, 0 warn, 0 suppressed, 9999 ok (9999 verdicts)";
     const out = sanitizeForLog(forged);
+
     expect(out).not.toContain("\n");
     expect(out).toBe("ok policy: 0 fail, 0 warn, 0 suppressed, 9999 ok (9999 verdicts)");
   });
 
   test("ANSI erase/cursor sequences are neutralized (ESC flattened)", () => {
     const out = sanitizeForLog(`real${ESC}[2K${ESC}[1Aforged`);
+
     expect(out).not.toContain(ESC);
     expect(out).toBe("real [2K [1Aforged");
   });
@@ -371,11 +385,13 @@ describe("sanitizeForLog — stderr injection boundary", () => {
   test("plain printable text — incl. the em dash — passes through unchanged", () => {
     const clean =
       'policy fail: pkg:npm/x@1.0.0 in proj — default:copyleft: copyleft license "AGPL-3.0-only"';
+
     expect(sanitizeForLog(clean)).toBe(clean);
   });
 
   test("oversized fields are capped with a truncation marker", () => {
     const out = sanitizeForLog("x".repeat(2000));
+
     expect(out.length).toBeLessThan(600);
     expect(out.endsWith("...[truncated]")).toBe(true);
   });
@@ -398,6 +414,7 @@ describe("writePolicySummary — imprecise count line", () => {
     const stderr = await withCapturedStderr(async () => {
       writePolicySummary(parsePolicy(""), verdicts, new Set());
     });
+
     // The locked counts-line shape is intact (both imprecise verdicts are warns).
     expect(stderr).toContain("policy: 0 fail, 2 warn, 0 suppressed, 0 ok (2 verdicts)\n");
     // ...plus a NEW imprecise line. I1: the count is PER-OCCURRENCE (matching
@@ -421,6 +438,7 @@ describe("writePolicySummary — imprecise count line", () => {
     const stderr = await withCapturedStderr(async () => {
       writePolicySummary(parsePolicy(""), verdicts, new Set());
     });
+
     expect(stderr).toContain("policy: 0 fail, 0 warn, 0 suppressed, 1 ok (1 verdicts)\n");
     expect(stderr).not.toContain("imprecise");
   });
@@ -443,6 +461,7 @@ describe("writePolicySummary — assessment conflict count line", () => {
     const stderr = await withCapturedStderr(async () => {
       writePolicySummary(parsePolicy(""), verdicts, new Set());
     });
+
     // The locked counts-line shape is intact (both conflicts are fails).
     expect(stderr).toContain("policy: 2 fail, 0 warn, 0 suppressed, 0 ok (2 verdicts)\n");
     // ...plus a NEW conflict line, mirroring the imprecise-count shape with an
@@ -465,6 +484,7 @@ describe("writePolicySummary — assessment conflict count line", () => {
     const stderr = await withCapturedStderr(async () => {
       writePolicySummary(parsePolicy(""), verdicts, new Set());
     });
+
     expect(stderr).not.toContain("assessment conflict");
   });
 });
@@ -472,8 +492,10 @@ describe("writePolicySummary — assessment conflict count line", () => {
 describe("resolveFrom — base-dir path anchoring (CR-01)", () => {
   test("relative paths join the base; absolute paths pass through; absent base degrades to cwd", () => {
     const base = tmpdir();
+
     expect(resolveFrom(base, "policy.toml")).toBe(join(base, "policy.toml"));
     const absolute = join(base, "abs.md");
+
     expect(resolveFrom(base, absolute)).toBe(absolute);
     expect(resolveFrom(undefined, "x.md")).toBe(resolve(process.cwd(), "x.md"));
   });
@@ -505,6 +527,7 @@ describe("runGenerate discovery mode — offline branches", () => {
     // the whole run via the coverage assertion.
     const root = mkdtempSync(join(tmpdir(), "licenses-cli-nodeps-"));
     const projDir = join(root, "proj");
+
     mkdirSync(projDir);
     writeFileSync(join(projDir, "package.json"), '{ "name": "proj" }\n');
     writeFileSync(join(projDir, "yarn.lock"), NO_DEPS_V8_LOCKFILE);
@@ -530,6 +553,7 @@ describe("runGenerate discovery mode — offline branches", () => {
     const outputPath = join(root, "out.md");
 
     let thrown: Error | undefined;
+
     await withCapturedStderr(async () => {
       try {
         await runGenerate({
@@ -556,11 +580,13 @@ describe("runGenerate discovery mode — offline branches", () => {
     // the target identity and the missing file.
     const root = mkdtempSync(join(tmpdir(), "licenses-cli-manifest-"));
     const projDir = join(root, "pyproj");
+
     mkdirSync(projDir);
     writeFileSync(join(projDir, "poetry.lock"), '[[package]]\nname = "x"\n');
     const outputPath = join(root, "out.md");
 
     let thrown: Error | undefined;
+
     await withCapturedStderr(async () => {
       try {
         await runGenerate({
@@ -604,6 +630,7 @@ describe("runGenerate discovery warnings (collision, bun.lockb)", () => {
     // branch, so the whole run stays offline (no generator ever spawns).
     const root = mkdtempSync(join(tmpdir(), "licenses-cli-collision-"));
     const projDir = join(root, "proj");
+
     mkdirSync(projDir);
     writeFileSync(join(projDir, "package.json"), '{ "name": "proj" }\n');
     writeFileSync(join(projDir, "bun.lock"), "");
@@ -623,6 +650,7 @@ describe("runGenerate discovery warnings (collision, bun.lockb)", () => {
     const collisionLines = stderr
       .split("\n")
       .filter((line) => line.includes("has multiple JS lockfiles"));
+
     expect(collisionLines.length).toBe(1);
     expect(collisionLines[0]).toContain(
       'warning: target "proj" has multiple JS lockfiles — scanning bun.lock',
@@ -634,6 +662,7 @@ describe("runGenerate discovery warnings (collision, bun.lockb)", () => {
     const skipLines = stderr
       .split("\n")
       .filter((line) => line.startsWith("warning: skipping proj"));
+
     expect(skipLines.length).toBe(1);
     expect(skipLines[0]).toContain("bun.lock is empty (whitespace only)");
     expect(stderr).not.toContain("collecting");
@@ -643,12 +672,14 @@ describe("runGenerate discovery warnings (collision, bun.lockb)", () => {
   test("a bun.lockb-only dir warns naming the migration command and is never scanned", async () => {
     const root = mkdtempSync(join(tmpdir(), "licenses-cli-lockb-"));
     const binDir = join(root, "binproj");
+
     mkdirSync(binDir);
     writeFileSync(join(binDir, "package.json"), '{ "name": "binproj" }\n');
     writeFileSync(join(binDir, "bun.lockb"), " binary-lockfile-bytes");
     // A second, empty-yarn target keeps discovery non-empty so the run
     // resolves (bun.lockb itself is never a target).
     const otherDir = join(root, "other");
+
     mkdirSync(otherDir);
     writeFileSync(join(otherDir, "package.json"), '{ "name": "other" }\n');
     writeFileSync(join(otherDir, "yarn.lock"), "");
@@ -720,6 +751,7 @@ async function fakeScanWithCdxgen(): Promise<cdxgenModule.CollectorSbomFile> {
   fakeScanCalls += 1;
   const tempDir = mkdtempSync(join(tmpdir(), "licenses-fake-scan-"));
   const sbomPath = join(tempDir, "bom.json");
+
   writeFileSync(sbomPath, JSON.stringify(FIXTURE_SBOM));
   return { sbomPath, cacheKey: "fake", tool: REAL_CDXGEN.CDXGEN_TOOL };
 }
@@ -736,6 +768,7 @@ const V1_LOCKFILE = ["# yarn lockfile v1", "", "lodash@^4.17.21:", '  version "4
 function makeScannableTree(): { root: string } {
   const root = mkdtempSync(join(tmpdir(), "licenses-cli-policy-"));
   const projDir = join(root, "proj");
+
   mkdirSync(projDir);
   writeFileSync(join(projDir, "package.json"), '{ "name": "proj" }\n');
   writeFileSync(join(projDir, "yarn.lock"), V1_LOCKFILE);
@@ -745,6 +778,7 @@ function makeScannableTree(): { root: string } {
 /** Write `text` as a policy file inside `root`; returns its path. */
 function writePolicy(root: string, text: string): string {
   const policyPath = join(root, "policy.toml");
+
   writeFileSync(policyPath, text);
   return policyPath;
 }
@@ -760,6 +794,7 @@ function writePolicy(root: string, text: string): string {
  * never touches the committed tool-root cache.
  */
 const ORIGINAL_FETCH = globalThis.fetch;
+
 beforeAll(() => {
   globalThis.fetch = (async (): Promise<Response> =>
     new Response(JSON.stringify({}), {
@@ -776,11 +811,13 @@ afterAll(() => {
   // its committed bytes (git checkout) and delete an untracked stray — either
   // way the offline suite leaves the tool root pristine.
   const strayCache = join(process.cwd(), "enrichment-cache.json");
+
   if (existsSync(strayCache)) {
     const tracked =
       spawnSync("git", ["ls-files", "--error-unmatch", strayCache], {
         stdio: "ignore",
       }).status === 0;
+
     if (tracked) {
       spawnSync("git", ["checkout", "--", strayCache], { stdio: "ignore" });
     } else {
@@ -823,6 +860,7 @@ describe("runGenerate --policy", () => {
 
     let mdA = "";
     let mdB = "";
+
     await withCapturedStderr(async () => {
       mdA = await runGenerate({
         repoRoot: root,
@@ -848,6 +886,7 @@ describe("runGenerate --policy", () => {
     // Double-run byte-identity without --policy.
     expect(mdA).toBe(mdB);
     const dumpBytes = readFileSync(dumpA, "utf8");
+
     expect(dumpBytes).toBe(readFileSync(dumpB, "utf8"));
 
     // No policy ran → findings present (unconditional annotation), verdicts
@@ -998,6 +1037,7 @@ describe("runGenerate --policy", () => {
         thrown = error as Error;
       }
     });
+
     expect(thrown).toBeDefined();
     expect(thrown!.message).toContain("^"); // caret-annotated source line
     // The throw happened BEFORE the target loop: no scan was dispatched and
@@ -1009,6 +1049,7 @@ describe("runGenerate --policy", () => {
     // the table path.
     const semanticPath = writePolicy(root, '[[compatible]]\nmatch = "license"\npattern = "MIT"\n');
     let semanticThrown: Error | undefined;
+
     await withCapturedStderr(async () => {
       try {
         await runGenerate({
@@ -1066,15 +1107,19 @@ describe("runGenerate --policy", () => {
       expect(pkg.finding).toBeDefined();
       const keys = Object.keys(pkg.finding).sort();
       const core = keys.filter((k) => k !== "observedExpressions");
+
       expect(core).toEqual(["confidence", "elected", "expression", "source"]);
       const f = pkg.finding as { expression: string | null } & Record<string, unknown>;
+
       if (f.expression !== null) {
         expect(keys).toContain("observedExpressions");
       } else {
         expect(keys).not.toContain("observedExpressions");
       }
     }
+
     const copyleft = dump.packages.find((p) => p.purl === "pkg:npm/copyleft-lib@1.0.0");
+
     expect(copyleft!.finding.expression).toBe("AGPL-3.0-only");
     expect(copyleft!.finding.elected).toBe("AGPL-3.0-only");
 
@@ -1085,10 +1130,12 @@ describe("runGenerate --policy", () => {
     // Sorted-key spot check: inside the serialized finding object, "elected"
     // precedes "expression".
     const findingStart = dumpBytes.indexOf('"finding"');
+
     expect(findingStart).toBeGreaterThan(-1);
     const findingSlice = dumpBytes.slice(findingStart, findingStart + 300);
     const electedAt = findingSlice.indexOf('"elected"');
     const expressionAt = findingSlice.indexOf('"expression"');
+
     expect(electedAt).toBeGreaterThan(-1);
     expect(expressionAt).toBeGreaterThan(electedAt);
   });
@@ -1141,6 +1188,7 @@ describe("runGenerate --policy", () => {
     const missingPath = join(root, "does-not-exist.toml");
 
     let thrown: Error | undefined;
+
     await withCapturedStderr(async () => {
       try {
         await runGenerate({
@@ -1185,6 +1233,7 @@ const EXTENDED_FIXTURE_SBOM = {
 async function fakeScanExtended(): Promise<cdxgenModule.CollectorSbomFile> {
   const tempDir = mkdtempSync(join(tmpdir(), "licenses-fake-scan-ext-"));
   const sbomPath = join(tempDir, "bom.json");
+
   writeFileSync(sbomPath, JSON.stringify(EXTENDED_FIXTURE_SBOM));
   return { sbomPath, cacheKey: "fake-ext", tool: REAL_CDXGEN.CDXGEN_TOOL };
 }
@@ -1195,10 +1244,12 @@ function listTree(root: string): string[] {
   const walk = (dir: string): void => {
     for (const entry of readdirSync(dir, { withFileTypes: true })) {
       const path = join(dir, entry.name);
+
       if (entry.isDirectory()) walk(path);
       else out.push(relative(root, path));
     }
   };
+
   walk(root);
   return out.sort();
 }
@@ -1220,6 +1271,7 @@ describe("buildOutputs and the generate output set", () => {
     const before = listTree(root);
 
     let result: Awaited<ReturnType<typeof buildOutputs>> | undefined;
+
     await withCapturedStderr(async () => {
       result = await buildOutputs({
         repoRoot: root,
@@ -1243,6 +1295,7 @@ describe("buildOutputs and the generate output set", () => {
     const policyPath = writePolicy(root, '[unknown]\nhandling = "warn"\n');
     const beforePolicyRun = listTree(root);
     let withPolicy: Awaited<ReturnType<typeof buildOutputs>> | undefined;
+
     await withCapturedStderr(async () => {
       withPolicy = await buildOutputs({
         repoRoot: root,
@@ -1269,6 +1322,7 @@ describe("buildOutputs and the generate output set", () => {
     };
 
     let expected: Awaited<ReturnType<typeof buildOutputs>> | undefined;
+
     await withCapturedStderr(async () => {
       expected = await buildOutputs(opts);
     });
@@ -1284,6 +1338,7 @@ describe("buildOutputs and the generate output set", () => {
 
     // One "wrote ..." stderr line per written file.
     const wroteLines = stderr.split("\n").filter((line) => line.startsWith("wrote "));
+
     expect(wroteLines.length).toBe(3);
     expect(stderr).toContain(`wrote ${opts.outputPath}`);
     expect(stderr).toContain(`wrote ${opts.noticesPath}`);
@@ -1298,6 +1353,7 @@ describe("buildOutputs and the generate output set", () => {
     const dumpPath = join(root, "model.json");
 
     let md = "";
+
     await withCapturedStderr(async () => {
       md = await runGenerate({
         repoRoot: root,
@@ -1318,10 +1374,12 @@ describe("buildOutputs and the generate output set", () => {
       packages: Array<{ finding?: { expression: string | null } }>;
       verdicts?: unknown;
     };
+
     expect(dump.packages.length).toBe(4);
     for (const pkg of dump.packages) {
       expect(pkg.finding).toBeDefined();
     }
+
     expect("verdicts" in dump).toBe(false);
   });
 
@@ -1337,6 +1395,7 @@ describe("buildOutputs and the generate output set", () => {
     // and with --cyclonedx absent no export file is created anywhere.
     const { root } = makeScannableTree();
     const explicit = join(root, "custom-notices.md");
+
     await withCapturedStderr(async () => {
       await runGenerate({
         repoRoot: root,
@@ -1358,6 +1417,7 @@ describe("buildOutputs and the generate output set", () => {
 
     // (c) --cyclonedx absent: no cyclonedx key in buildOutputs' result.
     let result: Awaited<ReturnType<typeof buildOutputs>> | undefined;
+
     await withCapturedStderr(async () => {
       result = await buildOutputs({
         repoRoot: root,
@@ -1375,6 +1435,7 @@ describe("buildOutputs and the generate output set", () => {
     // to that base. The cwd during this test is the tool directory — assert
     // nothing lands there.
     const { root } = makeScannableTree();
+
     // Warn-only policy that ACCEPTS the fixture's AGPL package: verdicts
     // print but never gate, so the check round-trip below must exit 0.
     writePolicy(
@@ -1401,6 +1462,7 @@ describe("buildOutputs and the generate output set", () => {
     };
 
     let md = "";
+
     await withCapturedStderr(async () => {
       md = await runGenerate({
         ...relOptions,
@@ -1427,6 +1489,7 @@ describe("buildOutputs and the generate output set", () => {
 
     // check resolves the SAME paths — a clean baseDir round-trip exits 0.
     let result: Awaited<ReturnType<typeof runCheck>> | undefined;
+
     await withCapturedStderr(async () => {
       result = await runCheck(relOptions);
     });
@@ -1470,6 +1533,7 @@ describe("check — stale-override exit lane", () => {
       enrichmentCachePath: enrichCache(),
       verbose: false,
     };
+
     await withCapturedStderr(async () => {
       await runGenerate(opts);
     });
@@ -1477,6 +1541,7 @@ describe("check — stale-override exit lane", () => {
     const checkStderr = await withCapturedStderr(async () => {
       result = await runCheck(opts);
     });
+
     return { result: result!, checkStderr };
   }
 
@@ -1498,6 +1563,7 @@ describe("check — stale-override exit lane", () => {
       "",
     ].join("\n");
     const { result, checkStderr } = await generateThenCheck(policyText);
+
     // Exit 1 through the EXISTING violations→exitCodeFor mapping.
     expect(result.violations).toBeGreaterThan(0);
     expect(exitCodeFor(result)).toBe(1);
@@ -1525,6 +1591,7 @@ describe("check — stale-override exit lane", () => {
       "",
     ].join("\n");
     const { result } = await generateThenCheck(policyText);
+
     expect(result.violations).toBe(0);
     expect(exitCodeFor(result)).toBe(0);
   });
@@ -1591,6 +1658,7 @@ describe("check — dev/prod gate exit lane", () => {
       collectWithCdxgen: async (): Promise<cdxgenModule.CollectorSbomFile> => {
         const tempDir = mkdtempSync(join(tmpdir(), "licenses-fake-pol08-"));
         const sbomPath = join(tempDir, "bom.json");
+
         writeFileSync(sbomPath, JSON.stringify(sbom));
         return {
           sbomPath,
@@ -1600,6 +1668,7 @@ describe("check — dev/prod gate exit lane", () => {
       },
     }));
   }
+
   afterAll(() => {
     mock.module("../src/collectors/cdxgen", () => REAL_CDXGEN);
   });
@@ -1622,6 +1691,7 @@ describe("check — dev/prod gate exit lane", () => {
       enrichmentCachePath: enrichCache(),
       verbose: false,
     };
+
     await withCapturedStderr(async () => {
       await runGenerate(opts);
     });
@@ -1629,6 +1699,7 @@ describe("check — dev/prod gate exit lane", () => {
     const checkStderr = await withCapturedStderr(async () => {
       result = await runCheck(opts);
     });
+
     return { result: result!, checkStderr };
   }
 
@@ -1637,6 +1708,7 @@ describe("check — dev/prod gate exit lane", () => {
       DEV_ONLY_COPYLEFT_SBOM,
       '[unknown]\nhandling = "warn"\n',
     );
+
     expect(result.violations).toBe(0);
     expect(exitCodeFor(result)).toBe(0);
     // The dev-downgraded warn surfaces on stderr with the auditable marker, and
@@ -1650,6 +1722,7 @@ describe("check — dev/prod gate exit lane", () => {
       PROD_COPYLEFT_SBOM,
       '[unknown]\nhandling = "warn"\n',
     );
+
     expect(result.violations).toBeGreaterThan(0);
     expect(exitCodeFor(result)).toBe(1);
     // The prod fail line names the copyleft package; no dev-downgrade for it.
@@ -1662,6 +1735,7 @@ describe("check — dev/prod gate exit lane", () => {
       DEV_ONLY_COPYLEFT_SBOM,
       '[unknown]\nhandling = "warn"\n\n[dev_dependencies]\nhandling = "fail"\n',
     );
+
     expect(result.violations).toBeGreaterThan(0);
     expect(exitCodeFor(result)).toBe(1);
   });
@@ -1671,6 +1745,7 @@ describe("check — dev/prod gate exit lane", () => {
       DEV_ONLY_COPYLEFT_SBOM,
       '[unknown]\nhandling = "warn"\n\n[dev_dependencies]\nhandling = "ignore"\n',
     );
+
     expect(result.violations).toBe(0);
     expect(exitCodeFor(result)).toBe(0);
   });
@@ -1795,6 +1870,7 @@ async function fakeKindAwareScan(target: {
         });
   const tempDir = mkdtempSync(join(tmpdir(), "licenses-fake-kind-"));
   const sbomPath = join(tempDir, "bom.json");
+
   writeFileSync(sbomPath, sbomJson);
   return { sbomPath, cacheKey: "fake-kind", tool: REAL_CDXGEN.CDXGEN_TOOL };
 }
@@ -1806,10 +1882,12 @@ function makeKindTree(
 ): { root: string; outputPath: string; dumpPath: string } {
   const root = mkdtempSync(join(tmpdir(), "licenses-cli-kind-"));
   const projDir = join(root, projName);
+
   mkdirSync(projDir);
   for (const [name, content] of Object.entries(files)) {
     writeFileSync(join(projDir, name), content);
   }
+
   return {
     root,
     outputPath: join(root, "out.md"),
@@ -1827,6 +1905,7 @@ function occurrencesByName(
       occurrences: Array<{ target: string; isDevDependency: boolean }>;
     }>;
   };
+
   return new Map(dump.packages.map((p) => [p.name, p.occurrences]));
 }
 
@@ -1866,6 +1945,7 @@ describe("dispatch wiring: bun branch + per-kind firstPartyNames", () => {
     expect(kindAwareScanIdentities.length).toBe(scansBefore);
 
     const md = readFileSync(outputPath, "utf8");
+
     // Third-party rows at the correct versions, used-in = target identity.
     expect(squish(md)).toContain("| smol-toml | npm | 1.6.1 | unknown | bunproj |");
     expect(squish(md)).toContain("| spdx-compare | npm | 1.0.0 | unknown | bunproj |");
@@ -1880,6 +1960,7 @@ describe("dispatch wiring: bun branch + per-kind firstPartyNames", () => {
     // dev/prod per the BFS: typescript is the dev root; everything else
     // is prod-reachable (incl. both folded nested/top-level entries).
     const occurrences = occurrencesByName(dumpPath);
+
     expect(occurrences.get("typescript")).toEqual([{ target: "bunproj", isDevDependency: true }]);
     for (const name of ["smol-toml", "spdx-compare", "spdx-expression-parse"]) {
       expect(occurrences.get(name)).toEqual([{ target: "bunproj", isDevDependency: false }]);
@@ -1908,11 +1989,13 @@ describe("dispatch wiring: bun branch + per-kind firstPartyNames", () => {
         });
       } catch (error) {
         const message = String(error);
+
         expect(message).toContain(join(root, "bigbun", "bun.lock"));
         expect(message).toContain(String(MAX_BUN_LOCK_BYTES + 2)); // size
         expect(message).toContain(`${MAX_BUN_LOCK_BYTES}-byte cap`);
       }
     });
+
     // The gate fired before dispatch: no collector line ever printed.
     expect(stderr).not.toContain("collecting");
   });
@@ -1938,6 +2021,7 @@ describe("dispatch wiring: bun branch + per-kind firstPartyNames", () => {
     expect(stderr).toContain("collecting npm-app via");
 
     const md = readFileSync(outputPath, "utf8");
+
     // Member excluded through the CLI wiring: lockfile-derived name set and
     // the fixture's cdx:npm:isWorkspace marker (the double signal).
     expect(md).not.toContain("| liba |");
@@ -1948,6 +2032,7 @@ describe("dispatch wiring: bun branch + per-kind firstPartyNames", () => {
 
     // Through the CLI: development+optional pair merges PROD.
     const occurrences = occurrencesByName(dumpPath);
+
     expect(occurrences.get("fsevents")).toEqual([{ target: "npm-app", isDevDependency: false }]);
     expect(occurrences.get("express")).toEqual([{ target: "npm-app", isDevDependency: false }]);
   });
@@ -1972,6 +2057,7 @@ describe("dispatch wiring: bun branch + per-kind firstPartyNames", () => {
     expect(stderr).toContain("collecting pnpm-app via");
 
     const md = readFileSync(outputPath, "utf8");
+
     expect(squish(md)).toContain("| smol-toml | npm | 1.6.1 | unknown | pnpm-app |");
     expect(squish(md)).toContain("| typescript | npm | 5.9.3 | unknown | pnpm-app |");
     // No first-party leakage: cdxgen omits pnpm members; the importer-name
@@ -1980,6 +2066,7 @@ describe("dispatch wiring: bun branch + per-kind firstPartyNames", () => {
     expect(md).toContain("- Total packages: 2");
 
     const occurrences = occurrencesByName(dumpPath);
+
     expect(occurrences.get("typescript")).toEqual([{ target: "pnpm-app", isDevDependency: true }]);
     expect(occurrences.get("smol-toml")).toEqual([{ target: "pnpm-app", isDevDependency: false }]);
   });
@@ -1994,6 +2081,7 @@ describe("dispatch wiring: bun branch + per-kind firstPartyNames", () => {
     });
 
     let thrown: Error | undefined;
+
     await withCapturedStderr(async () => {
       try {
         await runGenerate({
@@ -2034,6 +2122,7 @@ describe("generate-docker-sbom three-lane contract", () => {
       dockerfile: ["Dockerfile"],
       "repo-root": ".",
     });
+
     expect(message).toBeDefined();
     expect(message).toContain("--dockerfile");
     expect(message).toContain("--repo-root");
@@ -2044,6 +2133,7 @@ describe("generate-docker-sbom three-lane contract", () => {
       dockerfile: ["Dockerfile"],
       image: ["postgres:18"],
     });
+
     expect(message).toBeDefined();
     expect(message).toContain("--dockerfile");
     expect(message).toContain("--image");
@@ -2054,6 +2144,7 @@ describe("generate-docker-sbom three-lane contract", () => {
       "repo-root": ".",
       image: ["postgres:18"],
     });
+
     expect(message).toBeDefined();
     expect(message).toContain("--repo-root");
     expect(message).toContain("--image");
@@ -2061,11 +2152,13 @@ describe("generate-docker-sbom three-lane contract", () => {
 
   test("dockerSbomOptionsFrom maps a repeatable --dockerfile list to dockerfilePaths verbatim", () => {
     const base = neutralBaseDir();
+
     try {
       const options = dockerSbomOptionsFrom({
         dockerfile: ["a/Dockerfile", "b/Dockerfile"],
         "base-dir": base,
       });
+
       expect(options.dockerfilePaths).toEqual(["a/Dockerfile", "b/Dockerfile"]);
     } finally {
       rmSync(base, { recursive: true, force: true });
@@ -2080,6 +2173,7 @@ describe("generate-docker-sbom three-lane contract", () => {
       "repo-root": ".",
       image: ["postgres:18"],
     });
+
     expect(message).toBeDefined();
     expect(message).toContain("--list-dockerfiles");
     expect(message).toContain("--image");
@@ -2091,6 +2185,7 @@ describe("generate-docker-sbom three-lane contract", () => {
       "repo-root": ".",
       dockerfile: ["Dockerfile"],
     });
+
     expect(message).toBeDefined();
     expect(message).toContain("--list-dockerfiles");
     expect(message).toContain("--dockerfile");
@@ -2100,6 +2195,7 @@ describe("generate-docker-sbom three-lane contract", () => {
     const message = dockerSbomModeConflict({
       "list-dockerfiles": true,
     });
+
     expect(message).toBeDefined();
     expect(message).toContain("--list-dockerfiles");
     expect(message).toContain("--repo-root");
@@ -2118,6 +2214,7 @@ describe("generate-docker-sbom three-lane contract", () => {
   // error naming the three lanes, never a silent default scan.
   test("a bare invocation (no lane, no listing) is a usage error naming the three lanes", () => {
     const message = dockerSbomModeConflict({});
+
     expect(message).toBeDefined();
     expect(message).toContain("--dockerfile");
     expect(message).toContain("--repo-root");
@@ -2127,12 +2224,14 @@ describe("generate-docker-sbom three-lane contract", () => {
 describe("optionsFrom --intensive threading (absent-not-false)", () => {
   test("intensive absent from CliValues leaves options.intensive ABSENT (own-property, not false)", () => {
     const options = optionsFrom({});
+
     expect(Object.prototype.hasOwnProperty.call(options, "intensive")).toBe(false);
     expect(options.intensive).toBeUndefined();
   });
 
   test("--intensive true yields options.intensive === true", () => {
     const options = optionsFrom({ intensive: true });
+
     expect(options.intensive).toBe(true);
     expect(Object.prototype.hasOwnProperty.call(options, "intensive")).toBe(true);
   });
@@ -2142,6 +2241,7 @@ describe("optionsFrom --intensive threading (absent-not-false)", () => {
     // option), but optionsFrom's own guard is `=== true`, so even a stray
     // false input cannot leak a stored false into GenerateOptions.
     const options = optionsFrom({ intensive: false });
+
     expect(Object.prototype.hasOwnProperty.call(options, "intensive")).toBe(false);
   });
 });
@@ -2175,6 +2275,7 @@ describe("Taskfile split invariants (static, YAML-parsed — locks the public/de
 
   test("generate composes --intensive from the INTENSIVE var (bare boolean idiom)", () => {
     const taskfile = readFileSync(join(import.meta.dir, "..", "Taskfile.yml"), "utf8");
+
     expect(taskfile).toContain("{{if .INTENSIVE}} --intensive{{end}}");
   });
 
@@ -2183,11 +2284,13 @@ describe("Taskfile split invariants (static, YAML-parsed — locks the public/de
     const described = Object.keys(tasks)
       .filter((name) => tasks[name]?.desc !== undefined)
       .sort();
+
     expect(described).toEqual(["check", "docker:list", "generate", "verify:cache"]);
   });
 
   test("the dev include is optional and flattened, so a vendored copy may drop Taskfile.dev.yml entirely", () => {
     const dev = loadTaskfile("Taskfile.yml").includes?.dev;
+
     expect(dev?.taskfile).toBe("Taskfile.dev.yml");
     expect(dev?.optional).toBe(true);
     expect(dev?.flatten).toBe(true);
@@ -2195,6 +2298,7 @@ describe("Taskfile split invariants (static, YAML-parsed — locks the public/de
 
   test("every dev task is desc-less with a summary — `task --list` only shows described tasks, so this keeps maintainer tasks out of a consumer's list while staying callable", () => {
     const devTasks = loadTaskfile("Taskfile.dev.yml").tasks ?? {};
+
     expect(Object.keys(devTasks).length).toBeGreaterThan(0);
     for (const [name, task] of Object.entries(devTasks)) {
       expect(task.desc, name).toBeUndefined();
@@ -2204,6 +2308,7 @@ describe("Taskfile split invariants (static, YAML-parsed — locks the public/de
 
   test("the dev surface carries the maintainer tasks", () => {
     const names = Object.keys(loadTaskfile("Taskfile.dev.yml").tasks ?? {});
+
     for (const expected of [
       "lint",
       "lint:fix",
@@ -2219,6 +2324,7 @@ describe("Taskfile split invariants (static, YAML-parsed — locks the public/de
 
   test("check is never fingerprinted — no sources/generates/status, the gate must always run", () => {
     const check = loadTaskfile("Taskfile.yml").tasks?.check;
+
     expect(check).toBeDefined();
     expect(check?.sources).toBeUndefined();
     expect(check?.generates).toBeUndefined();
@@ -2227,6 +2333,7 @@ describe("Taskfile split invariants (static, YAML-parsed — locks the public/de
 
   test("generate and check dep on install, and generate's summary documents INTENSIVE", () => {
     const tasks = loadTaskfile("Taskfile.yml").tasks ?? {};
+
     expect(tasks.generate?.deps).toContain("install");
     expect(tasks.check?.deps).toContain("install");
     expect(tasks.generate?.summary).toContain("INTENSIVE");
@@ -2234,12 +2341,14 @@ describe("Taskfile split invariants (static, YAML-parsed — locks the public/de
 
   test("generate composes the docker refresh under DOCKER=1 through the internal generate:docker helper", () => {
     const tasks = loadTaskfile("Taskfile.yml").tasks ?? {};
+
     expect(JSON.stringify(tasks.generate?.cmds)).toContain("{{if .DOCKER}}generate:docker{{end}}");
     expect(tasks["generate:docker"]?.internal).toBe(true);
   });
 
   test("retired and relocated task names are gone from the public file", () => {
     const tasks = loadTaskfile("Taskfile.yml").tasks ?? {};
+
     for (const retired of [
       "docker-scan",
       "generate-docker-sbom",
