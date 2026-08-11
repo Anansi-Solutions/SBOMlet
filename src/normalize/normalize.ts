@@ -891,19 +891,24 @@ export function annotateFindings(
   builtins: ReadonlyArray<BuiltinOverrideInput> = [],
 ): AnnotatedFindings {
   const usedClarifyIndices = new Set<number>();
+
   const packages = model.packages.map((rawEntry: PackageEntry): PackageEntry => {
     // dockerClaimDivergence is a merge-time-only carrier (see PackageEntry): folded into
     // finding.conflict below and never left standing on the returned entry.
     const { dockerClaimDivergence, ...entry } = rawEntry;
     const unrefinedBase = findingFromClaims(entry.licenseClaims, entry.scope);
+
     // The ScanCode assessment runs BEFORE overrides (clarify/builtin decide last).
     const scancodeAssessed = applyScancodeAssessment(entry.licenseClaims, unrefinedBase);
+
     // Cross-image divergence overlays LAST so a later scancode/registry stage can never mask it
     // - it only ever ADDS the marker when scancode did not already claim the conflict slot.
     const base = withCrossImageConflict(dockerClaimDivergence, scancodeAssessed);
+
     const signal = observedSignal(entry.licenseClaims, base);
     const overridden = resolveOverride(entry, clarify, builtins, base, signal, usedClarifyIndices);
     const finding = overridden ?? base;
+
     // Deny terminal over overrides: preserve the PRE-OVERRIDE observed expression whenever an
     // override REWROTE it (overridden has a different expression than the un-overridden base). The
     // deny terminal in evaluate consults this so a denied observed license can never be licensed
@@ -912,9 +917,11 @@ export function annotateFindings(
       overridden !== undefined &&
       base.expression !== null &&
       overridden.expression !== base.expression;
+
     // Deny needs every observed claim, not only the combined expression combineKnown may collapse
     // - independent of observedExpression above; both feed deny.
     const observed = observedExpressions(entry.licenseClaims);
+
     return {
       ...entry,
       finding: {
@@ -924,5 +931,6 @@ export function annotateFindings(
       },
     };
   });
+
   return { model: { packages }, usedClarifyIndices };
 }
