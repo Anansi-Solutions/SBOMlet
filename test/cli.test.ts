@@ -2377,6 +2377,7 @@ describe("reportVerifyCache — the scancode memo line", () => {
     const stderr = await withCapturedStderr(async () => {
       reportVerifyCache(baseResult(42));
     });
+
     expect(stderr).toContain(
       "scancode memo: 42 entries (not audited: local scan results have no " +
         "upstream to verify against)",
@@ -2387,6 +2388,7 @@ describe("reportVerifyCache — the scancode memo line", () => {
     const stderr = await withCapturedStderr(async () => {
       reportVerifyCache(baseResult(1));
     });
+
     expect(stderr).toContain("scancode memo: 1 entry ");
   });
 
@@ -2394,6 +2396,7 @@ describe("reportVerifyCache — the scancode memo line", () => {
     const stderr = await withCapturedStderr(async () => {
       reportVerifyCache(baseResult(0));
     });
+
     expect(stderr).toContain(
       "scancode memo: 0 entries (not audited: local scan results have no " +
         "upstream to verify against)",
@@ -2405,6 +2408,7 @@ describe("reportVerifyCache — the scancode memo line", () => {
       reportVerifyCache(baseResult(5));
     });
     const cleanLines = clean.trim().split("\n");
+
     expect(cleanLines[0]).toContain("all audited entries match upstream");
     expect(cleanLines.at(-1)).toContain("scancode memo: 5 entries");
 
@@ -2423,6 +2427,7 @@ describe("reportVerifyCache — the scancode memo line", () => {
       });
     });
     const mismatchedLines = mismatched.trim().split("\n");
+
     expect(mismatchedLines.at(-1)).toContain("scancode memo: 3 entries");
   });
 });

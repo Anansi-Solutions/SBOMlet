@@ -1587,6 +1587,7 @@ describe("cross-document invariants — LICENSES and NOTICES agree on one shared
     const unknownEntries = [...notices.matchAll(/^- (\S+)@\S+ — unknown license/gm)].map(
       (m) => m[1],
     );
+
     assertStructural(
       unknownEntries.length === 2,
       "NOTICES unknown section entry count",

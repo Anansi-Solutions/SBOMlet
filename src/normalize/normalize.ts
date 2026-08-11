@@ -696,12 +696,16 @@ function applyOverride(
   base: LicenseFinding,
   signal: ReadonlyArray<string>,
 ): LicenseFinding {
-  if (expects === undefined) return overrideFinding(expression, overrideRule);
+  if (expects === undefined) {
+    return overrideFinding(expression, overrideRule);
+  }
+
   if (needsLiteralExpectsMatch(expects, expression)) {
     return signalMatches(signal, expects)
       ? overrideFinding(expression, overrideRule)
       : withStaleOverride(base, { level, expected: expects, observed: signal });
   }
+
   if (signalMatches(signal, expects)) {
     if (!signalContradicts(signal, expects, expression)) {
       return overrideFinding(expression, overrideRule);

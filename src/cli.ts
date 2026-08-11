@@ -111,13 +111,17 @@ export function reportVerifyCache(result: VerifyCacheResult): void {
       line(`  registry:  ${mismatch.current ?? "(none)"}`);
       line(`  ${mismatch.reason}`);
     }
+
     const verb = result.mismatches.length === 1 ? "diverges from" : "diverge from";
+
     line(
       `verify-cache: ${result.mismatches.length} of ${result.audited} audited cache ${noun} ` +
         `${verb} upstream — investigate before release`,
     );
   }
+
   const memoNoun = result.scancodeMemoEntries === 1 ? "entry" : "entries";
+
   line(
     `scancode memo: ${result.scancodeMemoEntries} ${memoNoun} ` +
       `(not audited: local scan results have no upstream to verify against)`,
@@ -371,6 +375,7 @@ async function runCheckCommand(values: CliValues): Promise<never> {
  */
 async function runVerifyCacheCommand(values: CliValues): Promise<never> {
   let result: VerifyCacheResult;
+
   try {
     result = await runVerifyCache({
       baseDir: values["base-dir"],

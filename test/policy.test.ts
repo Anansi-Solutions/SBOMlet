@@ -1702,6 +1702,7 @@ describe("evaluate — staleness-guarded overrides", () => {
       "",
       builtins,
     );
+
     expect(verdicts[0].status).toBe("ok");
     expect(verdicts[0].rule).toBe("override:builtin[0]");
     expect(verdicts[0].reason).toContain("MIT OR Apache-2.0");
@@ -1738,6 +1739,7 @@ describe("evaluate — COMPOUND expects (the AND/OR registry-claim precondition)
       [scanPkgSpec("compound-pkg", compoundClaim, "MIT", ["backend"])],
       compoundClarify,
     );
+
     expect(verdicts[0].status).toBe("ok");
     expect(verdicts[0].rule).toBe("clarify[0]");
   });
@@ -1747,6 +1749,7 @@ describe("evaluate — COMPOUND expects (the AND/OR registry-claim precondition)
       [scanPkgSpec("compound-pkg", "(MIT AND CC0-1.0)", "MIT", ["backend"])],
       compoundClarify,
     );
+
     expect(verdicts[0].status).toBe("fail");
     expect(verdicts[0].rule).toContain("override:stale");
     expect(verdicts[0].reason).toContain(compoundClaim); // expected
@@ -1766,12 +1769,14 @@ describe("evaluate — COMPOUND expects (the AND/OR registry-claim precondition)
       [scanPkgSpec("or-compound-pkg", orClaim, "MIT", ["backend"])],
       policyText,
     );
+
     expect(verdicts[0].status).toBe("ok");
     expect(verdicts[0].rule).toBe("clarify[0]");
   });
 
   test("parsePolicy ACCEPTS a compound expects — validation never restricts its shape", () => {
     const policy = parsePolicy(compoundClarify);
+
     expect(policy.clarify[0]?.expects).toBe(compoundClaim);
   });
 });

@@ -46,5 +46,6 @@ export async function runVerifyCache(opts: VerifyCacheOptions): Promise<VerifyCa
     ...(opts.backoffBaseMs === undefined ? {} : { backoffBaseMs: opts.backoffBaseMs }),
   });
   const scancodeMemoEntries = readScancodeMemo(resolveFrom(dir, SCANCODE_CACHE_FILE)).size;
+
   return { ...result, scancodeMemoEntries };
 }

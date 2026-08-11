@@ -562,6 +562,7 @@ describe("runVerifyCache (pipeline wrapper) — the scancode memo count", () => 
   /** A temp repo root with an empty enrichment cache, so the registry audit itself is a no-op. */
   function tempRepoRoot(): string {
     const root = mkdtempSync(join(tmpdir(), "verify-cache-repo-"));
+
     tempDirs.push(root);
     writeFileSync(join(root, "enrichment-cache.json"), serializeCache(new Map()));
     return root;
@@ -574,12 +575,14 @@ describe("runVerifyCache (pipeline wrapper) — the scancode memo count", () => 
       enrichmentCachePath: "enrichment-cache.json",
       verbose: false,
     });
+
     expect(result.scancodeMemoEntries).toBe(0);
   });
 
   test("a populated scancode memo at the default cache-dir location is counted, never fetched", async () => {
     const root = tempRepoRoot();
     const memo = new Map();
+
     putMemoEntry(memo, "pkg:npm/analyzed-a@1.0.0", {
       license: "MIT",
       via: "scancode@1",
@@ -595,6 +598,7 @@ describe("runVerifyCache (pipeline wrapper) — the scancode memo count", () => 
       enrichmentCachePath: "enrichment-cache.json",
       verbose: false,
     });
+
     expect(result.scancodeMemoEntries).toBe(2);
     // The registry audit itself stays untouched: an empty enrichment cache audits zero entries.
     expect(result.audited).toBe(0);
