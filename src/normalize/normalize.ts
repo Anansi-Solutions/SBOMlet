@@ -26,7 +26,15 @@ import {
   type StaleOverride,
 } from "../model/dependencies";
 import { COULD_BE_COPYLEFT_FAMILIES } from "../policy/copyleftFamily";
-import { elect, isCopyleft, leafIds, renderNode, type ExpressionNode } from "./expression";
+import {
+  elect,
+  isCompoundClaim,
+  isCopyleft,
+  leafIds,
+  orLeaves,
+  renderNode,
+  type ExpressionNode,
+} from "./expression";
 
 /**
  * Raw values that must never reach correct(): npm's "UNLICENSED" means proprietary (correct() maps
@@ -569,6 +577,15 @@ function withStaleOverride(base: LicenseFinding, stale: StaleOverride): LicenseF
 }
 
 /**
+ * True when this override must compare `expects` by literal string equality instead of running the
+ * signal/satisfies decision tree: `expects` is itself a compound claim, or `expression` contains an
+ * AND (spdx-satisfies's allowlist argument can only take OR-decomposable expressions).
+ */
+function needsLiteralExpectsMatch(expects: string, expression: string): boolean {
+  return isCompoundClaim(expects) || orLeaves(parse(expression) as ExpressionNode) === null;
+}
+
+/**
  * Apply one preconditioned override to a package, given its un-overridden finding and observed
  * signal. Returns the override finding on a match, the UNCHANGED base finding on a redundant match
  * (the gap fix below), a stale-marked finding on a genuine mismatch, or undefined when this
@@ -577,6 +594,8 @@ function withStaleOverride(base: LicenseFinding, stale: StaleOverride): LicenseF
  * `expects` undefined → blind apply (backward-compat). `expects` present → decision tree on the
  * observed signal S and the asserted expression E:
  *
+ *   IF compound (needsLiteralExpectsMatch): IF `expects` literally ∈ S → APPLY E; ELSE → STALE
+ *      [no redundancy path: a compound already names its exact reading].
  *   IF expects ∈ S (signalMatches):
  *     IF a non-`expects` precise member contradicts E (signalContradicts)
  *        → STALE → fail closed [the relicense-metadata-lag mask].
@@ -601,6 +620,11 @@ function applyOverride(
   signal: ReadonlyArray<string>,
 ): LicenseFinding {
   if (expects === undefined) return overrideFinding(expression, overrideRule);
+  if (needsLiteralExpectsMatch(expects, expression)) {
+    return signalMatches(signal, expects)
+      ? overrideFinding(expression, overrideRule)
+      : withStaleOverride(base, { level, expected: expects, observed: signal });
+  }
   if (signalMatches(signal, expects)) {
     if (!signalContradicts(signal, expects, expression)) {
       return overrideFinding(expression, overrideRule);

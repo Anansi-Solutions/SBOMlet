@@ -10,8 +10,11 @@
  * only; no substring or prefix matching on license ids anywhere.
  *
  * Pure functions, no I/O, no logging - the CLI owns stderr. Inputs are structurally-typed parse
- * output (spdx-expression-parse internals are never imported).
+ * output; the only spdx-expression-parse import here is the parser itself (isCompoundClaim), cast
+ * straight to this file's own ExpressionNode shape - the library's internal types stay unused.
  */
+import parseSpdx from "spdx-expression-parse";
+
 import { compareCodeUnits } from "../model/dependencies";
 import { COPYLEFT_IDS } from "../policy/copyleft";
 
@@ -138,4 +141,16 @@ export function orLeaves(node: ExpressionNode): string[] | null {
   };
   if (!walk(node)) return null;
   return leaves.sort(compareCodeUnits);
+}
+
+/**
+ * True when `text` parses as a valid SPDX expression carrying an AND/OR conjunction at any level. A
+ * free-form label ("Dual License"), a single license ID or an unparseable string return false.
+ */
+export function isCompoundClaim(text: string): boolean {
+  try {
+    return "conjunction" in (parseSpdx(text) as ExpressionNode);
+  } catch {
+    return false;
+  }
 }

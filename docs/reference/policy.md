@@ -177,6 +177,23 @@ override on a package now reporting `GPL-3.0`, the override is stale, and the
 gate fails naming the package, the expected value, and the observed one. A stale
 assertion is never applied, so an old override cannot silently mask a relicence.
 
+**Compound claims.** The staleness check falls back to literal claim-string equality
+— instead of the per-licence comparison above — when `expects` is itself a compound
+`AND`/`OR` expression (a registry declaring `(MIT AND CC-BY-3.0)`, say, or even a
+plain `(MIT OR Apache-2.0)`), or when `expression` contains an `AND` anywhere and so
+cannot be reduced to a set of OR-only branches. An `expression` that is OR-only —
+even multi-branch — still goes through the ordinary per-licence comparison as long
+as `expects` names a single licence.
+
+In the fallback, `expects` must match one of the package's observed licence claims
+EXACTLY (case-insensitive, whitespace-trimmed, compared against the raw claim text,
+never re-derived or corrected). There is no redundancy path for a compound override
+— a compound claim already names the exact multi-licence reading it was written
+against, so any drift, even a single changed character, is staleness. This exists
+because the underlying SPDX-satisfies check that powers the simple case cannot take
+an `AND` expression as an allowlist entry (the same restriction the Validation
+section describes for `[[deny]]` and `[[compatible]]` patterns).
+
 The tool also ships its own curated clarifications for commonly-ambiguous
 projects, applied without your re-authoring them. When a project-level
 `[[clarify]]` names the same package, your entry takes precedence.
