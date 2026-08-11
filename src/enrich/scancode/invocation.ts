@@ -186,7 +186,9 @@ async function runScancode(
     // a catastrophic failure that left no parseable, correctly-versioned output still throws. With
     // NO output file the failure is real - rethrow the original error unchanged (its stderr tail is
     // the diagnostic).
-    if (!existsSync(outFile)) throw error;
+    if (!existsSync(outFile)) {
+      throw error;
+    }
   }
 
   if (!existsSync(outFile)) {
@@ -239,7 +241,9 @@ export async function scanPackageSources(
 
     const elected = electExpression(parsed.files);
 
-    if (elected === undefined) return null;
+    if (elected === undefined) {
+      return null;
+    }
 
     return {
       raw: elected.raw,
@@ -247,7 +251,10 @@ export async function scanPackageSources(
       copyrights: electCopyrights(parsed.files),
     };
   } finally {
-    if (ownsTempDir) rmSync(tempDir, { recursive: true, force: true });
-    else rmSync(outFile, { force: true });
+    if (ownsTempDir) {
+      rmSync(tempDir, { recursive: true, force: true });
+    } else {
+      rmSync(outFile, { force: true });
+    }
   }
 }

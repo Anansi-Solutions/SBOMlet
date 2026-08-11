@@ -112,7 +112,13 @@ export async function runCheck(opts: GenerateOptions): Promise<CheckResult> {
  * exceptions never reach this function - they propagate to main's catch -> fail() -> 3.
  */
 export function exitCodeFor(result: CheckResult): number {
-  if (result.violations > 0) return 1;
-  if (result.staleFiles.length > 0) return 2;
+  if (result.violations > 0) {
+    return 1;
+  }
+
+  if (result.staleFiles.length > 0) {
+    return 2;
+  }
+
   return 0;
 }

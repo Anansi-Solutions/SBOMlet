@@ -1457,7 +1457,10 @@ describe("enrichUnknowns terraform/github (version-tag, transient-vs-definitive,
 
     try {
       const { fetch, calls } = fetchByUrl((url) => {
-        if (url.endsWith("?ref=v6.42.0")) return jsonResponse({}, 404);
+        if (url.endsWith("?ref=v6.42.0")) {
+          return jsonResponse({}, 404);
+        }
+
         if (url.endsWith("?ref=6.42.0")) {
           return jsonResponse({ license: { spdx_id: "MPL-2.0" } });
         }
@@ -1497,7 +1500,10 @@ describe("enrichUnknowns terraform/github (version-tag, transient-vs-definitive,
         // Both v<version> and <version> tags 404; a no-?ref request (the old
         // default-branch fallback) would return MPL-2.0 — but it must NEVER be
         // issued now, so this branch is unreachable in the fixed behavior.
-        if (url.includes("?ref=")) return jsonResponse({}, 404);
+        if (url.includes("?ref=")) {
+          return jsonResponse({}, 404);
+        }
+
         return jsonResponse({ license: { spdx_id: "MPL-2.0" } });
       });
       const result = await withFetch(fetch, () =>
@@ -1748,8 +1754,11 @@ describe("enrichUnknowns terraform/github (version-tag, transient-vs-definitive,
           rmSync(dir2, { recursive: true, force: true });
         }
       } finally {
-        if (prior === undefined) delete process.env.GITHUB_TOKEN;
-        else process.env.GITHUB_TOKEN = prior;
+        if (prior === undefined) {
+          delete process.env.GITHUB_TOKEN;
+        } else {
+          process.env.GITHUB_TOKEN = prior;
+        }
       }
     } finally {
       rmSync(dir, { recursive: true, force: true });
@@ -2192,7 +2201,10 @@ describe("enrichUnknowns nuget (two-step fetch, negative discipline, offline che
 
     try {
       const { fetch, calls } = fetchByUrl((url) => {
-        if (url === LEAF_URL) return jsonResponse({ catalogEntry: CATALOG_URL });
+        if (url === LEAF_URL) {
+          return jsonResponse({ catalogEntry: CATALOG_URL });
+        }
+
         if (url === CATALOG_URL) {
           return jsonResponse({
             licenseExpression: "MIT",
@@ -2346,7 +2358,10 @@ describe("enrichUnknowns nuget (two-step fetch, negative discipline, offline che
     try {
       const evil = "https://evil.example/catalog.json";
       const { fetch, calls } = fetchByUrl((url) => {
-        if (url === LEAF_URL) return jsonResponse({ catalogEntry: evil });
+        if (url === LEAF_URL) {
+          return jsonResponse({ catalogEntry: evil });
+        }
+
         throw new Error(`unexpected url ${url}`);
       });
       const result = await withFetch(fetch, () =>
@@ -2407,8 +2422,14 @@ describe("enrichUnknowns nuget (two-step fetch, negative discipline, offline che
 
     try {
       const { fetch } = fetchByUrl((url) => {
-        if (url === GOOD_LEAF) return jsonResponse({ catalogEntry: GOOD_CATALOG });
-        if (url === GOOD_CATALOG) return jsonResponse({ licenseExpression: "MIT" });
+        if (url === GOOD_LEAF) {
+          return jsonResponse({ catalogEntry: GOOD_CATALOG });
+        }
+
+        if (url === GOOD_CATALOG) {
+          return jsonResponse({ licenseExpression: "MIT" });
+        }
+
         return jsonResponse({}, 503); // the OTHER miss — persistent transient
       });
 
@@ -2541,7 +2562,10 @@ describe("enrichUnknowns nuget (two-step fetch, negative discipline, offline che
           return jsonResponse({ versions: { "2.0.0": { license: "ISC" } } });
         }
 
-        if (url === LEAF_URL) return jsonResponse({ catalogEntry: CATALOG_URL });
+        if (url === LEAF_URL) {
+          return jsonResponse({ catalogEntry: CATALOG_URL });
+        }
+
         if (url === CATALOG_URL) {
           return jsonResponse({ licenseExpression: "Apache-2.0" });
         }
@@ -2750,7 +2774,10 @@ describe("enrichUnknowns maven (deps.dev single fetch, honest sentinel, 404-defi
 
     try {
       const { fetch, calls } = fetchByUrl((url) => {
-        if (url === VERSION_URL) return jsonResponse({ licenses: ["Apache-2.0"] });
+        if (url === VERSION_URL) {
+          return jsonResponse({ licenses: ["Apache-2.0"] });
+        }
+
         throw new Error(`unexpected url ${url}`);
       });
       const result = await withFetch(fetch, () =>

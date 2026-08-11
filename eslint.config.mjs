@@ -213,4 +213,16 @@ export default tseslint.config(
   // that sit directly above the one object property or spread they explain, and
   // neither has a matching allowlist option in the rule.
   eslintPluginPrettierRecommended,
+  {
+    // eslint-config-prettier (above) blanket-disables `curly` as a
+    // conflict-safety default; "all" mode is one of the modes its own docs
+    // call out as Prettier-safe, so re-enable it here, after the disable,
+    // for the same file scope as the other style rules. No dangling
+    // single-statement control bodies: every if/else/for/while/do gets
+    // braces, even when the body is one line.
+    files: ["**/*.ts"],
+    rules: {
+      curly: ["error", "all"],
+    },
+  },
 );

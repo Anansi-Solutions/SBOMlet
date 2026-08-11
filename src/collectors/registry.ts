@@ -87,7 +87,10 @@ function readSbom(path: string): unknown {
 function readPyprojectText(target: DiscoveredTarget): string {
   const path = join(target.dir, "pyproject.toml");
 
-  if (!existsSync(path)) return "";
+  if (!existsSync(path)) {
+    return "";
+  }
+
   try {
     return readFileSync(path, "utf8");
   } catch {

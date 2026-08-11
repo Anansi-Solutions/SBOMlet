@@ -571,7 +571,10 @@ describe("renderMarkdown — the full document", () => {
     ];
     const positions = markers.map((marker) => output.indexOf(marker));
 
-    for (const position of positions) expect(position).toBeGreaterThan(-1);
+    for (const position of positions) {
+      expect(position).toBeGreaterThan(-1);
+    }
+
     expect(positions).toEqual([...positions].sort((a, b) => a - b));
 
     // No date string anywhere.

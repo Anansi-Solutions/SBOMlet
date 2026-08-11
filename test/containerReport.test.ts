@@ -302,7 +302,9 @@ function resolveDevelopmentContainersForTest(
     const matcher = globToRegExp(devEntry.source);
 
     for (const source of sources) {
-      if (matcher.test(source)) resolved.add(`${DOCKER_IDENTITY_PREFIX}${source}`);
+      if (matcher.test(source)) {
+        resolved.add(`${DOCKER_IDENTITY_PREFIX}${source}`);
+      }
     }
   }
 

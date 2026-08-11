@@ -84,20 +84,32 @@ export interface ParsedPurl {
  * non-`pkg:` or malformed purl.
  */
 export function parsePurl(purl: string): ParsedPurl | undefined {
-  if (!purl.startsWith("pkg:")) return undefined;
+  if (!purl.startsWith("pkg:")) {
+    return undefined;
+  }
+
   const rest = purl.slice("pkg:".length);
   const slash = rest.indexOf("/");
 
-  if (slash === -1) return undefined;
+  if (slash === -1) {
+    return undefined;
+  }
+
   const type = rest.slice(0, slash);
   const nameAtVersion = rest.slice(slash + 1);
   const at = nameAtVersion.lastIndexOf("@");
 
-  if (at === -1) return undefined;
+  if (at === -1) {
+    return undefined;
+  }
+
   const encodedName = nameAtVersion.slice(0, at);
   const version = nameAtVersion.slice(at + 1);
 
-  if (encodedName === "" || version === "") return undefined;
+  if (encodedName === "" || version === "") {
+    return undefined;
+  }
+
   return { type, encodedName, version };
 }
 
@@ -119,7 +131,10 @@ function needsEnrichment(entry: PackageEntry): boolean {
     }
   }
 
-  if (distinct.length === 0) return true;
+  if (distinct.length === 0) {
+    return true;
+  }
+
   return distinct.some((c) => normalizeRaw(c.raw).expression === null);
 }
 
@@ -196,13 +211,21 @@ export function withReplayAttribution(
   entry: PackageEntry,
   hit: { copyrights?: readonly string[] },
 ): PackageEntry {
-  if (entry.attribution !== undefined) return entry;
-  if (hit.copyrights === undefined || hit.copyrights.length === 0) return entry;
+  if (entry.attribution !== undefined) {
+    return entry;
+  }
+
+  if (hit.copyrights === undefined || hit.copyrights.length === 0) {
+    return entry;
+  }
 
   const sanitized = new Set<string>();
 
   for (const line of hit.copyrights) {
-    if (sanitized.size >= MAX_REPLAY_COPYRIGHT_LINES) break;
+    if (sanitized.size >= MAX_REPLAY_COPYRIGHT_LINES) {
+      break;
+    }
+
     sanitized.add(sanitizeEvidenceText(line));
   }
 
@@ -240,10 +263,16 @@ export async function enrichUnknowns(
   const unknowns: Unknown[] = [];
 
   model.packages.forEach((entry, index) => {
-    if (!needsEnrichment(entry)) return;
+    if (!needsEnrichment(entry)) {
+      return;
+    }
+
     const parsed = parsePurl(entry.purl);
 
-    if (parsed === undefined) return;
+    if (parsed === undefined) {
+      return;
+    }
+
     if (
       parsed.type !== "pypi" &&
       parsed.type !== "npm" &&
@@ -288,7 +317,10 @@ export async function enrichUnknowns(
   }
 
   if (opts.mode === "generate") {
-    if (misses.length > 0) await fetchMisses(misses, packages, cache, opts);
+    if (misses.length > 0) {
+      await fetchMisses(misses, packages, cache, opts);
+    }
+
     // The ONLY enrichment write site, gated on generate mode: generate always materializes the
     // committed artifact; an empty envelope is a valid answer.
     writeArtifact(opts.cachePath, serializeCache(cache));
@@ -359,8 +391,11 @@ async function fetchRegistryMisses(
         : npmPackumentUrl(miss.parsed.encodedName);
     const group = byUrl.get(url);
 
-    if (group === undefined) byUrl.set(url, [miss]);
-    else group.push(miss);
+    if (group === undefined) {
+      byUrl.set(url, [miss]);
+    } else {
+      group.push(miss);
+    }
   }
 
   const urls = [...byUrl.keys()];
@@ -416,10 +451,16 @@ async function fetchTerraformMisses(
       const url = githubLicenseUrl(repo.owner, repo.repo, ref);
       const result = await fetchGithubLicense(url, fetchOpts);
 
-      if (result.status === 404) continue; // missing tag → next candidate
+      if (result.status === 404) {
+        continue;
+      } // missing tag → next candidate
+
       const resolved = resolveGithubLicense(result.body);
 
-      if (resolved === null) continue; // NOASSERTION/null at this ref → next
+      if (resolved === null) {
+        continue;
+      } // NOASSERTION/null at this ref → next
+
       const viaRef = ref ?? "default";
 
       packages[miss.index] = withCacheClaim(miss.entry, resolved.raw, "registry");

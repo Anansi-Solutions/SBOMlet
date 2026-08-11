@@ -131,7 +131,10 @@ function assessPackage(entry: PackageEntry): Assessment {
 
   const expression = finding?.expression ?? null;
 
-  if (expression === null) return UNKNOWN_ASSESSMENT;
+  if (expression === null) {
+    return UNKNOWN_ASSESSMENT;
+  }
+
   try {
     const node = parseSpdx(expression) as ExpressionNode;
     const electedNode = elect(node);
@@ -207,7 +210,10 @@ function licenseRuleFor(
   policy: Policy,
 ): IndexedRule<CompatibleLicenseRule> | undefined {
   for (const [index, rule] of policy.compatible.entries()) {
-    if (rule.match !== "license" || !appliesAt(rule, target)) continue;
+    if (rule.match !== "license" || !appliesAt(rule, target)) {
+      continue;
+    }
+
     let matched: boolean;
 
     try {
@@ -216,7 +222,9 @@ function licenseRuleFor(
       matched = false;
     }
 
-    if (matched) return { index, rule };
+    if (matched) {
+      return { index, rule };
+    }
   }
 
   return undefined;
@@ -277,21 +285,35 @@ function suppressionJustification(
   try {
     const node = parseSpdx(rule.license) as ExpressionNode;
 
-    if ("license" in node) workspaceLeaf = node.license;
+    if ("license" in node) {
+      workspaceLeaf = node.license;
+    }
   } catch {
     workspaceLeaf = undefined;
   }
 
-  if (workspaceLeaf === undefined) return undefined;
+  if (workspaceLeaf === undefined) {
+    return undefined;
+  }
+
   const workspaceFamily = COPYLEFT_FAMILY.get(workspaceLeaf);
 
-  if (workspaceFamily === undefined) return undefined;
+  if (workspaceFamily === undefined) {
+    return undefined;
+  }
+
   const absorbed = WORKSPACE_ABSORBS.get(workspaceFamily);
 
-  if (absorbed === undefined) return undefined;
+  if (absorbed === undefined) {
+    return undefined;
+  }
+
   const leaves = copyleftLeafIds(electedNode);
 
-  if (leaves.length === 0) return undefined;
+  if (leaves.length === 0) {
+    return undefined;
+  }
+
   const leafFamilies = leaves.map((id) => COPYLEFT_FAMILY.get(id));
 
   if (!leafFamilies.every((family) => family !== undefined && absorbed.has(family))) {
@@ -478,7 +500,10 @@ function overrideCitation(
   expression: string | null,
   policy: Policy,
 ): Verdict | undefined {
-  if (entry.finding?.source !== "override") return undefined;
+  if (entry.finding?.source !== "override") {
+    return undefined;
+  }
+
   const clarifyIndex = clarifyIndexFor(entry, policy);
 
   if (clarifyIndex !== -1) {
@@ -523,10 +548,16 @@ function overrideCitation(
  * helper - it sits at the would-be default-fail terminals only.
  */
 function applyDevScope(failVerdict: Verdict, occurrence: Occurrence, policy: Policy): Verdict {
-  if (!occurrence.isDevDependency) return failVerdict;
+  if (!occurrence.isDevDependency) {
+    return failVerdict;
+  }
+
   const handling = policy.devDependencies;
 
-  if (handling === "fail") return failVerdict;
+  if (handling === "fail") {
+    return failVerdict;
+  }
+
   if (handling === "ignore") {
     return {
       ...failVerdict,
@@ -560,10 +591,16 @@ function applyDevScope(failVerdict: Verdict, occurrence: Occurrence, policy: Pol
  * package is never reached here.
  */
 function applyOsScope(failVerdict: Verdict, entry: PackageEntry, policy: Policy): Verdict {
-  if (entry.scope !== "os") return failVerdict;
+  if (entry.scope !== "os") {
+    return failVerdict;
+  }
+
   const handling = policy.osDependencies;
 
-  if (handling === "fail") return failVerdict;
+  if (handling === "fail") {
+    return failVerdict;
+  }
+
   if (handling === "ignore") {
     return {
       ...failVerdict,
@@ -615,19 +652,26 @@ function firstDeny(
 ): IndexedDenyRule | undefined {
   const combined = denyRuleFor(policy, expression, entry.name);
 
-  if (combined !== undefined) return combined;
+  if (combined !== undefined) {
+    return combined;
+  }
+
   const observed = entry.finding?.observedExpression;
 
   if (observed !== undefined) {
     const hit = denyRuleFor(policy, observed, entry.name);
 
-    if (hit !== undefined) return hit;
+    if (hit !== undefined) {
+      return hit;
+    }
   }
 
   for (const obs of entry.finding?.observedExpressions ?? []) {
     const hit = denyRuleFor(policy, obs, entry.name);
 
-    if (hit !== undefined) return hit;
+    if (hit !== undefined) {
+      return hit;
+    }
   }
 
   return undefined;
@@ -682,7 +726,10 @@ function sourceAvailableExemption(
   const license = denyRule.rule.pattern;
   const index = policy.allowSourceAvailable.findIndex((entry) => entry.license === license);
 
-  if (index === -1) return undefined;
+  if (index === -1) {
+    return undefined;
+  }
+
   return { index, license, reason: policy.allowSourceAvailable[index]!.reason };
 }
 
@@ -715,7 +762,10 @@ function denyOrExemptVerdict(
 ): Verdict {
   const exemption = sourceAvailableExemption(policy, denyRule);
 
-  if (exemption !== undefined) return exemptionVerdict(base, exemption);
+  if (exemption !== undefined) {
+    return exemptionVerdict(base, exemption);
+  }
+
   return denyVerdict(base, denyRule);
 }
 
@@ -875,7 +925,9 @@ function verdictFor(
 
   const stale = entry.finding?.staleOverride;
 
-  if (stale !== undefined) return staleVerdict(base, entry, stale);
+  if (stale !== undefined) {
+    return staleVerdict(base, entry, stale);
+  }
 
   // conflict:scancode sits directly below stale and above compatible - a fail, not a warn, because
   // human involvement is necessary and a warn is ignorable (rationale on conflictVerdict). A stale
@@ -883,7 +935,9 @@ function verdictFor(
   // disputed answer, so this precedes the compatible lanes.
   const conflict = entry.finding?.conflict;
 
-  if (conflict !== undefined) return conflictVerdict(base, entry, conflict);
+  if (conflict !== undefined) {
+    return conflictVerdict(base, entry, conflict);
+  }
 
   if (packageRule !== undefined) {
     const { index, rule } = packageRule;
@@ -922,7 +976,9 @@ function verdictFor(
 
   const citation = overrideCitation(entry, base, target, assessment.expression, policy);
 
-  if (citation !== undefined) return citation;
+  if (citation !== undefined) {
+    return citation;
+  }
 
   // A LicenseRef-/DocumentRef- leaf that survived election is unassessed content, not a clean
   // permissive finding - route it through the same [unknown] handling as a genuine unknown rather
@@ -1059,10 +1115,15 @@ export function acceptedContainerNotices(
   const notices: AcceptedContainerNotice[] = [];
 
   for (const entry of model.packages) {
-    if (entry.scope !== "os") continue;
+    if (entry.scope !== "os") {
+      continue;
+    }
+
     const assessment = assessPackage(entry);
 
-    if (!carriesAgplObligation(assessment)) continue;
+    if (!carriesAgplObligation(assessment)) {
+      continue;
+    }
 
     const targets: string[] = [];
     let rule: string | undefined;
@@ -1123,10 +1184,14 @@ export function unusedRuleIds(
   policy.compatible.forEach((_, index) => {
     const id = `compatible[${index}]`;
 
-    if (!cited.has(id)) unused.push(id);
+    if (!cited.has(id)) {
+      unused.push(id);
+    }
   });
   policy.clarify.forEach((_, index) => {
-    if (!usedClarifyIndices.has(index)) unused.push(`clarify[${index}]`);
+    if (!usedClarifyIndices.has(index)) {
+      unused.push(`clarify[${index}]`);
+    }
   });
   return unused;
 }

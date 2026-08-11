@@ -28,7 +28,10 @@ function splitCells(row: string): string[] {
 
 /** A separator row: every cell is GFM dashes (optionally colon-aligned). */
 function isSeparatorRow(line: string): boolean {
-  if (!isTableRow(line)) return false;
+  if (!isTableRow(line)) {
+    return false;
+  }
+
   const cells = splitCells(line);
 
   return cells.length > 0 && cells.every((cell) => /^:?-+:?$/.test(cell));
@@ -45,14 +48,19 @@ function formatTable(block: readonly string[]): string[] {
 
     rows.forEach((cells, rowIndex) => {
       // the separator row is regenerated, never measured
-      if (rowIndex !== 1) width = Math.max(width, (cells[column] ?? "").length);
+      if (rowIndex !== 1) {
+        width = Math.max(width, (cells[column] ?? "").length);
+      }
     });
     widths.push(width);
   }
 
   return rows.map((cells, rowIndex) => {
     const padded = widths.map((width, column) => {
-      if (rowIndex === 1) return "-".repeat(width);
+      if (rowIndex === 1) {
+        return "-".repeat(width);
+      }
+
       const cell = cells[column] ?? "";
 
       return cell + " ".repeat(width - cell.length);

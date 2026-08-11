@@ -101,7 +101,9 @@ export function githubLicenseRefsFor(version: string): Array<string> {
 export function resolveGithubLicense(body: unknown): GithubResolution | null {
   const narrowed = narrowGithubLicense(body);
 
-  if (narrowed === undefined) return null;
+  if (narrowed === undefined) {
+    return null;
+  }
 
   const spdxId = narrowed.spdxId?.trim();
 

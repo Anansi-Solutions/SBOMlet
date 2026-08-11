@@ -37,7 +37,10 @@ function normalizePep503(name: string): string {
  * conservative "unknown → prod" posture (a shipped dep must never be silently dev-dropped).
  */
 function isProdGroups(groups: unknown): boolean {
-  if (!Array.isArray(groups)) return true; // absent/garbage → default "main"
+  if (!Array.isArray(groups)) {
+    return true;
+  } // absent/garbage → default "main"
+
   return groups.some((g) => stringOf(g) === "main");
 }
 
@@ -58,19 +61,34 @@ export function poetryProdPurlSet(lockfileText: string): ReadonlySet<string> {
 
   const doc = recordOf(parsed);
 
-  if (doc === undefined) return purls;
+  if (doc === undefined) {
+    return purls;
+  }
+
   const packages = doc["package"];
 
-  if (!Array.isArray(packages)) return purls;
+  if (!Array.isArray(packages)) {
+    return purls;
+  }
+
   for (const raw of packages) {
     const pkg = recordOf(raw);
 
-    if (pkg === undefined) continue;
-    if (!isProdGroups(pkg["groups"])) continue;
+    if (pkg === undefined) {
+      continue;
+    }
+
+    if (!isProdGroups(pkg["groups"])) {
+      continue;
+    }
+
     const name = stringOf(pkg["name"]);
     const version = stringOf(pkg["version"]);
 
-    if (name === undefined || version === undefined) continue;
+    if (name === undefined || version === undefined) {
+      continue;
+    }
+
     purls.add(`pkg:pypi/${normalizePep503(name)}@${version}`);
   }
 

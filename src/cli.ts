@@ -261,7 +261,9 @@ export function dockerSbomModeConflict(values: CliValues): string | undefined {
   ];
 
   for (const [left, right, message] of pairs) {
-    if (left && right) return message;
+    if (left && right) {
+      return message;
+    }
   }
 
   if (hasListDockerfiles && !hasRepoRoot) {

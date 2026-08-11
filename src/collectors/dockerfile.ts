@@ -80,9 +80,18 @@ export interface DiscoverDockerfilesResult {
 export function isDockerfileName(name: string): boolean {
   const lower = name.toLowerCase();
 
-  if (lower === "dockerfile") return true;
-  if (lower.endsWith(".dockerfile")) return true;
-  if (lower.startsWith("dockerfile.")) return true;
+  if (lower === "dockerfile") {
+    return true;
+  }
+
+  if (lower.endsWith(".dockerfile")) {
+    return true;
+  }
+
+  if (lower.startsWith("dockerfile.")) {
+    return true;
+  }
+
   return false;
 }
 
@@ -125,12 +134,18 @@ export function discoverDockerfiles(
         continue;
       }
 
-      if (!entry.isFile() || !isDockerfileName(entry.name)) continue;
+      if (!entry.isFile() || !isDockerfileName(entry.name)) {
+        continue;
+      }
+
       const identity = identityOf(sub);
 
       // --exclude prunes silently (a generic walk filter); a [docker] ignore is a deliberate user
       // exclusion the summary surfaces by name.
-      if (isExcluded(identity, excludeMatchers)) continue;
+      if (isExcluded(identity, excludeMatchers)) {
+        continue;
+      }
+
       if (isExcluded(identity, ignoreMatchers)) {
         ignored.push(identity);
         continue;

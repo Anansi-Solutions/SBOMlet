@@ -70,7 +70,9 @@ function fencedBlock(content: string): string[] {
   let longestRun = 0;
 
   for (const run of normalized.match(/`+/g) ?? []) {
-    if (run.length > longestRun) longestRun = run.length;
+    if (run.length > longestRun) {
+      longestRun = run.length;
+    }
   }
 
   const fence = "`".repeat(Math.max(3, longestRun + 1));
@@ -107,7 +109,10 @@ function licenseLabelOf(pkg: PackageEntry): string {
 function qualifiesForSection(pkg: PackageEntry): boolean {
   const attribution = pkg.attribution;
 
-  if (attribution === undefined) return false;
+  if (attribution === undefined) {
+    return false;
+  }
+
   return (
     attribution.copyrightLines.length > 0 ||
     attribution.noticeTexts.length > 0 ||
@@ -163,7 +168,10 @@ function renderPackageSections(sorted: readonly PackageEntry[]): string[] {
   for (const pkg of sorted) {
     const attribution = pkg.attribution;
 
-    if (attribution === undefined || !qualifiesForSection(pkg)) continue;
+    if (attribution === undefined || !qualifiesForSection(pkg)) {
+      continue;
+    }
+
     lines.push(...packageAttributionLines(pkg, attribution));
   }
 
@@ -177,7 +185,10 @@ function renderPackageSections(sorted: readonly PackageEntry[]): string[] {
 function renderUnknownSection(sorted: readonly PackageEntry[]): string[] {
   const unknown = sorted.filter(isUnknownLicense);
 
-  if (unknown.length === 0) return [];
+  if (unknown.length === 0) {
+    return [];
+  }
+
   const lines: string[] = [
     "## Packages with unknown licenses",
     "",
@@ -206,7 +217,10 @@ function collectReferencedLicenses(sorted: readonly PackageEntry[]): {
   for (const pkg of sorted) {
     const expression = pkg.finding?.expression;
 
-    if (expression === undefined || expression === null) continue;
+    if (expression === undefined || expression === null) {
+      continue;
+    }
+
     let node: ExpressionNode;
 
     try {
@@ -218,8 +232,13 @@ function collectReferencedLicenses(sorted: readonly PackageEntry[]): {
 
     const leaves = leafIds(node);
 
-    for (const id of leaves.ids) ids.add(id);
-    for (const exception of leaves.exceptions) exceptions.add(exception);
+    for (const id of leaves.ids) {
+      ids.add(id);
+    }
+
+    for (const exception of leaves.exceptions) {
+      exceptions.add(exception);
+    }
   }
 
   return { ids, exceptions };
@@ -277,6 +296,9 @@ export function renderNotices(model: CanonicalDependencies): string {
 
   // Single trailing LF: drop trailing blank lines, then join with "\n" literals only (never the
   // platform EOL constant).
-  while (lines.length > 0 && lines[lines.length - 1] === "") lines.pop();
+  while (lines.length > 0 && lines[lines.length - 1] === "") {
+    lines.pop();
+  }
+
   return lines.join("\n") + "\n";
 }

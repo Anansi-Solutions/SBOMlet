@@ -42,8 +42,14 @@ import { sanitizeForLog } from "./summary";
  * Guards the --image lane, whose refs are passed straight through to syft/docker as operands.
  */
 function isSafeImageRef(ref: string): boolean {
-  if (ref.trim() === "") return false;
-  if (ref.startsWith("-")) return false;
+  if (ref.trim() === "") {
+    return false;
+  }
+
+  if (ref.startsWith("-")) {
+    return false;
+  }
+
   return true;
 }
 
@@ -206,7 +212,10 @@ export function resolveTargetedDockerfiles(
   const build: DockerfileBuild[] = [];
 
   for (const df of sorted) {
-    if (seen.has(df.identity)) continue;
+    if (seen.has(df.identity)) {
+      continue;
+    }
+
     seen.add(df.identity);
     build.push({
       identity: df.identity,

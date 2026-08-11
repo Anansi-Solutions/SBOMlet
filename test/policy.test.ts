@@ -418,15 +418,24 @@ describe("BUILTIN_OVERRIDES — the shipped tool-level set", () => {
     const known = new Set([...current, ...deprecated]);
     const leafIds: string[] = [];
     const walk = (node: unknown): void => {
-      if (typeof node !== "object" || node === null) return;
+      if (typeof node !== "object" || node === null) {
+        return;
+      }
+
       const n = node as Record<string, unknown>;
 
-      if (typeof n.license === "string") leafIds.push(n.license);
+      if (typeof n.license === "string") {
+        leafIds.push(n.license);
+      }
+
       walk(n.left);
       walk(n.right);
     };
 
-    for (const o of BUILTIN_OVERRIDES) walk(parseSpdxId(o.expression));
+    for (const o of BUILTIN_OVERRIDES) {
+      walk(parseSpdxId(o.expression));
+    }
+
     expect(leafIds.filter((id) => !known.has(id))).toEqual([]);
   });
 
@@ -3294,16 +3303,24 @@ describe("policy.example.toml — the shipped [[deny]] block", () => {
     const known = new Set([...current, ...deprecated]);
     const leafIds: string[] = [];
     const walk = (node: unknown): void => {
-      if (typeof node !== "object" || node === null) return;
+      if (typeof node !== "object" || node === null) {
+        return;
+      }
+
       const n = node as Record<string, unknown>;
 
-      if (typeof n.license === "string") leafIds.push(n.license);
+      if (typeof n.license === "string") {
+        leafIds.push(n.license);
+      }
+
       walk(n.left);
       walk(n.right);
     };
 
     for (const rule of examplePolicy.deny) {
-      if (rule.match === "license") walk(parseSpdxId(rule.pattern));
+      if (rule.match === "license") {
+        walk(parseSpdxId(rule.pattern));
+      }
     }
 
     expect(leafIds.filter((id) => !known.has(id))).toEqual([]);

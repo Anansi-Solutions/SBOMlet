@@ -90,7 +90,10 @@ export function putMemoEntry(
   entry: ScancodeMemoEntry,
   now: () => Date = defaultNow,
 ): void {
-  if (memo.has(purl)) return;
+  if (memo.has(purl)) {
+    return;
+  }
+
   memo.set(purl, {
     ...entry,
     ...(entry.scannedAt === undefined ? { scannedAt: now().toISOString() } : {}),

@@ -183,7 +183,10 @@ interface RawComponent {
  * and a stray field still maps to the id claim.
  */
 function narrowLicense(raw: unknown): OsLicense | undefined {
-  if (typeof raw !== "object" || raw === null) return undefined;
+  if (typeof raw !== "object" || raw === null) {
+    return undefined;
+  }
+
   const entry = raw as {
     license?: { id?: unknown; name?: unknown };
     expression?: unknown;
@@ -214,8 +217,14 @@ function narrowLicense(raw: unknown): OsLicense | undefined {
  * double-emit identity contract must hold WITH licenses).
  */
 function licenseSortKey(license: OsLicense): string {
-  if ("expression" in license) return `2:${license.expression}`;
-  if ("id" in license.license) return `0:${license.license.id}`;
+  if ("expression" in license) {
+    return `2:${license.expression}`;
+  }
+
+  if ("id" in license.license) {
+    return `0:${license.license.id}`;
+  }
+
   return `1:${license.license.name}`;
 }
 
@@ -227,10 +236,16 @@ function licenseSortKey(license: OsLicense): string {
 function osLicensesOf(raw: RawComponent): OsLicense[] | undefined {
   const licenses = raw.licenses;
 
-  if (!Array.isArray(licenses)) return undefined;
+  if (!Array.isArray(licenses)) {
+    return undefined;
+  }
+
   const narrowed = licenses.map(narrowLicense).filter((l): l is OsLicense => l !== undefined);
 
-  if (narrowed.length === 0) return undefined;
+  if (narrowed.length === 0) {
+    return undefined;
+  }
+
   return narrowed.sort((a, b) => compareCodeUnits(licenseSortKey(a), licenseSortKey(b)));
 }
 
@@ -252,9 +267,18 @@ function isPurlComponent(raw: RawComponent): raw is {
 } {
   const { name, version, purl } = raw;
 
-  if (typeof name !== "string" || name.length === 0) return false;
-  if (typeof version !== "string" || version.length === 0) return false;
-  if (typeof purl !== "string" || purl.length === 0) return false;
+  if (typeof name !== "string" || name.length === 0) {
+    return false;
+  }
+
+  if (typeof version !== "string" || version.length === 0) {
+    return false;
+  }
+
+  if (typeof purl !== "string" || purl.length === 0) {
+    return false;
+  }
+
   return true;
 }
 
@@ -269,14 +293,22 @@ function isPurlComponent(raw: RawComponent): raw is {
 export function filterOsComponents(sbom: unknown): OsComponent[] {
   const components = (sbom as RawSyftSbom).components;
 
-  if (!Array.isArray(components)) return [];
+  if (!Array.isArray(components)) {
+    return [];
+  }
 
   const byPurl = new Map<string, OsComponent>();
 
   for (const raw of components as RawComponent[]) {
-    if (!isPurlComponent(raw)) continue;
+    if (!isPurlComponent(raw)) {
+      continue;
+    }
+
     // First-wins keying by purl: a duplicate purl collapses to one row.
-    if (byPurl.has(raw.purl)) continue;
+    if (byPurl.has(raw.purl)) {
+      continue;
+    }
+
     const licenses = osLicensesOf(raw);
 
     byPurl.set(raw.purl, {
@@ -322,7 +354,10 @@ export function unionOsComponents(
 
   const merged = [...byPurl.values()].sort((a, b) => compareCodeUnits(a.purl, b.purl));
 
-  for (const entry of merged) entry.images.sort(compareCodeUnits);
+  for (const entry of merged) {
+    entry.images.sort(compareCodeUnits);
+  }
+
   return merged;
 }
 
@@ -474,7 +509,10 @@ async function resolveDigest(
  * prior `digests[0]`. Returns undefined for an empty set (the caller throws).
  */
 export function selectDigest(image: string, digests: readonly string[]): string | undefined {
-  if (digests.length === 0) return undefined;
+  if (digests.length === 0) {
+    return undefined;
+  }
+
   // Sort a COPY by code units first so every subsequent pick is order-stable.
   const sorted = [...digests].sort(compareCodeUnits);
   // Prefer the digest whose repository matches the requested image's repository.
@@ -483,7 +521,9 @@ export function selectDigest(image: string, digests: readonly string[]): string 
   if (wantRepo !== undefined) {
     const match = sorted.find((d) => repositoryOf(d) === wantRepo);
 
-    if (match !== undefined) return match;
+    if (match !== undefined) {
+      return match;
+    }
   }
 
   // No repo match → the code-unit-smallest digest (deterministic over the set).
@@ -498,7 +538,10 @@ export function selectDigest(image: string, digests: readonly string[]): string 
  * stripped.
  */
 function repositoryOf(ref: string): string | undefined {
-  if (ref === "") return undefined;
+  if (ref === "") {
+    return undefined;
+  }
+
   // Strip an `@<digest>` suffix first (RepoDigest form `repo@sha256:...`).
   const atIndex = ref.indexOf("@");
   const withoutDigest = atIndex === -1 ? ref : ref.slice(0, atIndex);
@@ -525,7 +568,10 @@ export function parseRepoDigests(stdout: string, invocation: string): string[] {
     );
   }
 
-  if (!Array.isArray(parsed)) return [];
+  if (!Array.isArray(parsed)) {
+    return [];
+  }
+
   return parsed.filter((d): d is string => typeof d === "string");
 }
 

@@ -88,23 +88,38 @@ async function currentRegistryLicense(
     return resolved === null ? null : resolved.raw;
   }
 
-  if (parsed.type === "nuget") return currentNugetLicense(parsed, fetchOpts);
-  if (parsed.type === "maven") return currentMavenLicense(parsed, fetchOpts);
+  if (parsed.type === "nuget") {
+    return currentNugetLicense(parsed, fetchOpts);
+  }
+
+  if (parsed.type === "maven") {
+    return currentMavenLicense(parsed, fetchOpts);
+  }
+
   // terraform → GitHub License API at the version tag (same ordered-ref walk as generate:
   // v<version> then <version>; first resolvable wins, 404 advances).
   const repo = githubRepoFor(parsed);
 
-  if (repo === null) return null;
+  if (repo === null) {
+    return null;
+  }
+
   for (const ref of githubLicenseRefsFor(parsed.version)) {
     const result = await fetchGithubLicense(
       githubLicenseUrl(repo.owner, repo.repo, ref),
       fetchOpts,
     );
 
-    if (result.status === 404) continue;
+    if (result.status === 404) {
+      continue;
+    }
+
     const resolved = resolveGithubLicense(result.body);
 
-    if (resolved === null) continue;
+    if (resolved === null) {
+      continue;
+    }
+
     return resolved.raw;
   }
 
@@ -128,13 +143,22 @@ async function currentNugetLicense(
     fetchOpts,
   );
 
-  if (leaf.status === 404) return null;
+  if (leaf.status === 404) {
+    return null;
+  }
+
   const catalogUrl = catalogEntryUrlOf(leaf.body);
 
-  if (catalogUrl === undefined) return null;
+  if (catalogUrl === undefined) {
+    return null;
+  }
+
   const catalog = await fetchJsonOr404(catalogUrl, fetchOpts);
 
-  if (catalog.status === 404) return null;
+  if (catalog.status === 404) {
+    return null;
+  }
+
   const resolved = resolveNugetCatalogLicense(catalog.body);
 
   return resolved === null ? null : resolved.raw;
@@ -154,10 +178,16 @@ async function currentMavenLicense(
     fetchOpts,
   );
 
-  if (result.status === 404) return null;
+  if (result.status === 404) {
+    return null;
+  }
+
   const resolved = resolveMavenLicenses(result.body);
 
-  if (resolved === null) return null;
+  if (resolved === null) {
+    return null;
+  }
+
   return resolved.raws.length === 1 ? resolved.raws[0]! : resolved.raws;
 }
 
@@ -173,7 +203,10 @@ function licenseValuesEqual(
   const arrA = a === null ? [] : Array.isArray(a) ? a : [a];
   const arrB = b === null ? [] : Array.isArray(b) ? b : [b];
 
-  if (arrA.length !== arrB.length) return false;
+  if (arrA.length !== arrB.length) {
+    return false;
+  }
+
   const sortedA = [...arrA].sort(compareCodeUnits);
   const sortedB = [...arrB].sort(compareCodeUnits);
 
@@ -221,7 +254,10 @@ async function auditEntry(
 
   const current = await currentRegistryLicense(parsed, fetchDoc, fetchOpts);
 
-  if (licenseValuesEqual(entry.license, current)) return null;
+  if (licenseValuesEqual(entry.license, current)) {
+    return null;
+  }
+
   return {
     purl,
     cached: entry.license,

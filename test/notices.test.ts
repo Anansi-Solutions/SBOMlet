@@ -71,12 +71,18 @@ function headingsOutsideFences(output: string): string[] {
 
   for (const line of output.split("\n")) {
     if (/^`{3,}$/.test(line)) {
-      if (openFence === null) openFence = line;
-      else if (line === openFence) openFence = null;
+      if (openFence === null) {
+        openFence = line;
+      } else if (line === openFence) {
+        openFence = null;
+      }
+
       continue;
     }
 
-    if (openFence === null && line.startsWith("#")) result.push(line);
+    if (openFence === null && line.startsWith("#")) {
+      result.push(line);
+    }
   }
 
   return result;

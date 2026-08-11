@@ -101,7 +101,10 @@ function stripTrailingCommas(text: string): string {
 
 /** packages[key] value[0] when it is a string in an array, else undefined. */
 function specOf(value: unknown): string | undefined {
-  if (!Array.isArray(value)) return undefined;
+  if (!Array.isArray(value)) {
+    return undefined;
+  }
+
   const first: unknown = value[0];
 
   return typeof first === "string" ? first : undefined;
@@ -121,7 +124,10 @@ function specOf(value: unknown): string | undefined {
 function splitSpec(spec: string): { name: string; version: string } | undefined {
   const at = spec.indexOf("@", spec.startsWith("@") ? 1 : 0);
 
-  if (at <= 0) return undefined; // no separator, or a bare leading-@ scope
+  if (at <= 0) {
+    return undefined;
+  } // no separator, or a bare leading-@ scope
+
   return { name: spec.slice(0, at), version: spec.slice(at + 1) };
 }
 
@@ -156,10 +162,16 @@ export function bunThirdPartyEntryCount(lockfileText: string): number | undefine
   // A failed document narrow is the unknown path - same as no packages map.
   const doc = BunLockDocument(parsed);
 
-  if (doc instanceof type.errors) return undefined;
+  if (doc instanceof type.errors) {
+    return undefined;
+  }
+
   const packages = doc.packages;
 
-  if (packages === undefined) return undefined;
+  if (packages === undefined) {
+    return undefined;
+  }
+
   let count = 0;
 
   for (const value of Object.values(packages)) {
@@ -229,7 +241,9 @@ function transitiveDevKeys(
     for (let length = parentChain.length; length >= 0; length -= 1) {
       const chain = [...parentChain.slice(0, length), depName];
 
-      if (chain.join("/") in packages) return chain;
+      if (chain.join("/") in packages) {
+        return chain;
+      }
     }
 
     return undefined;
@@ -240,7 +254,10 @@ function transitiveDevKeys(
     const value = packages[key];
     const metadata = Array.isArray(value) ? recordOf(value[2]) : undefined;
 
-    if (metadata === undefined) return [];
+    if (metadata === undefined) {
+      return [];
+    }
+
     return depNamesOf(metadata, PROD_DEP_FIELDS);
   };
 
@@ -253,7 +270,10 @@ function transitiveDevKeys(
   for (const rawImporter of Object.values(workspaces)) {
     const importer = recordOf(rawImporter);
 
-    if (importer === undefined) continue;
+    if (importer === undefined) {
+      continue;
+    }
+
     const rawName = importer["name"];
     const importerName = typeof rawName === "string" ? rawName : undefined;
     const parentChain = importerName === undefined || importerName === "" ? [] : [importerName];
@@ -275,12 +295,21 @@ function transitiveDevKeys(
   ): void => {
     const queue: Array<readonly string[]> = [];
     const enqueue = (chain: readonly string[] | undefined): void => {
-      if (chain === undefined) return;
+      if (chain === undefined) {
+        return;
+      }
+
       const key = chain.join("/");
 
-      if (visited.has(key)) return;
+      if (visited.has(key)) {
+        return;
+      }
+
       visited.add(key);
-      if (markDev) dev.add(key);
+      if (markDev) {
+        dev.add(key);
+      }
+
       queue.push(chain);
     };
 
@@ -341,12 +370,24 @@ function componentsOf(
   for (const [key, value] of Object.entries(packages)) {
     const spec = specOf(value);
 
-    if (spec === undefined) continue; // malformed entry - tolerant skip
-    if (spec.includes("@workspace:")) continue; // first-party member
+    if (spec === undefined) {
+      continue;
+    } // malformed entry - tolerant skip
+
+    if (spec.includes("@workspace:")) {
+      continue;
+    } // first-party member
+
     const identity = splitSpec(spec);
 
-    if (identity === undefined) continue; // malformed spec - tolerant skip
-    if (memberNames.has(identity.name)) continue; // belt-and-braces
+    if (identity === undefined) {
+      continue;
+    } // malformed spec - tolerant skip
+
+    if (memberNames.has(identity.name)) {
+      continue;
+    } // belt-and-braces
+
     const component: BunComponent = {
       type: "library",
       name: identity.name,

@@ -72,7 +72,10 @@ function expandLevel(
 
   for (const node of frontier) {
     for (const child of graph.edges.get(node.purl) ?? []) {
-      if (visited.has(child)) continue;
+      if (visited.has(child)) {
+        continue;
+      }
+
       visited.add(child);
       next.push({ purl: child, path: [...node.path, child] });
     }
@@ -99,14 +102,19 @@ export function shortestPath(graph: PurlGraph, target: string): string[] | undef
   let frontier: BfsNode[] = [];
 
   for (const child of [...graph.rootChildren].sort(compareCodeUnits)) {
-    if (visited.has(child)) continue;
+    if (visited.has(child)) {
+      continue;
+    }
+
     visited.add(child);
     frontier.push({ purl: child, path: [child] });
   }
 
   while (frontier.length > 0) {
     for (const node of frontier) {
-      if (node.purl === target) return node.path;
+      if (node.purl === target) {
+        return node.path;
+      }
     }
 
     frontier = expandLevel(graph, frontier, visited);
@@ -139,7 +147,10 @@ function expandReachable(
 
   for (const purl of frontier) {
     for (const child of graph.edges.get(purl) ?? []) {
-      if (reachable.has(child)) continue;
+      if (reachable.has(child)) {
+        continue;
+      }
+
       reachable.add(child);
       next.push(child);
     }
@@ -153,7 +164,10 @@ function reachableFromRoots(graph: PurlGraph): Set<string> {
   let frontier: string[] = [];
 
   for (const child of graph.rootChildren) {
-    if (reachable.has(child)) continue;
+    if (reachable.has(child)) {
+      continue;
+    }
+
     reachable.add(child);
     frontier.push(child);
   }
@@ -208,7 +222,10 @@ export function deriveIntroductions(graph: PurlGraph): Map<string, DependencyInt
     };
     const path = shortestPath(graph, purl);
 
-    if (path !== undefined) introduction.path = path;
+    if (path !== undefined) {
+      introduction.path = path;
+    }
+
     result.set(purl, introduction);
   }
 

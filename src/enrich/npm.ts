@@ -56,7 +56,10 @@ function joinLicensesArray(array: Array<{ type?: string }> | undefined): string 
     .map((entry) => nonEmpty(entry.type))
     .filter((type): type is string => type !== undefined);
 
-  if (types.length === 0) return undefined;
+  if (types.length === 0) {
+    return undefined;
+  }
+
   return types.length === 1 ? (types[0] as string) : `(${types.join(" OR ")})`;
 }
 
@@ -75,15 +78,21 @@ function resolveFields(
 ): NpmResolution | null {
   const license = nonEmpty(fields.license);
 
-  if (license !== undefined) return { raw: license, via: vias.string };
+  if (license !== undefined) {
+    return { raw: license, via: vias.string };
+  }
 
   const objectType = nonEmpty(fields.licenseObject?.type);
 
-  if (objectType !== undefined) return { raw: objectType, via: vias.object };
+  if (objectType !== undefined) {
+    return { raw: objectType, via: vias.object };
+  }
 
   const arrayJoined = joinLicensesArray(fields.licensesArray);
 
-  if (arrayJoined !== undefined) return { raw: arrayJoined, via: vias.array };
+  if (arrayJoined !== undefined) {
+    return { raw: arrayJoined, via: vias.array };
+  }
 
   return null;
 }
@@ -92,7 +101,9 @@ function resolveFields(
 export function resolveNpmLicense(packument: unknown, version: string): NpmResolution | null {
   const doc = narrowNpmPackument(packument);
 
-  if (doc === undefined) return null;
+  if (doc === undefined) {
+    return null;
+  }
 
   const versionEntry = doc.versions?.[version];
 
@@ -103,7 +114,9 @@ export function resolveNpmLicense(packument: unknown, version: string): NpmResol
       array: "version-licenses-array",
     });
 
-    if (fromVersion !== null) return fromVersion;
+    if (fromVersion !== null) {
+      return fromVersion;
+    }
   }
 
   return resolveFields(doc, {

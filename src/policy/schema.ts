@@ -296,7 +296,10 @@ function optionalText(
   where: string,
   problems: string[],
 ): string | undefined {
-  if (!(key in entry)) return undefined;
+  if (!(key in entry)) {
+    return undefined;
+  }
+
   const value = stringOf(entry[key]);
 
   if (value === undefined) {
@@ -322,7 +325,10 @@ function validateDocument(
   root: Record<string, unknown>,
   problems: string[],
 ): DocumentConfig | undefined {
-  if (!("document" in root)) return undefined;
+  if (!("document" in root)) {
+    return undefined;
+  }
+
   const table = recordOf(root["document"]);
 
   if (table === undefined) {
@@ -375,7 +381,10 @@ function validateDockerDevelopmentEntry(
   const source = requireText(entry, "source", where, problems);
   const reason = requireText(entry, "reason", where, problems);
 
-  if (source === undefined || reason === undefined) return undefined;
+  if (source === undefined || reason === undefined) {
+    return undefined;
+  }
+
   const before = problems.length;
 
   validatePath(source, where, problems);
@@ -391,7 +400,10 @@ function validateDockerDevelopmentEntry(
     );
   }
 
-  if (problems.length !== before) return undefined;
+  if (problems.length !== before) {
+    return undefined;
+  }
+
   seen.add(source);
   return { source, reason };
 }
@@ -406,7 +418,10 @@ function validateDockerDevelopment(
   table: Record<string, unknown>,
   problems: string[],
 ): DockerDevelopmentEntry[] {
-  if (!("development" in table)) return [];
+  if (!("development" in table)) {
+    return [];
+  }
+
   const raw = table["development"];
 
   if (!Array.isArray(raw)) {
@@ -425,7 +440,9 @@ function validateDockerDevelopment(
       problems,
     );
 
-    if (entry !== undefined) development.push(entry);
+    if (entry !== undefined) {
+      development.push(entry);
+    }
   });
   return development;
 }
@@ -434,7 +451,10 @@ function validateDocker(
   root: Record<string, unknown>,
   problems: string[],
 ): DockerConfig | undefined {
-  if (!("docker" in root)) return undefined;
+  if (!("docker" in root)) {
+    return undefined;
+  }
+
   const table = recordOf(root["docker"]);
 
   if (table === undefined) {
@@ -445,7 +465,10 @@ function validateDocker(
   checkKeys(table, ["ignore", "development"], "docker", problems);
   const development = validateDockerDevelopment(table, problems);
 
-  if (!("ignore" in table)) return { ignore: [], development };
+  if (!("ignore" in table)) {
+    return { ignore: [], development };
+  }
+
   const raw = table["ignore"];
 
   if (!Array.isArray(raw)) {
@@ -472,7 +495,9 @@ function validateDocker(
     const before = problems.length;
 
     validatePath(value, where, problems);
-    if (problems.length === before) ignore.push(value);
+    if (problems.length === before) {
+      ignore.push(value);
+    }
   });
   return { ignore, development };
 }
@@ -485,7 +510,10 @@ function validateDocker(
  * {} after recording the aggregated PolicyError naming cache.dir.
  */
 function validateCache(root: Record<string, unknown>, problems: string[]): CacheConfig | undefined {
-  if (!("cache" in root)) return undefined;
+  if (!("cache" in root)) {
+    return undefined;
+  }
+
   const table = recordOf(root["cache"]);
 
   if (table === undefined) {
@@ -494,14 +522,23 @@ function validateCache(root: Record<string, unknown>, problems: string[]): Cache
   }
 
   checkKeys(table, ["dir"], "cache", problems);
-  if (!("dir" in table)) return {};
+  if (!("dir" in table)) {
+    return {};
+  }
+
   const dir = requireText(table, "dir", "cache", problems);
 
-  if (dir === undefined) return {};
+  if (dir === undefined) {
+    return {};
+  }
+
   const before = problems.length;
 
   validatePath(dir, "cache.dir", problems);
-  if (problems.length !== before) return {};
+  if (problems.length !== before) {
+    return {};
+  }
+
   return { dir };
 }
 
@@ -563,7 +600,10 @@ function validateSuppressions(
 ): SuppressedWorkspace[] {
   const suppressed: SuppressedWorkspace[] = [];
 
-  if (!("workspace" in root)) return suppressed;
+  if (!("workspace" in root)) {
+    return suppressed;
+  }
+
   const workspace = recordOf(root["workspace"]);
 
   if (workspace === undefined) {
@@ -576,7 +616,10 @@ function validateSuppressions(
   checkKeys(workspace, ["copyleft_suppressed"], "workspace", problems);
   const entries = workspace["copyleft_suppressed"];
 
-  if (entries === undefined) return suppressed;
+  if (entries === undefined) {
+    return suppressed;
+  }
+
   if (!Array.isArray(entries)) {
     problems.push(
       "workspace.copyleft_suppressed: must be an array of tables ([[workspace.copyleft_suppressed]])",
@@ -645,7 +688,10 @@ function validateWhere(
   context: string,
   problems: string[],
 ): { where?: ReadonlyArray<string>; valid: boolean } {
-  if (!("where" in entry)) return { valid: true };
+  if (!("where" in entry)) {
+    return { valid: true };
+  }
+
   const raw = entry["where"];
 
   if (!Array.isArray(raw) || raw.length === 0) {
@@ -669,7 +715,10 @@ function validateWhere(
     validatePath(text, `${context}.where[${index}]`, problems);
     scope.push(text);
   });
-  if (problems.length !== before) return { valid: false };
+  if (problems.length !== before) {
+    return { valid: false };
+  }
+
   return { where: scope, valid: true };
 }
 
@@ -677,7 +726,10 @@ function validateCompatible(root: Record<string, unknown>, problems: string[]): 
   const compatible: CompatibleRule[] = [];
   const raw = root["compatible"];
 
-  if (raw === undefined) return compatible;
+  if (raw === undefined) {
+    return compatible;
+  }
+
   if (!Array.isArray(raw)) {
     problems.push("compatible: must be an array of tables ([[compatible]])");
     return compatible;
@@ -697,11 +749,15 @@ function validateCompatible(root: Record<string, unknown>, problems: string[]): 
     if (match === "license") {
       const rule = validateCompatibleLicense(entry, where, problems);
 
-      if (rule !== undefined) compatible.push(rule);
+      if (rule !== undefined) {
+        compatible.push(rule);
+      }
     } else if (match === "package") {
       const rule = validateCompatiblePackage(entry, where, problems);
 
-      if (rule !== undefined) compatible.push(rule);
+      if (rule !== undefined) {
+        compatible.push(rule);
+      }
     } else {
       problems.push(`${where}: key "match" must be "license" or "package"`);
     }
@@ -720,10 +776,16 @@ function validateCompatibleLicense(
   const reason = requireText(entry, "reason", where, problems);
   const scope = validateWhere(entry, where, problems);
 
-  if (pattern === undefined) return undefined;
+  if (pattern === undefined) {
+    return undefined;
+  }
+
   const node = parseSpdxChecked(pattern, `${where}: pattern`, problems);
 
-  if (node === undefined) return undefined;
+  if (node === undefined) {
+    return undefined;
+  }
+
   const allowlist = orLeaves(node);
 
   if (allowlist === null) {
@@ -733,7 +795,10 @@ function validateCompatibleLicense(
     return undefined;
   }
 
-  if (reason === undefined || !scope.valid) return undefined;
+  if (reason === undefined || !scope.valid) {
+    return undefined;
+  }
+
   return {
     match: "license",
     pattern,
@@ -807,7 +872,10 @@ function validateClarifyPackage(
   checkKeys(pkg, ["name", "version"], `${where}: package`, problems);
   const name = requireText(pkg, "name", `${where}: package`, problems);
 
-  if (!("version" in pkg)) return { name, versionValid: true };
+  if (!("version" in pkg)) {
+    return { name, versionValid: true };
+  }
+
   const version = stringOf(pkg["version"]);
 
   if (version === undefined) {
@@ -843,7 +911,10 @@ function validateClarify(root: Record<string, unknown>, problems: string[]): Cla
   const clarify: ClarifyRule[] = [];
   const raw = root["clarify"];
 
-  if (raw === undefined) return clarify;
+  if (raw === undefined) {
+    return clarify;
+  }
+
   if (!Array.isArray(raw)) {
     problems.push("clarify: must be an array of tables ([[clarify]])");
     return clarify;
@@ -914,10 +985,16 @@ function validateDenyEntry(
     const pattern = requireText(entry, "pattern", where, problems);
     const reason = requireText(entry, "reason", where, problems);
 
-    if (pattern === undefined) return undefined;
+    if (pattern === undefined) {
+      return undefined;
+    }
+
     const node = parseSpdxChecked(pattern, `${where}: pattern`, problems);
 
-    if (node === undefined) return undefined;
+    if (node === undefined) {
+      return undefined;
+    }
+
     const allowlist = orLeaves(node);
 
     if (allowlist === null) {
@@ -927,7 +1004,10 @@ function validateDenyEntry(
       return undefined;
     }
 
-    if (reason === undefined) return undefined;
+    if (reason === undefined) {
+      return undefined;
+    }
+
     return { match: "license", pattern, allowlist, reason };
   }
 
@@ -936,7 +1016,10 @@ function validateDenyEntry(
     const pattern = requireText(entry, "pattern", where, problems);
     const reason = requireText(entry, "reason", where, problems);
 
-    if (pattern === undefined || reason === undefined) return undefined;
+    if (pattern === undefined || reason === undefined) {
+      return undefined;
+    }
+
     return { match: "name", pattern, reason };
   }
 
@@ -948,7 +1031,10 @@ function validateDeny(root: Record<string, unknown>, problems: string[]): DenyRu
   const deny: DenyRule[] = [];
   const raw = root["deny"];
 
-  if (raw === undefined) return deny;
+  if (raw === undefined) {
+    return deny;
+  }
+
   if (!Array.isArray(raw)) {
     problems.push("deny: must be an array of tables ([[deny]])");
     return deny;
@@ -965,7 +1051,9 @@ function validateDeny(root: Record<string, unknown>, problems: string[]): DenyRu
 
     const rule = validateDenyEntry(entry, where, problems);
 
-    if (rule !== undefined) deny.push(rule);
+    if (rule !== undefined) {
+      deny.push(rule);
+    }
   });
   return deny;
 }
@@ -988,7 +1076,10 @@ function validateAllowSourceAvailable(
   const exemptions: AllowSourceAvailable[] = [];
   const raw = root["allow_source_available"];
 
-  if (raw === undefined) return exemptions;
+  if (raw === undefined) {
+    return exemptions;
+  }
+
   if (!Array.isArray(raw)) {
     problems.push(
       "allow_source_available: must be an array of tables ([[allow_source_available]])",
@@ -1026,7 +1117,10 @@ function validateAllowSourceAvailable(
 function validateUnknown(root: Record<string, unknown>, problems: string[]): "warn" | "fail" {
   const raw = root["unknown"];
 
-  if (raw === undefined) return "warn"; // absent table defaults to warn
+  if (raw === undefined) {
+    return "warn";
+  } // absent table defaults to warn
+
   const table = recordOf(raw);
 
   if (table === undefined) {
@@ -1042,7 +1136,10 @@ function validateUnknown(root: Record<string, unknown>, problems: string[]): "wa
 
   const handling = stringOf(table["handling"]);
 
-  if (handling === "warn" || handling === "fail") return handling;
+  if (handling === "warn" || handling === "fail") {
+    return handling;
+  }
+
   problems.push('unknown.handling: must be "warn" or "fail"');
   return "warn";
 }
@@ -1059,7 +1156,10 @@ function validateDevDependencies(
 ): DevDependencyHandling {
   const raw = root["dev_dependencies"];
 
-  if (raw === undefined) return "warn"; // absent table defaults to warn
+  if (raw === undefined) {
+    return "warn";
+  } // absent table defaults to warn
+
   const table = recordOf(raw);
 
   if (table === undefined) {
@@ -1095,7 +1195,10 @@ function validateOsDependencies(
 ): OsDependencyHandling {
   const raw = root["os_dependencies"];
 
-  if (raw === undefined) return "warn"; // absent table defaults to warn
+  if (raw === undefined) {
+    return "warn";
+  } // absent table defaults to warn
+
   const table = recordOf(raw);
 
   if (table === undefined) {
@@ -1155,7 +1258,10 @@ export function parsePolicy(text: string): Policy {
   const cache = validateCache(root, problems);
   const allowSourceAvailable = validateAllowSourceAvailable(root, problems);
 
-  if (problems.length > 0) throw new PolicyError(problems);
+  if (problems.length > 0) {
+    throw new PolicyError(problems);
+  }
+
   return {
     unknownHandling,
     devDependencies,

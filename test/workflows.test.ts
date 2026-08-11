@@ -52,7 +52,9 @@ function extractRunBlocks(file: string, text: string): RunBlock[] {
     const line = lines[i] ?? "";
     const match = runKeyPattern.exec(line);
 
-    if (!match) continue;
+    if (!match) {
+      continue;
+    }
 
     const indent = match[1]?.length ?? 0;
     const inline = (match[2] ?? "").trim();
@@ -89,7 +91,10 @@ function collectBlockScalarBody(lines: string[], startIndex: number, keyIndent: 
 
     const nextIndent = next.length - next.trimStart().length;
 
-    if (nextIndent <= keyIndent) break;
+    if (nextIndent <= keyIndent) {
+      break;
+    }
+
     bodyLines.push(next);
   }
 
@@ -122,7 +127,9 @@ function findToolingNames(text: string): string[] {
   for (const name of ["gsd", "claude", "anthropic"]) {
     const re = new RegExp("\\b" + name + "\\b", "i");
 
-    if (re.test(text)) found.push(name);
+    if (re.test(text)) {
+      found.push(name);
+    }
   }
 
   return found;
@@ -166,7 +173,9 @@ function checkContentsWriteJob(file: string, jobName: string, job: JobShape): st
   const perms = job.permissions;
   const contentsWrite = typeof perms === "object" && perms !== null && perms.contents === "write";
 
-  if (!contentsWrite) return [];
+  if (!contentsWrite) {
+    return [];
+  }
 
   const checkoutSteps = (job.steps ?? []).filter((s) =>
     (s.uses ?? "").startsWith("actions/checkout@"),
@@ -208,7 +217,9 @@ describe("workflow authoring invariants (.github/workflows/*.yml)", () => {
       const text = readFileSync(full, "utf8");
       const names = findToolingNames(text);
 
-      if (names.length > 0) offenders.push({ file: `.github/${relPath}`, names });
+      if (names.length > 0) {
+        offenders.push({ file: `.github/${relPath}`, names });
+      }
     }
 
     expect(offenders, offenders.map((o) => `${o.file}: ${o.names.join(", ")}`).join("; ")).toEqual(
@@ -223,7 +234,10 @@ describe("workflow authoring invariants (.github/workflows/*.yml)", () => {
       const on = doc.on as Record<string, unknown> | undefined;
       const push = on?.push as Record<string, unknown> | undefined;
 
-      if (!push) continue;
+      if (!push) {
+        continue;
+      }
+
       if ("paths" in push && !("branches" in push)) {
         offenders.push(file);
       }

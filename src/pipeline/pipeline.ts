@@ -207,16 +207,28 @@ function isNonEmptyString(value: unknown): value is string {
  * membership's source ambiguous).
  */
 function narrowSidecarImages(value: unknown): Array<{ image: string; source: string }> | undefined {
-  if (!Array.isArray(value)) return undefined;
+  if (!Array.isArray(value)) {
+    return undefined;
+  }
+
   const entries: Array<{ image: string; source: string }> = [];
   const seen = new Set<string>();
 
   for (const raw of value) {
-    if (typeof raw !== "object" || raw === null) return undefined;
+    if (typeof raw !== "object" || raw === null) {
+      return undefined;
+    }
+
     const { image, source } = raw as { image?: unknown; source?: unknown };
 
-    if (!isNonEmptyString(image) || !isNonEmptyString(source)) return undefined;
-    if (seen.has(image)) return undefined;
+    if (!isNonEmptyString(image) || !isNonEmptyString(source)) {
+      return undefined;
+    }
+
+    if (seen.has(image)) {
+      return undefined;
+    }
+
     seen.add(image);
     entries.push({ image, source });
   }
@@ -234,18 +246,30 @@ function narrowSidecarComponents(
   value: unknown,
   listed: ReadonlySet<string>,
 ): AttributedSidecarComponent[] | undefined {
-  if (!Array.isArray(value)) return undefined;
+  if (!Array.isArray(value)) {
+    return undefined;
+  }
+
   const components: AttributedSidecarComponent[] = [];
 
   for (const raw of value) {
-    if (typeof raw !== "object" || raw === null) return undefined;
+    if (typeof raw !== "object" || raw === null) {
+      return undefined;
+    }
+
     const images = (raw as { images?: unknown }).images;
 
-    if (!Array.isArray(images) || images.length === 0) return undefined;
+    if (!Array.isArray(images) || images.length === 0) {
+      return undefined;
+    }
+
     const memberships: string[] = [];
 
     for (const entry of images) {
-      if (!isNonEmptyString(entry) || !listed.has(entry)) return undefined;
+      if (!isNonEmptyString(entry) || !listed.has(entry)) {
+        return undefined;
+      }
+
       memberships.push(entry);
     }
 
@@ -271,11 +295,17 @@ function narrowAttributedSidecar(parsed: unknown): AttributedSidecar | undefined
   const doc = parsed as Record<string, unknown>;
   const images = narrowSidecarImages(doc["dockerImages"]);
 
-  if (images === undefined) return undefined;
+  if (images === undefined) {
+    return undefined;
+  }
+
   const listed = new Set(images.map((entry) => entry.image));
   const components = narrowSidecarComponents(doc["components"], listed);
 
-  if (components === undefined) return undefined;
+  if (components === undefined) {
+    return undefined;
+  }
+
   return { doc, components, images };
 }
 
@@ -352,7 +382,10 @@ function policyPointerPath(opts: GenerateOptions): string {
   const policyFile = resolveFrom(opts.baseDir, opts.policyPath!);
   const repoRoot = resolvedRepoRoot(opts);
 
-  if (repoRoot === undefined) return basename(policyFile);
+  if (repoRoot === undefined) {
+    return basename(policyFile);
+  }
+
   return relative(repoRoot, policyFile).replaceAll("\\", "/");
 }
 
@@ -444,7 +477,10 @@ function intensiveOptionsFor(
   opts: GenerateOptions,
   targetDirs: string[],
 ): IntensiveOptions | undefined {
-  if (mode !== "generate" || opts.intensive !== true) return undefined;
+  if (mode !== "generate" || opts.intensive !== true) {
+    return undefined;
+  }
+
   return { targetDirs };
 }
 
@@ -461,7 +497,10 @@ function analyzedContainerSources(model: CanonicalDependencies): ReadonlySet<str
 
   for (const pkg of model.packages) {
     for (const occurrence of pkg.occurrences) {
-      if (!occurrence.target.startsWith(DOCKER_IDENTITY_PREFIX)) continue;
+      if (!occurrence.target.startsWith(DOCKER_IDENTITY_PREFIX)) {
+        continue;
+      }
+
       sources.add(occurrence.target.slice(DOCKER_IDENTITY_PREFIX.length));
     }
   }
@@ -489,7 +528,10 @@ function resolveDevelopmentContainers(
 ): ReadonlySet<string> {
   const entries = policy?.docker?.development ?? [];
 
-  if (entries.length === 0) return new Set();
+  if (entries.length === 0) {
+    return new Set();
+  }
+
   const sources = analyzedContainerSources(model);
   const resolved = new Set<string>();
 
@@ -587,7 +629,9 @@ export async function buildOutputs(opts: GenerateOptions): Promise<BuiltOutputs>
   // docker, no syft.
   const osInputs = readCommittedDockerSbom(opts, dir);
 
-  if (osInputs !== undefined) inputs.push(...osInputs);
+  if (osInputs !== undefined) {
+    inputs.push(...osInputs);
+  }
 
   // One merged model from all targets: shared packages appear once with every consumer in their
   // occurrences.

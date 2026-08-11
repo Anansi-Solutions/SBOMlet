@@ -49,7 +49,9 @@ function npmSourceDir(purl: EcosystemPurl, targetDir: string): string | undefine
   // "%40scope/pkg" -> "@scope/pkg".
   const name = safeDecode(purl.encodedName);
 
-  if (name === undefined) return undefined;
+  if (name === undefined) {
+    return undefined;
+  }
 
   const nodeModulesRoot = resolve(targetDir, "node_modules");
   const candidate = resolve(nodeModulesRoot, name);
@@ -65,7 +67,9 @@ function npmSourceDir(purl: EcosystemPurl, targetDir: string): string | undefine
 
   const packageJsonPath = join(candidate, "package.json");
 
-  if (!existsSync(packageJsonPath)) return undefined;
+  if (!existsSync(packageJsonPath)) {
+    return undefined;
+  }
 
   let parsed: unknown;
 
@@ -112,7 +116,9 @@ function posixSitePackagesDir(venvDir: string): string {
   const libDir = join(venvDir, "lib");
   const fallback = join(libDir, "site-packages");
 
-  if (!existsSync(libDir)) return fallback;
+  if (!existsSync(libDir)) {
+    return fallback;
+  }
 
   const pythonDirs = safeReaddir(libDir)
     .filter((e) => e.startsWith("python"))
@@ -147,11 +153,16 @@ function pypiSourceDirs(purl: EcosystemPurl, targetDir: string): string[] {
   // paths.
   const sitePackages = resolve(sitePackagesDir(venvDir));
 
-  if (!existsSync(sitePackages)) return [];
+  if (!existsSync(sitePackages)) {
+    return [];
+  }
 
   const name = safeDecode(purl.encodedName);
 
-  if (name === undefined) return [];
+  if (name === undefined) {
+    return [];
+  }
+
   const folded = pep503Fold(`${name}-${purl.version}`);
 
   const entries = safeReaddir(sitePackages);
@@ -159,7 +170,9 @@ function pypiSourceDirs(purl: EcosystemPurl, targetDir: string): string[] {
     (e) => e.endsWith(".dist-info") && pep503Fold(e.slice(0, -".dist-info".length)) === folded,
   );
 
-  if (distInfoName === undefined) return [];
+  if (distInfoName === undefined) {
+    return [];
+  }
 
   const distInfoDir = join(sitePackages, distInfoName);
   const packageDir = topLevelPackageDir(sitePackages, distInfoDir);
@@ -174,7 +187,9 @@ function pypiSourceDirs(purl: EcosystemPurl, targetDir: string): string[] {
 function topLevelPackageDir(sitePackages: string, distInfoDir: string): string | undefined {
   const topLevelPath = join(distInfoDir, "top_level.txt");
 
-  if (!existsSync(topLevelPath)) return undefined;
+  if (!existsSync(topLevelPath)) {
+    return undefined;
+  }
 
   let topLevelRaw: string;
 
@@ -198,8 +213,13 @@ function topLevelPackageDir(sitePackages: string, distInfoDir: string): string |
   for (const candidate of candidates) {
     const packageDir = resolve(sitePackages, candidate);
 
-    if (!packageDir.startsWith(rootWithSep)) continue; // escape attempt: skip
-    if (existsSync(packageDir)) return packageDir;
+    if (!packageDir.startsWith(rootWithSep)) {
+      continue;
+    } // escape attempt: skip
+
+    if (existsSync(packageDir)) {
+      return packageDir;
+    }
   }
 
   return undefined;
@@ -217,8 +237,13 @@ function topLevelPackageDir(sitePackages: string, distInfoDir: string): string |
 export function sourceDirsFor(purl: string, targetDirs: string[]): string[] {
   const parsed = parsePurl(purl);
 
-  if (parsed === undefined) return [];
-  if (parsed.type !== "npm" && parsed.type !== "pypi") return [];
+  if (parsed === undefined) {
+    return [];
+  }
+
+  if (parsed.type !== "npm" && parsed.type !== "pypi") {
+    return [];
+  }
 
   const sortedDirs = [...targetDirs].sort(compareCodeUnits);
 
@@ -226,11 +251,15 @@ export function sourceDirsFor(purl: string, targetDirs: string[]): string[] {
     if (parsed.type === "npm") {
       const found = npmSourceDir(parsed, targetDir);
 
-      if (found !== undefined) return [found];
+      if (found !== undefined) {
+        return [found];
+      }
     } else {
       const found = pypiSourceDirs(parsed, targetDir);
 
-      if (found.length > 0) return found;
+      if (found.length > 0) {
+        return found;
+      }
     }
   }
 

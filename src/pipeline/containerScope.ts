@@ -66,7 +66,10 @@ export function applyContainerScopes(
  * target.
  */
 function assertOsScopeIsDockerOnly(pkg: PackageEntry): void {
-  if (pkg.scope !== "os") return;
+  if (pkg.scope !== "os") {
+    return;
+  }
+
   for (const occurrence of pkg.occurrences) {
     if (!occurrence.target.startsWith(DOCKER_IDENTITY_PREFIX)) {
       throw new Error(
@@ -98,7 +101,10 @@ function rescoped(pkg: PackageEntry, developmentContainers: ReadonlySet<string>)
     (occurrence, index) => occurrence !== pkg.occurrences[index],
   );
 
-  if (pkg.scope === "app" && !occurrencesChanged) return pkg;
+  if (pkg.scope === "app" && !occurrencesChanged) {
+    return pkg;
+  }
+
   return { ...pkg, scope: "app", occurrences };
 }
 
@@ -111,7 +117,13 @@ function rescopedOccurrence(
   occurrence: Occurrence,
   developmentContainers: ReadonlySet<string>,
 ): Occurrence {
-  if (occurrence.isDevDependency) return occurrence;
-  if (!developmentContainers.has(occurrence.target)) return occurrence;
+  if (occurrence.isDevDependency) {
+    return occurrence;
+  }
+
+  if (!developmentContainers.has(occurrence.target)) {
+    return occurrence;
+  }
+
   return { ...occurrence, isDevDependency: true };
 }

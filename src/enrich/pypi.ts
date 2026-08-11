@@ -60,7 +60,9 @@ function resolveFromClassifiers(classifiers: readonly string[]): PypiResolution 
 export function resolvePypiLicense(response: unknown): PypiResolution | null {
   const info = narrowPypiResponse(response);
 
-  if (info === undefined) return null;
+  if (info === undefined) {
+    return null;
+  }
 
   const expression = info.licenseExpression?.trim();
 

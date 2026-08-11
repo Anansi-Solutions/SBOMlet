@@ -238,7 +238,10 @@ describe("collectDockerOsSbom one posture (full contents, generalized digest, pr
   afterEach(() => {
     invocations = [];
     currentExec = fakeExecTool;
-    if (tempDir !== undefined) rmSync(tempDir, { recursive: true, force: true });
+    if (tempDir !== undefined) {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+
     tempDir = undefined;
   });
 

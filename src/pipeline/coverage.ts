@@ -49,7 +49,10 @@ function terraformSkipReason(
   lockfileText: string,
   lockfileDir: string | undefined,
 ): string | undefined {
-  if (lockfileDir === undefined) return undefined;
+  if (lockfileDir === undefined) {
+    return undefined;
+  }
+
   const modulesJsonPath = join(lockfileDir, ".terraform", "modules", "modules.json");
 
   // The PRESENCE check requires a REGULAR FILE: a directory-named modules.json is treated as
@@ -61,7 +64,10 @@ function terraformSkipReason(
     // (`.terraform/providers/` present, `.terraform/modules/` absent): scan it. A providers-empty
     // such dir scans to zero - skip-classify it rather than hard-fail, the same as the
     // present-but-empty modules.json case below.
-    if (absentModulesJsonShouldFail(lockfileDir)) return undefined;
+    if (absentModulesJsonShouldFail(lockfileDir)) {
+      return undefined;
+    }
+
     if (terraformComponentCount(lockfileText, "") === 0) {
       return `${lockfileName} has no providers and no external modules`;
     }
@@ -243,6 +249,9 @@ export function componentCountOf(sbom: unknown): number {
   // "unknown[]" shape) instead of a fourth ad-hoc narrow.
   const doc = SbomDocument(sbom);
 
-  if (doc instanceof type.errors) return 0;
+  if (doc instanceof type.errors) {
+    return 0;
+  }
+
   return doc.components?.length ?? 0;
 }

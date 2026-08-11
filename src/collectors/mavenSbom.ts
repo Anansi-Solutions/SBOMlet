@@ -206,7 +206,10 @@ function readAndNarrowMavenSbom(
 function composeMavenInventory(testParsed: unknown, defaultParsed: unknown): unknown {
   const testDoc = recordOf(testParsed);
 
-  if (testDoc === undefined) return testParsed;
+  if (testDoc === undefined) {
+    return testParsed;
+  }
+
   const testComponents = Array.isArray(testDoc["components"])
     ? (testDoc["components"] as unknown[])
     : [];
@@ -215,7 +218,9 @@ function composeMavenInventory(testParsed: unknown, defaultParsed: unknown): unk
   for (const raw of testComponents) {
     const purl = recordOf(raw)?.["purl"];
 
-    if (typeof purl === "string") testPurls.add(purl);
+    if (typeof purl === "string") {
+      testPurls.add(purl);
+    }
   }
 
   const defaultDoc = recordOf(defaultParsed);
@@ -355,8 +360,14 @@ export function mavenRootPurlOf(text: string): string | undefined {
 
   const narrowed = MavenSbomDocument(parsed);
 
-  if (narrowed instanceof type.errors) return undefined;
-  if (narrowed.bomFormat !== "CycloneDX") return undefined;
+  if (narrowed instanceof type.errors) {
+    return undefined;
+  }
+
+  if (narrowed.bomFormat !== "CycloneDX") {
+    return undefined;
+  }
+
   return narrowed.metadata?.component?.purl;
 }
 
@@ -378,10 +389,16 @@ export function mavenRootPurlOf(text: string): string | undefined {
 export function excludeMavenFirstParty(sbom: unknown, purls: ReadonlySet<string>): unknown {
   const doc = recordOf(sbom);
 
-  if (doc === undefined) return sbom;
+  if (doc === undefined) {
+    return sbom;
+  }
+
   const components = doc["components"];
 
-  if (!Array.isArray(components)) return sbom;
+  if (!Array.isArray(components)) {
+    return sbom;
+  }
+
   const filtered = components.filter((component) => {
     const purl = recordOf(component)?.["purl"];
 

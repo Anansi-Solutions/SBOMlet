@@ -272,7 +272,10 @@ async function dispatchAndCollect(
     target.dir,
   );
 
-  if (verdict === "skip") return undefined;
+  if (verdict === "skip") {
+    return undefined;
+  }
+
   return input;
 }
 
@@ -336,7 +339,9 @@ async function scanWorkspaceUnits(
     assertManifestsExist(unit.identity, unit.dir, ["package.json"]);
     const input = await dispatchAndCollect(unit, rootLockfileText, lockfileName, opts, log);
 
-    if (input !== undefined) results.push(input);
+    if (input !== undefined) {
+      results.push(input);
+    }
   }
 
   return results;
@@ -359,7 +364,9 @@ function absorbUnitInputs(
     inputs.push(input);
     const unitDir = dirByIdentity.get(input.targetIdentity);
 
-    if (unitDir !== undefined) dirs.add(unitDir);
+    if (unitDir !== undefined) {
+      dirs.add(unitDir);
+    }
   }
 }
 
@@ -379,13 +386,18 @@ function mavenFirstPartyPurls(targets: readonly DiscoveredTarget[]): ReadonlySet
   const purls = new Set<string>();
 
   for (const target of targets) {
-    if (target.lockfile !== "maven") continue;
+    if (target.lockfile !== "maven") {
+      continue;
+    }
+
     const sbomPath = join(target.dir, "maven.sbom.json");
 
     assertMavenSbomSize(sbomPath);
     const purl = mavenRootPurlOf(readFileSync(sbomPath, "utf8"));
 
-    if (purl !== undefined) purls.add(purl);
+    if (purl !== undefined) {
+      purls.add(purl);
+    }
   }
 
   return purls;
@@ -404,7 +416,10 @@ function applyMavenFirstPartyFilter(
   input: CollectedSbom,
   mavenFirstPartySet: ReadonlySet<string>,
 ): CollectedSbom {
-  if (target.lockfile !== "maven") return input;
+  if (target.lockfile !== "maven") {
+    return input;
+  }
+
   return {
     ...input,
     sbom: excludeMavenFirstParty(input.sbom, mavenFirstPartySet),
@@ -485,7 +500,10 @@ export async function collectTargets(
 
     const input = await dispatchAndCollect(target, lockfileText, lockfileName, opts, log);
 
-    if (input === undefined) continue;
+    if (input === undefined) {
+      continue;
+    }
+
     inputs.push(applyMavenFirstPartyFilter(target, input, mavenFirstPartySet));
     dirs.add(target.dir);
   }

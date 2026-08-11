@@ -76,9 +76,14 @@ export function measureFile(text: string): CommentMetrics {
   let commentLines = 0;
 
   for (let i = 0; i < lines.length; i++) {
-    if (lines[i]!.trim() === "") continue;
+    if (lines[i]!.trim() === "") {
+      continue;
+    }
+
     totalLines++;
-    if (codeLines[i]!.trim() === "") commentLines++;
+    if (codeLines[i]!.trim() === "") {
+      commentLines++;
+    }
   }
 
   const strippedComment = commentText.replace(/\/\*+|\*+\/|^\s*\*+|\/\//gm, " ");
@@ -97,8 +102,11 @@ function listSourceFiles(dir: string): string[] {
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
     const path = join(dir, entry.name);
 
-    if (entry.isDirectory()) files.push(...listSourceFiles(path));
-    else if (entry.name.endsWith(".ts")) files.push(path);
+    if (entry.isDirectory()) {
+      files.push(...listSourceFiles(path));
+    } else if (entry.name.endsWith(".ts")) {
+      files.push(path);
+    }
   }
 
   return files.sort();

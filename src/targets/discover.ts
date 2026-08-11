@@ -189,10 +189,16 @@ export function shouldDescendDir(
     }
   }
 
-  if (toolDir !== undefined && resolve(sub) === resolve(toolDir)) return false;
+  if (toolDir !== undefined && resolve(sub) === resolve(toolDir)) {
+    return false;
+  }
+
   // Git-submodule prune: a `.git` FILE (gitlink) marks a submodule root - vendored third-party code
   // that is not our distribution. Skip descent.
-  if (isGitSubmoduleRoot(sub)) return false;
+  if (isGitSubmoduleRoot(sub)) {
+    return false;
+  }
+
   return true;
 }
 
@@ -278,7 +284,10 @@ const AGGREGATE_EXAMPLE_LIMIT = 3;
  * testing - hostile names cannot be created on every filesystem.
  */
 export function csprojNoLockWarnings(lockless: readonly string[], verbose: boolean): string[] {
-  if (lockless.length === 0) return [];
+  if (lockless.length === 0) {
+    return [];
+  }
+
   if (verbose) {
     return lockless.map(
       (identity) =>
@@ -339,7 +348,10 @@ function locklessCsprojWarnings(
  * testing - hostile names cannot be created on every filesystem.
  */
 export function pomNoSidecarWarnings(unsidecared: readonly string[], verbose: boolean): string[] {
-  if (unsidecared.length === 0) return [];
+  if (unsidecared.length === 0) {
+    return [];
+  }
+
   if (verbose) {
     return unsidecared.map(
       (identity) =>
@@ -404,7 +416,10 @@ export function mavenTestSbomOrphanWarnings(
   orphaned: readonly string[],
   verbose: boolean,
 ): string[] {
-  if (orphaned.length === 0) return [];
+  if (orphaned.length === 0) {
+    return [];
+  }
+
   if (verbose) {
     return orphaned.map(
       (identity) =>
@@ -500,7 +515,10 @@ export function discoverTargetsWithWarnings(
     // Windows.
     const identity = identityOf(dir);
 
-    if (isExcluded(identity, matchers)) return;
+    if (isExcluded(identity, matchers)) {
+      return;
+    }
+
     found.push({
       dir,
       identity,
@@ -513,7 +531,10 @@ export function discoverTargetsWithWarnings(
     // whether the sighting warrants a migration warning.
     const identity = identityOf(dir);
 
-    if (isExcluded(identity, matchers)) return;
+    if (isExcluded(identity, matchers)) {
+      return;
+    }
+
     bunLockbIdentities.add(identity);
   };
 
@@ -526,7 +547,10 @@ export function discoverTargetsWithWarnings(
     // lock), while a CPM repo WITHOUT locks already warns once per project via its csproj dirs.
     const identity = identityOf(dir);
 
-    if (isExcluded(identity, matchers)) return;
+    if (isExcluded(identity, matchers)) {
+      return;
+    }
+
     csprojIdentities.add(identity);
   };
 
@@ -536,7 +560,10 @@ export function discoverTargetsWithWarnings(
     // The post-step below decides whether the sighting warrants the no-sidecar adoption warning.
     const identity = identityOf(dir);
 
-    if (isExcluded(identity, matchers)) return;
+    if (isExcluded(identity, matchers)) {
+      return;
+    }
+
     pomIdentities.add(identity);
   };
 
@@ -546,7 +573,10 @@ export function discoverTargetsWithWarnings(
     // warrants the orphan warning.
     const identity = identityOf(dir);
 
-    if (isExcluded(identity, matchers)) return;
+    if (isExcluded(identity, matchers)) {
+      return;
+    }
+
     mavenTestSbomIdentities.add(identity);
   };
 
@@ -557,7 +587,9 @@ export function discoverTargetsWithWarnings(
       if (entry.isDirectory()) {
         const sub = join(dir, entry.name);
 
-        if (shouldDescend(sub, entry.name)) walk(sub);
+        if (shouldDescend(sub, entry.name)) {
+          walk(sub);
+        }
       } else if (entry.isFile() && LOCKFILES.has(entry.name)) {
         recordLockfile(dir, entry.name);
       } else if (entry.isFile() && entry.name === "bun.lockb") {

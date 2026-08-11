@@ -47,8 +47,14 @@ export function renderNode(node: ExpressionNode): string {
  * copyleft conjunct taints; OR = copyleft only if both branches are.
  */
 export function isCopyleft(node: ExpressionNode): boolean {
-  if ("license" in node) return COPYLEFT_IDS.has(node.license);
-  if (node.conjunction === "and") return isCopyleft(node.left) || isCopyleft(node.right);
+  if ("license" in node) {
+    return COPYLEFT_IDS.has(node.license);
+  }
+
+  if (node.conjunction === "and") {
+    return isCopyleft(node.left) || isCopyleft(node.right);
+  }
+
   return isCopyleft(node.left) && isCopyleft(node.right);
 }
 
@@ -96,8 +102,10 @@ export function leafIds(node: ExpressionNode): {
  * (anchored prefix per spec), not license-id matching.
  */
 export function hasRefLeaf(node: ExpressionNode): boolean {
-  if ("license" in node)
+  if ("license" in node) {
     return node.license.startsWith("LicenseRef-") || node.license.startsWith("DocumentRef-");
+  }
+
   return hasRefLeaf(node.left) || hasRefLeaf(node.right);
 }
 
@@ -106,7 +114,10 @@ export function hasRefLeaf(node: ExpressionNode): boolean {
  * ANY-leaf check.
  */
 export function allLeavesAreRefs(node: ExpressionNode): boolean {
-  if ("license" in node) return hasRefLeaf(node);
+  if ("license" in node) {
+    return hasRefLeaf(node);
+  }
+
   return allLeavesAreRefs(node.left) && allLeavesAreRefs(node.right);
 }
 
@@ -117,19 +128,31 @@ export function allLeavesAreRefs(node: ExpressionNode): boolean {
  * elected as a unit - the exception is never stripped. Order-independent by construction.
  */
 export function elect(node: ExpressionNode): ExpressionNode {
-  if ("license" in node) return node;
+  if ("license" in node) {
+    return node;
+  }
+
   const left = elect(node.left);
   const right = elect(node.right);
 
-  if (node.conjunction === "and") return { left, conjunction: "and", right };
+  if (node.conjunction === "and") {
+    return { left, conjunction: "and", right };
+  }
+
   const leftCopyleft = isCopyleft(left);
   const rightCopyleft = isCopyleft(right);
 
-  if (leftCopyleft !== rightCopyleft) return leftCopyleft ? right : left;
+  if (leftCopyleft !== rightCopyleft) {
+    return leftCopyleft ? right : left;
+  }
+
   const leftRef = hasRefLeaf(left);
   const rightRef = hasRefLeaf(right);
 
-  if (leftRef !== rightRef) return leftRef ? right : left;
+  if (leftRef !== rightRef) {
+    return leftRef ? right : left;
+  }
+
   return compareCodeUnits(renderNode(left), renderNode(right)) <= 0 ? left : right;
 }
 
@@ -146,11 +169,17 @@ export function orLeaves(node: ExpressionNode): string[] | null {
       return true;
     }
 
-    if (n.conjunction === "and") return false;
+    if (n.conjunction === "and") {
+      return false;
+    }
+
     return walk(n.left) && walk(n.right);
   };
 
-  if (!walk(node)) return null;
+  if (!walk(node)) {
+    return null;
+  }
+
   return leaves.sort(compareCodeUnits);
 }
 

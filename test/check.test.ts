@@ -117,8 +117,11 @@ function snapshotTree(root: string): Record<string, string> {
     for (const entry of readdirSync(dir, { withFileTypes: true })) {
       const path = join(dir, entry.name);
 
-      if (entry.isDirectory()) walk(path);
-      else out[relative(root, path)] = readFileSync(path).toString("base64");
+      if (entry.isDirectory()) {
+        walk(path);
+      } else {
+        out[relative(root, path)] = readFileSync(path).toString("base64");
+      }
     }
   };
 

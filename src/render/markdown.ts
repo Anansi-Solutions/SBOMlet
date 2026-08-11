@@ -156,7 +156,10 @@ const WHY_MAX_ITEMS = 4;
  * for legibility, never reorders.
  */
 function boundedJoin(items: readonly string[], separator: string): string {
-  if (items.length <= WHY_MAX_ITEMS) return items.join(separator);
+  if (items.length <= WHY_MAX_ITEMS) {
+    return items.join(separator);
+  }
+
   const shown = items.slice(0, WHY_MAX_ITEMS);
   const more = items.length - WHY_MAX_ITEMS;
 
@@ -209,7 +212,9 @@ function whyCellOf(pkg: PackageEntry, shownTargets: ReadonlySet<string>): string
     .map((o) => o.introduction)
     .filter((i): i is DependencyIntroduction => i !== undefined);
 
-  if (introductions.length === 0) return "—";
+  if (introductions.length === 0) {
+    return "—";
+  }
 
   // A defined-but-EMPTY `path: []` carries NO chain - it must be treated identically to an absent
   // path. boundedJoin([], …) would render "" (an empty Why cell), and the orphan guard's
@@ -228,12 +233,16 @@ function whyCellOf(pkg: PackageEntry, shownTargets: ReadonlySet<string>): string
 
   // All in-scope introductions are orphans → no genuine direct and no introducer evidence anywhere:
   // the honest " - " residual (no-fabrication).
-  if (genuine.length === 0) return "—";
+  if (genuine.length === 0) {
+    return "—";
+  }
 
   // Bare "direct" ONLY when EVERY genuine in-scope occurrence is direct. If the package is direct
   // in one flagged occurrence but transitive in another, fall through to the path logic so the
   // transitive introducer is surfaced rather than hidden behind "direct".
-  if (genuine.every((i) => i.direct)) return "direct";
+  if (genuine.every((i) => i.direct)) {
+    return "direct";
+  }
 
   // Transitive in at least one genuine in-scope occurrence. Surface the representative path of the
   // smallest-target occurrence carrying a REAL (defined AND non-empty) chain - deterministic
@@ -254,7 +263,10 @@ function whyCellOf(pkg: PackageEntry, shownTargets: ReadonlySet<string>): string
   const union = [...new Set(introductions.flatMap((i) => i.introducedBy))].sort(compareCodeUnits);
 
   // No path AND no introducer in scope → the honest " - " residual.
-  if (union.length === 0) return "—";
+  if (union.length === 0) {
+    return "—";
+  }
+
   return boundedJoin(union, ", ");
 }
 
@@ -362,7 +374,10 @@ function containersSectionLines(
 
   for (const pkg of sorted) {
     for (const occurrence of pkg.occurrences) {
-      if (!occurrence.target.startsWith(DOCKER_IDENTITY_PREFIX)) continue;
+      if (!occurrence.target.startsWith(DOCKER_IDENTITY_PREFIX)) {
+        continue;
+      }
+
       counts.set(occurrence.target, (counts.get(occurrence.target) ?? 0) + 1);
     }
   }
@@ -409,10 +424,16 @@ function containerTableRow(pkg: PackageEntry): string {
  * table.
  */
 function containerPartitionLines(label: string, rows: readonly PackageEntry[]): string[] {
-  if (rows.length === 0) return [];
+  if (rows.length === 0) {
+    return [];
+  }
+
   const lines: string[] = [`**${label}**`, "", ...CONTAINER_TABLE_HEAD];
 
-  for (const pkg of rows) lines.push(containerTableRow(pkg));
+  for (const pkg of rows) {
+    lines.push(containerTableRow(pkg));
+  }
+
   lines.push("");
   return lines;
 }
@@ -474,7 +495,10 @@ function summarySection(
   packages: readonly PackageEntry[],
   emptyMessage: string,
 ): string[] {
-  if (packages.length === 0) return [heading, "", emptyMessage];
+  if (packages.length === 0) {
+    return [heading, "", emptyMessage];
+  }
+
   const lines: string[] = [heading, "", ...TABLE_HEAD];
 
   for (const pkg of packages) {
@@ -521,7 +545,10 @@ function copyleftRow(pkg: PackageEntry, shownTargets: readonly string[]): string
 function impreciseSectionLines(sorted: readonly PackageEntry[]): string[] {
   const imprecise = sorted.filter(isImprecise);
 
-  if (imprecise.length === 0) return [];
+  if (imprecise.length === 0) {
+    return [];
+  }
+
   const lines: string[] = [
     "## Imprecise licenses (review / disambiguate)",
     "",
@@ -553,7 +580,10 @@ function conflictSectionLines(sorted: readonly PackageEntry[]): string[] {
   for (const pkg of sorted) {
     const conflict = pkg.finding?.conflict;
 
-    if (conflict === undefined) continue;
+    if (conflict === undefined) {
+      continue;
+    }
+
     if (conflict.kind === "cross-image-claims") {
       const byImage = conflict.byTarget
         .map(
@@ -573,7 +603,9 @@ function conflictSectionLines(sorted: readonly PackageEntry[]): string[] {
     );
   }
 
-  if (scancodeRows.length === 0 && crossImageRows.length === 0) return [];
+  if (scancodeRows.length === 0 && crossImageRows.length === 0) {
+    return [];
+  }
 
   const lines: string[] = [
     "## Assessment conflicts",
@@ -634,9 +666,17 @@ function packageCountsLines(
     const ecosystem = purlEcosystem(pkg.purl);
 
     ecosystemCounts.set(ecosystem, (ecosystemCounts.get(ecosystem) ?? 0) + 1);
-    if (isUnknownLicense(pkg)) unknownCount += 1;
-    if (hasContainerOccurrence(pkg)) containerCount += 1;
-    if (rendersDevelopmentOnly(pkg, developmentContainers)) devOnlyCount += 1;
+    if (isUnknownLicense(pkg)) {
+      unknownCount += 1;
+    }
+
+    if (hasContainerOccurrence(pkg)) {
+      containerCount += 1;
+    }
+
+    if (rendersDevelopmentOnly(pkg, developmentContainers)) {
+      devOnlyCount += 1;
+    }
   }
 
   const prodCount = sorted.length - devOnlyCount;
@@ -669,7 +709,10 @@ const DEFAULT_TITLE = "Third-Party Licenses";
 function documentTitle(policyView?: PolicyView): string {
   const raw = policyView?.document?.title;
 
-  if (raw === undefined) return DEFAULT_TITLE;
+  if (raw === undefined) {
+    return DEFAULT_TITLE;
+  }
+
   return raw.replace(/\r\n|\r|\n/g, " ").trim();
 }
 
@@ -705,7 +748,10 @@ function warnCategory(rule: string): "copyleft" | "unknown" | "deny" | "other" {
     return "unknown";
   }
 
-  if (rule.startsWith("deny")) return "deny";
+  if (rule.startsWith("deny")) {
+    return "deny";
+  }
+
   return "other";
 }
 
@@ -737,15 +783,23 @@ function problematicSectionLines(
 ): string[] {
   const byPurl = new Map<string, PackageEntry>();
 
-  for (const pkg of sorted) byPurl.set(pkg.purl, pkg);
+  for (const pkg of sorted) {
+    byPurl.set(pkg.purl, pkg);
+  }
 
   // Group fail verdicts by (purl, rule, reason). A fail whose purl has no package entry is
   // defensively skipped (it can carry no name/version/license).
   const groups = new Map<string, BlockingGroup>();
 
   for (const verdict of verdicts) {
-    if (verdict.status !== "fail") continue;
-    if (!byPurl.has(verdict.purl)) continue;
+    if (verdict.status !== "fail") {
+      continue;
+    }
+
+    if (!byPurl.has(verdict.purl)) {
+      continue;
+    }
+
     const key = `${verdict.purl} ${verdict.rule} ${verdict.reason}`;
     const existing = groups.get(key);
 
@@ -771,12 +825,18 @@ function problematicSectionLines(
     const ordered = [...groups.values()].sort((a, b) => {
       const byRule = compareCodeUnits(a.rule, b.rule);
 
-      if (byRule !== 0) return byRule;
+      if (byRule !== 0) {
+        return byRule;
+      }
+
       const pkgA = byPurl.get(a.purl)!;
       const pkgB = byPurl.get(b.purl)!;
       const byPkg = comparePackages(pkgA, pkgB);
 
-      if (byPkg !== 0) return byPkg;
+      if (byPkg !== 0) {
+        return byPkg;
+      }
+
       const targetsA = [...new Set(a.targets)].sort(compareCodeUnits).join(", ");
       const targetsB = [...new Set(b.targets)].sort(compareCodeUnits).join(", ");
 
@@ -797,7 +857,10 @@ function problematicSectionLines(
   let warnTotal = 0;
 
   for (const verdict of verdicts) {
-    if (verdict.status !== "warn") continue;
+    if (verdict.status !== "warn") {
+      continue;
+    }
+
     warnTotal += 1;
     const category = warnCategory(verdict.rule);
 
@@ -847,8 +910,11 @@ function copyleftSectionLines(sorted: readonly PackageEntry[], policyView: Polic
   for (const verdict of policyView.verdicts) {
     const list = verdictsByPurl.get(verdict.purl);
 
-    if (list === undefined) verdictsByPurl.set(verdict.purl, [verdict]);
-    else list.push(verdict);
+    if (list === undefined) {
+      verdictsByPurl.set(verdict.purl, [verdict]);
+    } else {
+      list.push(verdict);
+    }
   }
 
   // Purls carrying at least one fail verdict - excluded from Copyleft membership ONLY (the dedup is
@@ -864,15 +930,24 @@ function copyleftSectionLines(sorted: readonly PackageEntry[], policyView: Polic
   const copyleftRows: string[] = [];
 
   for (const pkg of sorted) {
-    if (pkg.scope === "os") continue;
-    if (problematicPurls.has(pkg.purl)) continue;
+    if (pkg.scope === "os") {
+      continue;
+    }
+
+    if (problematicPurls.has(pkg.purl)) {
+      continue;
+    }
+
     const flagged = (verdictsByPurl.get(pkg.purl) ?? []).filter(
       (verdict) =>
         (verdict.status === "fail" || verdict.status === "warn") &&
         verdict.rule === "default:copyleft",
     );
 
-    if (flagged.length === 0) continue;
+    if (flagged.length === 0) {
+      continue;
+    }
+
     const targets = [...new Set(flagged.map((verdict) => verdict.occurrenceTarget))].sort(
       compareCodeUnits,
     );
@@ -1032,7 +1107,9 @@ export function renderMarkdown(model: CanonicalDependencies, policyView?: Policy
   // separator (matching every other section-lines helper), which would otherwise leave a blank line
   // at end-of-file. Strip it so the document keeps its single-trailing-LF convention regardless of
   // which section renders last.
-  while (lines.length > 0 && lines[lines.length - 1] === "") lines.pop();
+  while (lines.length > 0 && lines[lines.length - 1] === "") {
+    lines.pop();
+  }
 
   return lines.join("\n") + "\n";
 }

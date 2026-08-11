@@ -341,7 +341,10 @@ describe("scanPackageSources (subprocess-free, exec recorder harness)", () => {
       invocations.push([cmd, ...args]);
       const i = args.indexOf("--json-pp");
 
-      if (i !== -1) copyFileSync(FIXTURE_PATH, args[i + 1] as string);
+      if (i !== -1) {
+        copyFileSync(FIXTURE_PATH, args[i + 1] as string);
+      }
+
       return Promise.reject(
         new Error("scancode exited with code 1\nSome files failed to scan properly"),
       );
@@ -401,7 +404,10 @@ describe("scanPackageSources (subprocess-free, exec recorder harness)", () => {
       invocations.push([cmd, ...args]);
       const i = args.indexOf("--json-pp");
 
-      if (i !== -1) writeFileSync(args[i + 1] as string, JSON.stringify(wrongVersion));
+      if (i !== -1) {
+        writeFileSync(args[i + 1] as string, JSON.stringify(wrongVersion));
+      }
+
       return Promise.reject(new Error("scancode exited with code 1"));
     };
 
@@ -888,8 +894,14 @@ describe("assessPackages — ScanCode peer assessment stage", () => {
 
   afterEach(() => {
     invocations = [];
-    if (repoDir !== undefined) rmSync(repoDir, { recursive: true, force: true });
-    if (memoDir !== undefined) rmSync(memoDir, { recursive: true, force: true });
+    if (repoDir !== undefined) {
+      rmSync(repoDir, { recursive: true, force: true });
+    }
+
+    if (memoDir !== undefined) {
+      rmSync(memoDir, { recursive: true, force: true });
+    }
+
     repoDir = undefined;
     memoDir = undefined;
   });

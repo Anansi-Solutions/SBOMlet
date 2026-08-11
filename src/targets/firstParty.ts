@@ -42,15 +42,26 @@ export function firstPartyNames(lockfileText: string): Set<string> {
   for (const rawLine of lockfileText.split("\n")) {
     const line = rawLine.trimEnd(); // tolerate CRLF lockfiles
 
-    if (line.length === 0) continue;
+    if (line.length === 0) {
+      continue;
+    }
+
     // Entry headers start in column 0; indented lines are entry bodies.
-    if (line[0] === " " || line[0] === "\t") continue;
-    if (!line.endsWith(":")) continue;
+    if (line[0] === " " || line[0] === "\t") {
+      continue;
+    }
+
+    if (!line.endsWith(":")) {
+      continue;
+    }
+
     for (const descriptor of line.split(", ")) {
       const match = FIRST_PARTY_RE.exec(descriptor);
       const name = match?.[1];
 
-      if (name !== undefined) names.add(name);
+      if (name !== undefined) {
+        names.add(name);
+      }
     }
   }
 
@@ -112,7 +123,10 @@ export function yarnWorkspaceMembers(
   for (const rawLine of lockfileText.split("\n")) {
     const line = rawLine.trimEnd(); // tolerate CRLF lockfiles
 
-    if (line.length === 0) continue;
+    if (line.length === 0) {
+      continue;
+    }
+
     if (line[0] !== " " && line[0] !== "\t") {
       // Column-0 line: a new entry header - flush the previous candidate.
       flush();
@@ -155,10 +169,22 @@ export function thirdPartyEntryCount(lockfileText: string): number {
   for (const rawLine of lockfileText.split("\n")) {
     const line = rawLine.trimEnd(); // tolerate CRLF lockfiles
 
-    if (line.length === 0) continue;
-    if (line[0] === " " || line[0] === "\t") continue;
-    if (!line.endsWith(":")) continue;
-    if (/^"?__metadata"?:$/.test(line)) continue;
+    if (line.length === 0) {
+      continue;
+    }
+
+    if (line[0] === " " || line[0] === "\t") {
+      continue;
+    }
+
+    if (!line.endsWith(":")) {
+      continue;
+    }
+
+    if (/^"?__metadata"?:$/.test(line)) {
+      continue;
+    }
+
     // A header containing any workspace:/portal: descriptor resolves to a first-party member - it
     // is not a third-party entry.
     if (line.split(", ").some((descriptor) => FIRST_PARTY_RE.test(descriptor))) {
@@ -191,7 +217,9 @@ export function pythonThirdPartyEntryCount(lockfileText: string): number {
   let inPackage = false;
   let isLocal = false;
   const flush = (): void => {
-    if (inPackage && !isLocal) count += 1;
+    if (inPackage && !isLocal) {
+      count += 1;
+    }
   };
 
   for (const rawLine of lockfileText.split("\n")) {
@@ -373,11 +401,16 @@ export function nugetThirdPartyEntryCount(lockfileText: string): number | undefi
   for (const rawSection of Object.values(dependencies)) {
     const section = recordOf(rawSection);
 
-    if (section === undefined) continue; // non-record section - nothing to count
+    if (section === undefined) {
+      continue;
+    } // non-record section - nothing to count
+
     for (const rawEntry of Object.values(section)) {
       // Exclusion by type === "Project" only; a malformed (non-record) entry counts too - erring
       // toward the scan, never toward a silent skip.
-      if (recordOf(rawEntry)?.["type"] !== "Project") count += 1;
+      if (recordOf(rawEntry)?.["type"] !== "Project") {
+        count += 1;
+      }
     }
   }
 
@@ -407,17 +440,26 @@ export function pnpmThirdPartyEntryCount(lockfileText: string): number {
   for (const rawLine of lockfileText.split("\n")) {
     const line = rawLine.trimEnd(); // tolerate CRLF lockfiles
 
-    if (line.length === 0) continue;
+    if (line.length === 0) {
+      continue;
+    }
+
     if (line[0] !== " " && line[0] !== "\t") {
       // Column-0 line: a new top-level section (importers:, packages:, snapshots:, settings:,
       // lockfileVersion: ...).
       const header = /^([^\s:]+):/.exec(line);
 
-      if (header !== null) section = header[1] as string;
+      if (header !== null) {
+        section = header[1] as string;
+      }
+
       continue;
     }
 
-    if (section !== "packages") continue;
+    if (section !== "packages") {
+      continue;
+    }
+
     if (/^ {2}\S/.test(line) && line.endsWith(":")) {
       count += 1;
     }
@@ -445,22 +487,37 @@ export function pnpmImporterNames(lockfileText: string): ReadonlySet<string> {
   for (const rawLine of lockfileText.split("\n")) {
     const line = rawLine.trimEnd(); // tolerate CRLF lockfiles
 
-    if (line.length === 0) continue;
-    if (line[0] !== " " && line[0] !== "\t") {
-      const header = /^([^\s:]+):/.exec(line);
-
-      if (header !== null) section = header[1] as string;
+    if (line.length === 0) {
       continue;
     }
 
-    if (section !== "importers") continue;
+    if (line[0] !== " " && line[0] !== "\t") {
+      const header = /^([^\s:]+):/.exec(line);
+
+      if (header !== null) {
+        section = header[1] as string;
+      }
+
+      continue;
+    }
+
+    if (section !== "importers") {
+      continue;
+    }
+
     const match = /^ {2}(\S+):/.exec(line);
 
-    if (match === null) continue;
+    if (match === null) {
+      continue;
+    }
+
     // Strip optional surrounding quotes from the importer path key.
     const key = (match[1] as string).replace(/^['"]|['"]$/g, "");
 
-    if (key === ".") continue; // the root importer is the target itself
+    if (key === ".") {
+      continue;
+    } // the root importer is the target itself
+
     names.add(key.slice(key.lastIndexOf("/") + 1));
   }
 
@@ -502,8 +559,14 @@ export function mavenThirdPartyEntryCount(lockfileText: string): number | undefi
 
   const doc = MavenSbomDocument(parsed);
 
-  if (doc instanceof type.errors) return undefined;
-  if (doc.bomFormat !== "CycloneDX") return undefined;
+  if (doc instanceof type.errors) {
+    return undefined;
+  }
+
+  if (doc.bomFormat !== "CycloneDX") {
+    return undefined;
+  }
+
   const rootPurl = doc.metadata?.component?.purl;
 
   if (rootPurl === undefined || !rootPurl.startsWith("pkg:maven/")) {
@@ -512,13 +575,19 @@ export function mavenThirdPartyEntryCount(lockfileText: string): number | undefi
 
   const components = doc.components;
 
-  if (components === undefined) return 0;
+  if (components === undefined) {
+    return 0;
+  }
+
   let count = 0;
 
   for (const raw of components) {
     const purl = recordOf(raw)?.["purl"];
 
-    if (typeof purl === "string" && purl === rootPurl) continue;
+    if (typeof purl === "string" && purl === rootPurl) {
+      continue;
+    }
+
     count += 1;
   }
 

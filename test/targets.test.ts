@@ -1441,7 +1441,10 @@ describe("collectTargets — yarn workspace expansion (fixture-mirror document)"
       verbose: false,
     };
 
-    if (policyPath !== undefined) opts.policyPath = policyPath;
+    if (policyPath !== undefined) {
+      opts.policyPath = policyPath;
+    }
+
     return opts;
   }
 

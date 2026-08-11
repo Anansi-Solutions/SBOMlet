@@ -55,7 +55,10 @@ interface CdxComponent {
 function unrecognizedLicenses(pkg: PackageEntry): CdxLicense[] {
   const tokens = pkg.finding?.unrecognizedTokens;
 
-  if (tokens === undefined || tokens.length === 0) return [];
+  if (tokens === undefined || tokens.length === 0) {
+    return [];
+  }
+
   return tokens.map((name) => ({ license: { name } }));
 }
 
@@ -115,7 +118,10 @@ function propertiesOf(
 
   if (verdicts !== undefined) {
     for (const verdict of verdicts) {
-      if (verdict.purl !== pkg.purl) continue;
+      if (verdict.purl !== pkg.purl) {
+        continue;
+      }
+
       properties.push({
         name: `licenses-tool:verdict:${verdict.occurrenceTarget}`,
         value: verdict.status,

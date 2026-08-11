@@ -89,12 +89,16 @@ function placementDivergence(slug: string, expectation: string): string {
 
 /** Throws a classificationDivergence message naming `slug` when `condition` is false. */
 function assertClassification(condition: boolean, slug: string, expectation: string): void {
-  if (!condition) throw new Error(classificationDivergence(slug, expectation));
+  if (!condition) {
+    throw new Error(classificationDivergence(slug, expectation));
+  }
 }
 
 /** Throws a placementDivergence message naming `slug` when `condition` is false. */
 function assertPlacement(condition: boolean, slug: string, expectation: string): void {
-  if (!condition) throw new Error(placementDivergence(slug, expectation));
+  if (!condition) {
+    throw new Error(placementDivergence(slug, expectation));
+  }
 }
 
 /** Structural (cross-page) drift: names which two id sets disagree, and how. */
@@ -128,7 +132,9 @@ function parseDocPathIndexIds(doc: string, docLabel: string): Set<string> {
   for (const row of doc.slice(start).split(/\r?\n/)) {
     const match = /^\|\s*`([a-z0-9-]+)`\s*\|/.exec(row);
 
-    if (match?.[1] !== undefined) ids.add(match[1]);
+    if (match?.[1] !== undefined) {
+      ids.add(match[1]);
+    }
   }
 
   return ids;
@@ -242,7 +248,9 @@ function resolveDevelopmentContainers(
     const matcher = globToRegExp(devEntry.source);
 
     for (const source of sources) {
-      if (matcher.test(source)) resolved.add(`${DOCKER_IDENTITY_PREFIX}${source}`);
+      if (matcher.test(source)) {
+        resolved.add(`${DOCKER_IDENTITY_PREFIX}${source}`);
+      }
     }
   }
 

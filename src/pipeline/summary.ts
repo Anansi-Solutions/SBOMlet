@@ -16,7 +16,10 @@ import { type Policy } from "../policy/schema";
 function unusedRuleReason(policy: Policy, ruleId: string): string {
   const match = /^(compatible|clarify)\[(\d+)\]$/.exec(ruleId);
 
-  if (match === null) return "";
+  if (match === null) {
+    return "";
+  }
+
   const index = Number(match[2]);
   const rule = match[1] === "compatible" ? policy.compatible[index] : policy.clarify[index];
 
@@ -72,7 +75,10 @@ export function writePolicySummary(
 ): void {
   const counts = { ok: 0, warn: 0, fail: 0, suppressed: 0 };
 
-  for (const verdict of verdicts) counts[verdict.status] += 1;
+  for (const verdict of verdicts) {
+    counts[verdict.status] += 1;
+  }
+
   process.stderr.write(
     `policy: ${counts.fail} fail, ${counts.warn} warn, ` +
       `${counts.suppressed} suppressed, ${counts.ok} ok ` +

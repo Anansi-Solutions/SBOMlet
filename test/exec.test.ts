@@ -101,7 +101,10 @@ describe("execTool", () => {
     ).rejects.toThrow("timed out");
 
     // Wait for the pid file (written well before the 1.5s timeout fires).
-    for (let i = 0; i < 100 && !existsSync(pidFile); i++) await sleep(100);
+    for (let i = 0; i < 100 && !existsSync(pidFile); i++) {
+      await sleep(100);
+    }
+
     expect(existsSync(pidFile)).toBe(true);
     const grandchildPid = Number(readFileSync(pidFile, "utf-8"));
 
@@ -112,7 +115,10 @@ describe("execTool", () => {
 
     for (let i = 0; i < 100; i++) {
       alive = isAlive(grandchildPid);
-      if (!alive) break;
+      if (!alive) {
+        break;
+      }
+
       await sleep(100);
     }
 
@@ -136,7 +142,10 @@ describe("execTool", () => {
       const pathKeys = Object.keys(process.env).filter((key) => key.toUpperCase() === "PATH");
       const saved = pathKeys.map((key) => [key, process.env[key]] as const);
 
-      for (const key of pathKeys) delete process.env[key];
+      for (const key of pathKeys) {
+        delete process.env[key];
+      }
+
       try {
         await expect(
           execTool(process.execPath, ["-e", script], {
@@ -145,18 +154,26 @@ describe("execTool", () => {
           }),
         ).rejects.toThrow("timed out");
       } finally {
-        for (const [key, value] of saved) process.env[key] = value;
+        for (const [key, value] of saved) {
+          process.env[key] = value;
+        }
       }
 
       // The fallback child.kill() must still terminate the direct child.
-      for (let i = 0; i < 100 && !existsSync(pidFile); i++) await sleep(100);
+      for (let i = 0; i < 100 && !existsSync(pidFile); i++) {
+        await sleep(100);
+      }
+
       expect(existsSync(pidFile)).toBe(true);
       const childPid = Number(readFileSync(pidFile, "utf-8"));
       let alive = true;
 
       for (let i = 0; i < 100; i++) {
         alive = isAlive(childPid);
-        if (!alive) break;
+        if (!alive) {
+          break;
+        }
+
         await sleep(100);
       }
 

@@ -180,11 +180,17 @@ function isBareConnective(raw: string): boolean {
  * license-like - and stays correctable.
  */
 function isCommaLicenseList(value: string): boolean {
-  if (!value.includes(",")) return false;
+  if (!value.includes(",")) {
+    return false;
+  }
+
   return value.split(",").every((part) => {
     const candidate = part.trim();
 
-    if (candidate === "") return false;
+    if (candidate === "") {
+      return false;
+    }
+
     try {
       parse(candidate);
       return true;
@@ -308,7 +314,10 @@ function findingFromClaims(
   for (const c of claims) {
     // Drop bare connective syntax artifacts ("AND"/"OR"/"WITH") - they are syft compound-license
     // tokenization noise, never a license claim.
-    if (isBareConnective(c.raw)) continue;
+    if (isBareConnective(c.raw)) {
+      continue;
+    }
+
     const key = `${c.kind}\0${c.raw}`; // NUL-joined: no concatenation ambiguity
 
     if (!seen.has(key)) {
@@ -317,7 +326,9 @@ function findingFromClaims(
     }
   }
 
-  if (distinct.length === 0) return UNKNOWN_FINDING;
+  if (distinct.length === 0) {
+    return UNKNOWN_FINDING;
+  }
 
   const results = distinct.map((c) => normalizeRaw(c.raw));
   // A genuinely-unknown claim is expression null AND not imprecise (an imprecise family is its own
@@ -376,7 +387,9 @@ function combineKnown(results: ReadonlyArray<NormalizeResult>): LicenseFinding {
     expressionIsCopyleft(r.expression as string),
   );
 
-  if (hasPreciseCopyleft) return combinePrecise(preciseResults);
+  if (hasPreciseCopyleft) {
+    return combinePrecise(preciseResults);
+  }
 
   const impreciseFamily = electImpreciseFamily(results);
 
@@ -412,7 +425,10 @@ function electImpreciseFamily(results: ReadonlyArray<NormalizeResult>): string |
   let permissive: string | undefined;
 
   for (const r of results) {
-    if (r.imprecise !== true || r.impreciseFamily === undefined) continue;
+    if (r.imprecise !== true || r.impreciseFamily === undefined) {
+      continue;
+    }
+
     if (COULD_BE_COPYLEFT_FAMILIES.has(r.impreciseFamily)) {
       return r.impreciseFamily; // copyleft family dominates
     }
@@ -509,7 +525,9 @@ function observedSignal(
   for (const c of claims) {
     const trimmed = c.raw.trim();
 
-    if (trimmed !== "") signal.add(trimmed);
+    if (trimmed !== "") {
+      signal.add(trimmed);
+    }
   }
 
   if (baseFinding.impreciseFamily !== undefined) {
@@ -532,7 +550,9 @@ function observedExpressions(claims: ReadonlyArray<LicenseClaim>): readonly stri
   for (const c of claims) {
     const precise = normalizeRaw(c.raw).expression;
 
-    if (precise !== null) seen.add(precise);
+    if (precise !== null) {
+      seen.add(precise);
+    }
   }
 
   return [...seen].sort(compareCodeUnits);
@@ -566,10 +586,16 @@ function signalContradicts(
   const want = expects.trim().toLowerCase();
 
   for (const member of signal) {
-    if (member.trim().toLowerCase() === want) continue;
+    if (member.trim().toLowerCase() === want) {
+      continue;
+    }
+
     const precise = normalizeRaw(member).expression;
 
-    if (precise === null) continue; // imprecise/unknown: no precise contradiction
+    if (precise === null) {
+      continue;
+    } // imprecise/unknown: no precise contradiction
+
     let ok: boolean;
 
     try {
@@ -578,7 +604,9 @@ function signalContradicts(
       ok = false; // unparseable against the assertion → fail closed
     }
 
-    if (!ok) return true;
+    if (!ok) {
+      return true;
+    }
   }
 
   return false;
@@ -596,7 +624,10 @@ function signalContradicts(
  * treated as NOT satisfying (fail closed).
  */
 function baseSatisfiesAssertion(base: LicenseFinding, expression: string): boolean {
-  if (base.expression === null) return false; // imprecise/unknown: not redundant
+  if (base.expression === null) {
+    return false;
+  } // imprecise/unknown: not redundant
+
   try {
     return satisfies(base.expression, [expression]);
   } catch {
@@ -778,8 +809,14 @@ function quickCheckClaims(claims: ReadonlyArray<LicenseClaim>): LicenseClaim[] {
   const distinct: LicenseClaim[] = [];
 
   for (const c of claims) {
-    if (c.source === "scancode") continue;
-    if (c.raw.trim() === "" || isBareConnective(c.raw)) continue;
+    if (c.source === "scancode") {
+      continue;
+    }
+
+    if (c.raw.trim() === "" || isBareConnective(c.raw)) {
+      continue;
+    }
+
     const key = `${c.kind}\0${c.raw}`;
 
     if (!seen.has(key)) {
@@ -805,7 +842,10 @@ function claimAgreesWithAssessment(claim: LicenseClaim, assessed: string): boole
   const result = normalizeRaw(claim.raw);
 
   if (result.expression !== null) {
-    if (result.expression === assessed) return true;
+    if (result.expression === assessed) {
+      return true;
+    }
+
     try {
       return satisfies(result.expression, [assessed]);
     } catch {
@@ -828,7 +868,10 @@ function claimAgreesWithAssessment(claim: LicenseClaim, assessed: string): boole
 function disagreeingLabel(claim: LicenseClaim): string {
   const result = normalizeRaw(claim.raw);
 
-  if (result.expression !== null) return result.expression;
+  if (result.expression !== null) {
+    return result.expression;
+  }
+
   if (result.imprecise === true && result.impreciseFamily !== undefined) {
     return result.impreciseFamily;
   }
@@ -918,7 +961,10 @@ export function applyScancodeAssessment(
 ): LicenseFinding {
   const scancode = claims.find((c) => c.source === "scancode");
 
-  if (scancode === undefined) return base;
+  if (scancode === undefined) {
+    return base;
+  }
+
   const result = normalizeRaw(scancode.raw);
 
   if (result.expression !== null) {
@@ -940,7 +986,10 @@ function withCrossImageConflict(
   divergence: CrossImageClaimDivergence | undefined,
   finding: LicenseFinding,
 ): LicenseFinding {
-  if (divergence === undefined || finding.conflict !== undefined) return finding;
+  if (divergence === undefined || finding.conflict !== undefined) {
+    return finding;
+  }
+
   return { ...finding, conflict: divergence };
 }
 

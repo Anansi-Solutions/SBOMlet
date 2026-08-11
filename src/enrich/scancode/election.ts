@@ -44,7 +44,10 @@ function isRawScancodeFile(raw: unknown): raw is RawScancodeFile {
  * order (scancode's own walk order is not guaranteed root-first). This closes that gap.
  */
 function isRootLevelPath(path: string): boolean {
-  if (path.includes("\\")) return false;
+  if (path.includes("\\")) {
+    return false;
+  }
+
   return path.split("/").length === 2;
 }
 
@@ -60,13 +63,28 @@ function electFromPattern(
   for (const entry of entries) {
     const path = entry.path;
 
-    if (typeof path !== "string") continue;
-    if (!isRootLevelPath(path)) continue;
-    if (!pattern.test(basename(path))) continue;
+    if (typeof path !== "string") {
+      continue;
+    }
+
+    if (!isRootLevelPath(path)) {
+      continue;
+    }
+
+    if (!pattern.test(basename(path))) {
+      continue;
+    }
+
     const expression = entry.detected_license_expression_spdx;
 
-    if (typeof expression !== "string" || expression.length === 0) continue;
-    if (isLicenseRefNoise(expression)) continue;
+    if (typeof expression !== "string" || expression.length === 0) {
+      continue;
+    }
+
+    if (isLicenseRefNoise(expression)) {
+      continue;
+    }
+
     return {
       raw: expression,
       via: `${SCANCODE_TOOL.name}@${SCANCODE_TOOL.version}/${lane}`,
@@ -87,12 +105,17 @@ function electFromPattern(
  * lane, or to a clean no-answer if both lanes reject.
  */
 export function electExpression(files: unknown): { raw: string; via: string } | undefined {
-  if (!Array.isArray(files)) return undefined;
+  if (!Array.isArray(files)) {
+    return undefined;
+  }
+
   const entries = files.filter(isRawScancodeFile);
 
   const legal = electFromPattern(entries, LEGAL_FILE_PATTERN, "license-file");
 
-  if (legal !== undefined) return legal;
+  if (legal !== undefined) {
+    return legal;
+  }
 
   return electFromPattern(entries, MANIFEST_FILE_PATTERN, "manifest");
 }
@@ -109,21 +132,36 @@ interface RawCopyrightEntry {
  * MAX_SCANCODE_COPYRIGHT_LINES}.
  */
 export function electCopyrights(files: unknown): string[] {
-  if (!Array.isArray(files)) return [];
+  if (!Array.isArray(files)) {
+    return [];
+  }
+
   const seen = new Set<string>();
 
   for (const raw of files) {
-    if (!isRawScancodeFile(raw)) continue;
+    if (!isRawScancodeFile(raw)) {
+      continue;
+    }
+
     const copyrights = (raw as { copyrights?: unknown }).copyrights;
 
-    if (!Array.isArray(copyrights)) continue;
+    if (!Array.isArray(copyrights)) {
+      continue;
+    }
+
     for (const entry of copyrights) {
       // Tolerant narrowing, matching the rest of this parse path: a null or mistyped element is
       // skipped, never a TypeError mid-scan.
-      if (typeof entry !== "object" || entry === null) continue;
+      if (typeof entry !== "object" || entry === null) {
+        continue;
+      }
+
       const text = (entry as RawCopyrightEntry).copyright;
 
-      if (typeof text !== "string" || text.length === 0) continue;
+      if (typeof text !== "string" || text.length === 0) {
+        continue;
+      }
+
       seen.add(sanitizeEvidenceText(text));
     }
   }

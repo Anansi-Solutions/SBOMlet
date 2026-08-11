@@ -569,7 +569,10 @@ const DEV_PROPERTY = "cdx:npm:package:development";
 function isDevMarked(component: Record<string, unknown>): boolean {
   const properties = component["properties"];
 
-  if (!Array.isArray(properties)) return false;
+  if (!Array.isArray(properties)) {
+    return false;
+  }
+
   return properties.some((raw) => {
     const property = raw as Record<string, unknown>;
 
@@ -580,7 +583,10 @@ function isDevMarked(component: Record<string, unknown>): boolean {
 function byPurl(components: Array<Record<string, unknown>>, purl: string): Record<string, unknown> {
   const found = components.find((c) => c["purl"] === purl);
 
-  if (found === undefined) throw new Error(`no component with purl ${purl}`);
+  if (found === undefined) {
+    throw new Error(`no component with purl ${purl}`);
+  }
+
   return found;
 }
 

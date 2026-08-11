@@ -35,7 +35,10 @@ function makeRecorder(fail = false): {
     _opts: ExecOptions,
   ): Promise<{ stdout: string; stderr: string }> => {
     invocations.push([cmd, ...args]);
-    if (fail) return Promise.reject(new Error("buildx exit 1"));
+    if (fail) {
+      return Promise.reject(new Error("buildx exit 1"));
+    }
+
     return Promise.resolve({ stdout: "", stderr: "" });
   };
 
@@ -136,12 +139,16 @@ describe("buildImage (execTool seam)", () => {
     const first = makeRecorder();
     const tags1: string[] = [];
 
-    for (const p of paths) tags1.push(await buildImage(p, first.exec));
+    for (const p of paths) {
+      tags1.push(await buildImage(p, first.exec));
+    }
 
     const second = makeRecorder();
     const tags2: string[] = [];
 
-    for (const p of paths) tags2.push(await buildImage(p, second.exec));
+    for (const p of paths) {
+      tags2.push(await buildImage(p, second.exec));
+    }
 
     expect(tags1).toEqual(tags2);
     expect(first.invocations).toEqual(second.invocations);

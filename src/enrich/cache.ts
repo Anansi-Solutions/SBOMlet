@@ -83,7 +83,9 @@ export function readEnvelope<T>(
   label: string,
   expectedVersion?: number,
 ): Map<string, T> {
-  if (!existsSync(path)) return new Map();
+  if (!existsSync(path)) {
+    return new Map();
+  }
 
   const raw = readFileSync(path, "utf8");
   let parsed: unknown;

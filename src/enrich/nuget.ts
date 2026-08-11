@@ -78,7 +78,9 @@ export interface NugetResolution {
 export function resolveNugetCatalogLicense(doc: unknown): NugetResolution | null {
   const entry = narrowNugetCatalogEntry(doc);
 
-  if (entry === undefined) return null;
+  if (entry === undefined) {
+    return null;
+  }
 
   const expression = entry.licenseExpression?.trim();
 
@@ -87,7 +89,9 @@ export function resolveNugetCatalogLicense(doc: unknown): NugetResolution | null
   }
 
   // Embedded file BEFORE licenseUrl: the aka.ms sentinel never reads as a URL.
-  if (entry.licenseFile !== undefined && entry.licenseFile !== "") return null;
+  if (entry.licenseFile !== undefined && entry.licenseFile !== "") {
+    return null;
+  }
 
   const url = entry.licenseUrl;
 
@@ -119,6 +123,9 @@ function decodeSpdxPath(path: string): string | undefined {
   }
 
   // eslint-disable-next-line no-control-regex -- deliberate control-character class: reject, never resolve
-  if (/[\u0000-\u001f\u007f-\u009f]/u.test(decoded)) return undefined;
+  if (/[\u0000-\u001f\u007f-\u009f]/u.test(decoded)) {
+    return undefined;
+  }
+
   return decoded.trim();
 }

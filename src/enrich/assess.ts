@@ -117,7 +117,10 @@ function replayMemo(packages: PackageEntry[], memo: Map<string, ScancodeMemoEntr
 
     // A no-result entry (license null) appends nothing - a scan-skip marker, never a disagreement
     // with a positive registry answer.
-    if (memoEntry === undefined || memoEntry.license === null) return;
+    if (memoEntry === undefined || memoEntry.license === null) {
+      return;
+    }
+
     const withClaim = withCacheClaim(entry, memoEntry.license, "scancode");
 
     packages[index] = withReplayAttribution(withClaim, memoEntry);
@@ -161,7 +164,10 @@ async function scanFullSet(
     counts: { scanned: 0, hits: 0, noLocalSources: 0, unsupported: 0 },
   };
 
-  for (const entry of packages) await analyzeOne(entry, ctx);
+  for (const entry of packages) {
+    await analyzeOne(entry, ctx);
+  }
+
   reportCounts(ctx.counts);
 }
 
@@ -210,7 +216,9 @@ async function scanDirs(
   for (const dir of dirs) {
     const resolved = await scanPackageSources(dir, scanOpts);
 
-    if (resolved !== null) return resolved;
+    if (resolved !== null) {
+      return resolved;
+    }
   }
 
   return null;

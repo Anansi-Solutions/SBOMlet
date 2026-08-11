@@ -156,7 +156,10 @@ export function parseProviders(lockText: string): TerraformProvider[] {
     const version = match[2] as string;
     const parts = address.split("/");
 
-    if (parts.length !== 3) continue; // malformed address - tolerant skip
+    if (parts.length !== 3) {
+      continue;
+    } // malformed address - tolerant skip
+
     const [host, namespace, name] = parts as [string, string, string];
 
     providers.push({ host, namespace, name, version });
@@ -216,9 +219,17 @@ function looksLikeHost(segment: string): boolean {
  * carries, and it is split off before host parsing.
  */
 function parseModuleSource(source: string): ParsedModuleSource | undefined {
-  if (source === "") return undefined;
-  if (source.startsWith("./") || source.startsWith("../")) return undefined;
-  if (source.includes("::")) return undefined; // git::/vcs form
+  if (source === "") {
+    return undefined;
+  }
+
+  if (source.startsWith("./") || source.startsWith("../")) {
+    return undefined;
+  }
+
+  if (source.includes("::")) {
+    return undefined;
+  } // git::/vcs form
 
   // Strip an optional `//<submodule-path>` suffix (submodule address).
   const submoduleAt = source.indexOf("//");
@@ -226,7 +237,9 @@ function parseModuleSource(source: string): ParsedModuleSource | undefined {
 
   const segments = address.split("/");
 
-  if (segments.some((s) => s.length === 0)) return undefined;
+  if (segments.some((s) => s.length === 0)) {
+    return undefined;
+  }
 
   // A leading hostname-looking segment is the optional host prefix; otherwise the whole address
   // must be the bare `<ns>/<name>/<provider>` shorthand.
@@ -238,7 +251,9 @@ function parseModuleSource(source: string): ParsedModuleSource | undefined {
     triple = segments.slice(1);
   }
 
-  if (triple.length !== 3) return undefined;
+  if (triple.length !== 3) {
+    return undefined;
+  }
 
   const [namespace, name, provider] = triple as [string, string, string];
 
@@ -269,7 +284,10 @@ function parseModuleSource(source: string): ParsedModuleSource | undefined {
  */
 export function readExternalModules(modulesJsonText: string): TerraformModule[] {
   // The empty-string sentinel = "no modules.json present" → zero modules.
-  if (modulesJsonText === "") return [];
+  if (modulesJsonText === "") {
+    return [];
+  }
+
   let parsed: unknown;
 
   try {
@@ -297,7 +315,10 @@ export function readExternalModules(modulesJsonText: string): TerraformModule[] 
   for (const raw of doc.Modules ?? []) {
     const entry = recordOf(raw);
 
-    if (entry === undefined) continue;
+    if (entry === undefined) {
+      continue;
+    }
+
     const source = stringOf(entry["Source"]);
     const version = stringOf(entry["Version"]);
 
@@ -307,7 +328,10 @@ export function readExternalModules(modulesJsonText: string): TerraformModule[] 
 
     const parsed = parseModuleSource(source);
 
-    if (parsed === undefined) continue;
+    if (parsed === undefined) {
+      continue;
+    }
+
     modules.push({ ...parsed, version });
   }
 
@@ -413,7 +437,10 @@ export function absentModulesJsonShouldFail(dir: string): boolean {
  * diverge.
  */
 export function modulesJsonIsPresentFile(modulesJsonPath: string): boolean {
-  if (!existsSync(modulesJsonPath)) return false;
+  if (!existsSync(modulesJsonPath)) {
+    return false;
+  }
+
   try {
     return statSync(modulesJsonPath).isFile();
   } catch {
@@ -471,7 +498,9 @@ function componentsOf(lockText: string, modulesJsonText: string): TerraformCompo
     ...readExternalModules(modulesJsonText).map(moduleComponent),
   ]) {
     // First-wins keying by purl: identical-purl submodules merge to one row.
-    if (!byPurl.has(component.purl)) byPurl.set(component.purl, component);
+    if (!byPurl.has(component.purl)) {
+      byPurl.set(component.purl, component);
+    }
   }
 
   const components = [...byPurl.values()];

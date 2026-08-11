@@ -78,7 +78,9 @@ export interface MavenResolution {
 export function resolveMavenLicenses(doc: unknown): MavenResolution | null {
   const parsed = narrowDepsDevVersion(doc);
 
-  if (parsed === undefined || parsed.licenses === undefined) return null;
+  if (parsed === undefined || parsed.licenses === undefined) {
+    return null;
+  }
 
   const raws = [
     ...new Set(
@@ -88,6 +90,9 @@ export function resolveMavenLicenses(doc: unknown): MavenResolution | null {
     ),
   ].sort(compareCodeUnits);
 
-  if (raws.length === 0) return null;
+  if (raws.length === 0) {
+    return null;
+  }
+
   return { raws, via: "deps-dev-licenses", confidence: "high" };
 }

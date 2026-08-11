@@ -35,7 +35,10 @@ afterEach(() => {
 function writeCache(path: string, entries: Record<string, CacheEntry>): void {
   const cache = new Map<string, CacheEntry>();
 
-  for (const [purl, entry] of Object.entries(entries)) putEntry(cache, purl, entry);
+  for (const [purl, entry] of Object.entries(entries)) {
+    putEntry(cache, purl, entry);
+  }
+
   writeFileSync(path, serializeCache(cache));
 }
 
@@ -359,7 +362,10 @@ describe("verifyCache nuget (two-step re-resolution, the same resolver generate 
         return { status: 200, body: { catalogEntry: CATALOG_URL } };
       }
 
-      if (url === CATALOG_URL) return { status: 200, body: catalogBody };
+      if (url === CATALOG_URL) {
+        return { status: 200, body: catalogBody };
+      }
+
       return { status: 500 };
     };
   }
