@@ -47,6 +47,7 @@ import {
   readScancodeMemo,
   scanPackageSources,
   serializeScancodeMemo,
+  ScancodeEnvironmentError,
   SCANCODE_TOOL,
   sourceDirsFor,
   type IntensiveOptions,
@@ -133,6 +134,13 @@ interface ScanCounts {
   hits: number;
   noLocalSources: number;
   unsupported: number;
+  /**
+   * A per-package scan that rejected (timeout, non-zero exit with no usable output, oversized or
+   * malformed output) and was CONTAINED rather than aborting the run - see {@link
+   * ScancodeEnvironmentError} for the fatal class this excludes. Never memoized, so the package is
+   * retried on the next run.
+   */
+  failed: number;
 }
 
 /** Everything analyzeOne needs, bundled so the per-package call stays readable. */
@@ -161,7 +169,7 @@ async function scanFullSet(
     scanOpts: scanOptionsFrom(intensive),
     now: opts.now ?? defaultNow,
     verbose: opts.verbose,
-    counts: { scanned: 0, hits: 0, noLocalSources: 0, unsupported: 0 },
+    counts: { scanned: 0, hits: 0, noLocalSources: 0, unsupported: 0, failed: 0 },
   };
 
   for (const entry of packages) {
@@ -175,6 +183,14 @@ async function scanFullSet(
  * Classify one package into the analysis partition and, when it is a fresh scannable target, run
  * the scan and memoize the outcome. A memo hit is skipped; an unsupported ecosystem or an absent
  * local tree is counted and reported but NEVER memoized (a memo entry means the tree was analyzed).
+ *
+ * A per-package scan failure is CONTAINED, never memoized (retried next run), and reported by name
+ * unconditionally on stderr - not gated on --verbose like the routine no-local-sources skip above,
+ * because an unexpected rejection (a timeout, a crash) is exceptional and must stay visible even in
+ * a quiet run. A {@link ScancodeEnvironmentError} - the local tool install itself is broken - is
+ * the one exception: it is NOT a per-package condition, so it propagates uncaught and aborts the
+ * whole scan pass (scanFullSet's loop, and assessPackages's finally, still persist every entry
+ * already memoized before the abort).
  */
 async function analyzeOne(entry: PackageEntry, ctx: ScanContext): Promise<void> {
   if (getMemoEntry(ctx.memo, entry.purl) !== undefined) {
@@ -202,10 +218,32 @@ async function analyzeOne(entry: PackageEntry, ctx: ScanContext): Promise<void> 
     return;
   }
 
-  const resolved = await scanDirs(dirs, ctx.scanOpts);
+  let resolved: ScancodeResolution | null;
+
+  try {
+    resolved = await scanDirs(dirs, ctx.scanOpts);
+  } catch (error) {
+    if (error instanceof ScancodeEnvironmentError) {
+      throw error;
+    }
+
+    ctx.counts.failed += 1;
+    process.stderr.write(
+      `intensive failed: ${sanitizeForLog(entry.purl)} — ${scanFailureReason(error)}\n`,
+    );
+
+    return;
+  }
 
   ctx.counts.scanned += 1;
   putMemoEntry(ctx.memo, entry.purl, memoEntryFor(resolved), ctx.now);
+}
+
+/**
+ * The one-line reason a contained scan rejection prints, mirroring the tool's error-message idiom.
+ */
+function scanFailureReason(error: unknown): string {
+  return error instanceof Error ? error.message.split("\n")[0]! : String(error);
 }
 
 /** Scan the ordered candidate dirs, returning the first positive answer, or null. */
@@ -258,6 +296,6 @@ function reportCounts(counts: ScanCounts): void {
   process.stderr.write(
     `intensive: scanned ${counts.scanned}, memoized ${counts.hits} (hits), ` +
       `no local sources ${counts.noLocalSources}, ` +
-      `unsupported ${counts.unsupported}\n`,
+      `unsupported ${counts.unsupported}, failed ${counts.failed}\n`,
   );
 }

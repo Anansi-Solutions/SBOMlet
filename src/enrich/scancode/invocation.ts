@@ -10,6 +10,14 @@
  * at enrich.ts's resolveFromDocument), and `normalizeRaw` stays the single SPDX authority
  * downstream. It never spawns outside `execTool`, and it never writes the cache itself - the single
  * write site stays in enrich.ts.
+ *
+ * Failures split into two classes for the assessment stage (assess.ts) that calls this module in a
+ * loop: a {@link ScancodeEnvironmentError} means the LOCAL TOOL is broken (missing binary, or a
+ * substituted/drifted version caught by the runtime assert) and every remaining package would fail
+ * identically, so the caller aborts the whole run. Every other rejection - a timeout, a non-zero
+ * exit with no usable output, an oversized output, a malformed one - is specific to the ONE package
+ * being scanned and carries no such information about its neighbors; the caller contains those,
+ * counts them, and moves on.
  */
 import { existsSync, mkdtempSync, readFileSync, rmSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -29,7 +37,9 @@ export const MAX_SCANCODE_OUTPUT_BYTES = 64 * 1024 * 1024;
 /**
  * Wall-clock timeout per package scan. ScanCode's OWN per-file `--timeout` stays at its 120s
  * default - deliberately not passed here, since it bounds a single file's matching, not the whole
- * run. 10 minutes is generous headroom for even a large vendored bundle.
+ * run. 10 minutes is generous headroom for even a large vendored bundle, but not every bundle: the
+ * CLI's `--scancode-timeout <minutes>` flag overrides this default per invocation
+ * (IntensiveOptions.timeoutMs), for a package or an environment that needs more.
  */
 export const DEFAULT_SCAN_TIMEOUT_MS = 10 * 60 * 1000;
 
@@ -84,6 +94,17 @@ export interface ScancodeResolution {
   copyrights: string[];
 }
 
+/**
+ * A scancode failure that indicts the local tool installation itself - a missing binary or a
+ * substituted/drifted toolkit version - rather than the one package being scanned. The assessment
+ * stage (assess.ts) aborts the WHOLE run on this class; every other failure (timeout, non-zero
+ * exit, oversized or malformed output) is per-package and contained instead, because those say
+ * nothing about whether the next package would succeed - only THIS class means "the next scan would
+ * fail identically". Thrown only at the two sites that assert environment integrity: {@link
+ * runScancode}'s ENOENT branch and {@link assertScancodeVersion}.
+ */
+export class ScancodeEnvironmentError extends Error {}
+
 /** A narrowed scancode output - only the fields this module reads. */
 interface RawScancodeOutput {
   headers?: unknown;
@@ -114,7 +135,7 @@ function assertScancodeVersion(parsed: unknown, invocation: string): void {
       : undefined;
 
   if (toolVersion !== SCANCODE_TOOL.version) {
-    throw new Error(
+    throw new ScancodeEnvironmentError(
       `scancode output tool_version is ${JSON.stringify(toolVersion)}, ` +
         `expected ${JSON.stringify(SCANCODE_TOOL.version)} — wrong scancode ` +
         `version?\ninvocation: ${invocation}`,
@@ -171,7 +192,7 @@ async function runScancode(
     await execTool(scancodeBin, args, opts);
   } catch (error) {
     if (isEnoentError(error)) {
-      throw new Error(
+      throw new ScancodeEnvironmentError(
         `scancode binary not found on PATH — run mise install\ninvocation: ${invocation}`,
         { cause: error },
       );
