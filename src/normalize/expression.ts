@@ -144,13 +144,8 @@ export function orLeaves(node: ExpressionNode): string[] | null {
 }
 
 /**
- * True when `text` parses as a valid SPDX expression carrying an AND/OR conjunction at any level
- * - a compound claim, never a single license leaf. A free-form label ("Dual License") or a plain
- * unparseable string returns false, same as a single license id: only a genuine multi-license claim
- * returns true. The compound-`expects` staleness comparison (normalize.ts) uses this to decide when
- * a clarify override must fall back to literal claim-string equality, because spdx-satisfies's
- * allowlist argument can never take an AND entry (the {@link orLeaves} precedent above) and a
- * compound claim is not a single leaf spdx-satisfies can test either.
+ * True when `text` parses as a valid SPDX expression carrying an AND/OR conjunction at any level. A
+ * free-form label ("Dual License"), a single license ID or an unparseable string return false.
  */
 export function isCompoundClaim(text: string): boolean {
   try {

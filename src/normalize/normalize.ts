@@ -577,14 +577,9 @@ function withStaleOverride(base: LicenseFinding, stale: StaleOverride): LicenseF
 }
 
 /**
- * True when the signal/satisfies decision tree in applyOverride cannot run: spdx-satisfies's
- * allowlist argument can never take an AND entry (the orLeaves precedent this codebase already
- * applies to compatible/deny patterns), and signalContradicts/baseSatisfiesAssertion both pass
- * `expression` into exactly that argument. Either half of a preconditioned override being a
- * compound (AND/OR) claim - `expects` naming a multi-license registry claim, or `expression`
- * asserting one - trips this: an untested compound expression would otherwise degrade to a
- * defensive `false` inside those helpers' try/catch and fail the override closed on every run, not
- * just on a genuine relicense.
+ * True when this override must compare `expects` by literal string equality instead of running the
+ * signal/satisfies decision tree: `expects` is itself a compound claim, or `expression` contains an
+ * AND (spdx-satisfies's allowlist argument can only take OR-decomposable expressions).
  */
 function needsLiteralExpectsMatch(expects: string, expression: string): boolean {
   return isCompoundClaim(expects) || orLeaves(parse(expression) as ExpressionNode) === null;
@@ -596,18 +591,11 @@ function needsLiteralExpectsMatch(expects: string, expression: string): boolean 
  * (the gap fix below), a stale-marked finding on a genuine mismatch, or undefined when this
  * override does not apply (no `expects` blind path is the only undefined caller path).
  *
- * `expects` undefined → blind apply (backward-compat). A COMPOUND override (see {@link
- * needsLiteralExpectsMatch}) skips the signal/satisfies decision tree entirely and falls back to
- * literal claim-string equality: `expects` must exactly match one member of the observed signal
- * (signalMatches's own normalization - case-insensitive, trimmed, compared against the RAW claim
- * string, never re-derived through the normalizer/spdx-correct) or the override is stale. There is
- * no redundancy path for a compound override: a compound claim already names the EXACT
- * multi-license reading it was written against, so there is nothing to promote-from the way an
- * imprecise family label ("BSD") promotes to its precise variant.
+ * `expects` undefined → blind apply (backward-compat). `expects` present → decision tree on the
+ * observed signal S and the asserted expression E:
  *
- * Otherwise (both `expects` and `expression` decompose cleanly), `expects` present → decision tree
- * on the observed signal S and the asserted expression E:
- *
+ *   IF compound (needsLiteralExpectsMatch): IF `expects` literally ∈ S → APPLY E; ELSE → STALE
+ *      [no redundancy path: a compound already names its exact reading].
  *   IF expects ∈ S (signalMatches):
  *     IF a non-`expects` precise member contradicts E (signalContradicts)
  *        → STALE → fail closed [the relicense-metadata-lag mask].
