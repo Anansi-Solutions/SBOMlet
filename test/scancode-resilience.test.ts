@@ -9,8 +9,9 @@
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, describe, expect, mock, test } from "bun:test";
+import { afterAll, afterEach, beforeAll, describe, expect, mock, test } from "bun:test";
 
+import * as cdxgenModule from "../src/collectors/cdxgen";
 import * as execModule from "../src/collectors/exec";
 import { assessPackages } from "../src/enrich/assess";
 import {
@@ -21,9 +22,14 @@ import {
   type ScancodeMemoEntry,
 } from "../src/enrich/scancode";
 import { type LicenseClaim, type PackageEntry } from "../src/model/dependencies";
+import { optionsFrom } from "../src/cli";
+import { runGenerate } from "../src/pipeline/pipeline";
 
 /** Original exec export captured BEFORE any mock.module call (restore target). */
 const REAL_EXEC = { ...execModule };
+
+/** Original cdxgen export captured BEFORE any mock.module call (restore target). */
+const REAL_CDXGEN = { ...cdxgenModule };
 
 /** Every recorded execTool invocation: [cmd, ...args]. */
 let invocations: string[][] = [];
@@ -529,5 +535,163 @@ describe("merge-on-write: the committed memo write NEVER overrides pre-existing 
     const reparsed = readScancodeMemo(path);
 
     expect(serializeScancodeMemo(reparsed)).toBe(bytes);
+  });
+});
+
+describe("--scancode-timeout end-to-end: CLI minutes -> GenerateOptions ms -> IntensiveOptions -> execTool spawn opts", () => {
+  let repoDir: string | undefined;
+  let capturedTimeoutMs: (number | undefined)[] = [];
+
+  const BAIT_SBOM = {
+    bomFormat: "CycloneDX",
+    specVersion: "1.6",
+    components: [{ purl: "pkg:npm/left-pad@1.3.0", name: "left-pad", version: "1.3.0" }],
+  };
+
+  const BAIT_LOCKFILE = [
+    "# yarn lockfile v1",
+    "",
+    "left-pad@^1.3.0:",
+    '  version "1.3.0"',
+    "",
+  ].join("\n");
+
+  beforeAll(() => {
+    mock.module("../src/collectors/cdxgen", () => ({
+      ...REAL_CDXGEN,
+      collectWithCdxgen: async (): Promise<cdxgenModule.CollectorSbomFile> => {
+        const tempDir = mkdtempSync(join(tmpdir(), "resilience-timeout-scan-"));
+        const sbomPath = join(tempDir, "bom.json");
+
+        writeFileSync(sbomPath, JSON.stringify(BAIT_SBOM));
+        return { sbomPath, cacheKey: "fake-bait", tool: REAL_CDXGEN.CDXGEN_TOOL };
+      },
+    }));
+  });
+
+  afterAll(() => {
+    mock.module("../src/collectors/cdxgen", () => REAL_CDXGEN);
+    mock.module("../src/collectors/exec", () => REAL_EXEC);
+  });
+
+  afterEach(() => {
+    invocations = [];
+    capturedTimeoutMs = [];
+    if (repoDir !== undefined) {
+      rmSync(repoDir, { recursive: true, force: true });
+    }
+
+    repoDir = undefined;
+    mock.module("../src/collectors/exec", () => REAL_EXEC);
+  });
+
+  function makeBaitTree(): string {
+    const root = mkdtempSync(join(tmpdir(), "resilience-timeout-repo-"));
+    const projDir = join(root, "proj");
+
+    mkdirSync(projDir, { recursive: true });
+    writeFileSync(join(projDir, "package.json"), '{ "name": "proj" }\n');
+    writeFileSync(join(projDir, "yarn.lock"), BAIT_LOCKFILE);
+    writeNpmSource(projDir, "left-pad", "1.3.0");
+    return root;
+  }
+
+  test("a real intensive generate run spawns scancode with the CLI-configured per-package timeout, converted minutes-to-ms", async () => {
+    mock.module("../src/collectors/exec", () => ({
+      ...REAL_EXEC,
+      execTool: (
+        cmd: string,
+        args: string[],
+        opts: { timeoutMs: number },
+      ): Promise<{ stdout: string; stderr: string }> => {
+        invocations.push([cmd, ...args]);
+        capturedTimeoutMs.push(opts.timeoutMs);
+        const jsonPpIndex = args.indexOf("--json-pp");
+
+        if (jsonPpIndex !== -1) {
+          writeFileSync(args[jsonPpIndex + 1] as string, readFileSync(FIXTURE_PATH, "utf8"));
+        }
+
+        return Promise.resolve({ stdout: "", stderr: "" });
+      },
+    }));
+
+    const root = makeBaitTree();
+
+    repoDir = root;
+    const cacheDir = mkdtempSync(join(tmpdir(), "resilience-timeout-cache-"));
+
+    try {
+      const options = optionsFrom({ intensive: true, "scancode-timeout": "42" });
+
+      await runGenerate({
+        ...options,
+        repoRoot: root,
+        outputPath: join(root, "out.md"),
+        noticesPath: join(root, "notices.md"),
+        enrichmentCachePath: join(cacheDir, "licenses.cache.json"),
+        scancodeCachePath: join(cacheDir, "scancode.cache.json"),
+        verbose: false,
+      });
+
+      const scancodeInvocations = invocations.filter((argv) => argv[0] === "scancode");
+
+      expect(scancodeInvocations.length).toBeGreaterThan(0);
+      expect(capturedTimeoutMs.length).toBeGreaterThan(0);
+      for (const ms of capturedTimeoutMs) {
+        expect(ms).toBe(42 * 60_000);
+      }
+    } finally {
+      rmSync(cacheDir, { recursive: true, force: true });
+    }
+  });
+
+  test("--intensive WITHOUT --scancode-timeout keeps the tool default (10 minutes) - the flag is absent-not-zero, never coerced", async () => {
+    mock.module("../src/collectors/exec", () => ({
+      ...REAL_EXEC,
+      execTool: (
+        cmd: string,
+        args: string[],
+        opts: { timeoutMs: number },
+      ): Promise<{ stdout: string; stderr: string }> => {
+        invocations.push([cmd, ...args]);
+        capturedTimeoutMs.push(opts.timeoutMs);
+        const jsonPpIndex = args.indexOf("--json-pp");
+
+        if (jsonPpIndex !== -1) {
+          writeFileSync(args[jsonPpIndex + 1] as string, readFileSync(FIXTURE_PATH, "utf8"));
+        }
+
+        return Promise.resolve({ stdout: "", stderr: "" });
+      },
+    }));
+
+    const root = makeBaitTree();
+
+    repoDir = root;
+    const cacheDir = mkdtempSync(join(tmpdir(), "resilience-timeout-default-cache-"));
+
+    try {
+      const options = optionsFrom({ intensive: true });
+
+      expect(Object.prototype.hasOwnProperty.call(options, "scancodeTimeoutMs")).toBe(false);
+
+      await runGenerate({
+        ...options,
+        repoRoot: root,
+        outputPath: join(root, "out.md"),
+        noticesPath: join(root, "notices.md"),
+        enrichmentCachePath: join(cacheDir, "licenses.cache.json"),
+        scancodeCachePath: join(cacheDir, "scancode.cache.json"),
+        verbose: false,
+      });
+
+      expect(capturedTimeoutMs.length).toBeGreaterThan(0);
+      for (const ms of capturedTimeoutMs) {
+        expect(ms).toBe(10 * 60 * 1000);
+      }
+    } finally {
+      rmSync(cacheDir, { recursive: true, force: true });
+    }
   });
 });

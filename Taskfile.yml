@@ -54,7 +54,12 @@ tasks:
                      (default unset: the tool auto-discovers .sbomlet.policy.toml)
         CYCLONEDX    CycloneDX export path; --cyclonedx is passed only when set
         INTENSIVE    set (INTENSIVE=1) to also scan still-unresolved packages'
-                     local sources with ScanCode — slow, occasional-run cost
+                     local sources with ScanCode — slow, occasional-run cost.
+                     A package that times out or otherwise fails is skipped
+                     and retried next run, never aborting the rest of the scan
+        SCANCODE_TIMEOUT  with INTENSIVE=1 — per-package ScanCode wall-clock
+                     limit in MINUTES; --scancode-timeout is passed only when
+                     set (default: 10)
         DOCKER       set (DOCKER=1) to build and scan the repository's
                      Dockerfiles and refresh the committed docker SBOM before
                      generating; needs a Docker daemon
@@ -65,7 +70,7 @@ tasks:
     deps: [install]
     cmds:
       - task: '{{if .DOCKER}}generate:docker{{end}}'
-      - mise x -- bun src/cli.ts generate --base-dir {{.USER_WORKING_DIR | q}} --repo-root {{.REPO_ROOT | q}} --output {{.OUTPUT | q}} --notices {{.NOTICES | q}}{{if .POLICY}} --policy {{.POLICY | q}}{{end}}{{if .CYCLONEDX}} --cyclonedx {{.CYCLONEDX | q}}{{end}}{{if .INTENSIVE}} --intensive{{end}}
+      - mise x -- bun src/cli.ts generate --base-dir {{.USER_WORKING_DIR | q}} --repo-root {{.REPO_ROOT | q}} --output {{.OUTPUT | q}} --notices {{.NOTICES | q}}{{if .POLICY}} --policy {{.POLICY | q}}{{end}}{{if .CYCLONEDX}} --cyclonedx {{.CYCLONEDX | q}}{{end}}{{if .INTENSIVE}} --intensive{{end}}{{if .SCANCODE_TIMEOUT}} --scancode-timeout {{.SCANCODE_TIMEOUT | q}}{{end}}
 
   check:
     desc: 'CI gate — exit 0 clean, 1 policy violation (beats stale), 2 stale/missing output, 3+ tool error'

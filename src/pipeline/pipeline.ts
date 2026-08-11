@@ -103,6 +103,14 @@ export interface GenerateOptions {
    */
   intensive?: boolean;
   /**
+   * Optional override for ScanCode's per-package wall-clock timeout under --intensive
+   * (--scancode-timeout, minutes on the CLI, converted to milliseconds by cli.ts's optionsFrom to
+   * match {@link IntensiveOptions.timeoutMs} / DEFAULT_SCAN_TIMEOUT_MS). Threaded ONLY into the
+   * intensive lane via intensiveOptionsFor below; a default generate/check never reaches it. Absent
+   * keeps the tool default (10 minutes).
+   */
+  scancodeTimeoutMs?: number;
+  /**
    * Optional TOML policy file: loaded + validated before any scan; verdicts evaluated after the
    * merge and rendered into the PolicyView document. Findings are annotated unconditionally - the
    * absent flag only removes the policy-gated surfaces (pointer line, copyleft section, verdicts).
@@ -481,7 +489,10 @@ function intensiveOptionsFor(
     return undefined;
   }
 
-  return { targetDirs };
+  return {
+    targetDirs,
+    ...(opts.scancodeTimeoutMs !== undefined ? { timeoutMs: opts.scancodeTimeoutMs } : {}),
+  };
 }
 
 /**

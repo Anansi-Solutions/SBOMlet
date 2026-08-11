@@ -2249,6 +2249,51 @@ describe("optionsFrom --intensive threading (absent-not-false)", () => {
   });
 });
 
+describe("optionsFrom --scancode-timeout threading (minutes-to-ms, absent-not-zero)", () => {
+  test("--scancode-timeout absent leaves options.scancodeTimeoutMs ABSENT (own-property, not a coerced default)", () => {
+    const options = optionsFrom({});
+
+    expect(Object.prototype.hasOwnProperty.call(options, "scancodeTimeoutMs")).toBe(false);
+    expect(options.scancodeTimeoutMs).toBeUndefined();
+  });
+
+  test("--scancode-timeout 42 yields options.scancodeTimeoutMs === 42 minutes in milliseconds", () => {
+    const options = optionsFrom({ "scancode-timeout": "42" });
+
+    expect(options.scancodeTimeoutMs).toBe(42 * 60_000);
+  });
+
+  test("--scancode-timeout 0.5 (fractional minutes) converts exactly, no truncation", () => {
+    const options = optionsFrom({ "scancode-timeout": "0.5" });
+
+    expect(options.scancodeTimeoutMs).toBe(30_000);
+  });
+
+  test("a non-positive --scancode-timeout is a config error (exit 3), naming the bad value", () => {
+    const spawned = spawnSync(
+      process.execPath,
+      ["src/cli.ts", "generate", "--intensive", "--scancode-timeout", "0"],
+      { encoding: "utf8" },
+    );
+
+    expect(spawned.status).toBe(3);
+    expect(spawned.stderr).toContain("--scancode-timeout must be a positive number of minutes");
+    expect(spawned.stderr).toContain('"0"');
+  });
+
+  test("a non-numeric --scancode-timeout is a config error (exit 3), naming the bad value", () => {
+    const spawned = spawnSync(
+      process.execPath,
+      ["src/cli.ts", "generate", "--intensive", "--scancode-timeout", "not-a-number"],
+      { encoding: "utf8" },
+    );
+
+    expect(spawned.status).toBe(3);
+    expect(spawned.stderr).toContain("--scancode-timeout must be a positive number of minutes");
+    expect(spawned.stderr).toContain('"not-a-number"');
+  });
+});
+
 describe("Taskfile split invariants (static, YAML-parsed — locks the public/dev surface)", () => {
   interface TaskfileTask {
     desc?: string;
