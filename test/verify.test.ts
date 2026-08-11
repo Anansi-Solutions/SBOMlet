@@ -7,13 +7,15 @@
  * negative entry the registry contradicts with a real license. Network/cache
  * FAILURES must propagate loudly — never a false "all clean".
  */
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, test } from "bun:test";
 
 import { putEntry, serializeCache, type CacheEntry } from "../src/enrich/cache";
+import { putMemoEntry, serializeScancodeMemo } from "../src/enrich/scancode/cache";
 import { verifyCache } from "../src/enrich/verify";
+import { runVerifyCache } from "../src/pipeline/verifyCache";
 
 const tempDirs: string[] = [];
 
@@ -487,5 +489,48 @@ describe("verifyCache maven (deps.dev single-fetch re-resolution, the same resol
     await expect(
       withFetch(fetch, () => verifyCache({ cachePath: path, verbose: false, backoffBaseMs: 1 })),
     ).rejects.toThrow(/registry 503/);
+  });
+});
+
+describe("runVerifyCache (pipeline wrapper) — the scancode memo count", () => {
+  /** A temp repo root with an empty enrichment cache, so the registry audit itself is a no-op. */
+  function tempRepoRoot(): string {
+    const root = mkdtempSync(join(tmpdir(), "verify-cache-repo-"));
+    tempDirs.push(root);
+    writeFileSync(join(root, "enrichment-cache.json"), serializeCache(new Map()));
+    return root;
+  }
+
+  test("no scancode memo file on disk — the count is 0", async () => {
+    const root = tempRepoRoot();
+    const result = await runVerifyCache({
+      baseDir: root,
+      enrichmentCachePath: "enrichment-cache.json",
+      verbose: false,
+    });
+    expect(result.scancodeMemoEntries).toBe(0);
+  });
+
+  test("a populated scancode memo at the default cache-dir location is counted, never fetched", async () => {
+    const root = tempRepoRoot();
+    const memo = new Map();
+    putMemoEntry(memo, "pkg:npm/analyzed-a@1.0.0", {
+      license: "MIT",
+      via: "scancode@1",
+    });
+    putMemoEntry(memo, "pkg:npm/analyzed-b@2.0.0", {
+      license: null,
+      via: "scancode@1",
+    });
+    mkdirSync(join(root, ".sbomlet.cache"), { recursive: true });
+    writeFileSync(join(root, ".sbomlet.cache", "scancode.cache.json"), serializeScancodeMemo(memo));
+    const result = await runVerifyCache({
+      baseDir: root,
+      enrichmentCachePath: "enrichment-cache.json",
+      verbose: false,
+    });
+    expect(result.scancodeMemoEntries).toBe(2);
+    // The registry audit itself stays untouched: an empty enrichment cache audits zero entries.
+    expect(result.audited).toBe(0);
   });
 });

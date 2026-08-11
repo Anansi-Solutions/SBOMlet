@@ -28,7 +28,12 @@ import { tmpdir } from "node:os";
 import { join, relative, resolve } from "node:path";
 import { afterAll, beforeAll, describe, expect, mock, test } from "bun:test";
 
-import { dockerSbomOptionsFrom, dockerSbomModeConflict, optionsFrom } from "../src/cli";
+import {
+  dockerSbomOptionsFrom,
+  dockerSbomModeConflict,
+  optionsFrom,
+  reportVerifyCache,
+} from "../src/cli";
 import { exitCodeFor, runCheck } from "../src/gate/check";
 import { classifyCoverage, coverageSkipReason } from "../src/pipeline/coverage";
 import { defaultNoticesPath, resolveFrom } from "../src/pipeline/paths";
@@ -37,6 +42,7 @@ import { sanitizeForLog, writePolicySummary } from "../src/pipeline/summary";
 import { parsePolicy } from "../src/policy/schema";
 import { MAX_BUN_LOCK_BYTES } from "../src/collectors/bunLock";
 import * as cdxgenModule from "../src/collectors/cdxgen";
+import type { VerifyCacheResult } from "../src/pipeline/verifyCache";
 import type { Verdict } from "../src/model/dependencies";
 
 /**
@@ -2246,5 +2252,65 @@ describe("Taskfile split invariants (static, YAML-parsed — locks the public/de
     ]) {
       expect(tasks[retired], retired).toBeUndefined();
     }
+  });
+});
+
+describe("reportVerifyCache — the scancode memo line", () => {
+  /** A base result with zero mismatches; individual tests override fields. */
+  function baseResult(scancodeMemoEntries: number): VerifyCacheResult {
+    return { audited: 0, mismatches: [], scancodeMemoEntries };
+  }
+
+  test("a non-empty memo prints its count and the not-audited reason", async () => {
+    const stderr = await withCapturedStderr(async () => {
+      reportVerifyCache(baseResult(42));
+    });
+    expect(stderr).toContain(
+      "scancode memo: 42 entries (not audited: local scan results have no " +
+        "upstream to verify against)",
+    );
+  });
+
+  test("a single entry uses the singular noun", async () => {
+    const stderr = await withCapturedStderr(async () => {
+      reportVerifyCache(baseResult(1));
+    });
+    expect(stderr).toContain("scancode memo: 1 entry ");
+  });
+
+  test("an absent/empty memo still prints the line, at 0 — mirrors the audited-count line's own zero case", async () => {
+    const stderr = await withCapturedStderr(async () => {
+      reportVerifyCache(baseResult(0));
+    });
+    expect(stderr).toContain(
+      "scancode memo: 0 entries (not audited: local scan results have no " +
+        "upstream to verify against)",
+    );
+  });
+
+  test("the memo line follows the registry-audit summary, whether clean or mismatched", async () => {
+    const clean = await withCapturedStderr(async () => {
+      reportVerifyCache(baseResult(5));
+    });
+    const cleanLines = clean.trim().split("\n");
+    expect(cleanLines[0]).toContain("all audited entries match upstream");
+    expect(cleanLines.at(-1)).toContain("scancode memo: 5 entries");
+
+    const mismatched = await withCapturedStderr(async () => {
+      reportVerifyCache({
+        audited: 1,
+        mismatches: [
+          {
+            purl: "pkg:npm/foo@1.0.0",
+            cached: "MIT",
+            current: "GPL-3.0-only",
+            reason: "license changed since the cache was written",
+          },
+        ],
+        scancodeMemoEntries: 3,
+      });
+    });
+    const mismatchedLines = mismatched.trim().split("\n");
+    expect(mismatchedLines.at(-1)).toContain("scancode memo: 3 entries");
   });
 });
