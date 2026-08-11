@@ -49,9 +49,7 @@ export function applyContainerScopes(
   model: CanonicalDependencies,
   developmentContainers: ReadonlySet<string>,
 ): CanonicalDependencies {
-  const packages = model.packages.map((pkg) =>
-    rescoped(pkg, developmentContainers),
-  );
+  const packages = model.packages.map((pkg) => rescoped(pkg, developmentContainers));
   for (const pkg of packages) assertOsScopeIsDockerOnly(pkg);
   return { packages };
 }
