@@ -23,19 +23,29 @@ export type ExpressionNode =
   | { left: ExpressionNode; conjunction: "or" | "and"; right: ExpressionNode };
 
 /**
+ * A parsed leaf: `id[+][ WITH exception]`, shared by {@link renderNode} and canonicalization below.
+ */
+type Leaf = Extract<ExpressionNode, { license: string }>;
+
+/** Leaf rendering: `id[+][ WITH exception]` - the one leaf format, never duplicated. */
+function renderLeaf(leaf: Leaf): string {
+  const plus = leaf.plus === true ? "+" : "";
+  const withPart = leaf.exception !== undefined ? ` WITH ${leaf.exception}` : "";
+
+  return `${leaf.license}${plus}${withPart}`;
+}
+
+/**
  * Canonical rendering: leaf = `id[+][ WITH exception]`; compound child operands are parenthesized,
  * the top level is not.
  */
 export function renderNode(node: ExpressionNode): string {
   if ("license" in node) {
-    const plus = node.plus === true ? "+" : "";
-    const withPart = node.exception !== undefined ? ` WITH ${node.exception}` : "";
-
-    return `${node.license}${plus}${withPart}`;
+    return renderLeaf(node);
   }
 
   const operand = (child: ExpressionNode): string =>
-    "license" in child ? renderNode(child) : `(${renderNode(child)})`;
+    "license" in child ? renderLeaf(child) : `(${renderNode(child)})`;
   const conj = node.conjunction === "or" ? "OR" : "AND";
 
   return `${operand(node.left)} ${conj} ${operand(node.right)}`;
@@ -193,4 +203,123 @@ export function isCompoundClaim(text: string): boolean {
   } catch {
     return false;
   }
+}
+
+/**
+ * Canonicalization's own shape: a leaf is {@link Leaf}; a compound is an n-ary set of same-operator
+ * siblings rather than one binary split, so FLATTEN and the set-wide laws below operate on a whole
+ * group at once. A canonical node never nests same-operator compounds - {@link canonicalizeNode}
+ * flattens them away on construction - so any compound member is always the OPPOSITE operator of
+ * its parent set.
+ */
+type CanonicalNode = Leaf | { op: "and" | "or"; items: CanonicalNode[] };
+
+/**
+ * Bare serialization of a canonical node - no outer parens, a compound member parenthesized only
+ * when embedded in its parent's join (the one case a canonical tree ever nests a compound, since
+ * FLATTEN already ruled out same-operator nesting). Doubles as the structural-equality key for
+ * dedupe/absorption below and the sort key for COMMUTATIVITY, mirroring {@link elect}'s existing
+ * rendered-string tie-break.
+ */
+function serializeCanonical(node: CanonicalNode): string {
+  if ("license" in node) {
+    return renderLeaf(node);
+  }
+
+  const operand = (child: CanonicalNode): string =>
+    "license" in child ? renderLeaf(child) : `(${serializeCanonical(child)})`;
+  const conj = node.op === "or" ? "OR" : "AND";
+
+  return node.items.map(operand).join(` ${conj} `);
+}
+
+/**
+ * ABSORPTION, both directions, applied simultaneously against the original set so dropping one
+ * member never starves another: an AND-sibling `(X OR ...)` is dropped when one of its OR-branches
+ * structurally equals another AND-sibling (`A AND (A OR B)` -> `A`); the mirror OR-sibling
+ * `(X AND ...)` is dropped when one of its AND-conjuncts structurally equals another OR-sibling (`A
+ * OR (A AND B)` -> `A`, the textbook law: choosing A alone already satisfies the OR).
+ */
+function absorb(op: "and" | "or", items: CanonicalNode[]): CanonicalNode[] {
+  const oppositeOp = op === "and" ? "or" : "and";
+  const digests = items.map(serializeCanonical);
+
+  return items.filter((item, index) => {
+    if ("license" in item || item.op !== oppositeOp) {
+      return true;
+    }
+
+    const siblingDigests = digests.filter((_, i) => i !== index);
+
+    return !item.items.some((member) => siblingDigests.includes(serializeCanonical(member)));
+  });
+}
+
+/**
+ * Builds one canonical AND/OR level from its already-canonical children: IDEMPOTENCE (dedupe by
+ * structural digest, first occurrence wins), then {@link absorb}, then COMMUTATIVITY (sort by
+ * rendered form via {@link compareCodeUnits}). A set reduced to one member collapses to that member
+ * bare - the recursive base case that lets a whole expression serialize without redundant parens.
+ */
+function buildSet(op: "and" | "or", rawItems: CanonicalNode[]): CanonicalNode {
+  const deduped = new Map<string, CanonicalNode>();
+
+  for (const item of rawItems) {
+    const digest = serializeCanonical(item);
+
+    if (!deduped.has(digest)) {
+      deduped.set(digest, item);
+    }
+  }
+
+  const items = absorb(op, [...deduped.values()]).sort((a, b) =>
+    compareCodeUnits(serializeCanonical(a), serializeCanonical(b)),
+  );
+
+  return items.length === 1 ? items[0]! : { op, items };
+}
+
+/**
+ * Canonicalizes one parsed node bottom-up: a leaf passes through untouched; a compound FLATTENs any
+ * same-operator child into its own item set (`A AND (B AND C)` becomes one AND over {A, B, C})
+ * before {@link buildSet} applies dedupe, absorption, and sort. Conservative by construction
+ * - FLATTEN, IDEMPOTENCE, ABSORPTION, COMMUTATIVITY only, never distribution or any other
+ * cross-operator rewrite.
+ */
+function canonicalizeNode(node: ExpressionNode): CanonicalNode {
+  if ("license" in node) {
+    return node;
+  }
+
+  const op = node.conjunction;
+  const items: CanonicalNode[] = [];
+
+  for (const child of [canonicalizeNode(node.left), canonicalizeNode(node.right)]) {
+    if (!("license" in child) && child.op === op) {
+      items.push(...child.items);
+    } else {
+      items.push(child);
+    }
+  }
+
+  return buildSet(op, items);
+}
+
+/**
+ * Simplifies a noisy SPDX expression - ScanCode's boolean-algebra redundancy is the motivating
+ * case - by the conservative laws in {@link canonicalizeNode}: flatten, dedupe, absorb, and sort,
+ * never distribute. Idempotent (canonicalizing the output again is a no-op) and round-trip safe
+ * (the output always reparses). Unparseable input is returned UNCHANGED - this never throws and
+ * never guesses, the honest-residual posture the rest of this module follows.
+ */
+export function canonicalizeExpression(text: string): string {
+  let parsed: ExpressionNode;
+
+  try {
+    parsed = parseSpdx(text) as ExpressionNode;
+  } catch {
+    return text;
+  }
+
+  return serializeCanonical(canonicalizeNode(parsed));
 }
