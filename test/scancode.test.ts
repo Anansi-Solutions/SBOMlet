@@ -540,6 +540,16 @@ describe("electExpression / electCopyrights (pure narrow, no exec)", () => {
     expect(elected?.raw).toBe("MIT");
   });
 
+  test("a noisy elected expression is canonicalized before it is returned — the memo and claims see the simplified form, never ScanCode's own boolean-algebra noise", () => {
+    const noisy =
+      "(MIT AND OFL-1.1 AND CC-BY-4.0) AND (CC-BY-4.0 OR CC-BY-3.0) AND " +
+      "(OFL-1.1 AND (CC-BY-4.0 AND OFL-1.1 AND MIT) AND MIT AND (MIT AND OFL-1.1 AND CC-BY-4.0))";
+    const files = [{ path: "pkg/LICENSE", detected_license_expression_spdx: noisy }];
+    const elected = electExpression(files);
+
+    expect(elected?.raw).toBe("CC-BY-4.0 AND MIT AND OFL-1.1");
+  });
+
   test("a null element inside a copyrights[] array is skipped, never a TypeError", () => {
     const files = [
       {
@@ -1041,6 +1051,67 @@ describe("assessPackages — ScanCode peer assessment stage", () => {
     expect(finding.conflict).toBeDefined();
   });
 
+  // applyScancodeAssessment's agreement test (normalize.ts) exact-string-equals
+  // the declared/registry claim against the ScanCode expression FIRST, falling
+  // back to spdx-satisfies() only for a single-id ScanCode expression — a
+  // compound ScanCode expression can ONLY agree via exact string equality
+  // (locked above: "spdx-satisfies allowlist-entry edge"). Canonicalization
+  // therefore changes the VERDICT for a compound assessment: a spelling-only
+  // difference used to read as textual disagreement (a spurious conflict);
+  // once both sides land on the same canonical spelling, it reads as
+  // agreement. A genuine semantic disagreement is untouched — canonicalizing
+  // two DIFFERENT expressions never makes them equal.
+
+  test("canonicalization resolves a SPELLING-ONLY conflict on a compound assessment — same semantics, no more textual mismatch", async () => {
+    const noisy =
+      "(MIT AND OFL-1.1 AND CC-BY-4.0) AND (CC-BY-4.0 OR CC-BY-3.0) AND " +
+      "(OFL-1.1 AND (CC-BY-4.0 AND OFL-1.1 AND MIT) AND MIT AND (MIT AND OFL-1.1 AND CC-BY-4.0))";
+    const path = seedMemo([
+      [
+        "pkg:npm/multi-licensed@2.0.0",
+        { license: noisy, via: "scancode-toolkit@32.5.0/license-file" },
+      ],
+    ]);
+    const model: CanonicalDependenciesLike = {
+      packages: [
+        npmPackage("multi-licensed", "2.0.0", [generatorClaim("CC-BY-4.0 AND MIT AND OFL-1.1")]),
+      ],
+    };
+
+    const { model: assessed } = await assessPackages(model as never, {
+      mode: "check",
+      memoPath: path,
+      verbose: false,
+    });
+
+    const finding = findingOf(assessed.packages);
+
+    expect(finding.conflict).toBeUndefined();
+    expect(finding.expression).toBe("CC-BY-4.0 AND MIT AND OFL-1.1");
+  });
+
+  test("a GENUINE compound disagreement still conflicts after canonicalization — different license sets are never equated", async () => {
+    const noisy =
+      "(MIT AND OFL-1.1 AND CC-BY-4.0) AND (CC-BY-4.0 OR CC-BY-3.0) AND " +
+      "(OFL-1.1 AND (CC-BY-4.0 AND OFL-1.1 AND MIT) AND MIT AND (MIT AND OFL-1.1 AND CC-BY-4.0))";
+    const path = seedMemo([
+      ["pkg:npm/mismatched@2.0.0", { license: noisy, via: "scancode-toolkit@32.5.0/license-file" }],
+    ]);
+    const model: CanonicalDependenciesLike = {
+      packages: [npmPackage("mismatched", "2.0.0", [generatorClaim("Apache-2.0 AND MIT")])],
+    };
+
+    const { model: assessed } = await assessPackages(model as never, {
+      mode: "check",
+      memoPath: path,
+      verbose: false,
+    });
+
+    const finding = findingOf(assessed.packages);
+
+    expect(finding.conflict).toBeDefined();
+  });
+
   test("replay: a zero-claim package gains the memo's answer WITH attribution (copyrights sanitized/sorted/deduped)", async () => {
     const path = seedMemo([
       [
@@ -1158,6 +1229,49 @@ describe("assessPackages — ScanCode peer assessment stage", () => {
     });
 
     expect(invocations.length).toBe(0);
+  });
+
+  test("a noisy memo entry migrates to its canonical spelling on an ordinary generate --intensive run, with ZERO scans — the memo write, the replayed claim, and the finding are all canonical", async () => {
+    const noisy =
+      "(MIT AND OFL-1.1 AND CC-BY-4.0) AND (CC-BY-4.0 OR CC-BY-3.0) AND " +
+      "(OFL-1.1 AND (CC-BY-4.0 AND OFL-1.1 AND MIT) AND MIT AND (MIT AND OFL-1.1 AND CC-BY-4.0))";
+    const canonical = "CC-BY-4.0 AND MIT AND OFL-1.1";
+    const path = seedMemo([
+      [
+        "pkg:npm/multi-licensed@1.0.0",
+        { license: noisy, via: "scancode-toolkit@32.5.0/license-file" },
+      ],
+    ]);
+    const model: CanonicalDependenciesLike = {
+      packages: [npmPackage("multi-licensed", "1.0.0", [generatorClaim(canonical)])],
+    };
+
+    const { model: assessed } = await assessPackages(model as never, {
+      mode: "generate",
+      memoPath: path,
+      verbose: false,
+      // targetDirs is never consulted: the purl is already memoized, so
+      // analyzeOne's memo-hit check short-circuits before any source lookup
+      // or scan — invocations.length === 0 below is the FAILS-IF-CALLED
+      // assertion for the underlying scancode invocation.
+      intensive: { targetDirs: [] },
+    });
+
+    expect(invocations.length).toBe(0);
+
+    // The claim replayed into THIS run's finding is canonical.
+    expect(scancodeClaim(assessed.packages[0])?.raw).toBe(canonical);
+    const finding = findingOf(assessed.packages);
+
+    expect(finding.expression).toBe(canonical);
+    expect(finding.conflict).toBeUndefined();
+
+    // persistMemo's merge-on-write (finally block, unconditional under
+    // --intensive) rewrote the FILE with the canonical spelling — no memo
+    // entry retains the noisy shape, and no new scan produced it.
+    const onDisk = readScancodeMemo(path);
+
+    expect(getMemoEntry(onDisk, "pkg:npm/multi-licensed@1.0.0")?.license).toBe(canonical);
   });
 
   test("scan: a package whose sources are absent is reported but NEVER memoized (a memo entry means the tree was analyzed)", async () => {
