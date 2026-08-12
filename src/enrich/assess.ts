@@ -51,6 +51,7 @@ import {
   SCANCODE_TOOL,
   sourceDirsFor,
   type IntensiveOptions,
+  type NpmSourceIndexCache,
   type ScancodeMemoEntry,
   type ScancodeResolution,
   type ScancodeScanOptions,
@@ -174,6 +175,13 @@ interface ScanContext {
   now: () => Date;
   verbose: boolean;
   counts: ScanCounts;
+  /**
+   * Per-run npm source-index cache (sources.ts): built lazily, one readdir-walk per target dir,
+   * reused across every package this scan pass looks up - explicit plumbing through this context
+   * rather than module-level state, and freshly constructed per {@link scanFullSet} call so no
+   * cross-run staleness is possible.
+   */
+  npmIndexCache: NpmSourceIndexCache;
 }
 
 /**
@@ -193,6 +201,7 @@ async function scanFullSet(
     now: opts.now ?? defaultNow,
     verbose: opts.verbose,
     counts: { scanned: 0, hits: 0, noLocalSources: 0, unsupported: 0, failed: 0 },
+    npmIndexCache: new Map(),
   };
 
   for (const entry of packages) {
@@ -228,7 +237,7 @@ async function analyzeOne(entry: PackageEntry, ctx: ScanContext): Promise<void> 
     return;
   }
 
-  const dirs = sourceDirsFor(entry.purl, ctx.intensive.targetDirs);
+  const dirs = sourceDirsFor(entry.purl, ctx.intensive.targetDirs, ctx.npmIndexCache);
 
   if (dirs.length === 0) {
     ctx.counts.noLocalSources += 1;

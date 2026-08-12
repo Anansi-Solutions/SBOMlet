@@ -1,16 +1,21 @@
 /**
  * purl → ordered locally-present scan-candidate mapper (no registry/collector analog exists for
- * this). npm: the decoded package name under `<targetDir>/node_modules`, with the installed
- * `package.json` version MANDATORILY equal to the purl's version (a stale node_modules must never
- * poison the cache with the wrong version's license). pypi: an in-project `.venv`'s site-packages,
- * keyed by the PEP-503 structural fold of the dist-info dir name (ADR-0015: the dir name IS the
- * signal, no PEP-440/508 parsing) - the dist-info dir itself is the first candidate (a wheel's
- * METADATA and legal files live there, not in the import package), the top_level.txt import package
- * dir the second. Everything else, or any structural mismatch, returns [] - an honest skip, never a
- * fabricated guess. A `..`-shaped or absolute-path-shaped decoded name (or top_level.txt line) can
- * never escape the target's containment root (resolve + strict prefix-check).
+ * this). npm: an index of EVERY installed package dir under `<targetDir>/node_modules`, at any
+ * nesting depth (a yarn node-modules-linker install hoists one version to the workspace root and
+ * nests every other required version inside a dependent's own node_modules - see {@link
+ * buildNpmSourceIndex}), looked up by decoded name + the purl's version MANDATORILY equal to the
+ * installed `package.json` version (a stale node_modules must never poison the cache with the wrong
+ * version's license). pypi: an in-project `.venv`'s site-packages, keyed by the PEP-503 structural
+ * fold of the dist-info dir name (ADR-0015: the dir name IS the signal, no PEP-440/508 parsing)
+ * - the dist-info dir itself is the first candidate (a wheel's METADATA and legal files live there,
+ * not in the import package), the top_level.txt import package dir the second. Everything else, or
+ * any structural mismatch, returns [] - an honest skip, never a fabricated guess. A `..`-shaped or
+ * absolute-path-shaped top_level.txt line can never escape site-packages (resolve + strict
+ * prefix-check); the npm index carries no equivalent risk by construction - it is built entirely
+ * from real directory entries the walk itself discovered, never from a join against caller- or
+ * purl-controlled input.
  */
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, type Dirent } from "node:fs";
 import { join, resolve, sep } from "node:path";
 
 import { compareCodeUnits } from "../../model/dependencies";
@@ -36,36 +41,31 @@ function safeDecode(encoded: string): string | undefined {
   }
 }
 
+/** `name@version` -> the winning installed dir, as produced by {@link buildNpmSourceIndex}. */
+export type NpmSourceIndex = Map<string, string>;
+
 /**
- * Decode + validate an npm purl's encoded name against a candidate `node_modules` root, requiring
- * the installed package.json `version` field to equal the purl version (mandatory - never
- * optional). Returns the resolved source dir, or undefined on ANY structural mismatch: dir absent,
- * package.json absent/unparseable (a garbage node_modules must never throw and kill the run
- * - honest skip), version mismatch, or a decoded name that would escape the node_modules root
- * (resolve + strict prefix-check, never best-effort).
+ * Per-run cache of {@link NpmSourceIndex}, keyed by the resolved target dir it was built from.
+ * Built lazily by the first npm lookup for a given target dir and reused for the rest of the run
+ * - callers own the cache's lifetime (assess.ts's ScanContext, built once per intensive scan pass)
+ * so this module carries no module-level state and needs no test-visible reset.
  */
-function npmSourceDir(purl: EcosystemPurl, targetDir: string): string | undefined {
-  // The decode exactly mirrors npmPackumentUrl's scoped-name decode (enrich.ts npmPackumentUrl):
-  // "%40scope/pkg" -> "@scope/pkg".
-  const name = safeDecode(purl.encodedName);
+export type NpmSourceIndexCache = Map<string, NpmSourceIndex>;
 
-  if (name === undefined) {
-    return undefined;
-  }
+/**
+ * Defensive nesting-depth backstop for the node_modules walk. The real loop/cost guard is
+ * symlink-refusal in {@link walkNodeModules} - this only bounds a pathological non-symlink
+ * structure that would otherwise recurse indefinitely.
+ */
+const MAX_NODE_MODULES_DEPTH = 30;
 
-  const nodeModulesRoot = resolve(targetDir, "node_modules");
-  const candidate = resolve(nodeModulesRoot, name);
-
-  // Strict prefix-check under the RESOLVED node_modules root: a ".."-shaped or absolute-path-shaped
-  // decoded name can never produce a non-null result outside it. A path-separator-suffixed prefix
-  // guards against a sibling-directory false-positive (e.g. "node_modules-evil").
-  const rootWithSep = nodeModulesRoot.endsWith(sep) ? nodeModulesRoot : `${nodeModulesRoot}${sep}`;
-
-  if (candidate !== nodeModulesRoot && !candidate.startsWith(rootWithSep)) {
-    return undefined;
-  }
-
-  const packageJsonPath = join(candidate, "package.json");
+/**
+ * The package.json `version` field at dir, or undefined on ANY structural mismatch - absent,
+ * unparseable, or a non-string field (a garbage node_modules entry must never throw and kill the
+ * walk, the honest-skip posture this whole module keeps).
+ */
+function readInstalledVersion(pkgDir: string): string | undefined {
+  const packageJsonPath = join(pkgDir, "package.json");
 
   if (!existsSync(packageJsonPath)) {
     return undefined;
@@ -76,18 +76,179 @@ function npmSourceDir(purl: EcosystemPurl, targetDir: string): string | undefine
   try {
     parsed = JSON.parse(readFileSync(packageJsonPath, "utf8"));
   } catch {
-    // Unparseable package.json -> honest skip, never a throw (a garbage node_modules must not kill
-    // the run).
     return undefined;
   }
 
   const version = (parsed as { version?: unknown }).version;
 
-  if (typeof version !== "string" || version !== purl.version) {
+  return typeof version === "string" ? version : undefined;
+}
+
+/**
+ * The deterministic winner between two dirs indexed under the same `name@version`: the shorter path
+ * wins (closer to the workspace root is the more "normal" install), a tie broken lexicographically
+ * ({@link compareCodeUnits}) - never insertion/walk order, so the result is identical regardless of
+ * readdir's platform-dependent ordering.
+ */
+function preferShorterThenLexicographic(a: string, b: string): string {
+  if (a.length !== b.length) {
+    return a.length < b.length ? a : b;
+  }
+
+  return compareCodeUnits(a, b) <= 0 ? a : b;
+}
+
+/** readdirSync(withFileTypes) wrapped so a missing/unreadable dir is an honest empty list. */
+function safeReaddirDirents(dir: string): Dirent[] {
+  try {
+    return readdirSync(dir, { withFileTypes: true });
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Index one candidate package dir (its package.json version, if present and parseable) and then
+ * descend into its OWN nested node_modules, if any - the one recursive step that finds a
+ * non-hoisted version installed under a dependent's node_modules.
+ */
+function indexPackageDir(pkgDir: string, name: string, index: NpmSourceIndex, depth: number): void {
+  const version = readInstalledVersion(pkgDir);
+
+  if (version !== undefined) {
+    const key = `${name}@${version}`;
+    const existing = index.get(key);
+
+    index.set(
+      key,
+      existing === undefined ? pkgDir : preferShorterThenLexicographic(existing, pkgDir),
+    );
+  }
+
+  walkNodeModules(join(pkgDir, "node_modules"), index, depth + 1);
+}
+
+/** Index every package dir directly under a `node_modules/@scope` namespace dir. */
+function indexScopeDir(
+  scopeDir: string,
+  scopeName: string,
+  index: NpmSourceIndex,
+  depth: number,
+): void {
+  const entries = [...safeReaddirDirents(scopeDir)].sort((a, b) =>
+    compareCodeUnits(a.name, b.name),
+  );
+
+  for (const entry of entries) {
+    // Symlinks report isDirectory() === false on Dirent entries (discover.ts's walk idiom), so a
+    // directory symlink - a yarn/npm workspace member is one - is never followed: excluding it is
+    // correct (it names first-party workspace code, not an installed copy) and it is what keeps a
+    // symlink cycle from ever being entered in the first place.
+    if (!entry.isDirectory()) {
+      continue;
+    }
+
+    indexPackageDir(join(scopeDir, entry.name), `${scopeName}/${entry.name}`, index, depth);
+  }
+}
+
+/**
+ * Recursively index every installed package dir under a node_modules root, at ANY nesting depth, by
+ * descending ONLY through `node_modules -> package -> node_modules` chains - never a package's
+ * other subdirectories (src/, dist/, test fixtures, ...), which carry no further node_modules of
+ * interest and would make the walk needlessly expensive. Both `node_modules/<name>` and
+ * `node_modules/@scope/<name>` shapes are indexed. Entries are visited in {@link
+ * compareCodeUnits}-sorted order so the walk itself is deterministic (the duplicate tie-break in
+ * {@link preferShorterThenLexicographic} does not depend on it, but determinism here costs nothing
+ * and rules out any platform-readdir-order surprise).
+ */
+function walkNodeModules(nodeModulesDir: string, index: NpmSourceIndex, depth: number): void {
+  if (depth > MAX_NODE_MODULES_DEPTH) {
+    return;
+  }
+
+  const entries = [...safeReaddirDirents(nodeModulesDir)].sort((a, b) =>
+    compareCodeUnits(a.name, b.name),
+  );
+
+  for (const entry of entries) {
+    // Symlinks report isDirectory() === false on Dirent entries; see indexScopeDir for why that is
+    // exactly the loop guard this walk needs.
+    if (!entry.isDirectory()) {
+      continue;
+    }
+
+    if (entry.name.startsWith("@")) {
+      indexScopeDir(join(nodeModulesDir, entry.name), entry.name, index, depth);
+      continue;
+    }
+
+    indexPackageDir(join(nodeModulesDir, entry.name), entry.name, index, depth);
+  }
+}
+
+/**
+ * Build the full `name@version` -> dir index for one target dir's node_modules tree: ONE
+ * readdir-walk regardless of how many npm purls are subsequently looked up against it. Only ever
+ * runs under `--intensive`, and only when the first npm purl actually needs a lookup for this
+ * target dir (a pypi-only analysis set, or a target dir with nothing left unmemoized, never pays
+ * for this walk).
+ */
+function buildNpmSourceIndex(targetDir: string): NpmSourceIndex {
+  const index: NpmSourceIndex = new Map();
+
+  walkNodeModules(resolve(targetDir, "node_modules"), index, 0);
+
+  return index;
+}
+
+/**
+ * The index for a resolved target dir - built once and cached under it, or built fresh every call
+ * when no cache is supplied (the direct-call/test shape, where reuse across lookups does not
+ * matter).
+ */
+function npmSourceIndexFor(
+  targetDir: string,
+  cache: NpmSourceIndexCache | undefined,
+): NpmSourceIndex {
+  if (cache === undefined) {
+    return buildNpmSourceIndex(targetDir);
+  }
+
+  const key = resolve(targetDir);
+  const cached = cache.get(key);
+
+  if (cached !== undefined) {
+    return cached;
+  }
+
+  const built = buildNpmSourceIndex(targetDir);
+
+  cache.set(key, built);
+
+  return built;
+}
+
+/**
+ * Decode an npm purl's encoded name and look it up in the target dir's npm source index at the
+ * exact `name@version` key, returning the winning installed dir or undefined on ANY structural
+ * mismatch - the name never matches any installed package, or it does but no installed copy (at any
+ * nesting depth) carries this exact version.
+ */
+function npmSourceDir(
+  purl: EcosystemPurl,
+  targetDir: string,
+  cache?: NpmSourceIndexCache,
+): string | undefined {
+  // The decode exactly mirrors npmPackumentUrl's scoped-name decode (enrich.ts npmPackumentUrl):
+  // "%40scope/pkg" -> "@scope/pkg".
+  const name = safeDecode(purl.encodedName);
+
+  if (name === undefined) {
     return undefined;
   }
 
-  return candidate;
+  return npmSourceIndexFor(targetDir, cache).get(`${name}@${purl.version}`);
 }
 
 /**
@@ -145,7 +306,7 @@ function sitePackagesDir(venvDir: string): string {
  * follows as the second candidate when present. Absent venv or absent dist-info -> [] (honest skip,
  * never a fabricated guess). top_level.txt content is fully controlled by the installed package, so
  * a `..`-shaped or absolute-path-shaped line can never name a directory outside site-packages
- * (resolve + strict prefix-check, the npmSourceDir guard).
+ * (resolve + strict prefix-check, mirrored below in {@link topLevelPackageDir}).
  */
 function pypiSourceDirs(purl: EcosystemPurl, targetDir: string): string[] {
   const venvDir = join(targetDir, ".venv");
@@ -233,8 +394,17 @@ function topLevelPackageDir(sitePackages: string, distInfoDir: string): string |
  * order until the first positive answer). npm and pypi are the only supported ecosystems (Pattern
  * 4); every other type - including an unparseable purl - returns [] with zero fs probes beyond the
  * initial parse.
+ *
+ * `npmIndexCache` is optional and purely a performance seam: when supplied, each target dir's npm
+ * source index ({@link buildNpmSourceIndex}) is built at most once and reused across every purl
+ * looked up against this same cache - the one-readdir-walk-per-workspace contract. Omitted, a fresh
+ * index is built on every call (correct, just uncached - the direct-call/test shape).
  */
-export function sourceDirsFor(purl: string, targetDirs: string[]): string[] {
+export function sourceDirsFor(
+  purl: string,
+  targetDirs: string[],
+  npmIndexCache?: NpmSourceIndexCache,
+): string[] {
   const parsed = parsePurl(purl);
 
   if (parsed === undefined) {
@@ -249,7 +419,7 @@ export function sourceDirsFor(purl: string, targetDirs: string[]): string[] {
 
   for (const targetDir of sortedDirs) {
     if (parsed.type === "npm") {
-      const found = npmSourceDir(parsed, targetDir);
+      const found = npmSourceDir(parsed, targetDir, npmIndexCache);
 
       if (found !== undefined) {
         return [found];

@@ -5,7 +5,7 @@
  * scanPackageSources}), memoize the answer in the committed cache. The detail behind each step
  * lives in this module's own files: sources.ts, election.ts, invocation.ts, cache.ts.
  */
-export { sourceDirsFor } from "./sources";
+export { sourceDirsFor, type NpmSourceIndex, type NpmSourceIndexCache } from "./sources";
 export { electCopyrights, electExpression } from "./election";
 export {
   scancodeArgs,
