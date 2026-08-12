@@ -1,19 +1,23 @@
 /**
  * purl → ordered locally-present scan-candidate mapper (no registry/collector analog exists for
- * this). npm: an index of EVERY installed package dir under `<targetDir>/node_modules`, at any
- * nesting depth (a yarn node-modules-linker install hoists one version to the workspace root and
- * nests every other required version inside a dependent's own node_modules - see {@link
+ * this). Anything unsupported, or any structural mismatch, returns [] - an honest skip, never a
+ * fabricated guess.
+ *
+ * npm: an index of EVERY installed package dir under `<targetDir>/node_modules`, at any nesting
+ * depth (a yarn node-modules-linker install hoists one version to the workspace root and nests
+ * every other required version inside a dependent's own node_modules - see {@link
  * buildNpmSourceIndex}), looked up by decoded name + the purl's version MANDATORILY equal to the
  * installed `package.json` version (a stale node_modules must never poison the cache with the wrong
- * version's license). pypi: an in-project `.venv`'s site-packages, keyed by the PEP-503 structural
- * fold of the dist-info dir name (ADR-0015: the dir name IS the signal, no PEP-440/508 parsing)
- * - the dist-info dir itself is the first candidate (a wheel's METADATA and legal files live there,
- * not in the import package), the top_level.txt import package dir the second. Everything else, or
- * any structural mismatch, returns [] - an honest skip, never a fabricated guess. A `..`-shaped or
+ * version's license). The index carries no path-traversal risk by construction - it is built
+ * entirely from real directory entries the walk itself discovered, never from a join against
+ * caller- or purl-controlled input.
+ *
+ * pypi: an in-project `.venv`'s site-packages, keyed by the PEP-503 structural fold of the
+ * dist-info dir name (ADR-0015: the dir name IS the signal, no PEP-440/508 parsing) - the dist-info
+ * dir itself is the first candidate (a wheel's METADATA and legal files live there, not in the
+ * import package), the top_level.txt import package dir the second. A `..`-shaped or
  * absolute-path-shaped top_level.txt line can never escape site-packages (resolve + strict
- * prefix-check); the npm index carries no equivalent risk by construction - it is built entirely
- * from real directory entries the walk itself discovered, never from a join against caller- or
- * purl-controlled input.
+ * prefix-check).
  */
 import { existsSync, readdirSync, readFileSync, type Dirent } from "node:fs";
 import { join, resolve, sep } from "node:path";
@@ -85,17 +89,27 @@ function readInstalledVersion(pkgDir: string): string | undefined {
 }
 
 /**
- * The deterministic winner between two dirs indexed under the same `name@version`: the shorter path
- * wins (closer to the workspace root is the more "normal" install), a tie broken lexicographically
- * ({@link compareCodeUnits}) - never insertion/walk order, so the result is identical regardless of
- * readdir's platform-dependent ordering.
+ * The deterministic winner between two dirs indexed under the same `name@version`: the SHALLOWER
+ * path wins - depth measured as node_modules nesting levels, not string length (a deeply nested
+ * copy under short-named dependents can spell a SHORTER path than a shallower copy under one
+ * long-named dependent) and not raw segment count (a scoped dependent adds a segment without adding
+ * nesting). Ties break lexicographically ({@link compareCodeUnits}) - never insertion/walk order,
+ * so the result is identical regardless of readdir's platform-dependent ordering.
  */
-function preferShorterThenLexicographic(a: string, b: string): string {
-  if (a.length !== b.length) {
-    return a.length < b.length ? a : b;
+function preferShallowerThenLexicographic(a: string, b: string): string {
+  const depthA = nodeModulesDepth(a);
+  const depthB = nodeModulesDepth(b);
+
+  if (depthA !== depthB) {
+    return depthA < depthB ? a : b;
   }
 
   return compareCodeUnits(a, b) <= 0 ? a : b;
+}
+
+/** Nesting depth = how many `node_modules` levels the path passes through. */
+function nodeModulesDepth(path: string): number {
+  return path.split(sep).filter((segment) => segment === "node_modules").length;
 }
 
 /** readdirSync(withFileTypes) wrapped so a missing/unreadable dir is an honest empty list. */
@@ -121,7 +135,7 @@ function indexPackageDir(pkgDir: string, name: string, index: NpmSourceIndex, de
 
     index.set(
       key,
-      existing === undefined ? pkgDir : preferShorterThenLexicographic(existing, pkgDir),
+      existing === undefined ? pkgDir : preferShallowerThenLexicographic(existing, pkgDir),
     );
   }
 
@@ -159,8 +173,8 @@ function indexScopeDir(
  * interest and would make the walk needlessly expensive. Both `node_modules/<name>` and
  * `node_modules/@scope/<name>` shapes are indexed. Entries are visited in {@link
  * compareCodeUnits}-sorted order so the walk itself is deterministic (the duplicate tie-break in
- * {@link preferShorterThenLexicographic} does not depend on it, but determinism here costs nothing
- * and rules out any platform-readdir-order surprise).
+ * {@link preferShallowerThenLexicographic} does not depend on it, but determinism here costs
+ * nothing and rules out any platform-readdir-order surprise).
  */
 function walkNodeModules(nodeModulesDir: string, index: NpmSourceIndex, depth: number): void {
   if (depth > MAX_NODE_MODULES_DEPTH) {

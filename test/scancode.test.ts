@@ -753,7 +753,7 @@ describe("sourceDirsFor — npm nested node_modules (yarn hoisting)", () => {
     expect(result).toEqual([nestedDir]);
   });
 
-  test("duplicate same-version copies installed at different depths pick the SHORTEST path deterministically", () => {
+  test("duplicate same-version copies installed at different depths pick the SHALLOWEST path deterministically", () => {
     targetDir = mkdtempSync(join(tmpdir(), "scancode-npm-dup-depth-"));
     const shallow = writeNpmPackage(targetDir, "dup-pkg", "1.0.0");
 
@@ -764,7 +764,24 @@ describe("sourceDirsFor — npm nested node_modules (yarn hoisting)", () => {
     expect(result).toEqual([shallow]);
   });
 
-  test("duplicate same-version copies at EQUAL path length pick the lexicographically-first path", () => {
+  test("depth means node_modules levels, not string length: a 2-level copy under one long-named dependent beats a 3-level copy under short-named dependents", () => {
+    targetDir = mkdtempSync(join(tmpdir(), "scancode-npm-dup-len-"));
+    // Three levels via one-char dependents spells a SHORTER string than two levels via one
+    // long-named dependent - the string-length proxy would pick the deeper copy.
+    writeNestedNpmPackage(targetDir, ["a", "b"], "dup-pkg", "1.0.0");
+    const twoLevels = writeNestedNpmPackage(
+      targetDir,
+      ["an-extremely-long-dependent-package-name"],
+      "dup-pkg",
+      "1.0.0",
+    );
+
+    const result = sourceDirsFor("pkg:npm/dup-pkg@1.0.0", [targetDir]);
+
+    expect(result).toEqual([twoLevels]);
+  });
+
+  test("duplicate same-version copies at EQUAL nesting depth pick the lexicographically-first path", () => {
     targetDir = mkdtempSync(join(tmpdir(), "scancode-npm-dup-tie-"));
     const inDepA = writeNestedNpmPackage(targetDir, ["dep-a"], "dup-pkg", "1.0.0");
 
