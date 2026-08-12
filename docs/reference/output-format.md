@@ -282,7 +282,7 @@ rendered empty, when no package carries that kind of marker.
 | Column | Contents |
 | --- | --- |
 | Package | the package name |
-| In-depth (ScanCode) | the ScanCode-elected value, canonicalized (redundant boolean-algebra structure simplified away): a precise SPDX expression, or the bare family token when the assessment itself is imprecise |
+| In-depth (ScanCode) | the ScanCode-detected value, canonicalized: a precise SPDX expression, or the bare family token when the assessment itself is imprecise |
 | Quick check | the disagreeing declared/registry signal member(s), comma-joined |
 | Used in | every target the package occurs in |
 
