@@ -294,13 +294,15 @@ diverging docker occurrence and that image's own declared claims:
 | Package | the package name |
 | Claims by image | every docker occurrence, semicolon-joined as `<target>: <claims>`; an occurrence that declared no claim at all reads `(no declared license)` |
 
-Both comparisons — ScanCode vs quick check, and the cross-image claim
-sets — canonicalize the boolean-algebra structure on every side before
-deciding agreement or divergence, so a spelling-only reordering (`MIT AND
-CC0-1.0` read back as `CC0-1.0 AND MIT`) never manufactures a marker by
-itself. The Quick check and Claims by image columns above still render each
-claim's as-observed spelling; canonicalization governs the decision, never
-what a row displays.
+Every comparison this report and the policy gate make — ScanCode vs quick
+check, the cross-image claim sets, and an `[[clarify]]`/`[[override]]`
+`expects` match ([policy.md#clarify](./policy.md#clarify)) — canonicalizes
+the boolean-algebra structure on every side before deciding agreement,
+divergence, or staleness, so a spelling-only reordering (`MIT AND CC0-1.0`
+read back as `CC0-1.0 AND MIT`) never manufactures a marker or reopens a
+decision by itself. The Quick check and Claims by image columns above still
+render each claim's as-observed spelling; canonicalization governs the
+decision, never what a row displays.
 
 Which packages carry a marker is placement, normatively defined in
 [report-placement.md](./report-placement.md#narrative-sections-verdict--or-finding-driven-deduped).

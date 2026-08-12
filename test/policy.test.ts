@@ -1714,12 +1714,15 @@ describe("evaluate — staleness-guarded overrides", () => {
 // registry claim. signalContradicts/baseSatisfiesAssertion both feed
 // `expression` into spdx-satisfies's allowlist argument, which throws on an
 // AND entry - so a compound override (either half compound) instead compares
-// `expects` against the observed signal by LITERAL claim-string equality,
-// mirroring signalMatches's own normalization (case-insensitive, trimmed, the
-// RAW claim - never re-derived through the normalizer). Modeled on the real
-// spdx-ranges dogfood case: npm declares "(MIT AND CC-BY-3.0)", the in-depth
-// scan reads only the root LICENSE and sees "MIT" - two co-present signal
-// members, one of which is the compound the clarify names.
+// `expects` against the observed signal by CANONICAL claim-string equality:
+// both sides run through canonicalizeExpression (flatten, dedupe, absorb,
+// sort) before the case-insensitive, trimmed comparison signalMatches always
+// applied, so a registry re-spelling of the same license set - reordered
+// operands, a duplicated conjunct, an absorbable branch - never reopens the
+// override. Only a genuine change to the license SET does. Modeled on the
+// real spdx-ranges dogfood case: npm declares "(MIT AND CC-BY-3.0)", the
+// in-depth scan reads only the root LICENSE and sees "MIT" - two co-present
+// signal members, one of which is the compound the clarify names.
 // ===========================================================================
 
 describe("evaluate — COMPOUND expects (the AND/OR registry-claim precondition)", () => {
@@ -1744,7 +1747,7 @@ describe("evaluate — COMPOUND expects (the AND/OR registry-claim precondition)
     expect(verdicts[0].rule).toBe("clarify[0]");
   });
 
-  test("the claim changing ANY character goes stale (fail closed), naming expected and now-observed", () => {
+  test("a genuine change to the license SET goes stale (fail closed), naming expected and now-observed — not merely a re-spelling", () => {
     const { verdicts } = runEngine(
       [scanPkgSpec("compound-pkg", "(MIT AND CC0-1.0)", "MIT", ["backend"])],
       compoundClarify,
@@ -1754,6 +1757,62 @@ describe("evaluate — COMPOUND expects (the AND/OR registry-claim precondition)
     expect(verdicts[0].rule).toContain("override:stale");
     expect(verdicts[0].reason).toContain(compoundClaim); // expected
     expect(verdicts[0].reason).toContain("(MIT AND CC0-1.0)"); // now-observed
+  });
+
+  test("a re-spelling of the SAME license set — a parenthesized `expects` (the dogfood shape) against an unparenthesized, reordered claim — stays APPLIED — canonical comparison, not a stale trigger", () => {
+    const respellClaim = "(MIT AND CC0-1.0)";
+    const policyText = [
+      "[[clarify]]",
+      'package = { name = "respelled-pkg" }',
+      `expects = ${JSON.stringify(respellClaim)}`,
+      `expression = ${JSON.stringify(respellClaim)}`,
+      'reason = "the registry declares (MIT AND CC0-1.0); the in-depth scan only sees the root MIT license"',
+    ].join("\n");
+    const { verdicts } = runEngine(
+      [scanPkgSpec("respelled-pkg", "CC0-1.0 AND MIT", "MIT", ["backend"])],
+      policyText,
+    );
+
+    expect(verdicts[0].status).toBe("ok");
+    expect(verdicts[0].rule).toBe("clarify[0]");
+  });
+
+  test("a genuine set change (MIT AND CC0-1.0 -> MIT AND Apache-2.0) still flags override:stale under canonical comparison", () => {
+    const baseClaim = "MIT AND CC0-1.0";
+    const policyText = [
+      "[[clarify]]",
+      'package = { name = "set-changed-pkg" }',
+      `expects = ${JSON.stringify(baseClaim)}`,
+      `expression = ${JSON.stringify(baseClaim)}`,
+      'reason = "the registry declares MIT AND CC0-1.0; the in-depth scan only sees the root MIT license"',
+    ].join("\n");
+    const { verdicts } = runEngine(
+      [scanPkgSpec("set-changed-pkg", "MIT AND Apache-2.0", "MIT", ["backend"])],
+      policyText,
+    );
+
+    expect(verdicts[0].status).toBe("fail");
+    expect(verdicts[0].rule).toContain("override:stale");
+    expect(verdicts[0].reason).toContain(baseClaim); // expected
+    expect(verdicts[0].reason).toContain("MIT AND Apache-2.0"); // now-observed
+  });
+
+  test("a noisy-but-equal compound claim (duplicated conjunct, an absorbable OR branch) canonicalizes to the same set and stays APPLIED", () => {
+    const baseClaim = "MIT AND CC0-1.0";
+    const policyText = [
+      "[[clarify]]",
+      'package = { name = "noisy-pkg" }',
+      `expects = ${JSON.stringify(baseClaim)}`,
+      `expression = ${JSON.stringify(baseClaim)}`,
+      'reason = "the registry declares MIT AND CC0-1.0; the in-depth scan only sees the root MIT license"',
+    ].join("\n");
+    const { verdicts } = runEngine(
+      [scanPkgSpec("noisy-pkg", "MIT AND CC0-1.0 AND (MIT OR Apache-2.0)", "MIT", ["backend"])],
+      policyText,
+    );
+
+    expect(verdicts[0].status).toBe("ok");
+    expect(verdicts[0].rule).toBe("clarify[0]");
   });
 
   test("an OR-compound expression also takes the literal-equality path (either half compound trips it)", () => {
