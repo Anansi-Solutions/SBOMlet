@@ -95,7 +95,10 @@ by package version — override its path with `--scancode-cache`. The memo also
 records the versions that were scanned and found no licence, so an
 already-assessed version is never re-scanned. A package whose sources are not
 present locally is skipped and reported on stderr, never memoised, so a later
-install can still scan it.
+install can still scan it. The search covers the whole `node_modules` tree, not
+just its top level, so a non-hoisted version nested under a dependent's own
+`node_modules` is still found — a skip genuinely means that exact version isn't
+installed anywhere in the workspace.
 
 A package that times out or otherwise fails to scan (each bounded by
 `--package-timeout-mins`, 10 minutes by default) is skipped and reported the same

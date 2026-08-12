@@ -227,6 +227,12 @@ can be read from a structural signal — a file's existence, a lockfile edge, a 
 shape — read that instead of lexing free-form text; structural signals have no
 decoy edge cases.
 
+The same posture applies when untrusted input selects a filesystem location:
+enumerate the real directory and match the input against what exists, rather than
+joining the input into a path and guarding the construction. A lookup that never
+builds the path has no traversal to defend; a fenced join carries residual risk
+that every future edit near the guard can weaken.
+
 Source: `normalize/normalize.ts` (`AMBIGUOUS_FAMILY`, `findingFromClaims`),
 `policy/copyleftFamily.ts`, `collectors/terraform.ts`
 (`absentModulesJsonShouldFail`), `collectors/dockerfile.ts` (`discoverDockerfiles`),

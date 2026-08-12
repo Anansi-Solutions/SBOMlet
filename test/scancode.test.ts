@@ -16,6 +16,7 @@ import {
   mkdtempSync,
   readFileSync,
   rmSync,
+  symlinkSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -687,6 +688,161 @@ describe("sourceDirsFor — npm mapping", () => {
       rmSync(dirA, { recursive: true, force: true });
       rmSync(dirB, { recursive: true, force: true });
     }
+  });
+});
+
+describe("sourceDirsFor — npm nested node_modules (yarn hoisting)", () => {
+  let targetDir: string;
+
+  afterEach(() => {
+    if (targetDir !== undefined) {
+      rmSync(targetDir, { recursive: true, force: true });
+    }
+  });
+
+  function writeNpmPackage(dir: string, name: string, version: string): string {
+    const pkgDir = join(dir, "node_modules", ...name.split("/"));
+
+    mkdirSync(pkgDir, { recursive: true });
+    writeFileSync(join(pkgDir, "package.json"), JSON.stringify({ name, version }));
+    return pkgDir;
+  }
+
+  /**
+   * Write a package at an arbitrary node_modules nesting depth: pathSegments are the chain of
+   * DEPENDENT package names whose own node_modules the target is nested under (e.g. ["some-dep"]
+   * -> node_modules/some-dep/node_modules/<name>).
+   */
+  function writeNestedNpmPackage(
+    dir: string,
+    pathSegments: string[],
+    name: string,
+    version: string,
+  ): string {
+    const parts = ["node_modules"];
+
+    for (const segment of pathSegments) {
+      parts.push(segment, "node_modules");
+    }
+
+    parts.push(...name.split("/"));
+
+    const pkgDir = join(dir, ...parts);
+
+    mkdirSync(pkgDir, { recursive: true });
+    writeFileSync(join(pkgDir, "package.json"), JSON.stringify({ name, version }));
+    return pkgDir;
+  }
+
+  test("a version NESTED under a dependent's own node_modules resolves to the nested dir, the hoisted root resolves the hoisted version, and an uninstalled version still honest-skips", () => {
+    targetDir = mkdtempSync(join(tmpdir(), "scancode-npm-nested-"));
+    const hoistedDir = writeNpmPackage(targetDir, "left-pad", "1.3.0");
+    const nestedDir = writeNestedNpmPackage(targetDir, ["some-dep"], "left-pad", "1.4.0");
+
+    expect(sourceDirsFor("pkg:npm/left-pad@1.4.0", [targetDir])).toEqual([nestedDir]);
+    expect(sourceDirsFor("pkg:npm/left-pad@1.3.0", [targetDir])).toEqual([hoistedDir]);
+    expect(sourceDirsFor("pkg:npm/left-pad@9.9.9", [targetDir])).toEqual([]);
+  });
+
+  test("a scoped package nested under a dependent's own node_modules resolves to the nested dir", () => {
+    targetDir = mkdtempSync(join(tmpdir(), "scancode-npm-nested-scoped-"));
+    const nestedDir = writeNestedNpmPackage(targetDir, ["some-dep"], "@scope/pkg", "2.0.0");
+
+    const result = sourceDirsFor("pkg:npm/%40scope/pkg@2.0.0", [targetDir]);
+
+    expect(result).toEqual([nestedDir]);
+  });
+
+  test("duplicate same-version copies installed at different depths pick the SHALLOWEST path deterministically", () => {
+    targetDir = mkdtempSync(join(tmpdir(), "scancode-npm-dup-depth-"));
+    const shallow = writeNpmPackage(targetDir, "dup-pkg", "1.0.0");
+
+    writeNestedNpmPackage(targetDir, ["some-dep"], "dup-pkg", "1.0.0");
+
+    const result = sourceDirsFor("pkg:npm/dup-pkg@1.0.0", [targetDir]);
+
+    expect(result).toEqual([shallow]);
+  });
+
+  test("depth means node_modules levels, not string length: a 2-level copy under one long-named dependent beats a 3-level copy under short-named dependents", () => {
+    targetDir = mkdtempSync(join(tmpdir(), "scancode-npm-dup-len-"));
+    // Three levels via one-char dependents spells a SHORTER string than two levels via one
+    // long-named dependent - the string-length proxy would pick the deeper copy.
+    writeNestedNpmPackage(targetDir, ["a", "b"], "dup-pkg", "1.0.0");
+    const twoLevels = writeNestedNpmPackage(
+      targetDir,
+      ["an-extremely-long-dependent-package-name"],
+      "dup-pkg",
+      "1.0.0",
+    );
+
+    const result = sourceDirsFor("pkg:npm/dup-pkg@1.0.0", [targetDir]);
+
+    expect(result).toEqual([twoLevels]);
+  });
+
+  test("duplicate same-version copies at EQUAL nesting depth pick the lexicographically-first path", () => {
+    targetDir = mkdtempSync(join(tmpdir(), "scancode-npm-dup-tie-"));
+    const inDepA = writeNestedNpmPackage(targetDir, ["dep-a"], "dup-pkg", "1.0.0");
+
+    writeNestedNpmPackage(targetDir, ["dep-b"], "dup-pkg", "1.0.0");
+
+    const result = sourceDirsFor("pkg:npm/dup-pkg@1.0.0", [targetDir]);
+
+    expect(result).toEqual([inDepA]);
+  });
+
+  test("a directory symlink inside node_modules is never followed (no loop, workspace-member symlink excluded)", () => {
+    targetDir = mkdtempSync(join(tmpdir(), "scancode-npm-symlink-"));
+    const workspaceMemberDir = mkdtempSync(join(tmpdir(), "scancode-npm-symlink-target-"));
+
+    writeFileSync(
+      join(workspaceMemberDir, "package.json"),
+      JSON.stringify({ name: "linked-pkg", version: "1.0.0" }),
+    );
+    // A package reachable ONLY by following the symlink — proves the walk does not descend into
+    // it (as opposed to merely not indexing the symlink dir itself).
+    const beyondSymlink = join(workspaceMemberDir, "node_modules", "beyond-symlink-pkg");
+
+    mkdirSync(beyondSymlink, { recursive: true });
+    writeFileSync(
+      join(beyondSymlink, "package.json"),
+      JSON.stringify({ name: "beyond-symlink-pkg", version: "1.0.0" }),
+    );
+
+    mkdirSync(join(targetDir, "node_modules"), { recursive: true });
+    const linkPath = join(targetDir, "node_modules", "linked-pkg");
+
+    try {
+      symlinkSync(workspaceMemberDir, linkPath, "junction");
+    } catch {
+      // Symlink privileges unavailable in this environment (e.g. non-admin Windows without
+      // Developer Mode) — skip rather than false-fail; the property is proven wherever symlinks
+      // ARE available (CI, most dev machines with Developer Mode on).
+      rmSync(workspaceMemberDir, { recursive: true, force: true });
+      return;
+    }
+
+    try {
+      expect(sourceDirsFor("pkg:npm/linked-pkg@1.0.0", [targetDir])).toEqual([]);
+      expect(sourceDirsFor("pkg:npm/beyond-symlink-pkg@1.0.0", [targetDir])).toEqual([]);
+    } finally {
+      rmSync(workspaceMemberDir, { recursive: true, force: true });
+    }
+  });
+
+  test("a package nested 3+ levels deep under successive node_modules is found", () => {
+    targetDir = mkdtempSync(join(tmpdir(), "scancode-npm-deep-"));
+    const deepDir = writeNestedNpmPackage(
+      targetDir,
+      ["dep-a", "dep-b", "dep-c"],
+      "deep-pkg",
+      "5.0.0",
+    );
+
+    const result = sourceDirsFor("pkg:npm/deep-pkg@5.0.0", [targetDir]);
+
+    expect(result).toEqual([deepDir]);
   });
 });
 
