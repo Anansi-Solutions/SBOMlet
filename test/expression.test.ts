@@ -6,6 +6,7 @@ import parse from "spdx-expression-parse";
 import satisfies from "spdx-satisfies";
 
 import { COPYLEFT_IDS } from "../src/policy/copyleft";
+import { denyRuleFor } from "../src/policy/denylist";
 import {
   canonicalizeExpression,
   elect,
@@ -14,6 +15,7 @@ import {
   renderNode,
   type ExpressionNode,
 } from "../src/normalize/expression";
+import type { Policy } from "../src/policy/schema";
 
 // parse() output is structurally compatible with ExpressionNode (inline-union
 // purity pattern: we never import the lib's internal types).
@@ -289,5 +291,254 @@ describe("canonicalizeExpression — conservative boolean-algebra simplification
 
     expect(canonicalizeExpression(garbage)).toBe(garbage);
     expect(canonicalizeExpression("MIT AND")).toBe("MIT AND");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Adversarial property suite. canonicalizeExpression is now load-bearing for
+// the policy gate (agreement, staleness, and cross-image divergence all
+// compare canonically), so this section holds it to a stronger bar than the
+// hand fixtures above: a tiny reference boolean evaluator treats an
+// expression as a Boolean formula over its leaves (a leaf = a license id
+// INCLUDING any WITH-exception suffix, treated atomically) and checks
+// canonicalization never changes the formula it computes. Everything below
+// is driven by a seeded LCG, never Math.random, so a failure reproduces
+// byte-for-byte.
+//
+// The documented boundary (a maintainer decision — a Blake-style canonical
+// form was explicitly rejected): comparisons here are spelling-blind under
+// reordering, duplication, and absorption noise, but deliberately NOT under
+// re-factoring — `(A OR B) AND (A OR C)` and `A OR (B AND C)` stay distinct
+// even though a full Boolean-algebra normal form would equate them. That
+// direction fails safe as a visible conflict rather than a silent one.
+// ---------------------------------------------------------------------------
+
+/**
+ * Minimal Numerical-Recipes LCG (state_{n+1} = 1664525*state_n + 1013904223 mod 2^32) — the
+ * property suite's only source of randomness, seeded once for byte-determinism.
+ */
+class Lcg {
+  private state: number;
+
+  constructor(seed: number) {
+    this.state = seed >>> 0;
+  }
+
+  private next(): number {
+    this.state = (Math.imul(this.state, 1664525) + 1013904223) >>> 0;
+
+    return this.state;
+  }
+
+  /** A float in [0, 1). */
+  float(): number {
+    return this.next() / 4294967296;
+  }
+
+  /** An integer in [0, bound). */
+  int(bound: number): number {
+    return Math.floor(this.float() * bound);
+  }
+}
+
+const PROPERTY_SEED = 0xc0ffee;
+
+/**
+ * Nine real SPDX ids: three near-miss pairs (MIT/MIT-0, CC-BY-4.0/CC-BY-SA-4.0,
+ * GPL-2.0-only/GPL-2.0-or-later), one leaf carrying a WITH exception, and BUSL-1.1 — the only
+ * pool member the shipped source-available defaults (builtinDenylist.ts) deny, so the
+ * deny-election gate predicate below is actually exercised rather than vacuously undefined.
+ */
+const LEAF_POOL: ReadonlyArray<string> = [
+  "MIT",
+  "MIT-0",
+  "CC-BY-4.0",
+  "CC-BY-SA-4.0",
+  "GPL-2.0-only",
+  "GPL-2.0-or-later",
+  "Apache-2.0",
+  "Apache-2.0 WITH LLVM-exception",
+  "BUSL-1.1",
+];
+
+/** Random AND/OR expression text, depth-bounded; duplicate leaves are deliberate, not avoided. */
+function randomExpressionText(rng: Lcg, depth: number): string {
+  if (depth <= 0 || rng.float() < 0.35) {
+    return LEAF_POOL[rng.int(LEAF_POOL.length)]!;
+  }
+
+  const left = randomExpressionText(rng, depth - 1);
+  const right = randomExpressionText(rng, depth - 1);
+  const conjunction = rng.float() < 0.5 ? "AND" : "OR";
+
+  return `(${left} ${conjunction} ${right})`;
+}
+
+/** Every distinct rendered leaf in a parsed tree, insertion-ordered and deduped. */
+function collectLeaves(node: ExpressionNode, into: Set<string>): void {
+  if ("license" in node) {
+    into.add(renderNode(node));
+
+    return;
+  }
+
+  collectLeaves(node.left, into);
+  collectLeaves(node.right, into);
+}
+
+/** Evaluates a parsed tree against one leaf-to-truth assignment (an absent leaf reads false). */
+function evaluateNode(node: ExpressionNode, assignment: ReadonlyMap<string, boolean>): boolean {
+  if ("license" in node) {
+    return assignment.get(renderNode(node)) ?? false;
+  }
+
+  const left = evaluateNode(node.left, assignment);
+  const right = evaluateNode(node.right, assignment);
+
+  return node.conjunction === "and" ? left && right : left || right;
+}
+
+/** The full truth table of a parsed tree over every 2^n assignment of `leaves` (fixed order). */
+function truthTable(node: ExpressionNode, leaves: ReadonlyArray<string>): boolean[] {
+  const rows: boolean[] = [];
+
+  for (let mask = 0; mask < 2 ** leaves.length; mask++) {
+    const assignment = new Map(leaves.map((leaf, i) => [leaf, (mask & (1 << i)) !== 0]));
+
+    rows.push(evaluateNode(node, assignment));
+  }
+
+  return rows;
+}
+
+/**
+ * Truth-table equality of two SPDX expression texts over the union of their leaves — bounded
+ * ≤ 10 by construction (LEAF_POOL has 9 members; the hand fixtures below stay well under it too).
+ */
+function semanticallyEqual(a: string, b: string): boolean {
+  const nodeA = p(a);
+  const nodeB = p(b);
+  const leaves = new Set<string>();
+
+  collectLeaves(nodeA, leaves);
+  collectLeaves(nodeB, leaves);
+
+  const order = [...leaves];
+
+  return JSON.stringify(truthTable(nodeA, order)) === JSON.stringify(truthTable(nodeB, order));
+}
+
+/**
+ * The minimal real Policy relying only on the shipped BUSL/SSPL/Elastic defaults — an empty
+ * `deny` means denyRuleFor here is the real deny-election predicate over BUILTIN_DENY_RULES, not
+ * a stub with hand-authored rules.
+ */
+const DENY_ONLY_DEFAULTS_POLICY: Policy = {
+  unknownHandling: "warn",
+  devDependencies: "warn",
+  osDependencies: "warn",
+  suppressedWorkspaces: [],
+  compatible: [],
+  clarify: [],
+  deny: [],
+  allowSourceAvailable: [],
+};
+
+// Every hand fixture from the describe above, re-checked against the oracle: the noisy
+// motivating example, both absorption directions, flatten-only, both idempotence shapes,
+// no-distribution, the WITH-exception leaf, deep mixed nesting, and the single-leaf collapse.
+const HAND_FIXTURES: ReadonlyArray<string> = [
+  "(MIT AND OFL-1.1 AND CC-BY-4.0) AND (CC-BY-4.0 OR CC-BY-3.0) AND " +
+    "(OFL-1.1 AND (CC-BY-4.0 AND OFL-1.1 AND MIT) AND MIT AND (MIT AND OFL-1.1 AND CC-BY-4.0))",
+  "MIT AND (MIT OR Apache-2.0)",
+  "MIT OR (MIT AND Apache-2.0)",
+  "MIT AND (Apache-2.0 AND BSD-2-Clause)",
+  "MIT AND MIT",
+  "(MIT OR MIT)",
+  "Apache-2.0 AND (MIT OR BSD-2-Clause)",
+  "(GPL-2.0-only WITH Classpath-exception-2.0) AND (GPL-2.0-only WITH Classpath-exception-2.0)",
+  "(MIT OR (MIT AND Apache-2.0)) AND (BSD-2-Clause OR BSD-2-Clause)",
+  "Apache-2.0 AND (Apache-2.0 OR GPL-2.0-only)",
+];
+
+const RANDOM_CASE_COUNT = 3000;
+const RANDOM_PAIR_COUNT = 1500;
+const MAX_DEPTH = 5;
+
+/**
+ * RANDOM_CASE_COUNT deterministic expressions from the seeded LCG, generated once so every
+ * property test below shares the identical corpus.
+ */
+const RANDOM_CASES: ReadonlyArray<string> = ((): ReadonlyArray<string> => {
+  const rng = new Lcg(PROPERTY_SEED);
+
+  return Array.from({ length: RANDOM_CASE_COUNT }, () => randomExpressionText(rng, MAX_DEPTH));
+})();
+
+describe("canonicalizeExpression — adversarial property suite (truth-table oracle)", () => {
+  test(`truth-table oracle: every hand fixture (${HAND_FIXTURES.length}) canonicalizes to a semantically identical formula`, () => {
+    for (const fixture of HAND_FIXTURES) {
+      expect(semanticallyEqual(fixture, canonicalizeExpression(fixture))).toBe(true);
+    }
+  });
+
+  test(`truth-table oracle: ${RANDOM_CASE_COUNT} seeded-random expressions canonicalize to a semantically identical formula`, () => {
+    for (const original of RANDOM_CASES) {
+      expect(semanticallyEqual(original, canonicalizeExpression(original))).toBe(true);
+    }
+  });
+
+  test("leaf containment: every canonical leaf already appeared in the original (absorption may drop, nothing may appear)", () => {
+    for (const original of RANDOM_CASES) {
+      const originalLeaves = new Set<string>();
+      const canonicalLeaves = new Set<string>();
+
+      collectLeaves(p(original), originalLeaves);
+      collectLeaves(p(canonicalizeExpression(original)), canonicalLeaves);
+
+      for (const leaf of canonicalLeaves) {
+        expect(originalLeaves.has(leaf)).toBe(true);
+      }
+    }
+  });
+
+  test("idempotence + round-trip parse hold on every seeded-random case", () => {
+    for (const original of RANDOM_CASES) {
+      assertRoundTripAndIdempotent(canonicalizeExpression(original));
+    }
+  });
+
+  test("gate-predicate preservation: isCopyleft and the deny election agree on original vs. canonical", () => {
+    for (const original of RANDOM_CASES) {
+      const canonical = canonicalizeExpression(original);
+
+      expect(isCopyleft(p(canonical))).toBe(isCopyleft(p(original)));
+      expect(denyRuleFor(DENY_ONLY_DEFAULTS_POLICY, canonical, "property-suite-pkg")).toEqual(
+        denyRuleFor(DENY_ONLY_DEFAULTS_POLICY, original, "property-suite-pkg"),
+      );
+    }
+  });
+
+  test(`false-agreement kill-test: ${RANDOM_PAIR_COUNT} seeded-random pairs never canonical-equate two semantically different expressions`, () => {
+    // The catastrophic direction only: canonical-equality must always imply semantic equality.
+    // The converse — semantic equality implying canonical-equality — is never asserted here or
+    // anywhere else; re-factoring noise (see the module doc boundary above) deliberately stays a
+    // visible conflict rather than a silent agreement.
+    const rng = new Lcg(PROPERTY_SEED ^ 0x5eed);
+    let agreementsChecked = 0;
+
+    for (let i = 0; i < RANDOM_PAIR_COUNT; i++) {
+      const a = RANDOM_CASES[rng.int(RANDOM_CASES.length)]!;
+      const b = RANDOM_CASES[rng.int(RANDOM_CASES.length)]!;
+
+      if (canonicalizeExpression(a) === canonicalizeExpression(b)) {
+        agreementsChecked++;
+        expect(semanticallyEqual(a, b)).toBe(true);
+      }
+    }
+
+    // A sanity floor: the seeded pairs must exercise the agreement branch at least once, or the
+    // kill-test above is vacuous.
+    expect(agreementsChecked).toBeGreaterThan(0);
   });
 });

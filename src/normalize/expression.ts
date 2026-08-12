@@ -310,7 +310,10 @@ function canonicalizeNode(node: ExpressionNode): CanonicalNode {
  * case - by the conservative laws in {@link canonicalizeNode}: flatten, dedupe, absorb, and sort,
  * never distribute. Idempotent (canonicalizing the output again is a no-op) and round-trip safe
  * (the output always reparses). Unparseable input is returned UNCHANGED - this never throws and
- * never guesses, the honest-residual posture the rest of this module follows.
+ * never guesses, the honest-residual posture the rest of this module follows. A comparison built on
+ * this output is spelling-blind under reordering, duplication, and absorption noise, but never
+ * under re-factoring - `(A OR B) AND (A OR C)` and `A OR (B AND C)` stay distinct - so that
+ * direction fails safe as a visible conflict instead of a silently-accepted rewrite.
  */
 export function canonicalizeExpression(text: string): string {
   let parsed: ExpressionNode;
