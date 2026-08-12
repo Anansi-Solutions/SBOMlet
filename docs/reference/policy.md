@@ -194,6 +194,14 @@ because the underlying SPDX-satisfies check that powers the simple case cannot t
 an `AND` expression as an allowlist entry (the same restriction the Validation
 section describes for `[[deny]]` and `[[compatible]]` patterns).
 
+This literal match is deliberately spelling-sensitive — unlike the ScanCode
+assessment and cross-image comparisons in
+[output-format.md](./output-format.md#assessment-conflicts), which canonicalize
+both sides before deciding agreement. `expects` is a tripwire for the observed
+metadata *changing*, not an equality test: even a harmless re-spelling of the
+same compound licence should reopen the override for review, not silently
+keep passing.
+
 The tool also ships its own curated clarifications for commonly-ambiguous
 projects, applied without your re-authoring them. When a project-level
 `[[clarify]]` names the same package, your entry takes precedence.

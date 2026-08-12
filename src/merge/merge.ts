@@ -13,6 +13,7 @@
 import { type } from "arktype";
 
 import { extractCopyrightLines } from "../extract/copyright";
+import { canonicalizeExpression } from "../normalize/expression";
 import {
   compareCodeUnits,
   comparePackages,
@@ -440,9 +441,22 @@ function recordDockerOccurrenceClaims(
   }
 }
 
+/**
+ * Comparison-only key for the divergence claim SET, spelling-blind on the expression component:
+ * canonicalizeExpression normalizes claim.raw before it joins the key, so two images that declare
+ * the SAME compound license reordered or reduced differently (`MIT AND CC0-1.0` vs
+ * `CC0-1.0 AND MIT`) are the same set member, never a spurious divergence. This key exists only for
+ * {@link crossImageClaimDivergence}'s set-equality check - the recorded/rendered `byTarget` claims
+ * below still come from each claim's own `raw`, so the marker always shows what each image actually
+ * said, never the canonicalized form.
+ */
+function canonicalClaimKey(claim: LicenseClaim): string {
+  return `${claim.kind}\0${claim.source}\0${canonicalizeExpression(claim.raw)}`;
+}
+
 /** Order/duplicate-insensitive canonical key for one occurrence's claim SET. */
 function claimSetKey(claims: ReadonlyArray<LicenseClaim>): string {
-  return [...new Set(claims.map(claimKey))].sort(compareCodeUnits).join("");
+  return [...new Set(claims.map(canonicalClaimKey))].sort(compareCodeUnits).join("");
 }
 
 /**

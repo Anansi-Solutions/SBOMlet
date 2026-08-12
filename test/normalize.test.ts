@@ -1837,6 +1837,31 @@ describe("annotateFindings — scancode senior assessment (the re-pinned fill ma
     });
   });
 
+  test("canonical agreement: a declared compound claim spelled differently from the assessment still agrees — both sides canonicalize before the exact-equality check, so spelling alone never creates a conflict", () => {
+    const agreeing = pkg("canonical-agree-pkg", "1.0.0", [
+      claim("MIT AND CC0-1.0", "expression"),
+      scancodeClaim("CC0-1.0 AND MIT"),
+    ]);
+    const agreeingFinding = annotateFindings(modelOf(agreeing), []).model.packages[0]!.finding!;
+
+    expect(agreeingFinding.source).toBe("scancode");
+    expect(agreeingFinding.expression).toBe("CC0-1.0 AND MIT");
+    expect(agreeingFinding.conflict).toBeUndefined();
+
+    const differing = pkg("canonical-disagree-pkg", "1.0.0", [
+      claim("MIT AND ISC", "expression"),
+      scancodeClaim("CC0-1.0 AND MIT"),
+    ]);
+    const differingFinding = annotateFindings(modelOf(differing), []).model.packages[0]!.finding!;
+
+    expect(differingFinding.source).not.toBe("scancode");
+    expect(differingFinding.conflict).toEqual({
+      kind: "scancode",
+      assessed: "CC0-1.0 AND MIT",
+      disagreeing: ["MIT AND ISC"],
+    });
+  });
+
   test("imprecise assessment vs an out-of-family PRECISE base (C2 copyleft): the base stands and the disagreement is a conflict — an imprecise answer never upgrades or absorbs", () => {
     const entry = pkg("imprecise-scan-vs-copyleft-pkg", "1.0.0", [
       claim("GPL-3.0-only"),

@@ -28,6 +28,7 @@ import {
 } from "../model/dependencies";
 import { COULD_BE_COPYLEFT_FAMILIES } from "../policy/copyleftFamily";
 import {
+  canonicalizeExpression,
   elect,
   isCompoundClaim,
   isCopyleft,
@@ -834,19 +835,24 @@ function quickCheckClaims(claims: ReadonlyArray<LicenseClaim>): LicenseClaim[] {
 
 /**
  * True when one quick-check claim AGREES with the precise in-depth expression. A precise member P
- * agrees iff P === S (normalized exact equality, cheap first check) or satisfies(P, [S]) holds
- * - satisfies is wrapped defensively for the spdx-satisfies allowlist edge (a compound S throws for
- * the AND/OR operators alike): ANY throw = disagree, fail closed, so a compound assessment can only
- * agree via exact equality. An imprecise family agrees iff every leaf of S is in the family. A
- * genuinely-unknown claim with a non-empty raw DISAGREES: a garbage/proprietary declaration
- * contradicted by a precise assessment must become a visible conflict, never be silently decided in
- * either direction.
+ * agrees iff canonicalize(P) === canonicalize(S) (spelling-blind equality, the first check) or
+ * satisfies(P, [S]) holds - satisfies is wrapped defensively for the spdx-satisfies allowlist edge
+ * (a compound S throws for the AND/OR operators alike): ANY throw = disagree, fail closed, so a
+ * compound assessment can only agree via the canonical-equality check. P and S are two independent
+ * spellings of the same underlying claim (a registry's declared metadata, ScanCode's in-depth
+ * read), so comparing them canonicalized means a boolean-algebra reordering never manufactures a
+ * conflict the raw claims themselves would not have. The satisfies() call stays on the raw pair
+ * deliberately: it already treats an OR expression as a set of alternatives independent of operand
+ * order, so canonicalizing first would not change its verdict, only add redundant work. An
+ * imprecise family agrees iff every leaf of S is in the family. A genuinely-unknown claim with a
+ * non-empty raw DISAGREES: a garbage/proprietary declaration contradicted by a precise assessment
+ * must become a visible conflict, never be silently decided in either direction.
  */
 function claimAgreesWithAssessment(claim: LicenseClaim, assessed: string): boolean {
   const result = normalizeRaw(claim.raw);
 
   if (result.expression !== null) {
-    if (result.expression === assessed) {
+    if (canonicalizeExpression(result.expression) === canonicalizeExpression(assessed)) {
       return true;
     }
 
