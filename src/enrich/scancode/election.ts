@@ -2,6 +2,7 @@ import { basename } from "node:path";
 
 import { sanitizeEvidenceText } from "../../merge/merge";
 import { compareCodeUnits } from "../../model/dependencies";
+import { canonicalizeExpression } from "../../normalize/expression";
 import { SCANCODE_TOOL } from "./tool";
 
 /** Cap on copyright lines returned per scanned package (extractor-cap parity). */
@@ -86,7 +87,7 @@ function electFromPattern(
     }
 
     return {
-      raw: expression,
+      raw: canonicalizeExpression(expression),
       via: `${SCANCODE_TOOL.name}@${SCANCODE_TOOL.version}/${lane}`,
     };
   }
@@ -102,7 +103,9 @@ function electFromPattern(
  * else undefined (never an AND-combine across files). An
  * elected expression containing `LicenseRef-scancode-` is rejected within each lane (treated as no
  * answer there, ADR-0007) rather than accepted as noise - the caller falls through to the next
- * lane, or to a clean no-answer if both lanes reject.
+ * lane, or to a clean no-answer if both lanes reject. The winning expression is simplified via
+ * {@link canonicalizeExpression} before it is returned, so ScanCode's own boolean-algebra noise
+ * never reaches the memo or a claim.
  */
 export function electExpression(files: unknown): { raw: string; via: string } | undefined {
   if (!Array.isArray(files)) {

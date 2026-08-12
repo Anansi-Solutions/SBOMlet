@@ -2152,4 +2152,62 @@ describe("mergeSboms — cross-image claim divergence (dockerClaimDivergence)", 
       "docker:image-b",
     ]);
   });
+
+  function dockerExpressionDoc(expression: string): unknown {
+    return {
+      bomFormat: "CycloneDX",
+      specVersion: "1.6",
+      components: [
+        {
+          type: "library",
+          name: "busybox",
+          version: "1.37.0-r20",
+          purl: SHARED,
+          licenses: [{ expression }],
+        },
+      ],
+    };
+  }
+
+  test("spelling-only compound-expression difference across images is NOT a divergence — the comparison key canonicalizes the expression component, so the claim SET (not the raw spelling) is what is compared", () => {
+    const model = mergeSboms([
+      {
+        sbom: dockerExpressionDoc("MIT AND CC0-1.0"),
+        targetIdentity: "docker:image-a",
+        scope: "os",
+      },
+      {
+        sbom: dockerExpressionDoc("CC0-1.0 AND MIT"),
+        targetIdentity: "docker:image-b",
+        scope: "os",
+      },
+    ]);
+    const pkg = model.packages.find((p) => p.purl === SHARED);
+
+    expect(pkg?.dockerClaimDivergence).toBeUndefined();
+  });
+
+  test("a genuinely different compound claim set still diverges after canonicalization — spelling-blindness never masks a real difference, and the recorded claims keep their as-observed spelling", () => {
+    const model = mergeSboms([
+      {
+        sbom: dockerExpressionDoc("MIT AND CC0-1.0"),
+        targetIdentity: "docker:image-a",
+        scope: "os",
+      },
+      {
+        sbom: dockerExpressionDoc("MIT AND ISC"),
+        targetIdentity: "docker:image-b",
+        scope: "os",
+      },
+    ]);
+    const pkg = model.packages.find((p) => p.purl === SHARED);
+
+    expect(pkg?.dockerClaimDivergence).toEqual({
+      kind: "cross-image-claims",
+      byTarget: [
+        { target: "docker:image-a", claims: ["MIT AND CC0-1.0"] },
+        { target: "docker:image-b", claims: ["MIT AND ISC"] },
+      ],
+    });
+  });
 });

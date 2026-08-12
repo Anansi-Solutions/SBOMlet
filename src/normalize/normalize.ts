@@ -28,6 +28,7 @@ import {
 } from "../model/dependencies";
 import { COULD_BE_COPYLEFT_FAMILIES } from "../policy/copyleftFamily";
 import {
+  canonicalizeExpression,
   elect,
   isCompoundClaim,
   isCopyleft,
@@ -566,6 +567,25 @@ function signalMatches(signal: ReadonlyArray<string>, expects: string): boolean 
 }
 
 /**
+ * {@link signalMatches}, canonicalized first: both `expects` and each signal member run through
+ * {@link canonicalizeExpression} before the same case-insensitive, trimmed equality, so a
+ * boolean-algebra re-spelling of the same license set (`MIT AND CC0-1.0` read back as `CC0-1.0 AND
+ * MIT`, a duplicated conjunct, an absorbable branch) never counts as a mismatch. Canonicalization
+ * runs FIRST because it is the coarser, structural normalization; layering it under trim/lowercase
+ * keeps the existing text normalization doing its job unchanged - canonicalizeExpression's contract
+ * returns unparseable input verbatim, so a non-expression claim reaches signalMatches's own
+ * comparison exactly as before. Used ONLY by the compound `expects` fallback ({@link
+ * needsLiteralExpectsMatch}); the non-compound path stays satisfies-based and semantic, so it has
+ * no equivalent need.
+ */
+function signalMatchesCanonical(signal: ReadonlyArray<string>, expects: string): boolean {
+  return signalMatches(
+    signal.map((s) => canonicalizeExpression(s)),
+    canonicalizeExpression(expects),
+  );
+}
+
+/**
  * Fail-closed staleness guard: an override may apply ONLY when no non-`expects` member of the
  * observed signal carries a PRECISE license that the asserted `expression` does not account for.
  * The any-member `expects` match alone is fail-OPEN - a lingering obsolete label (`BSD`) would
@@ -654,9 +674,10 @@ function withStaleOverride(base: LicenseFinding, stale: StaleOverride): LicenseF
 }
 
 /**
- * True when this override must compare `expects` by literal string equality instead of running the
- * signal/satisfies decision tree: `expects` is itself a compound claim, or `expression` contains an
- * AND (spdx-satisfies's allowlist argument can only take OR-decomposable expressions).
+ * True when this override must compare `expects` by canonicalized string equality ({@link
+ * signalMatchesCanonical}) instead of running the signal/satisfies decision tree: `expects` is
+ * itself a compound claim, or `expression` contains an AND (spdx-satisfies's allowlist argument can
+ * only take OR-decomposable expressions).
  */
 function needsLiteralExpectsMatch(expects: string, expression: string): boolean {
   return isCompoundClaim(expects) || orLeaves(parse(expression) as ExpressionNode) === null;
@@ -671,8 +692,9 @@ function needsLiteralExpectsMatch(expects: string, expression: string): boolean 
  * `expects` undefined → blind apply (backward-compat). `expects` present → decision tree on the
  * observed signal S and the asserted expression E:
  *
- *   IF compound (needsLiteralExpectsMatch): IF `expects` literally ∈ S → APPLY E; ELSE → STALE
- *      [no redundancy path: a compound already names its exact reading].
+ *   IF compound (needsLiteralExpectsMatch): IF `expects` canonically ∈ S → APPLY E; ELSE → STALE
+ *      [no redundancy path: a compound already names its exact reading; canonical equality means a
+ *      boolean-algebra re-spelling of the same set still counts, only a real set change is STALE].
  *   IF expects ∈ S (signalMatches):
  *     IF a non-`expects` precise member contradicts E (signalContradicts)
  *        → STALE → fail closed [the relicense-metadata-lag mask].
@@ -701,7 +723,7 @@ function applyOverride(
   }
 
   if (needsLiteralExpectsMatch(expects, expression)) {
-    return signalMatches(signal, expects)
+    return signalMatchesCanonical(signal, expects)
       ? overrideFinding(expression, overrideRule)
       : withStaleOverride(base, { level, expected: expects, observed: signal });
   }
@@ -834,19 +856,24 @@ function quickCheckClaims(claims: ReadonlyArray<LicenseClaim>): LicenseClaim[] {
 
 /**
  * True when one quick-check claim AGREES with the precise in-depth expression. A precise member P
- * agrees iff P === S (normalized exact equality, cheap first check) or satisfies(P, [S]) holds
- * - satisfies is wrapped defensively for the spdx-satisfies allowlist edge (a compound S throws for
- * the AND/OR operators alike): ANY throw = disagree, fail closed, so a compound assessment can only
- * agree via exact equality. An imprecise family agrees iff every leaf of S is in the family. A
- * genuinely-unknown claim with a non-empty raw DISAGREES: a garbage/proprietary declaration
- * contradicted by a precise assessment must become a visible conflict, never be silently decided in
- * either direction.
+ * agrees iff canonicalize(P) === canonicalize(S) (spelling-blind equality, the first check) or
+ * satisfies(P, [S]) holds - satisfies is wrapped defensively for the spdx-satisfies allowlist edge
+ * (a compound S throws for the AND/OR operators alike): ANY throw = disagree, fail closed, so a
+ * compound assessment can only agree via the canonical-equality check. P and S are two independent
+ * spellings of the same underlying claim (a registry's declared metadata, ScanCode's in-depth
+ * read), so comparing them canonicalized means a boolean-algebra reordering never manufactures a
+ * conflict the raw claims themselves would not have. The satisfies() call stays on the raw pair
+ * deliberately: it already treats an OR expression as a set of alternatives independent of operand
+ * order, so canonicalizing first would not change its verdict, only add redundant work. An
+ * imprecise family agrees iff every leaf of S is in the family. A genuinely-unknown claim with a
+ * non-empty raw DISAGREES: a garbage/proprietary declaration contradicted by a precise assessment
+ * must become a visible conflict, never be silently decided in either direction.
  */
 function claimAgreesWithAssessment(claim: LicenseClaim, assessed: string): boolean {
   const result = normalizeRaw(claim.raw);
 
   if (result.expression !== null) {
-    if (result.expression === assessed) {
+    if (canonicalizeExpression(result.expression) === canonicalizeExpression(assessed)) {
       return true;
     }
 

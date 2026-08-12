@@ -28,6 +28,7 @@
  * a silent empty.
  */
 import { toSortedJson } from "../../model/dependencies";
+import { canonicalizeExpression } from "../../normalize/expression";
 import { readEnvelope } from "../cache";
 
 /** Schema version - bump for a clean future invalidation of the whole memo. */
@@ -58,9 +59,26 @@ interface ScancodeMemoFile {
  * `entries`) or a wrong schema version throws loudly with the path - same posture as the registry
  * cache read, plus the version guard: a poisoned or future-version memo is a config error, never a
  * silent empty.
+ *
+ * This is the single chokepoint every consumer reads through (the replay pass, the scan pass's
+ * merge-on-write re-read in persistMemo, verifyCache's count), so each entry's positive `license`
+ * is simplified via {@link canonicalizeExpression} right here: an old committed memo with
+ * ScanCode's
+ * boolean-algebra noise reads back canonical with zero re-scanning, and the next `generate
+ * --intensive` write persists that simplification (merge-on-write, cache.ts's own contract). A
+ * `license: null` no-answer entry is untouched, and an unparseable string passes through unchanged
+ * per canonicalizeExpression's own honest-residual rule.
  */
 export function readScancodeMemo(path: string): Map<string, ScancodeMemoEntry> {
-  return readEnvelope<ScancodeMemoEntry>(path, "scancode memo", MEMO_VERSION);
+  const memo = readEnvelope<ScancodeMemoEntry>(path, "scancode memo", MEMO_VERSION);
+
+  for (const [purl, entry] of memo) {
+    if (entry.license !== null) {
+      memo.set(purl, { ...entry, license: canonicalizeExpression(entry.license) });
+    }
+  }
+
+  return memo;
 }
 
 /**
