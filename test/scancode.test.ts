@@ -478,6 +478,48 @@ describe("scanPackageSources (subprocess-free, exec recorder harness)", () => {
     expect(existsSync(dirname(outFile))).toBe(false);
   });
 
+  test("PEP 639 end-to-end: a dist-info scan root whose files carry ONLY a licenses/LICENSE detection yields a non-null resolution — the manifest-lane null this bug used to produce is gone", async () => {
+    const fixture = JSON.parse(readFileSync(FIXTURE_PATH, "utf8")) as {
+      headers: unknown[];
+      files: unknown[];
+    };
+    const pep639DistInfoLayout = {
+      ...fixture,
+      files: [
+        {
+          path: "pkg-1.0.dist-info/licenses/LICENSE",
+          detected_license_expression_spdx: "MIT",
+          copyrights: [],
+        },
+        {
+          path: "pkg-1.0.dist-info/METADATA",
+          detected_license_expression_spdx: null,
+          copyrights: [],
+        },
+      ],
+    };
+
+    mock.module("../src/collectors/exec", () => ({
+      ...REAL_EXEC,
+      execTool: makeFakeExecToolWithDoc(pep639DistInfoLayout),
+    }));
+
+    tempDir = mkdtempSync(join(tmpdir(), "scancode-pep639-"));
+    // The scan root itself is a dist-info dir — scanPackageSources must derive
+    // that from sourceDir and thread it into election so the licenses/
+    // subtree is admitted.
+    const result = await scanPackageSources("/some/source/pkg-1.0.dist-info", { tempDir });
+
+    expect(result).not.toBeNull();
+    expect(result?.raw).toBe("MIT");
+    expect(result?.via).toBe(`${SCANCODE_TOOL.name}@${SCANCODE_TOOL.version}/license-file`);
+
+    mock.module("../src/collectors/exec", () => ({
+      ...REAL_EXEC,
+      execTool: fakeExecTool,
+    }));
+  });
+
   test("isolation proof: no scancode invocation is recorded unless scanPackageSources is called", () => {
     expect(invocations).toEqual([]);
   });
@@ -538,6 +580,81 @@ describe("electExpression / electCopyrights (pure narrow, no exec)", () => {
 
     // The scanned package's OWN root license must win — a nested vendored
     // file two-or-more segments deep is never "the" root legal file.
+    expect(elected?.raw).toBe("MIT");
+  });
+
+  test("PEP 639: a dist-info root's licenses/LICENSE is elected via the legal-file lane when the scan root is flagged as a dist-info dir", () => {
+    const files = [
+      {
+        path: "pkg-1.0.dist-info/licenses/LICENSE",
+        detected_license_expression_spdx: "MIT",
+      },
+    ];
+    const elected = electExpression(files, true);
+
+    expect(elected?.raw).toBe("MIT");
+    expect(elected?.via).toContain("/license-file");
+  });
+
+  test("PEP 639: a NESTED path under a dist-info root's licenses/ (e.g. licenses/nested/COPYING) is still package-own and is admitted", () => {
+    const files = [
+      {
+        path: "pkg-1.0.dist-info/licenses/nested/COPYING",
+        detected_license_expression_spdx: "MIT",
+      },
+    ];
+    const elected = electExpression(files, true);
+
+    expect(elected?.raw).toBe("MIT");
+    expect(elected?.via).toContain("/license-file");
+  });
+
+  test("PEP 639: without the dist-info flag, the same licenses/-subtree path is rejected exactly like today (regression guard for the flag threading itself)", () => {
+    const files = [
+      {
+        path: "pkg-1.0.dist-info/licenses/LICENSE",
+        detected_license_expression_spdx: "MIT",
+      },
+    ];
+    const elected = electExpression(files);
+
+    expect(elected).toBeUndefined();
+  });
+
+  test("PEP 639 legacy layout: a 2-segment dist-info/LICENSE stays elected (unaffected by the widened rule)", () => {
+    const files = [
+      {
+        path: "pkg-1.0.dist-info/LICENSE",
+        detected_license_expression_spdx: "MIT",
+      },
+    ];
+    const elected = electExpression(files, true);
+
+    expect(elected?.raw).toBe("MIT");
+  });
+
+  test("PEP 639 admission is licenses/-subtree-only: a nested NON-licenses path inside a dist-info root is still rejected", () => {
+    const files = [
+      {
+        path: "pkg-1.0.dist-info/foo/LICENSE",
+        detected_license_expression_spdx: "GPL-3.0-only",
+      },
+    ];
+    const elected = electExpression(files, true);
+
+    expect(elected).toBeUndefined();
+  });
+
+  test("the vendored-nested attack (KNOWN BUG test above) still rejects for a non-dist-info root even when files ALSO contain a dist-info-shaped path — the flag, not path shape alone, gates the widening", () => {
+    const files = [
+      {
+        path: "pkg/dist/vendor/some-lib/LICENSE",
+        detected_license_expression_spdx: "GPL-3.0-only",
+      },
+      { path: "pkg/LICENSE", detected_license_expression_spdx: "MIT" },
+    ];
+    const elected = electExpression(files, false);
+
     expect(elected?.raw).toBe("MIT");
   });
 
