@@ -52,6 +52,7 @@ import {
   sourceDirsFor,
   type IntensiveOptions,
   type NpmSourceIndexCache,
+  type ScanCandidate,
   type ScancodeMemoEntry,
   type ScancodeResolution,
   type ScancodeScanOptions,
@@ -237,9 +238,9 @@ async function analyzeOne(entry: PackageEntry, ctx: ScanContext): Promise<void> 
     return;
   }
 
-  const dirs = sourceDirsFor(entry.purl, ctx.intensive.targetDirs, ctx.npmIndexCache);
+  const candidates = sourceDirsFor(entry.purl, ctx.intensive.targetDirs, ctx.npmIndexCache);
 
-  if (dirs.length === 0) {
+  if (candidates.length === 0) {
     ctx.counts.noLocalSources += 1;
     if (ctx.verbose) {
       process.stderr.write(
@@ -253,7 +254,7 @@ async function analyzeOne(entry: PackageEntry, ctx: ScanContext): Promise<void> 
   let resolved: ScancodeResolution | null;
 
   try {
-    resolved = await scanDirs(dirs, ctx.scanOpts);
+    resolved = await scanDirs(candidates, ctx.scanOpts);
   } catch (error) {
     if (error instanceof ScancodeEnvironmentError) {
       throw error;
@@ -278,13 +279,13 @@ function scanFailureReason(error: unknown): string {
   return error instanceof Error ? error.message.split("\n")[0]! : String(error);
 }
 
-/** Scan the ordered candidate dirs, returning the first positive answer, or null. */
+/** Scan the ordered scan candidates, returning the first positive answer, or null. */
 async function scanDirs(
-  dirs: string[],
+  candidates: ScanCandidate[],
   scanOpts: ScancodeScanOptions,
 ): Promise<ScancodeResolution | null> {
-  for (const dir of dirs) {
-    const resolved = await scanPackageSources(dir, scanOpts);
+  for (const candidate of candidates) {
+    const resolved = await scanPackageSources(candidate, scanOpts);
 
     if (resolved !== null) {
       return resolved;

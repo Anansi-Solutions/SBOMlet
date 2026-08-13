@@ -20,7 +20,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import { afterAll, afterEach, beforeAll, describe, expect, mock, test } from "bun:test";
 
 import * as cdxgenModule from "../src/collectors/cdxgen";
@@ -36,7 +36,13 @@ import {
   serializeScancodeMemo,
   sourceDirsFor,
   SCANCODE_TOOL,
+  type ScanCandidate,
 } from "../src/enrich/scancode";
+import {
+  isRootLevelOrDistInfoLicensesPath,
+  isRootLevelPath,
+  sitePackagesDir,
+} from "../src/enrich/scancode/sources";
 import { serializeCache } from "../src/enrich/cache";
 import { annotateFindings } from "../src/normalize/normalize";
 import { runGenerate } from "../src/pipeline/pipeline";
@@ -58,6 +64,28 @@ let invocations: string[][] = [];
 
 /** The fixture path, loaded once and JSON.parse'd for in-test variant surgery. */
 const FIXTURE_PATH = join(__dirname, "fixtures", "scancode-license-file-trimmed.json");
+
+/**
+ * A minimal {@link ScanCandidate} for tests that only care about the scanned dir, defaulting to
+ * the real production admission predicate ({@link isRootLevelPath}) unless the widened dist-info
+ * predicate is explicitly supplied. Never used where the test's subject is sources.ts's own
+ * candidate wiring — those tests get their candidate from a real `sourceDirsFor` call instead.
+ */
+function candidate(
+  dir: string,
+  isPackageOwnLegalPath: (path: string) => boolean = isRootLevelPath,
+): ScanCandidate {
+  return { dir, isPackageOwnLegalPath };
+}
+
+/**
+ * The scanned dirs from a sourceDirsFor result, discarding each candidate's admission predicate -
+ * the mapping tests below assert on WHICH dirs were found, never on candidate admission shape
+ * (that is covered separately by the "candidate admission predicates" wiring suite below).
+ */
+function dirs(candidates: ScanCandidate[]): string[] {
+  return candidates.map((c) => c.dir);
+}
 
 /**
  * A subprocess-free execTool recorder. For a scancode invocation (argv
@@ -151,7 +179,7 @@ describe("scanPackageSources (subprocess-free, exec recorder harness)", () => {
 
   test("the recorded invocation equals exactly [scancodeBin, --license, --copyright, --json-pp, outFile, --, sourceDir]", async () => {
     tempDir = mkdtempSync(join(tmpdir(), "scancode-invoke-"));
-    await scanPackageSources("/some/source/dir", { tempDir });
+    await scanPackageSources(candidate("/some/source/dir"), { tempDir });
 
     expect(invocations.length).toBe(1);
     const [cmd, ...args] = invocations[0] as string[];
@@ -170,7 +198,7 @@ describe("scanPackageSources (subprocess-free, exec recorder harness)", () => {
 
   test("happy path: elects the root-LICENSE detection, via license-file, sorted+deduped copyrights", async () => {
     tempDir = mkdtempSync(join(tmpdir(), "scancode-happy-"));
-    const result = await scanPackageSources("/some/source/dir", { tempDir });
+    const result = await scanPackageSources(candidate("/some/source/dir"), { tempDir });
 
     expect(result).not.toBeNull();
     expect(result?.raw).toBe("MIT");
@@ -200,18 +228,20 @@ describe("scanPackageSources (subprocess-free, exec recorder harness)", () => {
       execTool: makeFakeExecToolWithDoc(withoutLicenseFile),
     }));
 
-    tempDir = mkdtempSync(join(tmpdir(), "scancode-manifest-"));
-    const result = await scanPackageSources("/some/source/dir", { tempDir });
+    try {
+      tempDir = mkdtempSync(join(tmpdir(), "scancode-manifest-"));
+      const result = await scanPackageSources(candidate("/some/source/dir"), { tempDir });
 
-    expect(result).not.toBeNull();
-    expect(result?.raw).toBe("MIT");
-    expect(result?.via).toBe(`${SCANCODE_TOOL.name}@${SCANCODE_TOOL.version}/manifest`);
-
-    // Restore the shared fixture-based stub for subsequent tests.
-    mock.module("../src/collectors/exec", () => ({
-      ...REAL_EXEC,
-      execTool: fakeExecTool,
-    }));
+      expect(result).not.toBeNull();
+      expect(result?.raw).toBe("MIT");
+      expect(result?.via).toBe(`${SCANCODE_TOOL.name}@${SCANCODE_TOOL.version}/manifest`);
+    } finally {
+      // Restore the shared fixture-based stub for subsequent tests.
+      mock.module("../src/collectors/exec", () => ({
+        ...REAL_EXEC,
+        execTool: fakeExecTool,
+      }));
+    }
   });
 
   test("no answer: neither legal-file nor manifest detection present -> null", async () => {
@@ -229,15 +259,17 @@ describe("scanPackageSources (subprocess-free, exec recorder harness)", () => {
       execTool: makeFakeExecToolWithDoc(onlyNoise),
     }));
 
-    tempDir = mkdtempSync(join(tmpdir(), "scancode-noanswer-"));
-    const result = await scanPackageSources("/some/source/dir", { tempDir });
+    try {
+      tempDir = mkdtempSync(join(tmpdir(), "scancode-noanswer-"));
+      const result = await scanPackageSources(candidate("/some/source/dir"), { tempDir });
 
-    expect(result).toBeNull();
-
-    mock.module("../src/collectors/exec", () => ({
-      ...REAL_EXEC,
-      execTool: fakeExecTool,
-    }));
+      expect(result).toBeNull();
+    } finally {
+      mock.module("../src/collectors/exec", () => ({
+        ...REAL_EXEC,
+        execTool: fakeExecTool,
+      }));
+    }
   });
 
   test("rejection lane: an expression containing LicenseRef-scancode- is treated as no answer", async () => {
@@ -261,15 +293,17 @@ describe("scanPackageSources (subprocess-free, exec recorder harness)", () => {
       execTool: makeFakeExecToolWithDoc(noiseAsLicense),
     }));
 
-    tempDir = mkdtempSync(join(tmpdir(), "scancode-rejection-"));
-    const result = await scanPackageSources("/some/source/dir", { tempDir });
+    try {
+      tempDir = mkdtempSync(join(tmpdir(), "scancode-rejection-"));
+      const result = await scanPackageSources(candidate("/some/source/dir"), { tempDir });
 
-    expect(result).toBeNull();
-
-    mock.module("../src/collectors/exec", () => ({
-      ...REAL_EXEC,
-      execTool: fakeExecTool,
-    }));
+      expect(result).toBeNull();
+    } finally {
+      mock.module("../src/collectors/exec", () => ({
+        ...REAL_EXEC,
+        execTool: fakeExecTool,
+      }));
+    }
   });
 
   test("version assert: a different headers tool version rejects loudly, naming the invocation and both versions", async () => {
@@ -287,15 +321,17 @@ describe("scanPackageSources (subprocess-free, exec recorder harness)", () => {
       execTool: makeFakeExecToolWithDoc(wrongVersion),
     }));
 
-    tempDir = mkdtempSync(join(tmpdir(), "scancode-version-"));
-    await expect(scanPackageSources("/some/source/dir", { tempDir })).rejects.toThrow(
-      /31\.0\.0.*32\.5\.0|invocation:/s,
-    );
-
-    mock.module("../src/collectors/exec", () => ({
-      ...REAL_EXEC,
-      execTool: fakeExecTool,
-    }));
+    try {
+      tempDir = mkdtempSync(join(tmpdir(), "scancode-version-"));
+      await expect(scanPackageSources(candidate("/some/source/dir"), { tempDir })).rejects.toThrow(
+        /31\.0\.0.*32\.5\.0|invocation:/s,
+      );
+    } finally {
+      mock.module("../src/collectors/exec", () => ({
+        ...REAL_EXEC,
+        execTool: fakeExecTool,
+      }));
+    }
   });
 
   test("size gate: an oversized output file rejects BEFORE any parse", async () => {
@@ -304,15 +340,17 @@ describe("scanPackageSources (subprocess-free, exec recorder harness)", () => {
       execTool: makeFakeExecToolOversized(),
     }));
 
-    tempDir = mkdtempSync(join(tmpdir(), "scancode-oversized-"));
-    await expect(scanPackageSources("/some/source/dir", { tempDir })).rejects.toThrow(
-      /over the.*byte cap/,
-    );
-
-    mock.module("../src/collectors/exec", () => ({
-      ...REAL_EXEC,
-      execTool: fakeExecTool,
-    }));
+    try {
+      tempDir = mkdtempSync(join(tmpdir(), "scancode-oversized-"));
+      await expect(scanPackageSources(candidate("/some/source/dir"), { tempDir })).rejects.toThrow(
+        /over the.*byte cap/,
+      );
+    } finally {
+      mock.module("../src/collectors/exec", () => ({
+        ...REAL_EXEC,
+        execTool: fakeExecTool,
+      }));
+    }
   });
 
   test("missing tool: an ENOENT-shaped spawn error rejects with the mise install hint", async () => {
@@ -321,15 +359,17 @@ describe("scanPackageSources (subprocess-free, exec recorder harness)", () => {
       execTool: fakeExecToolEnoent,
     }));
 
-    tempDir = mkdtempSync(join(tmpdir(), "scancode-enoent-"));
-    await expect(scanPackageSources("/some/source/dir", { tempDir })).rejects.toThrow(
-      /run mise install/,
-    );
-
-    mock.module("../src/collectors/exec", () => ({
-      ...REAL_EXEC,
-      execTool: fakeExecTool,
-    }));
+    try {
+      tempDir = mkdtempSync(join(tmpdir(), "scancode-enoent-"));
+      await expect(scanPackageSources(candidate("/some/source/dir"), { tempDir })).rejects.toThrow(
+        /run mise install/,
+      );
+    } finally {
+      mock.module("../src/collectors/exec", () => ({
+        ...REAL_EXEC,
+        execTool: fakeExecTool,
+      }));
+    }
   });
 
   test("partial-file-error exit: a NON-ZERO scancode exit that still wrote a valid, version-asserted output is TOLERATED — the produced result is elected, the run is not aborted (a bundled undecodable file must not sink the whole scan)", async () => {
@@ -355,15 +395,19 @@ describe("scanPackageSources (subprocess-free, exec recorder harness)", () => {
       ...REAL_EXEC,
       execTool: failButWroteFixture,
     }));
-    tempDir = mkdtempSync(join(tmpdir(), "scancode-partial-"));
-    const result = await scanPackageSources("/some/source/dir", { tempDir });
 
-    expect(result?.raw).toBe("MIT");
-    expect(result?.via).toBe(`${SCANCODE_TOOL.name}@${SCANCODE_TOOL.version}/license-file`);
-    mock.module("../src/collectors/exec", () => ({
-      ...REAL_EXEC,
-      execTool: fakeExecTool,
-    }));
+    try {
+      tempDir = mkdtempSync(join(tmpdir(), "scancode-partial-"));
+      const result = await scanPackageSources(candidate("/some/source/dir"), { tempDir });
+
+      expect(result?.raw).toBe("MIT");
+      expect(result?.via).toBe(`${SCANCODE_TOOL.name}@${SCANCODE_TOOL.version}/license-file`);
+    } finally {
+      mock.module("../src/collectors/exec", () => ({
+        ...REAL_EXEC,
+        execTool: fakeExecTool,
+      }));
+    }
   });
 
   test("non-zero exit with NO output file still throws (the failure is real — tolerance requires a produced result)", async () => {
@@ -379,14 +423,18 @@ describe("scanPackageSources (subprocess-free, exec recorder harness)", () => {
       ...REAL_EXEC,
       execTool: failNoOutput,
     }));
-    tempDir = mkdtempSync(join(tmpdir(), "scancode-fail-noout-"));
-    await expect(scanPackageSources("/some/source/dir", { tempDir })).rejects.toThrow(
-      /exited with code 1|produced no output/,
-    );
-    mock.module("../src/collectors/exec", () => ({
-      ...REAL_EXEC,
-      execTool: fakeExecTool,
-    }));
+
+    try {
+      tempDir = mkdtempSync(join(tmpdir(), "scancode-fail-noout-"));
+      await expect(scanPackageSources(candidate("/some/source/dir"), { tempDir })).rejects.toThrow(
+        /exited with code 1|produced no output/,
+      );
+    } finally {
+      mock.module("../src/collectors/exec", () => ({
+        ...REAL_EXEC,
+        execTool: fakeExecTool,
+      }));
+    }
   });
 
   test("non-zero exit whose output fails the tool_version assert still throws (the integrity gate survives tolerance — a substituted binary is never silently accepted)", async () => {
@@ -416,14 +464,18 @@ describe("scanPackageSources (subprocess-free, exec recorder harness)", () => {
       ...REAL_EXEC,
       execTool: failWrongVersion,
     }));
-    tempDir = mkdtempSync(join(tmpdir(), "scancode-fail-version-"));
-    await expect(scanPackageSources("/some/source/dir", { tempDir })).rejects.toThrow(
-      /31\.0\.0.*32\.5\.0|invocation:/s,
-    );
-    mock.module("../src/collectors/exec", () => ({
-      ...REAL_EXEC,
-      execTool: fakeExecTool,
-    }));
+
+    try {
+      tempDir = mkdtempSync(join(tmpdir(), "scancode-fail-version-"));
+      await expect(scanPackageSources(candidate("/some/source/dir"), { tempDir })).rejects.toThrow(
+        /31\.0\.0.*32\.5\.0|invocation:/s,
+      );
+    } finally {
+      mock.module("../src/collectors/exec", () => ({
+        ...REAL_EXEC,
+        execTool: fakeExecTool,
+      }));
+    }
   });
 
   test("a shared tempDir never lets a previous scan's output masquerade as a later scan's result", async () => {
@@ -454,10 +506,10 @@ describe("scanPackageSources (subprocess-free, exec recorder harness)", () => {
 
     tempDir = mkdtempSync(join(tmpdir(), "scancode-shared-"));
     try {
-      const first = await scanPackageSources("/pkg/first", { tempDir });
+      const first = await scanPackageSources(candidate("/pkg/first"), { tempDir });
 
       expect(first?.raw).toBe("MIT");
-      await expect(scanPackageSources("/pkg/second", { tempDir })).rejects.toThrow(
+      await expect(scanPackageSources(candidate("/pkg/second"), { tempDir })).rejects.toThrow(
         /produced no output/,
       );
     } finally {
@@ -469,13 +521,130 @@ describe("scanPackageSources (subprocess-free, exec recorder harness)", () => {
   });
 
   test("an owned (default) temp dir is cleaned up after the scan", async () => {
-    const result = await scanPackageSources("/some/source/dir", {});
+    const result = await scanPackageSources(candidate("/some/source/dir"), {});
 
     expect(result?.raw).toBe("MIT");
     // argv shape: [cmd, --license, --copyright, --json-pp, outFile, --, dir]
     const outFile = (invocations[0] as string[])[4] as string;
 
     expect(existsSync(dirname(outFile))).toBe(false);
+  });
+
+  test("PEP 639 end-to-end: a dist-info scan root whose files carry ONLY a licenses/LICENSE detection yields a non-null resolution — the manifest-lane null this bug used to produce is gone", async () => {
+    // The candidate comes from a REAL sourceDirsFor call against a real on-disk .venv/dist-info
+    // layout, never a hand-built stand-in — this is what proves pypiSourceDirs actually wires the
+    // widened predicate to the dist-info candidate, not just that scanPackageSources threads
+    // WHATEVER predicate it is handed (that generic-threading property is covered separately by
+    // the leak-guard test below, which is deliberately synthetic).
+    const venvTargetDir = mkdtempSync(join(tmpdir(), "scancode-pep639-fixture-"));
+
+    try {
+      const sitePackages = sitePackagesDir(join(venvTargetDir, ".venv"));
+
+      mkdirSync(join(sitePackages, "pkg-1.0.dist-info"), { recursive: true });
+
+      // pep503Fold("pkg-1.0") folds to "pkg_1_0", matching the "pkg-1.0.dist-info" dir name below
+      // — the purl version is "1.0", not "1.0.0", so the fold actually matches.
+      const [distInfoCandidate] = sourceDirsFor("pkg:pypi/pkg@1.0", [venvTargetDir]);
+
+      expect(distInfoCandidate).toBeDefined();
+
+      const distInfoBasename = basename(distInfoCandidate!.dir);
+      const fixture = JSON.parse(readFileSync(FIXTURE_PATH, "utf8")) as {
+        headers: unknown[];
+        files: unknown[];
+      };
+      const pep639DistInfoLayout = {
+        ...fixture,
+        files: [
+          {
+            path: `${distInfoBasename}/licenses/LICENSE`,
+            detected_license_expression_spdx: "MIT",
+            copyrights: [],
+          },
+          {
+            path: `${distInfoBasename}/METADATA`,
+            detected_license_expression_spdx: null,
+            copyrights: [],
+          },
+        ],
+      };
+
+      mock.module("../src/collectors/exec", () => ({
+        ...REAL_EXEC,
+        execTool: makeFakeExecToolWithDoc(pep639DistInfoLayout),
+      }));
+
+      try {
+        tempDir = mkdtempSync(join(tmpdir(), "scancode-pep639-"));
+        const result = await scanPackageSources(distInfoCandidate!, { tempDir });
+
+        expect(result).not.toBeNull();
+        expect(result?.raw).toBe("MIT");
+        expect(result?.via).toBe(`${SCANCODE_TOOL.name}@${SCANCODE_TOOL.version}/license-file`);
+      } finally {
+        mock.module("../src/collectors/exec", () => ({
+          ...REAL_EXEC,
+          execTool: fakeExecTool,
+        }));
+      }
+    } finally {
+      rmSync(venvTargetDir, { recursive: true, force: true });
+    }
+  });
+
+  test("two candidates scanned back-to-back never leak each other's admission shape: the SAME fixture path is elected via one candidate's predicate, then rejected via a second candidate's unrelated predicate", async () => {
+    // Deliberately arbitrary predicates, shaped only to accept/reject the fixture path below: the
+    // subject here is election's own genericity — that isPackageOwnLegalPath travels WITH each
+    // candidate rather than leaking across calls — never sources.ts's specific wiring (covered by
+    // the PEP 639 end-to-end test above and the "candidate admission predicates" suite below).
+    const acceptsFixturePath = (path: string): boolean => path.endsWith("/licenses/LICENSE");
+    const rejectsEverything = (): boolean => false;
+    const fixture = JSON.parse(readFileSync(FIXTURE_PATH, "utf8")) as {
+      headers: unknown[];
+      files: unknown[];
+    };
+    const pep639DistInfoLayout = {
+      ...fixture,
+      files: [
+        {
+          path: "pkg-1.0.dist-info/licenses/LICENSE",
+          detected_license_expression_spdx: "MIT",
+          copyrights: [],
+        },
+      ],
+    };
+
+    mock.module("../src/collectors/exec", () => ({
+      ...REAL_EXEC,
+      execTool: makeFakeExecToolWithDoc(pep639DistInfoLayout),
+    }));
+
+    tempDir = mkdtempSync(join(tmpdir(), "scancode-pep639-noleak-"));
+
+    try {
+      // Each candidate's predicate is its own — this is the property the refactor introduces:
+      // isPackageOwnLegalPath travels WITH the candidate, not as a module-level or
+      // call-order-scoped flag a later scan could accidentally inherit.
+      const widened = await scanPackageSources(
+        candidate("/some/source/pkg-1.0.dist-info", acceptsFixturePath),
+        { tempDir },
+      );
+
+      expect(widened?.raw).toBe("MIT");
+
+      const unwidened = await scanPackageSources(
+        candidate("/some/source/pkg-1.0.dist-info", rejectsEverything),
+        { tempDir },
+      );
+
+      expect(unwidened).toBeNull();
+    } finally {
+      mock.module("../src/collectors/exec", () => ({
+        ...REAL_EXEC,
+        execTool: fakeExecTool,
+      }));
+    }
   });
 
   test("isolation proof: no scancode invocation is recorded unless scanPackageSources is called", () => {
@@ -504,7 +673,7 @@ describe("electExpression / electCopyrights (pure narrow, no exec)", () => {
         detected_license_expression_spdx: "Apache-2.0",
       },
     ];
-    const elected = electExpression(files);
+    const elected = electExpression(files, isRootLevelPath);
 
     expect(elected?.raw).toBe("Apache-2.0");
     expect(elected?.via).toContain("/manifest");
@@ -518,7 +687,7 @@ describe("electExpression / electCopyrights (pure narrow, no exec)", () => {
         detected_license_expression_spdx: "BSD-3-Clause",
       },
     ];
-    const elected = electExpression(files);
+    const elected = electExpression(files, isRootLevelPath);
 
     expect(elected?.raw).toBe("MIT");
   });
@@ -534,10 +703,97 @@ describe("electExpression / electCopyrights (pure narrow, no exec)", () => {
       },
       { path: "pkg/LICENSE", detected_license_expression_spdx: "MIT" },
     ];
-    const elected = electExpression(files);
+    const elected = electExpression(files, isRootLevelPath);
 
     // The scanned package's OWN root license must win — a nested vendored
     // file two-or-more segments deep is never "the" root legal file.
+    expect(elected?.raw).toBe("MIT");
+  });
+
+  test("PEP 639: a dist-info root's licenses/LICENSE is elected via the legal-file lane when the scan root is flagged as a dist-info dir", () => {
+    const files = [
+      {
+        path: "pkg-1.0.dist-info/licenses/LICENSE",
+        detected_license_expression_spdx: "MIT",
+      },
+    ];
+    const elected = electExpression(files, isRootLevelOrDistInfoLicensesPath);
+
+    expect(elected?.raw).toBe("MIT");
+    expect(elected?.via).toContain("/license-file");
+  });
+
+  test("PEP 639: a NESTED path under a dist-info root's licenses/ (e.g. licenses/nested/COPYING) is still package-own and is admitted", () => {
+    const files = [
+      {
+        path: "pkg-1.0.dist-info/licenses/nested/COPYING",
+        detected_license_expression_spdx: "MIT",
+      },
+    ];
+    const elected = electExpression(files, isRootLevelOrDistInfoLicensesPath);
+
+    expect(elected?.raw).toBe("MIT");
+    expect(elected?.via).toContain("/license-file");
+  });
+
+  test("PEP 639: without the dist-info flag, the same licenses/-subtree path is rejected exactly like today (regression guard for the flag threading itself)", () => {
+    const files = [
+      {
+        path: "pkg-1.0.dist-info/licenses/LICENSE",
+        detected_license_expression_spdx: "MIT",
+      },
+    ];
+    const elected = electExpression(files, isRootLevelPath);
+
+    expect(elected).toBeUndefined();
+  });
+
+  test("PEP 639 legacy layout: a 2-segment dist-info/LICENSE stays elected (unaffected by the widened rule)", () => {
+    const files = [
+      {
+        path: "pkg-1.0.dist-info/LICENSE",
+        detected_license_expression_spdx: "MIT",
+      },
+    ];
+    const elected = electExpression(files, isRootLevelOrDistInfoLicensesPath);
+
+    expect(elected?.raw).toBe("MIT");
+  });
+
+  test("PEP 639 admission is licenses/-subtree-only: a nested NON-licenses path inside a dist-info root is still rejected", () => {
+    const files = [
+      {
+        path: "pkg-1.0.dist-info/foo/LICENSE",
+        detected_license_expression_spdx: "GPL-3.0-only",
+      },
+    ];
+    const elected = electExpression(files, isRootLevelOrDistInfoLicensesPath);
+
+    expect(elected).toBeUndefined();
+  });
+
+  test("the manifest lane is root-only even under the widened dist-info predicate — a nested licenses/METADATA is never elected as the manifest", () => {
+    const files = [
+      {
+        path: "pkg-1.0.dist-info/licenses/METADATA",
+        detected_license_expression_spdx: "MIT",
+      },
+    ];
+    const elected = electExpression(files, isRootLevelOrDistInfoLicensesPath);
+
+    expect(elected).toBeUndefined();
+  });
+
+  test("the vendored-nested attack (KNOWN BUG test above) still rejects for a non-dist-info root even when files ALSO contain a dist-info-shaped path — the flag, not path shape alone, gates the widening", () => {
+    const files = [
+      {
+        path: "pkg/dist/vendor/some-lib/LICENSE",
+        detected_license_expression_spdx: "GPL-3.0-only",
+      },
+      { path: "pkg/LICENSE", detected_license_expression_spdx: "MIT" },
+    ];
+    const elected = electExpression(files, isRootLevelPath);
+
     expect(elected?.raw).toBe("MIT");
   });
 
@@ -546,7 +802,7 @@ describe("electExpression / electCopyrights (pure narrow, no exec)", () => {
       "(MIT AND OFL-1.1 AND CC-BY-4.0) AND (CC-BY-4.0 OR CC-BY-3.0) AND " +
       "(OFL-1.1 AND (CC-BY-4.0 AND OFL-1.1 AND MIT) AND MIT AND (MIT AND OFL-1.1 AND CC-BY-4.0))";
     const files = [{ path: "pkg/LICENSE", detected_license_expression_spdx: noisy }];
-    const elected = electExpression(files);
+    const elected = electExpression(files, isRootLevelPath);
 
     expect(elected?.raw).toBe("CC-BY-4.0 AND MIT AND OFL-1.1");
   });
@@ -590,7 +846,7 @@ describe("sourceDirsFor — npm mapping", () => {
     targetDir = mkdtempSync(join(tmpdir(), "scancode-npm-"));
     const pkgDir = writeNpmPackage(targetDir, "left-pad", "1.3.0");
 
-    const result = sourceDirsFor("pkg:npm/left-pad@1.3.0", [targetDir]);
+    const result = dirs(sourceDirsFor("pkg:npm/left-pad@1.3.0", [targetDir]));
 
     expect(result).toEqual([pkgDir]);
   });
@@ -599,7 +855,7 @@ describe("sourceDirsFor — npm mapping", () => {
     targetDir = mkdtempSync(join(tmpdir(), "scancode-npm-scoped-"));
     const pkgDir = writeNpmPackage(targetDir, "@scope/pkg", "1.0.0");
 
-    const result = sourceDirsFor("pkg:npm/%40scope/pkg@1.0.0", [targetDir]);
+    const result = dirs(sourceDirsFor("pkg:npm/%40scope/pkg@1.0.0", [targetDir]));
 
     expect(result).toEqual([pkgDir]);
   });
@@ -608,7 +864,7 @@ describe("sourceDirsFor — npm mapping", () => {
     targetDir = mkdtempSync(join(tmpdir(), "scancode-npm-mismatch-"));
     writeNpmPackage(targetDir, "left-pad", "1.2.0");
 
-    const result = sourceDirsFor("pkg:npm/left-pad@1.3.0", [targetDir]);
+    const result = dirs(sourceDirsFor("pkg:npm/left-pad@1.3.0", [targetDir]));
 
     expect(result).toEqual([]);
   });
@@ -617,7 +873,7 @@ describe("sourceDirsFor — npm mapping", () => {
     targetDir = mkdtempSync(join(tmpdir(), "scancode-npm-absent-"));
     mkdirSync(join(targetDir, "node_modules"), { recursive: true });
 
-    const result = sourceDirsFor("pkg:npm/does-not-exist@1.0.0", [targetDir]);
+    const result = dirs(sourceDirsFor("pkg:npm/does-not-exist@1.0.0", [targetDir]));
 
     expect(result).toEqual([]);
   });
@@ -628,7 +884,7 @@ describe("sourceDirsFor — npm mapping", () => {
       recursive: true,
     });
 
-    const result = sourceDirsFor("pkg:npm/left-pad@1.3.0", [targetDir]);
+    const result = dirs(sourceDirsFor("pkg:npm/left-pad@1.3.0", [targetDir]));
 
     expect(result).toEqual([]);
   });
@@ -641,7 +897,7 @@ describe("sourceDirsFor — npm mapping", () => {
     writeFileSync(join(pkgDir, "package.json"), "{ not valid json");
 
     expect(() => sourceDirsFor("pkg:npm/left-pad@1.3.0", [targetDir])).not.toThrow();
-    const result = sourceDirsFor("pkg:npm/left-pad@1.3.0", [targetDir]);
+    const result = dirs(sourceDirsFor("pkg:npm/left-pad@1.3.0", [targetDir]));
 
     expect(result).toEqual([]);
   });
@@ -659,7 +915,7 @@ describe("sourceDirsFor — npm mapping", () => {
     );
 
     // "..%2Fsecret" decodes to "../secret" — an escape attempt.
-    const result = sourceDirsFor("pkg:npm/..%2Fsecret@1.0.0", [targetDir]);
+    const result = dirs(sourceDirsFor("pkg:npm/..%2Fsecret@1.0.0", [targetDir]));
 
     expect(result).toEqual([]);
   });
@@ -668,7 +924,7 @@ describe("sourceDirsFor — npm mapping", () => {
     targetDir = mkdtempSync(join(tmpdir(), "scancode-npm-invariant-"));
     const pkgDir = writeNpmPackage(targetDir, "left-pad", "1.3.0");
 
-    const result = sourceDirsFor("pkg:npm/left-pad@1.3.0", [targetDir]);
+    const result = dirs(sourceDirsFor("pkg:npm/left-pad@1.3.0", [targetDir]));
 
     expect(result).toHaveLength(1);
     const nodeModulesRoot = join(targetDir, "node_modules");
@@ -691,7 +947,7 @@ describe("sourceDirsFor — npm mapping", () => {
 
       // Call with REVERSED argument order to prove determinism is a function
       // of the sorted set, not caller order.
-      const result = sourceDirsFor("pkg:npm/left-pad@1.3.0", [dirB, dirA]);
+      const result = dirs(sourceDirsFor("pkg:npm/left-pad@1.3.0", [dirB, dirA]));
 
       expect(result).toEqual([expected]);
     } finally {
@@ -749,16 +1005,16 @@ describe("sourceDirsFor — npm nested node_modules (yarn hoisting)", () => {
     const hoistedDir = writeNpmPackage(targetDir, "left-pad", "1.3.0");
     const nestedDir = writeNestedNpmPackage(targetDir, ["some-dep"], "left-pad", "1.4.0");
 
-    expect(sourceDirsFor("pkg:npm/left-pad@1.4.0", [targetDir])).toEqual([nestedDir]);
-    expect(sourceDirsFor("pkg:npm/left-pad@1.3.0", [targetDir])).toEqual([hoistedDir]);
-    expect(sourceDirsFor("pkg:npm/left-pad@9.9.9", [targetDir])).toEqual([]);
+    expect(dirs(sourceDirsFor("pkg:npm/left-pad@1.4.0", [targetDir]))).toEqual([nestedDir]);
+    expect(dirs(sourceDirsFor("pkg:npm/left-pad@1.3.0", [targetDir]))).toEqual([hoistedDir]);
+    expect(dirs(sourceDirsFor("pkg:npm/left-pad@9.9.9", [targetDir]))).toEqual([]);
   });
 
   test("a scoped package nested under a dependent's own node_modules resolves to the nested dir", () => {
     targetDir = mkdtempSync(join(tmpdir(), "scancode-npm-nested-scoped-"));
     const nestedDir = writeNestedNpmPackage(targetDir, ["some-dep"], "@scope/pkg", "2.0.0");
 
-    const result = sourceDirsFor("pkg:npm/%40scope/pkg@2.0.0", [targetDir]);
+    const result = dirs(sourceDirsFor("pkg:npm/%40scope/pkg@2.0.0", [targetDir]));
 
     expect(result).toEqual([nestedDir]);
   });
@@ -769,7 +1025,7 @@ describe("sourceDirsFor — npm nested node_modules (yarn hoisting)", () => {
 
     writeNestedNpmPackage(targetDir, ["some-dep"], "dup-pkg", "1.0.0");
 
-    const result = sourceDirsFor("pkg:npm/dup-pkg@1.0.0", [targetDir]);
+    const result = dirs(sourceDirsFor("pkg:npm/dup-pkg@1.0.0", [targetDir]));
 
     expect(result).toEqual([shallow]);
   });
@@ -786,7 +1042,7 @@ describe("sourceDirsFor — npm nested node_modules (yarn hoisting)", () => {
       "1.0.0",
     );
 
-    const result = sourceDirsFor("pkg:npm/dup-pkg@1.0.0", [targetDir]);
+    const result = dirs(sourceDirsFor("pkg:npm/dup-pkg@1.0.0", [targetDir]));
 
     expect(result).toEqual([twoLevels]);
   });
@@ -797,7 +1053,7 @@ describe("sourceDirsFor — npm nested node_modules (yarn hoisting)", () => {
 
     writeNestedNpmPackage(targetDir, ["dep-b"], "dup-pkg", "1.0.0");
 
-    const result = sourceDirsFor("pkg:npm/dup-pkg@1.0.0", [targetDir]);
+    const result = dirs(sourceDirsFor("pkg:npm/dup-pkg@1.0.0", [targetDir]));
 
     expect(result).toEqual([inDepA]);
   });
@@ -834,8 +1090,8 @@ describe("sourceDirsFor — npm nested node_modules (yarn hoisting)", () => {
     }
 
     try {
-      expect(sourceDirsFor("pkg:npm/linked-pkg@1.0.0", [targetDir])).toEqual([]);
-      expect(sourceDirsFor("pkg:npm/beyond-symlink-pkg@1.0.0", [targetDir])).toEqual([]);
+      expect(dirs(sourceDirsFor("pkg:npm/linked-pkg@1.0.0", [targetDir]))).toEqual([]);
+      expect(dirs(sourceDirsFor("pkg:npm/beyond-symlink-pkg@1.0.0", [targetDir]))).toEqual([]);
     } finally {
       rmSync(workspaceMemberDir, { recursive: true, force: true });
     }
@@ -850,7 +1106,7 @@ describe("sourceDirsFor — npm nested node_modules (yarn hoisting)", () => {
       "5.0.0",
     );
 
-    const result = sourceDirsFor("pkg:npm/deep-pkg@5.0.0", [targetDir]);
+    const result = dirs(sourceDirsFor("pkg:npm/deep-pkg@5.0.0", [targetDir]));
 
     expect(result).toEqual([deepDir]);
   });
@@ -865,15 +1121,9 @@ describe("sourceDirsFor — pypi mapping", () => {
     }
   });
 
-  function venvSitePackagesDir(dir: string): string {
-    return process.platform === "win32"
-      ? join(dir, ".venv", "Lib", "site-packages")
-      : join(dir, ".venv", "lib", "python3.12", "site-packages");
-  }
-
   test("a pypi purl with a temp .venv dist-info + top_level.txt naming an existing sibling dir yields the dist-info dir first, then that dir", () => {
     targetDir = mkdtempSync(join(tmpdir(), "scancode-pypi-"));
-    const sitePackages = venvSitePackagesDir(targetDir);
+    const sitePackages = sitePackagesDir(join(targetDir, ".venv"));
 
     mkdirSync(sitePackages, { recursive: true });
 
@@ -886,7 +1136,7 @@ describe("sourceDirsFor — pypi mapping", () => {
 
     mkdirSync(packageDir, { recursive: true });
 
-    const result = sourceDirsFor("pkg:pypi/typing-extensions@4.9.0", [targetDir]);
+    const result = dirs(sourceDirsFor("pkg:pypi/typing-extensions@4.9.0", [targetDir]));
 
     // The dist-info dir holds the wheel's METADATA and legal files — it is
     // the first scan candidate; the import package dir follows.
@@ -895,14 +1145,14 @@ describe("sourceDirsFor — pypi mapping", () => {
 
   test("absent venv returns undefined", () => {
     targetDir = mkdtempSync(join(tmpdir(), "scancode-pypi-novenv-"));
-    const result = sourceDirsFor("pkg:pypi/typing-extensions@4.9.0", [targetDir]);
+    const result = dirs(sourceDirsFor("pkg:pypi/typing-extensions@4.9.0", [targetDir]));
 
     expect(result).toEqual([]);
   });
 
   test("absent top-level dir still yields the dist-info dir (the wheel's own evidence)", () => {
     targetDir = mkdtempSync(join(tmpdir(), "scancode-pypi-notopdir-"));
-    const sitePackages = venvSitePackagesDir(targetDir);
+    const sitePackages = sitePackagesDir(join(targetDir, ".venv"));
 
     mkdirSync(sitePackages, { recursive: true });
     const distInfoDir = join(sitePackages, "typing_extensions-4.9.0.dist-info");
@@ -911,14 +1161,14 @@ describe("sourceDirsFor — pypi mapping", () => {
     writeFileSync(join(distInfoDir, "top_level.txt"), "typing_extensions\n");
     // Deliberately do NOT create the sibling package dir.
 
-    const result = sourceDirsFor("pkg:pypi/typing-extensions@4.9.0", [targetDir]);
+    const result = dirs(sourceDirsFor("pkg:pypi/typing-extensions@4.9.0", [targetDir]));
 
     expect(result).toEqual([distInfoDir]);
   });
 
   test("a hostile top_level.txt line containing '..' never escapes site-packages (mirrors the npm traversal guard)", () => {
     targetDir = mkdtempSync(join(tmpdir(), "scancode-pypi-traversal-"));
-    const sitePackages = venvSitePackagesDir(targetDir);
+    const sitePackages = sitePackagesDir(join(targetDir, ".venv"));
 
     mkdirSync(sitePackages, { recursive: true });
     const distInfoDir = join(sitePackages, "evil-1.0.0.dist-info");
@@ -933,14 +1183,14 @@ describe("sourceDirsFor — pypi mapping", () => {
 
     // The dist-info dir stays a legitimate candidate; the escaped path must
     // never appear among the candidates.
-    const result = sourceDirsFor("pkg:pypi/evil@1.0.0", [targetDir]);
+    const result = dirs(sourceDirsFor("pkg:pypi/evil@1.0.0", [targetDir]));
 
     expect(result).toEqual([distInfoDir]);
   });
 
   test("an absolute-path-shaped top_level.txt line never resolves outside site-packages", () => {
     targetDir = mkdtempSync(join(tmpdir(), "scancode-pypi-absline-"));
-    const sitePackages = venvSitePackagesDir(targetDir);
+    const sitePackages = sitePackagesDir(join(targetDir, ".venv"));
 
     mkdirSync(sitePackages, { recursive: true });
     const distInfoDir = join(sitePackages, "evil-1.0.0.dist-info");
@@ -950,29 +1200,126 @@ describe("sourceDirsFor — pypi mapping", () => {
     // so only the containment guard can reject it.
     writeFileSync(join(distInfoDir, "top_level.txt"), `${targetDir}\n`);
 
-    const result = sourceDirsFor("pkg:pypi/evil@1.0.0", [targetDir]);
+    const result = dirs(sourceDirsFor("pkg:pypi/evil@1.0.0", [targetDir]));
 
     expect(result).toEqual([distInfoDir]);
   });
 });
 
+describe("sourceDirsFor — candidate admission predicates (real wiring, not mirrored)", () => {
+  let targetDir: string;
+
+  afterEach(() => {
+    if (targetDir !== undefined) {
+      rmSync(targetDir, { recursive: true, force: true });
+    }
+  });
+
+  /**
+   * A pypi `.venv` layout carrying both a dist-info dir and its import-package dir, returned as
+   * the two candidates {@link sourceDirsFor} derives from it (dist-info first, import-package
+   * second) - the shared fixture setup for the single-subject tests below.
+   */
+  function pypiCandidates(): [ScanCandidate, ScanCandidate] {
+    targetDir = mkdtempSync(join(tmpdir(), "scancode-pypi-predicate-"));
+    const sitePackages = sitePackagesDir(join(targetDir, ".venv"));
+
+    mkdirSync(sitePackages, { recursive: true });
+    const distInfoDir = join(sitePackages, "typing_extensions-4.9.0.dist-info");
+
+    mkdirSync(distInfoDir, { recursive: true });
+    writeFileSync(join(distInfoDir, "top_level.txt"), "typing_extensions\n");
+
+    const packageDir = join(sitePackages, "typing_extensions");
+
+    mkdirSync(packageDir, { recursive: true });
+
+    const candidates = sourceDirsFor("pkg:pypi/typing-extensions@4.9.0", [targetDir]);
+
+    expect(candidates).toHaveLength(2);
+
+    return candidates as [ScanCandidate, ScanCandidate];
+  }
+
+  test("pypiSourceDirs' dist-info candidate admits its own root-level licenses/LICENSE", () => {
+    const [distInfoCandidate] = pypiCandidates();
+    const distInfoBasename = basename(distInfoCandidate.dir);
+
+    expect(distInfoCandidate.isPackageOwnLegalPath(`${distInfoBasename}/licenses/LICENSE`)).toBe(
+      true,
+    );
+  });
+
+  test("pypiSourceDirs' dist-info candidate admits a NESTED path under its licenses/ subtree", () => {
+    const [distInfoCandidate] = pypiCandidates();
+    const distInfoBasename = basename(distInfoCandidate.dir);
+
+    expect(
+      distInfoCandidate.isPackageOwnLegalPath(`${distInfoBasename}/licenses/nested/COPYING`),
+    ).toBe(true);
+  });
+
+  test("pypiSourceDirs' dist-info candidate rejects a nested path OUTSIDE licenses/", () => {
+    const [distInfoCandidate] = pypiCandidates();
+    const distInfoBasename = basename(distInfoCandidate.dir);
+
+    expect(distInfoCandidate.isPackageOwnLegalPath(`${distInfoBasename}/foo/LICENSE`)).toBe(false);
+  });
+
+  test("pypiSourceDirs' import-package candidate stays root-level-only — never the dist-info widening, even as the SECOND element of the same sourceDirsFor result", () => {
+    const [, packageCandidate] = pypiCandidates();
+    const packageBasename = basename(packageCandidate.dir);
+
+    expect(packageCandidate.isPackageOwnLegalPath(`${packageBasename}/LICENSE`)).toBe(true);
+    expect(packageCandidate.isPackageOwnLegalPath(`${packageBasename}/licenses/LICENSE`)).toBe(
+      false,
+    );
+    expect(packageCandidate.isPackageOwnLegalPath(`${packageBasename}/nested/LICENSE`)).toBe(false);
+  });
+
+  test("npmSourceDir's candidate admits root-level paths only — never the pypi dist-info widening", () => {
+    targetDir = mkdtempSync(join(tmpdir(), "scancode-npm-predicate-"));
+    const pkgDir = join(targetDir, "node_modules", "left-pad");
+
+    mkdirSync(pkgDir, { recursive: true });
+    writeFileSync(
+      join(pkgDir, "package.json"),
+      JSON.stringify({ name: "left-pad", version: "1.3.0" }),
+    );
+
+    const [npmCandidate] = sourceDirsFor("pkg:npm/left-pad@1.3.0", [targetDir]);
+
+    expect(npmCandidate).toBeDefined();
+
+    const npmBasename = basename(npmCandidate!.dir);
+
+    expect(npmCandidate!.isPackageOwnLegalPath(`${npmBasename}/LICENSE`)).toBe(true);
+    // A licenses/-subtree path is the pypi dist-info widening — an npm candidate must never admit
+    // it, even though the path shape coincidentally matches what a dist-info candidate would.
+    expect(npmCandidate!.isPackageOwnLegalPath(`${npmBasename}/licenses/LICENSE`)).toBe(false);
+    expect(npmCandidate!.isPackageOwnLegalPath(`${npmBasename}/nested/LICENSE`)).toBe(false);
+  });
+});
+
 describe("sourceDirsFor — unsupported ecosystems and malformed purls", () => {
   test("terraform purls return undefined with zero fs probes", () => {
-    const result = sourceDirsFor("pkg:terraform/registry.opentofu.org/hashicorp/aws@5.0.0", [
-      "/nonexistent/dir/that/would/throw/if/probed",
-    ]);
+    const result = dirs(
+      sourceDirsFor("pkg:terraform/registry.opentofu.org/hashicorp/aws@5.0.0", [
+        "/nonexistent/dir/that/would/throw/if/probed",
+      ]),
+    );
 
     expect(result).toEqual([]);
   });
 
   test("apk purls return undefined", () => {
-    const result = sourceDirsFor("pkg:apk/alpine/musl@1.2.0", ["/nonexistent/dir"]);
+    const result = dirs(sourceDirsFor("pkg:apk/alpine/musl@1.2.0", ["/nonexistent/dir"]));
 
     expect(result).toEqual([]);
   });
 
   test("unparseable purls return undefined", () => {
-    const result = sourceDirsFor("not-a-purl-at-all", ["/nonexistent/dir"]);
+    const result = dirs(sourceDirsFor("not-a-purl-at-all", ["/nonexistent/dir"]));
 
     expect(result).toEqual([]);
   });
@@ -986,7 +1333,7 @@ describe("sourceDirsFor — unsupported ecosystems and malformed purls", () => {
       // undefined on ANY structural mismatch — a crafted SBOM purl must
       // never crash the run.
       expect(() => sourceDirsFor("pkg:npm/%ZZ@1.0.0", [targetDir])).not.toThrow();
-      expect(sourceDirsFor("pkg:npm/%ZZ@1.0.0", [targetDir])).toEqual([]);
+      expect(dirs(sourceDirsFor("pkg:npm/%ZZ@1.0.0", [targetDir]))).toEqual([]);
     } finally {
       rmSync(targetDir, { recursive: true, force: true });
     }
@@ -997,14 +1344,11 @@ describe("sourceDirsFor — unsupported ecosystems and malformed purls", () => {
 
     try {
       // A present site-packages so the mapper reaches its decode step.
-      const sitePackages =
-        process.platform === "win32"
-          ? join(targetDir, ".venv", "Lib", "site-packages")
-          : join(targetDir, ".venv", "lib", "python3.12", "site-packages");
+      const sitePackages = sitePackagesDir(join(targetDir, ".venv"));
 
       mkdirSync(sitePackages, { recursive: true });
       expect(() => sourceDirsFor("pkg:pypi/%ZZ@1.0.0", [targetDir])).not.toThrow();
-      expect(sourceDirsFor("pkg:pypi/%ZZ@1.0.0", [targetDir])).toEqual([]);
+      expect(dirs(sourceDirsFor("pkg:pypi/%ZZ@1.0.0", [targetDir]))).toEqual([]);
     } finally {
       rmSync(targetDir, { recursive: true, force: true });
     }
