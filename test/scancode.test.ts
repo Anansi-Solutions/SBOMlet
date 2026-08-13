@@ -228,18 +228,20 @@ describe("scanPackageSources (subprocess-free, exec recorder harness)", () => {
       execTool: makeFakeExecToolWithDoc(withoutLicenseFile),
     }));
 
-    tempDir = mkdtempSync(join(tmpdir(), "scancode-manifest-"));
-    const result = await scanPackageSources(candidate("/some/source/dir"), { tempDir });
+    try {
+      tempDir = mkdtempSync(join(tmpdir(), "scancode-manifest-"));
+      const result = await scanPackageSources(candidate("/some/source/dir"), { tempDir });
 
-    expect(result).not.toBeNull();
-    expect(result?.raw).toBe("MIT");
-    expect(result?.via).toBe(`${SCANCODE_TOOL.name}@${SCANCODE_TOOL.version}/manifest`);
-
-    // Restore the shared fixture-based stub for subsequent tests.
-    mock.module("../src/collectors/exec", () => ({
-      ...REAL_EXEC,
-      execTool: fakeExecTool,
-    }));
+      expect(result).not.toBeNull();
+      expect(result?.raw).toBe("MIT");
+      expect(result?.via).toBe(`${SCANCODE_TOOL.name}@${SCANCODE_TOOL.version}/manifest`);
+    } finally {
+      // Restore the shared fixture-based stub for subsequent tests.
+      mock.module("../src/collectors/exec", () => ({
+        ...REAL_EXEC,
+        execTool: fakeExecTool,
+      }));
+    }
   });
 
   test("no answer: neither legal-file nor manifest detection present -> null", async () => {
@@ -257,15 +259,17 @@ describe("scanPackageSources (subprocess-free, exec recorder harness)", () => {
       execTool: makeFakeExecToolWithDoc(onlyNoise),
     }));
 
-    tempDir = mkdtempSync(join(tmpdir(), "scancode-noanswer-"));
-    const result = await scanPackageSources(candidate("/some/source/dir"), { tempDir });
+    try {
+      tempDir = mkdtempSync(join(tmpdir(), "scancode-noanswer-"));
+      const result = await scanPackageSources(candidate("/some/source/dir"), { tempDir });
 
-    expect(result).toBeNull();
-
-    mock.module("../src/collectors/exec", () => ({
-      ...REAL_EXEC,
-      execTool: fakeExecTool,
-    }));
+      expect(result).toBeNull();
+    } finally {
+      mock.module("../src/collectors/exec", () => ({
+        ...REAL_EXEC,
+        execTool: fakeExecTool,
+      }));
+    }
   });
 
   test("rejection lane: an expression containing LicenseRef-scancode- is treated as no answer", async () => {
@@ -289,15 +293,17 @@ describe("scanPackageSources (subprocess-free, exec recorder harness)", () => {
       execTool: makeFakeExecToolWithDoc(noiseAsLicense),
     }));
 
-    tempDir = mkdtempSync(join(tmpdir(), "scancode-rejection-"));
-    const result = await scanPackageSources(candidate("/some/source/dir"), { tempDir });
+    try {
+      tempDir = mkdtempSync(join(tmpdir(), "scancode-rejection-"));
+      const result = await scanPackageSources(candidate("/some/source/dir"), { tempDir });
 
-    expect(result).toBeNull();
-
-    mock.module("../src/collectors/exec", () => ({
-      ...REAL_EXEC,
-      execTool: fakeExecTool,
-    }));
+      expect(result).toBeNull();
+    } finally {
+      mock.module("../src/collectors/exec", () => ({
+        ...REAL_EXEC,
+        execTool: fakeExecTool,
+      }));
+    }
   });
 
   test("version assert: a different headers tool version rejects loudly, naming the invocation and both versions", async () => {
@@ -315,15 +321,17 @@ describe("scanPackageSources (subprocess-free, exec recorder harness)", () => {
       execTool: makeFakeExecToolWithDoc(wrongVersion),
     }));
 
-    tempDir = mkdtempSync(join(tmpdir(), "scancode-version-"));
-    await expect(scanPackageSources(candidate("/some/source/dir"), { tempDir })).rejects.toThrow(
-      /31\.0\.0.*32\.5\.0|invocation:/s,
-    );
-
-    mock.module("../src/collectors/exec", () => ({
-      ...REAL_EXEC,
-      execTool: fakeExecTool,
-    }));
+    try {
+      tempDir = mkdtempSync(join(tmpdir(), "scancode-version-"));
+      await expect(scanPackageSources(candidate("/some/source/dir"), { tempDir })).rejects.toThrow(
+        /31\.0\.0.*32\.5\.0|invocation:/s,
+      );
+    } finally {
+      mock.module("../src/collectors/exec", () => ({
+        ...REAL_EXEC,
+        execTool: fakeExecTool,
+      }));
+    }
   });
 
   test("size gate: an oversized output file rejects BEFORE any parse", async () => {
@@ -332,15 +340,17 @@ describe("scanPackageSources (subprocess-free, exec recorder harness)", () => {
       execTool: makeFakeExecToolOversized(),
     }));
 
-    tempDir = mkdtempSync(join(tmpdir(), "scancode-oversized-"));
-    await expect(scanPackageSources(candidate("/some/source/dir"), { tempDir })).rejects.toThrow(
-      /over the.*byte cap/,
-    );
-
-    mock.module("../src/collectors/exec", () => ({
-      ...REAL_EXEC,
-      execTool: fakeExecTool,
-    }));
+    try {
+      tempDir = mkdtempSync(join(tmpdir(), "scancode-oversized-"));
+      await expect(scanPackageSources(candidate("/some/source/dir"), { tempDir })).rejects.toThrow(
+        /over the.*byte cap/,
+      );
+    } finally {
+      mock.module("../src/collectors/exec", () => ({
+        ...REAL_EXEC,
+        execTool: fakeExecTool,
+      }));
+    }
   });
 
   test("missing tool: an ENOENT-shaped spawn error rejects with the mise install hint", async () => {
@@ -349,15 +359,17 @@ describe("scanPackageSources (subprocess-free, exec recorder harness)", () => {
       execTool: fakeExecToolEnoent,
     }));
 
-    tempDir = mkdtempSync(join(tmpdir(), "scancode-enoent-"));
-    await expect(scanPackageSources(candidate("/some/source/dir"), { tempDir })).rejects.toThrow(
-      /run mise install/,
-    );
-
-    mock.module("../src/collectors/exec", () => ({
-      ...REAL_EXEC,
-      execTool: fakeExecTool,
-    }));
+    try {
+      tempDir = mkdtempSync(join(tmpdir(), "scancode-enoent-"));
+      await expect(scanPackageSources(candidate("/some/source/dir"), { tempDir })).rejects.toThrow(
+        /run mise install/,
+      );
+    } finally {
+      mock.module("../src/collectors/exec", () => ({
+        ...REAL_EXEC,
+        execTool: fakeExecTool,
+      }));
+    }
   });
 
   test("partial-file-error exit: a NON-ZERO scancode exit that still wrote a valid, version-asserted output is TOLERATED — the produced result is elected, the run is not aborted (a bundled undecodable file must not sink the whole scan)", async () => {
@@ -383,15 +395,19 @@ describe("scanPackageSources (subprocess-free, exec recorder harness)", () => {
       ...REAL_EXEC,
       execTool: failButWroteFixture,
     }));
-    tempDir = mkdtempSync(join(tmpdir(), "scancode-partial-"));
-    const result = await scanPackageSources(candidate("/some/source/dir"), { tempDir });
 
-    expect(result?.raw).toBe("MIT");
-    expect(result?.via).toBe(`${SCANCODE_TOOL.name}@${SCANCODE_TOOL.version}/license-file`);
-    mock.module("../src/collectors/exec", () => ({
-      ...REAL_EXEC,
-      execTool: fakeExecTool,
-    }));
+    try {
+      tempDir = mkdtempSync(join(tmpdir(), "scancode-partial-"));
+      const result = await scanPackageSources(candidate("/some/source/dir"), { tempDir });
+
+      expect(result?.raw).toBe("MIT");
+      expect(result?.via).toBe(`${SCANCODE_TOOL.name}@${SCANCODE_TOOL.version}/license-file`);
+    } finally {
+      mock.module("../src/collectors/exec", () => ({
+        ...REAL_EXEC,
+        execTool: fakeExecTool,
+      }));
+    }
   });
 
   test("non-zero exit with NO output file still throws (the failure is real — tolerance requires a produced result)", async () => {
@@ -407,14 +423,18 @@ describe("scanPackageSources (subprocess-free, exec recorder harness)", () => {
       ...REAL_EXEC,
       execTool: failNoOutput,
     }));
-    tempDir = mkdtempSync(join(tmpdir(), "scancode-fail-noout-"));
-    await expect(scanPackageSources(candidate("/some/source/dir"), { tempDir })).rejects.toThrow(
-      /exited with code 1|produced no output/,
-    );
-    mock.module("../src/collectors/exec", () => ({
-      ...REAL_EXEC,
-      execTool: fakeExecTool,
-    }));
+
+    try {
+      tempDir = mkdtempSync(join(tmpdir(), "scancode-fail-noout-"));
+      await expect(scanPackageSources(candidate("/some/source/dir"), { tempDir })).rejects.toThrow(
+        /exited with code 1|produced no output/,
+      );
+    } finally {
+      mock.module("../src/collectors/exec", () => ({
+        ...REAL_EXEC,
+        execTool: fakeExecTool,
+      }));
+    }
   });
 
   test("non-zero exit whose output fails the tool_version assert still throws (the integrity gate survives tolerance — a substituted binary is never silently accepted)", async () => {
@@ -444,14 +464,18 @@ describe("scanPackageSources (subprocess-free, exec recorder harness)", () => {
       ...REAL_EXEC,
       execTool: failWrongVersion,
     }));
-    tempDir = mkdtempSync(join(tmpdir(), "scancode-fail-version-"));
-    await expect(scanPackageSources(candidate("/some/source/dir"), { tempDir })).rejects.toThrow(
-      /31\.0\.0.*32\.5\.0|invocation:/s,
-    );
-    mock.module("../src/collectors/exec", () => ({
-      ...REAL_EXEC,
-      execTool: fakeExecTool,
-    }));
+
+    try {
+      tempDir = mkdtempSync(join(tmpdir(), "scancode-fail-version-"));
+      await expect(scanPackageSources(candidate("/some/source/dir"), { tempDir })).rejects.toThrow(
+        /31\.0\.0.*32\.5\.0|invocation:/s,
+      );
+    } finally {
+      mock.module("../src/collectors/exec", () => ({
+        ...REAL_EXEC,
+        execTool: fakeExecTool,
+      }));
+    }
   });
 
   test("a shared tempDir never lets a previous scan's output masquerade as a later scan's result", async () => {
@@ -551,17 +575,19 @@ describe("scanPackageSources (subprocess-free, exec recorder harness)", () => {
         execTool: makeFakeExecToolWithDoc(pep639DistInfoLayout),
       }));
 
-      tempDir = mkdtempSync(join(tmpdir(), "scancode-pep639-"));
-      const result = await scanPackageSources(distInfoCandidate!, { tempDir });
+      try {
+        tempDir = mkdtempSync(join(tmpdir(), "scancode-pep639-"));
+        const result = await scanPackageSources(distInfoCandidate!, { tempDir });
 
-      expect(result).not.toBeNull();
-      expect(result?.raw).toBe("MIT");
-      expect(result?.via).toBe(`${SCANCODE_TOOL.name}@${SCANCODE_TOOL.version}/license-file`);
-
-      mock.module("../src/collectors/exec", () => ({
-        ...REAL_EXEC,
-        execTool: fakeExecTool,
-      }));
+        expect(result).not.toBeNull();
+        expect(result?.raw).toBe("MIT");
+        expect(result?.via).toBe(`${SCANCODE_TOOL.name}@${SCANCODE_TOOL.version}/license-file`);
+      } finally {
+        mock.module("../src/collectors/exec", () => ({
+          ...REAL_EXEC,
+          execTool: fakeExecTool,
+        }));
+      }
     } finally {
       rmSync(venvTargetDir, { recursive: true, force: true });
     }
@@ -739,6 +765,18 @@ describe("electExpression / electCopyrights (pure narrow, no exec)", () => {
       {
         path: "pkg-1.0.dist-info/foo/LICENSE",
         detected_license_expression_spdx: "GPL-3.0-only",
+      },
+    ];
+    const elected = electExpression(files, isRootLevelOrDistInfoLicensesPath);
+
+    expect(elected).toBeUndefined();
+  });
+
+  test("the manifest lane is root-only even under the widened dist-info predicate — a nested licenses/METADATA is never elected as the manifest", () => {
+    const files = [
+      {
+        path: "pkg-1.0.dist-info/licenses/METADATA",
+        detected_license_expression_spdx: "MIT",
       },
     ];
     const elected = electExpression(files, isRootLevelOrDistInfoLicensesPath);
@@ -1168,12 +1206,6 @@ describe("sourceDirsFor — pypi mapping", () => {
   });
 });
 
-// --- Wiring gap closed: the candidates ABOVE this line were only ever compared on `.dir`
-// (see dirs()) — nothing asserted that pypiSourceDirs' dist-info candidate actually carries the
-// widened predicate, or that npmSourceDir's carries the unwidened one. This suite calls
-// sourceDirsFor for real and exercises the RETURNED candidates' own isPackageOwnLegalPath — the
-// real sources.ts predicates (isRootLevelPath / isRootLevelOrDistInfoLicensesPath, imported above)
-// wired through production's actual candidate construction, never a hand-built stand-in.
 describe("sourceDirsFor — candidate admission predicates (real wiring, not mirrored)", () => {
   let targetDir: string;
 
@@ -1183,7 +1215,12 @@ describe("sourceDirsFor — candidate admission predicates (real wiring, not mir
     }
   });
 
-  test("pypiSourceDirs' dist-info candidate admits its licenses/ subtree; the import-package candidate stays root-level-only", () => {
+  /**
+   * A pypi `.venv` layout carrying both a dist-info dir and its import-package dir, returned as
+   * the two candidates {@link sourceDirsFor} derives from it (dist-info first, import-package
+   * second) - the shared fixture setup for the single-subject tests below.
+   */
+  function pypiCandidates(): [ScanCandidate, ScanCandidate] {
     targetDir = mkdtempSync(join(tmpdir(), "scancode-pypi-predicate-"));
     const sitePackages = sitePackagesDir(join(targetDir, ".venv"));
 
@@ -1200,21 +1237,37 @@ describe("sourceDirsFor — candidate admission predicates (real wiring, not mir
     const candidates = sourceDirsFor("pkg:pypi/typing-extensions@4.9.0", [targetDir]);
 
     expect(candidates).toHaveLength(2);
-    const [distInfoCandidate, packageCandidate] = candidates as [ScanCandidate, ScanCandidate];
 
-    // The dist-info candidate's predicate: root-level AND its licenses/ subtree (nested included).
+    return candidates as [ScanCandidate, ScanCandidate];
+  }
+
+  test("pypiSourceDirs' dist-info candidate admits its own root-level licenses/LICENSE", () => {
+    const [distInfoCandidate] = pypiCandidates();
     const distInfoBasename = basename(distInfoCandidate.dir);
 
     expect(distInfoCandidate.isPackageOwnLegalPath(`${distInfoBasename}/licenses/LICENSE`)).toBe(
       true,
     );
+  });
+
+  test("pypiSourceDirs' dist-info candidate admits a NESTED path under its licenses/ subtree", () => {
+    const [distInfoCandidate] = pypiCandidates();
+    const distInfoBasename = basename(distInfoCandidate.dir);
+
     expect(
       distInfoCandidate.isPackageOwnLegalPath(`${distInfoBasename}/licenses/nested/COPYING`),
     ).toBe(true);
-    expect(distInfoCandidate.isPackageOwnLegalPath(`${distInfoBasename}/foo/LICENSE`)).toBe(false);
+  });
 
-    // The import-package candidate's predicate: root-level only — never the dist-info widening,
-    // even though it is the SECOND element of the same sourceDirsFor result.
+  test("pypiSourceDirs' dist-info candidate rejects a nested path OUTSIDE licenses/", () => {
+    const [distInfoCandidate] = pypiCandidates();
+    const distInfoBasename = basename(distInfoCandidate.dir);
+
+    expect(distInfoCandidate.isPackageOwnLegalPath(`${distInfoBasename}/foo/LICENSE`)).toBe(false);
+  });
+
+  test("pypiSourceDirs' import-package candidate stays root-level-only — never the dist-info widening, even as the SECOND element of the same sourceDirsFor result", () => {
+    const [, packageCandidate] = pypiCandidates();
     const packageBasename = basename(packageCandidate.dir);
 
     expect(packageCandidate.isPackageOwnLegalPath(`${packageBasename}/LICENSE`)).toBe(true);
