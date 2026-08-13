@@ -45,6 +45,75 @@ function safeDecode(encoded: string): string | undefined {
   }
 }
 
+/**
+ * A locally-present directory scancode can be pointed at, together with which of its own
+ * `files[].path` entries election may treat as the package's OWN legal-file evidence (see
+ * election.ts). What counts as "own" is a property of the scan root's LAYOUT - an npm package dir
+ * and a pypi import-package dir both keep their legal files at the root, a wheel's `*.dist-info`
+ * dir also keeps them under its `licenses/` subtree (PEP 639) - so the shape is decided HERE, once
+ * per ecosystem, and travels opaquely with the candidate from here on: election and invocation
+ * carry zero layout knowledge of their own (the misattribution guard - a vendored dependency's
+ * license must never be attributed to the scanned package - lives in the predicate, not in a caller
+ * that has to know which ecosystem it is looking at).
+ */
+export interface ScanCandidate {
+  /** The directory scancode is pointed at. */
+  dir: string;
+  /**
+   * True iff a scancode `files[].path` (forward-slash-separated, always prefixed with the scanned
+   * dir's own basename - verified live: `ajv/LICENSE`, `ajv/dist/ajv.bundle.js`) belongs to this
+   * candidate's OWN legal-file evidence, never a nested/vendored/bundled subdirectory's file
+   * wearing the same basename.
+   */
+  isPackageOwnLegalPath(path: string): boolean;
+}
+
+/**
+ * True iff path uses scancode's own forward-slash separator. A backslash-separated path is rejected
+ * defensively by every predicate below - scancode never emits one; fail closed rather than trust an
+ * unexpected separator as root-level.
+ */
+function isForwardSlashPath(path: string): boolean {
+  return !path.includes("\\");
+}
+
+/**
+ * True iff path sits directly inside the scanned dir - EXACTLY two forward-slash-separated segments
+ * (`<scanRootBasename>/<filename>`), never a nested/vendored/bundled subdirectory. The npm
+ * candidate and the pypi import-package candidate both use this: their only own-legal location is
+ * the scan root itself.
+ *
+ * A review found election previously matched on `basename(path)` alone with no depth check, so a
+ * deeply-nested vendored/bundled dependency's LICENSE - carrying a DIFFERENT, potentially copyleft
+ * license - could silently outrank the scanned package's own root license purely by `files[]` array
+ * order (scancode's own walk order is not guaranteed root-first); this predicate is the fix - a
+ * two-or-more-segment nested path is never root-level.
+ */
+function isRootLevelPath(path: string): boolean {
+  return isForwardSlashPath(path) && path.split("/").length === 2;
+}
+
+/**
+ * {@link isRootLevelPath}, widened for a PEP 639 wheel's `*.dist-info` dir: a path under its
+ * `licenses/` subtree - nested paths included - is ALSO the package's own, since that directory IS
+ * the wheel's own legal-file location, never a vendored dependency's, so admitting the whole
+ * subtree carries no vendoring risk. Only the pypi dist-info candidate uses this predicate; the npm
+ * and pypi import-package candidates keep the unwidened {@link isRootLevelPath}.
+ */
+function isRootLevelOrDistInfoLicensesPath(path: string): boolean {
+  if (!isForwardSlashPath(path)) {
+    return false;
+  }
+
+  const segments = path.split("/");
+
+  if (segments.length === 2) {
+    return true;
+  }
+
+  return segments.length > 2 && segments[1] === "licenses";
+}
+
 /** `name@version` -> the winning installed dir, as produced by {@link buildNpmSourceIndex}. */
 export type NpmSourceIndex = Map<string, string>;
 
@@ -245,15 +314,16 @@ function npmSourceIndexFor(
 
 /**
  * Decode an npm purl's encoded name and look it up in the target dir's npm source index at the
- * exact `name@version` key, returning the winning installed dir or undefined on ANY structural
- * mismatch - the name never matches any installed package, or it does but no installed copy (at any
- * nesting depth) carries this exact version.
+ * exact `name@version` key, returning a {@link ScanCandidate} for the winning installed dir or
+ * undefined on ANY structural mismatch - the name never matches any installed package, or it does
+ * but no installed copy (at any nesting depth) carries this exact version. An npm package's own
+ * legal files live only at its own root - {@link isRootLevelPath}, unwidened.
  */
 function npmSourceDir(
   purl: EcosystemPurl,
   targetDir: string,
   cache?: NpmSourceIndexCache,
-): string | undefined {
+): ScanCandidate | undefined {
   // The decode exactly mirrors npmPackumentUrl's scoped-name decode (enrich.ts npmPackumentUrl):
   // "%40scope/pkg" -> "@scope/pkg".
   const name = safeDecode(purl.encodedName);
@@ -262,7 +332,9 @@ function npmSourceDir(
     return undefined;
   }
 
-  return npmSourceIndexFor(targetDir, cache).get(`${name}@${purl.version}`);
+  const dir = npmSourceIndexFor(targetDir, cache).get(`${name}@${purl.version}`);
+
+  return dir === undefined ? undefined : { dir, isPackageOwnLegalPath: isRootLevelPath };
 }
 
 /**
@@ -315,14 +387,17 @@ function sitePackagesDir(venvDir: string): string {
  * site-packages. The dist-info dir name is the PEP-503 structural fold of `<name>-<version>`
  * (literal lower-case + `-`/`_`/`.` folded); the matched dist-info dir itself is ALWAYS the first
  * candidate - a wheel install puts `METADATA` and the `LICENSE`/`licenses/` legal files there, not
- * inside the import package, so it is where the election lanes' evidence actually lives. The
- * `top_level.txt`-named import package dir (sorted, first entry that exists as a sibling dir)
- * follows as the second candidate when present. Absent venv or absent dist-info -> [] (honest skip,
- * never a fabricated guess). top_level.txt content is fully controlled by the installed package, so
- * a `..`-shaped or absolute-path-shaped line can never name a directory outside site-packages
- * (resolve + strict prefix-check, mirrored below in {@link topLevelPackageDir}).
+ * inside the import package, so it is where the election lanes' evidence actually lives, and PEP
+ * 639 puts its own legal files under the dist-info dir's `licenses/` subtree too, hence its
+ * candidate uses the widened {@link isRootLevelOrDistInfoLicensesPath}. The `top_level.txt`-named
+ * import package dir (sorted, first entry that exists as a sibling dir) follows as the second
+ * candidate when present, using the unwidened {@link isRootLevelPath} - only the dist-info dir
+ * itself is the wheel's own legal-file location. Absent venv or absent dist-info -> [] (honest
+ * skip, never a fabricated guess). top_level.txt content is fully controlled by the installed
+ * package, so a `..`-shaped or absolute-path-shaped line can never name a directory outside
+ * site-packages (resolve + strict prefix-check, mirrored below in {@link topLevelPackageDir}).
  */
-function pypiSourceDirs(purl: EcosystemPurl, targetDir: string): string[] {
+function pypiSourceDirs(purl: EcosystemPurl, targetDir: string): ScanCandidate[] {
   const venvDir = join(targetDir, ".venv");
   // Resolved once up front so both sides of the containment check below compare canonical absolute
   // paths.
@@ -350,9 +425,17 @@ function pypiSourceDirs(purl: EcosystemPurl, targetDir: string): string[] {
   }
 
   const distInfoDir = join(sitePackages, distInfoName);
+  const distInfoCandidate: ScanCandidate = {
+    dir: distInfoDir,
+    isPackageOwnLegalPath: isRootLevelOrDistInfoLicensesPath,
+  };
   const packageDir = topLevelPackageDir(sitePackages, distInfoDir);
 
-  return packageDir === undefined ? [distInfoDir] : [distInfoDir, packageDir];
+  if (packageDir === undefined) {
+    return [distInfoCandidate];
+  }
+
+  return [distInfoCandidate, { dir: packageDir, isPackageOwnLegalPath: isRootLevelPath }];
 }
 
 /**
@@ -418,7 +501,7 @@ export function sourceDirsFor(
   purl: string,
   targetDirs: string[],
   npmIndexCache?: NpmSourceIndexCache,
-): string[] {
+): ScanCandidate[] {
   const parsed = parsePurl(purl);
 
   if (parsed === undefined) {

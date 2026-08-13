@@ -32,49 +32,17 @@ function isRawScancodeFile(raw: unknown): raw is RawScancodeFile {
 }
 
 /**
- * True iff a scancode `files[].path` belongs to the scanned package's own legal-file evidence
- * - either it sits directly inside the scanned tree's root (never a nested/vendored/bundled
- * subdirectory), or the scan root is a wheel's `*.dist-info` dir and the path falls under its
- * `licenses/` subtree, at any depth (PEP 639: that directory - nested paths included - IS the
- * package's own legal-file location, never a vendored dependency's, so admitting the whole subtree
- * carries no vendoring risk). ScanCode's `--json-pp` paths are forward-slash-separated and always
- * prefixed with the scanned directory's OWN basename (verified live: `ajv/LICENSE`,
- * `ajv/dist/ajv.bundle.js`), so a root-level file has EXACTLY two `/`-segments:
- * `<scanRootBasename>/<filename>`, and a dist-info `licenses/` entry has
- * `<scanRootBasename>/licenses` as its first two segments with one or more further segments beyond
- * that. Backslash-separated paths are defensively rejected too (scancode never emits them; fail
- * closed rather than trust an unexpected separator as root-level).
- *
- * A review found election previously matched on `basename(path)` alone with no depth check, so a
- * deeply-nested vendored/bundled dependency's LICENSE - carrying a DIFFERENT, potentially copyleft
- * license - could silently outrank the scanned package's own root license purely by `files[]` array
- * order (scancode's own walk order is not guaranteed root-first). This closes that gap; the
- * dist-info `licenses/` widening cannot reopen it, since it only ever admits paths under a
- * directory that is itself the scanned package's own dist-info root.
- */
-function isAdmissibleLegalPath(path: string, scanRootIsDistInfo: boolean): boolean {
-  if (path.includes("\\")) {
-    return false;
-  }
-
-  const segments = path.split("/");
-
-  if (segments.length === 2) {
-    return true;
-  }
-
-  return scanRootIsDistInfo && segments.length > 2 && segments[1] === "licenses";
-}
-
-/**
- * Elect the first ROOT-LEVEL file entry matching a basename pattern with a non-null, non-noise
- * expression.
+ * Elect the first file entry matching a basename pattern with a non-null, non-noise expression,
+ * admitted by `isPackageOwnLegalPath` - the misattribution guard (a vendored dependency's license
+ * must never be attributed to the scanned package), decided entirely by the scan candidate that
+ * produced this path (see `ScanCandidate` in sources.ts). Election asks the predicate; it carries
+ * no layout knowledge of its own - not which ecosystem, not where a package's own legal files live.
  */
 function electFromPattern(
   entries: RawScancodeFile[],
   pattern: RegExp,
   lane: string,
-  scanRootIsDistInfo: boolean,
+  isPackageOwnLegalPath: (path: string) => boolean,
 ): { raw: string; via: string } | undefined {
   for (const entry of entries) {
     const path = entry.path;
@@ -83,7 +51,7 @@ function electFromPattern(
       continue;
     }
 
-    if (!isAdmissibleLegalPath(path, scanRootIsDistInfo)) {
+    if (!isPackageOwnLegalPath(path)) {
       continue;
     }
 
@@ -111,13 +79,12 @@ function electFromPattern(
 }
 
 /**
- * Elect ONE raw SPDX expression from the scanned files: a root-level legal file (basename matches
- * {@link LEGAL_FILE_PATTERN}) with a non-null, non-noise expression wins; else the first
- * package-manifest entry
- * ({@link MANIFEST_FILE_PATTERN}) with a non-null, non-noise expression;
- * else undefined (never an AND-combine across files). `scanRootIsDistInfo` widens the legal-file
- * lane's path admission to a PEP 639 wheel's `<dist-info>/licenses/` subtree (see {@link
- * isAdmissibleLegalPath}); omitted, only root-level files are admitted, unchanged from before. An
+ * Elect ONE raw SPDX expression from the scanned files: a legal file (basename matches {@link
+ * LEGAL_FILE_PATTERN}) admitted by `isPackageOwnLegalPath` with a non-null, non-noise expression
+ * wins; else the first admitted package-manifest entry ({@link MANIFEST_FILE_PATTERN}) with a
+ * non-null, non-noise expression; else undefined (never an AND-combine across files).
+ * `isPackageOwnLegalPath` is the scan candidate's own admission predicate (see `ScanCandidate` in
+ * sources.ts) - election never decides for itself which paths a scanned tree owns, only asks. An
  * elected expression containing `LicenseRef-scancode-` is rejected within each lane (treated as no
  * answer there, ADR-0007) rather than accepted as noise - the caller falls through to the next
  * lane, or to a clean no-answer if both lanes reject. The winning expression is simplified via
@@ -126,7 +93,7 @@ function electFromPattern(
  */
 export function electExpression(
   files: unknown,
-  scanRootIsDistInfo = false,
+  isPackageOwnLegalPath: (path: string) => boolean,
 ): { raw: string; via: string } | undefined {
   if (!Array.isArray(files)) {
     return undefined;
@@ -134,13 +101,18 @@ export function electExpression(
 
   const entries = files.filter(isRawScancodeFile);
 
-  const legal = electFromPattern(entries, LEGAL_FILE_PATTERN, "license-file", scanRootIsDistInfo);
+  const legal = electFromPattern(
+    entries,
+    LEGAL_FILE_PATTERN,
+    "license-file",
+    isPackageOwnLegalPath,
+  );
 
   if (legal !== undefined) {
     return legal;
   }
 
-  return electFromPattern(entries, MANIFEST_FILE_PATTERN, "manifest", scanRootIsDistInfo);
+  return electFromPattern(entries, MANIFEST_FILE_PATTERN, "manifest", isPackageOwnLegalPath);
 }
 
 /** One narrowed copyrights[] entry. */

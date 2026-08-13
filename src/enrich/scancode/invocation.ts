@@ -21,11 +21,12 @@
  */
 import { existsSync, mkdtempSync, readFileSync, rmSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { basename, join } from "node:path";
+import { join } from "node:path";
 
 import { execTool } from "../../collectors/exec";
 import { electCopyrights, electExpression } from "./election";
 import { SCANCODE_TOOL } from "./tool";
+import type { ScanCandidate } from "./sources";
 
 /**
  * DoS bound: real scancode `--json-pp` output for a single npm package tree is well under a MiB
@@ -227,13 +228,17 @@ async function runScancode(
 }
 
 /**
- * Scan one locally-present source dir with the pinned scancode-toolkit CLI and return its elected
- * result, or null on a clean no-answer. Mirrors dockerOs.ts's scanImage/parseSyftOutput skeleton:
- * spawn via execTool (the tool's only child_process seam) -> exists-check -> size-gate BEFORE read
- * -> read -> parse + version-assert -> election. A spawn ENOENT (missing tool) is mapped to the
- * loud install-command error; any other
+ * Scan one locally-present scan candidate with the pinned scancode-toolkit CLI and return its
+ * elected result, or null on a clean no-answer. Mirrors dockerOs.ts's scanImage/parseSyftOutput
+ * skeleton: spawn via execTool (the tool's only child_process seam) -> exists-check -> size-gate
+ * BEFORE read -> read -> parse + version-assert -> election. A spawn ENOENT (missing tool) is
+ * mapped to the loud install-command error; any other
 
  * rejection (non-zero exit, timeout) propagates as-is.
+ *
+ * The candidate's own `isPackageOwnLegalPath` predicate (see `ScanCandidate` in sources.ts) threads
+ * straight through to election, unexamined - this module carries no layout knowledge of its own,
+ * not which ecosystem produced the candidate, not where its legal files live.
  *
  * Output-file hygiene: any stale out file is removed BEFORE the spawn, so with a caller-shared
  * tempDir a PREVIOUS scan's output can never masquerade as this scan's result (the exists-check
@@ -242,9 +247,10 @@ async function runScancode(
  * package per run.
  */
 export async function scanPackageSources(
-  sourceDir: string,
+  candidate: ScanCandidate,
   opts: ScancodeScanOptions = {},
 ): Promise<ScancodeResolution | null> {
+  const { dir: sourceDir, isPackageOwnLegalPath } = candidate;
   const timeoutMs = opts.timeoutMs ?? DEFAULT_SCAN_TIMEOUT_MS;
   const verbose = opts.verbose ?? false;
   const scancodeBin = opts.scancodeBin ?? "scancode";
@@ -260,12 +266,7 @@ export async function scanPackageSources(
       verbose,
     });
 
-    // A PEP 639 wheel's own legal files live under <dist-info>/licenses/, which election only
-    // admits once it knows the scanned root IS that dist-info dir - the one place this module
-    // already has that knowledge (the caller-chosen sourceDir), so it is derived here rather than
-    // re-discovered inside election.ts.
-    const scanRootIsDistInfo = basename(sourceDir).endsWith(".dist-info");
-    const elected = electExpression(parsed.files, scanRootIsDistInfo);
+    const elected = electExpression(parsed.files, isPackageOwnLegalPath);
 
     if (elected === undefined) {
       return null;
