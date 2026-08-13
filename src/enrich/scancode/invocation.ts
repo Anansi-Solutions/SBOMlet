@@ -21,7 +21,7 @@
  */
 import { existsSync, mkdtempSync, readFileSync, rmSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 
 import { execTool } from "../../collectors/exec";
 import { electCopyrights, electExpression } from "./election";
@@ -260,7 +260,12 @@ export async function scanPackageSources(
       verbose,
     });
 
-    const elected = electExpression(parsed.files);
+    // A PEP 639 wheel's own legal files live under <dist-info>/licenses/, which election only
+    // admits once it knows the scanned root IS that dist-info dir - the one place this module
+    // already has that knowledge (the caller-chosen sourceDir), so it is derived here rather than
+    // re-discovered inside election.ts.
+    const scanRootIsDistInfo = basename(sourceDir).endsWith(".dist-info");
+    const elected = electExpression(parsed.files, scanRootIsDistInfo);
 
     if (elected === undefined) {
       return null;
