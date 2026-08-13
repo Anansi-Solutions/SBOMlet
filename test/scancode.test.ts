@@ -20,7 +20,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import { afterAll, afterEach, beforeAll, describe, expect, mock, test } from "bun:test";
 
 import * as cdxgenModule from "../src/collectors/cdxgen";
@@ -61,9 +61,13 @@ let invocations: string[][] = [];
 const FIXTURE_PATH = join(__dirname, "fixtures", "scancode-license-file-trimmed.json");
 
 /**
- * Root-level-only admission predicate, mirroring sources.ts's npm/pypi-import-package candidate
- * shape: only a two-segment `<scanRootBasename>/<filename>` path is the package's own. The
- * mechanical replacement for the old scanRootIsDistInfo=false / omitted flag below.
+ * A deliberately-synthetic root-level-only admission predicate, SHAPED like sources.ts's
+ * npm/pypi-import-package candidate but never asserted to equal it: `electExpression` and
+ * `scanPackageSources` accept any predicate function, and most tests below supply their own
+ * arbitrary one purely to exercise that generic contract (election lanes, argv shape, error
+ * handling) — none of that depends on sources.ts's actual definition. The real production
+ * predicate, wired through a real `sourceDirsFor` candidate, is asserted separately by the
+ * "candidate admission predicates (real wiring, not mirrored)" suite below.
  */
 function rootLevelOnly(path: string): boolean {
   return !path.includes("\\") && path.split("/").length === 2;
@@ -71,8 +75,9 @@ function rootLevelOnly(path: string): boolean {
 
 /**
  * {@link rootLevelOnly}, widened for a PEP 639 wheel's dist-info dir: a path under its
- * `licenses/` subtree - nested paths included - is ALSO admitted. Mirrors sources.ts's pypi
- * dist-info candidate shape; the mechanical replacement for the old scanRootIsDistInfo=true flag.
+ * `licenses/` subtree - nested paths included - is ALSO admitted. Same synthetic-predicate
+ * caveat as {@link rootLevelOnly}: shaped like sources.ts's pypi dist-info candidate for
+ * election-lane unit tests, never asserted to equal it.
  */
 function rootLevelOrDistInfoLicenses(path: string): boolean {
   if (path.includes("\\")) {
@@ -90,7 +95,9 @@ function rootLevelOrDistInfoLicenses(path: string): boolean {
 
 /**
  * A minimal {@link ScanCandidate} for tests that only care about the scanned dir, defaulting to
- * {@link rootLevelOnly} unless the widened dist-info predicate is explicitly supplied.
+ * the synthetic {@link rootLevelOnly} unless the widened dist-info predicate is explicitly
+ * supplied. Never used where the test's subject is sources.ts's own candidate wiring — those
+ * tests get their candidate from a real `sourceDirsFor` call instead.
  */
 function candidate(
   dir: string,
@@ -102,10 +109,17 @@ function candidate(
 /**
  * The scanned dirs from a sourceDirsFor result, discarding each candidate's admission predicate -
  * the mapping tests below assert on WHICH dirs were found, never on candidate admission shape
- * (that is covered separately by the PEP 639 / election test suites above).
+ * (that is covered separately by the "candidate admission predicates" wiring suite below).
  */
 function dirs(candidates: ScanCandidate[]): string[] {
   return candidates.map((c) => c.dir);
+}
+
+/** The platform-appropriate site-packages path under a temp dir's `.venv`, matching sources.ts. */
+function venvSitePackagesDir(dir: string): string {
+  return process.platform === "win32"
+    ? join(dir, ".venv", "Lib", "site-packages")
+    : join(dir, ".venv", "lib", "python3.12", "site-packages");
 }
 
 /**
@@ -528,50 +542,71 @@ describe("scanPackageSources (subprocess-free, exec recorder harness)", () => {
   });
 
   test("PEP 639 end-to-end: a dist-info scan root whose files carry ONLY a licenses/LICENSE detection yields a non-null resolution — the manifest-lane null this bug used to produce is gone", async () => {
-    const fixture = JSON.parse(readFileSync(FIXTURE_PATH, "utf8")) as {
-      headers: unknown[];
-      files: unknown[];
-    };
-    const pep639DistInfoLayout = {
-      ...fixture,
-      files: [
-        {
-          path: "pkg-1.0.dist-info/licenses/LICENSE",
-          detected_license_expression_spdx: "MIT",
-          copyrights: [],
-        },
-        {
-          path: "pkg-1.0.dist-info/METADATA",
-          detected_license_expression_spdx: null,
-          copyrights: [],
-        },
-      ],
-    };
+    // The candidate comes from a REAL sourceDirsFor call against a real on-disk .venv/dist-info
+    // layout, never a hand-built stand-in — this is what proves pypiSourceDirs actually wires the
+    // widened predicate to the dist-info candidate, not just that scanPackageSources threads
+    // WHATEVER predicate it is handed (that generic-threading property is covered separately by
+    // the leak-guard test below, which is deliberately synthetic).
+    const venvTargetDir = mkdtempSync(join(tmpdir(), "scancode-pep639-fixture-"));
 
-    mock.module("../src/collectors/exec", () => ({
-      ...REAL_EXEC,
-      execTool: makeFakeExecToolWithDoc(pep639DistInfoLayout),
-    }));
+    try {
+      const sitePackages = venvSitePackagesDir(venvTargetDir);
 
-    tempDir = mkdtempSync(join(tmpdir(), "scancode-pep639-"));
-    // The candidate itself carries the widened dist-info admission predicate — scanPackageSources
-    // threads it to election opaquely, never deriving layout knowledge from sourceDir on its own.
-    const result = await scanPackageSources(
-      candidate("/some/source/pkg-1.0.dist-info", rootLevelOrDistInfoLicenses),
-      { tempDir },
-    );
+      mkdirSync(join(sitePackages, "pkg-1.0.dist-info"), { recursive: true });
 
-    expect(result).not.toBeNull();
-    expect(result?.raw).toBe("MIT");
-    expect(result?.via).toBe(`${SCANCODE_TOOL.name}@${SCANCODE_TOOL.version}/license-file`);
+      // pep503Fold("pkg-1.0") folds to "pkg_1_0", matching the "pkg-1.0.dist-info" dir name below
+      // — the purl version is "1.0", not "1.0.0", so the fold actually matches.
+      const [distInfoCandidate] = sourceDirsFor("pkg:pypi/pkg@1.0", [venvTargetDir]);
 
-    mock.module("../src/collectors/exec", () => ({
-      ...REAL_EXEC,
-      execTool: fakeExecTool,
-    }));
+      expect(distInfoCandidate).toBeDefined();
+
+      const distInfoBasename = basename(distInfoCandidate!.dir);
+      const fixture = JSON.parse(readFileSync(FIXTURE_PATH, "utf8")) as {
+        headers: unknown[];
+        files: unknown[];
+      };
+      const pep639DistInfoLayout = {
+        ...fixture,
+        files: [
+          {
+            path: `${distInfoBasename}/licenses/LICENSE`,
+            detected_license_expression_spdx: "MIT",
+            copyrights: [],
+          },
+          {
+            path: `${distInfoBasename}/METADATA`,
+            detected_license_expression_spdx: null,
+            copyrights: [],
+          },
+        ],
+      };
+
+      mock.module("../src/collectors/exec", () => ({
+        ...REAL_EXEC,
+        execTool: makeFakeExecToolWithDoc(pep639DistInfoLayout),
+      }));
+
+      tempDir = mkdtempSync(join(tmpdir(), "scancode-pep639-"));
+      const result = await scanPackageSources(distInfoCandidate!, { tempDir });
+
+      expect(result).not.toBeNull();
+      expect(result?.raw).toBe("MIT");
+      expect(result?.via).toBe(`${SCANCODE_TOOL.name}@${SCANCODE_TOOL.version}/license-file`);
+
+      mock.module("../src/collectors/exec", () => ({
+        ...REAL_EXEC,
+        execTool: fakeExecTool,
+      }));
+    } finally {
+      rmSync(venvTargetDir, { recursive: true, force: true });
+    }
   });
 
   test("two candidates scanned back-to-back never leak each other's admission shape: the SAME licenses/-nested fixture is elected via a dist-info candidate's widened predicate, then rejected via a plain candidate's unwidened predicate", async () => {
+    // Deliberately synthetic predicates: the subject here is election's own genericity — that
+    // isPackageOwnLegalPath travels WITH each candidate rather than leaking across calls — not
+    // sources.ts's specific wiring (covered by the PEP 639 end-to-end test above and the
+    // "candidate admission predicates" suite below).
     const fixture = JSON.parse(readFileSync(FIXTURE_PATH, "utf8")) as {
       headers: unknown[];
       files: unknown[];
@@ -1080,12 +1115,6 @@ describe("sourceDirsFor — pypi mapping", () => {
     }
   });
 
-  function venvSitePackagesDir(dir: string): string {
-    return process.platform === "win32"
-      ? join(dir, ".venv", "Lib", "site-packages")
-      : join(dir, ".venv", "lib", "python3.12", "site-packages");
-  }
-
   test("a pypi purl with a temp .venv dist-info + top_level.txt naming an existing sibling dir yields the dist-info dir first, then that dir", () => {
     targetDir = mkdtempSync(join(tmpdir(), "scancode-pypi-"));
     const sitePackages = venvSitePackagesDir(targetDir);
@@ -1168,6 +1197,88 @@ describe("sourceDirsFor — pypi mapping", () => {
     const result = dirs(sourceDirsFor("pkg:pypi/evil@1.0.0", [targetDir]));
 
     expect(result).toEqual([distInfoDir]);
+  });
+});
+
+// --- Wiring gap closed: the candidates ABOVE this line were only ever compared on `.dir`
+// (see dirs()) — nothing asserted that pypiSourceDirs' dist-info candidate actually carries the
+// widened predicate, or that npmSourceDir's carries the unwidened one. This suite calls
+// sourceDirsFor for real and exercises the RETURNED candidates' own isPackageOwnLegalPath,
+// never a local mirror of sources.ts's private isRootLevelPath / isRootLevelOrDistInfoLicensesPath
+// (kept private and unexported — ScanCandidate.isPackageOwnLegalPath is the module's own public
+// surface for this behavior, so asserting through it exercises the real production wiring without
+// widening sources.ts's export surface for a test-only need).
+describe("sourceDirsFor — candidate admission predicates (real wiring, not mirrored)", () => {
+  let targetDir: string;
+
+  afterEach(() => {
+    if (targetDir !== undefined) {
+      rmSync(targetDir, { recursive: true, force: true });
+    }
+  });
+
+  test("pypiSourceDirs' dist-info candidate admits its licenses/ subtree; the import-package candidate stays root-level-only", () => {
+    targetDir = mkdtempSync(join(tmpdir(), "scancode-pypi-predicate-"));
+    const sitePackages = venvSitePackagesDir(targetDir);
+
+    mkdirSync(sitePackages, { recursive: true });
+    const distInfoDir = join(sitePackages, "typing_extensions-4.9.0.dist-info");
+
+    mkdirSync(distInfoDir, { recursive: true });
+    writeFileSync(join(distInfoDir, "top_level.txt"), "typing_extensions\n");
+
+    const packageDir = join(sitePackages, "typing_extensions");
+
+    mkdirSync(packageDir, { recursive: true });
+
+    const candidates = sourceDirsFor("pkg:pypi/typing-extensions@4.9.0", [targetDir]);
+
+    expect(candidates).toHaveLength(2);
+    const [distInfoCandidate, packageCandidate] = candidates as [ScanCandidate, ScanCandidate];
+
+    // The dist-info candidate's predicate: root-level AND its licenses/ subtree (nested included).
+    const distInfoBasename = basename(distInfoCandidate.dir);
+
+    expect(distInfoCandidate.isPackageOwnLegalPath(`${distInfoBasename}/licenses/LICENSE`)).toBe(
+      true,
+    );
+    expect(
+      distInfoCandidate.isPackageOwnLegalPath(`${distInfoBasename}/licenses/nested/COPYING`),
+    ).toBe(true);
+    expect(distInfoCandidate.isPackageOwnLegalPath(`${distInfoBasename}/foo/LICENSE`)).toBe(false);
+
+    // The import-package candidate's predicate: root-level only — never the dist-info widening,
+    // even though it is the SECOND element of the same sourceDirsFor result.
+    const packageBasename = basename(packageCandidate.dir);
+
+    expect(packageCandidate.isPackageOwnLegalPath(`${packageBasename}/LICENSE`)).toBe(true);
+    expect(packageCandidate.isPackageOwnLegalPath(`${packageBasename}/licenses/LICENSE`)).toBe(
+      false,
+    );
+    expect(packageCandidate.isPackageOwnLegalPath(`${packageBasename}/nested/LICENSE`)).toBe(false);
+  });
+
+  test("npmSourceDir's candidate admits root-level paths only — never the pypi dist-info widening", () => {
+    targetDir = mkdtempSync(join(tmpdir(), "scancode-npm-predicate-"));
+    const pkgDir = join(targetDir, "node_modules", "left-pad");
+
+    mkdirSync(pkgDir, { recursive: true });
+    writeFileSync(
+      join(pkgDir, "package.json"),
+      JSON.stringify({ name: "left-pad", version: "1.3.0" }),
+    );
+
+    const [npmCandidate] = sourceDirsFor("pkg:npm/left-pad@1.3.0", [targetDir]);
+
+    expect(npmCandidate).toBeDefined();
+
+    const npmBasename = basename(npmCandidate!.dir);
+
+    expect(npmCandidate!.isPackageOwnLegalPath(`${npmBasename}/LICENSE`)).toBe(true);
+    // A licenses/-subtree path is the pypi dist-info widening — an npm candidate must never admit
+    // it, even though the path shape coincidentally matches what a dist-info candidate would.
+    expect(npmCandidate!.isPackageOwnLegalPath(`${npmBasename}/licenses/LICENSE`)).toBe(false);
+    expect(npmCandidate!.isPackageOwnLegalPath(`${npmBasename}/nested/LICENSE`)).toBe(false);
   });
 });
 
