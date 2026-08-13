@@ -89,7 +89,7 @@ function isForwardSlashPath(path: string): boolean {
  * order (scancode's own walk order is not guaranteed root-first); this predicate is the fix - a
  * two-or-more-segment nested path is never root-level.
  */
-function isRootLevelPath(path: string): boolean {
+export function isRootLevelPath(path: string): boolean {
   return isForwardSlashPath(path) && path.split("/").length === 2;
 }
 
@@ -100,7 +100,7 @@ function isRootLevelPath(path: string): boolean {
  * subtree carries no vendoring risk. Only the pypi dist-info candidate uses this predicate; the npm
  * and pypi import-package candidates keep the unwidened {@link isRootLevelPath}.
  */
-function isRootLevelOrDistInfoLicensesPath(path: string): boolean {
+export function isRootLevelOrDistInfoLicensesPath(path: string): boolean {
   if (!isForwardSlashPath(path)) {
     return false;
   }
@@ -376,7 +376,7 @@ function posixSitePackagesDir(venvDir: string): string {
 }
 
 /** The platform-appropriate site-packages path under a project `.venv`. */
-function sitePackagesDir(venvDir: string): string {
+export function sitePackagesDir(venvDir: string): string {
   return process.platform === "win32"
     ? join(venvDir, "Lib", "site-packages")
     : posixSitePackagesDir(venvDir);

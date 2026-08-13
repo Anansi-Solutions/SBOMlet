@@ -38,6 +38,11 @@ import {
   SCANCODE_TOOL,
   type ScanCandidate,
 } from "../src/enrich/scancode";
+import {
+  isRootLevelOrDistInfoLicensesPath,
+  isRootLevelPath,
+  sitePackagesDir,
+} from "../src/enrich/scancode/sources";
 import { serializeCache } from "../src/enrich/cache";
 import { annotateFindings } from "../src/normalize/normalize";
 import { runGenerate } from "../src/pipeline/pipeline";
@@ -61,47 +66,14 @@ let invocations: string[][] = [];
 const FIXTURE_PATH = join(__dirname, "fixtures", "scancode-license-file-trimmed.json");
 
 /**
- * A deliberately-synthetic root-level-only admission predicate, SHAPED like sources.ts's
- * npm/pypi-import-package candidate but never asserted to equal it: `electExpression` and
- * `scanPackageSources` accept any predicate function, and most tests below supply their own
- * arbitrary one purely to exercise that generic contract (election lanes, argv shape, error
- * handling) — none of that depends on sources.ts's actual definition. The real production
- * predicate, wired through a real `sourceDirsFor` candidate, is asserted separately by the
- * "candidate admission predicates (real wiring, not mirrored)" suite below.
- */
-function rootLevelOnly(path: string): boolean {
-  return !path.includes("\\") && path.split("/").length === 2;
-}
-
-/**
- * {@link rootLevelOnly}, widened for a PEP 639 wheel's dist-info dir: a path under its
- * `licenses/` subtree - nested paths included - is ALSO admitted. Same synthetic-predicate
- * caveat as {@link rootLevelOnly}: shaped like sources.ts's pypi dist-info candidate for
- * election-lane unit tests, never asserted to equal it.
- */
-function rootLevelOrDistInfoLicenses(path: string): boolean {
-  if (path.includes("\\")) {
-    return false;
-  }
-
-  const segments = path.split("/");
-
-  if (segments.length === 2) {
-    return true;
-  }
-
-  return segments.length > 2 && segments[1] === "licenses";
-}
-
-/**
  * A minimal {@link ScanCandidate} for tests that only care about the scanned dir, defaulting to
- * the synthetic {@link rootLevelOnly} unless the widened dist-info predicate is explicitly
- * supplied. Never used where the test's subject is sources.ts's own candidate wiring — those
- * tests get their candidate from a real `sourceDirsFor` call instead.
+ * the real production admission predicate ({@link isRootLevelPath}) unless the widened dist-info
+ * predicate is explicitly supplied. Never used where the test's subject is sources.ts's own
+ * candidate wiring — those tests get their candidate from a real `sourceDirsFor` call instead.
  */
 function candidate(
   dir: string,
-  isPackageOwnLegalPath: (path: string) => boolean = rootLevelOnly,
+  isPackageOwnLegalPath: (path: string) => boolean = isRootLevelPath,
 ): ScanCandidate {
   return { dir, isPackageOwnLegalPath };
 }
@@ -113,13 +85,6 @@ function candidate(
  */
 function dirs(candidates: ScanCandidate[]): string[] {
   return candidates.map((c) => c.dir);
-}
-
-/** The platform-appropriate site-packages path under a temp dir's `.venv`, matching sources.ts. */
-function venvSitePackagesDir(dir: string): string {
-  return process.platform === "win32"
-    ? join(dir, ".venv", "Lib", "site-packages")
-    : join(dir, ".venv", "lib", "python3.12", "site-packages");
 }
 
 /**
@@ -550,7 +515,7 @@ describe("scanPackageSources (subprocess-free, exec recorder harness)", () => {
     const venvTargetDir = mkdtempSync(join(tmpdir(), "scancode-pep639-fixture-"));
 
     try {
-      const sitePackages = venvSitePackagesDir(venvTargetDir);
+      const sitePackages = sitePackagesDir(join(venvTargetDir, ".venv"));
 
       mkdirSync(join(sitePackages, "pkg-1.0.dist-info"), { recursive: true });
 
@@ -602,11 +567,13 @@ describe("scanPackageSources (subprocess-free, exec recorder harness)", () => {
     }
   });
 
-  test("two candidates scanned back-to-back never leak each other's admission shape: the SAME licenses/-nested fixture is elected via a dist-info candidate's widened predicate, then rejected via a plain candidate's unwidened predicate", async () => {
-    // Deliberately synthetic predicates: the subject here is election's own genericity — that
-    // isPackageOwnLegalPath travels WITH each candidate rather than leaking across calls — not
-    // sources.ts's specific wiring (covered by the PEP 639 end-to-end test above and the
-    // "candidate admission predicates" suite below).
+  test("two candidates scanned back-to-back never leak each other's admission shape: the SAME fixture path is elected via one candidate's predicate, then rejected via a second candidate's unrelated predicate", async () => {
+    // Deliberately arbitrary predicates, shaped only to accept/reject the fixture path below: the
+    // subject here is election's own genericity — that isPackageOwnLegalPath travels WITH each
+    // candidate rather than leaking across calls — never sources.ts's specific wiring (covered by
+    // the PEP 639 end-to-end test above and the "candidate admission predicates" suite below).
+    const acceptsFixturePath = (path: string): boolean => path.endsWith("/licenses/LICENSE");
+    const rejectsEverything = (): boolean => false;
     const fixture = JSON.parse(readFileSync(FIXTURE_PATH, "utf8")) as {
       headers: unknown[];
       files: unknown[];
@@ -634,15 +601,16 @@ describe("scanPackageSources (subprocess-free, exec recorder harness)", () => {
       // isPackageOwnLegalPath travels WITH the candidate, not as a module-level or
       // call-order-scoped flag a later scan could accidentally inherit.
       const widened = await scanPackageSources(
-        candidate("/some/source/pkg-1.0.dist-info", rootLevelOrDistInfoLicenses),
+        candidate("/some/source/pkg-1.0.dist-info", acceptsFixturePath),
         { tempDir },
       );
 
       expect(widened?.raw).toBe("MIT");
 
-      const unwidened = await scanPackageSources(candidate("/some/source/pkg-1.0.dist-info"), {
-        tempDir,
-      });
+      const unwidened = await scanPackageSources(
+        candidate("/some/source/pkg-1.0.dist-info", rejectsEverything),
+        { tempDir },
+      );
 
       expect(unwidened).toBeNull();
     } finally {
@@ -679,7 +647,7 @@ describe("electExpression / electCopyrights (pure narrow, no exec)", () => {
         detected_license_expression_spdx: "Apache-2.0",
       },
     ];
-    const elected = electExpression(files, rootLevelOnly);
+    const elected = electExpression(files, isRootLevelPath);
 
     expect(elected?.raw).toBe("Apache-2.0");
     expect(elected?.via).toContain("/manifest");
@@ -693,7 +661,7 @@ describe("electExpression / electCopyrights (pure narrow, no exec)", () => {
         detected_license_expression_spdx: "BSD-3-Clause",
       },
     ];
-    const elected = electExpression(files, rootLevelOnly);
+    const elected = electExpression(files, isRootLevelPath);
 
     expect(elected?.raw).toBe("MIT");
   });
@@ -709,7 +677,7 @@ describe("electExpression / electCopyrights (pure narrow, no exec)", () => {
       },
       { path: "pkg/LICENSE", detected_license_expression_spdx: "MIT" },
     ];
-    const elected = electExpression(files, rootLevelOnly);
+    const elected = electExpression(files, isRootLevelPath);
 
     // The scanned package's OWN root license must win — a nested vendored
     // file two-or-more segments deep is never "the" root legal file.
@@ -723,7 +691,7 @@ describe("electExpression / electCopyrights (pure narrow, no exec)", () => {
         detected_license_expression_spdx: "MIT",
       },
     ];
-    const elected = electExpression(files, rootLevelOrDistInfoLicenses);
+    const elected = electExpression(files, isRootLevelOrDistInfoLicensesPath);
 
     expect(elected?.raw).toBe("MIT");
     expect(elected?.via).toContain("/license-file");
@@ -736,7 +704,7 @@ describe("electExpression / electCopyrights (pure narrow, no exec)", () => {
         detected_license_expression_spdx: "MIT",
       },
     ];
-    const elected = electExpression(files, rootLevelOrDistInfoLicenses);
+    const elected = electExpression(files, isRootLevelOrDistInfoLicensesPath);
 
     expect(elected?.raw).toBe("MIT");
     expect(elected?.via).toContain("/license-file");
@@ -749,7 +717,7 @@ describe("electExpression / electCopyrights (pure narrow, no exec)", () => {
         detected_license_expression_spdx: "MIT",
       },
     ];
-    const elected = electExpression(files, rootLevelOnly);
+    const elected = electExpression(files, isRootLevelPath);
 
     expect(elected).toBeUndefined();
   });
@@ -761,7 +729,7 @@ describe("electExpression / electCopyrights (pure narrow, no exec)", () => {
         detected_license_expression_spdx: "MIT",
       },
     ];
-    const elected = electExpression(files, rootLevelOrDistInfoLicenses);
+    const elected = electExpression(files, isRootLevelOrDistInfoLicensesPath);
 
     expect(elected?.raw).toBe("MIT");
   });
@@ -773,7 +741,7 @@ describe("electExpression / electCopyrights (pure narrow, no exec)", () => {
         detected_license_expression_spdx: "GPL-3.0-only",
       },
     ];
-    const elected = electExpression(files, rootLevelOrDistInfoLicenses);
+    const elected = electExpression(files, isRootLevelOrDistInfoLicensesPath);
 
     expect(elected).toBeUndefined();
   });
@@ -786,7 +754,7 @@ describe("electExpression / electCopyrights (pure narrow, no exec)", () => {
       },
       { path: "pkg/LICENSE", detected_license_expression_spdx: "MIT" },
     ];
-    const elected = electExpression(files, rootLevelOnly);
+    const elected = electExpression(files, isRootLevelPath);
 
     expect(elected?.raw).toBe("MIT");
   });
@@ -796,7 +764,7 @@ describe("electExpression / electCopyrights (pure narrow, no exec)", () => {
       "(MIT AND OFL-1.1 AND CC-BY-4.0) AND (CC-BY-4.0 OR CC-BY-3.0) AND " +
       "(OFL-1.1 AND (CC-BY-4.0 AND OFL-1.1 AND MIT) AND MIT AND (MIT AND OFL-1.1 AND CC-BY-4.0))";
     const files = [{ path: "pkg/LICENSE", detected_license_expression_spdx: noisy }];
-    const elected = electExpression(files, rootLevelOnly);
+    const elected = electExpression(files, isRootLevelPath);
 
     expect(elected?.raw).toBe("CC-BY-4.0 AND MIT AND OFL-1.1");
   });
@@ -1117,7 +1085,7 @@ describe("sourceDirsFor — pypi mapping", () => {
 
   test("a pypi purl with a temp .venv dist-info + top_level.txt naming an existing sibling dir yields the dist-info dir first, then that dir", () => {
     targetDir = mkdtempSync(join(tmpdir(), "scancode-pypi-"));
-    const sitePackages = venvSitePackagesDir(targetDir);
+    const sitePackages = sitePackagesDir(join(targetDir, ".venv"));
 
     mkdirSync(sitePackages, { recursive: true });
 
@@ -1146,7 +1114,7 @@ describe("sourceDirsFor — pypi mapping", () => {
 
   test("absent top-level dir still yields the dist-info dir (the wheel's own evidence)", () => {
     targetDir = mkdtempSync(join(tmpdir(), "scancode-pypi-notopdir-"));
-    const sitePackages = venvSitePackagesDir(targetDir);
+    const sitePackages = sitePackagesDir(join(targetDir, ".venv"));
 
     mkdirSync(sitePackages, { recursive: true });
     const distInfoDir = join(sitePackages, "typing_extensions-4.9.0.dist-info");
@@ -1162,7 +1130,7 @@ describe("sourceDirsFor — pypi mapping", () => {
 
   test("a hostile top_level.txt line containing '..' never escapes site-packages (mirrors the npm traversal guard)", () => {
     targetDir = mkdtempSync(join(tmpdir(), "scancode-pypi-traversal-"));
-    const sitePackages = venvSitePackagesDir(targetDir);
+    const sitePackages = sitePackagesDir(join(targetDir, ".venv"));
 
     mkdirSync(sitePackages, { recursive: true });
     const distInfoDir = join(sitePackages, "evil-1.0.0.dist-info");
@@ -1184,7 +1152,7 @@ describe("sourceDirsFor — pypi mapping", () => {
 
   test("an absolute-path-shaped top_level.txt line never resolves outside site-packages", () => {
     targetDir = mkdtempSync(join(tmpdir(), "scancode-pypi-absline-"));
-    const sitePackages = venvSitePackagesDir(targetDir);
+    const sitePackages = sitePackagesDir(join(targetDir, ".venv"));
 
     mkdirSync(sitePackages, { recursive: true });
     const distInfoDir = join(sitePackages, "evil-1.0.0.dist-info");
@@ -1203,11 +1171,9 @@ describe("sourceDirsFor — pypi mapping", () => {
 // --- Wiring gap closed: the candidates ABOVE this line were only ever compared on `.dir`
 // (see dirs()) — nothing asserted that pypiSourceDirs' dist-info candidate actually carries the
 // widened predicate, or that npmSourceDir's carries the unwidened one. This suite calls
-// sourceDirsFor for real and exercises the RETURNED candidates' own isPackageOwnLegalPath,
-// never a local mirror of sources.ts's private isRootLevelPath / isRootLevelOrDistInfoLicensesPath
-// (kept private and unexported — ScanCandidate.isPackageOwnLegalPath is the module's own public
-// surface for this behavior, so asserting through it exercises the real production wiring without
-// widening sources.ts's export surface for a test-only need).
+// sourceDirsFor for real and exercises the RETURNED candidates' own isPackageOwnLegalPath — the
+// real sources.ts predicates (isRootLevelPath / isRootLevelOrDistInfoLicensesPath, imported above)
+// wired through production's actual candidate construction, never a hand-built stand-in.
 describe("sourceDirsFor — candidate admission predicates (real wiring, not mirrored)", () => {
   let targetDir: string;
 
@@ -1219,7 +1185,7 @@ describe("sourceDirsFor — candidate admission predicates (real wiring, not mir
 
   test("pypiSourceDirs' dist-info candidate admits its licenses/ subtree; the import-package candidate stays root-level-only", () => {
     targetDir = mkdtempSync(join(tmpdir(), "scancode-pypi-predicate-"));
-    const sitePackages = venvSitePackagesDir(targetDir);
+    const sitePackages = sitePackagesDir(join(targetDir, ".venv"));
 
     mkdirSync(sitePackages, { recursive: true });
     const distInfoDir = join(sitePackages, "typing_extensions-4.9.0.dist-info");
@@ -1325,10 +1291,7 @@ describe("sourceDirsFor — unsupported ecosystems and malformed purls", () => {
 
     try {
       // A present site-packages so the mapper reaches its decode step.
-      const sitePackages =
-        process.platform === "win32"
-          ? join(targetDir, ".venv", "Lib", "site-packages")
-          : join(targetDir, ".venv", "lib", "python3.12", "site-packages");
+      const sitePackages = sitePackagesDir(join(targetDir, ".venv"));
 
       mkdirSync(sitePackages, { recursive: true });
       expect(() => sourceDirsFor("pkg:pypi/%ZZ@1.0.0", [targetDir])).not.toThrow();
