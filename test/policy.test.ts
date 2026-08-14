@@ -4585,6 +4585,55 @@ describe("parsePolicy — [target] table", () => {
     expect(error.message).toContain("not a valid SPDX expression");
   });
 
+  test("rejects a project-level OSS target license that parses as SPDX but is absent from the compatibility matrix's rows", () => {
+    const error = expectPolicyError(`[target]
+license = "CC0-1.0"
+network = false
+distribution = "external"
+`);
+
+    expect(error.message).toContain("target:");
+    expect(error.message).toContain('license "CC0-1.0"');
+    expect(error.message).toContain("not covered by the compatibility matrix");
+  });
+
+  test("accepts a project-level OSS target license that is a matrix row (MIT)", () => {
+    expect(() =>
+      parsePolicy(`[target]
+license = "MIT"
+network = false
+distribution = "external"
+`),
+    ).not.toThrow();
+  });
+
+  test("accepts the literal proprietary target license regardless of matrix coverage", () => {
+    expect(() =>
+      parsePolicy(`[target]
+license = "proprietary"
+network = false
+distribution = "external"
+`),
+    ).not.toThrow();
+  });
+
+  test("rejects a [[target.workspace]] override license absent from the matrix, even when the project license is covered", () => {
+    const error = expectPolicyError(`[target]
+license = "MIT"
+network = false
+distribution = "external"
+
+[[target.workspace]]
+path = "apps/api"
+license = "CC0-1.0"
+reason = "diverging outbound license for this workspace"
+`);
+
+    expect(error.message).toContain("target.workspace[0]:");
+    expect(error.message).toContain('license "CC0-1.0"');
+    expect(error.message).toContain("not covered by the compatibility matrix");
+  });
+
   test("rejects a non-boolean network", () => {
     const error = expectPolicyError(
       ["[target]", 'license = "MIT"', 'network = "false"', 'distribution = "external"', ""].join(

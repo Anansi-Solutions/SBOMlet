@@ -86,6 +86,11 @@ The rules that hold across the file:
 - A `[[workspace.copyleft_suppressed]]` `path` must not start with `docker:` —
   that prefix is the reserved occurrence-identity namespace for image targets,
   and a container image is not a workspace.
+- A `[target]`/`[[target.workspace]]` OSS `license` must be one of the OSADL
+  compatibility matrix's own row keys — a valid SPDX id the matrix has no row
+  for is rejected too, naming the id, because the target lane could never
+  classify a dependency against an uncovered target. `"proprietary"` is
+  exempt.
 - Unknown top-level tables and unknown keys inside a known table are both
   errors. A misspelled `[[deney]]` or a stray field is not silently ignored.
 
@@ -467,7 +472,7 @@ load-bearing choice, so the tool forces you to make it consciously):
 
 | Field | Type | Required | Meaning |
 |-------|------|----------|---------|
-| `license` | string | yes | One FOSS SPDX id, or the literal `"proprietary"`. A compound expression (`MIT OR Apache-2.0`) or a `LicenseRef-`/`DocumentRef-` reference is rejected — neither can anchor a compatibility-matrix row (dual-licensed targets aren't supported yet). |
+| `license` | string | yes | One FOSS SPDX id covered by the OSADL compatibility matrix's own rows, or the literal `"proprietary"`. A compound expression (`MIT OR Apache-2.0`, dual-licensed targets aren't supported yet), a `LicenseRef-`/`DocumentRef-` reference, or a valid SPDX id the matrix simply has no row for is rejected — none can anchor a compatibility-matrix row. |
 | `network` | boolean | yes | Whether your software is deployed on a network. Gates whether the AGPL/section-13 obligation class is *in scope* — it never hardcodes the verdict. `true` keeps that class in scope regardless of `distribution`; the compatibility relation then decides — an AGPL (or otherwise section-13-compatible) target absorbs an AGPL dependency fine, an incompatible target still fails. `false` folds AGPL into the ordinary copyleft class, gated by `distribution` instead. |
 | `distribution` | `"external"` \| `"internal"` | yes | Whether you convey the software outside your organization in any form. `external` keeps the distribution-triggered copyleft class fully in scope. `internal` takes that class out of scope: a would-be `target:incompatible`/`target:boundary` whose deciding leaf carries a positively-known copyleft (or, when `network = false`, AGPL) obligation becomes `ok` with the distinct rule `target:internal-use` instead — visible in its own report list, never a silent pass. A non-copyleft-driven incompatibility, or an obligation the vetted data can't positively classify, is never held this way; the flag gates a declared obligation class, never broader legal inference. |
 | `unknown_pair` | `"warn"` \| `"fail"` | no | The residual knob for a licence pair none of the vetted data covers, mirroring `[unknown].handling`. Defaults to `"warn"`. Never a silent pass. |

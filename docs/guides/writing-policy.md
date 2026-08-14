@@ -51,12 +51,15 @@ network = false
 distribution = "external"
 ```
 
-All three keys are mandatory together — `license` (a single FOSS SPDX id,
-or the literal `"proprietary"`), `network` (whether you're deployed on a
-network — gates the AGPL/section-13 obligation class), and `distribution`
-(`"external"` or `"internal"` — gates the ordinary distribution-triggered
-copyleft class). See [policy.md#target](../reference/policy.md#target) for
-the full field reference.
+All three keys are mandatory together — `license` (a single FOSS SPDX id
+covered by the OSADL compatibility matrix's own rows, or the literal
+`"proprietary"`), `network` (whether you're deployed on a network — gates
+the AGPL/section-13 obligation class), and `distribution` (`"external"` or
+`"internal"` — gates the ordinary distribution-triggered copyleft class).
+A valid SPDX id the matrix has no row for is rejected at parse time; govern
+those packages with per-package `[[compatible]]` rules instead. See
+[policy.md#target](../reference/policy.md#target) for the full field
+reference.
 
 ### What changes, and what doesn't
 

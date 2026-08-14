@@ -9,7 +9,7 @@ import { describe, expect, test } from "bun:test";
 
 import { annotateFindings } from "../src/normalize/normalize";
 import { evaluate } from "../src/policy/evaluate";
-import { parsePolicy, type Policy } from "../src/policy/schema";
+import { parsePolicy, PolicyError, type Policy } from "../src/policy/schema";
 import { renderMarkdown } from "../src/render/markdown";
 import type { CanonicalDependencies, Verdict } from "../src/model/dependencies";
 
@@ -466,5 +466,56 @@ describe("target lane — profile flip re-fails (the held exposure is never stic
       expect(verdict.status).toBe("ok");
       expect(verdict.rule).toBe("target:ok");
     }
+  });
+});
+
+describe("target lane — an unlisted-OSS-target policy is rejected before it can ever reach evaluate", () => {
+  test("the maintainer's repro: a CC0-1.0 target (valid SPDX, absent from the compatibility matrix's 119 rows) paired with a GPL-3.0-only dependency used to warn target:unknown-pair instead of failing target:incompatible - parsePolicy now rejects the target before evaluate ever sees it", () => {
+    const policyText = `[target]
+license = "CC0-1.0"
+network = false
+distribution = "external"
+`;
+
+    // Pre-fix, this policy parsed and the pair below landed here:
+    //   { status: "warn", rule: "target:unknown-pair",
+    //     reason: "... has no vetted compatibility data - OSADL copyleft class: Yes - not
+    //     silently passed; accept explicitly via [[compatible]] or correct the finding via
+    //     [[clarify]]" }
+    // CC0-1.0 is not an OSADL matrix row, so classifyLeaf's tier 1 (the only tier that may ever
+    // decide "incompatible" for an OSS target) never fires - every genuinely-incompatible
+    // dependency under an unlisted target silently degrades to the residual warn above, exit 0.
+    // The fix rejects the unlisted target at parse time instead, so the pair can never reach
+    // evaluate() at all.
+    let thrown: unknown;
+
+    try {
+      parsePolicy(policyText);
+    } catch (error) {
+      thrown = error;
+    }
+
+    expect(thrown).toBeInstanceOf(PolicyError);
+    expect((thrown as PolicyError).message).toContain('license "CC0-1.0"');
+    expect((thrown as PolicyError).message).toContain("not covered by the compatibility matrix");
+  });
+
+  test("permanent lock: an unlisted-OSS-target policy never produces a Verdict[] - parsePolicy throws before runEngine's evaluate() call is reachable", () => {
+    const purl = "pkg:npm/unlisted-target-lock@1.0.0";
+    const policyText = `[target]
+license = "CC0-1.0"
+network = false
+distribution = "external"
+`;
+    const specs: PackageSpec[] = [
+      {
+        purl,
+        name: "unlisted-target-lock",
+        claims: ["GPL-3.0-only"],
+        occurrences: [{ target: TARGET }],
+      },
+    ];
+
+    expect(() => runEngine(specs, policyText)).toThrow(PolicyError);
   });
 });

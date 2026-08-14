@@ -28,7 +28,7 @@ import { orLeaves, type ExpressionNode } from "../normalize/expression";
 import { PolicyRoot, TOP_LEVEL_KEYS } from "../validate/policy";
 import { recordOf, stringOf } from "../validate/record";
 import { BUILTIN_DENY_RULES } from "./builtinDenylist";
-import type { TargetLicense, TargetProfile } from "./compat";
+import { OSADL_MATRIX, type TargetLicense, type TargetProfile } from "./compat";
 import type { DenyRule } from "./denylist";
 
 export type { DenyRule } from "./denylist";
@@ -1269,9 +1269,14 @@ const TARGET_KEYS = ["license", "network", "distribution", "unknown_pair", "work
 const TARGET_WORKSPACE_KEYS = ["path", "license", "reason", "network", "distribution"] as const;
 
 /**
- * A target license value: the literal "proprietary" keyword, or a single FOSS SPDX id (A1 - a
- * compound expression, or a LicenseRef-/DocumentRef- reference, is rejected loudly naming the table
- * path: neither can anchor a compatibility matrix row).
+ * A target license value: the literal "proprietary" keyword, or a single FOSS SPDX id covered by
+ * the OSADL compatibility matrix's own row keys (a compound expression, or a LicenseRef-/
+ * DocumentRef- reference, is rejected loudly naming the table path: neither can anchor a
+ * compatibility matrix row). Coverage is required, not just SPDX validity: an OSS target id absent
+ * from the matrix's 119 rows would make classifyLeaf's tier 1 - the only tier that may ever decide
+ * "incompatible" for an OSS target - unreachable, silently degrading every genuinely-incompatible
+ * dependency to the residual target:unknown-pair warn instead of a fail. `proprietary` is exempt
+ * - tiers 2 and 3 already serve it a real incompatible verdict without needing a matrix row.
  */
 function validateTargetLicense(
   raw: unknown,
@@ -1305,6 +1310,13 @@ function validateTargetLicense(
   if (node.license.startsWith("LicenseRef-") || node.license.startsWith("DocumentRef-")) {
     problems.push(
       `${where}: license "${value}" must be a real SPDX license id or the literal "proprietary" - a LicenseRef-/DocumentRef- reference cannot anchor a compatibility target`,
+    );
+    return undefined;
+  }
+
+  if (!OSADL_MATRIX.has(node.license)) {
+    problems.push(
+      `${where}: license "${value}" is not covered by the compatibility matrix as a TARGET - the vetted OSADL data has no row for it, so the target lane could never classify a dependency against it; choose a target id the matrix covers, or govern the affected packages with per-package [[compatible]] rules instead`,
     );
     return undefined;
   }
