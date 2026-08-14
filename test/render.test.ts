@@ -9,6 +9,7 @@ import {
   type PackageEntry,
   type Verdict,
 } from "../src/model/dependencies";
+import { canonicalizeExpression } from "../src/normalize/expression";
 import { annotateFindings } from "../src/normalize/normalize";
 import { renderMarkdown, type PolicyView } from "../src/render/markdown";
 
@@ -353,6 +354,129 @@ describe("renderMarkdown — assessment conflicts section", () => {
   });
 });
 
+// A registry-declared expression carrying redundant boolean-algebra noise —
+// the maintainer's motivating case: absorption, duplication, and reordering
+// that canonicalizeExpression already simplifies for comparisons, now applied
+// to display too.
+const NOISY_EXPRESSION = "(MIT OR Apache-2.0) AND (Apache-2.0 AND MIT)";
+const CANONICAL_EXPRESSION = canonicalizeExpression(NOISY_EXPRESSION);
+const NOISY_DISAGREEING = "(Apache-2.0 AND MIT) OR (MIT AND Apache-2.0)";
+
+describe("renderMarkdown — canonical license display", () => {
+  test("a noisy normalized expression renders canonical in the inventory License cell", () => {
+    const model: CanonicalDependencies = {
+      packages: [
+        {
+          purl: "pkg:npm/noisy-pkg@1.0.0",
+          name: "noisy-pkg",
+          version: "1.0.0",
+          occurrences: [{ target: SYNTHETIC_TARGET, isDevDependency: false }],
+          licenseClaims: [],
+          scope: "app",
+          finding: {
+            expression: NOISY_EXPRESSION,
+            elected: "MIT",
+            source: "generator",
+            confidence: "exact",
+          },
+        },
+      ],
+    };
+    const out = renderMarkdown(model);
+
+    expect(
+      out.includes(`| noisy-pkg | npm | 1.0.0 | ${CANONICAL_EXPRESSION} | ${SYNTHETIC_TARGET} |`),
+    ).toBe(true);
+    expect(out.includes(NOISY_EXPRESSION)).toBe(false);
+  });
+
+  test("the conflict-evidence carve-out: Assessment conflicts columns keep the as-observed spelling while the same package's inventory License cell renders canonical", () => {
+    const model: CanonicalDependencies = {
+      packages: [
+        {
+          purl: "pkg:npm/conflicted-noisy@1.0.0",
+          name: "conflicted-noisy",
+          version: "1.0.0",
+          occurrences: [{ target: SYNTHETIC_TARGET, isDevDependency: false }],
+          licenseClaims: [],
+          scope: "app",
+          finding: {
+            expression: NOISY_EXPRESSION,
+            elected: "MIT",
+            source: "generator",
+            confidence: "exact",
+            conflict: {
+              kind: "scancode",
+              assessed: NOISY_EXPRESSION,
+              disagreeing: [NOISY_DISAGREEING],
+            },
+          },
+        },
+      ],
+    };
+    const out = renderMarkdown(model);
+
+    // Inventory: canonical.
+    expect(
+      out.includes(
+        `| conflicted-noisy | npm | 1.0.0 | ${CANONICAL_EXPRESSION} | ${SYNTHETIC_TARGET} |`,
+      ),
+    ).toBe(true);
+    // Assessment conflicts: as-observed, verbatim — the deliberate carve-out.
+    expect(
+      out.includes(
+        `| conflicted-noisy | ${NOISY_EXPRESSION} | ${NOISY_DISAGREEING} | ${SYNTHETIC_TARGET} |`,
+      ),
+    ).toBe(true);
+  });
+
+  test("an unparseable expression and an imprecise family token pass through the License cell unchanged", () => {
+    const model: CanonicalDependencies = {
+      packages: [
+        {
+          purl: "pkg:npm/unparseable-pkg@1.0.0",
+          name: "unparseable-pkg",
+          version: "1.0.0",
+          occurrences: [{ target: SYNTHETIC_TARGET, isDevDependency: false }],
+          licenseClaims: [],
+          scope: "app",
+          finding: {
+            expression: "not a real spdx expression !!",
+            elected: null,
+            source: "generator",
+            confidence: "exact",
+          },
+        },
+        {
+          purl: "pkg:npm/imprecise-pkg@1.0.0",
+          name: "imprecise-pkg",
+          version: "1.0.0",
+          occurrences: [{ target: SYNTHETIC_TARGET, isDevDependency: false }],
+          licenseClaims: [],
+          scope: "app",
+          finding: {
+            expression: null,
+            elected: null,
+            source: "generator",
+            confidence: "imprecise",
+            impreciseFamily: "BSD",
+          },
+        },
+      ],
+    };
+    const out = renderMarkdown(model);
+
+    expect(
+      out.includes(
+        `| unparseable-pkg | npm | 1.0.0 | not a real spdx expression !! | ${SYNTHETIC_TARGET} |`,
+      ),
+    ).toBe(true);
+    expect(
+      out.includes(`| imprecise-pkg | npm | 1.0.0 | BSD (imprecise) | ${SYNTHETIC_TARGET} |`),
+    ).toBe(true);
+  });
+});
+
 describe("renderMarkdown — table content", () => {
   test("a package with zero licenseClaims renders License cell 'unknown'", () => {
     const output = renderMarkdown(trimmedModel);
@@ -689,8 +813,8 @@ describe("renderMarkdown — the full document", () => {
     };
     const output = renderMarkdown(model);
 
-    // Full normalized expression — NEVER only the elected branch.
-    expect(output.includes("| expr | npm | 1.0.0 | MIT OR Apache-2.0 | apps/a |")).toBe(true);
+    // Full normalized expression, canonicalized — NEVER only the elected branch.
+    expect(output.includes("| expr | npm | 1.0.0 | Apache-2.0 OR MIT | apps/a |")).toBe(true);
     expect(output.includes("| expr | npm | 1.0.0 | Apache-2.0 |")).toBe(false);
     // Null expression renders "unknown" even though a raw claim exists.
     expect(output.includes("| mystery | npm | 1.0.0 | unknown | apps/a |")).toBe(true);
@@ -1907,7 +2031,7 @@ describe("renderMarkdown — os-scope partial-license cell", () => {
 
     expect(
       osSection.includes(
-        "| os-partial | deb | 1.0 | GPL-2.0-only AND BSD-3-Clause (+ public-domain) |",
+        "| os-partial | deb | 1.0 | BSD-3-Clause AND GPL-2.0-only (+ public-domain) |",
       ),
     ).toBe(true);
   });
@@ -2015,7 +2139,7 @@ describe("renderMarkdown — os-scope partial-license cell", () => {
     });
     const output = renderMarkdown({ packages: [plain] });
 
-    expect(output.includes("| plain | npm | 1.0 | MIT AND Apache-2.0 |")).toBe(true);
+    expect(output.includes("| plain | npm | 1.0 | Apache-2.0 AND MIT |")).toBe(true);
     expect(output.includes("(+")).toBe(false);
   });
 });

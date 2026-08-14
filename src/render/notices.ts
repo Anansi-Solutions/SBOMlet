@@ -30,7 +30,7 @@ import {
   type CanonicalDependencies,
   type PackageEntry,
 } from "../model/dependencies";
-import { leafIds, type ExpressionNode } from "../normalize/expression";
+import { canonicalizeExpression, leafIds, type ExpressionNode } from "../normalize/expression";
 import { escapeCell } from "./markdown";
 import { isUnknownLicense } from "./unknownLicense";
 
@@ -82,9 +82,12 @@ function fencedBlock(content: string): string[] {
 
 /**
  * License label for the section's "License:" line: the full normalized expression when a finding
- * exists; an imprecise finding renders "<family> (imprecise)" (the honest family, never a
- * fabricated id); "unknown" on a null non-imprecise expression; pre-annotation tolerance falls back
- * to the raw-claims dedup join (the markdown.ts licenseCellOf rule).
+ * exists, canonicalized via {@link canonicalizeExpression} (spelling-blind reordering/dedup/
+ * absorption only) - the same rule markdown.ts's licenseCellOf applies, so the two documents never
+ * disagree on spelling; an imprecise finding renders "<family> (imprecise)" (the honest family,
+ * never a fabricated id) - a family token is not an expression and never reaches
+ * canonicalizeExpression; "unknown" on a null non-imprecise expression; pre-annotation tolerance
+ * falls back to the raw-claims dedup join, rendered as-declared.
  */
 function licenseLabelOf(pkg: PackageEntry): string {
   if (pkg.finding !== undefined) {
@@ -92,7 +95,9 @@ function licenseLabelOf(pkg: PackageEntry): string {
       return `${pkg.finding.impreciseFamily ?? "unknown"} (imprecise)`;
     }
 
-    return pkg.finding.expression ?? "unknown";
+    return pkg.finding.expression !== null
+      ? canonicalizeExpression(pkg.finding.expression)
+      : "unknown";
   }
 
   return pkg.licenseClaims.length === 0

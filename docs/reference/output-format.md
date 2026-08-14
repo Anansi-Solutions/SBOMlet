@@ -123,18 +123,29 @@ The two summary sections, Production and Development-only, share five columns:
 | Used in | the [targets](../glossary.md#target) where the package is used, comma-joined |
 
 The License column shows the full normalized SPDX expression when a finding
-exists, the whole expression rather than one elected branch of an `OR`. The
-variations:
+exists, the whole expression rather than one elected branch of an `OR`, and
+canonicalized: the boolean-algebra simplification described below (reordering,
+deduplication, absorption) applies to what this column displays, not only to
+comparisons. The variations:
 
-- A precise finding renders its expression, for example `Apache-2.0 AND LGPL-3.0-or-later`.
+- A precise finding renders its canonicalized expression, for example
+  `Apache-2.0 AND LGPL-3.0-or-later`; a registry declaring redundant noise like
+  `(MIT OR Apache-2.0) AND (Apache-2.0 AND MIT)` renders as `Apache-2.0 AND MIT`.
 - An [imprecise](../glossary.md#imprecise-family) finding renders its family
-  token plus a marker, for example `BSD (imprecise)`.
+  token plus a marker, for example `BSD (imprecise)` — a family token is not an
+  expression and is never canonicalized.
 - An OS-scope partial finding that recognized part of its license but not all of
-  it appends the surfaced remainder, for example `MIT (+ tok, tok)`, so both the
-  known obligation and the unrecognized tokens stay visible.
+  it appends the surfaced remainder to the canonicalized expression, for example
+  `MIT (+ tok, tok)`, so both the known obligation and the unrecognized tokens
+  stay visible.
 - A package with no finding renders `unknown`, or, before annotation, the
   deduplicated raw [license claims](../glossary.md#license-claim) joined with
-  commas.
+  commas, as-declared — there is no finding yet to canonicalize.
+
+The raw, as-declared expression survives unchanged in the
+[enrichment cache](#the-committed-sidecars) and the
+[CycloneDX export](#the-cyclonedx-export); only the rendered License column is
+canonicalized.
 
 Which packages row in these two tables versus a container's own subsection —
 including a package that ships both ways — is placement, normatively defined
@@ -300,9 +311,12 @@ check, the cross-image claim sets, and an `[[clarify]]`/`[[override]]`
 the boolean-algebra structure on every side before deciding agreement,
 divergence, or staleness, so a spelling-only reordering (`MIT AND CC0-1.0`
 read back as `CC0-1.0 AND MIT`) never manufactures a marker or reopens a
-decision by itself. The Quick check and Claims by image columns above still
-render each claim's as-observed spelling; canonicalization governs the
-decision, never what a row displays.
+decision by itself. The Quick check and Claims by image columns above are the
+deliberate exception to the License column's own canonicalized display: they
+quote disagreeing sources and still render each claim's as-observed spelling,
+never canonicalized — canonicalization governs the decision here, never what
+these two columns show. A conflicted package's own inventory row above still
+renders its License cell canonicalized, same as every other row.
 
 Which packages carry a marker is placement, normatively defined in
 [report-placement.md](./report-placement.md#narrative-sections-verdict--or-finding-driven-deduped).

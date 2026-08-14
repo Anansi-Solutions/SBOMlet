@@ -230,6 +230,25 @@ describe("renderCyclonedx — license dispatch", () => {
 
     expect(component["licenses"]).toEqual([{ expression: "MIT OR Apache-2.0" }]);
   });
+
+  test("canonical-display carve-out: the export carries the as-observed expression verbatim, never canonicalized, even when the Markdown/Notices renderers would simplify it", () => {
+    const noisy = "(MIT OR Apache-2.0) AND (Apache-2.0 AND MIT)";
+    const noisyEntry = entry({
+      purl: "pkg:npm/noisy-cdx-pkg@1.0.0",
+      name: "noisy-cdx-pkg",
+      version: "1.0.0",
+      finding: {
+        expression: noisy,
+        elected: "MIT",
+        source: "generator",
+        confidence: "exact",
+      },
+    });
+    const doc = parse(renderCyclonedx({ packages: [noisyEntry] }));
+    const component = doc.components.find((c) => c["purl"] === "pkg:npm/noisy-cdx-pkg@1.0.0")!;
+
+    expect(component["licenses"]).toEqual([{ expression: noisy }]);
+  });
 });
 
 describe("renderCyclonedx — component minimum + purl sort", () => {

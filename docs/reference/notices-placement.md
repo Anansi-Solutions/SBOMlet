@@ -40,7 +40,7 @@ whatever it has to attribute:
 
 | Field | Source |
 | --- | --- |
-| `License:` | The package's [license finding](../glossary.md#license-finding): the full expression when exact; `<family> (imprecise)` for an imprecise finding; `unknown` for a null, non-imprecise finding; before annotation, the deduplicated raw [license claims](../glossary.md#license-claim) joined by comma. |
+| `License:` | The package's [license finding](../glossary.md#license-finding): the full expression when exact, canonicalized (same boolean-algebra simplification as `THIRD_PARTY_LICENSES.md`'s License column, so the two documents never disagree on spelling); `<family> (imprecise)` for an imprecise finding; `unknown` for a null, non-imprecise finding; before annotation, the deduplicated raw [license claims](../glossary.md#license-claim) joined by comma, as-declared. |
 | Copyright lines | Extracted copyright statements, one per bullet. |
 | `Author:` | Rendered only when no copyright line was extracted — an attribution, never a copyright claim the tool didn't find. |
 | `NOTICE:` | Every extracted `NOTICE` file's contents, each in its own fenced block. |

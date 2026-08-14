@@ -13,6 +13,7 @@ import {
   type Verdict,
 } from "../src/model/dependencies";
 import { mergeSboms } from "../src/merge/merge";
+import { canonicalizeExpression } from "../src/normalize/expression";
 import { annotateFindings } from "../src/normalize/normalize";
 import { applyContainerScopes } from "../src/pipeline/containerScope";
 import { BUILTIN_OVERRIDES } from "../src/policy/builtinOverrides";
@@ -1618,6 +1619,45 @@ describe("cross-document invariants — LICENSES and NOTICES agree on one shared
       licensesA === licensesB,
       "renderMarkdown double-render",
       "the same model must render byte-identical LICENSES output",
+    );
+  });
+
+  test("canonical-display: a noisy declared expression renders identically canonical in both LICENSES' inventory cell and NOTICES' per-package License line", () => {
+    const noisy = "(MIT OR Apache-2.0) AND (Apache-2.0 AND MIT)";
+    const canonical = canonicalizeExpression(noisy);
+    // Hand-built shared model - both renderers consume the same package
+    // entry, one attribution line so the package qualifies for a NOTICES
+    // section.
+    const model: CanonicalDependencies = {
+      packages: [
+        {
+          purl: "pkg:npm/noisy-lib@1.0.0",
+          name: "noisy-lib",
+          version: "1.0.0",
+          occurrences: [{ target: WORKSPACE, isDevDependency: false }],
+          licenseClaims: [{ raw: noisy, kind: "expression", source: "generator" }],
+          scope: "app",
+          finding: { expression: noisy, elected: "MIT", source: "generator", confidence: "exact" },
+          attribution: {
+            copyrightLines: ["Copyright (c) 2020 Noisy Lib Authors"],
+            noticeTexts: [],
+            hasVerbatimText: false,
+          },
+        },
+      ],
+    };
+    const doc = renderMarkdown(model);
+    const notices = renderNotices(model);
+
+    assertStructural(
+      doc.includes(`| noisy-lib | npm | 1.0.0 | ${canonical} | ${WORKSPACE} |`),
+      "LICENSES inventory License cell vs the canonicalized declared expression",
+      `expected the canonical spelling "${canonical}", not the as-declared "${noisy}"`,
+    );
+    assertStructural(
+      notices.includes(`License: ${canonical}`),
+      "NOTICES per-package License line vs the canonicalized declared expression",
+      `expected the canonical spelling "${canonical}", not the as-declared "${noisy}"`,
     );
   });
 });

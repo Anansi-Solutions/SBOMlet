@@ -2027,7 +2027,7 @@ License: CC0-1.0
 
 ### spdx-ranges@2.1.1
 
-License: (MIT AND CC-BY-3.0)
+License: CC-BY-3.0 AND MIT
 
 - Copyright (c) 2015 Kyle E. Mitchell
 
@@ -2102,7 +2102,7 @@ License: MIT
 
 ### type-fest@5.8.0
 
-License: (MIT OR CC0-1.0)
+License: CC0-1.0 OR MIT
 
 - Copyright (c) Sindre Sorhus &lt;sindresorhus@gmail.com&gt; (https://sindresorhus.com)
 

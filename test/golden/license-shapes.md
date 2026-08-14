@@ -23,7 +23,7 @@
 | dup-pkg | npm | 1.2.3 | MIT | apps/synthetic |
 | empty-group-pkg | npm | 1.0.0 | BSD-3-Clause | apps/synthetic |
 | evil&lt;img src=x&gt;\[click me\](https://evil.example)pkg | npm | 1.0.0 | MIT | apps/synthetic |
-| expr-pkg | npm | 3.0.0 | MIT OR Apache-2.0 | apps/synthetic |
+| expr-pkg | npm | 3.0.0 | Apache-2.0 OR MIT | apps/synthetic |
 | mit-pkg | npm | 1.0.0 | MIT | apps/synthetic |
 | no-license-pkg | npm | 0.1.0 | unknown | apps/synthetic |
 | pipe\|tick\`pkg | npm | 1.0.0 | ISC | apps/synthetic |

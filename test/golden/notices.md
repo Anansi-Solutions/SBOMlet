@@ -28,7 +28,7 @@ Plain last line
 
 ### dual-file-pkg@4.0.0
 
-License: MIT OR Apache-2.0
+License: Apache-2.0 OR MIT
 
 - Copyright (c) 2018 Dual Author
 - Copyright 2019 Dual Author Apache
