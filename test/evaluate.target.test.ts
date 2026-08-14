@@ -10,6 +10,7 @@ import { describe, expect, test } from "bun:test";
 import { annotateFindings } from "../src/normalize/normalize";
 import { evaluate } from "../src/policy/evaluate";
 import { parsePolicy, type Policy } from "../src/policy/schema";
+import { renderMarkdown } from "../src/render/markdown";
 import type { CanonicalDependencies, Verdict } from "../src/model/dependencies";
 
 interface OccurrenceSpec {
@@ -309,5 +310,161 @@ describe("target lane — determinism", () => {
     const second = evaluate(model, policy);
 
     expect(second).toEqual(first);
+  });
+});
+
+describe("target lane — election flip locks (both directions)", () => {
+  test("Apache-2.0 OR GPL-2.0-only: no target elects Apache-2.0 (today's elect()); a GPL-2.0-only target's verdict cites the GPL branch instead; the License column stays byte-identical between the two runs", () => {
+    const purl = "pkg:npm/election-flip@1.0.0";
+    const specs: PackageSpec[] = [
+      {
+        purl,
+        name: "election-flip",
+        claims: ["Apache-2.0 OR GPL-2.0-only"],
+        occurrences: [{ target: TARGET }],
+      },
+    ];
+
+    const noTargetPolicy = parsePolicy('[unknown]\nhandling = "warn"\n');
+    const { model: noTargetModel } = annotateFindings(makeModel(specs), noTargetPolicy.clarify, []);
+    const noTargetVerdicts = evaluate(noTargetModel, noTargetPolicy);
+    const noTargetVerdict = findVerdict(noTargetVerdicts, purl, TARGET)!;
+
+    // Today's non-target-aware elect() prefers the non-copyleft branch.
+    expect(noTargetModel.packages[0]!.finding!.elected).toBe("Apache-2.0");
+    expect(noTargetVerdict.rule).toBe("default:ok");
+    expect(noTargetVerdict.reason).toContain("Apache-2.0");
+
+    const targetPolicy = parsePolicy(GPL2_TARGET_EXTERNAL);
+    const { model: targetModel } = annotateFindings(makeModel(specs), targetPolicy.clarify, []);
+    const targetVerdicts = evaluate(targetModel, targetPolicy);
+    const targetVerdict = findVerdict(targetVerdicts, purl, TARGET)!;
+
+    // The target-aware election picks the GPL-2.0-only branch instead (the matrix diagonal),
+    // the exact opposite of elect()'s own preference.
+    expect(targetVerdict.rule).toBe("target:ok");
+    expect(targetVerdict.reason).toContain("GPL-2.0-only");
+
+    // The two runs differ ONLY at the verdict-reason level. finding.expression/elected are
+    // computed at normalize time, independent of any policy target, so the rendered License
+    // column (which shows the full expression, never one elected branch) is byte-identical.
+    const licenseLine = (model: CanonicalDependencies): string | undefined =>
+      renderMarkdown(model)
+        .split("\n")
+        .find((line) => line.includes("election-flip"));
+
+    expect(licenseLine(targetModel)).toBe(licenseLine(noTargetModel));
+    expect(licenseLine(noTargetModel)).toContain("Apache-2.0 OR GPL-2.0-only");
+  });
+});
+
+describe("target lane — profile flip re-fails (the held exposure is never sticky)", () => {
+  test("flipping distribution internal -> external turns a held GPL dep into a fail", () => {
+    const purl = "pkg:npm/profile-flip-distribution@1.0.0";
+    const specs: PackageSpec[] = [
+      {
+        purl,
+        name: "profile-flip-distribution",
+        claims: ["GPL-3.0-only"],
+        occurrences: [{ target: TARGET }],
+      },
+    ];
+    const internalPolicy = [
+      "[target]",
+      'license = "MIT"',
+      "network = false",
+      'distribution = "internal"',
+      "",
+    ].join("\n");
+    const { verdicts: heldVerdicts } = runEngine(specs, internalPolicy);
+    const held = findVerdict(heldVerdicts, purl, TARGET)!;
+
+    expect(held.status).toBe("ok");
+    expect(held.rule).toBe("target:internal-use");
+
+    const externalPolicy = [
+      "[target]",
+      'license = "MIT"',
+      "network = false",
+      'distribution = "external"',
+      "",
+    ].join("\n");
+    const { verdicts: failedVerdicts } = runEngine(specs, externalPolicy);
+    const failed = findVerdict(failedVerdicts, purl, TARGET)!;
+
+    expect(failed.status).toBe("fail");
+    expect(failed.rule).toBe("target:incompatible");
+  });
+
+  test("flipping network false -> true turns a held AGPL dep into a fail", () => {
+    const purl = "pkg:npm/profile-flip-network@1.0.0";
+    const specs: PackageSpec[] = [
+      {
+        purl,
+        name: "profile-flip-network",
+        claims: ["AGPL-3.0-only"],
+        occurrences: [{ target: TARGET }],
+      },
+    ];
+    const networkFalsePolicy = [
+      "[target]",
+      'license = "MIT"',
+      "network = false",
+      'distribution = "internal"',
+      "",
+    ].join("\n");
+    const { verdicts: heldVerdicts } = runEngine(specs, networkFalsePolicy);
+    const held = findVerdict(heldVerdicts, purl, TARGET)!;
+
+    expect(held.status).toBe("ok");
+    expect(held.rule).toBe("target:internal-use");
+
+    const networkTruePolicy = [
+      "[target]",
+      'license = "MIT"',
+      "network = true",
+      'distribution = "internal"',
+      "",
+    ].join("\n");
+    const { verdicts: failedVerdicts } = runEngine(specs, networkTruePolicy);
+    const failed = findVerdict(failedVerdicts, purl, TARGET)!;
+
+    expect(failed.status).toBe("fail");
+    expect(failed.rule).toBe("target:incompatible");
+  });
+
+  test("absorption guard: the same flips over an AGPL dep under an AGPL-3.0-only target change nothing - target:ok throughout", () => {
+    const purl = "pkg:npm/absorption-guard@1.0.0";
+    const specs: PackageSpec[] = [
+      {
+        purl,
+        name: "absorption-guard",
+        claims: ["AGPL-3.0-only"],
+        occurrences: [{ target: TARGET }],
+      },
+    ];
+    const combos: ReadonlyArray<
+      readonly [network: boolean, distribution: "external" | "internal"]
+    > = [
+      [false, "internal"],
+      [false, "external"],
+      [true, "internal"],
+      [true, "external"],
+    ];
+
+    for (const [network, distribution] of combos) {
+      const policy = [
+        "[target]",
+        'license = "AGPL-3.0-only"',
+        `network = ${network}`,
+        `distribution = "${distribution}"`,
+        "",
+      ].join("\n");
+      const { verdicts } = runEngine(specs, policy);
+      const verdict = findVerdict(verdicts, purl, TARGET)!;
+
+      expect(verdict.status).toBe("ok");
+      expect(verdict.rule).toBe("target:ok");
+    }
   });
 });

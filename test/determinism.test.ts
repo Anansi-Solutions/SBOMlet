@@ -28,7 +28,8 @@ import { annotateFindings } from "../src/normalize/normalize";
 import { evaluate } from "../src/policy/evaluate";
 import { parsePolicy } from "../src/policy/schema";
 import { renderCyclonedx } from "../src/render/cyclonedx";
-import { renderMarkdown } from "../src/render/markdown";
+import { renderMarkdown, type PolicyView } from "../src/render/markdown";
+import { renderNotices } from "../src/render/notices";
 import type { Target } from "../src/targets/target";
 
 const TARGET = "libraries/iframe-rpc";
@@ -736,5 +737,90 @@ describe("determinism — maven collector double-run byte-identity", () => {
     // Both kinds are present in the merged dump (multi-PM, not vacuous).
     expect(first.dump.includes("pkg:npm/smol-toml@1.6.1")).toBe(true);
     expect(first.dump.includes("pkg:npm/%40next/swc-win32-x64-msvc@16.0.10")).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Target-lane byte-identity locks: a policy with no [target] table must
+// produce output identical to one whose [target] table governs nothing in
+// the run - the target-compatibility lane is purely additive.
+// ---------------------------------------------------------------------------
+
+const TARGET_CORPUS_TARGET = "apps/synthetic";
+
+describe("target lane — no-target corpus byte-identity", () => {
+  test("a corpus spanning copyleft/AGPL/imprecise/unknown findings renders byte-identical verdicts + both documents whether [target] is absent or declared-but-inert", () => {
+    const merged = mergeSboms([
+      { sbom: JSON.parse(shapesRaw), targetIdentity: TARGET_CORPUS_TARGET },
+    ]);
+    const noTargetPolicy = parsePolicy('[unknown]\nhandling = "warn"\n');
+    const inertTargetPolicy = parsePolicy(
+      [
+        "[unknown]",
+        'handling = "warn"',
+        "",
+        "[[target.workspace]]",
+        'path = "totally/unrelated/workspace/never-present-in-this-corpus"',
+        'license = "MIT"',
+        "network = false",
+        'distribution = "external"',
+        'reason = "workspaces-only [target] that governs nothing in this corpus"',
+        "",
+      ].join("\n"),
+    );
+
+    // annotateFindings depends only on policy.clarify (empty for both policies here), so a
+    // single shared annotated model is the honest input to both evaluate() calls.
+    const { model } = annotateFindings(merged, noTargetPolicy.clarify, []);
+    const noTargetVerdicts = evaluate(model, noTargetPolicy);
+    const inertTargetVerdicts = evaluate(model, inertTargetPolicy);
+
+    expect(inertTargetVerdicts).toEqual(noTargetVerdicts);
+
+    const viewFor = (verdicts: typeof noTargetVerdicts): PolicyView => ({
+      policyPath: "policy.toml",
+      suppressedWorkspaces: [],
+      verdicts,
+    });
+    const noTargetLicenses = renderMarkdown(model, viewFor(noTargetVerdicts));
+    const inertTargetLicenses = renderMarkdown(model, viewFor(inertTargetVerdicts));
+
+    expect(inertTargetLicenses).toBe(noTargetLicenses);
+    // NOTICES is never policy-gated (renderNotices takes no PolicyView) - it is rendered from the
+    // model alone, so it is trivially identical here; asserted explicitly (NOTICES stays pure
+    // regardless of any declared target).
+    expect(renderNotices(model)).toBe(renderNotices(model));
+    expect(inertTargetLicenses.includes("## Target compatibility")).toBe(false);
+  });
+});
+
+describe("target lane — double-generate determinism with an active profile", () => {
+  test("two evaluate + render passes over the same model + an active target profile are byte-identical", () => {
+    const merged = mergeSboms([
+      { sbom: JSON.parse(shapesRaw), targetIdentity: TARGET_CORPUS_TARGET },
+    ]);
+    const policy = parsePolicy(
+      ["[target]", 'license = "MIT"', "network = false", 'distribution = "external"', ""].join(
+        "\n",
+      ),
+    );
+    const { model } = annotateFindings(merged, policy.clarify, []);
+
+    const build = (): { md: string; notices: string; verdicts: string } => {
+      const verdicts = evaluate(model, policy);
+      const view: PolicyView = { policyPath: "policy.toml", suppressedWorkspaces: [], verdicts };
+
+      return {
+        md: renderMarkdown(model, view),
+        notices: renderNotices(model),
+        verdicts: JSON.stringify(verdicts),
+      };
+    };
+    const first = build();
+    const second = build();
+
+    expect(second.md).toBe(first.md);
+    expect(second.notices).toBe(first.notices);
+    expect(second.verdicts).toBe(first.verdicts);
   });
 });
