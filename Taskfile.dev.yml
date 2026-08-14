@@ -131,6 +131,23 @@ tasks:
     cmds:
       - mise x -- bun scripts/new-adr.ts {{.TITLE | default "" | q}}
 
+  compat:data:refresh:
+    summary: |
+      Refresh the vendored license-compatibility snapshots under
+      src/policy/compat/ (the OSADL matrix, the OSADL copyleft class table,
+      the ScanCode LicenseDB index). Probes the upstream freshness timestamp,
+      downloads all three from their fixed URLs, size-gates them, validates
+      them with the same narrows the loader uses plus structural shape
+      assertions, runs the inter-tier disagreement gate against the
+      currently committed pair, and prints a diff summary — writing nothing
+      until every check passes. Rewrites PROVENANCE.md with the new
+      retrieval timestamps and sha256 hashes. Needs the network; never
+      fingerprinted, never run by CI or `task check`. Run the full suite
+      afterward: a pinning test failure means a reviewed verdict flipped and
+      needs human review before the refresh is committed.
+    cmds:
+      - mise x -- bun scripts/refresh-compat-data.ts
+
   canary:dotnet:
     summary: |
       Probe the packages.lock.json format against the .NET SDK on PATH:

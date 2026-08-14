@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+
 import { describe, expect, test } from "bun:test";
 import parse from "spdx-expression-parse";
 
@@ -10,9 +13,25 @@ import {
   OSADL_MATRIX,
   SCANCODE_CATEGORY,
 } from "../src/policy/compat/data";
+import {
+  assertStructuralShape,
+  assertWithinSizeGate,
+  compareInterTierDisagreements,
+  diffEntries,
+  diffMatrix,
+  renderProvenance,
+  SIZE_GATES,
+  validateDownloadedSnapshots,
+  withUpdatedScancodeTimestamp,
+} from "../scripts/refresh-compat-data";
 
 const MATRIX_CELLS = new Set(["Same", "Yes", "No", "Unknown", "Check dependency"]);
 const COPYLEFT_CLASSES = new Set(["No", "Yes", "Yes (restricted)", "Questionable"]);
+
+const COMPAT_DIR = join(import.meta.dir, "..", "src", "policy", "compat");
+const MATRIX_PATH = join(COMPAT_DIR, "osadl-matrix.json");
+const COPYLEFT_PATH = join(COMPAT_DIR, "osadl-copyleft.json");
+const SCANCODE_PATH = join(COMPAT_DIR, "scancode-licensedb-index.json");
 
 function parses(id: string): boolean {
   try {
@@ -262,5 +281,193 @@ describe("honest failure on a malformed shape", () => {
     );
 
     expect(categories.size).toBe(0);
+  });
+});
+
+describe("refresh-compat-data.ts pure core", () => {
+  test("size gates accept the committed files' own byte lengths", () => {
+    expect(() =>
+      assertWithinSizeGate(
+        Buffer.byteLength(readFileSync(MATRIX_PATH, "utf8"), "utf8"),
+        SIZE_GATES.matrix,
+      ),
+    ).not.toThrow();
+    expect(() =>
+      assertWithinSizeGate(
+        Buffer.byteLength(readFileSync(COPYLEFT_PATH, "utf8"), "utf8"),
+        SIZE_GATES.copyleft,
+      ),
+    ).not.toThrow();
+    expect(() =>
+      assertWithinSizeGate(
+        Buffer.byteLength(readFileSync(SCANCODE_PATH, "utf8"), "utf8"),
+        SIZE_GATES.scancode,
+      ),
+    ).not.toThrow();
+  });
+
+  test("a size gate rejects a truncated or oversized download", () => {
+    expect(() => assertWithinSizeGate(50_000, SIZE_GATES.matrix)).toThrow(/osadl-matrix\.json/);
+    expect(() => assertWithinSizeGate(2_000_000, SIZE_GATES.matrix)).toThrow(/osadl-matrix\.json/);
+    expect(() => assertWithinSizeGate(500, SIZE_GATES.copyleft)).toThrow(/osadl-copyleft\.json/);
+  });
+
+  test("structural assertions accept the real committed shape", () => {
+    expect(() =>
+      assertStructuralShape(OSADL_MATRIX, OSADL_COPYLEFT_CLASS, SCANCODE_CATEGORY),
+    ).not.toThrow();
+  });
+
+  test("structural assertions reject a matrix outside the row-count range", () => {
+    const tooFew = new Map([["MIT", new Map([["MIT", "Same" as const]])]]);
+
+    expect(() => assertStructuralShape(tooFew, OSADL_COPYLEFT_CLASS, SCANCODE_CATEGORY)).toThrow(
+      /osadl-matrix\.json/,
+    );
+  });
+
+  test("structural assertions reject a non-square row", () => {
+    const rows = new Map<string, Map<string, "Same" | "Yes">>(
+      Array.from({ length: 100 }, (_, i) => [`L${i}`, new Map([[`L${i}`, "Same"]])]),
+    );
+
+    // Give the first row an extra column no other row carries.
+    rows.set("L0", new Map([...rows.get("L0")!, ["L1", "Yes"]]));
+
+    expect(() => assertStructuralShape(rows, OSADL_COPYLEFT_CLASS, SCANCODE_CATEGORY)).toThrow(
+      /not square/,
+    );
+  });
+
+  test("structural assertions reject a ScanCode map with too few mapped keys", () => {
+    expect(() =>
+      assertStructuralShape(OSADL_MATRIX, OSADL_COPYLEFT_CLASS, new Map([["MIT", "Permissive"]])),
+    ).toThrow(/scancode-licensedb-index\.json/);
+  });
+
+  test("the inter-tier gate reports a new disagreement and aborts the refresh", () => {
+    const result = compareInterTierDisagreements(
+      ["A: class No but B→A = No"],
+      ["A: class No but B→A = No", "C: class No but D→C = No"],
+    );
+
+    expect(result.newEntries).toEqual(["C: class No but D→C = No"]);
+    expect(result.resolvedEntries).toEqual([]);
+  });
+
+  test("the inter-tier gate reports a resolved disagreement without aborting", () => {
+    const result = compareInterTierDisagreements(
+      ["A: class No but B→A = No", "C: class No but D→C = No"],
+      ["A: class No but B→A = No"],
+    );
+
+    expect(result.newEntries).toEqual([]);
+    expect(result.resolvedEntries).toEqual(["C: class No but D→C = No"]);
+  });
+
+  test("an identical pair reports neither new nor resolved entries", () => {
+    const disagreements = ["A: class No but B→A = No"];
+    const result = compareInterTierDisagreements(disagreements, disagreements);
+
+    expect(result.newEntries).toEqual([]);
+    expect(result.resolvedEntries).toEqual([]);
+  });
+
+  test("diffMatrix is deterministic and caps the named-flip sample at 20", () => {
+    const previous = new Map([["MIT", new Map([["MIT", "Same" as const]])]]);
+    const nextRow = new Map<string, "Yes" | "No" | "Same">([["MIT", "Same"]]);
+
+    for (let i = 0; i < 25; i++) {
+      nextRow.set(`L${i}`, "Yes");
+    }
+
+    const next = new Map([["MIT", nextRow]]);
+
+    const first = diffMatrix(previous, next);
+    const second = diffMatrix(previous, next);
+
+    expect(first).toEqual(second);
+    expect(first.added).toBe(25);
+    expect(first.sampleFlips.length).toBe(20);
+  });
+
+  test("diffEntries reports added, removed, and changed entries by id", () => {
+    const previous = new Map([
+      ["A", "No"],
+      ["B", "Yes"],
+    ]);
+    const next = new Map([
+      ["A", "No"],
+      ["B", "Yes (restricted)"],
+      ["C", "No"],
+    ]);
+
+    expect(diffEntries(previous, next)).toEqual(["B: Yes → Yes (restricted)", "C: (new) → No"]);
+  });
+
+  test("validateDownloadedSnapshots returns the real committed snapshots unchanged", () => {
+    const result = validateDownloadedSnapshots({
+      matrixText: readFileSync(MATRIX_PATH, "utf8"),
+      copyleftText: readFileSync(COPYLEFT_PATH, "utf8"),
+      scancodeText: readFileSync(SCANCODE_PATH, "utf8"),
+    });
+
+    expect(result.matrix.size).toBe(OSADL_MATRIX.size);
+    expect(result.copyleftClass.size).toBe(OSADL_COPYLEFT_CLASS.size);
+    expect(result.scancodeCategory.size).toBe(SCANCODE_CATEGORY.size);
+    expect(result.interTierGate.newEntries).toEqual([]);
+  });
+
+  test("validateDownloadedSnapshots throws on a malformed download and writes nothing", () => {
+    // A pure function with no filesystem access: it cannot write, so a thrown validation error
+    // is itself the proof that nothing was committed - see the module doc on this function.
+    expect(() =>
+      validateDownloadedSnapshots({
+        matrixText: "not json",
+        copyleftText: readFileSync(COPYLEFT_PATH, "utf8"),
+        scancodeText: readFileSync(SCANCODE_PATH, "utf8"),
+      }),
+    ).toThrow();
+  });
+
+  test("withUpdatedScancodeTimestamp rewrites the literal and rejects a missing declaration", () => {
+    const source = 'export const SCANCODE_SNAPSHOT_TIMESTAMP = "2026-08-10T16:21:01Z";\n';
+
+    expect(withUpdatedScancodeTimestamp(source, "2026-09-01T00:00:00Z")).toBe(
+      'export const SCANCODE_SNAPSHOT_TIMESTAMP = "2026-09-01T00:00:00Z";\n',
+    );
+    expect(() =>
+      withUpdatedScancodeTimestamp("// no declaration here", "2026-09-01T00:00:00Z"),
+    ).toThrow(/SCANCODE_SNAPSHOT_TIMESTAMP/);
+  });
+
+  test("renderProvenance embeds every dynamic field for all three sources", () => {
+    const rendered = renderProvenance({
+      matrix: {
+        retrievalUrl: "https://example.test/matrix.json",
+        retrievedAt: "2026-09-01T00:00:00.000Z",
+        upstreamTimestamp: "2026-08-30T00:00:00+0000",
+        sha256: "a".repeat(64),
+      },
+      copyleft: {
+        retrievalUrl: "https://example.test/copyleft.json",
+        retrievedAt: "2026-09-01T00:00:00.000Z",
+        upstreamTimestamp: "2026-08-30T00:00:00+0000",
+        sha256: "b".repeat(64),
+      },
+      scancode: {
+        retrievalUrl: "https://example.test/index.json",
+        retrievedAt: "2026-09-01T00:00:00.000Z",
+        upstreamTimestamp: "Sun, 30 Aug 2026 00:00:00 GMT",
+        sha256: "c".repeat(64),
+      },
+    });
+
+    expect(rendered).toContain("a".repeat(64));
+    expect(rendered).toContain("b".repeat(64));
+    expect(rendered).toContain("c".repeat(64));
+    expect(rendered).toContain("https://example.test/matrix.json");
+    expect(rendered).toContain("https://example.test/copyleft.json");
+    expect(rendered).toContain("https://example.test/index.json");
   });
 });
