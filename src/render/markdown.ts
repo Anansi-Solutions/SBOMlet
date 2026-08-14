@@ -782,12 +782,23 @@ interface BlockingGroup {
 
 /**
  * Coarse warn category derived from a verdict rule (non-blocking roll-up): copyleft
- * (default:copyleft / default:imprecise-copyleft), unknown (default:unknown / default:imprecise),
- * deny (rule starts with "deny"), else other. Deterministic and total over the rule string.
+ * (default:copyleft / default:imprecise-copyleft), target (the target-compatibility lane's own warn
+ * rules - a reviewer must see these are license-compatibility findings, not vague "other" noise,
+ * especially since they land right after a Copyleft section a governed tree usually renders empty),
+ * unknown (default:unknown / default:imprecise), deny (rule starts with "deny"), else other.
+ * Deterministic and total over the rule string.
  */
-function warnCategory(rule: string): "copyleft" | "unknown" | "deny" | "other" {
+function warnCategory(rule: string): "copyleft" | "target" | "unknown" | "deny" | "other" {
   if (rule === "default:copyleft" || rule === "default:imprecise-copyleft") {
     return "copyleft";
+  }
+
+  if (
+    rule === TARGET_RULE_BOUNDARY ||
+    rule === TARGET_RULE_UNKNOWN_PAIR ||
+    rule === TARGET_RULE_INCOMPATIBLE
+  ) {
+    return "target";
   }
 
   if (rule === "default:unknown" || rule === "default:imprecise") {
@@ -914,8 +925,9 @@ function problematicSectionLines(
   }
 
   if (warnTotal > 0) {
-    const order: ReadonlyArray<"copyleft" | "unknown" | "deny" | "other"> = [
+    const order: ReadonlyArray<"copyleft" | "target" | "unknown" | "deny" | "other"> = [
       "copyleft",
+      "target",
       "unknown",
       "deny",
       "other",
