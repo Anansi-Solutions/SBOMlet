@@ -41,9 +41,16 @@ page states only where a package lands.
 
 - **Problematic licenses** — every `fail` verdict, grouped by (purl, rule,
   reason). Takes precedence over the whole Copyleft and special notices
-  section, and the whole Target compatibility section, below: a purl carrying
-  a fail anywhere never rows in either section's flagged table, and never
-  appears in an accepted/held list either.
+  section, and Target compatibility's flagged table, below: a purl carrying a
+  fail anywhere never rows in either section's flagged table, and never
+  appears in Copyleft's accepted-AGPL notice list either. The one exception is
+  Target compatibility's held-for-internal-use list: a `target:internal-use`
+  verdict at one occurrence is never suppressed by a fail at a *different*
+  occurrence of the same purl — the two describe unrelated facts (one
+  occurrence discharges an out-of-scope obligation, another fails outright
+  under its own profile), and the hold's own visibility guarantee (see the
+  invariants below) requires the row to stay enumerable regardless of what any
+  other occurrence decides.
 - **Copyleft and special notices** — three independent parts:
   - The suppressed-workspaces list, shown whenever policy configures any,
     whether or not it currently suppresses anything. A suppression a declared
@@ -81,14 +88,16 @@ page states only where a package lands.
   container-system AGPL escalation and its network=false-demoted sibling.
 - **Target compatibility** — policy run only, and only rendered at all when at
   least one row qualifies (unlike Copyleft, an empty lane renders no heading).
-  Two independent parts, both excluding a purl already in Problematic:
+  Two independent parts:
   - A flagged table (the same row shape as Copyleft's) for every
     `target:boundary`, `target:unknown-pair`, or dev-downgraded
-    `target:incompatible` (status `warn`) verdict.
+    `target:incompatible` (status `warn`) verdict, excluding a purl already
+    in Problematic.
   - A "held for internal use" bullet list for every `target:internal-use`
     (status `ok`) verdict — the usage profile takes the obligation out of
     scope, but the row stays visible for the day the profile flips (never
-    silent, unlike a bare `ok` would be).
+    silent, unlike a bare `ok` would be). NOT excluded by the Problematic
+    dedup: see the Narrative-sections note above.
 
   A `target:ok` verdict never rows here (it is a clean pass, exactly like
   `default:ok`); an `incompatible`/`residual` fail routes to Problematic
@@ -153,9 +162,12 @@ helpers).
 ## Invariants
 
 - Every package has exactly one Production/Development-only classification.
-- A purl in Problematic never rows in Copyleft or Target compatibility, but
+- A purl in Problematic never rows in Copyleft's flagged rows or Target
+  compatibility's flagged table (for the SAME occurrence that failed), but
   keeps its inventory row and its Assessment-conflicts row when it carries a
-  conflict marker.
+  conflict marker. A DIFFERENT occurrence of the same purl that holds
+  (`target:internal-use`) still rows in Target compatibility's held list —
+  see the next invariant.
 - An AGPL obligation is always visible: a fail routes to Problematic, an
   accepted system AGPL (via `[[compatible]]` or a declared `network = false`
   demotion) routes to a special notice, and it is never silently absent.
@@ -171,7 +183,7 @@ helpers).
 
 ## Path index (verified end to end)
 
-The same 45 paths as
+The same 46 paths as
 [dependency-classification.md](./dependency-classification.md#path-index-verified-end-to-end),
 one row each, stating where the package lands in the markdown report instead
 of its Stage-1/Stage-2 outcome — the two tables share one slug set, verified
@@ -224,3 +236,4 @@ by the same suite (`test/reportPlacement.test.ts`).
 | `target-os-scope-untouched` | apk GPL-2.0-only under any target profile | that container's System packages table (byte-identical to the no-target run) |
 | `target-supersedes-suppression` | a governed occurrence matching a family-justified `[[workspace.copyleft_suppressed]]` | Production dependencies (app table) only; no suppressed-workspaces entry decides it |
 | `target-os-agpl-network-false-ignored-notice` | apk AGPL-3.0-only, project target `network = false`, `os_dependencies = "ignore"` | accepted-AGPL notice in Copyleft and special notices; not Problematic |
+| `target-held-survives-purl-fail` | one purl, two workspace occurrences: one fails (project MIT/external target), the other holds (a `[[target.workspace]]` MIT/internal override) | Problematic licenses (workspace A's fail) + Target compatibility (held-for-internal-use list, workspace B's hold - never dropped by the Problematic dedup, which applies to the flagged table only) + Production dependencies (app table) |

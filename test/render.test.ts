@@ -12,7 +12,7 @@ import {
 import { annotateFindings } from "../src/normalize/normalize";
 import { renderMarkdown, type PolicyView, type TargetProfileSummary } from "../src/render/markdown";
 import { renderNotices } from "../src/render/notices";
-import type { TargetProfile } from "../src/policy/compat";
+import { TARGET_RULE_INCOMPATIBLE, type TargetProfile } from "../src/policy/compat";
 
 const TARGET = "libraries/iframe-rpc";
 const SYNTHETIC_TARGET = "apps/synthetic";
@@ -2637,6 +2637,29 @@ describe("renderMarkdown — Problematic licenses summary", () => {
     expect(section.includes("2 copyleft warning(s)")).toBe(true);
     expect(section.includes("1 unknown warning(s)")).toBe(true);
     expect(section.includes("1 deny warning(s)")).toBe(true);
+  });
+
+  test("non-blocking roll-up names a target:* warn under its own category, not the vague 'other' bucket (adversarial gate finding: the pre-registered warnCategory judgment)", () => {
+    const model: CanonicalDependencies = { packages: [warnOnly] };
+    const view: PolicyView = {
+      policyPath: "policy.toml",
+      suppressedWorkspaces: [],
+      verdicts: [
+        {
+          purl: "pkg:npm/warn-pkg@4.0.0",
+          occurrenceTarget: "apps/a",
+          status: "warn",
+          rule: TARGET_RULE_INCOMPATIBLE,
+          reason: "x",
+        },
+      ],
+    };
+    const section = slice(renderMarkdown(model, view));
+
+    // A reviewer scanning the roll-up must see this warn is target-lane, not a bucket vague enough
+    // to make it look unrelated to the license obligation the Target compatibility section details.
+    expect(section.includes("1 target warning(s)")).toBe(true);
+    expect(section.includes("1 other warning(s)")).toBe(false);
   });
 
   test("(d) the summary sits ABOVE the detailed copyleft section; a fail-flagged package is excluded from it by the copyleft-only dedup", () => {

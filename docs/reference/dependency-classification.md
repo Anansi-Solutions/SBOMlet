@@ -231,7 +231,7 @@ surfacing it on the finding).
 
 ## Path index (verified end to end)
 
-The same 45 paths as
+The same 46 paths as
 [report-placement.md](./report-placement.md#path-index-verified-end-to-end),
 one row each, stating the Stage-1/Stage-2 outcome (scope, verdict status,
 rule) instead of the markdown destination — the two tables share one slug
@@ -286,3 +286,4 @@ tables are about slug coverage, not about every classification being unique.
 | `target-os-scope-untouched` | apk GPL-2.0-only under any target profile | `os · warn · default:copyleft` (byte-identical reason to the no-target run) |
 | `target-supersedes-suppression` | a governed occurrence matching a family-justified `[[workspace.copyleft_suppressed]]` | `app · ok · target:ok` (never `suppressed`) |
 | `target-os-agpl-network-false-ignored-notice` | apk AGPL-3.0-only, project target `network = false`, `os_dependencies = "ignore"` | `os · ok · default:copyleft` |
+| `target-held-survives-purl-fail` | one purl, two workspace occurrences: one fails (project MIT/external target), the other holds (a `[[target.workspace]]` MIT/internal override) | `app · fail · target:incompatible` (workspace A) and `app · ok · target:internal-use` (workspace B) |

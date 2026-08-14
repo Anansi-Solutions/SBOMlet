@@ -87,6 +87,7 @@ const PLACEMENT_PATHS = [
   "target-os-scope-untouched",
   "target-supersedes-suppression",
   "target-os-agpl-network-false-ignored-notice",
+  "target-held-survives-purl-fail",
 ] as const;
 
 type PlacementPath = (typeof PLACEMENT_PATHS)[number];
@@ -2240,6 +2241,76 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
       !section(doc, "## Problematic licenses").includes("target-os-agpl-ignored"),
       slug,
       "the demoted-and-accepted package must not row in Problematic",
+    );
+  },
+
+  // Adversarial gate finding: a held-internal row was silently dropped whenever the same
+  // purl also carried a fail at a DIFFERENT occurrence - the Problematic dedup was purl-wide, not
+  // per-occurrence, so a genuine out-of-scope exposure vanished from the report entirely instead
+  // of staying enumerable per report-placement.md's own held-row invariant.
+  "target-held-survives-purl-fail": () => {
+    const slug = "target-held-survives-purl-fail";
+    const purl = "pkg:npm/target-held-survives-purl-fail@1.0.0";
+    const policy = [
+      UNKNOWN_WARN,
+      ...targetProfileLines("MIT", false, "external"),
+      "[[target.workspace]]",
+      `path = "${WORKSPACE_B}"`,
+      'license = "MIT"',
+      "network = false",
+      'distribution = "internal"',
+      'reason = "workspace B is internal-only tooling"',
+      "",
+    ].join("\n");
+    const { doc, verdicts, scoped } = buildScenario(
+      [
+        {
+          targetIdentity: WORKSPACE,
+          components: [{ name: "target-held-survives-purl-fail", purl, license: "GPL-3.0-only" }],
+        },
+        {
+          targetIdentity: WORKSPACE_B,
+          components: [{ name: "target-held-survives-purl-fail", purl, license: "GPL-3.0-only" }],
+        },
+      ],
+      policy,
+    );
+
+    assertClassificationOutcome(
+      scoped,
+      verdicts,
+      purl,
+      WORKSPACE,
+      slug,
+      "app",
+      "fail",
+      "target:incompatible",
+    );
+    assertClassificationOutcome(
+      scoped,
+      verdicts,
+      purl,
+      WORKSPACE_B,
+      slug,
+      "app",
+      "ok",
+      "target:internal-use",
+    );
+    assertPlacement(
+      section(doc, "## Problematic licenses").includes("target-held-survives-purl-fail"),
+      slug,
+      "workspace A's fail rows in Problematic licenses",
+    );
+    assertPlacement(
+      section(doc, "## Target compatibility").includes("target-held-survives-purl-fail") &&
+        section(doc, "## Target compatibility").includes("Held out of scope"),
+      slug,
+      "workspace B's held-internal row still rows in Target compatibility's held-for-internal-use list, even though the same purl fails at workspace A - the Problematic dedup must never drop a held row for an unrelated occurrence",
+    );
+    assertPlacement(
+      appTableOnly(doc, "## Production dependencies").includes("target-held-survives-purl-fail"),
+      slug,
+      "it keeps one inventory row in Production dependencies spanning both workspaces",
     );
   },
 };
