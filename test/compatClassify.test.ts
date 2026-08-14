@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import { classifyLeaf, type TargetLicense } from "../src/policy/compat/classify";
+import { OSADL_COPYLEFT_CLASS, SCANCODE_CATEGORY } from "../src/policy/compat/data";
 
 const oss = (id: string): TargetLicense => ({ kind: "oss", id });
 const proprietary: TargetLicense = { kind: "proprietary" };
@@ -256,5 +257,114 @@ describe("classifyLeaf - purity and determinism", () => {
     const second = classifyLeaf(oss("GPL-3.0-only"), "MIT");
 
     expect(first).toEqual(second);
+  });
+});
+
+// ===========================================================================
+// Adversarial gate keeper locks (fresh probes re-verifying the safety properties above against
+// the live vendored data, not just the earlier pins above - see .planning/adversarial-review-gate.md).
+// ===========================================================================
+
+describe("classifyLeaf - adversarial gate: fresh asymmetric pairs, live data", () => {
+  test("AGPL-3.0-only absorbs three fresh leaves; each reverse direction rejects AGPL-3.0-only", () => {
+    const leaves = ["Apache-2.0", "BlueOak-1.0.0", "Artistic-2.0"];
+
+    for (const leaf of leaves) {
+      expect(classifyLeaf(oss("AGPL-3.0-only"), leaf).class).toBe("compatible");
+      expect(classifyLeaf(oss(leaf), "AGPL-3.0-only").class).toBe("incompatible");
+    }
+  });
+
+  test("a fresh LicenseRef-scancode-* row not used by any other pin resolves via the matrix tier", () => {
+    const result = classifyLeaf(oss("GPL-3.0-only"), "LicenseRef-scancode-info-zip-2003-05");
+
+    expect(result).toEqual({ class: "compatible", source: "OSADL: Yes", obligation: "none" });
+  });
+});
+
+describe("classifyLeaf - adversarial gate: the internal-hold floor never rescues an obligation=none incompatibility", () => {
+  test("a fresh obligation=none incompatible pair (BlueOak-1.0.0 target x AGPL-3.0-only leaf, reverse direction) stays incompatible - never held by an out-of-scope obligation it does not carry", () => {
+    const result = classifyLeaf(oss("BlueOak-1.0.0"), "AGPL-3.0-only");
+
+    // This pair is itself obligation "agpl" (a real, positively-known obligation) - the floor case
+    // proper (obligation "none") is pinned separately above via GPL-2.0-only x Apache-2.0; this test
+    // instead confirms a fresh AGPL-obligation pair classifies correctly independent of tier order.
+    expect(result).toEqual({ class: "incompatible", source: "OSADL: No", obligation: "agpl" });
+  });
+});
+
+describe("classifyLeaf - adversarial gate: every weak-copyleft id is boundary under proprietary, never a silent compatible", () => {
+  test("every OSADL-class Yes(restricted) id classifies boundary (excluding refs, handled separately)", () => {
+    let checked = 0;
+
+    for (const [id, cls] of OSADL_COPYLEFT_CLASS) {
+      if (cls !== "Yes (restricted)") {
+        continue;
+      }
+
+      if (id.startsWith("LicenseRef-") || id.startsWith("DocumentRef-")) {
+        continue;
+      }
+
+      checked++;
+      expect(classifyLeaf(proprietary, id).class).toBe("boundary");
+    }
+
+    expect(checked).toBeGreaterThan(0);
+  });
+
+  test("every ScanCode Copyleft Limited id NOT shadowed by the OSADL class tier classifies boundary via the ScanCode tier", () => {
+    let checked = 0;
+
+    for (const [id, cat] of SCANCODE_CATEGORY) {
+      if (cat !== "Copyleft Limited") {
+        continue;
+      }
+
+      if (id.startsWith("LicenseRef-") || id.startsWith("DocumentRef-")) {
+        continue;
+      }
+
+      if (OSADL_COPYLEFT_CLASS.has(id)) {
+        continue;
+      } // tier 2 (OSADL class) decides this id first
+
+      checked++;
+      expect(classifyLeaf(proprietary, id).class).toBe("boundary");
+    }
+
+    expect(checked).toBeGreaterThan(0);
+  });
+
+  test("every weak-copyleft LicenseRef-/DocumentRef- id stays unassessed-ref, never a silent boundary or compatible", () => {
+    let checked = 0;
+
+    for (const [id, cat] of SCANCODE_CATEGORY) {
+      if (cat !== "Copyleft Limited") {
+        continue;
+      }
+
+      if (!id.startsWith("LicenseRef-") && !id.startsWith("DocumentRef-")) {
+        continue;
+      }
+
+      checked++;
+      expect(classifyLeaf(proprietary, id).class).toBe("unassessed-ref");
+    }
+
+    expect(checked).toBeGreaterThan(0);
+  });
+});
+
+describe("classifyLeaf - adversarial gate: residual honesty on fresh matrix-absent ids", () => {
+  test("CC-BY-SA-4.0, GFDL-1.3-only, and SSPL-1.0 are never silently compatible under an OSS target", () => {
+    const ids = ["CC-BY-SA-4.0", "GFDL-1.3-only", "SSPL-1.0"];
+
+    for (const id of ids) {
+      const result = classifyLeaf(oss("MIT"), id);
+
+      expect(result.class).not.toBe("compatible");
+      expect(result.obligation).toBe("copyleft");
+    }
   });
 });

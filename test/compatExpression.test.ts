@@ -147,6 +147,17 @@ describe("classifyExpression - nested shapes", () => {
     expect(result.class).toBe("compatible");
     expect(renderNode(result.elected)).toBe("GPL-3.0-only");
   });
+
+  test("adversarial gate: a fresh (A OR B) AND C shape is operand-order independent under both an MIT and a GPL-2.0-only target", () => {
+    for (const target of [oss("MIT"), oss("GPL-2.0-only")]) {
+      const prof = profile(target, false, "external");
+      const forward = classifyExpression(prof, p("(Apache-2.0 OR GPL-2.0-only) AND MIT"));
+      const reverse = classifyExpression(prof, p("MIT AND (GPL-2.0-only OR Apache-2.0)"));
+
+      expect(forward.class).toBe(reverse.class);
+      expect(forward.class).toBe("compatible");
+    }
+  });
 });
 
 describe("classifyExpression - properties (sampled over real matrix ids x both flags)", () => {
