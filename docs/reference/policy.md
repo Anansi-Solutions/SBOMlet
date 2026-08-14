@@ -33,8 +33,9 @@ decides:
 | 2 | Clarify | `[[clarify]]` | Replace the package's [licence finding](../glossary.md#license-finding) with a precise expression, then re-decide. |
 | 3 | Compatible (package) | `[[compatible]]` with `match = "package"` | Allow this exact package. |
 | 4 | Compatible (licence) | `[[compatible]]` with `match = "license"` | Allow this licence. |
-| 5 | Workspace suppression | `[[workspace.copyleft_suppressed]]` | Stop flagging absorbed copyleft inside a workspace that ships under that copyleft. |
-| 6 | Category default | `[unknown]`, `[dev_dependencies]`, `[os_dependencies]` | What an unresolved, dev-only, or OS-scope would-be-fail does when no lane above caught it. |
+| 5 | Target compatibility | `[target]` / `[[target.workspace]]` | When a declared target profile governs this occurrence, decide the verdict from license-vs-target compatibility instead of the lanes below. |
+| 6 | Workspace suppression | `[[workspace.copyleft_suppressed]]` | Stop flagging absorbed copyleft inside a workspace that ships under that copyleft. |
+| 7 | Category default | `[unknown]`, `[dev_dependencies]`, `[os_dependencies]` | What an unresolved, dev-only, or OS-scope would-be-fail does when no lane above caught it. |
 
 Deny sits above everything because a
 [source-available](../glossary.md#source-available) licence legally cannot be
@@ -46,7 +47,11 @@ The order matters whenever a package could match more than one lane. A
 package denied by `[[deny]]` fails even though a `[[compatible]]` rule would
 accept it, because deny is terminal. A copyleft dependency accepted by a
 `[[compatible]]` licence pattern never reaches workspace suppression, because
-compatible already decided it.
+compatible already decided it. A target-governed occurrence never reaches
+workspace suppression either: the target lane decides it first, so a
+`[[workspace.copyleft_suppressed]]` entry whose path a declared target
+governs is **superseded** — surfaced as a notice naming both, never
+silently.
 
 ## Validation
 
@@ -440,6 +445,84 @@ segment, no leading or trailing slash), so a committed-artifact directory can
 never escape the repo. Whatever directory you choose is committed; `check` reads
 it offline. The location resolves against the scanned repo, so it is the same
 under the GitHub Action as locally.
+
+## `[target]`
+
+An optional table that activates the compatibility lane: instead of
+hand-authoring `[[compatible]]`/`[[deny]]` entries for every dependency
+licence, you declare your own software's usage profile and the tool decides
+compatibility against it using the vetted OSADL compatibility matrix and
+copyleft class table, then the ScanCode LicenseDB category index. Absent
+table: behaviour is byte-identical to a policy with no `[target]` at all —
+the lane is purely additive. See
+[dependency-classification.md#the-target-compatibility-lane](./dependency-classification.md#the-target-compatibility-lane)
+for the normative routing tree — how a verdict lands in one of the lane's
+outcomes — and the
+[adopting a target recipe](../guides/writing-policy.md#adopting-a-target)
+for a worked before/after.
+
+A declared target is a **usage profile**, not just a licence id. All three
+profile keys are mandatory together (no defaults — declaring a target is a
+load-bearing choice, so the tool forces you to make it consciously):
+
+| Field | Type | Required | Meaning |
+|-------|------|----------|---------|
+| `license` | string | yes | One FOSS SPDX id, or the literal `"proprietary"`. A compound expression (`MIT OR Apache-2.0`) or a `LicenseRef-`/`DocumentRef-` reference is rejected — neither can anchor a compatibility-matrix row (dual-licensed targets aren't supported yet). |
+| `network` | boolean | yes | Whether your software is deployed on a network. Gates whether the AGPL/section-13 obligation class is *in scope* — it never hardcodes the verdict. `true` keeps that class in scope regardless of `distribution`; the compatibility relation then decides — an AGPL (or otherwise section-13-compatible) target absorbs an AGPL dependency fine, an incompatible target still fails. `false` folds AGPL into the ordinary copyleft class, gated by `distribution` instead. |
+| `distribution` | `"external"` \| `"internal"` | yes | Whether you convey the software outside your organization in any form. `external` keeps the distribution-triggered copyleft class fully in scope. `internal` takes that class out of scope: a would-be `target:incompatible`/`target:boundary` whose deciding leaf carries a positively-known copyleft (or, when `network = false`, AGPL) obligation becomes `ok` with the distinct rule `target:internal-use` instead — visible in its own report list, never a silent pass. A non-copyleft-driven incompatibility, or an obligation the vetted data can't positively classify, is never held this way; the flag gates a declared obligation class, never broader legal inference. |
+| `unknown_pair` | `"warn"` \| `"fail"` | no | The residual knob for a licence pair none of the vetted data covers, mirroring `[unknown].handling`. Defaults to `"warn"`. Never a silent pass. |
+
+A project-level profile is **all-or-nothing**: declaring any one of
+`license`/`network`/`distribution` without the other two is rejected,
+naming every missing key. Omitting all three — a `[target]` table carrying
+only `unknown_pair` and/or `[[target.workspace]]` entries — is the
+workspaces-only shape (below). An entirely empty `[target]` table, with
+neither a project profile nor any workspace entry, declares nothing to
+govern and is rejected as a dead activation switch.
+
+### `[[target.workspace]]`
+
+An array of tables under `[target]`. Each entry overrides the project
+profile for one workspace and every occurrence under it — the same
+segment-aware path matching as `[[compatible]]` `where` and
+`[[workspace.copyleft_suppressed]]` `path`; the **most specific** covering
+entry wins per occurrence. A docker (container) occurrence is never
+governed by a workspace entry — only the project profile applies there,
+since a container ships the project's software as a whole.
+
+| Field | Type | Required | Meaning |
+|-------|------|----------|---------|
+| `path` | string | yes | Repo-relative workspace prefix (forward slashes, no `..`, no leading/trailing slash); must not start with `docker:`, and must not duplicate an earlier entry (the first match wins at resolution, so a repeat would be dead). |
+| `license` | string | yes | This workspace's own target licence — same rules as the project-level `license`. Always overrides; there is no "inherit the project licence" option. |
+| `reason` | string (non-empty) | yes | Why this workspace diverges from the project profile — the audit trail. |
+| `network` | boolean | no | Overrides the project profile's `network`; inherited when absent and a complete project profile is declared. |
+| `distribution` | `"external"` \| `"internal"` | no | Overrides the project profile's `distribution`; inherited the same way. |
+
+**Inheritance is per field.** Omitting `network`/`distribution` inherits
+the project profile's own value for that field only; `license` always
+overrides, since a workspace entry with no licence divergence at all would
+be pointless. When no *complete* project-level profile is declared (the
+workspaces-only shape), there is nothing to inherit from, so every
+`[[target.workspace]]` entry must then carry its own `network` and
+`distribution` too — omitting either there is rejected, naming the entry.
+
+**The compatibility engine's absorption assumption.** The OSADL matrix —
+and this lane's use of it — models one question: does integrating a
+dependency into a combined work distributed under the *leading* (target)
+licence discharge the dependency's obligations? It does not model linking
+mode — static versus dynamic, in-process versus a separate service — its
+cells are the same regardless of how a dependency is actually wired in.
+This is a deliberate simplification, not an oversight: modelling linking
+modes would need a second axis of vetted data that doesn't exist publicly
+at this matrix's scale, and a conservative pairwise absorption answer is
+the safer default. [`[[compatible]]`](#compatible) stays the reviewed
+escape hatch for a specific pairing you've examined more closely — a
+weak-copyleft dependency behind a genuinely compliant linking boundary the
+matrix's conservative cell can't know about. (The same absorption idea, at
+workspace-license-family granularity rather than the matrix, is what
+[`[[workspace.copyleft_suppressed]]`](#workspacecopyleft_suppressed) checks
+above — the two lanes never both govern the same occurrence, since a
+target-governed one is superseded first.)
 
 ## Related pages
 

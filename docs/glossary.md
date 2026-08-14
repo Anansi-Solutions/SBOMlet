@@ -18,6 +18,20 @@ their licences. There is one collector per ecosystem. A collector either runs a
 standard [generator](#generator) and reads its output, or parses a lockfile
 itself.
 
+### compatibility lane
+
+The verdict lane a declared [target profile](#target-profile) activates:
+instead of an occurrence's licence being judged only by hand-authored
+`[[compatible]]`/`[[deny]]` rules, it is judged by directional compatibility
+against the target, using a vetted licence-compatibility matrix. Sits below
+`[[compatible]]` and above workspace copyleft suppression in
+[precedence](../reference/policy.md#precedence); absent a declared target,
+the lane never activates and routing is unchanged. The matrix models
+absorption into a combined work under the target licence, not linking mode
+— see
+[policy.md#targetworkspace](../reference/policy.md#targetworkspace) for
+that assumption stated in full.
+
 ### CycloneDX
 
 An industry-standard SBOM format (JSON). It's the interchange format inside the
@@ -56,7 +70,13 @@ consumer could legitimately choose, that avoids the obligation or the deny
 rule? A finding is copyleft only if every branch is; a finding is denied only
 when it has no electable branch left — an OR is denied only when every
 branch is denied (an electable branch defeats it), while an AND is denied
-when any conjunct is denied (a conjunct can't be elected away).
+when any conjunct is denied (a conjunct can't be elected away). When a
+[target profile](#target-profile) governs the occurrence, election becomes
+target-aware: the preference for a non-copyleft branch can pick a DIFFERENT
+branch than the untargeted walk would, because "non-copyleft" isn't always
+the branch that best serves the declared target — an OR containing a branch
+the target absorbs cleanly is preferred over one that merely avoids
+copyleft in the abstract.
 
 ### enrichment and the enrichment cache
 
@@ -188,6 +208,17 @@ dependency changed and the inventory wasn't regenerated.
 One thing the tool scans: a single lockfile or Terraform directory, found by
 walking the repository. `yarn.lock`, `poetry.lock`, a `.terraform.lock.hcl`
 directory. Each target is handled by one [collector](#collector).
+
+### target profile
+
+Your own software's declared licence and usage — not the scan
+[target](#target) above, an unrelated word for a different thing. A
+`[target]` table in `.sbomlet.policy.toml` declares one: a licence (or
+`"proprietary"`), whether you're deployed on a network, and whether you
+distribute externally or keep the software internal. Declaring one
+activates the [compatibility lane](#compatibility-lane); `[[target.workspace]]`
+overrides the profile per workspace. See
+[policy.md#target](../reference/policy.md#target).
 
 ### verdict
 

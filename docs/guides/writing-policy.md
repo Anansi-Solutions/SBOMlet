@@ -32,9 +32,109 @@ the build on any `fail`.
 
 For one package in one occurrence, the engine consults the lanes in a fixed
 order and takes the first that decides: deny, then clarify, then compatible
-(package, then licence), then workspace suppression, then the category
-default. The full table, and why deny is terminal, is
-[policy.md#precedence](../reference/policy.md#precedence).
+(package, then licence), then the target-compatibility lane (only when a
+declared `[target]` profile governs the occurrence), then workspace
+suppression, then the category default. The full table, and why deny is
+terminal, is [policy.md#precedence](../reference/policy.md#precedence).
+
+## Adopting a target
+
+Instead of hand-authoring `[[compatible]]`/`[[deny]]` entries for every
+dependency licence, declare your own software's licence and how it is
+used, and the tool decides compatibility against a vetted licence
+compatibility matrix for you.
+
+```toml
+[target]
+license = "MIT"
+network = false
+distribution = "external"
+```
+
+All three keys are mandatory together — `license` (a single FOSS SPDX id,
+or the literal `"proprietary"`), `network` (whether you're deployed on a
+network — gates the AGPL/section-13 obligation class), and `distribution`
+(`"external"` or `"internal"` — gates the ordinary distribution-triggered
+copyleft class). See [policy.md#target](../reference/policy.md#target) for
+the full field reference.
+
+### What changes, and what doesn't
+
+Adopting a target does not retire your existing hand-tuned policy.
+`[[deny]]`, `[[clarify]]`, and `[[compatible]]` still decide first — they
+sit above the target lane in
+[precedence](../reference/policy.md#precedence) — so a package you already
+reviewed and accepted keeps its `compatible[i]` verdict unchanged. What
+changes is everything BELOW those lanes: a
+`[[workspace.copyleft_suppressed]]` entry inside a workspace the target now
+governs is **superseded** — the target lane decides that occurrence
+instead, and `generate`/`check` print a notice naming both the suppression
+entry and the target that supersedes it, so nothing goes silent. Once you
+confirm the overlap notice reads as expected, that suppression entry is
+prunable: it can never fire again while the target governs the same
+occurrence. The tool also warns, unused-entry style, on a
+`[[target.workspace]]` entry whose path matches no occurrence in the run —
+the same dead-rule posture as an unused `[[compatible]]` rule.
+
+### The first run is a review session
+
+Adopting a proprietary target is intentionally noisy at first. Every
+weak-copyleft dependency (LGPL, MPL, and similar "restricted" licences)
+warns — `target:boundary` — until you record a scoped `[[compatible]]`
+boundary confirmation for it. This volume is by design, not a defect: a
+weak-copyleft licence's obligations depend on HOW you link the dependency
+in, something the vetted matrix data can't see, so the tool asks a human to
+confirm the boundary once per package rather than guessing silently. There
+is no class-level "accept every weak copyleft" switch — each confirmation
+is its own line in the audit trail.
+
+```toml
+[[compatible]]
+match = "package"
+name = "some-lgpl-lib"
+reason = "Dynamically linked via its published API; the boundary satisfies LGPL-3.0-only's relinkability requirement."
+```
+
+### The declared profile must be true
+
+The tool trusts your declared profile completely — it has no way to verify
+`network` or `distribution` against your actual deployment. `network =
+false` with containerized services is almost always wrong: a container is
+reachable over a network far more often than not, and getting this wrong
+silently defeats the AGPL scope-gating the flag exists to provide — an
+AGPL dependency that should fail under a network-deployed target instead
+folds into the ordinary copyleft class, where a permissive
+`distribution = "internal"` profile could then hold it out of scope
+entirely (see the AGPL-container reconciliation in
+[dependency-classification.md](../reference/dependency-classification.md#the-target-compatibility-lane)).
+Declare the profile that matches reality, not the one that produces the
+fewest warnings.
+
+### A monorepo with divergent workspaces
+
+Your project declares one project-wide target, but one workspace ships
+under a different licence, or with a different deployment shape.
+`[[target.workspace]]` overrides per field — declare only what diverges,
+and the rest inherits from the project profile:
+
+```toml
+[target]
+license = "MIT"
+network = true
+distribution = "external"
+
+[[target.workspace]]
+path = "apps/studio"
+license = "AGPL-3.0-only"
+reason = "apps/studio bundles an AGPL-licensed editor component and ships under AGPL-3.0-only itself, not the project's MIT licence."
+```
+
+`apps/studio`'s occurrences are now judged against an AGPL target instead
+of MIT; `network`/`distribution` are inherited unchanged since this entry
+doesn't override them. See
+[policy.md#targetworkspace](../reference/policy.md#targetworkspace) for the
+inheritance rules and the workspaces-only shape (declaring no project-level
+profile at all).
 
 ## Allow a copyleft dependency inside a copyleft workspace
 

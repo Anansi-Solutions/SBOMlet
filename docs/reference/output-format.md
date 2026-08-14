@@ -56,8 +56,34 @@ content change rather than a reordering.
 
 The first two non-blank lines are the title (`# Third-Party Licenses`, taken from
 `[document].title` or the default) and the auto-generated header comment that
-names the regenerate command. When the policy sets `[document].preamble`, that
-paragraph follows. On a policy run a line then points at the policy file:
+names the regenerate command.
+
+When the policy's `[target]` table activates the compatibility lane, two more
+generated lines follow immediately, before anything else — including the
+author preamble:
+
+1. The scope-of-assertion statement: the report was audited against the
+   declared target, and its findings assert licence validity only against
+   that target and configuration. For example: `This report was audited
+   against the declared target: proprietary, network-deployed, distributed
+   externally. Its findings assert license validity against that target and
+   the declared configuration only.` A project-level profile names itself;
+   any declared `[[target.workspace]]` overrides are appended, sorted by
+   path. A workspaces-only `[target]` table (no complete project profile)
+   names its per-workspace profiles as the audited-against subject directly.
+2. The attribution/disclaimer line, naming the OSADL compatibility matrix
+   and copyleft class table plus the ScanCode LicenseDB category index, each
+   with its vendored snapshot timestamp, closing with a
+   not-legal-advice clause.
+
+Both lines are generated, deterministic, and present only when the target
+lane is active — a policy with no `[target]` table renders neither, and the
+document stays byte-identical to one generated before this pair existed.
+Neither line ever appears in `THIRD_PARTY_NOTICES.md`. See
+[policy.md#target](policy.md#target) for the profile shape.
+
+When the policy sets `[document].preamble`, that paragraph follows next. On a
+policy run a line then points at the policy file:
 `Copyleft notice rules are configured in <policy>.`
 
 Sections appear in this order:
@@ -438,6 +464,13 @@ occurrences cleanly. The per-component property names:
 | `licenses-tool:scope:<target>` | `dev` or `prod` | once per occurrence |
 | `licenses-tool:verdict:<target>` | the verdict status (`ok`, `warn`, `fail`, `suppressed`) | once per matching verdict, policy runs only |
 | `licenses-tool:rule:<target>` | the [policy lane](../glossary.md#policy-lanes) rule | once per matching verdict, policy runs only |
+
+`licenses-tool:rule:<target>` carries whatever rule id decided the verdict,
+unfiltered — a target-compatibility lane verdict (`target:ok`,
+`target:incompatible`, `target:boundary`, `target:unknown-pair`,
+`target:internal-use`) surfaces here exactly like `default:copyleft` or a
+`compatible[i]` acceptance would; there is no separate export surface for
+the target lane.
 
 The determinism guarantees: components are sorted by purl; the JSON is indented
 two spaces with exactly one trailing newline; `JSON.stringify` is the only

@@ -20,6 +20,8 @@
 #   [[clarify]] override
 #   [[compatible]] match = "package"
 #   [[compatible]] match = "license"
+#   [target] / [[target.workspace]] compatibility lane (only when a declared
+#     target governs the occurrence; supersedes workspace suppression below)
 #   [[workspace.copyleft_suppressed]]
 #   category default (copyleft flag / [unknown] handling)
 
@@ -146,6 +148,52 @@ version = "0.34.5"
 # omitted, the rule applies everywhere (see `where` in docs/reference/policy.md).
 # where = ["docker:examples/docker-scan/Dockerfile"]
 reason = "Dual-licensed Apache-2.0 AND LGPL-3.0-or-later; the LGPL obligations are reviewed and accepted for these prebuilt sharp binaries."
+
+# ---------------------------------------------------------------------------
+# Target-license compatibility lane ([target] / [[target.workspace]])
+#
+# Instead of hand-authoring [[compatible]]/[[deny]] entries for every
+# dependency license, declare your OWN software's usage profile and the tool
+# decides compatibility against it using a vetted license-compatibility
+# matrix. Commented out below (inert) -- SBOMlet itself does not declare a
+# target in this shipped example.
+#
+# ALL THREE profile keys below are MANDATORY together if you declare one at
+# all (no defaults -- declaring a target is a load-bearing choice):
+#   license      -- one FOSS SPDX id, or the literal "proprietary". A
+#                   compound expression or a LicenseRef-/DocumentRef-
+#                   reference is rejected (dual-licensed targets aren't
+#                   supported yet).
+#   network      -- boolean. Gates whether the AGPL/section-13 obligation
+#                   class is IN SCOPE, never the verdict itself: true keeps
+#                   it in scope regardless of distribution (the
+#                   compatibility relation then decides); false folds AGPL
+#                   into the ordinary copyleft class instead.
+#   distribution -- "external" or "internal". "internal" takes the
+#                   distribution-triggered copyleft class OUT OF SCOPE for a
+#                   positively-known obligation (target:internal-use,
+#                   visible in its own report list -- never a silent pass).
+#
+# unknown_pair ("warn"/"fail", defaults to "warn") is the residual knob for
+# a license pair the vetted data doesn't cover -- mirrors [unknown].handling.
+#
+# This lane sits BELOW [[compatible]] (which still decides first) and ABOVE
+# [[workspace.copyleft_suppressed]] (which a governed occurrence never
+# reaches at all -- superseded, surfaced as a notice, never silently).
+#
+# [target]
+# license = "MIT"
+# network = false
+# distribution = "external"
+#
+# [[target.workspace]]
+# # Per-field inheritance from the project profile above: path/license/reason
+# # are always mandatory here; network/distribution are OPTIONAL and inherit
+# # the project profile's own value when omitted.
+# path = "apps/studio"
+# license = "AGPL-3.0-only"
+# reason = "apps/studio bundles an AGPL-licensed editor component and ships under AGPL-3.0-only itself, not the project's MIT license."
+# ---------------------------------------------------------------------------
 
 # ---------------------------------------------------------------------------
 # Clarify overrides (two-level, staleness-guarded — POL-07)
