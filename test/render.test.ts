@@ -3817,7 +3817,7 @@ describe("renderMarkdown — Target compatibility section", () => {
     expect(section.includes("held out of scope for internal use")).toBe(true);
   });
 
-  test("Problematic dedup: a purl carrying a fail verdict anywhere never rows here", () => {
+  test("Problematic dedup applies to the flagged table only - a fail at one occurrence never suppresses a held-internal row at a DIFFERENT occurrence of the same purl", () => {
     const dedupedPkg = entry({
       purl: "pkg:npm/deduped-pkg@1.0.0",
       name: "deduped-pkg",
@@ -3857,8 +3857,16 @@ describe("renderMarkdown — Target compatibility section", () => {
     const output = renderMarkdown({ packages: [dedupedPkg] }, view);
     const problematicStart = output.indexOf("## Problematic licenses");
     const problematicEnd = output.indexOf("## Copyleft and special notices");
+    const targetSection = output.slice(output.indexOf("## Target compatibility"));
 
-    expect(output.includes("## Target compatibility")).toBe(false);
+    // apps/a's fail routes to Problematic, exactly as before.
     expect(output.slice(problematicStart, problematicEnd).includes("deduped-pkg")).toBe(true);
+    // apps/b's held-internal row still renders - the dedup never drops a held row for an unrelated
+    // occurrence's fail (the adversarial-gate fix: this used to silently vanish the section entirely).
+    expect(targetSection.includes("deduped-pkg@1.0.0 in apps/b")).toBe(true);
+    expect(targetSection.includes("held out of scope")).toBe(true);
+    // The flagged table (not the held list) still respects the dedup: apps/a's occurrence never
+    // gets a SECOND, flagged-table row here on top of its Problematic one.
+    expect(targetSection.includes("The packages listed below need review")).toBe(false);
   });
 });

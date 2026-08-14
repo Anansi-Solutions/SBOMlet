@@ -1086,12 +1086,15 @@ const TARGET_WARN_RULES: ReadonlySet<string> = new Set([
  * document). Two parts, in order:
  *   - a flagged table (the copyleft-section row shape) for every target:boundary,
  *     target:unknown-pair, or dev-downgraded target:incompatible (status "warn") verdict;
- *   - a "Held for internal use" bullet list for every target:internal-use (status "ok") verdict -
- *   the
- *     usage profile takes the obligation out of scope, but the row stays enumerable for the day the
- *     profile flips (the internal-use hold's own repudiation mitigation).
- * The Problematic dedup applies to both parts: a purl carrying a fail verdict anywhere never rows
- * here, matching the Copyleft section's own dedup. Deterministic sort: comparePackages order,
+ *   - a "Held for internal use" bullet list for every target:internal-use (status "ok") verdict
+ *     - the usage profile takes the obligation out of scope, but the row stays enumerable for the
+ *     day the profile flips (the internal-use hold's own repudiation mitigation).
+ * The Problematic dedup applies ONLY to the flagged table (a purl carrying a fail verdict anywhere
+ * never rows there, matching the Copyleft section's own dedup) - the held list is exempt by design.
+ * A held-internal verdict names one SPECIFIC occurrence's out-of-scope obligation; a fail elsewhere
+ * on the same purl describes an unrelated occurrence entirely, and the hold's whole purpose (an
+ * exposure staying visible for the day the profile flips) breaks if a sibling occurrence's fail can
+ * make it vanish with no trace anywhere in the document. Deterministic sort: comparePackages order,
  * already the caller's `sorted` order.
  */
 function targetSectionLines(sorted: readonly PackageEntry[], policyView: PolicyView): string[] {
@@ -1117,21 +1120,20 @@ function targetSectionLines(sorted: readonly PackageEntry[], policyView: PolicyV
   const heldLines: string[] = [];
 
   for (const pkg of sorted) {
-    if (problematicPurls.has(pkg.purl)) {
-      continue;
-    }
-
     const relevant = verdictsByPurl.get(pkg.purl) ?? [];
-    const warns = relevant.filter(
-      (verdict) => verdict.status === "warn" && TARGET_WARN_RULES.has(verdict.rule),
-    );
 
-    if (warns.length > 0) {
-      const targets = [...new Set(warns.map((verdict) => verdict.occurrenceTarget))].sort(
-        compareCodeUnits,
+    if (!problematicPurls.has(pkg.purl)) {
+      const warns = relevant.filter(
+        (verdict) => verdict.status === "warn" && TARGET_WARN_RULES.has(verdict.rule),
       );
 
-      warnRows.push(copyleftRow(pkg, targets));
+      if (warns.length > 0) {
+        const targets = [...new Set(warns.map((verdict) => verdict.occurrenceTarget))].sort(
+          compareCodeUnits,
+        );
+
+        warnRows.push(copyleftRow(pkg, targets));
+      }
     }
 
     const held = relevant
