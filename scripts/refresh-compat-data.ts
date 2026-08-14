@@ -68,7 +68,7 @@ export function assertWithinSizeGate(byteLength: number, gate: SizeGate): void {
 }
 
 /**
- * Structural assertions (A5) on the DOWNLOADED, already-narrowed data: a matrix that stopped being
+ * Structural assertions on the DOWNLOADED, already-narrowed data: a matrix that stopped being
  * square, or a row/entry count outside the expected range, means the upstream FORMAT changed - this
  * must fail the refresh loudly rather than silently reshape the loader's contract.
  */
@@ -177,7 +177,7 @@ export function diffEntries(
 }
 
 /**
- * The inter-tier gate (A3): compare the DOWNLOADED pair's disagreements against the CURRENTLY
+ * The inter-tier gate: compare the DOWNLOADED pair's disagreements against the CURRENTLY
  * COMMITTED pair's disagreements (computed live via the same enumerator, never a separately
  * maintained literal - the test file's pinned list and this comparison can never drift apart from
  * each other because both read the one committed snapshot). A newly introduced disagreement must

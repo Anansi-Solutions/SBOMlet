@@ -75,7 +75,7 @@ export function targetBoundaryReason(ctx: ReasonContext): string {
   );
 }
 
-/** `target:unknown-pair` reason: honest residual, never a silent pass (A4). */
+/** `target:unknown-pair` reason: honest residual, never a silent pass. */
 export function targetUnknownPairReason(ctx: ReasonContext): string {
   return (
     `${reasonPrefix(ctx)} has no vetted compatibility data - ${ctx.source} - not silently ` +

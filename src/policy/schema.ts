@@ -195,13 +195,13 @@ export interface AllowSourceAvailable {
 
 /**
  * One [[target.workspace]] override: PER-FIELD inheritance from a complete project [target] profile
- * (20-00-PLAN-OVERVIEW.md's resolved design) - `path`/`license`/`reason` are always mandatory here;
- * `network`/`distribution` are optional and inherit the project profile's own values when a
- * complete one is declared. When no complete project profile exists, schema.ts's validator requires
- * every entry to carry BOTH itself - there is nothing to inherit from.
+ * - `path`/`license`/`reason` are always mandatory here; `network`/`distribution` are optional and
+ * inherit the project profile's own values when a complete one is declared. When no complete
+ * project profile exists, schema.ts's validator requires every entry to carry BOTH itself
+ * - there is nothing to inherit from.
  */
 export interface TargetWorkspaceEntry {
-  /** Repo-relative target-identity prefix this override governs, e.g. "apps/scratch". */
+  /** Repo-relative target-identity prefix this override governs, e.g. "apps/studio". */
   path: string;
   /** This workspace's own declared target license - overrides the project license when present. */
   license: TargetLicense;

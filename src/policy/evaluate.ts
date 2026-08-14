@@ -1021,7 +1021,7 @@ function copyleftVerdict(
 
 /**
  * The target-compatibility lane: decides a governed, parseable (non-imprecise, non-null) occurrence
- * against its resolved {@link TargetProfile} via the wave-2 engine (compat/classify.ts
+ * against its resolved {@link TargetProfile} via the pure compatibility engine (compat/classify.ts
  * + compat/profile.ts), returning undefined when the lane should NOT decide - the caller then
  * falls through to today's copyleft/imprecise/unknown walk unchanged. Two cases return undefined:
  * the elected branch still carries a LicenseRef-/DocumentRef- leaf after the TARGET-AWARE election

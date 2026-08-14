@@ -41,7 +41,7 @@ describe("classifyLeaf - OSS target, matrix tier", () => {
     expect(result.source).toBe("OSADL: Unknown");
   });
 
-  test("Check dependency cell routes to residual naming the cell value verbatim (A4)", () => {
+  test("Check dependency cell routes to residual naming the cell value verbatim", () => {
     const result = classifyLeaf(oss("GPL-3.0-only"), "AGPL-3.0-only");
 
     expect(result.class).toBe("residual");
@@ -262,7 +262,7 @@ describe("classifyLeaf - purity and determinism", () => {
 
 // ===========================================================================
 // Adversarial gate keeper locks (fresh probes re-verifying the safety properties above against
-// the live vendored data, not just the earlier pins above - see .planning/adversarial-review-gate.md).
+// the live vendored data, not just the earlier pins above).
 // ===========================================================================
 
 describe("classifyLeaf - adversarial gate: fresh asymmetric pairs, live data", () => {

@@ -77,10 +77,11 @@ the declared target.
 
 ## See also
 
-- [ADR-0007](0007-honest-residual.md), [ADR-0009](0009-dev-prod-os-scopes.md),
-  [ADR-0013](0013-source-available-deny.md),
-  [ADR-0015](0015-abstain-over-fragile-parsing.md) — the residual, os-scope,
-  deny-precedence, and vetted-data precedents this lane extends
-- Research: `.planning/phases/20-target-license-policy/20-RESEARCH.md`
+- Related: [ADR-0007](0007-honest-residual.md) (the residual principle this
+  lane extends), [ADR-0009](0009-dev-prod-os-scopes.md) (the os-scope
+  boundary this lane never crosses), [ADR-0013](0013-source-available-deny.md)
+  (the deny-precedence this lane sits below),
+  [ADR-0015](0015-abstain-over-fragile-parsing.md) (the vetted-data-over-
+  hand-authored-rules precedent)
 - Code: `src/policy/compat/`, `src/policy/target.ts`,
   `src/policy/evaluate.ts`, `src/render/markdown.ts`

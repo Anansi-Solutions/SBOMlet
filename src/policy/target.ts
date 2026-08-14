@@ -17,13 +17,13 @@ import type { Policy, TargetWorkspaceEntry } from "./schema";
  * The governing target profile for one occurrence, or undefined when nothing governs it.
  *
  * A docker occurrence resolves ONLY the project profile - a container ships the project's software,
- * and a workspace override never governs it (the container-design resolution,
- * 20-00-PLAN-OVERVIEW.md: `[[target.workspace]]` entries are ungoverned for docker occurrences by
- * construction). A workspace occurrence resolves the most-specific covering `[[target.workspace]]`
- * entry - longest path wins, segment-aware via {@link matchesIdentityPrefix}, the same comparison
- * copyleft suppression paths and `[[compatible]]` `where` scopes use - inheriting any field the
- * entry omits from a complete project profile. Failing a workspace match, the project profile
- * itself; failing both, undefined (today's walk, untouched).
+ * and a workspace override never governs it: `[[target.workspace]]` entries are ungoverned for
+ * docker occurrences by construction. A workspace occurrence resolves the most-specific covering
+ * `[[target.workspace]]` entry - longest path wins, segment-aware via {@link
+ * matchesIdentityPrefix}, the same comparison copyleft suppression paths and `[[compatible]]`
+ * `where` scopes use - inheriting any field the entry omits from a complete project profile.
+ * Failing a workspace match, the project profile itself; failing both, undefined (today's walk,
+ * untouched).
  */
 export function resolveTargetProfile(
   occurrenceTarget: string,
