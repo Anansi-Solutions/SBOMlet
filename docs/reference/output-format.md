@@ -67,6 +67,7 @@ Sections appear in this order:
 | Package counts | `**Package counts:**` | always |
 | Problematic licenses | `## Problematic licenses` | policy run only |
 | Copyleft and special notices | `## Copyleft and special notices` | policy run only |
+| Target compatibility | `## Target compatibility` | policy run only, and only when the target lane produced a warn or held-internal row |
 | Imprecise licenses | `## Imprecise licenses (review / disambiguate)` | any [imprecise](../glossary.md#imprecise-family) package exists |
 | Assessment conflicts | `## Assessment conflicts` | any conflict marker exists |
 | Containers | `## Containers` | always |
@@ -264,6 +265,34 @@ out of this table — except AGPL, which fails into Problematic licenses above
 or, when accepted via [`[[compatible]]`](policy.md#compatible), appears here
 instead as a non-blocking special notice. The exact exclusion and dedup
 rules are [report-placement.md](./report-placement.md#invariants)'s.
+
+### Target compatibility
+
+Rendered only on a policy run whose `[target]` table activates the
+compatibility lane, and only when the lane actually produced a row - an
+absent lane, or one whose every occurrence landed a clean `target:ok` or a
+`target:incompatible`/`target:unknown-pair` fail (routed to
+[Problematic licenses](#problematic-licenses) instead), renders no heading at
+all. See [policy.md#target](policy.md#target) for the profile shape and
+[dependency-classification.md](./dependency-classification.md) for how a
+verdict lands in one of the lane's five outcomes.
+
+Two independent parts, in order, both excluding a purl already in
+Problematic licenses:
+
+- A flagged table, the same five summary columns plus **Why** as the
+  Copyleft table, for every `target:boundary`, `target:unknown-pair`, or
+  dev-downgraded `target:incompatible` (status `warn`) verdict - a package
+  needing review against the declared target.
+- A "held for internal use" bullet list, `- <name>@<version> in <target>
+  - <reason>`, for every `target:internal-use` (status `ok`) verdict: a
+  copyleft or AGPL obligation the usage profile takes out of scope. The
+  distinct rule id and this dedicated list keep the exposure visible - never
+  a silent `ok` - for the day the profile's `distribution` or `network`
+  flag flips back.
+
+Which packages land in either part is placement, normatively defined in
+[report-placement.md](./report-placement.md#narrative-sections-verdict--or-finding-driven-deduped).
 
 ### Assessment conflicts
 

@@ -90,16 +90,73 @@ highest to lowest:
    runs, so a clarified package falls through the same lanes as any other
    finding. One that clears every lane below cites `clarify[i]` at the
    default-ok tier instead of a bare `default:ok`.)
-5. **The copyleft lane** — entered only when the elected SPDX branch is
+5. **The target-compatibility lane** — entered only when a target profile
+   governs this occurrence *and* the finding has a parseable, non-imprecise
+   expression. The tree below.
+6. **The copyleft lane** — entered only when the elected SPDX branch is
    copyleft. The tree below.
-6. **The imprecise-family lane** — entered when the finding names only a
+7. **The imprecise-family lane** — entered when the finding names only a
    family, with no elected expression.
-7. **The unknown lane** — entered when the finding has no expression and isn't
+8. **The unknown lane** — entered when the finding has no expression and isn't
    imprecise: follows `[unknown]` handling (`warn` or `fail`).
-8. **Default: ok.**
+9. **Default: ok.**
+
+### The target-compatibility lane
+
+Activates per occurrence only when BOTH hold: a `[target]`/`[[target.workspace]]`
+profile resolves for that occurrence (a workspace occurrence takes the
+most-specific covering `[[target.workspace]]` entry, else the project
+profile; a docker occurrence takes the project profile only — a workspace
+override never governs a container), and the finding is parseable (not
+imprecise, not a genuine unknown). `os`-scope packages never enter this lane
+at all — they keep today's walk, with one reconciliation noted below.
+
+**The scope-gating principle:** the profile's `network`/`distribution` flags
+decide which obligation class is *in scope*; the compatibility relation (the
+vetted OSADL-matrix-first tier chain) always decides the *verdict* for an
+in-scope obligation — a flag never hardcodes an outcome. Five outcomes:
+
+- **compatible** → ok, `target:ok` (a clarified package landing here still
+  cites `clarify[i]`, exactly like the default-ok tier above).
+- **held-internal** — a positively-known copyleft/AGPL obligation the profile
+  takes out of scope (`distribution = "internal"` for copyleft; additionally
+  `network = false` for AGPL, since `network = true` keeps the AGPL class in
+  scope regardless of distribution) → ok, `target:internal-use`, distinct
+  from a bare `target:ok` so the exposure stays enumerable for the day the
+  profile flips. A non-copyleft-driven incompatibility, or an obligation
+  class the vetted data cannot positively classify, is *never* held — the
+  flag gates only a declared obligation class, never broader legal inference.
+- **boundary** → warn, `target:boundary` (weak copyleft under a proprietary
+  target — usable only behind a compliant linking boundary).
+- **incompatible** → fail, `target:incompatible`, dev-downgraded per
+  `[dev_dependencies]` exactly like `default:copyleft`.
+- **a matrix-uncovered pair** → the `unknown_pair` knob (`warn` by default,
+  `fail` also dev-downgraded) — honest residual, never a silent pass.
+
+A ref-carrying elected branch (under the target-aware election, which can
+differ from the no-target election) falls through to the unknown lane below
+instead, never `target:ok` — an opaque reference's content is unknowable
+regardless of a declared target.
+
+**The AGPL-container/network reconciliation:** the container AGPL escalation
+below (`default:agpl-container`) encodes "a container is network-deployed" as
+a heuristic. Where a *complete* project target profile is declared, the
+explicit `network` flag owns that applicability fact instead: `network =
+true` leaves the escalation exactly as it is today (now declared, not
+guessed); `network = false` demotes it to the routine would-be
+`default:copyleft` fail, then `[os_dependencies]` decides from there, the
+reason naming the declared basis. A repo with no complete project profile
+keeps the heuristic byte-identically. This is the one place a declared target
+profile touches an `os`-scope verdict — the target-compatibility lane itself
+still never governs `os`-scope packages.
 
 ### The copyleft lane
 
+- A target-governed occurrence never reaches this lane at all — the
+  target-compatibility lane above decides it first, so a
+  `[[workspace.copyleft_suppressed]]` entry a target governs is effectively
+  dead there (surfaced by `policy/target.ts`'s `suppressionOverlapNotices`,
+  never silently).
 - A family-justified workspace copyleft suppression (the occurrence sits under
   the suppressed path, and the elected copyleft is absorbed by that
   workspace's own declared license family) → `suppressed`. Checked *before*
@@ -108,11 +165,16 @@ highest to lowest:
   against workspace paths, not `docker:` ones.
 - Otherwise, scope `os` and the elected expression carries an AGPL leaf → fail
   `default:agpl-container`, checked before the os downgrade so
-  `[os_dependencies]` can never soften it. The practical accept path is a
-  `[[compatible]]` rule (tier 4 above — it never even reaches this lane); that
-  acceptance is recorded and surfaced by the output layer — see
+  `[os_dependencies]` can never soften it — UNLESS a complete project target
+  profile declares `network = false` (the reconciliation above), which
+  demotes it to the routine would-be `default:copyleft` fail instead. The
+  practical accept path for the undemoted escalation is a `[[compatible]]`
+  rule (tier 4 above — it never even reaches this lane); that acceptance is
+  recorded and surfaced by the output layer — see
   [report-placement.md](./report-placement.md) for the markdown report's
-  accepted-AGPL notice.
+  accepted-AGPL notice, which a network=false-demoted row landing `ok` (via
+  `[os_dependencies] = "ignore"`) also gets, so the obligation is never
+  silently absent.
 - Otherwise, scope `os`, any other copyleft → would-be fail
   `default:copyleft`, then `[os_dependencies]`: `fail` stays fail, `warn`
   downgrades to warn with the rule id preserved, `ignore` downgrades to ok.
@@ -122,7 +184,8 @@ highest to lowest:
 ### The imprecise-family lane
 
 - Scope `os` and the family is the bare `AGPL` token → fail
-  `default:agpl-container` (the same escalation as the precise case).
+  `default:agpl-container` (the same escalation as the precise case, and the
+  same network=false demotion reconciliation).
 - Family is a could-be-copyleft token (bare `GPL`, `AGPL`, `LGPL`) → warn
   `default:imprecise-copyleft`.
 - Any other family (a known-permissive one like bare `BSD`) → warn
@@ -136,14 +199,17 @@ expression still carries a `LicenseRef-`/`DocumentRef-` leaf after election (a
 bare ref, or an `AND` that keeps one alongside a known license) — an opaque
 reference's content is unknowable to the tool, so it is never silently
 `default:ok`; an `OR` with an electable known branch already resolves to that
-branch before this lane and never reaches it.
+branch before this lane and never reaches it. A ref-carrying elected branch
+under a target-aware election falls through here too, from the
+target-compatibility lane above.
 
-Source: `src/policy/evaluate.ts` (`verdictFor`, `copyleftVerdict`,
-`impreciseVerdict`, `unknownVerdict`, `refUnknownVerdict`,
-`acceptedContainerNotices`), `src/policy/copyleft.ts` (`AGPL_IDS`),
-`src/merge/merge.ts` (`crossImageClaimDivergence`, detecting the divergence),
-`src/normalize/normalize.ts` (`withCrossImageConflict`, surfacing it on the
-finding).
+Source: `src/policy/evaluate.ts` (`verdictFor`, `targetVerdict`,
+`copyleftVerdict`, `impreciseVerdict`, `unknownVerdict`, `refUnknownVerdict`,
+`acceptedContainerNotices`), `src/policy/target.ts` (`resolveTargetProfile`),
+`src/policy/compat/classify.ts` (`classifyExpression`), `src/policy/copyleft.ts`
+(`AGPL_IDS`), `src/merge/merge.ts` (`crossImageClaimDivergence`, detecting the
+divergence), `src/normalize/normalize.ts` (`withCrossImageConflict`,
+surfacing it on the finding).
 
 ## Invariants
 
@@ -153,11 +219,19 @@ finding).
 - An AGPL obligation is never silently softened at the verdict level: the
   container AGPL escalation (`default:agpl-container`) bypasses both
   `[os_dependencies]` and `[dev_dependencies]`; only an explicit
-  `[[compatible]]` rule can change the verdict.
+  `[[compatible]]` rule, or a complete project target profile's declared
+  `network = false`, can change the verdict — and the declared-`network`
+  path stays visible even when it lands `ok` (the accepted-AGPL notice).
+- Absent a `[target]`/`[[target.workspace]]` profile, or on an occurrence no
+  profile governs, verdict routing is byte-identical to a repo with no
+  `[target]` table at all — the target-compatibility lane is purely additive.
+- `os`-scope packages never receive a `target:*` rule; the declared `network`
+  flag's only effect on an `os`-scope verdict is the AGPL-container
+  reconciliation above.
 
 ## Path index (verified end to end)
 
-The same 26 paths as
+The same 45 paths as
 [report-placement.md](./report-placement.md#path-index-verified-end-to-end),
 one row each, stating the Stage-1/Stage-2 outcome (scope, verdict status,
 rule) instead of the markdown destination — the two tables share one slug
@@ -193,3 +267,22 @@ tables are about slug coverage, not about every classification being unique.
 | `denied-license-terminal` | a `[[deny]]` match with a `[[compatible]]` rule that would otherwise accept it | `app · fail · denied[0]` |
 | `system-package-in-dev-container-counts-dev` | apk permissive package whose only container is dev-marked | `os · ok · default:ok` |
 | `cross-image-claim-divergence` | apk purl baked into two prod containers with different declared licenses | `os · fail · conflict:cross-image-claims` |
+| `target-ok-permissive` | MIT dep under a (MIT, network=false, external) target | `app · ok · target:ok` |
+| `target-incompatible-prod` | GPL-3.0-only dep under a (MIT, external) target, prod occurrence | `app · fail · target:incompatible` |
+| `target-incompatible-dev-downgrade` | same finding, dev occurrence, `dev_dependencies = "warn"` | `app · warn · target:incompatible` |
+| `target-apache-gpl2-incompatible` | Apache-2.0 dep under a (GPL-2.0-only, external) target | `app · fail · target:incompatible` |
+| `target-or-election-flip` | `Apache-2.0 OR GPL-2.0-only` dep under a (GPL-2.0-only, external) target | `app · ok · target:ok` |
+| `target-proprietary-boundary-external` | LGPL-2.1-only dep under a (proprietary, network=true, external) target | `app · warn · target:boundary` |
+| `target-unknown-pair-residual` | a matrix-uncovered pair, `unknown_pair` absent then `"fail"` | `app · warn · target:unknown-pair` then `app · fail · target:unknown-pair` |
+| `target-internal-holds-gpl` | GPL-3.0-only dep under a (MIT, network=false, internal) target | `app · ok · target:internal-use` |
+| `target-internal-network-agpl-fails` | AGPL-3.0-only dep under a (MIT, network=true, internal) target | `app · fail · target:incompatible` |
+| `target-network-agpl-absorbed` | AGPL-3.0-only dep under an (AGPL-3.0-only, network=true, external) target, container occurrence | `app · ok · target:ok` |
+| `target-network-false-agpl-internal-held` | AGPL-3.0-only dep under a (MIT, network=false, internal) target | `app · ok · target:internal-use` |
+| `target-internal-nondistribution-conflict-stays` | Apache-2.0 dep under a (GPL-2.0-only, network=false, internal) target | `app · fail · target:incompatible` |
+| `target-workspace-divergence` | one purl, two workspace occurrences under diverging per-workspace targets | `app · fail · target:incompatible` (workspace A) and `app · ok · target:ok` (workspace B) |
+| `target-container-app-ecosystem` | npm GPL-3.0-only baked into a prod container, project (GPL-3.0-only, external) target | `app · ok · target:ok` |
+| `target-os-agpl-network-true-escalates` | apk AGPL-3.0-only, project target `network = true` | `os · fail · default:agpl-container` |
+| `target-os-agpl-network-false-routine` | same package (precise and imprecise), project target `network = false`, `os_dependencies = "warn"` | `os · warn · default:copyleft` |
+| `target-os-scope-untouched` | apk GPL-2.0-only under any target profile | `os · warn · default:copyleft` (byte-identical reason to the no-target run) |
+| `target-supersedes-suppression` | a governed occurrence matching a family-justified `[[workspace.copyleft_suppressed]]` | `app · ok · target:ok` (never `suppressed`) |
+| `target-os-agpl-network-false-ignored-notice` | apk AGPL-3.0-only, project target `network = false`, `os_dependencies = "ignore"` | `os · ok · default:copyleft` |

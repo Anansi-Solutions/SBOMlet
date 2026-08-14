@@ -3457,3 +3457,229 @@ describe("renderMarkdown — Why-cell target scoping", () => {
     expect(section.includes(", optional")).toBe(false);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Target compatibility section - policy runs only, rendered after Copyleft and
+// special notices, only when the lane produced a warn/held-internal row.
+// ---------------------------------------------------------------------------
+
+describe("renderMarkdown — Target compatibility section", () => {
+  test("absent when no target:* row exists at all - no heading, no blank-line drift", () => {
+    const output = renderMarkdown(policyModel, basicView);
+
+    expect(output.includes("## Target compatibility")).toBe(false);
+  });
+
+  test("absent when the only target:* verdict is a clean target:ok", () => {
+    const pkg = entry({
+      purl: "pkg:npm/target-ok-only@1.0.0",
+      name: "target-ok-only",
+      version: "1.0.0",
+      licenseClaims: [{ raw: "MIT", kind: "spdx-id", source: "generator" }],
+      finding: { expression: "MIT", elected: "MIT", source: "generator", confidence: "exact" },
+    });
+    const view: PolicyView = {
+      policyPath: "policy.toml",
+      suppressedWorkspaces: [],
+      verdicts: [
+        {
+          purl: "pkg:npm/target-ok-only@1.0.0",
+          occurrenceTarget: "apps/a",
+          status: "ok",
+          rule: "target:ok",
+          reason: "compatible",
+        },
+      ],
+    };
+    const output = renderMarkdown({ packages: [pkg] }, view);
+
+    expect(output.includes("## Target compatibility")).toBe(false);
+  });
+
+  test("renders after Copyleft and special notices, before Imprecise licenses", () => {
+    const boundaryPkg = entry({
+      purl: "pkg:npm/boundary-pkg@1.0.0",
+      name: "boundary-pkg",
+      version: "1.0.0",
+      licenseClaims: [{ raw: "LGPL-2.1-only", kind: "spdx-id", source: "generator" }],
+      finding: {
+        expression: "LGPL-2.1-only",
+        elected: "LGPL-2.1-only",
+        source: "generator",
+        confidence: "exact",
+      },
+    });
+    const view: PolicyView = {
+      policyPath: "policy.toml",
+      suppressedWorkspaces: [],
+      verdicts: [
+        {
+          purl: "pkg:npm/boundary-pkg@1.0.0",
+          occurrenceTarget: "apps/a",
+          status: "warn",
+          rule: "target:boundary",
+          reason: "weak copyleft under a proprietary target",
+        },
+      ],
+    };
+    const output = renderMarkdown({ packages: [boundaryPkg] }, view);
+    const copyleftIdx = output.indexOf("## Copyleft and special notices");
+    const targetIdx = output.indexOf("## Target compatibility");
+
+    expect(copyleftIdx).toBeGreaterThan(-1);
+    expect(targetIdx).toBeGreaterThan(copyleftIdx);
+  });
+
+  test("flagged table rows target:boundary, target:unknown-pair, and dev-downgraded target:incompatible", () => {
+    const boundaryPkg = entry({
+      purl: "pkg:npm/boundary-pkg@1.0.0",
+      name: "boundary-pkg",
+      version: "1.0.0",
+      licenseClaims: [{ raw: "LGPL-2.1-only", kind: "spdx-id", source: "generator" }],
+      finding: {
+        expression: "LGPL-2.1-only",
+        elected: "LGPL-2.1-only",
+        source: "generator",
+        confidence: "exact",
+      },
+    });
+    const residualPkg = entry({
+      purl: "pkg:npm/residual-pkg@1.0.0",
+      name: "residual-pkg",
+      version: "1.0.0",
+      licenseClaims: [{ raw: "QPL-1.0", kind: "spdx-id", source: "generator" }],
+      finding: {
+        expression: "QPL-1.0",
+        elected: "QPL-1.0",
+        source: "generator",
+        confidence: "exact",
+      },
+    });
+    const devDowngradedPkg = entry({
+      purl: "pkg:npm/dev-downgraded-pkg@1.0.0",
+      name: "dev-downgraded-pkg",
+      version: "1.0.0",
+      occurrences: [{ target: "apps/a", isDevDependency: true }],
+      licenseClaims: [{ raw: "GPL-3.0-only", kind: "spdx-id", source: "generator" }],
+      finding: {
+        expression: "GPL-3.0-only",
+        elected: "GPL-3.0-only",
+        source: "generator",
+        confidence: "exact",
+      },
+    });
+    const view: PolicyView = {
+      policyPath: "policy.toml",
+      suppressedWorkspaces: [],
+      verdicts: [
+        {
+          purl: "pkg:npm/boundary-pkg@1.0.0",
+          occurrenceTarget: "apps/a",
+          status: "warn",
+          rule: "target:boundary",
+          reason: "weak copyleft under a proprietary target",
+        },
+        {
+          purl: "pkg:npm/residual-pkg@1.0.0",
+          occurrenceTarget: "apps/a",
+          status: "warn",
+          rule: "target:unknown-pair",
+          reason: "no vetted compatibility data",
+        },
+        {
+          purl: "pkg:npm/dev-downgraded-pkg@1.0.0",
+          occurrenceTarget: "apps/a",
+          status: "warn",
+          rule: "target:incompatible",
+          reason: "incompatible, downgraded to warn: dev-only occurrence",
+        },
+      ],
+    };
+    const output = renderMarkdown({ packages: [boundaryPkg, residualPkg, devDowngradedPkg] }, view);
+    const start = output.indexOf("## Target compatibility");
+    const end = output.indexOf("## Imprecise licenses");
+    const section = output.slice(start, end === -1 ? undefined : end);
+
+    expect(section.includes("boundary-pkg")).toBe(true);
+    expect(section.includes("residual-pkg")).toBe(true);
+    expect(section.includes("dev-downgraded-pkg")).toBe(true);
+  });
+
+  test("held-for-internal-use list rows every target:internal-use verdict", () => {
+    const heldPkg = entry({
+      purl: "pkg:npm/held-pkg@1.0.0",
+      name: "held-pkg",
+      version: "1.0.0",
+      licenseClaims: [{ raw: "GPL-3.0-only", kind: "spdx-id", source: "generator" }],
+      finding: {
+        expression: "GPL-3.0-only",
+        elected: "GPL-3.0-only",
+        source: "generator",
+        confidence: "exact",
+      },
+    });
+    const view: PolicyView = {
+      policyPath: "policy.toml",
+      suppressedWorkspaces: [],
+      verdicts: [
+        {
+          purl: "pkg:npm/held-pkg@1.0.0",
+          occurrenceTarget: "apps/a",
+          status: "ok",
+          rule: "target:internal-use",
+          reason: "held out of scope for internal use",
+        },
+      ],
+    };
+    const output = renderMarkdown({ packages: [heldPkg] }, view);
+    const section = output.slice(output.indexOf("## Target compatibility"));
+
+    expect(section.includes("held-pkg@1.0.0 in apps/a")).toBe(true);
+    expect(section.includes("held out of scope for internal use")).toBe(true);
+  });
+
+  test("Problematic dedup: a purl carrying a fail verdict anywhere never rows here", () => {
+    const dedupedPkg = entry({
+      purl: "pkg:npm/deduped-pkg@1.0.0",
+      name: "deduped-pkg",
+      version: "1.0.0",
+      occurrences: [
+        { target: "apps/a", isDevDependency: false },
+        { target: "apps/b", isDevDependency: false },
+      ],
+      licenseClaims: [{ raw: "GPL-3.0-only", kind: "spdx-id", source: "generator" }],
+      finding: {
+        expression: "GPL-3.0-only",
+        elected: "GPL-3.0-only",
+        source: "generator",
+        confidence: "exact",
+      },
+    });
+    const view: PolicyView = {
+      policyPath: "policy.toml",
+      suppressedWorkspaces: [],
+      verdicts: [
+        {
+          purl: "pkg:npm/deduped-pkg@1.0.0",
+          occurrenceTarget: "apps/a",
+          status: "fail",
+          rule: "target:incompatible",
+          reason: "incompatible",
+        },
+        {
+          purl: "pkg:npm/deduped-pkg@1.0.0",
+          occurrenceTarget: "apps/b",
+          status: "ok",
+          rule: "target:internal-use",
+          reason: "held out of scope",
+        },
+      ],
+    };
+    const output = renderMarkdown({ packages: [dedupedPkg] }, view);
+    const problematicStart = output.indexOf("## Problematic licenses");
+    const problematicEnd = output.indexOf("## Copyleft and special notices");
+
+    expect(output.includes("## Target compatibility")).toBe(false);
+    expect(output.slice(problematicStart, problematicEnd).includes("deduped-pkg")).toBe(true);
+  });
+});

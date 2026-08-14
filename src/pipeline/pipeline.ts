@@ -23,6 +23,7 @@ import { annotateFindings } from "../normalize/normalize";
 import { BUILTIN_OVERRIDES } from "../policy/builtinOverrides";
 import { acceptedContainerNotices, evaluate } from "../policy/evaluate";
 import { parsePolicy, type Policy } from "../policy/schema";
+import { suppressionOverlapNotices, unusedWorkspaceTargetWarnings } from "../policy/target";
 import { alignTables } from "../render/alignTables";
 import { renderCyclonedx } from "../render/cyclonedx";
 import { renderMarkdown, type PolicyView } from "../render/markdown";
@@ -569,6 +570,22 @@ function resolveDevelopmentContainers(
 }
 
 /**
+ * Target-lane adoption/shadowing hygiene (policy/target.ts's two pure builders) - printed alongside
+ * the policy summary, policy runs only. Every value is policy- or SBOM-derived, so it routes
+ * through sanitizeForLog exactly like writePolicySummary's own lines. Split out of buildOutputs to
+ * keep it within the complexity budget.
+ */
+function writeTargetHygieneNotices(model: CanonicalDependencies, policy: Policy): void {
+  for (const message of unusedWorkspaceTargetWarnings(model, policy)) {
+    process.stderr.write(`policy warning: ${sanitizeForLog(message)}\n`);
+  }
+
+  for (const message of suppressionOverlapNotices(policy)) {
+    process.stderr.write(`policy: ${sanitizeForLog(message)}\n`);
+  }
+}
+
+/**
  * Project the PolicyView the document renderer consumes. The policy pointer path is
  * repo-root-relative (policyPointerPath) so the committed bytes stay stable across platforms. The
  * author-supplied [document] title + preamble flow into the licenses-document renderer only (never
@@ -704,6 +721,7 @@ export async function buildOutputs(opts: GenerateOptions): Promise<BuiltOutputs>
   if (policy !== undefined && opts.policyPath !== undefined) {
     verdicts = evaluate(scoped, policy);
     writePolicySummary(policy, verdicts, usedClarifyIndices);
+    writeTargetHygieneNotices(scoped, policy);
     policyView = projectPolicyView(
       policy,
       policyPointerPath(opts),

@@ -30,28 +30,45 @@ regardless.
 
 `renderMarkdown` places every package into two different kinds of section, in
 this fixed order: package counts, Problematic licenses (policy run only),
-Copyleft and special notices (policy run only), Imprecise licenses, Assessment
-conflicts, Containers, Production dependencies, Development-only dependencies.
-See [output-format.md](./output-format.md) for what each column means; this
+Copyleft and special notices (policy run only), Target compatibility (policy
+run only, and only when the target lane produced a warn or held-internal
+row), Imprecise licenses, Assessment conflicts, Containers, Production
+dependencies, Development-only dependencies. See
+[output-format.md](./output-format.md) for what each column means; this
 page states only where a package lands.
 
 ### Narrative sections (verdict- or finding-driven, deduped)
 
 - **Problematic licenses** — every `fail` verdict, grouped by (purl, rule,
   reason). Takes precedence over the whole Copyleft and special notices
-  section below: a purl carrying a fail anywhere never rows in that section's
-  flagged table, and never appears in its accepted-notice list either.
+  section, and the whole Target compatibility section, below: a purl carrying
+  a fail anywhere never rows in either section's flagged table, and never
+  appears in an accepted/held list either.
 - **Copyleft and special notices** — three independent parts:
   - The suppressed-workspaces list, shown whenever policy configures any,
-    whether or not it currently suppresses anything.
+    whether or not it currently suppresses anything. A suppression a declared
+    target governs never decides anything (the target-compatibility lane
+    intercepts the occurrence first — see
+    [dependency-classification.md](./dependency-classification.md)), but it
+    still renders here unconditionally when configured; `policy/target.ts`'s
+    `suppressionOverlapNotices` is a stderr-only diagnostic, not a placement
+    change.
   - Accepted-AGPL container notices: a scope-`os` package whose AGPL
     obligation (a precise leaf, or the imprecise `AGPL` token) was accepted
-    through a `[[compatible]]` rule at some occurrence, excluded when the
-    purl also carries a fail elsewhere.
+    through a `[[compatible]]` rule at some occurrence, OR demoted to a
+    routine `ok` by a complete project target profile's `network = false`
+    (`[os_dependencies] = "ignore"`) — both excluded when the purl also
+    carries a fail elsewhere. Either acceptance path renders identically here
+    (a bullet naming the accepting/demoting rule and its reason); the
+    declared-`network` reason names the demotion basis instead of a
+    `[[compatible]]` citation.
   - Flagged rows: scope is not `os`, the purl isn't already in Problematic,
     and it carries at least one fail or warn verdict whose rule is *exactly*
     `default:copyleft` — an imprecise-copyleft warn never qualifies here, only
-    in Imprecise licenses below.
+    in Imprecise licenses below. A target-governed occurrence's copyleft never
+    reaches `default:copyleft` at all (it decided target:ok/target:incompatible/etc
+    already), so it never rows here either — see Target compatibility below
+    for where a target-governed occurrence's warn/held rows instead.
 
   A system package's non-AGPL copyleft never rows here — it's routine, and
   excluded by scope alone, regardless of its verdict. Acceptance via
@@ -59,9 +76,23 @@ page states only where a package lands.
   ecosystem and scope, because an accepted occurrence never reaches the
   copyleft lane at all
   ([dependency-classification.md](./dependency-classification.md), tier 4
-  decides first); the accepted-notice mechanism above exists only for the one
-  case that would otherwise fail unconditionally, the container-system AGPL
-  escalation.
+  decides first); the accepted-notice mechanism above exists only for the two
+  cases that would otherwise fail (or go silently `ok`) unconditionally, the
+  container-system AGPL escalation and its network=false-demoted sibling.
+- **Target compatibility** — policy run only, and only rendered at all when at
+  least one row qualifies (unlike Copyleft, an empty lane renders no heading).
+  Two independent parts, both excluding a purl already in Problematic:
+  - A flagged table (the same row shape as Copyleft's) for every
+    `target:boundary`, `target:unknown-pair`, or dev-downgraded
+    `target:incompatible` (status `warn`) verdict.
+  - A "held for internal use" bullet list for every `target:internal-use`
+    (status `ok`) verdict — the usage profile takes the obligation out of
+    scope, but the row stays visible for the day the profile flips (never
+    silent, unlike a bare `ok` would be).
+
+  A `target:ok` verdict never rows here (it is a clean pass, exactly like
+  `default:ok`); an `incompatible`/`residual` fail routes to Problematic
+  instead, per the dedup above.
 - **Imprecise licenses** — every package whose finding is imprecise,
   unconditionally, independent of its verdict. This overlaps the sections
   above by design: a bare-`AGPL` system package that fails
@@ -122,19 +153,25 @@ helpers).
 ## Invariants
 
 - Every package has exactly one Production/Development-only classification.
-- A purl in Problematic never rows in Copyleft, but keeps its inventory row
-  and its Assessment-conflicts row when it carries a conflict marker.
+- A purl in Problematic never rows in Copyleft or Target compatibility, but
+  keeps its inventory row and its Assessment-conflicts row when it carries a
+  conflict marker.
 - An AGPL obligation is always visible: a fail routes to Problematic, an
-  accepted system AGPL routes to a special notice, and it is never silently
-  absent.
+  accepted system AGPL (via `[[compatible]]` or a declared `network = false`
+  demotion) routes to a special notice, and it is never silently absent.
 - Routine system copyleft (anything but AGPL) appears only under its
   container, never in the Copyleft section.
+- A `target:internal-use` row always renders in Target compatibility's held
+  list — never silently absorbed into a bare inventory row.
+- Absent a `[target]` table, the Target compatibility section never renders
+  at all, and every other section's bytes are identical to the same run with
+  no `[target]` table.
 - The report is byte-deterministic: fixed section order, stable sorts
   throughout.
 
 ## Path index (verified end to end)
 
-The same 26 paths as
+The same 45 paths as
 [dependency-classification.md](./dependency-classification.md#path-index-verified-end-to-end),
 one row each, stating where the package lands in the markdown report instead
 of its Stage-1/Stage-2 outcome — the two tables share one slug set, verified
@@ -168,3 +205,22 @@ by the same suite (`test/reportPlacement.test.ts`).
 | `denied-license-terminal` | a `[[deny]]` match with a `[[compatible]]` rule that would otherwise accept it | Problematic licenses (deny is terminal) |
 | `system-package-in-dev-container-counts-dev` | apk permissive package whose only container is dev-marked | counted Development-only (via the container's classification); System packages table under the Development-only subsection |
 | `cross-image-claim-divergence` | apk purl baked into two prod containers with different declared licenses | Problematic licenses + Assessment conflicts (Cross-image license claims sub-table) + both containers' System packages tables |
+| `target-ok-permissive` | MIT dep under a (MIT, network=false, external) target | Production dependencies (app table) only |
+| `target-incompatible-prod` | GPL-3.0-only dep under a (MIT, external) target, prod occurrence | Problematic licenses |
+| `target-incompatible-dev-downgrade` | same finding, dev occurrence, `dev_dependencies = "warn"` | Target compatibility (flagged table) + Development-only dependencies (app table) |
+| `target-apache-gpl2-incompatible` | Apache-2.0 dep under a (GPL-2.0-only, external) target | Problematic licenses |
+| `target-or-election-flip` | `Apache-2.0 OR GPL-2.0-only` dep under a (GPL-2.0-only, external) target | Production dependencies (app table); the License column shows the full unelected expression, byte-identical to the no-target run |
+| `target-proprietary-boundary-external` | LGPL-2.1-only dep under a (proprietary, network=true, external) target | Target compatibility (flagged table) + Production dependencies (app table) |
+| `target-unknown-pair-residual` | a matrix-uncovered pair, `unknown_pair` absent then `"fail"` | Target compatibility (flagged table) with `unknown_pair` absent; Problematic licenses with `unknown_pair = "fail"` |
+| `target-internal-holds-gpl` | GPL-3.0-only dep under a (MIT, network=false, internal) target | Target compatibility (held-for-internal-use list) + Production dependencies (app table) |
+| `target-internal-network-agpl-fails` | AGPL-3.0-only dep under a (MIT, network=true, internal) target | Problematic licenses |
+| `target-network-agpl-absorbed` | AGPL-3.0-only dep under an (AGPL-3.0-only, network=true, external) target, container occurrence | Production dependencies (app table) + that container's Application packages table |
+| `target-network-false-agpl-internal-held` | AGPL-3.0-only dep under a (MIT, network=false, internal) target | Target compatibility (held-for-internal-use list) |
+| `target-internal-nondistribution-conflict-stays` | Apache-2.0 dep under a (GPL-2.0-only, network=false, internal) target | Problematic licenses |
+| `target-workspace-divergence` | one purl, two workspace occurrences under diverging per-workspace targets | Problematic licenses (any-fail rule), naming workspace A's profile; inventory row in both workspaces |
+| `target-container-app-ecosystem` | npm GPL-3.0-only baked into a prod container, project (GPL-3.0-only, external) target | Production dependencies is n/a (container-only); that container's Application packages table |
+| `target-os-agpl-network-true-escalates` | apk AGPL-3.0-only, project target `network = true` | Problematic licenses (unchanged escalation) |
+| `target-os-agpl-network-false-routine` | same package (precise and imprecise), project target `network = false`, `os_dependencies = "warn"` | that container's System packages table; not Problematic, not Copyleft |
+| `target-os-scope-untouched` | apk GPL-2.0-only under any target profile | that container's System packages table (byte-identical to the no-target run) |
+| `target-supersedes-suppression` | a governed occurrence matching a family-justified `[[workspace.copyleft_suppressed]]` | Production dependencies (app table) only; no suppressed-workspaces entry decides it |
+| `target-os-agpl-network-false-ignored-notice` | apk AGPL-3.0-only, project target `network = false`, `os_dependencies = "ignore"` | accepted-AGPL notice in Copyleft and special notices; not Problematic |

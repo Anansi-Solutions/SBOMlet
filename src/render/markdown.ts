@@ -8,19 +8,20 @@
  * Document order (locked): title, dateless auto-generated header, policy pointer line (policy runs
  * only), package-counts block, problematic licenses roll-up (policy runs only), copyleft and
  * special notices (policy runs only - container system-package copyleft is excluded as routine, and
- * a package already flagged Problematic never duplicates into this section), imprecise licenses,
- * assessment conflicts, the Containers index (occurrence-derived, rendered with or without a policy
- * view), then Production and Development-only dependencies. Each of those two sections is the app
- * table followed by one "### Container: docker:<source>" subsection per container classified into
- * that half - a container's complete package inventory lists there, grouped by the docker:<source>
- * occurrence identity INDEPENDENT of scope (a package shared with an app workspace lists in both
- * places), with no separate Docker section. Each subsection further splits into a "**System
- * packages**" table (the OS-ecosystem allowlist) and an "**Application packages**" table
- * (everything else), omitting an empty half. The License column shows the full normalized
- * expression when a finding exists - never only the elected branch; election surfaces through
- * copyleft section membership instead. Without a policy view there is no policy pointer and no
- * problematic roll-up or copyleft section, and every container classifies production (the
- * conservative default).
+ * a package already flagged Problematic never duplicates into this section), target compatibility
+ * (policy runs only, and only when the target lane produced a warn or held-internal row - no
+ * heading otherwise), imprecise licenses, assessment conflicts, the Containers index
+ * (occurrence-derived, rendered with or without a policy view), then Production and
+ * Development-only dependencies. Each of those two sections is the app table followed by one "###
+ * Container: docker:<source>" subsection per container classified into that half - a container's
+ * complete package inventory lists there, grouped by the docker:<source> occurrence identity
+ * INDEPENDENT of scope (a package shared with an app workspace lists in both places), with no
+ * separate Docker section. Each subsection further splits into a "**System packages**" table (the
+ * OS-ecosystem allowlist) and an "**Application packages**" table (everything else), omitting an
+ * empty half. The License column shows the full normalized expression when a finding exists - never
+ * only the elected branch; election surfaces through copyleft section membership instead. Without a
+ * policy view there is no policy pointer and no problematic roll-up or copyleft section, and every
+ * container classifies production (the conservative default).
  *
  * This module deliberately does not render the notices companion, emit CycloneDX, or evaluate
  * policy - verdicts and suppressed workspaces arrive pre-computed in the PolicyView projection.
@@ -39,6 +40,12 @@ import {
   type PackageEntry,
   type Verdict,
 } from "../model/dependencies";
+import {
+  TARGET_RULE_BOUNDARY,
+  TARGET_RULE_INCOMPATIBLE,
+  TARGET_RULE_INTERNAL_USE,
+  TARGET_RULE_UNKNOWN_PAIR,
+} from "../policy/compat";
 import { OS_PACKAGE_ECOSYSTEMS } from "../policy/osEcosystems";
 import { isUnknownLicense } from "./unknownLicense";
 import type { AcceptedContainerNotice } from "../policy/evaluate";
@@ -1014,6 +1021,107 @@ function copyleftSectionLines(sorted: readonly PackageEntry[], policyView: Polic
   return lines;
 }
 
+/** The target-lane warn rule ids that row in the flagged table (never a bare `target:ok`). */
+const TARGET_WARN_RULES: ReadonlySet<string> = new Set([
+  TARGET_RULE_BOUNDARY,
+  TARGET_RULE_UNKNOWN_PAIR,
+  TARGET_RULE_INCOMPATIBLE,
+]);
+
+/**
+ * The "## Target compatibility" section - policy runs only, rendered after Copyleft and special
+ * notices, and ONLY when at least one target:* warn or held-internal row exists (unlike the
+ * Copyleft section, an absent lane renders no heading at all - no blank-line drift on a no-target
+ * document). Two parts, in order:
+ *   - a flagged table (the copyleft-section row shape) for every target:boundary,
+ *     target:unknown-pair, or dev-downgraded target:incompatible (status "warn") verdict;
+ *   - a "Held for internal use" bullet list for every target:internal-use (status "ok") verdict -
+ *   the
+ *     usage profile takes the obligation out of scope, but the row stays enumerable for the day the
+ *     profile flips (the internal-use hold's own repudiation mitigation).
+ * The Problematic dedup applies to both parts: a purl carrying a fail verdict anywhere never rows
+ * here, matching the Copyleft section's own dedup. Deterministic sort: comparePackages order,
+ * already the caller's `sorted` order.
+ */
+function targetSectionLines(sorted: readonly PackageEntry[], policyView: PolicyView): string[] {
+  const verdictsByPurl = new Map<string, Verdict[]>();
+
+  for (const verdict of policyView.verdicts) {
+    const list = verdictsByPurl.get(verdict.purl);
+
+    if (list === undefined) {
+      verdictsByPurl.set(verdict.purl, [verdict]);
+    } else {
+      list.push(verdict);
+    }
+  }
+
+  const problematicPurls = new Set(
+    policyView.verdicts
+      .filter((verdict) => verdict.status === "fail")
+      .map((verdict) => verdict.purl),
+  );
+
+  const warnRows: string[] = [];
+  const heldLines: string[] = [];
+
+  for (const pkg of sorted) {
+    if (problematicPurls.has(pkg.purl)) {
+      continue;
+    }
+
+    const relevant = verdictsByPurl.get(pkg.purl) ?? [];
+    const warns = relevant.filter(
+      (verdict) => verdict.status === "warn" && TARGET_WARN_RULES.has(verdict.rule),
+    );
+
+    if (warns.length > 0) {
+      const targets = [...new Set(warns.map((verdict) => verdict.occurrenceTarget))].sort(
+        compareCodeUnits,
+      );
+
+      warnRows.push(copyleftRow(pkg, targets));
+    }
+
+    const held = relevant
+      .filter((verdict) => verdict.status === "ok" && verdict.rule === TARGET_RULE_INTERNAL_USE)
+      .sort((a, b) => compareCodeUnits(a.occurrenceTarget, b.occurrenceTarget));
+
+    for (const verdict of held) {
+      heldLines.push(
+        `- ${escapeCell(pkg.name)}@${escapeCell(pkg.version)} in ${escapeCell(verdict.occurrenceTarget)} — ${escapeCell(verdict.reason)}`,
+      );
+    }
+  }
+
+  if (warnRows.length === 0 && heldLines.length === 0) {
+    return [];
+  }
+
+  const lines: string[] = ["## Target compatibility", ""];
+
+  if (warnRows.length > 0) {
+    lines.push(
+      "The packages listed below need review against the declared target profile.",
+      "",
+      ...COPYLEFT_HEAD,
+      ...warnRows,
+      "",
+    );
+  }
+
+  if (heldLines.length > 0) {
+    lines.push(
+      "Held out of scope for internal use - visible for the day the distribution profile flips:",
+      "",
+      ...heldLines,
+      "",
+    );
+  }
+
+  return lines;
+}
+
 export function renderMarkdown(model: CanonicalDependencies, policyView?: PolicyView): string {
   // Defensive re-sort: the renderer must not trust input order.
   const sorted = [...model.packages].sort(comparePackages);
@@ -1053,6 +1161,12 @@ export function renderMarkdown(model: CanonicalDependencies, policyView?: Policy
   // Copyleft and special notices - policy runs only.
   if (policyView !== undefined) {
     lines.push(...copyleftSectionLines(sorted, policyView));
+  }
+
+  // Target compatibility - policy runs only, and only when the lane produced a warn/held-internal
+  // row (targetSectionLines returns [] otherwise - no heading, no blank-line drift).
+  if (policyView !== undefined) {
+    lines.push(...targetSectionLines(sorted, policyView));
   }
 
   // Imprecise-licenses review section - finding-level (rendered with or without a policy view).

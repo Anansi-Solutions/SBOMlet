@@ -25,20 +25,36 @@
  *      compatible[i] - excluded from copyleft flagging everywhere.
  *   2. compatible match="license": satisfies(finding.expression, rule.allowlist) against the
  *      pre-decomposed allowlist from schema validation → ok, compatible[i].
- *   3. copyleft-flagged (isCopyleft on the elected branch - an OR with a permissive branch elects
+ *   3. The target-compatibility lane (targetLaneVerdict / targetVerdict, wiring policy/target.ts's
+ *      resolveTargetProfile into compat/classify.ts's classifyExpression) - active only when BOTH a
+ *      governing target profile resolves for this occurrence AND the finding has a parseable
+ *      (non-imprecise, non-null) expression; os-scope packages never enter this lane. Five
+ *      outcomes: compatible → overrideCitation ?? target:ok; held-internal (a
+ *      copyleft/AGPL obligation the usage profile takes out of scope) → ok target:internal-use;
+ *      boundary → warn target:boundary; incompatible → fail target:incompatible (dev-downgraded via
+ *      applyDevScope); a matrix-uncovered pair → the unknown_pair knob (warn/fail, fail also
+ *      dev-downgraded). A ref-carrying elected branch (under the target-aware election) instead
+ *      falls through to the unchanged unknown lane below, never target:ok. Absent a governing
+ *      profile, or on an imprecise/null finding, this lane is a no-op and today's walk is
+ *      byte-identical.
+ *   4. copyleft-flagged (isCopyleft on the elected branch - an OR with a permissive branch elects
  *      the permissive branch and is not copyleft) and the occurrence target is or is under a
  *      suppressed path and the suppression is family-justified (the elected expression satisfies
  *      the workspace's declared license, or every copyleft leaf in it is in a finding-family the
  *      workspace license family absorbs per the literal WORKSPACE_ABSORBS relation - an AGPL-3.0
  *      workspace absorbs GNU-family GPL/LGPL deps and MPL deps it bundles, but never SSPL or
  *      CC-BY-SA) → suppressed, workspace.copyleft_suppressed[i]. A path match without family
- *      justification falls through to the normal default chain.
- *   4. Defaults: copyleft → fail (default:copyleft, reason names the elected expression and the
- *      occurrence target); unknown finding → policy.unknownHandling as warn or fail
- *      (default:unknown); elected content that still carries a LicenseRef-/DocumentRef- leaf after
- *      election (a bare ref, or an AND that keeps one alongside a known conjunct) → same
- *      default:unknown handling, never default:ok - its content is unknowable to the tool;
- *      otherwise ok (default:ok).
+ *      justification falls through to the normal default chain. A target-governed occurrence never
+ *      reaches this tier at all (tier 3 above decides it first), so a suppression entry a target
+ *      governs is effectively dead there - see policy/target.ts's suppressionOverlapNotices.
+ *   5. Defaults: copyleft → fail (default:copyleft, reason names the elected expression and the
+ *      occurrence target; an os-scope AGPL leaf escalates to default:agpl-container unless a
+ *      complete project target profile declares network = false, which demotes it to the routine
+ *      would-be default:copyleft fail instead, the reason naming the declared basis); unknown
+ *      finding → policy.unknownHandling as warn or fail (default:unknown); elected content that
+ *      still carries a LicenseRef-/DocumentRef- leaf after election (a bare ref, or an AND that
+ *      keeps one alongside a known conjunct) → same default:unknown handling, never default:ok
+ *      - its content is unknowable to the tool; otherwise ok (default:ok).
  *   Clarify sits above all of these by having already replaced the finding in annotateFindings; a
  *   clarified package whose verdict falls through to
  *   default:ok cites clarify[i] instead, so usage stays visible.
@@ -73,9 +89,26 @@ import {
   type ExpressionNode,
 } from "../normalize/expression";
 import { BUILTIN_DENY_RULE_ID } from "./builtinDenylist";
+import {
+  classifyExpression,
+  formatProfileLabel,
+  targetBoundaryReason,
+  targetIncompatibleReason,
+  targetInternalUseReason,
+  targetOkReason,
+  targetUnknownPairReason,
+  TARGET_RULE_BOUNDARY,
+  TARGET_RULE_INCOMPATIBLE,
+  TARGET_RULE_INTERNAL_USE,
+  TARGET_RULE_OK,
+  TARGET_RULE_UNKNOWN_PAIR,
+  type ReasonContext,
+  type TargetProfile,
+} from "./compat";
 import { AGPL_IDS, COPYLEFT_FAMILY } from "./copyleft";
 import { COULD_BE_COPYLEFT_FAMILIES, WORKSPACE_ABSORBS } from "./copyleftFamily";
 import { denyRuleFor, type IndexedDenyRule } from "./denylist";
+import { resolveTargetProfile } from "./target";
 import type {
   CompatibleLicenseRule,
   CompatiblePackageRule,
@@ -95,6 +128,15 @@ interface Assessment {
    * surviving LicenseRef-/DocumentRef- leaf).
    */
   electedNode: ExpressionNode | null;
+  /**
+   * The PRE-election parsed node - null exactly when `electedNode` is null. The target lane's
+   * classifyExpression needs the raw tree, never the already-elected branch: elect()'s own
+   * non-target-aware preference can discard the branch a target-aware election would have picked
+   * (the Apache-2.0-vs-GPL-2.0-only counterexample - see compat/classify.ts's module doc), so
+   * feeding it the post-election node would silently pre-discard what the lane exists to recover.
+   * Inert when no target is declared - nothing else reads it.
+   */
+  rawNode: ExpressionNode | null;
   /** isCopyleft on the elected node - the elected branch decides. */
   copyleft: boolean;
   /**
@@ -109,6 +151,7 @@ const UNKNOWN_ASSESSMENT: Assessment = {
   expression: null,
   elected: null,
   electedNode: null,
+  rawNode: null,
   copyleft: false,
 };
 
@@ -144,6 +187,7 @@ function assessPackage(entry: PackageEntry): Assessment {
       expression,
       elected: renderNode(electedNode),
       electedNode,
+      rawNode: node,
       copyleft: isCopyleft(electedNode),
     };
   } catch {
@@ -350,13 +394,59 @@ function clarifyIndexFor(entry: PackageEntry, policy: Policy): number {
  *     fail purely for being imprecise.
  * The latter two are status "warn": visible in the summary, non-gating by default.
  */
+/**
+ * The declared-network basis clause appended to a demoted AGPL-container reason: a complete project
+ * target profile's `network` flag now OWNS the "containers are network-deployed" applicability fact
+ * the AGPL-container heuristic used to guess (the container-design reconciliation) - `network =
+ * false` takes the AGPL section-13 obligation out of scope, and the routine os-scope copyleft
+ * treatment decides from there.
+ */
+function declaredNetworkFalseBasis(): string {
+  return (
+    "the declared target profile's network = false takes the AGPL section-13 obligation out of " +
+    "scope (not network-deployed per the declaration) — treated as routine base-image copyleft"
+  );
+}
+
+/**
+ * The imprecise mirror of {@link demotedAgplContainerVerdict}: a bare-`AGPL` os-scope package under
+ * a complete project profile with `network = false` demotes to the routine would-be
+ * default:copyleft fail (through {@link applyScopeDowngrades}, i.e. `[os_dependencies]`) instead
+ * of the escalation, the reason naming the declared basis.
+ */
+function demotedImpreciseAgplVerdict(
+  base: { purl: string; occurrenceTarget: string },
+  entry: PackageEntry,
+  occurrence: Occurrence,
+  target: string,
+  policy: Policy,
+): Verdict {
+  const failVerdict: Verdict = {
+    ...base,
+    status: "fail",
+    rule: "default:copyleft",
+    reason: `imprecise license family "AGPL" in container system package "${target}" would normally escalate to the network-copyleft obligation, but ${declaredNetworkFalseBasis()}`,
+  };
+
+  return applyScopeDowngrades(failVerdict, entry, occurrence, policy);
+}
+
 function impreciseVerdict(
   base: { purl: string; occurrenceTarget: string },
-  target: string,
+  entry: PackageEntry,
+  occurrence: Occurrence,
   family: string,
-  scope: PackageEntry["scope"],
+  policy: Policy,
 ): Verdict {
-  if (scope === "os" && family === "AGPL") {
+  const target = occurrence.target;
+
+  if (entry.scope === "os" && family === "AGPL") {
+    const profile = policy.target?.profile;
+
+    if (profile !== undefined && !profile.network) {
+      return demotedImpreciseAgplVerdict(base, entry, occurrence, target, policy);
+    }
+
     return {
       ...base,
       status: "fail",
@@ -833,6 +923,30 @@ function agplContainerVerdict(
 }
 
 /**
+ * A complete project target profile's `network = false` demotes the precise AGPL-container
+ * escalation to the routine would-be default:copyleft fail (through {@link applyScopeDowngrades},
+ * i.e. `[os_dependencies]`), the reason naming the declared basis - the explicit flag now owns the
+ * applicability fact the escalation used to guess (the container-design reconciliation).
+ */
+function demotedAgplContainerVerdict(
+  base: { purl: string; occurrenceTarget: string },
+  entry: PackageEntry,
+  occurrence: Occurrence,
+  target: string,
+  elected: string,
+  policy: Policy,
+): Verdict {
+  const failVerdict: Verdict = {
+    ...base,
+    status: "fail",
+    rule: "default:copyleft",
+    reason: `copyleft license "${elected}" in container system package "${target}" carries an AGPL leaf that would normally escalate to the network-copyleft obligation, but ${declaredNetworkFalseBasis()}`,
+  };
+
+  return applyScopeDowngrades(failVerdict, entry, occurrence, policy);
+}
+
+/**
  * Copyleft lane: a copyleft elected branch is suppressed when its occurrence sits in a
  * family-justified suppressed workspace; otherwise an os-scope package whose elected expression
  * carries an AGPL leaf escalates to a real fail (agplContainerVerdict, checked before the scope
@@ -876,6 +990,19 @@ function copyleftVerdict(
     assessment.elected !== null &&
     copyleftLeafIds(assessment.electedNode).some((id) => AGPL_IDS.has(id))
   ) {
+    const profile = policy.target?.profile;
+
+    if (profile !== undefined && !profile.network) {
+      return demotedAgplContainerVerdict(
+        base,
+        entry,
+        occurrence,
+        target,
+        assessment.elected,
+        policy,
+      );
+    }
+
     return agplContainerVerdict(base, target, assessment.elected);
   }
 
@@ -890,6 +1017,176 @@ function copyleftVerdict(
     occurrence,
     policy,
   );
+}
+
+/**
+ * The target-compatibility lane: decides a governed, parseable (non-imprecise, non-null) occurrence
+ * against its resolved {@link TargetProfile} via the wave-2 engine (compat/classify.ts
+ * + compat/profile.ts), returning undefined when the lane should NOT decide - the caller then
+ * falls through to today's copyleft/imprecise/unknown walk unchanged. Two cases return undefined:
+ * the elected branch still carries a LicenseRef-/DocumentRef- leaf after the TARGET-AWARE election
+ * (an opaque reference's content is unknowable to the tool, so it routes to the existing [unknown]
+ * handling, never `target:ok`); and a defensive `unassessed-ref` fallthrough that can never
+ * actually be reached given the check above (the modulated class is only ever `unassessed-ref` when
+ * a ref leaf survives into `result.elected`).
+ *
+ * Maps classifyExpression's five ModulatedClass outcomes: `compatible` → `overrideCitation` first
+ * (a clarified package landing target:ok keeps citing `clarify[i]`), else `target:ok`;
+ * `held-internal` → ok `target:internal-use` (never overrideCitation - the distinct id must always
+ * stay visible, even for a clarified package, per the internal-use hold's own repudiation
+ * mitigation); `boundary` → warn `target:boundary`; `incompatible` → fail `target:incompatible`,
+ * composed with `applyDevScope` (a dev-only occurrence downgrades exactly like `default:copyleft`
+ * does); `residual` → the `unknown_pair` knob (warn by default), a `fail` position also composed
+ * with `applyDevScope`. `os` never reaches this lane at all (the caller gates on `entry.scope !==
+ * "os"` before calling) - the os reconciliation lives in copyleftVerdict/impreciseVerdict instead,
+ * so `applyDevScope` alone (never the os leg of `applyScopeDowngrades`) is the correct, and only,
+ * downgrade here.
+ */
+function targetVerdict(
+  base: { purl: string; occurrenceTarget: string },
+  entry: PackageEntry,
+  occurrence: Occurrence,
+  assessment: Assessment,
+  profile: TargetProfile,
+  policy: Policy,
+): Verdict | undefined {
+  if (assessment.rawNode === null) {
+    return undefined;
+  }
+
+  const result = classifyExpression(profile, assessment.rawNode);
+
+  if (hasRefLeaf(result.elected)) {
+    return undefined;
+  }
+
+  const ctx: ReasonContext = {
+    elected: renderNode(result.elected),
+    occurrenceTarget: occurrence.target,
+    profileLabel: formatProfileLabel(profile),
+    source: result.sources.join("; "),
+  };
+
+  switch (result.class) {
+    case "compatible": {
+      const citation = overrideCitation(
+        entry,
+        base,
+        occurrence.target,
+        assessment.expression,
+        policy,
+      );
+
+      return (
+        citation ?? { ...base, status: "ok", rule: TARGET_RULE_OK, reason: targetOkReason(ctx) }
+      );
+    }
+
+    case "held-internal":
+      return {
+        ...base,
+        status: "ok",
+        rule: TARGET_RULE_INTERNAL_USE,
+        reason: targetInternalUseReason(ctx),
+      };
+    case "boundary":
+      return {
+        ...base,
+        status: "warn",
+        rule: TARGET_RULE_BOUNDARY,
+        reason: targetBoundaryReason(ctx),
+      };
+    case "incompatible":
+      return applyDevScope(
+        {
+          ...base,
+          status: "fail",
+          rule: TARGET_RULE_INCOMPATIBLE,
+          reason: targetIncompatibleReason(ctx),
+        },
+        occurrence,
+        policy,
+      );
+    case "residual": {
+      const knob = policy.target?.unknownPair ?? "warn";
+      const verdict: Verdict = {
+        ...base,
+        status: knob,
+        rule: TARGET_RULE_UNKNOWN_PAIR,
+        reason: targetUnknownPairReason(ctx),
+      };
+
+      return knob === "fail" ? applyDevScope(verdict, occurrence, policy) : verdict;
+    }
+
+    case "unassessed-ref":
+      return undefined;
+  }
+}
+
+/**
+ * Tier 1/2 compatible-rule verdict (package form pinned before license form, mirroring the caller's
+ * own selection order), split out of verdictFor to keep the precedence walk within the complexity
+ * budget. Returns undefined when neither rule matched, so the caller falls through to the lanes
+ * below.
+ */
+function compatibleRuleVerdict(
+  base: { purl: string; occurrenceTarget: string },
+  assessment: Assessment,
+  packageRule: IndexedRule<CompatiblePackageRule> | undefined,
+  licenseRule: IndexedRule<CompatibleLicenseRule> | undefined,
+): Verdict | undefined {
+  if (packageRule !== undefined) {
+    const { index, rule } = packageRule;
+    const pin = rule.version === undefined ? "" : `@${rule.version}`;
+
+    return {
+      ...base,
+      status: "ok",
+      rule: `compatible[${index}]`,
+      reason: `package "${rule.name}${pin}" accepted by compatible package rule: ${rule.reason}`,
+    };
+  }
+
+  if (licenseRule !== undefined) {
+    const { index, rule } = licenseRule;
+
+    return {
+      ...base,
+      status: "ok",
+      rule: `compatible[${index}]`,
+      reason: `"${assessment.expression}" satisfies compatible license pattern "${rule.pattern}": ${rule.reason}`,
+    };
+  }
+
+  return undefined;
+}
+
+/**
+ * Activation gate for {@link targetVerdict}, split out of verdictFor to keep the precedence walk
+ * within the complexity budget: os-scope never activates the lane (the AGPL-container/network
+ * reconciliation lives in copyleftVerdict/impreciseVerdict instead, gated on entry.scope === "os"
+ * there); an imprecise/null finding (no rawNode) never activates it either; otherwise a governing
+ * profile is resolved once per occurrence and, when present, targetVerdict decides.
+ */
+function targetLaneVerdict(
+  base: { purl: string; occurrenceTarget: string },
+  entry: PackageEntry,
+  occurrence: Occurrence,
+  assessment: Assessment,
+  policy: Policy,
+): Verdict | undefined {
+  if (entry.scope === "os" || assessment.rawNode === null) {
+    return undefined;
+  }
+
+  const profile = resolveTargetProfile(occurrence.target, policy);
+
+  if (profile === undefined) {
+    return undefined;
+  }
+
+  return targetVerdict(base, entry, occurrence, assessment, profile, policy);
 }
 
 /** Walk the precedence chain for one (package × occurrence). */
@@ -928,27 +1225,20 @@ function verdictFor(
     return conflictVerdict(base, entry, conflict);
   }
 
-  if (packageRule !== undefined) {
-    const { index, rule } = packageRule;
-    const pin = rule.version === undefined ? "" : `@${rule.version}`;
+  const compatibleDecided = compatibleRuleVerdict(base, assessment, packageRule, licenseRule);
 
-    return {
-      ...base,
-      status: "ok",
-      rule: `compatible[${index}]`,
-      reason: `package "${rule.name}${pin}" accepted by compatible package rule: ${rule.reason}`,
-    };
+  if (compatibleDecided !== undefined) {
+    return compatibleDecided;
   }
 
-  if (licenseRule !== undefined) {
-    const { index, rule } = licenseRule;
+  // The target-compatibility lane: below deny/stale/conflict/compatible, above copyleft/imprecise/
+  // unknown. targetLaneVerdict returns undefined when the lane should not decide (no governing
+  // profile, an imprecise/null finding, os-scope, or a ref-carrying elected branch), so the walk
+  // falls through to the unchanged copyleft/imprecise/unknown lanes below.
+  const targetDecided = targetLaneVerdict(base, entry, occurrence, assessment, policy);
 
-    return {
-      ...base,
-      status: "ok",
-      rule: `compatible[${index}]`,
-      reason: `"${assessment.expression}" satisfies compatible license pattern "${rule.pattern}": ${rule.reason}`,
-    };
+  if (targetDecided !== undefined) {
+    return targetDecided;
   }
 
   if (assessment.copyleft) {
@@ -956,7 +1246,7 @@ function verdictFor(
   }
 
   if (assessment.impreciseFamily !== undefined) {
-    return impreciseVerdict(base, target, assessment.impreciseFamily, entry.scope);
+    return impreciseVerdict(base, entry, occurrence, assessment.impreciseFamily, policy);
   }
 
   if (assessment.expression === null) {
@@ -1083,13 +1373,24 @@ function carriesAgplObligation(assessment: Assessment): boolean {
 }
 
 /**
+ * True for a verdict rule that ACCEPTS an AGPL obligation without a real fail: a `[[compatible]]`
+ * rule (the only lever above the AGPL-container escalation in the precedence walk), or the
+ * network=false-demoted `default:copyleft` outcome landing "ok" via `os_dependencies = "ignore"`
+ * - a demoted-ok row must never go silent, so it gets the same notice-style visibility (the "AGPL
+ * obligation never silently absent" invariant holds regardless of the profile feature). Both
+ * require status "ok" at the call site; this only narrows which rule ids qualify.
+ */
+function acceptsAgplObligation(rule: string): boolean {
+  return rule.startsWith("compatible[") || rule === "default:copyleft";
+}
+
+/**
  * Accepted-AGPL container notices: one entry per os-scope package carrying the AGPL obligation with
- * at least one occurrence whose verdict is an acceptance (status "ok", rule cites a `compatible[i]`
- * entry - the only lever above the AGPL-container escalation in the precedence walk). A package
- * with no accepted occurrence contributes nothing; a package also carrying a fail elsewhere is
- * still returned here - the render layer applies the Problematic dedup, matching how the
- * flagged-copyleft rows dedup today. Sorted by purl (compareCodeUnits) for determinism; each
- * notice's targets are deduped and sorted the same way.
+ * at least one occurrence whose verdict is an acceptance - status "ok" via {@link
+ * acceptsAgplObligation}. A package with no accepted occurrence contributes nothing; a package also
+ * carrying a fail elsewhere is still returned here - the render layer applies the Problematic
+ * dedup, matching how the flagged-copyleft rows dedup today. Sorted by purl (compareCodeUnits) for
+ * determinism; each notice's targets are deduped and sorted the same way.
  */
 export function acceptedContainerNotices(
   model: CanonicalDependencies,
@@ -1124,7 +1425,7 @@ export function acceptedContainerNotices(
       if (
         verdict === undefined ||
         verdict.status !== "ok" ||
-        !verdict.rule.startsWith("compatible[")
+        !acceptsAgplObligation(verdict.rule)
       ) {
         continue;
       }

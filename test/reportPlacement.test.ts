@@ -18,6 +18,7 @@ import { applyContainerScopes } from "../src/pipeline/containerScope";
 import { BUILTIN_OVERRIDES } from "../src/policy/builtinOverrides";
 import { acceptedContainerNotices, evaluate } from "../src/policy/evaluate";
 import { parsePolicy, type Policy } from "../src/policy/schema";
+import { suppressionOverlapNotices } from "../src/policy/target";
 import { alignTables } from "../src/render/alignTables";
 import { renderMarkdown, type PolicyView } from "../src/render/markdown";
 import { renderNotices } from "../src/render/notices";
@@ -67,6 +68,25 @@ const PLACEMENT_PATHS = [
   "denied-license-terminal",
   "system-package-in-dev-container-counts-dev",
   "cross-image-claim-divergence",
+  "target-ok-permissive",
+  "target-incompatible-prod",
+  "target-incompatible-dev-downgrade",
+  "target-apache-gpl2-incompatible",
+  "target-or-election-flip",
+  "target-proprietary-boundary-external",
+  "target-unknown-pair-residual",
+  "target-internal-holds-gpl",
+  "target-internal-network-agpl-fails",
+  "target-network-agpl-absorbed",
+  "target-network-false-agpl-internal-held",
+  "target-internal-nondistribution-conflict-stays",
+  "target-workspace-divergence",
+  "target-container-app-ecosystem",
+  "target-os-agpl-network-true-escalates",
+  "target-os-agpl-network-false-routine",
+  "target-os-scope-untouched",
+  "target-supersedes-suppression",
+  "target-os-agpl-network-false-ignored-notice",
 ] as const;
 
 type PlacementPath = (typeof PLACEMENT_PATHS)[number];
@@ -380,6 +400,7 @@ function containerPartition(block: string): {
 const UNKNOWN_WARN = ["[unknown]", 'handling = "warn"', ""].join("\n");
 
 const WORKSPACE = "apps/web";
+const WORKSPACE_B = "apps/api";
 const PROD_CONTAINER = `${DOCKER_IDENTITY_PREFIX}services/app/Dockerfile`;
 const DEV_CONTAINER = `${DOCKER_IDENTITY_PREFIX}tools/build/Dockerfile`;
 const OTHER_CONTAINER = `${DOCKER_IDENTITY_PREFIX}services/other/Dockerfile`;
@@ -390,6 +411,21 @@ const DEV_CONTAINER_POLICY = [
   'reason = "ci tooling only"',
   "",
 ].join("\n");
+
+/** One `[target]` project-profile table's lines, for building inline TOML policy fixtures. */
+function targetProfileLines(
+  license: string,
+  network: boolean,
+  distribution: "external" | "internal",
+): string[] {
+  return [
+    "[target]",
+    `license = "${license}"`,
+    `network = ${network}`,
+    `distribution = "${distribution}"`,
+    "",
+  ];
+}
 
 const SCENARIOS: Record<PlacementPath, () => void> = {
   "workspace-prod-permissive": () => {
@@ -1448,6 +1484,762 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
       prodSystem.includes("shared-daemon") && otherSystem.includes("shared-daemon"),
       slug,
       "both diverging containers keep their complete inventory row in their own System packages table (inventory is never dropped by a conflict)",
+    );
+  },
+
+  "target-ok-permissive": () => {
+    const slug = "target-ok-permissive";
+    const purl = "pkg:npm/target-ok-lib@1.0.0";
+    const policy = [UNKNOWN_WARN, ...targetProfileLines("MIT", false, "external")].join("\n");
+    const { doc, verdicts, scoped } = buildScenario(
+      [
+        {
+          targetIdentity: WORKSPACE,
+          components: [{ name: "target-ok-lib", purl, license: "MIT" }],
+        },
+      ],
+      policy,
+    );
+
+    assertClassificationOutcome(scoped, verdicts, purl, WORKSPACE, slug, "app", "ok", "target:ok");
+    assertPlacement(
+      appTableOnly(doc, "## Production dependencies").includes("target-ok-lib"),
+      slug,
+      "a compatible dependency under a declared target rows in Production dependencies like any other ok package",
+    );
+    assertPlacement(
+      !doc.includes("## Target compatibility"),
+      slug,
+      "a clean target:ok verdict never triggers the Target compatibility section — no heading renders at all",
+    );
+  },
+
+  "target-incompatible-prod": () => {
+    const slug = "target-incompatible-prod";
+    const purl = "pkg:npm/target-incompatible-prod@1.0.0";
+    const policy = [UNKNOWN_WARN, ...targetProfileLines("MIT", false, "external")].join("\n");
+    const { doc, verdicts, scoped } = buildScenario(
+      [
+        {
+          targetIdentity: WORKSPACE,
+          components: [{ name: "target-incompatible-prod", purl, license: "GPL-3.0-only" }],
+        },
+      ],
+      policy,
+    );
+
+    assertClassificationOutcome(
+      scoped,
+      verdicts,
+      purl,
+      WORKSPACE,
+      slug,
+      "app",
+      "fail",
+      "target:incompatible",
+    );
+    assertPlacement(
+      section(doc, "## Problematic licenses").includes("target-incompatible-prod"),
+      slug,
+      "a target:incompatible fail on a production occurrence rows in Problematic licenses",
+    );
+  },
+
+  "target-incompatible-dev-downgrade": () => {
+    const slug = "target-incompatible-dev-downgrade";
+    const purl = "pkg:npm/target-dev-downgrade@1.0.0";
+    const policy = [UNKNOWN_WARN, ...targetProfileLines("MIT", false, "external")].join("\n");
+    const { doc, verdicts, scoped } = buildScenario(
+      [
+        {
+          targetIdentity: WORKSPACE,
+          components: [{ name: "target-dev-downgrade", purl, license: "GPL-3.0-only", dev: true }],
+        },
+      ],
+      policy,
+    );
+
+    assertClassificationOutcome(
+      scoped,
+      verdicts,
+      purl,
+      WORKSPACE,
+      slug,
+      "app",
+      "warn",
+      "target:incompatible",
+    );
+    assertPlacement(
+      section(doc, "## Target compatibility").includes("target-dev-downgrade"),
+      slug,
+      "a dev-downgraded target:incompatible (warn) rows in the Target compatibility flagged table",
+    );
+    assertPlacement(
+      appTableOnly(doc, "## Development-only dependencies").includes("target-dev-downgrade"),
+      slug,
+      "it also rows in the Development-only dependencies app table",
+    );
+    assertPlacement(
+      !section(doc, "## Problematic licenses").includes("target-dev-downgrade"),
+      slug,
+      "a dev-downgraded warn must not row in Problematic",
+    );
+  },
+
+  "target-apache-gpl2-incompatible": () => {
+    const slug = "target-apache-gpl2-incompatible";
+    const purl = "pkg:npm/target-apache-gpl2@1.0.0";
+    const policy = [UNKNOWN_WARN, ...targetProfileLines("GPL-2.0-only", false, "external")].join(
+      "\n",
+    );
+    const { doc, verdicts, scoped } = buildScenario(
+      [
+        {
+          targetIdentity: WORKSPACE,
+          components: [{ name: "target-apache-gpl2", purl, license: "Apache-2.0" }],
+        },
+      ],
+      policy,
+    );
+
+    assertClassificationOutcome(
+      scoped,
+      verdicts,
+      purl,
+      WORKSPACE,
+      slug,
+      "app",
+      "fail",
+      "target:incompatible",
+    );
+    assertPlacement(
+      section(doc, "## Problematic licenses").includes("target-apache-gpl2"),
+      slug,
+      "a permissive dependency the target's own compatibility matrix rejects fails target:incompatible — the case today's copyleft-only lane cannot see",
+    );
+  },
+
+  "target-or-election-flip": () => {
+    const slug = "target-or-election-flip";
+    const purl = "pkg:npm/target-or-election-flip@1.0.0";
+    const policy = [UNKNOWN_WARN, ...targetProfileLines("GPL-2.0-only", false, "external")].join(
+      "\n",
+    );
+    const { doc, verdicts, scoped } = buildScenario(
+      [
+        {
+          targetIdentity: WORKSPACE,
+          components: [
+            {
+              name: "target-or-election-flip",
+              purl,
+              license: "Apache-2.0 OR GPL-2.0-only",
+            },
+          ],
+        },
+      ],
+      policy,
+    );
+
+    assertClassificationOutcome(scoped, verdicts, purl, WORKSPACE, slug, "app", "ok", "target:ok");
+    const verdict = findVerdict(verdicts, purl, WORKSPACE)!;
+
+    assertPlacement(
+      verdict.reason.includes("GPL-2.0-only"),
+      slug,
+      "the target-aware election picks the GPL-2.0-only branch (the matrix diagonal), the opposite of the no-target elect() preference — the verdict reason cites it",
+    );
+    assertPlacement(
+      appTableOnly(doc, "## Production dependencies").includes("target-or-election-flip") &&
+        appTableOnly(doc, "## Production dependencies").includes("Apache-2.0 OR GPL-2.0-only"),
+      slug,
+      "the License column still shows the full unelected expression — election surfaces only through the verdict reason",
+    );
+  },
+
+  "target-proprietary-boundary-external": () => {
+    const slug = "target-proprietary-boundary-external";
+    const purl = "pkg:npm/target-proprietary-boundary@1.0.0";
+    const policy = [UNKNOWN_WARN, ...targetProfileLines("proprietary", true, "external")].join(
+      "\n",
+    );
+    const { doc, verdicts, scoped } = buildScenario(
+      [
+        {
+          targetIdentity: WORKSPACE,
+          components: [{ name: "target-proprietary-boundary", purl, license: "LGPL-2.1-only" }],
+        },
+      ],
+      policy,
+    );
+
+    assertClassificationOutcome(
+      scoped,
+      verdicts,
+      purl,
+      WORKSPACE,
+      slug,
+      "app",
+      "warn",
+      "target:boundary",
+    );
+    assertPlacement(
+      section(doc, "## Target compatibility").includes("target-proprietary-boundary"),
+      slug,
+      "weak copyleft under a proprietary target warns target:boundary and rows in the Target compatibility flagged table",
+    );
+    assertPlacement(
+      appTableOnly(doc, "## Production dependencies").includes("target-proprietary-boundary"),
+      slug,
+      "it also keeps its inventory row in Production dependencies",
+    );
+  },
+
+  "target-unknown-pair-residual": () => {
+    const slug = "target-unknown-pair-residual";
+    const purl = "pkg:npm/target-unknown-pair@1.0.0";
+    const warnPolicy = [UNKNOWN_WARN, ...targetProfileLines("MIT", false, "external")].join("\n");
+    const component = { name: "target-unknown-pair", purl, license: "QPL-1.0" };
+    const warnRun = buildScenario(
+      [{ targetIdentity: WORKSPACE, components: [component] }],
+      warnPolicy,
+    );
+
+    assertClassificationOutcome(
+      warnRun.scoped,
+      warnRun.verdicts,
+      purl,
+      WORKSPACE,
+      slug,
+      "app",
+      "warn",
+      "target:unknown-pair",
+    );
+    assertPlacement(
+      section(warnRun.doc, "## Target compatibility").includes("target-unknown-pair"),
+      slug,
+      "a matrix-uncovered pair warns target:unknown-pair by default (the D4 residual knob) and rows in the Target compatibility flagged table",
+    );
+
+    const failPolicy = [
+      UNKNOWN_WARN,
+      "[target]",
+      'license = "MIT"',
+      "network = false",
+      'distribution = "external"',
+      'unknown_pair = "fail"',
+      "",
+    ].join("\n");
+    const failRun = buildScenario(
+      [{ targetIdentity: WORKSPACE, components: [component] }],
+      failPolicy,
+    );
+
+    assertClassificationOutcome(
+      failRun.scoped,
+      failRun.verdicts,
+      purl,
+      WORKSPACE,
+      slug,
+      "app",
+      "fail",
+      "target:unknown-pair",
+    );
+    assertPlacement(
+      section(failRun.doc, "## Problematic licenses").includes("target-unknown-pair"),
+      slug,
+      'unknown_pair = "fail" routes the same residual to Problematic licenses instead',
+    );
+  },
+
+  "target-internal-holds-gpl": () => {
+    const slug = "target-internal-holds-gpl";
+    const purl = "pkg:npm/target-internal-holds-gpl@1.0.0";
+    const policy = [UNKNOWN_WARN, ...targetProfileLines("MIT", false, "internal")].join("\n");
+    const { doc, verdicts, scoped } = buildScenario(
+      [
+        {
+          targetIdentity: WORKSPACE,
+          components: [{ name: "target-internal-holds-gpl", purl, license: "GPL-3.0-only" }],
+        },
+      ],
+      policy,
+    );
+
+    assertClassificationOutcome(
+      scoped,
+      verdicts,
+      purl,
+      WORKSPACE,
+      slug,
+      "app",
+      "ok",
+      "target:internal-use",
+    );
+    assertPlacement(
+      section(doc, "## Target compatibility").includes("target-internal-holds-gpl"),
+      slug,
+      "a copyleft obligation held out of scope for internal-only distribution rows in the Target compatibility held-for-internal-use list",
+    );
+    assertPlacement(
+      appTableOnly(doc, "## Production dependencies").includes("target-internal-holds-gpl"),
+      slug,
+      "it also keeps a normal inventory row in Production dependencies (ok, never gating)",
+    );
+  },
+
+  "target-internal-network-agpl-fails": () => {
+    const slug = "target-internal-network-agpl-fails";
+    const purl = "pkg:npm/target-internal-network-agpl@1.0.0";
+    const policy = [UNKNOWN_WARN, ...targetProfileLines("MIT", true, "internal")].join("\n");
+    const { doc, verdicts, scoped } = buildScenario(
+      [
+        {
+          targetIdentity: WORKSPACE,
+          components: [{ name: "target-internal-network-agpl", purl, license: "AGPL-3.0-only" }],
+        },
+      ],
+      policy,
+    );
+
+    assertClassificationOutcome(
+      scoped,
+      verdicts,
+      purl,
+      WORKSPACE,
+      slug,
+      "app",
+      "fail",
+      "target:incompatible",
+    );
+    assertPlacement(
+      section(doc, "## Problematic licenses").includes("target-internal-network-agpl") &&
+        section(doc, "## Problematic licenses").includes("network-deployed"),
+      slug,
+      "network = true keeps the AGPL class in scope regardless of distribution — the MIT target cannot absorb it, and the reason names the network-deployed basis",
+    );
+  },
+
+  "target-network-agpl-absorbed": () => {
+    const slug = "target-network-agpl-absorbed";
+    const purl = "pkg:npm/target-network-agpl-absorbed@1.0.0";
+    const policy = [UNKNOWN_WARN, ...targetProfileLines("AGPL-3.0-only", true, "external")].join(
+      "\n",
+    );
+    const { doc, verdicts, scoped } = buildScenario(
+      [
+        {
+          targetIdentity: PROD_CONTAINER,
+          scope: "os",
+          components: [{ name: "target-network-agpl-absorbed", purl, license: "AGPL-3.0-only" }],
+        },
+      ],
+      policy,
+    );
+
+    assertClassificationOutcome(
+      scoped,
+      verdicts,
+      purl,
+      PROD_CONTAINER,
+      slug,
+      "app",
+      "ok",
+      "target:ok",
+    );
+    const { application } = containerPartition(containerSubsection(doc, PROD_CONTAINER));
+
+    assertPlacement(
+      application.includes("target-network-agpl-absorbed"),
+      slug,
+      "an AGPL-licensed, network-deployed target absorbs an AGPL dependency (the matrix diagonal) — the scope-gating guard case a hardcoded network rule would have failed",
+    );
+  },
+
+  "target-network-false-agpl-internal-held": () => {
+    const slug = "target-network-false-agpl-internal-held";
+    const purl = "pkg:npm/target-network-false-agpl-held@1.0.0";
+    const policy = [UNKNOWN_WARN, ...targetProfileLines("MIT", false, "internal")].join("\n");
+    const { doc, verdicts, scoped } = buildScenario(
+      [
+        {
+          targetIdentity: WORKSPACE,
+          components: [{ name: "target-network-false-agpl-held", purl, license: "AGPL-3.0-only" }],
+        },
+      ],
+      policy,
+    );
+
+    assertClassificationOutcome(
+      scoped,
+      verdicts,
+      purl,
+      WORKSPACE,
+      slug,
+      "app",
+      "ok",
+      "target:internal-use",
+    );
+    assertPlacement(
+      section(doc, "## Target compatibility").includes("target-network-false-agpl-held"),
+      slug,
+      "network = false joins the AGPL obligation to the ordinary distribution-gated copyleft class, which internal distribution then holds",
+    );
+  },
+
+  "target-internal-nondistribution-conflict-stays": () => {
+    const slug = "target-internal-nondistribution-conflict-stays";
+    const purl = "pkg:npm/target-internal-nondist-conflict@1.0.0";
+    const policy = [UNKNOWN_WARN, ...targetProfileLines("GPL-2.0-only", false, "internal")].join(
+      "\n",
+    );
+    const { doc, verdicts, scoped } = buildScenario(
+      [
+        {
+          targetIdentity: WORKSPACE,
+          components: [{ name: "target-internal-nondist-conflict", purl, license: "Apache-2.0" }],
+        },
+      ],
+      policy,
+    );
+
+    assertClassificationOutcome(
+      scoped,
+      verdicts,
+      purl,
+      WORKSPACE,
+      slug,
+      "app",
+      "fail",
+      "target:incompatible",
+    );
+    assertPlacement(
+      section(doc, "## Problematic licenses").includes("target-internal-nondist-conflict"),
+      slug,
+      'the internal-use hold floor: a non-copyleft-driven incompatibility (obligation "none") is never rescued by internal distribution',
+    );
+  },
+
+  "target-workspace-divergence": () => {
+    const slug = "target-workspace-divergence";
+    const purl = "pkg:npm/target-workspace-divergence@1.0.0";
+    const policy = [
+      UNKNOWN_WARN,
+      ...targetProfileLines("MIT", false, "external"),
+      "[[target.workspace]]",
+      `path = "${WORKSPACE_B}"`,
+      'license = "GPL-3.0-only"',
+      'reason = "workspace B ships under GPL-3.0-only"',
+      "",
+    ].join("\n");
+    const { doc, verdicts, scoped } = buildScenario(
+      [
+        {
+          targetIdentity: WORKSPACE,
+          components: [{ name: "target-workspace-divergence", purl, license: "GPL-3.0-only" }],
+        },
+        {
+          targetIdentity: WORKSPACE_B,
+          components: [{ name: "target-workspace-divergence", purl, license: "GPL-3.0-only" }],
+        },
+      ],
+      policy,
+    );
+
+    assertClassificationOutcome(
+      scoped,
+      verdicts,
+      purl,
+      WORKSPACE,
+      slug,
+      "app",
+      "fail",
+      "target:incompatible",
+    );
+    assertClassificationOutcome(
+      scoped,
+      verdicts,
+      purl,
+      WORKSPACE_B,
+      slug,
+      "app",
+      "ok",
+      "target:ok",
+    );
+    assertPlacement(
+      section(doc, "## Problematic licenses").includes("target-workspace-divergence") &&
+        section(doc, "## Problematic licenses").includes(WORKSPACE),
+      slug,
+      "the any-fail rule escalates the shared purl to Problematic, the reason naming workspace A's (the failing MIT target's) profile",
+    );
+    assertPlacement(
+      appTableOnly(doc, "## Production dependencies").includes("target-workspace-divergence"),
+      slug,
+      "it keeps one inventory row in Production dependencies spanning both workspaces",
+    );
+  },
+
+  "target-container-app-ecosystem": () => {
+    const slug = "target-container-app-ecosystem";
+    const purl = "pkg:npm/target-container-app-ecosystem@1.0.0";
+    const policy = [UNKNOWN_WARN, ...targetProfileLines("GPL-3.0-only", false, "external")].join(
+      "\n",
+    );
+    const { doc, verdicts, scoped } = buildScenario(
+      [
+        {
+          targetIdentity: PROD_CONTAINER,
+          scope: "os",
+          components: [{ name: "target-container-app-ecosystem", purl, license: "GPL-3.0-only" }],
+        },
+      ],
+      policy,
+    );
+
+    assertClassificationOutcome(
+      scoped,
+      verdicts,
+      purl,
+      PROD_CONTAINER,
+      slug,
+      "app",
+      "ok",
+      "target:ok",
+    );
+    const { application } = containerPartition(containerSubsection(doc, PROD_CONTAINER));
+
+    assertPlacement(
+      application.includes("target-container-app-ecosystem"),
+      slug,
+      "the project profile governs a docker occurrence of an app-ecosystem package (never a workspace override)",
+    );
+    assertPlacement(
+      !appTableOnly(doc, "## Production dependencies").includes("target-container-app-ecosystem"),
+      slug,
+      "a container-only package never rows in the app table",
+    );
+  },
+
+  "target-os-agpl-network-true-escalates": () => {
+    const slug = "target-os-agpl-network-true-escalates";
+    const purl = "pkg:apk/alpine/target-os-agpl-true@1.0.0";
+    const policy = [UNKNOWN_WARN, ...targetProfileLines("MIT", true, "external")].join("\n");
+    const { doc, verdicts, scoped } = buildScenario(
+      [
+        {
+          targetIdentity: PROD_CONTAINER,
+          scope: "os",
+          components: [{ name: "target-os-agpl-true", purl, license: "AGPL-3.0-only" }],
+        },
+      ],
+      policy,
+    );
+
+    assertClassificationOutcome(
+      scoped,
+      verdicts,
+      purl,
+      PROD_CONTAINER,
+      slug,
+      "os",
+      "fail",
+      "default:agpl-container",
+    );
+    assertPlacement(
+      section(doc, "## Problematic licenses").includes("target-os-agpl-true"),
+      slug,
+      "network = true keeps the container AGPL escalation exactly as it is today — now declared, not guessed",
+    );
+  },
+
+  "target-os-agpl-network-false-routine": () => {
+    const slug = "target-os-agpl-network-false-routine";
+    const precisePurl = "pkg:apk/alpine/target-os-agpl-false-precise@1.0.0";
+    const imprecisePurl = "pkg:apk/alpine/target-os-agpl-false-imprecise@1.0.0";
+    const policy = [UNKNOWN_WARN, ...targetProfileLines("MIT", false, "external")].join("\n");
+    const { doc, verdicts, scoped } = buildScenario(
+      [
+        {
+          targetIdentity: PROD_CONTAINER,
+          scope: "os",
+          components: [
+            {
+              name: "target-os-agpl-false-precise",
+              purl: precisePurl,
+              license: "AGPL-3.0-only",
+            },
+            {
+              name: "target-os-agpl-false-imprecise",
+              purl: imprecisePurl,
+              licenseName: "GNU Affero General Public License",
+            },
+          ],
+        },
+      ],
+      policy,
+    );
+
+    assertClassificationOutcome(
+      scoped,
+      verdicts,
+      precisePurl,
+      PROD_CONTAINER,
+      slug,
+      "os",
+      "warn",
+      "default:copyleft",
+    );
+    assertClassificationOutcome(
+      scoped,
+      verdicts,
+      imprecisePurl,
+      PROD_CONTAINER,
+      slug,
+      "os",
+      "warn",
+      "default:copyleft",
+    );
+    const preciseVerdict = findVerdict(verdicts, precisePurl, PROD_CONTAINER)!;
+    const impreciseVerdict = findVerdict(verdicts, imprecisePurl, PROD_CONTAINER)!;
+
+    assertPlacement(
+      preciseVerdict.reason.includes("network = false") &&
+        impreciseVerdict.reason.includes("network = false"),
+      slug,
+      "the declared network = false demotion basis is named in both the precise and the imprecise reason",
+    );
+    const { system } = containerPartition(containerSubsection(doc, PROD_CONTAINER));
+
+    assertPlacement(
+      system.includes("target-os-agpl-false-precise") &&
+        system.includes("target-os-agpl-false-imprecise") &&
+        !section(doc, "## Problematic licenses").includes("target-os-agpl-false-precise") &&
+        !section(doc, "## Copyleft and special notices").includes("target-os-agpl-false-precise"),
+      slug,
+      "the demoted warn rows only in its container's System packages table, exactly like routine non-AGPL system copyleft",
+    );
+  },
+
+  "target-os-scope-untouched": () => {
+    const slug = "target-os-scope-untouched";
+    const purl = "pkg:apk/alpine/target-os-scope-untouched@1.0.0";
+    const component = { name: "target-os-scope-untouched", purl, license: "GPL-2.0-only" };
+    const noTargetRun = buildScenario(
+      [{ targetIdentity: PROD_CONTAINER, scope: "os", components: [component] }],
+      UNKNOWN_WARN,
+    );
+    const targetPolicy = [UNKNOWN_WARN, ...targetProfileLines("MIT", true, "external")].join("\n");
+    const targetRun = buildScenario(
+      [{ targetIdentity: PROD_CONTAINER, scope: "os", components: [component] }],
+      targetPolicy,
+    );
+
+    assertClassificationOutcome(
+      targetRun.scoped,
+      targetRun.verdicts,
+      purl,
+      PROD_CONTAINER,
+      slug,
+      "os",
+      "warn",
+      "default:copyleft",
+    );
+    const noTargetVerdict = findVerdict(noTargetRun.verdicts, purl, PROD_CONTAINER)!;
+    const targetVerdictFound = findVerdict(targetRun.verdicts, purl, PROD_CONTAINER)!;
+
+    assertPlacement(
+      noTargetVerdict.reason === targetVerdictFound.reason,
+      slug,
+      "a non-AGPL os-scope copyleft package's verdict reason is byte-identical with or without a declared target — only the AGPL-container escalation ever consults the network flag",
+    );
+  },
+
+  "target-supersedes-suppression": () => {
+    const slug = "target-supersedes-suppression";
+    const purl = "pkg:npm/target-supersedes-suppression@1.0.0";
+    const policy = [
+      UNKNOWN_WARN,
+      ...targetProfileLines("AGPL-3.0-only", true, "external"),
+      "[[workspace.copyleft_suppressed]]",
+      `path = "${WORKSPACE}"`,
+      'license = "AGPL-3.0-only"',
+      'description = "the workspace itself is AGPL-3.0-only, absorbing its bundled GNU-family dependencies"',
+      "",
+    ].join("\n");
+    const { doc, verdicts, scoped } = buildScenario(
+      [
+        {
+          targetIdentity: WORKSPACE,
+          components: [{ name: "target-supersedes-suppression", purl, license: "AGPL-3.0-only" }],
+        },
+      ],
+      policy,
+    );
+
+    assertClassificationOutcome(scoped, verdicts, purl, WORKSPACE, slug, "app", "ok", "target:ok");
+    assertPlacement(
+      appTableOnly(doc, "## Production dependencies").includes("target-supersedes-suppression"),
+      slug,
+      "the target-compatibility lane decides the occurrence before the suppression check ever runs — the verdict is target:ok, never suppressed",
+    );
+    assertPlacement(
+      !section(doc, "## Copyleft and special notices").includes("target-supersedes-suppression"),
+      slug,
+      "the package never rows as a suppressed copyleft finding",
+    );
+
+    const parsedPolicy = parsePolicy(policy);
+    const notices = suppressionOverlapNotices(parsedPolicy);
+
+    assertPlacement(
+      notices.length === 1 && notices[0]!.includes(WORKSPACE),
+      slug,
+      "policy/target.ts's suppressionOverlapNotices surfaces the now-dead suppression entry exactly once",
+    );
+  },
+
+  "target-os-agpl-network-false-ignored-notice": () => {
+    const slug = "target-os-agpl-network-false-ignored-notice";
+    const purl = "pkg:apk/alpine/target-os-agpl-ignored@1.0.0";
+    const policy = [
+      UNKNOWN_WARN,
+      ...targetProfileLines("MIT", false, "external"),
+      "[os_dependencies]",
+      'handling = "ignore"',
+      "",
+    ].join("\n");
+    const { doc, verdicts, scoped } = buildScenario(
+      [
+        {
+          targetIdentity: PROD_CONTAINER,
+          scope: "os",
+          components: [{ name: "target-os-agpl-ignored", purl, license: "AGPL-3.0-only" }],
+        },
+      ],
+      policy,
+    );
+
+    assertClassificationOutcome(
+      scoped,
+      verdicts,
+      purl,
+      PROD_CONTAINER,
+      slug,
+      "os",
+      "ok",
+      "default:copyleft",
+    );
+    const copyleft = section(doc, "## Copyleft and special notices");
+
+    assertPlacement(
+      copyleft.includes("target-os-agpl-ignored") && copyleft.includes("network = false"),
+      slug,
+      'a network=false-demoted AGPL row landing ok via os_dependencies = "ignore" still gets notice-style visibility — never silently absent',
+    );
+    assertPlacement(
+      !section(doc, "## Problematic licenses").includes("target-os-agpl-ignored"),
+      slug,
+      "the demoted-and-accepted package must not row in Problematic",
     );
   },
 };
