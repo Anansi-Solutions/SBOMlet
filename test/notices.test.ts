@@ -494,6 +494,9 @@ describe("renderNotices — canonical license display", () => {
     expect(output.includes(`License: ${NOISY_EXPRESSION}`)).toBe(false);
   });
 
+  // An unparseable claim must round-trip verbatim - canonicalization passes it through.
+  const UNPARSEABLE_EXPRESSION = "not a real spdx expression !!";
+
   test("an unparseable expression and an imprecise family token pass through the License line unchanged", () => {
     const model: CanonicalDependencies = {
       packages: [
@@ -502,7 +505,7 @@ describe("renderNotices — canonical license display", () => {
           name: "unparseable-pkg",
           version: "1.0.0",
           finding: {
-            expression: "not a real spdx expression !!",
+            expression: UNPARSEABLE_EXPRESSION,
             elected: null,
             source: "generator",
             confidence: "exact",
@@ -513,7 +516,7 @@ describe("renderNotices — canonical license display", () => {
     };
     const output = renderNotices(model);
 
-    expect(output.includes("License: not a real spdx expression !!")).toBe(true);
+    expect(output.includes(`License: ${UNPARSEABLE_EXPRESSION}`)).toBe(true);
   });
 });
 
