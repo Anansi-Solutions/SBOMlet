@@ -313,11 +313,34 @@ when a dependency's license id is absent from both OSADL tables.
 }
 
 /**
+ * RFC 7231 section 7.1.1.1 IMF-fixdate shape for an HTTP Last-Modified header value, e.g.
+ * "Tue, 01 Sep 2026 00:00:00 GMT". The raw header is untrusted input; this is the gate that keeps
+ * a malformed or tampered value from ever reaching {@link withUpdatedScancodeTimestamp}'s rewrite.
+ */
+const HTTP_DATE_PATTERN =
+  /^(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun), \d{2} (?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) \d{4} \d{2}:\d{2}:\d{2} GMT$/;
+
+/** Throw when `value` is not RFC 7231 IMF-fixdate shaped. */
+function assertHttpDateShape(value: string): void {
+  if (!HTTP_DATE_PATTERN.test(value)) {
+    throw new Error(
+      `Last-Modified header ${JSON.stringify(value)} is not RFC 7231 date-shaped - refusing to ` +
+        `use it (a malformed or tampered header must never reach a string replacement)`,
+    );
+  }
+}
+
+/**
  * Rewrite the SCANCODE_SNAPSHOT_TIMESTAMP literal in data.ts's source text, naming it if the
  * expected declaration is not found (an upstream refactor of data.ts must not silently leave a
- * stale timestamp behind).
+ * stale timestamp behind). `newTimestamp` is validated against the RFC 7231 header shape first,
+ * then spliced in via a FUNCTION replacement - never a template-string second argument to
+ * String.replace, whose "$&"/"$'"/"$`" replacement-pattern syntax would otherwise let a malformed
+ * header splice the matched declaration text into itself instead of the intended timestamp.
  */
 export function withUpdatedScancodeTimestamp(dataTsSource: string, newTimestamp: string): string {
+  assertHttpDateShape(newTimestamp);
+
   const pattern = /export const SCANCODE_SNAPSHOT_TIMESTAMP = "[^"]*";/;
 
   if (!pattern.test(dataTsSource)) {
@@ -328,7 +351,7 @@ export function withUpdatedScancodeTimestamp(dataTsSource: string, newTimestamp:
 
   return dataTsSource.replace(
     pattern,
-    `export const SCANCODE_SNAPSHOT_TIMESTAMP = "${newTimestamp}";`,
+    () => `export const SCANCODE_SNAPSHOT_TIMESTAMP = "${newTimestamp}";`,
   );
 }
 

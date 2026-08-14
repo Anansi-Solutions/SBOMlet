@@ -23,9 +23,12 @@ const compareCodeUnits = (a: string, b: string): number => (a < b ? -1 : a > b ?
  * rendered list of one line per disagreement. Two disagreement shapes, per the data-review
  * definition above:
  *
- * (a) a license classed "No" (not copyleft) that some OTHER leading license's row still rejects it
- *     as subordinate (cell "No") - reported against the lexicographically smallest such leading
- *     license, so the rendered line is deterministic regardless of the maps' iteration order.
+ * (a) a license classed "No" (not copyleft) that one or more OTHER leading licenses' rows still
+ *     reject it as subordinate (cell "No") - the line names EVERY rejecting lead, sorted, not just
+ *     the lexicographically smallest one: a refresh that adds a later-sorting lead to an
+ *     already-disagreeing subordinate must still change the rendered line, or the refresh-time
+ *     abort gate (compareInterTierDisagreements, which diffs these lines as opaque strings) would
+ *     stay silent while classifyLeaf's own per-leaf matrix lookup starts seeing the new cell.
  * (b) a license classed "Yes" or "Yes (restricted)" that a permissive leading license (MIT,
  *     BSD-3-Clause, ISC) accepts as subordinate (cell "Yes") - one line per matching leading
  *     license, since each is independently informative.
@@ -49,7 +52,10 @@ export function interTierDisagreements(
       .sort(compareCodeUnits);
 
     if (rejectingLeads.length > 0) {
-      lines.push(`${subordinate}: class No but ${rejectingLeads[0]}→${subordinate} = No`);
+      lines.push(
+        `${subordinate}: class No but rejected (cell "No") by ${rejectingLeads.length} ` +
+          `leading id(s): ${rejectingLeads.join(", ")}`,
+      );
     }
   }
 

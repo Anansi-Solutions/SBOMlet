@@ -176,23 +176,23 @@ describe("orientation and semantics pins (the wrong-compatibility drift tripwire
  * this list - first-tier-wins classification stays strict regardless.
  */
 const PINNED_INTER_TIER_DISAGREEMENTS: readonly string[] = [
-  "Apache-1.0: class No but AGPL-3.0-only→Apache-1.0 = No",
-  "Apache-1.1: class No but AGPL-3.0-only→Apache-1.1 = No",
-  "Apache-2.0: class No but GPL-1.0-only→Apache-2.0 = No",
-  "BSD-4-Clause-UC: class No but AGPL-3.0-only→BSD-4-Clause-UC = No",
-  "BSD-4-Clause: class No but AGPL-3.0-only→BSD-4-Clause = No",
-  "BSD-4.3TAHOE: class No but AGPL-3.0-only→BSD-4.3TAHOE = No",
-  "ECL-2.0: class No but APSL-2.0→ECL-2.0 = No",
-  "FTL: class No but AGPL-3.0-only→FTL = No",
-  "IJG: class No but AGPL-3.0-only→IJG = No",
-  "LicenseRef-scancode-bsla-no-advert: class No but AGPL-3.0-only→LicenseRef-scancode-bsla-no-advert = No",
-  "Minpack: class No but AGPL-3.0-only→Minpack = No",
-  "PHP-3.01: class No but AGPL-3.0-only→PHP-3.01 = No",
-  "PSF-2.0: class No but AGPL-3.0-only→PSF-2.0 = No",
-  "Python-2.0: class No but AGPL-3.0-only→Python-2.0 = No",
-  "Spencer-86: class No but Sleepycat→Spencer-86 = No",
-  "XFree86-1.1: class No but APSL-2.0→XFree86-1.1 = No",
-  "zlib-acknowledgement: class No but AGPL-3.0-only→zlib-acknowledgement = No",
+  'Apache-1.0: class No but rejected (cell "No") by 18 leading id(s): AGPL-3.0-only, AGPL-3.0-or-later, APSL-2.0, EUPL-1.1, EUPL-1.2, GPL-1.0-only, GPL-1.0-or-later, GPL-2.0-only, GPL-2.0-only WITH Classpath-exception-2.0, GPL-2.0-or-later, GPL-3.0-only, GPL-3.0-or-later, LGPL-2.0-only, LGPL-2.0-or-later, LGPL-2.1-only, LGPL-2.1-or-later, LGPL-3.0-only, LGPL-3.0-or-later',
+  'Apache-1.1: class No but rejected (cell "No") by 18 leading id(s): AGPL-3.0-only, AGPL-3.0-or-later, APSL-2.0, EUPL-1.1, EUPL-1.2, GPL-1.0-only, GPL-1.0-or-later, GPL-2.0-only, GPL-2.0-only WITH Classpath-exception-2.0, GPL-2.0-or-later, GPL-3.0-only, GPL-3.0-or-later, LGPL-2.0-only, LGPL-2.0-or-later, LGPL-2.1-only, LGPL-2.1-or-later, LGPL-3.0-only, LGPL-3.0-or-later',
+  'Apache-2.0: class No but rejected (cell "No") by 8 leading id(s): GPL-1.0-only, GPL-2.0-only, GPL-2.0-only WITH Classpath-exception-2.0, LGPL-2.0-only, LGPL-2.0-or-later, LGPL-2.1-only, LGPL-2.1-or-later, MPL-1.1',
+  'BSD-4-Clause-UC: class No but rejected (cell "No") by 18 leading id(s): AGPL-3.0-only, AGPL-3.0-or-later, APSL-2.0, EUPL-1.1, EUPL-1.2, GPL-1.0-only, GPL-1.0-or-later, GPL-2.0-only, GPL-2.0-only WITH Classpath-exception-2.0, GPL-2.0-or-later, GPL-3.0-only, GPL-3.0-or-later, LGPL-2.0-only, LGPL-2.0-or-later, LGPL-2.1-only, LGPL-2.1-or-later, LGPL-3.0-only, LGPL-3.0-or-later',
+  'BSD-4-Clause: class No but rejected (cell "No") by 18 leading id(s): AGPL-3.0-only, AGPL-3.0-or-later, APSL-2.0, EUPL-1.1, EUPL-1.2, GPL-1.0-only, GPL-1.0-or-later, GPL-2.0-only, GPL-2.0-only WITH Classpath-exception-2.0, GPL-2.0-or-later, GPL-3.0-only, GPL-3.0-or-later, LGPL-2.0-only, LGPL-2.0-or-later, LGPL-2.1-only, LGPL-2.1-or-later, LGPL-3.0-only, LGPL-3.0-or-later',
+  'BSD-4.3TAHOE: class No but rejected (cell "No") by 18 leading id(s): AGPL-3.0-only, AGPL-3.0-or-later, APSL-2.0, EUPL-1.1, EUPL-1.2, GPL-1.0-only, GPL-1.0-or-later, GPL-2.0-only, GPL-2.0-only WITH Classpath-exception-2.0, GPL-2.0-or-later, GPL-3.0-only, GPL-3.0-or-later, LGPL-2.0-only, LGPL-2.0-or-later, LGPL-2.1-only, LGPL-2.1-or-later, LGPL-3.0-only, LGPL-3.0-or-later',
+  'ECL-2.0: class No but rejected (cell "No") by 10 leading id(s): APSL-2.0, GPL-1.0-only, GPL-1.0-or-later, GPL-2.0-only, GPL-2.0-only WITH Classpath-exception-2.0, GPL-2.0-or-later, LGPL-2.0-only, LGPL-2.0-or-later, LGPL-2.1-only, LGPL-2.1-or-later',
+  'FTL: class No but rejected (cell "No") by 18 leading id(s): AGPL-3.0-only, AGPL-3.0-or-later, APSL-2.0, EUPL-1.1, EUPL-1.2, GPL-1.0-only, GPL-1.0-or-later, GPL-2.0-only, GPL-2.0-only WITH Classpath-exception-2.0, GPL-2.0-or-later, GPL-3.0-only, GPL-3.0-or-later, LGPL-2.0-only, LGPL-2.0-or-later, LGPL-2.1-only, LGPL-2.1-or-later, LGPL-3.0-only, LGPL-3.0-or-later',
+  'IJG: class No but rejected (cell "No") by 18 leading id(s): AGPL-3.0-only, AGPL-3.0-or-later, APSL-2.0, EUPL-1.1, EUPL-1.2, GPL-1.0-only, GPL-1.0-or-later, GPL-2.0-only, GPL-2.0-only WITH Classpath-exception-2.0, GPL-2.0-or-later, GPL-3.0-only, GPL-3.0-or-later, LGPL-2.0-only, LGPL-2.0-or-later, LGPL-2.1-only, LGPL-2.1-or-later, LGPL-3.0-only, LGPL-3.0-or-later',
+  'LicenseRef-scancode-bsla-no-advert: class No but rejected (cell "No") by 18 leading id(s): AGPL-3.0-only, AGPL-3.0-or-later, APSL-2.0, EUPL-1.1, EUPL-1.2, GPL-1.0-only, GPL-1.0-or-later, GPL-2.0-only, GPL-2.0-only WITH Classpath-exception-2.0, GPL-2.0-or-later, GPL-3.0-only, GPL-3.0-or-later, LGPL-2.0-only, LGPL-2.0-or-later, LGPL-2.1-only, LGPL-2.1-or-later, LGPL-3.0-only, LGPL-3.0-or-later',
+  'Minpack: class No but rejected (cell "No") by 16 leading id(s): AGPL-3.0-only, AGPL-3.0-or-later, APSL-2.0, GPL-1.0-only, GPL-1.0-or-later, GPL-2.0-only, GPL-2.0-only WITH Classpath-exception-2.0, GPL-2.0-or-later, GPL-3.0-only, GPL-3.0-or-later, LGPL-2.0-only, LGPL-2.0-or-later, LGPL-2.1-only, LGPL-2.1-or-later, LGPL-3.0-only, LGPL-3.0-or-later',
+  'PHP-3.01: class No but rejected (cell "No") by 16 leading id(s): AGPL-3.0-only, AGPL-3.0-or-later, APSL-2.0, GPL-1.0-only, GPL-1.0-or-later, GPL-2.0-only, GPL-2.0-only WITH Classpath-exception-2.0, GPL-2.0-or-later, GPL-3.0-only, GPL-3.0-or-later, LGPL-2.0-only, LGPL-2.0-or-later, LGPL-2.1-only, LGPL-2.1-or-later, LGPL-3.0-only, LGPL-3.0-or-later',
+  'PSF-2.0: class No but rejected (cell "No") by 18 leading id(s): AGPL-3.0-only, AGPL-3.0-or-later, APSL-2.0, EUPL-1.1, EUPL-1.2, GPL-1.0-only, GPL-1.0-or-later, GPL-2.0-only, GPL-2.0-only WITH Classpath-exception-2.0, GPL-2.0-or-later, GPL-3.0-only, GPL-3.0-or-later, LGPL-2.0-only, LGPL-2.0-or-later, LGPL-2.1-only, LGPL-2.1-or-later, LGPL-3.0-only, LGPL-3.0-or-later',
+  'Python-2.0: class No but rejected (cell "No") by 18 leading id(s): AGPL-3.0-only, AGPL-3.0-or-later, APSL-2.0, EUPL-1.1, EUPL-1.2, GPL-1.0-only, GPL-1.0-or-later, GPL-2.0-only, GPL-2.0-only WITH Classpath-exception-2.0, GPL-2.0-or-later, GPL-3.0-only, GPL-3.0-or-later, LGPL-2.0-only, LGPL-2.0-or-later, LGPL-2.1-only, LGPL-2.1-or-later, LGPL-3.0-only, LGPL-3.0-or-later',
+  'Spencer-86: class No but rejected (cell "No") by 1 leading id(s): Sleepycat',
+  'XFree86-1.1: class No but rejected (cell "No") by 12 leading id(s): APSL-2.0, EUPL-1.1, EUPL-1.2, GPL-1.0-only, GPL-1.0-or-later, GPL-2.0-only, GPL-2.0-only WITH Classpath-exception-2.0, GPL-2.0-or-later, LGPL-2.0-only, LGPL-2.0-or-later, LGPL-2.1-only, LGPL-2.1-or-later',
+  'zlib-acknowledgement: class No but rejected (cell "No") by 18 leading id(s): AGPL-3.0-only, AGPL-3.0-or-later, APSL-2.0, EUPL-1.1, EUPL-1.2, GPL-1.0-only, GPL-1.0-or-later, GPL-2.0-only, GPL-2.0-only WITH Classpath-exception-2.0, GPL-2.0-or-later, GPL-3.0-only, GPL-3.0-or-later, LGPL-2.0-only, LGPL-2.0-or-later, LGPL-2.1-only, LGPL-2.1-or-later, LGPL-3.0-only, LGPL-3.0-or-later',
 ];
 
 describe("inter-tier disagreement allowlist (refresh-time gate, A3)", () => {
@@ -200,6 +200,35 @@ describe("inter-tier disagreement allowlist (refresh-time gate, A3)", () => {
     expect(interTierDisagreements(OSADL_MATRIX, OSADL_COPYLEFT_CLASS)).toEqual(
       PINNED_INTER_TIER_DISAGREEMENTS,
     );
+  });
+});
+
+describe("inter-tier disagreement line reflects the full rejecting-lead set", () => {
+  test("a new later-sorting rejecting lead changes the rendered line, never silently absorbed into the same first-lead citation", () => {
+    const before = new Map<string, Map<string, "No">>([
+      ["AAA", new Map([["SUB", "No"]])],
+      ["ZZZ", new Map()],
+      ["SUB", new Map()],
+    ]);
+    const after = new Map<string, Map<string, "No">>([
+      ["AAA", new Map([["SUB", "No"]])],
+      ["ZZZ", new Map([["SUB", "No"]])],
+      ["SUB", new Map()],
+    ]);
+    const copyleftClass = new Map([["SUB", "No" as const]]);
+
+    const beforeLines = interTierDisagreements(before, copyleftClass);
+    const afterLines = interTierDisagreements(after, copyleftClass);
+
+    // ZZZ sorts after AAA, so the lexicographically smallest rejecting lead never changes - a
+    // line citing only the smallest lead stays byte-identical across this refresh, leaving the
+    // abort gate silent even though classifyLeaf's per-leaf lookup now sees a second rejecting
+    // cell. The rendered line must differ whenever the rejecting-lead SET changes.
+    expect(beforeLines).not.toEqual(afterLines);
+
+    const gate = compareInterTierDisagreements(beforeLines, afterLines);
+
+    expect(gate.newEntries.length).toBeGreaterThan(0);
   });
 });
 
@@ -433,12 +462,26 @@ describe("refresh-compat-data.ts pure core", () => {
   test("withUpdatedScancodeTimestamp rewrites the literal and rejects a missing declaration", () => {
     const source = 'export const SCANCODE_SNAPSHOT_TIMESTAMP = "2026-08-10T16:21:01Z";\n';
 
-    expect(withUpdatedScancodeTimestamp(source, "2026-09-01T00:00:00Z")).toBe(
-      'export const SCANCODE_SNAPSHOT_TIMESTAMP = "2026-09-01T00:00:00Z";\n',
+    expect(withUpdatedScancodeTimestamp(source, "Tue, 01 Sep 2026 00:00:00 GMT")).toBe(
+      'export const SCANCODE_SNAPSHOT_TIMESTAMP = "Tue, 01 Sep 2026 00:00:00 GMT";\n',
     );
     expect(() =>
-      withUpdatedScancodeTimestamp("// no declaration here", "2026-09-01T00:00:00Z"),
+      withUpdatedScancodeTimestamp("// no declaration here", "Tue, 01 Sep 2026 00:00:00 GMT"),
     ).toThrow(/SCANCODE_SNAPSHOT_TIMESTAMP/);
+  });
+
+  test("withUpdatedScancodeTimestamp rejects a Last-Modified value that is not RFC 7231 date-shaped, before it can ever reach the string replacement", () => {
+    const source = 'export const SCANCODE_SNAPSHOT_TIMESTAMP = "2026-08-10T16:21:01Z";\n';
+
+    // A raw HTTP header is untrusted input. A "$&"/"$'"-style token here, spliced through a
+    // template-string replacement (String.replace's special replacement-pattern syntax), would
+    // insert the matched declaration text into itself instead of the intended timestamp -
+    // corrupting data.ts silently rather than throwing. The shape gate rejects it outright, and
+    // the underlying rewrite itself uses a function replacement, never a raw string, so even a
+    // date-shaped value could not trigger the substitution syntax (RFC dates carry no "$").
+    expect(() => withUpdatedScancodeTimestamp(source, "$&")).toThrow(/RFC 7231/);
+    expect(() => withUpdatedScancodeTimestamp(source, "$'malicious")).toThrow(/RFC 7231/);
+    expect(() => withUpdatedScancodeTimestamp(source, "not-a-date-at-all")).toThrow(/RFC 7231/);
   });
 
   test("renderProvenance embeds every dynamic field for all three sources", () => {
