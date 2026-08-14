@@ -1,8 +1,8 @@
 /**
  * License-compatibility data - vendored OSADL matrix + copyleft class table, ScanCode LicenseDB
- * category fallback, the shared inter-tier disagreement enumerator, and the pure license-axis leaf
- * classifier. See PROVENANCE.md beside this file for retrieval provenance and CC-BY-4.0
- * attribution; data.ts's module doc explains the loader shape.
+ * category fallback, the shared inter-tier disagreement enumerator, the pure license-axis leaf
+ * classifier, and the usage-profile scope gate. See PROVENANCE.md beside this file for retrieval
+ * provenance and CC-BY-4.0 attribution; data.ts's module doc explains the loader shape.
  */
 export {
   narrowOsadlCopyleftClass,
@@ -24,3 +24,9 @@ export {
   type ObligationClass,
   type TargetLicense,
 } from "./classify";
+export {
+  applyUsageProfile,
+  type ModulatedClass,
+  type ModulatedResult,
+  type TargetProfile,
+} from "./profile";
