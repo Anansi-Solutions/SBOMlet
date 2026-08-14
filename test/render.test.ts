@@ -2398,6 +2398,12 @@ describe("renderMarkdown - target-profile header lines (scope-of-assertion + att
     expect(output.includes("apps/\\[evil\\](x)")).toBe(true);
   });
 
+  test("a workspaces-only summary with no workspace overrides throws rather than rendering a dangling sentence (schema.ts already rejects this shape at parse time; guarded here too)", () => {
+    expect(() => renderMarkdown(model, viewWith({ workspaces: [] }))).toThrow(
+      /at least one workspace override/,
+    );
+  });
+
   test("renderNotices NEVER carries either generated line - it takes no PolicyView and cannot, by construction", () => {
     const notices = renderNotices(model);
 

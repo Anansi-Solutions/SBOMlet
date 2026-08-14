@@ -1213,6 +1213,17 @@ function scopeOfAssertionLine(summary: TargetProfileSummary): string {
     );
   }
 
+  if (overrides.length === 0) {
+    // schema.ts's validateTarget already rejects a [target] table that resolves to neither a
+    // project profile nor any [[target.workspace]] entry (a dead activation switch), so a real
+    // policy can never reach this branch - guarded anyway so a future caller can never render the
+    // dangling "targets: ." sentence this shape would otherwise produce.
+    throw new Error(
+      "scopeOfAssertionLine: a workspaces-only TargetProfileSummary must carry at least one " +
+        "workspace override",
+    );
+  }
+
   return (
     `This report was audited against the declared per-workspace targets: ${overrides.join(", ")}. ` +
     `Its findings assert license validity against those targets and the declared configuration only.`
