@@ -1930,3 +1930,86 @@ describe("a dead [[docker.development]] pattern warns; the marking never touches
     expect(marked.licensesMd.includes("### Container: docker:a/Dockerfile")).toBe(true);
   });
 });
+
+// ===========================================================================
+// Does a target:* rule id surface in the CycloneDX export? renderCyclonedx
+// emits one "licenses-tool:rule:<target>" property per verdict matching a
+// component's purl, with no rule-id filtering - the target lane's verdicts
+// flow through the SAME stream as every other rule id, unmodified. Locked
+// end to end (a real [target] policy through buildOutputs) so the answer can
+// never silently regress; see docs/reference/output-format.md and cli.md for
+// the documented shape.
+// ===========================================================================
+
+interface CdxProperty {
+  name: string;
+  value: string;
+}
+
+interface CdxComponent {
+  purl: string;
+  properties?: CdxProperty[];
+}
+
+/** buildOutputs over root with the CycloneDX export enabled, offline registry, captured stderr. */
+async function buildWithCyclonedx(
+  root: string,
+  policyPath: string,
+): Promise<Awaited<ReturnType<typeof buildOutputs>>> {
+  const paths = pathsFor(root, true);
+  let outputs: Awaited<ReturnType<typeof buildOutputs>> | undefined;
+
+  await withFetch(EMPTY_FETCH, () =>
+    withCapturedStderr(async () => {
+      outputs = await buildOutputs({
+        repoRoot: root,
+        baseDir: root,
+        ...paths,
+        policyPath,
+        verbose: false,
+      });
+    }),
+  );
+
+  return outputs!;
+}
+
+describe("buildOutputs — the target lane's verdicts in the CycloneDX export", () => {
+  beforeAll(() => {
+    mock.module("../src/collectors/cdxgen", () => ({
+      ...REAL_CDXGEN,
+      collectWithCdxgen: fakeScanWithCdxgen,
+    }));
+  });
+  afterAll(() => {
+    mock.module("../src/collectors/cdxgen", () => REAL_CDXGEN);
+  });
+
+  test("a target:incompatible fail and a target:ok pass both round-trip into licenses-tool:rule properties, matching the verdict stream exactly", async () => {
+    const { root } = makeScannableTree();
+    const policyPath = writePolicy(
+      root,
+      ["[target]", 'license = "MIT"', "network = false", 'distribution = "external"', ""].join(
+        "\n",
+      ),
+    );
+
+    const outputs = await buildWithCyclonedx(root, policyPath);
+    const doc = JSON.parse(outputs.cyclonedxJson!) as { components: CdxComponent[] };
+    const ruleFor = (purl: string): string | undefined =>
+      doc.components
+        .find((component) => component.purl === purl)
+        ?.properties?.find((property) => property.name.startsWith("licenses-tool:rule:"))?.value;
+
+    expect(ruleFor("pkg:npm/copyleft-lib@1.0.0")).toBe("target:incompatible");
+    expect(ruleFor("pkg:npm/mit-lib@3.0.0")).toBe("target:ok");
+
+    // Cross-check against the verdict stream itself — the export must never diverge from what
+    // evaluate() actually decided.
+    const copyleftVerdict = outputs.verdicts!.find((v) => v.purl === "pkg:npm/copyleft-lib@1.0.0");
+    const mitVerdict = outputs.verdicts!.find((v) => v.purl === "pkg:npm/mit-lib@3.0.0");
+
+    expect(copyleftVerdict).toMatchObject({ status: "fail", rule: "target:incompatible" });
+    expect(mitVerdict).toMatchObject({ status: "ok", rule: "target:ok" });
+  });
+});

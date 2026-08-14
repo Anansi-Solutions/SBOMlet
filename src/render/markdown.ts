@@ -5,7 +5,10 @@
  * with "\n" literals only (never the platform EOL constant) so the same model produces identical
  * bytes on Windows and Linux. The header carries the regenerate command, never a date.
  *
- * Document order (locked): title, dateless auto-generated header, policy pointer line (policy runs
+ * Document order (locked): title, dateless auto-generated header, the target-profile
+ * scope-of-assertion line PLUS the compatibility-data attribution/disclaimer line (both generated,
+ * both present ONLY when the policy declares an active target lane - PolicyView.targetProfile),
+ * author preamble (policy [document].preamble, when configured), policy pointer line (policy runs
  * only), package-counts block, problematic licenses roll-up (policy runs only), copyleft and
  * special notices (policy runs only - container system-package copyleft is excluded as routine, and
  * a package already flagged Problematic never duplicates into this section), target compatibility
@@ -24,7 +27,9 @@
  * container classifies production (the conservative default).
  *
  * This module deliberately does not render the notices companion, emit CycloneDX, or evaluate
- * policy - verdicts and suppressed workspaces arrive pre-computed in the PolicyView projection.
+ * policy - verdicts and suppressed workspaces arrive pre-computed in the PolicyView projection. The
+ * two generated target-lane lines are THIS document's alone - renderNotices (notices.ts) takes no
+ * PolicyView and can never carry them, by construction.
  *
  * The normative placement spec is docs/reference/report-placement.md - update both together.
  */
@@ -41,10 +46,14 @@ import {
   type Verdict,
 } from "../model/dependencies";
 import {
+  formatProfileLabel,
+  OSADL_SNAPSHOT_TIMESTAMP,
+  SCANCODE_SNAPSHOT_TIMESTAMP,
   TARGET_RULE_BOUNDARY,
   TARGET_RULE_INCOMPATIBLE,
   TARGET_RULE_INTERNAL_USE,
   TARGET_RULE_UNKNOWN_PAIR,
+  type TargetProfile,
 } from "../policy/compat";
 import { OS_PACKAGE_ECOSYSTEMS } from "../policy/osEcosystems";
 import { isUnknownLicense } from "./unknownLicense";
@@ -52,6 +61,31 @@ import type { AcceptedContainerNotice } from "../policy/evaluate";
 import type { SuppressedWorkspace } from "../policy/schema";
 
 const HEADER_LINE = "<!-- AUTO-GENERATED - do not edit. Regenerate with: task generate -->";
+
+/**
+ * One resolved [[target.workspace]] override for the header line: its declared path, plus its
+ * complete resolved profile (per-field inheritance from the project profile already applied).
+ */
+export interface TargetProfileHeaderOverride {
+  /** Repo-relative target-identity prefix this override governs, e.g. "apps/studio". */
+  path: string;
+  /** The complete, already-inherited profile - never a partial. */
+  profile: TargetProfile;
+}
+
+/**
+ * The resolved target usage profile(s) driving the header's scope-of-assertion line - present ONLY
+ * when the policy declares an active [target] lane (pipeline.ts's projectPolicyView threads it from
+ * policy.target; absent [target] leaves PolicyView.targetProfile undefined entirely, so a no-target
+ * policy renders neither generated line). `project` is absent for a workspaces-only [target] table
+ * (no complete project-level profile declared); `workspaces` is every declared [[target.workspace]]
+ * entry resolved to its own complete profile, sorted by path for determinism.
+ */
+export interface TargetProfileSummary {
+  /** The complete project-level profile, when the policy declares one. */
+  project?: TargetProfile;
+  workspaces: ReadonlyArray<TargetProfileHeaderOverride>;
+}
 
 /**
  * Policy projection for the document renderer. Verdicts drive copyleft-section membership;
@@ -86,6 +120,11 @@ export interface PolicyView {
    * heading, not a table cell; a preamble is intentional author markdown).
    */
   document?: { title?: string; preamble?: string };
+  /**
+   * The resolved target profile(s) driving the generated scope-of-assertion + attribution lines
+   * - absent renders neither line, so a no-target policy leaves the document unchanged.
+   */
+  targetProfile?: TargetProfileSummary;
 }
 
 /**
@@ -1122,11 +1161,94 @@ function targetSectionLines(sorted: readonly PackageEntry[], policyView: PolicyV
   return lines;
 }
 
+/**
+ * One profile rendered in reader's words for the header lines - {@link formatProfileLabel} escaped
+ * for markdown, optionally prefixed by its governing workspace path (also escaped; a project-level
+ * profile has none).
+ */
+function profileDescriptor(profile: TargetProfile, path?: string): string {
+  const label = escapeCell(formatProfileLabel(profile));
+
+  return path === undefined ? label : `${escapeCell(path)} (${label})`;
+}
+
+/**
+ * The scope-of-assertion statement: the header line is NOT decorative metadata - it is the primary
+ * honesty mechanism for the whole target-license feature, stating plainly that the document was
+ * audited against the declared profile and that its verdicts assert validity ONLY against that
+ * profile and configuration. A project-level profile names itself, plus every declared
+ * [[target.workspace]] override (already sorted by path); a workspaces-only [target] table (no
+ * complete project profile) names its per-workspace profiles as the audited-against subject
+ * directly, since there is no single project-wide target to lead with.
+ */
+function scopeOfAssertionLine(summary: TargetProfileSummary): string {
+  // Defensive re-sort: mirrors renderMarkdown's own package sort and copyleftSectionLines'
+  // suppressed-workspace sort - the renderer must not trust caller order for determinism.
+  const overrides = [...summary.workspaces]
+    .sort((a, b) => compareCodeUnits(a.path, b.path))
+    .map((entry) => profileDescriptor(entry.profile, entry.path));
+
+  if (summary.project !== undefined) {
+    const overridesClause =
+      overrides.length > 0 ? ` Per-workspace overrides: ${overrides.join(", ")}.` : "";
+
+    return (
+      `This report was audited against the declared target: ${profileDescriptor(summary.project)}.` +
+      `${overridesClause} Its findings assert license validity against that target and the ` +
+      `declared configuration only.`
+    );
+  }
+
+  return (
+    `This report was audited against the declared per-workspace targets: ${overrides.join(", ")}. ` +
+    `Its findings assert license validity against those targets and the declared configuration only.`
+  );
+}
+
+/**
+ * The attribution/disclaimer line: names the two vetted compatibility data sources with their
+ * snapshot timestamps - the one place this document carries that retrieval metadata at all; every
+ * per-package verdict reason cites only the source value (e.g. "OSADL: No"), never a timestamp or
+ * URL. Timestamps read exclusively from data.ts's vendored-data constants, never the clock - no
+ * per-run drift.
+ */
+function attributionLine(): string {
+  return (
+    `Compatibility verdicts draw on the OSADL compatibility matrix and copyleft class table ` +
+    `(snapshot ${OSADL_SNAPSHOT_TIMESTAMP}, osadl.org) and the ScanCode LicenseDB category index ` +
+    `(snapshot ${SCANCODE_SNAPSHOT_TIMESTAMP}, scancode-licensedb.aboutcode.org) - this is ` +
+    `automated, data-driven output, not legal advice.`
+  );
+}
+
+/**
+ * The two generated lines directly after HEADER_LINE when the target lane is active: the
+ * scope-of-assertion statement, then the attribution/disclaimer line - fixed at exactly two lines
+ * (the ADR records the decision). This licenses document is the only place either line renders:
+ * callers gate this on PolicyView.targetProfile, and renderNotices never receives a PolicyView at
+ * all.
+ */
+function targetHeaderLines(summary: TargetProfileSummary): string[] {
+  return [scopeOfAssertionLine(summary), attributionLine()];
+}
+
 export function renderMarkdown(model: CanonicalDependencies, policyView?: PolicyView): string {
   // Defensive re-sort: the renderer must not trust input order.
   const sorted = [...model.packages].sort(comparePackages);
 
-  const lines: string[] = [`# ${documentTitle(policyView)}`, "", HEADER_LINE, ""];
+  const lines: string[] = [`# ${documentTitle(policyView)}`, "", HEADER_LINE];
+
+  // The scope-of-assertion + attribution lines land directly after the auto-generated header
+  // comment, BEFORE the author preamble - generated content groups with the generated header.
+  // Absent PolicyView.targetProfile, nothing is pushed here and the output stays byte-identical to
+  // a document rendered with no [target] table declared.
+  const targetProfile = policyView?.targetProfile;
+
+  if (targetProfile !== undefined) {
+    lines.push(...targetHeaderLines(targetProfile));
+  }
+
+  lines.push("");
 
   // Author preamble: verbatim markdown block after the auto-generated header comment and BEFORE the
   // policy pointer / counts. CRLF/CR normalized to "\n" (determinism); rendered as-is - NOT

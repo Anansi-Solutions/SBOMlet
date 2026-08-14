@@ -10,7 +10,9 @@ import {
   type Verdict,
 } from "../src/model/dependencies";
 import { annotateFindings } from "../src/normalize/normalize";
-import { renderMarkdown, type PolicyView } from "../src/render/markdown";
+import { renderMarkdown, type PolicyView, type TargetProfileSummary } from "../src/render/markdown";
+import { renderNotices } from "../src/render/notices";
+import type { TargetProfile } from "../src/policy/compat";
 
 const TARGET = "libraries/iframe-rpc";
 const SYNTHETIC_TARGET = "apps/synthetic";
@@ -2252,7 +2254,161 @@ describe("renderMarkdown — [document] title + preamble", () => {
 });
 
 // ===========================================================================
-// The "## Problematic licenses" roll-up — rendered after the
+// The generated scope-of-assertion + attribution lines: directly after the
+// auto-generated header comment, BEFORE the author preamble - present only
+// when PolicyView.targetProfile is set (the policy declares an active
+// [target] lane). NOTICES never carries either line (it takes no PolicyView
+// at all). Absent [target] renders neither line - the no-target byte-identity
+// contract the existing golden-byte-equality tests already lock.
+// ===========================================================================
+describe("renderMarkdown - target-profile header lines (scope-of-assertion + attribution)", () => {
+  const model: CanonicalDependencies = {
+    packages: [
+      entry({
+        purl: "pkg:npm/a@1.0.0",
+        name: "a",
+        version: "1.0.0",
+        finding: { expression: "MIT", elected: "MIT", source: "generator", confidence: "exact" },
+      }),
+    ],
+  };
+
+  const proprietaryProfile: TargetProfile = {
+    license: { kind: "proprietary" },
+    network: true,
+    distribution: "external",
+  };
+  const mitProfile: TargetProfile = {
+    license: { kind: "oss", id: "MIT" },
+    network: false,
+    distribution: "internal",
+  };
+
+  const viewWith = (targetProfile?: TargetProfileSummary): PolicyView => ({
+    policyPath: "policy.toml",
+    suppressedWorkspaces: [],
+    verdicts: [],
+    ...(targetProfile !== undefined ? { targetProfile } : {}),
+  });
+
+  test("absent PolicyView.targetProfile renders neither line - byte-identical to a no-target render", () => {
+    const withField = renderMarkdown(model, viewWith());
+    const withoutField = renderMarkdown(model, {
+      policyPath: "policy.toml",
+      suppressedWorkspaces: [],
+      verdicts: [],
+    });
+
+    expect(withField).toBe(withoutField);
+    expect(withField.includes("audited against")).toBe(false);
+    expect(withField.includes("OSADL")).toBe(false);
+  });
+
+  test("a project-level profile renders the exact scope-of-assertion line, naming all three profile elements", () => {
+    const output = renderMarkdown(model, viewWith({ project: proprietaryProfile, workspaces: [] }));
+    const lines = output.split("\n");
+
+    expect(lines[3]).toBe(
+      "This report was audited against the declared target: proprietary, network-deployed, " +
+        "distributed externally. Its findings assert license validity against that target and the " +
+        "declared configuration only.",
+    );
+  });
+
+  test("the attribution/disclaimer line follows immediately, naming both data sources and their snapshot timestamps", () => {
+    const output = renderMarkdown(model, viewWith({ project: mitProfile, workspaces: [] }));
+    const lines = output.split("\n");
+
+    expect(lines[4]).toBe(
+      "Compatibility verdicts draw on the OSADL compatibility matrix and copyleft class table " +
+        "(snapshot 2026-08-04T15:39:00+0000, osadl.org) and the ScanCode LicenseDB category index " +
+        "(snapshot 2026-08-10T16:21:01Z, scancode-licensedb.aboutcode.org) - this is automated, " +
+        "data-driven output, not legal advice.",
+    );
+    expect(output.includes("not legal advice")).toBe(true);
+  });
+
+  test("locked order: header comment, then the target line, then the attribution line, then the author preamble", () => {
+    const output = renderMarkdown(model, {
+      policyPath: "policy.toml",
+      suppressedWorkspaces: [],
+      verdicts: [],
+      targetProfile: { project: mitProfile, workspaces: [] },
+      document: { preamble: "Author preamble text." },
+    });
+    const headerIdx = output.indexOf(
+      "<!-- AUTO-GENERATED - do not edit. Regenerate with: task generate -->",
+    );
+    const targetIdx = output.indexOf("This report was audited against");
+    const attributionIdx = output.indexOf("Compatibility verdicts draw on the OSADL");
+    const preambleIdx = output.indexOf("Author preamble text.");
+
+    expect(headerIdx).toBeGreaterThan(-1);
+    expect(targetIdx).toBeGreaterThan(headerIdx);
+    expect(attributionIdx).toBeGreaterThan(targetIdx);
+    expect(preambleIdx).toBeGreaterThan(attributionIdx);
+  });
+
+  test("per-workspace overrides append to the project-level line, deterministically sorted by path regardless of input order", () => {
+    const output = renderMarkdown(
+      model,
+      viewWith({
+        project: mitProfile,
+        workspaces: [
+          { path: "apps/z", profile: proprietaryProfile },
+          { path: "apps/a", profile: mitProfile },
+        ],
+      }),
+    );
+    const line = output.split("\n")[3]!;
+
+    expect(line).toBe(
+      "This report was audited against the declared target: MIT, not network-deployed, internal " +
+        "use only. Per-workspace overrides: apps/a (MIT, not network-deployed, internal use only), " +
+        "apps/z (proprietary, network-deployed, distributed externally). Its findings assert " +
+        "license validity against that target and the declared configuration only.",
+    );
+  });
+
+  test("a workspaces-only profile (no complete project profile) names the per-workspace targets directly as the audited-against subject", () => {
+    const output = renderMarkdown(
+      model,
+      viewWith({
+        workspaces: [{ path: "apps/studio", profile: proprietaryProfile }],
+      }),
+    );
+    const line = output.split("\n")[3]!;
+
+    expect(line).toBe(
+      "This report was audited against the declared per-workspace targets: apps/studio " +
+        "(proprietary, network-deployed, distributed externally). Its findings assert license " +
+        "validity against those targets and the declared configuration only.",
+    );
+  });
+
+  test("a workspace path is escapeCell'd (markdown-injection mitigation, same trust boundary as every other policy-authored string)", () => {
+    const output = renderMarkdown(
+      model,
+      viewWith({
+        workspaces: [{ path: "apps/[evil](x)", profile: proprietaryProfile }],
+      }),
+    );
+
+    expect(output.includes("apps/[evil](x)")).toBe(false);
+    expect(output.includes("apps/\\[evil\\](x)")).toBe(true);
+  });
+
+  test("renderNotices NEVER carries either generated line - it takes no PolicyView and cannot, by construction", () => {
+    const notices = renderNotices(model);
+
+    expect(notices.includes("audited against")).toBe(false);
+    expect(notices.includes("OSADL")).toBe(false);
+    expect(notices.includes("ScanCode LicenseDB")).toBe(false);
+  });
+});
+
+// ===========================================================================
+// The "## Problematic licenses" roll-up - rendered after the
 // counts block, before the copyleft section, ONLY on a policy run. A BLOCKING
 // table of every fail verdict (grouped by purl+rule+reason), plus a one-line
 // non-blocking warn roll-up. Empty state renders the ✅ line.

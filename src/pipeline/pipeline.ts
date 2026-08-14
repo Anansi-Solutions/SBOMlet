@@ -13,6 +13,7 @@ import { enrichUnknowns } from "../enrich/enrich";
 import { type IntensiveOptions } from "../enrich/scancode";
 import { mergeSboms, type CollectedSbom } from "../merge/merge";
 import {
+  compareCodeUnits,
   DOCKER_IDENTITY_PREFIX,
   toSortedDependenciesJson,
   type CanonicalDependencies,
@@ -23,16 +24,21 @@ import { annotateFindings } from "../normalize/normalize";
 import { BUILTIN_OVERRIDES } from "../policy/builtinOverrides";
 import { acceptedContainerNotices, evaluate } from "../policy/evaluate";
 import { parsePolicy, type Policy } from "../policy/schema";
-import { suppressionOverlapNotices, unusedWorkspaceTargetWarnings } from "../policy/target";
+import {
+  resolveTargetProfile,
+  suppressionOverlapNotices,
+  unusedWorkspaceTargetWarnings,
+} from "../policy/target";
 import { alignTables } from "../render/alignTables";
 import { renderCyclonedx } from "../render/cyclonedx";
-import { renderMarkdown, type PolicyView } from "../render/markdown";
+import { renderMarkdown, type PolicyView, type TargetProfileSummary } from "../render/markdown";
 import { renderNotices } from "../render/notices";
 import { globToRegExp } from "../targets/discover";
 import { applyContainerScopes } from "./containerScope";
 import { resolveFrom } from "./paths";
 import { sanitizeForLog, writePolicySummary } from "./summary";
 import { collectTargets } from "./targets";
+import type { TargetProfile } from "../policy/compat";
 
 /**
  * The default directory for tool-generated committed artifacts - the enrichment
@@ -586,10 +592,42 @@ function writeTargetHygieneNotices(model: CanonicalDependencies, policy: Policy)
 }
 
 /**
+ * Project policy.target into the header lines' resolved-profile summary (PolicyView.targetProfile):
+ * the complete project-level profile when declared, plus every [[target.workspace]] override
+ * resolved to ITS OWN complete profile via resolveTargetProfile(entry.path, policy) - reusing the
+ * exact per-occurrence resolution the target lane itself applies (path-as-its-own-target always
+ * resolves to that entry, never a broader ancestor, so this is never a second, drift-prone merge of
+ * the network/distribution inheritance), sorted by path for determinism. Undefined absent [target]
+ * - the generated header lines then stay off entirely, so a no-target policy renders unchanged.
+ */
+function targetProfileSummaryOf(policy: Policy): TargetProfileSummary | undefined {
+  const target = policy.target;
+
+  if (target === undefined) {
+    return undefined;
+  }
+
+  const workspaces = target.workspaces
+    .map((entry) => {
+      const profile = resolveTargetProfile(entry.path, policy);
+
+      return profile === undefined ? undefined : { path: entry.path, profile };
+    })
+    .filter((entry): entry is { path: string; profile: TargetProfile } => entry !== undefined)
+    .sort((a, b) => compareCodeUnits(a.path, b.path));
+
+  return {
+    ...(target.profile !== undefined ? { project: target.profile } : {}),
+    workspaces,
+  };
+}
+
+/**
  * Project the PolicyView the document renderer consumes. The policy pointer path is
  * repo-root-relative (policyPointerPath) so the committed bytes stay stable across platforms. The
- * author-supplied [document] title + preamble flow into the licenses-document renderer only (never
- * the notices companion), via conditional spread so "absent" stays observable.
+ * author-supplied [document] title + preamble, and the resolved target-profile summary, flow into
+ * the licenses-document renderer only (never the notices companion), via conditional spread so
+ * "absent" stays observable.
  */
 function projectPolicyView(
   policy: Policy,
@@ -598,6 +636,8 @@ function projectPolicyView(
   verdicts: ReadonlyArray<Verdict>,
   developmentContainers: ReadonlySet<string>,
 ): PolicyView {
+  const targetProfile = targetProfileSummaryOf(policy);
+
   return {
     policyPath,
     suppressedWorkspaces: policy.suppressedWorkspaces,
@@ -605,6 +645,7 @@ function projectPolicyView(
     developmentContainers,
     acceptedContainerNotices: acceptedContainerNotices(model, verdicts),
     ...(policy.document !== undefined ? { document: policy.document } : {}),
+    ...(targetProfile !== undefined ? { targetProfile } : {}),
   };
 }
 
