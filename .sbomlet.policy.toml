@@ -16,6 +16,16 @@ handling = "warn"
 [os_dependencies]
 handling = "warn"
 
+# SBOMlet's own usage profile: MIT-licensed, available online (so the
+# AGPL/section-13 obligation class stays in scope regardless of distribution),
+# and externally distributed as a published tool. Declaring this activates
+# the compatibility lane below, classifying every dependency against MIT
+# instead of relying solely on the hand-authored rules above.
+[target]
+license = "MIT"
+network = true
+distribution = "external"
+
 [docker]
 # The Dockerfile-name-pattern walk is intentionally name-only (no content
 # sniffing), so it also matches the tool's own source files that merely SHARE
