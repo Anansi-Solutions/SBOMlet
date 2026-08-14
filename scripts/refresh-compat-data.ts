@@ -338,7 +338,7 @@ interface Downloaded {
   readonly lastModified: string | null;
 }
 
-/** Fetch a fixed URL, rejecting a redirect that lands on a different host (T-20-02). */
+/** Fetch a fixed URL, rejecting a redirect that lands on a different host. */
 async function fetchVerbatim(url: string): Promise<Downloaded> {
   const response = await fetch(url);
 
