@@ -10,7 +10,7 @@ import {
   type PackageAttribution,
   type PackageEntry,
 } from "../src/model/dependencies";
-import { leafIds, type ExpressionNode } from "../src/normalize/expression";
+import { canonicalizeExpression, leafIds, type ExpressionNode } from "../src/normalize/expression";
 import { annotateFindings } from "../src/normalize/normalize";
 import { renderMarkdown } from "../src/render/markdown";
 import { renderNotices } from "../src/render/notices";
@@ -467,6 +467,53 @@ describe("renderNotices — imprecise label honesty", () => {
     // section (and the section is omitted when nothing else is unknown).
     expect(output.includes("## Packages with unknown licenses")).toBe(false);
     expect(output.includes("jinja2@3.1.0 — unknown license")).toBe(false);
+  });
+});
+
+describe("renderNotices — canonical license display", () => {
+  const NOISY_EXPRESSION = "(MIT OR Apache-2.0) AND (Apache-2.0 AND MIT)";
+  const CANONICAL_EXPRESSION = canonicalizeExpression(NOISY_EXPRESSION);
+
+  test("a noisy declared claim's normalized expression renders canonical in the per-package License line", () => {
+    const model: CanonicalDependencies = {
+      packages: [
+        entry({
+          purl: "pkg:npm/noisy-pkg@1.0.0",
+          name: "noisy-pkg",
+          version: "1.0.0",
+          finding: exactFinding(NOISY_EXPRESSION),
+          attribution: attribution({
+            copyrightLines: ["Copyright (c) 2020 Someone"],
+          }),
+        }),
+      ],
+    };
+    const output = renderNotices(model);
+
+    expect(output.includes(`License: ${CANONICAL_EXPRESSION}`)).toBe(true);
+    expect(output.includes(`License: ${NOISY_EXPRESSION}`)).toBe(false);
+  });
+
+  test("an unparseable expression and an imprecise family token pass through the License line unchanged", () => {
+    const model: CanonicalDependencies = {
+      packages: [
+        entry({
+          purl: "pkg:npm/unparseable-pkg@1.0.0",
+          name: "unparseable-pkg",
+          version: "1.0.0",
+          finding: {
+            expression: "not a real spdx expression !!",
+            elected: null,
+            source: "generator",
+            confidence: "exact",
+          },
+          attribution: attribution({ copyrightLines: ["Copyright (c) 2020 Someone"] }),
+        }),
+      ],
+    };
+    const output = renderNotices(model);
+
+    expect(output.includes("License: not a real spdx expression !!")).toBe(true);
   });
 });
 
