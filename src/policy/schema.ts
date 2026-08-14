@@ -34,7 +34,7 @@ import type { DenyRule } from "./denylist";
 export type { DenyRule } from "./denylist";
 
 export interface SuppressedWorkspace {
-  /** Repo-relative target-identity prefix, e.g. "apps/scratch". */
+  /** Repo-relative target-identity prefix, e.g. "apps/studio". */
   path: string;
   /**
    * SPDX ID the workspace itself is distributed under. Validated to be a single license id (leaf,

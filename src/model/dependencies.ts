@@ -215,7 +215,7 @@ export const DOCKER_IDENTITY_PREFIX = "docker:";
 
 /**
  * Segment-aware identity-prefix match: `target` matches `path` only when it IS `path` or sits under
- * it as a whole path segment - "apps/scratch-helper" never matches "apps/scratch". The one prefix
+ * it as a whole path segment - "apps/studio-helper" never matches "apps/studio". The one prefix
  * comparison every policy-surface matcher shares (copyleft suppression paths, `[[compatible]]`
  * `where` scopes, target-profile resolution) so a crafted narrower/wider path can never
  * accidentally match the wrong side. Both directions matter: the scope "docker:a" covers every

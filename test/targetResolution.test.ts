@@ -120,7 +120,7 @@ describe("resolveTargetProfile", () => {
     });
   });
 
-  test('segment-aware matching: "apps/scratch-helper" never matches the narrower "apps/scratch"', () => {
+  test('segment-aware matching: "apps/studio-helper" never matches the narrower "apps/studio"', () => {
     const policy = parsePolicy(
       [
         "[target]",
@@ -129,22 +129,22 @@ describe("resolveTargetProfile", () => {
         'distribution = "external"',
         "",
         "[[target.workspace]]",
-        'path = "apps/scratch"',
+        'path = "apps/studio"',
         'license = "AGPL-3.0-only"',
         'reason = "fork is AGPL"',
         "",
       ].join("\n"),
     );
 
-    expect(resolveTargetProfile("apps/scratch-helper", policy)?.license).toEqual({
+    expect(resolveTargetProfile("apps/studio-helper", policy)?.license).toEqual({
       kind: "oss",
       id: "MIT",
     });
-    expect(resolveTargetProfile("apps/scratch", policy)?.license).toEqual({
+    expect(resolveTargetProfile("apps/studio", policy)?.license).toEqual({
       kind: "oss",
       id: "AGPL-3.0-only",
     });
-    expect(resolveTargetProfile("apps/scratch/nested", policy)?.license).toEqual({
+    expect(resolveTargetProfile("apps/studio/nested", policy)?.license).toEqual({
       kind: "oss",
       id: "AGPL-3.0-only",
     });
@@ -261,7 +261,7 @@ describe("suppressionOverlapNotices", () => {
     const policy = parsePolicy(
       [
         "[[workspace.copyleft_suppressed]]",
-        'path = "apps/scratch"',
+        'path = "apps/studio"',
         'license = "AGPL-3.0-only"',
         'description = "n/a"',
         "",
@@ -278,7 +278,7 @@ describe("suppressionOverlapNotices", () => {
       ),
       [
         "[[workspace.copyleft_suppressed]]",
-        'path = "apps/scratch"',
+        'path = "apps/studio"',
         'license = "AGPL-3.0-only"',
         'description = "n/a"',
         "",
@@ -287,7 +287,7 @@ describe("suppressionOverlapNotices", () => {
     const notices = suppressionOverlapNotices(policy);
 
     expect(notices).toHaveLength(1);
-    expect(notices[0]).toContain("apps/scratch");
+    expect(notices[0]).toContain("apps/studio");
     expect(notices[0]).toContain("governed by the declared project target profile");
   });
 
@@ -295,7 +295,7 @@ describe("suppressionOverlapNotices", () => {
     const policy = policyWith(
       [
         "[[target.workspace]]",
-        'path = "apps/scratch"',
+        'path = "apps/studio"',
         'license = "AGPL-3.0-only"',
         "network = false",
         'distribution = "external"',
@@ -304,7 +304,7 @@ describe("suppressionOverlapNotices", () => {
       ].join("\n"),
       [
         "[[workspace.copyleft_suppressed]]",
-        'path = "apps/scratch"',
+        'path = "apps/studio"',
         'license = "AGPL-3.0-only"',
         'description = "n/a"',
         "",
@@ -313,7 +313,7 @@ describe("suppressionOverlapNotices", () => {
     const notices = suppressionOverlapNotices(policy);
 
     expect(notices).toHaveLength(1);
-    expect(notices[0]).toContain('"apps/scratch"');
+    expect(notices[0]).toContain('"apps/studio"');
     expect(notices[0]).toContain("[[target.workspace]] entry");
   });
 
@@ -330,7 +330,7 @@ describe("suppressionOverlapNotices", () => {
       ].join("\n"),
       [
         "[[workspace.copyleft_suppressed]]",
-        'path = "apps/scratch"',
+        'path = "apps/studio"',
         'license = "AGPL-3.0-only"',
         'description = "n/a"',
         "",
