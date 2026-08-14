@@ -41,23 +41,23 @@ The packages listed below carry copyleft or special license obligations in at le
 
 ## Production dependencies
 
-| Name                  | Ecosystem | Version | License             | Used in |
-| --------------------- | --------- | ------- | ------------------- | ------- |
-| @ark/schema           | npm       | 0.56.0  | MIT                 | .       |
-| @ark/util             | npm       | 0.56.0  | MIT                 | .       |
-| arkregex              | npm       | 0.0.5   | MIT                 | .       |
-| arktype               | npm       | 2.2.0   | MIT                 | .       |
-| array-find-index      | npm       | 1.0.2   | MIT                 | .       |
-| smol-toml             | npm       | 1.6.1   | BSD-3-Clause        | .       |
-| spdx-compare          | npm       | 1.0.0   | MIT                 | .       |
-| spdx-correct          | npm       | 3.2.0   | Apache-2.0          | .       |
-| spdx-exceptions       | npm       | 2.5.0   | CC-BY-3.0           | .       |
-| spdx-expression-parse | npm       | 3.0.1   | MIT                 | .       |
-| spdx-expression-parse | npm       | 4.0.0   | MIT                 | .       |
-| spdx-license-ids      | npm       | 3.0.23  | CC0-1.0             | .       |
-| spdx-license-list     | npm       | 6.11.0  | CC0-1.0             | .       |
-| spdx-ranges           | npm       | 2.1.1   | (MIT AND CC-BY-3.0) | .       |
-| spdx-satisfies        | npm       | 6.0.0   | MIT                 | .       |
+| Name                  | Ecosystem | Version | License           | Used in |
+| --------------------- | --------- | ------- | ----------------- | ------- |
+| @ark/schema           | npm       | 0.56.0  | MIT               | .       |
+| @ark/util             | npm       | 0.56.0  | MIT               | .       |
+| arkregex              | npm       | 0.0.5   | MIT               | .       |
+| arktype               | npm       | 2.2.0   | MIT               | .       |
+| array-find-index      | npm       | 1.0.2   | MIT               | .       |
+| smol-toml             | npm       | 1.6.1   | BSD-3-Clause      | .       |
+| spdx-compare          | npm       | 1.0.0   | MIT               | .       |
+| spdx-correct          | npm       | 3.2.0   | Apache-2.0        | .       |
+| spdx-exceptions       | npm       | 2.5.0   | CC-BY-3.0         | .       |
+| spdx-expression-parse | npm       | 3.0.1   | MIT               | .       |
+| spdx-expression-parse | npm       | 4.0.0   | MIT               | .       |
+| spdx-license-ids      | npm       | 3.0.23  | CC0-1.0           | .       |
+| spdx-license-list     | npm       | 6.11.0  | CC0-1.0           | .       |
+| spdx-ranges           | npm       | 2.1.1   | CC-BY-3.0 AND MIT | .       |
+| spdx-satisfies        | npm       | 6.0.0   | MIT               | .       |
 
 ## Development-only dependencies
 
@@ -429,7 +429,7 @@ The packages listed below carry copyleft or special license obligations in at le
 | ts-extras                                         | npm       | 1.2.0   | MIT                  | .       |
 | tslib                                             | npm       | 2.8.1   | 0BSD                 | .       |
 | type-check                                        | npm       | 0.4.0   | MIT                  | .       |
-| type-fest                                         | npm       | 5.8.0   | (MIT OR CC0-1.0)     | .       |
+| type-fest                                         | npm       | 5.8.0   | CC0-1.0 OR MIT       | .       |
 | typescript                                        | npm       | 5.9.3   | Apache-2.0           | .       |
 | typescript-eslint                                 | npm       | 8.61.0  | MIT                  | .       |
 | undici-types                                      | npm       | 7.24.6  | MIT                  | .       |
@@ -469,13 +469,13 @@ The packages listed below carry copyleft or special license obligations in at le
 | apk-tools              | apk       | 2.14.10-r0  | GPL-2.0-only                              |
 | busybox                | apk       | 1.37.0-r20  | GPL-2.0-only                              |
 | busybox-binsh          | apk       | 1.37.0-r20  | GPL-2.0-only                              |
-| ca-certificates        | apk       | 20260611-r0 | MPL-2.0 AND MIT                           |
-| ca-certificates-bundle | apk       | 20260611-r0 | MPL-2.0 AND MIT                           |
+| ca-certificates        | apk       | 20260611-r0 | MIT AND MPL-2.0                           |
+| ca-certificates-bundle | apk       | 20260611-r0 | MIT AND MPL-2.0                           |
 | libapk2                | apk       | 2.14.10-r0  | GPL-2.0-only                              |
 | libcrypto3             | apk       | 3.5.7-r0    | Apache-2.0                                |
 | libssl3                | apk       | 3.5.7-r0    | Apache-2.0                                |
 | musl                   | apk       | 1.2.5-r12   | MIT                                       |
-| musl-utils             | apk       | 1.2.5-r12   | MIT AND BSD-2-Clause AND GPL-2.0-or-later |
+| musl-utils             | apk       | 1.2.5-r12   | BSD-2-Clause AND GPL-2.0-or-later AND MIT |
 | scanelf                | apk       | 1.3.8-r1    | GPL-2.0-only                              |
 | ssl_client             | apk       | 1.37.0-r20  | GPL-2.0-only                              |
 | zlib                   | apk       | 1.3.2-r0    | Zlib                                      |

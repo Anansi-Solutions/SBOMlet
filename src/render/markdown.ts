@@ -17,10 +17,12 @@
  * places), with no separate Docker section. Each subsection further splits into a "**System
  * packages**" table (the OS-ecosystem allowlist) and an "**Application packages**" table
  * (everything else), omitting an empty half. The License column shows the full normalized
- * expression when a finding exists - never only the elected branch; election surfaces through
- * copyleft section membership instead. Without a policy view there is no policy pointer and no
- * problematic roll-up or copyleft section, and every container classifies production (the
- * conservative default).
+ * expression when a finding exists, canonicalized (boolean-algebra reordering/dedup/absorption, per
+ * {@link canonicalizeExpression}) - never only the elected branch; election surfaces through
+ * copyleft section membership instead. The Assessment-conflicts evidence columns are the deliberate
+ * exception: they quote disagreeing sources and render each claim's as-observed spelling, never
+ * canonicalized. Without a policy view there is no policy pointer and no problematic roll-up or
+ * copyleft section, and every container classifies production (the conservative default).
  *
  * This module deliberately does not render the notices companion, emit CycloneDX, or evaluate
  * policy - verdicts and suppressed workspaces arrive pre-computed in the PolicyView projection.
@@ -39,6 +41,7 @@ import {
   type PackageEntry,
   type Verdict,
 } from "../model/dependencies";
+import { canonicalizeExpression } from "../normalize/expression";
 import { OS_PACKAGE_ECOSYSTEMS } from "../policy/osEcosystems";
 import { isUnknownLicense } from "./unknownLicense";
 import type { AcceptedContainerNotice } from "../policy/evaluate";
@@ -108,12 +111,15 @@ function isImprecise(pkg: PackageEntry): boolean {
 }
 
 /**
- * License cell rule: the full normalized expression when a finding exists; an imprecise finding
- * renders "<family> (imprecise)" (the family, faithfully, never a fabricated precise id); an
- * os-scope PARTIAL finding renders the expression PLUS the surfaced remainder ("<expression> (+
- * tok, tok)") so the known obligation AND the unrecognized tokens are both visible; "unknown" when
- * the expression is null and not imprecise. Packages without a finding (pre-annotation tolerance)
- * fall back to the raw-claims dedup join.
+ * License cell rule: the full normalized expression when a finding exists, canonicalized via {@link
+ * canonicalizeExpression} (spelling-blind reordering/dedup/absorption only - never a distribution
+ * or any other rewrite that could change meaning); an imprecise finding renders "<family>
+ * (imprecise)" (the family, faithfully, never a fabricated precise id) - a family token is not an
+ * expression and never reaches canonicalizeExpression; an os-scope PARTIAL finding renders the
+ * canonical expression PLUS the surfaced remainder ("<expression> (+ tok, tok)") so the known
+ * obligation AND the unrecognized tokens are both visible; "unknown" when the expression is null
+ * and not imprecise. Packages without a finding (pre-annotation tolerance) fall back to the
+ * raw-claims dedup join, rendered as-declared - there is no finding yet to canonicalize.
  */
 function licenseCellOf(pkg: PackageEntry): string {
   if (pkg.finding !== undefined) {
@@ -130,7 +136,8 @@ function licenseCellOf(pkg: PackageEntry): string {
       return `${pkg.finding.impreciseFamily ?? "unknown"} (imprecise)${suffix}`;
     }
 
-    const expression = pkg.finding.expression ?? "unknown";
+    const expression =
+      pkg.finding.expression !== null ? canonicalizeExpression(pkg.finding.expression) : "unknown";
 
     return `${expression}${suffix}`;
   }
