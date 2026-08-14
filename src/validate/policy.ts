@@ -26,6 +26,7 @@ export const TOP_LEVEL_KEYS = [
   "docker",
   "allow_source_available",
   "cache",
+  "target",
 ] as const;
 
 /**

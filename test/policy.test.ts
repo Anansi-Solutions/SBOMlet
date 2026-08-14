@@ -4418,3 +4418,322 @@ describe("parsePolicy — [cache] table", () => {
     expect(expectPolicyError('[cache]\ndir = ""\n').message).toContain("cache");
   });
 });
+
+describe("parsePolicy — [target] table", () => {
+  test("policy.target is undefined when absent", () => {
+    expect(parsePolicy('[unknown]\nhandling = "warn"\n').target).toBeUndefined();
+  });
+
+  test("a complete project profile without unknown_pair parses, defaulting unknown_pair to warn", () => {
+    const policy = parsePolicy(
+      ["[target]", 'license = "MIT"', "network = false", 'distribution = "external"', ""].join(
+        "\n",
+      ),
+    );
+
+    expect(policy.target).toEqual({
+      profile: { license: { kind: "oss", id: "MIT" }, network: false, distribution: "external" },
+      unknownPair: "warn",
+      workspaces: [],
+    });
+  });
+
+  test("a proprietary target with unknown_pair captures both", () => {
+    const policy = parsePolicy(
+      [
+        "[target]",
+        'license = "proprietary"',
+        "network = true",
+        'distribution = "internal"',
+        'unknown_pair = "fail"',
+        "",
+      ].join("\n"),
+    );
+
+    expect(policy.target).toEqual({
+      profile: { license: { kind: "proprietary" }, network: true, distribution: "internal" },
+      unknownPair: "fail",
+      workspaces: [],
+    });
+  });
+
+  test("a workspaces-only [target] whose every entry is complete parses with no project profile", () => {
+    const policy = parsePolicy(
+      [
+        "[[target.workspace]]",
+        'path = "apps/api"',
+        'license = "MIT"',
+        "network = false",
+        'distribution = "external"',
+        'reason = "public API service"',
+        "",
+      ].join("\n"),
+    );
+
+    expect(policy.target?.profile).toBeUndefined();
+    expect(policy.target?.workspaces).toEqual([
+      {
+        path: "apps/api",
+        license: { kind: "oss", id: "MIT" },
+        reason: "public API service",
+        network: false,
+        distribution: "external",
+      },
+    ]);
+  });
+
+  test("per-field inheritance: a workspace entry may carry only path/license/reason under a complete project profile", () => {
+    const policy = parsePolicy(
+      [
+        "[target]",
+        'license = "MIT"',
+        "network = false",
+        'distribution = "external"',
+        "",
+        "[[target.workspace]]",
+        'path = "apps/api"',
+        'license = "GPL-3.0-only"',
+        'reason = "diverging outbound license for this workspace"',
+        "",
+      ].join("\n"),
+    );
+
+    expect(policy.target?.workspaces).toEqual([
+      {
+        path: "apps/api",
+        license: { kind: "oss", id: "GPL-3.0-only" },
+        reason: "diverging outbound license for this workspace",
+      },
+    ]);
+  });
+
+  test("TOP_LEVEL_KEYS accepts target (no unknown-top-level-key rejection)", () => {
+    expect(() =>
+      parsePolicy(
+        ["[target]", 'license = "MIT"', "network = false", 'distribution = "external"', ""].join(
+          "\n",
+        ),
+      ),
+    ).not.toThrow();
+  });
+
+  test("rejects missing network, naming the table path and the missing key", () => {
+    const error = expectPolicyError(
+      ["[target]", 'license = "MIT"', 'distribution = "external"', ""].join("\n"),
+    );
+
+    expect(error.message).toContain("target:");
+    expect(error.message).toContain("declaring a target requires the full usage profile");
+    expect(error.message).toContain('"network"');
+  });
+
+  test("rejects missing distribution, naming the missing key", () => {
+    const error = expectPolicyError(
+      ["[target]", 'license = "MIT"', "network = false", ""].join("\n"),
+    );
+
+    expect(error.message).toContain('"distribution"');
+  });
+
+  test("rejects missing license, naming the missing key", () => {
+    const error = expectPolicyError(
+      ["[target]", "network = false", 'distribution = "external"', ""].join("\n"),
+    );
+
+    expect(error.message).toContain('"license"');
+  });
+
+  test("rejects a compound license expression", () => {
+    const error = expectPolicyError(
+      [
+        "[target]",
+        'license = "MIT OR Apache-2.0"',
+        "network = false",
+        'distribution = "external"',
+        "",
+      ].join("\n"),
+    );
+
+    expect(error.message).toContain("compound expression");
+  });
+
+  test("rejects a LicenseRef- target license", () => {
+    const error = expectPolicyError(
+      [
+        "[target]",
+        'license = "LicenseRef-proprietary-eula"',
+        "network = false",
+        'distribution = "external"',
+        "",
+      ].join("\n"),
+    );
+
+    expect(error.message).toContain("LicenseRef-/DocumentRef-");
+  });
+
+  test("rejects an unknown SPDX id (parse failure, house idiom)", () => {
+    const error = expectPolicyError(
+      [
+        "[target]",
+        'license = "Not-A-Real-License-XYZ"',
+        "network = false",
+        'distribution = "external"',
+        "",
+      ].join("\n"),
+    );
+
+    expect(error.message).toContain("not a valid SPDX expression");
+  });
+
+  test("rejects a non-boolean network", () => {
+    const error = expectPolicyError(
+      ["[target]", 'license = "MIT"', 'network = "false"', 'distribution = "external"', ""].join(
+        "\n",
+      ),
+    );
+
+    expect(error.message).toContain('key "network" must be a boolean');
+  });
+
+  test("rejects a distribution outside external|internal", () => {
+    const error = expectPolicyError(
+      ["[target]", 'license = "MIT"', "network = false", 'distribution = "worldwide"', ""].join(
+        "\n",
+      ),
+    );
+
+    expect(error.message).toContain('"external" or "internal"');
+  });
+
+  test("rejects unknown_pair outside warn|fail", () => {
+    const error = expectPolicyError(
+      [
+        "[target]",
+        'license = "MIT"',
+        "network = false",
+        'distribution = "external"',
+        'unknown_pair = "ignore"',
+        "",
+      ].join("\n"),
+    );
+
+    expect(error.message).toContain('unknown_pair" must be "warn" or "fail"');
+  });
+
+  test("rejects an unknown key on the [target] table", () => {
+    const error = expectPolicyError(
+      [
+        "[target]",
+        'license = "MIT"',
+        "network = false",
+        'distribution = "external"',
+        'strict = "true"',
+        "",
+      ].join("\n"),
+    );
+
+    expect(error.message).toContain('unknown key "strict"');
+  });
+
+  test("rejects an empty [target] table (a dead activation switch)", () => {
+    const error = expectPolicyError("[target]\n");
+
+    expect(error.message).toContain("declares nothing to govern");
+  });
+
+  test("rejects a docker:-prefixed [[target.workspace]] path", () => {
+    const error = expectPolicyError(
+      [
+        "[target]",
+        'license = "MIT"',
+        "network = false",
+        'distribution = "external"',
+        "",
+        "[[target.workspace]]",
+        'path = "docker:services/app/Dockerfile"',
+        'license = "MIT"',
+        'reason = "n/a"',
+        "",
+      ].join("\n"),
+    );
+
+    expect(error.message).toContain('must not start with "docker:"');
+  });
+
+  test("rejects a duplicate [[target.workspace]] path", () => {
+    const error = expectPolicyError(
+      [
+        "[target]",
+        'license = "MIT"',
+        "network = false",
+        'distribution = "external"',
+        "",
+        "[[target.workspace]]",
+        'path = "apps/api"',
+        'license = "MIT"',
+        'reason = "first"',
+        "",
+        "[[target.workspace]]",
+        'path = "apps/api"',
+        'license = "GPL-3.0-only"',
+        'reason = "second, duplicate path"',
+        "",
+      ].join("\n"),
+    );
+
+    expect(error.message).toContain("duplicates an earlier [[target.workspace]] entry");
+  });
+
+  test("rejects a [[target.workspace]] entry missing reason", () => {
+    const error = expectPolicyError(
+      [
+        "[target]",
+        'license = "MIT"',
+        "network = false",
+        'distribution = "external"',
+        "",
+        "[[target.workspace]]",
+        'path = "apps/api"',
+        'license = "MIT"',
+        "",
+      ].join("\n"),
+    );
+
+    expect(error.message).toContain('missing required key "reason"');
+  });
+
+  test("rejects a partial [[target.workspace]] profile when no complete project profile exists", () => {
+    const error = expectPolicyError(
+      [
+        "[[target.workspace]]",
+        'path = "apps/api"',
+        'license = "MIT"',
+        "network = false",
+        'reason = "n/a"',
+        "",
+      ].join("\n"),
+    );
+
+    expect(error.message).toContain("must carry its own");
+  });
+
+  test("rejects an unknown key on a [[target.workspace]] entry", () => {
+    const error = expectPolicyError(
+      [
+        "[target]",
+        'license = "MIT"',
+        "network = false",
+        'distribution = "external"',
+        "",
+        "[[target.workspace]]",
+        'path = "apps/api"',
+        'license = "MIT"',
+        'reason = "n/a"',
+        'weird = "x"',
+        "",
+      ].join("\n"),
+    );
+
+    expect(error.message).toContain('unknown key "weird"');
+  });
+});

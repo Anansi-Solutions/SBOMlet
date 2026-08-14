@@ -214,6 +214,19 @@ export type ScopeTaxonomy = "app" | "os";
 export const DOCKER_IDENTITY_PREFIX = "docker:";
 
 /**
+ * Segment-aware identity-prefix match: `target` matches `path` only when it IS `path` or sits under
+ * it as a whole path segment - "apps/scratch-helper" never matches "apps/scratch". The one prefix
+ * comparison every policy-surface matcher shares (copyleft suppression paths, `[[compatible]]`
+ * `where` scopes, target-profile resolution) so a crafted narrower/wider path can never
+ * accidentally match the wrong side. Both directions matter: the scope "docker:a" covers every
+ * target under it ("docker:a/Dockerfile"), while the scope "docker:a/Dockerfile" never covers the
+ * shorter target "docker:a" (the fail-safe direction).
+ */
+export function matchesIdentityPrefix(target: string, path: string): boolean {
+  return target === path || target.startsWith(path + "/");
+}
+
+/**
  * Dependency provenance - "why is this dependency here?" - derived per-target at collect time from
  * the lockfile/BOM dependency graph. Introduction is PER-TARGET (per BOM): the same purl can be a
  * direct dependency in one workspace and a transitive one in another, so this rides on the
