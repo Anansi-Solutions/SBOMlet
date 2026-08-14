@@ -1,15 +1,18 @@
 /**
  * License-axis classification: target license x dependency leaf, through the four-tier fallback
  * chain (OSADL matrix cell -> OSADL copyleft class -> ScanCode LicenseDB category -> SBOMlet's
- * literal copyleft sets).
+ * literal copyleft sets), plus profile-aware SPDX expression composition.
  *
  * Tier order decides the axis class: the first tier that covers the leaf wins, exactly mirroring
  * the "first-tier-wins" runtime posture consistency.ts documents for the underlying data. The
  * obligation tag is a SEPARATE, tier-order-independent read of the same three datasets (never
- * guessed) - see {@link classifyLeaf}'s doc for the exact priority. Pure, deterministic, no I/O;
- * consumed by nothing yet (expression composition and the usage-profile modulation land in later
- * commits of this same wave).
+ * guessed) - see {@link classifyLeaf}'s doc for the exact priority. classifyExpression modulates
+ * every leaf through the usage-profile scope gate (profile.ts) before combining leaves with AND/OR
+ * dominance; it never imports or calls the no-target `elect()` in normalize/expression.ts, so that
+ * election path stays byte-unchanged by construction.
  */
+import { compareCodeUnits } from "../../model/dependencies";
+import { hasRefLeaf, renderNode, type ExpressionNode } from "../../normalize/expression";
 import { AGPL_IDS, COPYLEFT_IDS } from "../copyleft";
 import {
   OSADL_COPYLEFT_CLASS,
@@ -18,6 +21,7 @@ import {
   type OsadlCopyleftClass,
   type OsadlMatrixCell,
 } from "./data";
+import { applyUsageProfile, type ModulatedClass, type TargetProfile } from "./profile";
 
 /** The declared target: a single FOSS SPDX id, or the literal `proprietary` keyword. */
 export type TargetLicense = { kind: "oss"; id: string } | { kind: "proprietary" };
@@ -112,11 +116,10 @@ function matrixTier(
 }
 
 /**
- * Maps an OSADL copyleft class to an axis class. Proprietary targets follow D2 (`No` -> compatible,
- * `Yes (restricted)` -> boundary, `Yes` -> incompatible, `Questionable` -> residual - a real
- * posture with a boundary tier); OSS targets falling back to this tier have no pairwise data, so
- * only `No` may decide `compatible` - every other class is an honest `residual`, never
- * `incompatible`.
+ * Maps an OSADL copyleft class to an axis class. Proprietary targets get a real boundary tier (`No`
+ * -> compatible, `Yes (restricted)` -> boundary, `Yes` -> incompatible, `Questionable` ->
+ * residual); OSS targets falling back to this tier have no pairwise data, so only `No` may decide
+ * `compatible` - every other class is an honest `residual`, never `incompatible`.
  */
 function classifyOsadlClass(kind: TargetLicense["kind"], cls: OsadlCopyleftClass): AxisClass {
   if (kind === "proprietary") {
@@ -157,8 +160,8 @@ function osadlClassTier(
 /**
  * Maps a ScanCode LicenseDB category to an axis class. Permissive/Public Domain are compatible for
  * both target kinds; a proprietary target additionally distinguishes Copyleft Limited (boundary)
- * from Copyleft (incompatible), per D2's ScanCode extension; every other category (and the whole
- * OSS fallback branch) is residual - no pairwise data, no fail.
+ * from Copyleft (incompatible), the same boundary-tier extension the OSADL class table gets; every
+ * other category (and the whole OSS fallback branch) is residual - no pairwise data, no fail.
  */
 function classifyScancodeCategory(kind: TargetLicense["kind"], category: string): AxisClass {
   if (category === "Permissive" || category === "Public Domain") {
@@ -284,4 +287,109 @@ export function classifyLeaf(target: TargetLicense, leaf: string): AxisResult {
   const hit = osadlClassTier(target, keys) ?? scancodeTier(target, keys) ?? literalSetTier(keys);
 
   return { ...hit, obligation: obligationFor(keys) };
+}
+
+/**
+ * One leaf's modulated classification, carrying its own citation forward for the composition walk's
+ * `sources` accumulation.
+ */
+interface LeafVerdict {
+  readonly class: ModulatedClass;
+  readonly elected: ExpressionNode;
+  readonly sources: readonly string[];
+}
+
+/** Dominance order, worst to best - AND takes the lowest index present, OR prefers the highest. */
+const DOMINANCE_ORDER: readonly ModulatedClass[] = [
+  "incompatible",
+  "unassessed-ref",
+  "residual",
+  "boundary",
+  "held-internal",
+  "compatible",
+];
+
+/** AND's dominant class: the worst (lowest-indexed) of the two conjuncts' classes. */
+function dominantOf(a: ModulatedClass, b: ModulatedClass): ModulatedClass {
+  return DOMINANCE_ORDER.indexOf(a) <= DOMINANCE_ORDER.indexOf(b) ? a : b;
+}
+
+/**
+ * OR's preferred branch: the best (highest-indexed) class wins; a tie breaks exactly like the
+ * no-target `elect()` in normalize/expression.ts - no-ref-leaves first, then `compareCodeUnits` on
+ * the rendered elected form - so an OR of two equally-classed branches stays as order-independent
+ * as the untouched no-target election.
+ */
+function preferredBranch(left: LeafVerdict, right: LeafVerdict): LeafVerdict {
+  const leftRank = DOMINANCE_ORDER.indexOf(left.class);
+  const rightRank = DOMINANCE_ORDER.indexOf(right.class);
+
+  if (leftRank !== rightRank) {
+    return leftRank > rightRank ? left : right;
+  }
+
+  const leftRef = hasRefLeaf(left.elected);
+  const rightRef = hasRefLeaf(right.elected);
+
+  if (leftRef !== rightRef) {
+    return leftRef ? right : left;
+  }
+
+  return compareCodeUnits(renderNode(left.elected), renderNode(right.elected)) <= 0 ? left : right;
+}
+
+/** Renders a leaf node's `id[+][ WITH exception]` text for {@link classifyLeaf}'s string input. */
+function leafText(node: Extract<ExpressionNode, { license: string }>): string {
+  return renderNode(node);
+}
+
+/** Recursive composition walk shared by both operators, over already-profile-modulated leaves. */
+function walk(profile: TargetProfile, node: ExpressionNode): LeafVerdict {
+  if ("license" in node) {
+    const axis = classifyLeaf(profile.license, leafText(node));
+    const modulated = applyUsageProfile(axis, profile);
+
+    return { class: modulated.class, elected: node, sources: [modulated.source] };
+  }
+
+  const left = walk(profile, node.left);
+  const right = walk(profile, node.right);
+
+  if (node.conjunction === "and") {
+    return {
+      class: dominantOf(left.class, right.class),
+      elected: { left: left.elected, conjunction: "and", right: right.elected },
+      sources: [...left.sources, ...right.sources],
+    };
+  }
+
+  return preferredBranch(left, right);
+}
+
+/** One SPDX expression's profile-modulated, target-aware classification. */
+export interface ExpressionResult {
+  readonly class: ModulatedClass;
+  /**
+   * The elected branch (AND keeps both sides; OR keeps the winning branch) - WITH never stripped.
+   */
+  readonly elected: ExpressionNode;
+  /** Per-leaf citations of the elected subtree, in left-to-right leaf order (not deduped). */
+  readonly sources: readonly string[];
+}
+
+/**
+ * Classifies a whole SPDX expression against a target profile: every leaf is modulated through
+ * {@link applyUsageProfile} before combining. AND requires every conjunct (dominance: the worst
+ * class wins, keeping both sides elected - every obligation applies); OR elects the best-class
+ * branch (the inverse preference), ties breaking exactly as `elect()` does. Never imports or calls
+ * `elect()` - the no-target election path stays byte-unchanged by construction.
+ *
+ * @remarks The Apache-2.0 OR GPL-2.0-only case is the one concrete example worth carrying: under
+ * a `GPL-2.0-only` target, `elect()`'s own non-copyleft preference would pick the Apache-2.0 branch
+ * even though the matrix rejects it (`GPL-2.0-only` -> `Apache-2.0` = `No`) while the GPL branch is
+ * the target's own diagonal (`Same`) - this walk's target-aware preference picks the GPL branch
+ * instead, in both operand orders.
+ */
+export function classifyExpression(profile: TargetProfile, node: ExpressionNode): ExpressionResult {
+  return walk(profile, node);
 }

@@ -141,7 +141,7 @@ describe("classifyLeaf - tier order observable", () => {
   });
 });
 
-describe("classifyLeaf - proprietary target (D2)", () => {
+describe("classifyLeaf - proprietary target", () => {
   test("permissive is compatible", () => {
     const result = classifyLeaf(proprietary, "MIT");
 

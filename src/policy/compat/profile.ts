@@ -14,7 +14,7 @@
  */
 import type { AxisResult, TargetLicense } from "./classify";
 
-/** The declared usage profile: license + the two scope-gating flags, all mandatory (D5). */
+/** The declared usage profile: license + the two scope-gating flags, all mandatory. */
 export interface TargetProfile {
   readonly license: TargetLicense;
   /** Gates whether the AGPL/section-13 obligation class is in scope, regardless of distribution. */
