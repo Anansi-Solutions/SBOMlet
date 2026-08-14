@@ -51,3 +51,4 @@ something we no longer do but haven't replaced.
 | [0022](0022-dotnet-lockfile-in-process.md) | Parse packages.lock.json in-process for .NET | Accepted |
 | [0023](0023-maven-committed-sidecar.md) | Read a committed CycloneDX sidecar for Maven, produced by the consumer's own CI | Accepted |
 | [0024](0024-container-aware-licenses-report.md) | Container-aware licenses report: copyleft-only dedup, the AGPL container exception, per-container prod/dev fold | Accepted |
+| [0025](0025-target-license-compatibility-lane.md) | Target-license compatibility lane: vetted-matrix compatibility replaces hand-authored accept-lists | Accepted |

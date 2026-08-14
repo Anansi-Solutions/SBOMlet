@@ -10,6 +10,10 @@
  * every leaf through the usage-profile scope gate (profile.ts) before combining leaves with AND/OR
  * dominance; it never imports or calls the no-target `elect()` in normalize/expression.ts, so that
  * election path stays byte-unchanged by construction.
+ *
+ * See ADR-0025 (docs/explanation/adr/0025-target-license-compatibility-lane.md) for why this tier
+ * chain replaces hand-authored accept-lists, the scope-gating principle, and the rejected
+ * alternatives.
  */
 import { compareCodeUnits } from "../../model/dependencies";
 import { hasRefLeaf, renderNode, type ExpressionNode } from "../../normalize/expression";
