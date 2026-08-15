@@ -457,7 +457,7 @@ function combinePrecise(preciseResults: ReadonlyArray<NormalizeResult>): License
   }
 
   let node = parse(expressions[0] as string) as ExpressionNode;
-  let expression = expressions[0] as string; // single claim: raw preserved verbatim
+  let combined = expressions[0] as string; // single claim: raw, pre-canonicalization
 
   if (expressions.length > 1) {
     for (const next of expressions.slice(1)) {
@@ -468,14 +468,25 @@ function combinePrecise(preciseResults: ReadonlyArray<NormalizeResult>): License
       };
     }
 
-    expression = renderNode(node); // compound operands parenthesized
+    combined = renderNode(node); // compound operands parenthesized
   }
+
+  // Canonicalize the combined expression HERE, at formation, so finding.expression is a MODEL
+  // invariant rather than a property of which claims happened to combine - never distribute, per
+  // canonicalizeExpression's own contract: idempotent, round-trip safe, conservative
+  // (flatten/dedupe/absorb/sort only). A single claim is unaffected in practice: a lone leaf
+  // canonicalizes to itself verbatim, so the "raw preserved verbatim" reading survives unchanged.
+  // `elected` is re-derived from the CANONICAL node (reparsed - canonicalizeExpression guarantees
+  // its output always reparses) so it never names a branch an absorption already dissolved out of
+  // `expression`.
+  const expression = canonicalizeExpression(combined);
+  const canonicalNode = parse(expression) as ExpressionNode;
 
   const anyCorrected = preciseResults.some((r) => r.source === "corrected");
 
   return {
     expression,
-    elected: renderNode(elect(node)),
+    elected: renderNode(elect(canonicalNode)),
     source: anyCorrected ? "corrected" : "generator",
     confidence: anyCorrected ? "corrected" : "exact",
   };
@@ -934,10 +945,15 @@ function assessPrecise(
     };
   }
 
-  const node = parse(assessed) as ExpressionNode;
+  // Canonicalize explicitly rather than trusting the scancode claim's raw to already be canonical:
+  // the invariant belongs HERE, at finding formation - election.ts/cache.ts already canonicalize
+  // before a scancode claim ever exists, but a finding must never depend on a caller's own
+  // diligence to stay a model invariant.
+  const expression = canonicalizeExpression(assessed);
+  const node = parse(expression) as ExpressionNode;
 
   return {
-    expression: assessed,
+    expression,
     elected: renderNode(elect(node)),
     source: "scancode",
     confidence: "exact",
