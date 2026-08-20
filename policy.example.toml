@@ -1,11 +1,11 @@
 # policy.example.toml -- starter policy for the third-party license tool.
 #
-# Copy this file (e.g. to policy.toml at your repo root) and pass it to the
+# Copy this file to .sbomlet.policy.toml at your repo root and pass it to the
 # generator:
 #
-#     generate --policy policy.toml ...
+#     task sbomlet:generate POLICY=.sbomlet.policy.toml
 #
-# Without --policy the tool only inventories licenses; with it, every
+# Without a policy the tool only inventories licenses; with one, every
 # (package x workspace) occurrence gets a verdict: ok, warn, fail, or
 # suppressed.
 #
@@ -26,7 +26,7 @@
 #   category default (copyleft flag / [unknown] handling)
 
 # ---------------------------------------------------------------------------
-# Deny-list (POL-09) -- the HIGHEST-precedence, TERMINAL lane
+# Deny-list -- the HIGHEST-precedence, TERMINAL lane
 #
 # A [[deny]] entry FORCE-FAILS any matching (package x occurrence) regardless
 # of dev/prod scope, workspace suppression, OR a [[compatible]] rule, or a
@@ -96,10 +96,11 @@ reason = "Commons-Clause is a use-restriction rider (no resale) layered onto ano
 # Suppression is FAMILY-AWARE: a finding is only suppressed when its
 # elected expression satisfies the workspace `license` itself, OR every
 # copyleft obligation in it belongs to the same license family as the
-# workspace license. The GNU family spans AGPL/GPL/LGPL, so an
-# AGPL-3.0-only workspace suppresses AGPL, GPL, and LGPL findings -- but
-# never SSPL, CC-BY-SA, MPL, or any other out-of-family copyleft finding,
-# which falls through to the normal fail default instead. The generated
+# workspace license, or to one that family absorbs. The GNU family spans
+# AGPL/GPL/LGPL and absorbs MPL, so an AGPL-3.0-only workspace suppresses
+# AGPL, GPL, LGPL, and MPL findings -- but never SSPL, CC-BY-SA, or any
+# other out-of-family copyleft finding, which falls through to the normal
+# fail default instead. The generated
 # verdict reason records WHICH relationship was verified (the audit
 # trail). Family grouping is deliberately coarse; use [[compatible]] for
 # precise per-license or per-package judgment calls.
@@ -154,6 +155,12 @@ description = "apps/scratch and its scratch-editor submodule are themselves dist
 # the acceptance to how the package arrives, so the same package arriving
 # through some other chain does not inherit the judgment. It is NOT
 # applicable at license level, where `where` alone scopes the acceptance.
+#
+# On a target that HAS a dependency graph the claim is checked: if a package
+# this entry accepts also reaches your project through a chain passing none of
+# the names listed, the WHOLE entry is void at that target and every package it
+# governs there fails, naming the chain. Split it into narrower entries, each
+# covering one way in.
 # ---------------------------------------------------------------------------
 
 [[compatible]]
@@ -179,6 +186,19 @@ as-dependency-of = ["image-pipeline"]
 rationale = "license-reviewed"
 where = ["apps/media"]
 comment = "Dual-licensed Apache-2.0 AND LGPL-3.0-or-later; the LGPL obligations are reviewed and accepted for these prebuilt binaries."
+
+# A container image's OS layer has NO dependency graph, so there is no
+# introduction path to check there: "self" is the only parent a policy may
+# name, and it accepts every occurrence this entry's `where` reaches. That is
+# an UNSCOPED acceptance -- keep `where` narrow, usually the one image you
+# reviewed.
+#
+# [[compatible]]
+# match = "package"
+# name = "busybox"
+# as-dependency-of = ["self"]
+# rationale = "os-package-unmodified"
+# where = ["docker:services/api/Dockerfile"]
 
 # ---------------------------------------------------------------------------
 # Target-license compatibility lane ([target] / [[target.workspace]])
@@ -227,7 +247,7 @@ comment = "Dual-licensed Apache-2.0 AND LGPL-3.0-or-later; the LGPL obligations 
 # ---------------------------------------------------------------------------
 
 # ---------------------------------------------------------------------------
-# Clarify overrides (two-level, staleness-guarded — POL-07)
+# Clarify overrides (two-level, staleness-guarded)
 #
 # Overrides come at TWO levels:
 #   1. TOOL-LEVEL defaults ship WITH the tool (src/policy/builtinOverrides.ts):
@@ -283,6 +303,16 @@ comment = "Dual-licensed Apache-2.0 AND LGPL-3.0-or-later; the LGPL obligations 
 #
 # `expression` must be valid SPDX -- parsed at validation time, so a typo fails
 # fast instead of mid-evaluation.
+#
+# These entries can also live in a FILE OF THEIR OWN, named by an explicit
+# top-level key -- never found by convention. That file holds [[clarify]]
+# tables and nothing else, its entries are cited clarifications[j] (numbered
+# within it), and a [[clarify]] here naming the same package decides ahead of
+# an imported one. It is MACHINE-OWNED: `refresh-clarifications --write`
+# rewrites it whole, so notes about an entry go in that entry's own
+# comment/evidence keys, never in # lines around it.
+#
+#   clarifications = ".sbomlet.clarifications.toml"
 # ---------------------------------------------------------------------------
 
 [[clarify]]
@@ -328,7 +358,7 @@ evidence = ["node_modules/jsonify/README.md"]
 handling = "warn"
 
 # ---------------------------------------------------------------------------
-# Development / build-time dependency handling (POL-08)
+# Development / build-time dependency handling
 #
 # Distinguishes development/build-time dependencies from production (distributed)
 # ones IN THE GATE. A would-be FAIL (a copyleft license, or an unknown license
@@ -338,7 +368,7 @@ handling = "warn"
 #
 #   handling = "warn"    -- a dev would-be-fail downgrades to WARN (the default).
 #   handling = "fail"    -- NO downgrade; gate dev EXACTLY like prod (the
-#                           pre-POL-08 behavior, for strict projects).
+#                           for strict projects).
 #   handling = "ignore"  -- a dev would-be-fail becomes OK (an EXPLICIT,
 #                           documented opt-out — use deliberately).
 #
@@ -368,7 +398,32 @@ handling = "warn"
 # ---------------------------------------------------------------------------
 
 # ---------------------------------------------------------------------------
-# Docker image-package handling (COLL-04)
+# Document presentation ([document])
+#
+# Affects THIRD_PARTY_LICENSES.md only, never the notices companion. Both keys
+# are optional: `title` replaces the default H1, and `preamble` is rendered
+# verbatim as author Markdown below the generated header (write it as a
+# multi-line string if it spans paragraphs).
+#
+#   [document]
+#   title = "Third-Party Licenses -- Acme Corp"
+#   preamble = "Reviewed before each release; questions to compliance@acme.example."
+# ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# Dockerfile-discovery exclusions ([docker])
+#
+# Repo-relative forward-slash globs ("*" within one path segment, "**" across
+# them); a matching Dockerfile is never built or scanned. Consulted by the
+# maintainer-run `generate-docker-sbom` discovery lane ONLY -- generate and
+# check never discover Dockerfiles, so an ignore glob has no effect on them.
+#
+#   [docker]
+#   ignore = ["docker/dev.Dockerfile", "ci/**"]
+# ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# Docker image-package handling
 #
 # Governs the packages scanned out of your Docker images -- the full image
 # contents in the committed .sbomlet.cache/docker.sbom.json, produced by the
@@ -439,10 +494,17 @@ handling = "warn"
 # matching container's packages to render under "## Development-only
 # dependencies" instead of "## Production dependencies" -- for images that
 # only run in CI or locally and are never shipped to a user (a lint runner, a
-# test harness). RENDER-ONLY: it moves the LISTING, never a verdict -- a
-# routine copyleft package inside the marked container still downgrades or
-# gates per [os_dependencies] above, and an AGPL container package still fails
-# unconditionally either way.
+# test harness).
+#
+# For a SYSTEM package (the OS package-manager allowlist) this is
+# PLACEMENT-ONLY: it moves the LISTING, never a verdict -- a routine copyleft
+# package inside the marked container still downgrades or gates per
+# [os_dependencies] above, and an AGPL container package still fails
+# unconditionally either way. For an APPLICATION-ecosystem package baked into
+# the image (npm, pypi, ...) it moves the verdict too, exactly like marking a
+# lockfile dependency a devDependency: a copyleft fail dev-downgrades to a
+# warning once the container is marked. Mark a container development-only
+# because it never reaches a user, never to quiet a warning.
 #
 # `source` is a GLOB over the Dockerfile's repo-relative identity (no
 # "docker:" prefix), matched with the EXACT SAME dialect as [docker].ignore
