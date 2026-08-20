@@ -87,3 +87,24 @@ describe("collector registry", () => {
     expect(collectors.get("yarn")?.tool("not a lockfile }{ :::")).toEqual(CDXGEN_TOOL);
   });
 });
+
+describe("collector registry — which lanes derive a dependency graph", () => {
+  test("poetry is the only registration that derives one for every lockfile text", () => {
+    const deriving = ALL_KINDS.filter(
+      (kind) => collectors.get(kind)?.derivesDependencyGraph("") === true,
+    );
+
+    expect(deriving).toEqual(["poetry"]);
+  });
+
+  test("yarn derives one exactly when the lockfile routes to the plugin", () => {
+    expect(collectors.get("yarn")?.derivesDependencyGraph(YARN_V8_LOCKFILE)).toBe(true);
+    expect(collectors.get("yarn")?.derivesDependencyGraph(YARN_V6_LOCKFILE)).toBe(false);
+    expect(collectors.get("yarn")?.derivesDependencyGraph("")).toBe(false);
+  });
+
+  test("poetry's answer never depends on the lockfile text", () => {
+    expect(collectors.get("poetry")?.derivesDependencyGraph("")).toBe(true);
+    expect(collectors.get("poetry")?.derivesDependencyGraph("not a lockfile }{ :::")).toBe(true);
+  });
+});

@@ -2,6 +2,12 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, test } from "bun:test";
 
+import { npmIntroductions } from "../src/collectors/npmProvenance";
+import { poetryIntroductions } from "../src/collectors/poetryProvenance";
+import {
+  assertDependencyGraphCoverage,
+  targetsWithDependencyGraph,
+} from "../src/merge/dependencyGraphs";
 import { mergeSboms, purlSetOf } from "../src/merge/merge";
 import {
   comparePackages,
@@ -2209,5 +2215,126 @@ describe("mergeSboms — cross-image claim divergence (dockerClaimDivergence)", 
         { target: "docker:image-b", claims: ["MIT AND ISC"] },
       ],
     });
+  });
+});
+
+const GRAPH_TARGET = "apps/web";
+const GRAPHLESS_TARGET = "apps/legacy";
+
+/** A yarn-plugin-shaped BOM: a root-anchored graph over root -> direct -> deep. */
+function graphBom(dependencies?: unknown): unknown {
+  return {
+    bomFormat: "CycloneDX",
+    specVersion: "1.6",
+    metadata: { component: { "bom-ref": "root", purl: "pkg:npm/root@1.0.0" } },
+    components: [
+      {
+        type: "library",
+        name: "direct",
+        version: "1.0.0",
+        purl: "pkg:npm/direct@1.0.0",
+        "bom-ref": "direct",
+      },
+      {
+        type: "library",
+        name: "deep",
+        version: "2.0.0",
+        purl: "pkg:npm/deep@2.0.0",
+        "bom-ref": "deep",
+      },
+    ],
+    ...(dependencies !== undefined ? { dependencies } : {}),
+  };
+}
+
+/** The same components with no graph at all - what a regressed generator emits. */
+function graphlessBom(): unknown {
+  return graphBom();
+}
+
+const POETRY_LOCK = ["[[package]]", 'name = "a"', 'version = "1.0.0"', ""].join("\n");
+const PYPROJECT = ["[project]", 'dependencies = ["a"]', ""].join("\n");
+
+/** cdxgen's python inventory: one component the lock carries, one it does not. */
+function pypiBom(): unknown {
+  return {
+    bomFormat: "CycloneDX",
+    specVersion: "1.6",
+    components: [
+      { type: "library", name: "a", version: "1.0.0", purl: "pkg:pypi/a@1.0.0" },
+      { type: "library", name: "b", version: "2.0.0", purl: "pkg:pypi/b@2.0.0" },
+    ],
+  };
+}
+
+describe("dependency-graph coverage", () => {
+  test("targetsWithDependencyGraph names exactly the targets whose lane declared one", () => {
+    const targets = targetsWithDependencyGraph([
+      { sbom: graphBom(), targetIdentity: GRAPH_TARGET, derivesDependencyGraph: true },
+      { sbom: graphlessBom(), targetIdentity: GRAPHLESS_TARGET },
+      { sbom: graphlessBom(), targetIdentity: "docker:image-a", derivesDependencyGraph: false },
+    ]);
+
+    expect([...targets]).toEqual([GRAPH_TARGET]);
+  });
+
+  test("a target whose lane derived a graph passes when its occurrences carry the introductions", () => {
+    const sbom = graphBom([
+      { ref: "root", dependsOn: ["direct"] },
+      { ref: "direct", dependsOn: ["deep"] },
+    ]);
+    const model = mergeSboms([
+      { sbom, targetIdentity: GRAPH_TARGET, introductions: npmIntroductions(sbom) },
+    ]);
+
+    expect(
+      model.packages.every((pkg) => pkg.occurrences[0]?.introduction !== undefined),
+    ).toBeTrue();
+    expect(() => assertDependencyGraphCoverage(model, new Set([GRAPH_TARGET]))).not.toThrow();
+  });
+
+  test("a target whose lane derived a graph but whose packages carry none fails loudly, naming the target and its packages", () => {
+    const sbom = graphlessBom();
+    const model = mergeSboms([
+      { sbom, targetIdentity: GRAPH_TARGET, introductions: npmIntroductions(sbom) },
+    ]);
+
+    expect(() => assertDependencyGraphCoverage(model, new Set([GRAPH_TARGET]))).toThrow(
+      'target "apps/web" is collected by a lane that derives a dependency graph, but none of its 2 packages carries introduction data (deep, direct)',
+    );
+  });
+
+  test("a lockfile-derived graph covering only part of the inventory is not an integrity failure", () => {
+    const model = mergeSboms([
+      {
+        sbom: pypiBom(),
+        targetIdentity: GRAPH_TARGET,
+        introductions: poetryIntroductions(POETRY_LOCK, PYPROJECT),
+      },
+    ]);
+    const uncovered = model.packages.filter(
+      (pkg) => pkg.occurrences[0]?.introduction === undefined,
+    );
+
+    expect(uncovered.map((pkg) => pkg.name)).toEqual(["b"]);
+    expect(() => assertDependencyGraphCoverage(model, new Set([GRAPH_TARGET]))).not.toThrow();
+  });
+
+  test("a target no lane declared a graph for is never checked", () => {
+    const model = mergeSboms([{ sbom: graphlessBom(), targetIdentity: GRAPHLESS_TARGET }]);
+
+    expect(() => assertDependencyGraphCoverage(model, new Set([GRAPH_TARGET]))).not.toThrow();
+  });
+
+  test("an empty target contributes no packages and cannot fail the check", () => {
+    const model = mergeSboms([
+      {
+        sbom: { bomFormat: "CycloneDX", specVersion: "1.6", components: [] },
+        targetIdentity: GRAPH_TARGET,
+        introductions: new Map(),
+      },
+    ]);
+
+    expect(() => assertDependencyGraphCoverage(model, new Set([GRAPH_TARGET]))).not.toThrow();
   });
 });

@@ -68,11 +68,22 @@ export interface Collector {
    */
   tool(lockfileText: string): ToolIdentity;
   /**
+   * Does this lane reconstruct a root-anchored dependency graph for the target, so that a package's
+   * introduction path can be walked? Answered from the lockfile text for the same reason `tool` is
+   * - yarn's generator choice, and with it the graph, is content-dependent. Every registration
+   * states it explicitly: a lane that emits a flat inventory answers false, and a new lane has to
+   * decide rather than inherit.
+   */
+  derivesDependencyGraph(lockfileText: string): boolean;
+  /**
    * One discovered target -> the merge-ready input. Throws on scan failure (the CLI's
    * config/tool-error exit path).
    */
   collect(target: DiscoveredTarget, ctx: CollectContext): Promise<CollectedSbom>;
 }
+
+/** Every lane that emits a flat inventory, spelled once. */
+const NO_DEPENDENCY_GRAPH = (): boolean => false;
 
 /** Parse a collector's SBOM output file as an untrusted shape. */
 function readSbom(path: string): unknown {
@@ -109,6 +120,7 @@ function cdxgenCollector(
 ): Collector {
   return {
     tool: (): ToolIdentity => CDXGEN_TOOL,
+    derivesDependencyGraph: NO_DEPENDENCY_GRAPH,
     async collect(target, ctx): Promise<CollectedSbom> {
       const result = await collectWithCdxgen(target, {
         timeoutMs: ctx.timeoutMs,
@@ -139,6 +151,8 @@ const yarnCdxgenCollector = cdxgenCollector("yarn", firstPartyNames);
 const yarnCollector: Collector = {
   tool: (lockfileText): ToolIdentity =>
     selectJsGenerator(lockfileText) === "yarn-plugin" ? YARN_PLUGIN_TOOL : CDXGEN_TOOL,
+  derivesDependencyGraph: (lockfileText): boolean =>
+    selectJsGenerator(lockfileText) === "yarn-plugin",
   async collect(target, ctx): Promise<CollectedSbom> {
     const lockfileText = requireLockfileText(ctx);
 
@@ -177,6 +191,7 @@ const yarnCollector: Collector = {
  */
 const bunCollector: Collector = {
   tool: (): ToolIdentity => BUN_COLLECTOR_TOOL,
+  derivesDependencyGraph: NO_DEPENDENCY_GRAPH,
   async collect(target): Promise<CollectedSbom> {
     const result = await collectWithBunLock(target, {});
 
@@ -197,6 +212,7 @@ const bunCollector: Collector = {
  */
 const poetryCollector: Collector = {
   tool: (): ToolIdentity => CDXGEN_TOOL,
+  derivesDependencyGraph: (): boolean => true,
   async collect(target, ctx): Promise<CollectedSbom> {
     const result = await collectWithCdxgen(target, {
       timeoutMs: ctx.timeoutMs,
@@ -230,6 +246,7 @@ const poetryCollector: Collector = {
  */
 const terraformCollector: Collector = {
   tool: (): ToolIdentity => TERRAFORM_COLLECTOR_TOOL,
+  derivesDependencyGraph: NO_DEPENDENCY_GRAPH,
   async collect(target, ctx): Promise<CollectedSbom> {
     requireLockfileText(ctx);
     const result = await collectWithTerraform(target, {});
@@ -251,6 +268,7 @@ const terraformCollector: Collector = {
  */
 const nugetCollector: Collector = {
   tool: (): ToolIdentity => NUGET_COLLECTOR_TOOL,
+  derivesDependencyGraph: NO_DEPENDENCY_GRAPH,
   async collect(target): Promise<CollectedSbom> {
     const result = await collectWithNugetLock(target, {});
 
@@ -277,6 +295,7 @@ const nugetCollector: Collector = {
  */
 const mavenCollector: Collector = {
   tool: (): ToolIdentity => MAVEN_COLLECTOR_TOOL,
+  derivesDependencyGraph: NO_DEPENDENCY_GRAPH,
   async collect(target): Promise<CollectedSbom> {
     const result = await collectWithMavenSbom(target, {});
 

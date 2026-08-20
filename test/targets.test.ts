@@ -322,10 +322,16 @@ describe("collectTargets — yarn workspace expansion (mechanism test)", () => {
     const model = mergeSboms(result.inputs);
     const ms = model.packages.find((pkg) => pkg.purl === "pkg:npm/ms@2.1.3");
 
-    expect(ms?.occurrences).toEqual([{ target: "backend", isDevDependency: false }]);
+    const directOfItsWorkspace = { direct: true, introducedBy: [] };
+
+    expect(ms?.occurrences).toEqual([
+      { target: "backend", isDevDependency: false, introduction: directOfItsWorkspace },
+    ]);
     const leftPad = model.packages.find((pkg) => pkg.purl === "pkg:npm/left-pad@1.3.0");
 
-    expect(leftPad?.occurrences).toEqual([{ target: ".", isDevDependency: true }]);
+    expect(leftPad?.occurrences).toEqual([
+      { target: ".", isDevDependency: true, introduction: directOfItsWorkspace },
+    ]);
 
     // (d) exactly three "collecting <identity> via ..." lines, sorted.
     const collectingLines = log.filter((line) => line.startsWith("collecting "));

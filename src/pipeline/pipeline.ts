@@ -11,6 +11,10 @@ import { assertSyftSbomSize } from "../collectors/dockerOs";
 import { assessPackages } from "../enrich/assess";
 import { enrichUnknowns } from "../enrich/enrich";
 import { type IntensiveOptions } from "../enrich/scancode";
+import {
+  assertDependencyGraphCoverage,
+  targetsWithDependencyGraph,
+} from "../merge/dependencyGraphs";
 import { mergeSboms, type CollectedSbom } from "../merge/merge";
 import {
   compareCodeUnits,
@@ -705,6 +709,13 @@ export async function buildOutputs(opts: GenerateOptions): Promise<BuiltOutputs>
   // One merged model from all targets: shared packages appear once with every consumer in their
   // occurrences.
   const model = mergeSboms(inputs);
+
+  // A target collected by a lane that derives a dependency graph must have arrived with one. This
+  // runs before any verdict: reading such a target as graphless would widen every
+  // "as-dependency-of" acceptance scoped to it.
+  const graphTargets = targetsWithDependencyGraph(inputs);
+
+  assertDependencyGraphCoverage(model, graphTargets);
 
   // ENRICH stage - runs BEFORE annotate so an appended source:"registry" claim flows through the
   // SAME normalizeRaw as a generator claim (one SPDX path), and clarify > registry > generator

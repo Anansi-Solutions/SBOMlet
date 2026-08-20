@@ -51,6 +51,12 @@ export interface CollectedSbom {
    */
   prodPurlSet?: ReadonlySet<string>;
   /**
+   * Did the collector lane that produced this input reconstruct a root-anchored dependency graph?
+   * Declared by the registration and stamped by the collect loop, never inferred from whether
+   * {@link CollectedSbom.introductions} happens to carry anything - see merge/dependencyGraphs.ts.
+   */
+  derivesDependencyGraph?: boolean;
+  /**
    * First-party names from the target's own lockfile (firstPartyNames() / npmFirstPartyNames()).
    * Components matching by display name and carrying a second first-party signal are skipped. Two
    * second signals are accepted: the yarn/plugin local-version marker (version ===

@@ -276,7 +276,10 @@ async function dispatchAndCollect(
     return undefined;
   }
 
-  return input;
+  // The registration decides whether this target has a dependency graph, and the answer is stamped
+  // HERE rather than inside each collector: one place, so a lane can never declare one thing to the
+  // dispatch and hand the merge another.
+  return { ...input, derivesDependencyGraph: collector.derivesDependencyGraph(rootLockfileText) };
 }
 
 /**
