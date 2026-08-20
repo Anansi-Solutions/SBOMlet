@@ -22,6 +22,7 @@ import {
   readFileSync,
   readdirSync,
   rmSync,
+  symlinkSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -523,6 +524,44 @@ describe("resolveContained — a policy path resolved outside its anchor is refu
 
     expect(() => resolveContained(base, escape, "clarifications")).toThrow("clarifications");
     expect(() => resolveContained(base, escape, "clarifications")).toThrow("outside");
+  });
+
+  test("a link inside the anchor leading out of it is refused", () => {
+    const root = mkdtempSync(join(tmpdir(), "licenses-contained-"));
+    const base = join(root, "repo");
+    const outside = join(root, "outside");
+
+    mkdirSync(base);
+    mkdirSync(outside);
+    // A "junction" is an ordinary directory symlink on POSIX and the
+    // privilege-free form of one on Windows, so this runs wherever the suite does.
+    symlinkSync(outside, join(base, "away"), "junction");
+
+    expect(() => resolveContained(base, "away/clarifications.toml", "clarifications")).toThrow(
+      "outside",
+    );
+    expect(() => resolveContained(base, "away/clarifications.toml", "clarifications")).toThrow(
+      `a link to ${join(outside, "clarifications.toml")}`,
+    );
+
+    writeFileSync(join(outside, "clarifications.toml"), "");
+
+    expect(() => resolveContained(base, "away/clarifications.toml", "clarifications")).toThrow(
+      "outside",
+    );
+  });
+
+  test("an anchor reached through a link still contains the files under it", () => {
+    const root = mkdtempSync(join(tmpdir(), "licenses-contained-"));
+    const real = join(root, "real");
+    const linked = join(root, "repo");
+
+    mkdirSync(real);
+    symlinkSync(real, linked, "junction");
+
+    expect(resolveContained(linked, "clarifications.toml", "clarifications")).toBe(
+      join(linked, "clarifications.toml"),
+    );
   });
 
   test("a sibling sharing the anchor's name as a prefix is outside it, not under it", () => {
