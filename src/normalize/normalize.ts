@@ -21,6 +21,7 @@ import {
   type CanonicalDependencies,
   type CrossImageClaimDivergence,
   type LicenseClaim,
+  type LicenseClaimSource,
   type LicenseFinding,
   type PackageEntry,
   type ScopeTaxonomy,
@@ -513,29 +514,75 @@ export interface AnnotatedFindings {
 }
 
 /**
- * The package's PRE-OVERRIDE observed signal: the set of normalized raw claim strings (each claim's
- * trimmed raw value) UNION the un-overridden finding's impreciseFamily token. An override's
- * `expects` is compared (case-insensitive, trimmed equality) against the members of this set.
+ * The lanes a license claim can come from. The registry lane is the quick answer: what the
+ * collector read from package metadata, plus what registry enrichment added. The intensive lane is
+ * the source scan. The reserved claim sources sit in neither lane and surface only in the union.
  */
-function observedSignal(
+const REGISTRY_CLAIM_SOURCES: ReadonlySet<LicenseClaimSource> = new Set(["generator", "registry"]);
+
+const INTENSIVE_CLAIM_SOURCES: ReadonlySet<LicenseClaimSource> = new Set(["scancode"]);
+
+/** A package's PRE-OVERRIDE observed signal, per producing lane and as a whole. */
+export interface ObservedSignal {
+  /** Members the collector metadata and registry enrichment produced. */
+  registry: readonly string[];
+  /** Members the intensive source scan produced. */
+  intensive: readonly string[];
+  /** Every member, whichever lane produced it. */
+  union: readonly string[];
+}
+
+/** Trimmed, non-empty raw claim values, in claim order. */
+function rawSignalValues(claims: ReadonlyArray<LicenseClaim>): string[] {
+  return claims.map((c) => c.raw.trim()).filter((raw) => raw !== "");
+}
+
+/** True when this claim on its own normalizes to the family token the finding carries. */
+function yieldsFamily(claim: LicenseClaim, family: string): boolean {
+  const result = normalizeRaw(claim.raw);
+
+  return result.imprecise === true && result.impreciseFamily === family;
+}
+
+/** One lane's view: its own claims, plus the family token when a claim of that lane yields it. */
+function laneSignal(
   claims: ReadonlyArray<LicenseClaim>,
-  baseFinding: LicenseFinding,
+  sources: ReadonlySet<LicenseClaimSource>,
+  family: string | undefined,
 ): string[] {
-  const signal = new Set<string>();
+  const lane = claims.filter((c) => sources.has(c.source));
+  const signal = new Set(rawSignalValues(lane));
 
-  for (const c of claims) {
-    const trimmed = c.raw.trim();
-
-    if (trimmed !== "") {
-      signal.add(trimmed);
-    }
-  }
-
-  if (baseFinding.impreciseFamily !== undefined) {
-    signal.add(baseFinding.impreciseFamily);
+  if (family !== undefined && lane.some((c) => yieldsFamily(c, family))) {
+    signal.add(family);
   }
 
   return [...signal];
+}
+
+/**
+ * The set of normalized raw claim strings (each claim's trimmed raw value) UNION the un-overridden
+ * finding's impreciseFamily token, split by the lane that produced each member. An override's
+ * `expects` is compared (case-insensitive, trimmed equality) against the members of the UNION,
+ * whose membership and order are what they have always been. The lane views let a recorded
+ * per-source detection be checked against the lane that would produce it.
+ */
+export function observedSignalBySource(
+  claims: ReadonlyArray<LicenseClaim>,
+  baseFinding: LicenseFinding,
+): ObservedSignal {
+  const family = baseFinding.impreciseFamily;
+  const union = new Set(rawSignalValues(claims));
+
+  if (family !== undefined) {
+    union.add(family);
+  }
+
+  return {
+    registry: laneSignal(claims, REGISTRY_CLAIM_SOURCES, family),
+    intensive: laneSignal(claims, INTENSIVE_CLAIM_SOURCES, family),
+    union: [...union],
+  };
 }
 
 /**
@@ -1055,7 +1102,7 @@ export function annotateFindings(
     // - it only ever ADDS the marker when scancode did not already claim the conflict slot.
     const base = withCrossImageConflict(dockerClaimDivergence, scancodeAssessed);
 
-    const signal = observedSignal(entry.licenseClaims, base);
+    const signal = observedSignalBySource(entry.licenseClaims, base).union;
     const overridden = resolveOverride(entry, clarify, builtins, base, signal, usedClarifyIndices);
     const finding = overridden ?? base;
 
