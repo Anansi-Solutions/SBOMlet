@@ -513,7 +513,7 @@ function impreciseVerdict(
 }
 
 /** What the override recorded and what is seen instead - the fact half of {@link staleVerdict}. */
-function staleDivergence(stale: StaleOverride): string {
+export function staleDivergence(stale: StaleOverride): string {
   const observed = stale.observed.length > 0 ? stale.observed.join(", ") : "(nothing)";
 
   if (stale.unaccounted !== undefined) {
@@ -1690,8 +1690,32 @@ export interface UnnecessaryClarifyEntry {
 }
 
 /**
- * The entries a maintainer can drop: those whose justification was true and whose subject has since
- * gone away - a scan that stopped over-reporting, two sources that came to agree.
+ * Why the entry governing this package has nothing left to do here, or undefined while it still has
+ * something. An entry finishes two ways: the sources caught up with it, so its expression was never
+ * applied because the observed finding already satisfied it, or its stated reason became moot. A
+ * stale entry is doing something - failing - and is neither.
+ */
+function mootReason(
+  finding: PackageEntry["finding"],
+  decided: ClarifyDecision,
+): string | undefined {
+  if (finding === undefined || finding.staleOverride !== undefined) {
+    return undefined;
+  }
+
+  if (finding.source !== "override") {
+    return finding.expression === null
+      ? undefined
+      : `the sources now report "${finding.expression}", which already satisfies the recorded expression`;
+  }
+
+  return decided.validity.outcome === "unnecessary" ? decided.validity.reason : undefined;
+}
+
+/**
+ * The entries a maintainer can drop: those the sources have caught up with, and those whose
+ * justification was true and whose subject has since gone away - a scan that stopped
+ * over-reporting, two sources that came to agree.
  *
  * Never a verdict and never printed. An entry is reported only when EVERY package it governs says
  * the same thing, so one package still needing it - or one where the recorded detection itself
@@ -1711,13 +1735,12 @@ export function unnecessaryClarifyEntries(
       continue;
     }
 
-    const stillDoingSomething =
-      entry.finding?.staleOverride !== undefined || decided.validity.outcome !== "unnecessary";
+    const reason = mootReason(entry.finding, decided);
 
-    if (stillDoingSomething) {
+    if (reason === undefined) {
       needed.add(decided.index);
     } else if (!moot.has(decided.index)) {
-      moot.set(decided.index, decided.validity.reason);
+      moot.set(decided.index, reason);
     }
   }
 
