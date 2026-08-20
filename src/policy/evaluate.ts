@@ -249,9 +249,9 @@ function packageRuleFor(
  *
  * A direct dependency and a transitive one with at least one introducer both do. The two shapes
  * that do not are an absent introduction and a transitive one nothing reachable introduces, and
- * both are routine rather than exotic: the npm lane empties `introducedBy` for a component no chain
- * from the project reaches, and the poetry lane produces the same for a name resolved at several
- * versions.
+ * both are routine rather than exotic: BOM-graph provenance empties `introducedBy` for a component
+ * no chain from the project reaches, and the poetry lane produces the same for a name resolved at
+ * several versions.
  */
 function recordsHowItArrives(introduction: DependencyIntroduction | undefined): boolean {
   return (
