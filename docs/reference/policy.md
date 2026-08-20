@@ -166,7 +166,9 @@ See [ADR-0013](../explanation/adr/0013-source-available-deny.md).
 An array of tables. Each entry corrects or disambiguates one package's
 [licence finding](../glossary.md#license-finding) before the verdict is decided.
 The override replaces the finding, and the package is then judged on the
-corrected value. Absent table: no clarifications.
+corrected value. Absent table: no clarifications. Entries may also live in a
+file of their own — see
+[A separate clarifications file](#a-separate-clarifications-file).
 
 | Field | Type | Required | Meaning |
 |-------|------|----------|---------|
@@ -244,7 +246,8 @@ the comment after an em-dash when one is present.
 
 The invalidity check runs only once `detected` still holds: staleness is the
 earlier and more urgent question, and an entry that fails it never reaches this
-one. An entry the evidence disproves fails the gate as `clarify:invalid[i]`,
+one. An entry the evidence disproves fails the gate as `clarify:invalid[i]`
+(`clarifications:invalid[j]` when it came from the separate file),
 and the failure names where the entry can legally go instead — the
 justification the evidence now supports, `contradictory-claims-recorded` when
 the sources genuinely disagree, or a `[[compatible]]` entry with rationale
@@ -260,6 +263,41 @@ The tool also ships its own curated clarifications for commonly-ambiguous
 projects, applied without your re-authoring them, and preconditioned the same
 way. When a project-level `[[clarify]]` names the same package, your entry
 takes precedence.
+
+### A separate clarifications file
+
+Clarifications tend to outnumber every other kind of entry and to turn over on
+their own schedule. A top-level `clarifications` key moves them out of the
+policy:
+
+```toml
+clarifications = ".sbomlet.clarifications.toml"
+```
+
+The path is relative to the repository root and forward-slash, validated like
+every other path in this file, so it cannot leave the repository. A declared
+file that is missing or unreadable is a configuration error naming both files:
+a policy never runs as though it had said nothing.
+
+That file holds `[[clarify]]` tables and nothing else — any other key is
+rejected naming it — and its entries go through the same validator, so an entry
+means there exactly what it means here.
+
+The two files have separate citation spaces. The policy's own entries are
+`clarify[i]`; the imported ones are `clarifications[j]`, numbered within the
+imported file. Every id derived from an entry follows: the citation on an
+accepted verdict, `clarifications:invalid[j]`, the unused-entry warning, and
+the entry a stale-override failure tells you to update. A citation therefore
+names both which file to open and which table in it.
+
+The entries are combined policy-first, and the first entry matching a package
+decides it. A policy entry naming a package an imported entry also names
+therefore shadows it — deliberately, so a local decision can take precedence
+without editing the imported file.
+
+Keep prose about an entry in its `comment` and `evidence` keys rather than in
+`#` lines above it. The imported file is written to be machine-maintainable,
+and comment lines around the tables are not part of what an entry records.
 
 ### Migrating from the previous schema
 
