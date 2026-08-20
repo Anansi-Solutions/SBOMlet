@@ -719,22 +719,16 @@ function projectPolicyView(
  * The targets whose collector lane derives a dependency graph, established once the model exists
  * and before anything reads it.
  *
- * @throws Error when a target whose lane derives a graph arrived without one, or PolicyError when
- * the policy says something the scanned model cannot check - both the config-error exit path. They
- * run here, together, because each would otherwise surface as a wall of misleading verdicts.
+ * @throws Error when a target whose lane derives a graph arrived without one - the config-error
+ * exit path, taken here because it would otherwise surface as a wall of misleading verdicts.
  */
 function checkedDependencyGraphTargets(
   model: CanonicalDependencies,
   inputs: ReadonlyArray<CollectedSbom>,
-  policy: Policy | undefined,
 ): ReadonlySet<string> {
   const targets = targetsWithDependencyGraph(inputs);
 
   assertDependencyGraphCoverage(model, targets);
-  if (policy !== undefined) {
-    crossValidatePolicy(model, policy, targets);
-  }
-
   return targets;
 }
 
@@ -786,7 +780,7 @@ export async function buildOutputs(opts: GenerateOptions): Promise<BuiltOutputs>
   // occurrences.
   const model = mergeSboms(inputs);
 
-  const graphTargets = checkedDependencyGraphTargets(model, inputs, policy);
+  const graphTargets = checkedDependencyGraphTargets(model, inputs);
 
   // ENRICH stage - runs BEFORE annotate so an appended source:"registry" claim flows through the
   // SAME normalizeRaw as a generator claim (one SPDX path), and clarify > registry > generator
@@ -842,6 +836,11 @@ export async function buildOutputs(opts: GenerateOptions): Promise<BuiltOutputs>
   let policyView: PolicyView | undefined;
 
   if (policy !== undefined && opts.policyPath !== undefined) {
+    // Everything about a [[compatible]] entry the scan can contradict, checked against the model
+    // the engine is about to read rather than the merged one. Scope is the difference: the docker
+    // collector stamps every component "os", and the transform above is what decides which of them
+    // an "os-package-unmodified" entry may legitimately describe.
+    crossValidatePolicy(scoped, policy, graphTargets);
     verdicts = evaluate(scoped, policy, graphTargets);
     writePolicySummary(policy, verdicts, usedClarifyIndices);
     writeTargetHygieneNotices(scoped, policy);

@@ -1003,6 +1003,45 @@ describe("sidecar fan-out and the malformed-sidecar failure", () => {
     mock.module("../src/collectors/cdxgen", () => REAL_CDXGEN);
   });
 
+  test("an os-package-unmodified entry over a container package the scope transform re-keys to app is refused", async () => {
+    const { root } = makeScannableTree();
+
+    // The docker collector stamps every component it finds "os", base-image plumbing and baked-in
+    // application wheels alike; the scope transform is what tells them apart, and it runs after
+    // the merge. A pypi wheel therefore reaches every verdict as scope "app".
+    writeSidecar(
+      root,
+      sidecarDoc(
+        [
+          {
+            type: "library",
+            name: "app-wheel",
+            version: "1.0.0",
+            purl: "pkg:pypi/app-wheel@1.0.0",
+            licenses: [{ license: { id: "MIT" } }],
+            images: ["img-a"],
+          },
+        ],
+        [IMG_A],
+      ),
+    );
+
+    const policyPath = writePolicy(
+      root,
+      [
+        "[[compatible]]",
+        'match = "package"',
+        'name = "app-wheel"',
+        'as-dependency-of = ["self"]',
+        'rationale = "os-package-unmodified"',
+        'where = ["docker:a/Dockerfile"]',
+        "",
+      ].join("\n"),
+    );
+
+    expect(buildAgainst(root, policyPath)).rejects.toThrow("os-package-unmodified");
+  });
+
   test("the sidecar fans out per image: a shared purl rows in EACH container's own subsection, unique purls one each", async () => {
     const { root } = makeScannableTree();
 

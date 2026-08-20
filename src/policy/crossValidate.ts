@@ -2,6 +2,10 @@
  * The policy-against-model pass: everything about a `[[compatible]]` entry that can only be decided
  * once the scan has produced a model, checked BEFORE any verdict is computed.
  *
+ * The model it reads is the one the engine reads, scope settled - a container package the re-scope
+ * transform re-keys from "os" to "app" is an application dependency here too, so the rationale
+ * check below cannot be walked around by putting the entry over one.
+ *
  * The file parser sees text and nothing else, so it can accept an entry whose `as-dependency-of`
  * names a package no scan ever saw, or scopes a chain-based judgment to a target where no chain
  * exists. Neither can be answered by voiding the entry later: the resulting failures would cite an
