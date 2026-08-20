@@ -1235,6 +1235,9 @@ function validateVersionPin(
 /** The lanes `detected` may record, in the order the documented table and the checks use. */
 const DETECTED_SOURCES = ["registry", "intensive"] as const;
 
+/** One producing lane a `detected` table may record. */
+type DetectedSource = (typeof DETECTED_SOURCES)[number];
+
 /** The parsed `detected` table - see {@link validateDetected}. */
 interface DetectedFields {
   detected?: DetectedSignal;
@@ -1375,6 +1378,71 @@ function validateEvidence(
   return problems.length === before ? { evidence, valid: true } : { valid: false };
 }
 
+/**
+ * The lanes each justification makes a claim ABOUT. None of them may be recorded as `false`, which
+ * says that source reported nothing - the opposite of a claim about what it reported. A lane left
+ * out is not constrained: `detected` records what was checked, and an entry that never mentions a
+ * lane asserts nothing about it either way. `dual-license-choice` and `license-not-found` speak for
+ * no lane - each is about the licence text rather than about one source - and `license-not-found`
+ * carries its own rule below.
+ */
+const JUSTIFICATION_LANES: Readonly<Record<Justification, ReadonlyArray<DetectedSource>>> = {
+  "contradictory-claims-recorded": ["registry", "intensive"],
+  "declared-more-complete": ["registry"],
+  "dual-license-choice": [],
+  "license-not-found": [],
+  "scan-found-additional-content": ["intensive"],
+  "scan-more-precise": ["intensive"],
+  "scan-overdetection": ["intensive"],
+};
+
+/** Does this recorded value read as SPDX - a licence, rather than a label about one? */
+function isSpdxExpression(value: string): boolean {
+  try {
+    parseSpdx(value);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * The stated justification against the entry's own `detected`.
+ *
+ * An entry claiming the two sources disagree while recording one of them as silent contradicts
+ * itself, and the invalidity lane can never say so: it runs only while `detected` still holds, and
+ * a lane recorded as silent holds by staying silent. The check belongs here, where the entry is
+ * read, and the error names the lane to record.
+ */
+function validateJustificationDetection(
+  justification: Justification,
+  detected: DetectedSignal,
+  where: string,
+  problems: string[],
+): void {
+  for (const source of JUSTIFICATION_LANES[justification]) {
+    if (detected[source] === false) {
+      problems.push(
+        `${where}: justification "${justification}" is a claim about what the ${source} source reported, but detected.${source} records that it reports nothing. Record what it reported, or choose the justification that fits.`,
+      );
+    }
+  }
+
+  if (justification !== "license-not-found") {
+    return;
+  }
+
+  for (const source of DETECTED_SOURCES) {
+    const value = detected[source];
+
+    if (typeof value === "string" && isSpdxExpression(value)) {
+      problems.push(
+        `${where}: justification "license-not-found" says no source states a licence, but detected.${source} records "${value}", which is one. Record the reason the stated licence is wrong instead, or choose the justification that fits.`,
+      );
+    }
+  }
+}
+
 const CLARIFY_KEYS = [
   "name",
   "pattern",
@@ -1428,6 +1496,10 @@ function validateClarifyEntry(
 
   const evidence = validateEvidence(entry, where, problems);
   const comment = optionalText(entry, "comment", where, problems);
+
+  if (justification !== undefined && detection.detected !== undefined) {
+    validateJustificationDetection(justification, detection.detected, where, problems);
+  }
 
   if (
     problems.length !== before ||

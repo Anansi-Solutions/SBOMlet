@@ -765,8 +765,10 @@ describe("parsePolicy — the [[clarify]] `detected` precondition", () => {
   test("both lanes parse, and `false` records that a lane detects nothing", () => {
     const policy = parsePolicy(
       clarifyFixture([
+        'name = "demo-pkg"',
         'detected = { registry = "BSD", intensive = false }',
-        ...clarifyWithout("detected"),
+        'justification = "declared-more-complete"',
+        'expression = "BSD-3-Clause"',
       ]),
     );
 
@@ -2252,12 +2254,12 @@ describe("evaluate — staleness-guarded overrides", () => {
 
 describe("evaluate — per-source detected preconditions", () => {
   /** A [[clarify]] on `detected-pkg` recording exactly the given inline table. */
-  const detectedClarify = (table: string): string =>
+  const detectedClarify = (table: string, justification = "scan-more-precise"): string =>
     [
       "[[clarify]]",
       'name = "detected-pkg"',
       `detected = ${table}`,
-      'justification = "scan-more-precise"',
+      `justification = "${justification}"`,
       'expression = "BSD-3-Clause"',
     ].join("\n");
 
@@ -2285,7 +2287,7 @@ describe("evaluate — per-source detected preconditions", () => {
   test("`false` records that a lane reports nothing, and holds while it stays quiet", () => {
     const { verdicts } = runEngine(
       [pkgSpec("detected-pkg", "BSD", ["backend"])],
-      detectedClarify('{ registry = "BSD", intensive = false }'),
+      detectedClarify('{ registry = "BSD", intensive = false }', "declared-more-complete"),
     );
 
     expect(verdicts[0].status).toBe("ok");
@@ -2295,7 +2297,7 @@ describe("evaluate — per-source detected preconditions", () => {
   test("a `false` record is PROVEN WRONG once that lane starts reporting, even when the new report AGREES — a source that has started speaking is evidence to read", () => {
     const { verdicts } = runEngine(
       [scanPkgSpec("detected-pkg", "BSD", "BSD-3-Clause", ["backend"])],
-      detectedClarify('{ registry = "BSD", intensive = false }'),
+      detectedClarify('{ registry = "BSD", intensive = false }', "declared-more-complete"),
     );
 
     expect(verdicts[0].status).toBe("fail");
@@ -2699,7 +2701,7 @@ describe("evaluate — conflict:cross-image-claims fail verdict", () => {
       "[[clarify]]",
       'name = "busybox"',
       "detected = { registry = false, intensive = false }",
-      'justification = "contradictory-claims-recorded"',
+      'justification = "license-not-found"',
       'expression = "MIT"',
       'comment = "reviewed: image-a is correct"',
     ].join("\n");
@@ -6080,5 +6082,95 @@ describe("path-shaped policy fields never leave the repository", () => {
     expect(parsePolicy('[docker]\nignore = ["docker/dev/**"]\n').docker?.ignore).toEqual([
       "docker/dev/**",
     ]);
+  });
+});
+
+// ===========================================================================
+// A justification is a claim about what a source reported, so an entry may not
+// pair one with a `detected` lane recorded as silent. The invalidity lane
+// cannot catch this: it runs only while `detected` still holds, and a lane
+// recorded as silent holds by staying silent.
+// ===========================================================================
+
+describe("a justification and the detections it speaks for", () => {
+  const clarifyWith = (detected: string, justification: string): string =>
+    [
+      "[[clarify]]",
+      'name = "spoken-for"',
+      `detected = ${detected}`,
+      `justification = "${justification}"`,
+      'expression = "MIT"',
+      "",
+    ].join("\n");
+
+  test("contradictory-claims-recorded with a silent intensive lane rejects", () => {
+    expect(
+      expectPolicyError(
+        clarifyWith(
+          '{ registry = "Dual License", intensive = false }',
+          "contradictory-claims-recorded",
+        ),
+      ).message,
+    ).toContain("detected.intensive records that it reports nothing");
+  });
+
+  test("contradictory-claims-recorded with a silent registry lane rejects", () => {
+    expect(
+      expectPolicyError(
+        clarifyWith(
+          '{ registry = false, intensive = "Apache-2.0" }',
+          "contradictory-claims-recorded",
+        ),
+      ).message,
+    ).toContain("detected.registry records that it reports nothing");
+  });
+
+  test("declared-more-complete with a silent registry lane rejects", () => {
+    expect(
+      expectPolicyError(
+        clarifyWith('{ registry = false, intensive = "MIT" }', "declared-more-complete"),
+      ).message,
+    ).toContain("detected.registry records that it reports nothing");
+  });
+
+  test("each scan- justification with a silent intensive lane rejects", () => {
+    for (const justification of [
+      "scan-found-additional-content",
+      "scan-more-precise",
+      "scan-overdetection",
+    ]) {
+      expect(
+        expectPolicyError(clarifyWith('{ registry = "BSD", intensive = false }', justification))
+          .message,
+      ).toContain("detected.intensive records that it reports nothing");
+    }
+  });
+
+  test("license-not-found rejects a recorded value that is itself a licence", () => {
+    expect(
+      expectPolicyError(clarifyWith('{ registry = "MIT" }', "license-not-found")).message,
+    ).toContain("which is one");
+  });
+
+  test("license-not-found accepts a recorded label that states no licence", () => {
+    const policy = parsePolicy(
+      clarifyWith('{ registry = "Public Domain", intensive = false }', "license-not-found"),
+    );
+
+    expect(policy.clarify[0]?.detected).toEqual({ registry: "Public Domain", intensive: false });
+  });
+
+  test("dual-license-choice speaks for no lane, so a silent one is fine", () => {
+    const policy = parsePolicy(
+      clarifyWith('{ registry = "MIT OR Apache-2.0", intensive = false }', "dual-license-choice"),
+    );
+
+    expect(policy.clarify[0]?.justification).toBe("dual-license-choice");
+  });
+
+  test("a lane simply left out is not a claim that it is silent", () => {
+    expect(() =>
+      parsePolicy(clarifyWith('{ registry = "BSD" }', "scan-more-precise")),
+    ).not.toThrow();
   });
 });

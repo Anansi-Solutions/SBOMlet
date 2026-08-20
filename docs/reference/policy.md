@@ -251,6 +251,16 @@ fixed list. `comment` carries anything the list cannot.
 | `scan-more-precise` | The in-depth scan resolves an under-specified declared label to the exact licence. | the expression no longer accounts for what the scan reads |
 | `scan-overdetection` | The in-depth scan reports licences from files that do not govern the package. | never — it becomes unnecessary instead, below |
 
+Each of these is a claim about what a source reported, so the lane it speaks
+for may not be recorded as `false`. `contradictory-claims-recorded` speaks for
+both lanes, `declared-more-complete` for `registry`, and the three `scan-`
+values for `intensive`; recording `false` there says that source reported
+nothing, which is the opposite of the claim. Leaving a lane out is different
+and stays allowed — `detected` records what you checked. And
+`license-not-found` says no source states a licence, so neither recorded value
+may be one; a non-licence label such as `Public Domain` is exactly the case it
+is for. A policy breaking either rule is rejected when it is read.
+
 Wherever a verdict cites the entry, its reason is the justification value, and
 the comment after an em-dash when one is present.
 
