@@ -635,6 +635,9 @@ describe("--package-timeout-mins end-to-end: CLI minutes -> GenerateOptions ms -
       await runGenerate({
         ...options,
         repoRoot: root,
+        // optionsFrom discovered this repository's own policy from the cwd; this run scans a
+        // temporary tree instead, and that policy's paths resolve nowhere under it.
+        policyPath: undefined,
         outputPath: join(root, "out.md"),
         noticesPath: join(root, "notices.md"),
         enrichmentCachePath: join(cacheDir, "licenses.cache.json"),
@@ -687,6 +690,9 @@ describe("--package-timeout-mins end-to-end: CLI minutes -> GenerateOptions ms -
       await runGenerate({
         ...options,
         repoRoot: root,
+        // optionsFrom discovered this repository's own policy from the cwd; this run scans a
+        // temporary tree instead, and that policy's paths resolve nowhere under it.
+        policyPath: undefined,
         outputPath: join(root, "out.md"),
         noticesPath: join(root, "notices.md"),
         enrichmentCachePath: join(cacheDir, "licenses.cache.json"),
