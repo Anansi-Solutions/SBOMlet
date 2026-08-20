@@ -1269,17 +1269,26 @@ function targetVerdict(
   }
 }
 
+/** One version pin rendered for a verdict reason: a single string, or a list joined with commas. */
+function versionText(version: string | ReadonlyArray<string>): string {
+  return typeof version === "string" ? version : version.join(", ");
+}
+
 /** How a package-form rule names what it governs, quoted for the verdict reason. */
 function packageRuleSubject(rule: CompatiblePackageRule): string {
+  if (rule.packages !== undefined) {
+    return rule.packages
+      .map((member) => `"${member.name}@${versionText(member.version)}"`)
+      .join(", ");
+  }
+
   const selector = rule.name ?? (rule.pattern as string);
 
   if (rule.version === undefined) {
     return `"${selector}"`;
   }
 
-  const versions = typeof rule.version === "string" ? rule.version : rule.version.join(", ");
-
-  return `"${selector}@${versions}"`;
+  return `"${selector}@${versionText(rule.version)}"`;
 }
 
 /**

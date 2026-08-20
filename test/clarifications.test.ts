@@ -23,10 +23,11 @@ import { parsePolicy, PolicyError } from "../src/policy/schema";
 import { claim, modelOf, pkg } from "./normalizeTestSupport";
 
 /** One `[[clarify]]` table naming `name`, recording the registry lane, electing `expression`. */
-const clarifyTable = (name: string, expression: string): string =>
+const clarifyTable = (name: string, expression: string, version = "0.0.1"): string =>
   [
     "[[clarify]]",
     `name = ${JSON.stringify(name)}`,
+    `version = ${JSON.stringify(version)}`,
     'detected = { registry = "Public Domain" }',
     'justification = "license-not-found"',
     `expression = ${JSON.stringify(expression)}`,
@@ -284,7 +285,7 @@ describe("shadowed imported entries", () => {
     withImportedClarifications(
       parsePolicy(clarifyTable("jsonify", "Unlicense")),
       parseClarifications(
-        [clarifyTable("jsonify", "0BSD"), clarifyTable("elsewhere", "MIT")].join("\n\n"),
+        [clarifyTable("jsonify", "0BSD"), clarifyTable("elsewhere", "MIT", "1.0.0")].join("\n\n"),
       ),
     );
 

@@ -80,16 +80,37 @@ export interface CompatibleLicenseRule {
   comment?: string;
 }
 
+/**
+ * One member of a package-form entry's `packages` list: an exact display name and the required
+ * version pin covering it. No glob here - the family selector stays the entry-level `pattern` mode.
+ */
+export interface CompatiblePackageElement {
+  /** Exact display name, compared verbatim by the shared matcher. */
+  name: string;
+  /** The exact version, or exact versions, covered - required on every list member. */
+  version: string | ReadonlyArray<string>;
+}
+
 export interface CompatiblePackageRule {
   match: "package";
-  /** Exact display name; exactly one of `name` and `pattern` is present. */
+  /** Exact display name; exactly one selector of `name`, `pattern`, `packages` is present. */
   name?: string;
   /**
    * Display-name pattern, in the dialect of {@link compileNamePattern}. The license form reads the
    * same key as an SPDX expression instead - `match` decides which, as it does on the deny lane.
    */
   pattern?: string;
-  /** The exact version, or exact versions, covered. Absent covers every version. */
+  /**
+   * An explicit bundle of disparate packages that share this entry's `where`, `as-dependency-of`,
+   * `rationale`, and `comment`. Present in place of `name`/`pattern`; each member carries its own
+   * required version. An occurrence matches the entry when it matches ANY member.
+   */
+  packages?: ReadonlyArray<CompatiblePackageElement>;
+  /**
+   * The exact version, or exact versions, covered on a `name`/`pattern` entry. Required unless the
+   * entry's `where` is entirely a container os-scope; never present on a `packages` entry, whose
+   * members pin their own.
+   */
   version?: string | ReadonlyArray<string>;
   /**
    * The packages whose use of this one the acceptance was judged under, by display name, or the
@@ -135,7 +156,7 @@ export interface ClarifyRule {
   name?: string;
   /** Display-name pattern, in the dialect of {@link compileNamePattern}. */
   pattern?: string;
-  /** The exact version, or exact versions, covered. Absent covers every version. */
+  /** The exact version, or exact versions, covered - required on every clarify entry. */
   version?: string | ReadonlyArray<string>;
   /**
    * The staleness precondition: what each producing lane reported when the entry was written. The
@@ -1088,20 +1109,30 @@ function validateCompatiblePackage(
 
   checkKeys(
     entry,
-    ["match", "name", "pattern", "version", "as-dependency-of", "rationale", "where", "comment"],
+    [
+      "match",
+      "name",
+      "pattern",
+      "packages",
+      "version",
+      "as-dependency-of",
+      "rationale",
+      "where",
+      "comment",
+    ],
     where,
     problems,
     COMPATIBLE_REPLACED_KEYS,
   );
-  const selector = validateNameOrPattern(entry, where, problems);
-  const pin = validateVersionPin(entry, where, problems);
+  const scope = validateWhere(entry, where, problems);
+  const selector = validateCompatiblePackageSelector(entry, scope.where, where, problems);
   const parents = validateAsDependencyOf(entry, where, problems);
   const rationale = validateClosedSet(entry, "rationale", RATIONALE_VALUES, where, problems);
-  const scope = validateWhere(entry, where, problems);
   const comment = optionalText(entry, "comment", where, problems);
 
   if (
     problems.length !== before ||
+    !selector.valid ||
     parents.asDependencyOf === undefined ||
     rationale === undefined ||
     scope.where === undefined
@@ -1113,12 +1144,142 @@ function validateCompatiblePackage(
     match: "package",
     ...(selector.name !== undefined ? { name: selector.name } : {}),
     ...(selector.pattern !== undefined ? { pattern: selector.pattern } : {}),
-    ...(pin.version !== undefined ? { version: pin.version } : {}),
+    ...(selector.packages !== undefined ? { packages: selector.packages } : {}),
+    ...(selector.version !== undefined ? { version: selector.version } : {}),
     asDependencyOf: parents.asDependencyOf,
     rationale,
     where: scope.where,
     ...(comment !== undefined ? { comment } : {}),
   };
+}
+
+/** The parsed package-form selector - see {@link validateCompatiblePackageSelector}. */
+interface CompatibleSelector {
+  name?: string;
+  pattern?: string;
+  packages?: ReadonlyArray<CompatiblePackageElement>;
+  version?: string | ReadonlyArray<string>;
+  valid: boolean;
+}
+
+/**
+ * True when every `where` element targets a container os-scope. That is the one shape a
+ * package-form entry may omit `version` on: a base image's OS-package versions are not
+ * author-controlled and change on every rebuild, so pinning them would be churn rather than a
+ * guarantee.
+ */
+function whereIsEntirelyContainerScope(where: ReadonlyArray<string> | undefined): boolean {
+  return (
+    where !== undefined && where.length > 0 && where.every((scope) => scope.startsWith("docker:"))
+  );
+}
+
+/**
+ * The package-form selector: exactly one of `name`, `pattern`, and `packages`. The `name`/`pattern`
+ * forms carry an entry-level `version`, required unless `scopeWhere` is entirely a container
+ * os-scope; the `packages` form bundles disparate packages that each pin their own version and
+ * takes no entry-level `version`. `scopeWhere` is the already-validated `where` (undefined when it
+ * did not validate, which forces `version` required - the conservative reading).
+ */
+function validateCompatiblePackageSelector(
+  entry: Record<string, unknown>,
+  scopeWhere: ReadonlyArray<string> | undefined,
+  where: string,
+  problems: string[],
+): CompatibleSelector {
+  const modes = ["name", "pattern", "packages"].filter((key) => key in entry);
+
+  if (modes.length !== 1) {
+    problems.push(
+      `${where}: exactly one selector is required - "name", "pattern", or "packages" (${modes.length === 0 ? "none is present" : `${modes.map((key) => `"${key}"`).join(", ")} are present`})`,
+    );
+    return { valid: false };
+  }
+
+  if ("packages" in entry) {
+    let valid = true;
+
+    if ("version" in entry) {
+      problems.push(
+        `${where}: key "version" does not apply to a "packages" entry - pin each package's version inside its own { name = "...", version = "..." } table instead`,
+      );
+      valid = false;
+    }
+
+    const list = validatePackagesList(entry, where, problems);
+
+    return list.packages !== undefined && valid
+      ? { packages: list.packages, valid: true }
+      : { valid: false };
+  }
+
+  const required = !whereIsEntirelyContainerScope(scopeWhere);
+  const pin = validateVersionPin(entry, where, problems, { required, osScopeExemptible: true });
+  const nameOrPattern = validateNameOrPattern(entry, where, problems);
+
+  if (!nameOrPattern.valid || !pin.valid) {
+    return { valid: false };
+  }
+
+  return {
+    ...(nameOrPattern.name !== undefined ? { name: nameOrPattern.name } : {}),
+    ...(nameOrPattern.pattern !== undefined ? { pattern: nameOrPattern.pattern } : {}),
+    ...(pin.version !== undefined ? { version: pin.version } : {}),
+    valid: true,
+  };
+}
+
+/**
+ * The `packages` list: a non-empty array of `{ name, version }` members. Each names one exact
+ * package (a glob is refused - the family selector is the entry-level `pattern` mode) and pins its
+ * own required version. Malformed members push aggregated problems naming the member's position;
+ * only a fully-valid list materializes.
+ */
+function validatePackagesList(
+  entry: Record<string, unknown>,
+  where: string,
+  problems: string[],
+): { packages?: ReadonlyArray<CompatiblePackageElement>; valid: boolean } {
+  const raw = entry["packages"];
+
+  if (!Array.isArray(raw) || raw.length === 0) {
+    problems.push(
+      `${where}: key "packages" must be a non-empty array of { name = "...", version = "..." } tables`,
+    );
+    return { valid: false };
+  }
+
+  const packages: CompatiblePackageElement[] = [];
+  const before = problems.length;
+
+  raw.forEach((rawElement, index) => {
+    const elementWhere = `${where}.packages[${index}]`;
+    const element = recordOf(rawElement);
+
+    if (element === undefined) {
+      problems.push(`${elementWhere}: must be a table { name = "...", version = "..." }`);
+      return;
+    }
+
+    checkKeys(element, ["name", "version"], elementWhere, problems);
+    const name = requireText(element, "name", elementWhere, problems);
+
+    if (name !== undefined && isGlobPattern(name)) {
+      problems.push(
+        `${elementWhere}: name "${name}" carries a wildcard - a "packages" member names one exact package; use the entry-level "pattern" selector for a family`,
+      );
+    }
+
+    const pin = validateVersionPin(element, elementWhere, problems, {
+      required: true,
+      osScopeExemptible: false,
+    });
+
+    if (name !== undefined && !isGlobPattern(name) && pin.version !== undefined) {
+      packages.push({ name, version: pin.version });
+    }
+  });
+  return problems.length === before ? { packages, valid: true } : { valid: false };
 }
 
 /** Package selector fields shared by every entry that names the packages it governs. */
@@ -1183,18 +1344,41 @@ interface VersionPin {
   valid: boolean;
 }
 
+/** How {@link validateVersionPin} treats an absent `version` key. */
+interface VersionPinOptions {
+  /** True when an absent `version` is a rejection; false leaves an absent key as valid. */
+  required: boolean;
+  /**
+   * True on a package-form `[[compatible]]` entry, whose missing-version error names the container
+   * os-scope exemption. False elsewhere (a `[[clarify]]` entry or a `packages` member), where no
+   * such exemption exists.
+   */
+  osScopeExemptible: boolean;
+}
+
 /**
- * The optional `version` pin: one exact version, or a non-empty list of them. Absent covers every
- * version. The schema has no wildcard version anywhere - version churn is a maintenance task, not a
- * matching rule - so every element is compared literally.
+ * The `version` pin: one exact version, or a non-empty list of them. The schema has no wildcard
+ * version anywhere - version churn is a maintenance task, not a matching rule - so every element is
+ * compared literally. An absent key is rejected when `required`, with a pointed error that names
+ * the os-scope exemption where one applies; otherwise an absent key covers every version.
  */
 function validateVersionPin(
   entry: Record<string, unknown>,
   where: string,
   problems: string[],
+  options: VersionPinOptions,
 ): VersionPin {
   if (!("version" in entry)) {
-    return { valid: true };
+    if (!options.required) {
+      return { valid: true };
+    }
+
+    problems.push(
+      options.osScopeExemptible
+        ? `${where}: missing required key "version" - pin the exact version(s) this acceptance covers, a single string like "1.2.3" or a non-empty list. Only an entry whose "where" is entirely a container os-scope (every element "docker:...") may omit it, since base-image OS-package versions are not author-controlled and drift on every rebuild.`
+        : `${where}: missing required key "version" - pin the exact version(s) this entry covers, a single string like "1.2.3" or a non-empty list.`,
+    );
+    return { valid: false };
   }
 
   const raw = entry["version"];
@@ -1471,7 +1655,10 @@ function validateClarifyEntry(
   checkKeys(entry, CLARIFY_KEYS, where, problems, CLARIFY_REPLACED_KEYS);
 
   const selector = validateNameOrPattern(entry, where, problems);
-  const pin = validateVersionPin(entry, where, problems);
+  const pin = validateVersionPin(entry, where, problems, {
+    required: true,
+    osScopeExemptible: false,
+  });
   const detection = validateDetected(entry, where, problems);
   const justification = validateClosedSet(
     entry,

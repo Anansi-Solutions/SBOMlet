@@ -180,7 +180,7 @@ file of their own — see
 |-------|------|----------|---------|
 | `name` | string | exactly one of `name`/`pattern` | One package, by its exact display name. |
 | `pattern` | string (name glob) | exactly one of `name`/`pattern` | A family of packages by name — see [Name patterns](#name-patterns). |
-| `version` | string, or array of strings | no | The exact version, or versions, covered. Omit to cover all of them. |
+| `version` | string, or array of strings | yes | The exact version, or versions, covered. A single string or a non-empty list — a clarify is never version-less. |
 | `detected` | inline table | yes | What each source reported when you wrote the entry — see below. |
 | `justification` | string (closed set) | yes | Why your expression is preferred over what detection reports. |
 | `expression` | string (SPDX) | yes | The corrected SPDX expression, parsed at load time. |
@@ -338,6 +338,10 @@ with a message naming its replacement:
 | `expects` | `detected`, which records each source separately. |
 | `reason` | `justification`, plus `comment` for what it cannot carry. |
 
+`version` is required on every clarify entry — it was optional before. A clarify
+carries no `where`, so it has no container os-scope exemption: always pin the
+version(s) the correction applies to.
+
 ### Name patterns
 
 `pattern` selects a family of packages by their display name:
@@ -354,7 +358,8 @@ purl. Matching is case-sensitive and covers the whole name. A pattern must
 carry a wildcard — a pattern without one names a single package, so write
 `name` instead — and at least one literal character, so a pattern of wildcards
 alone cannot become a blanket rule. Versions have no wildcard anywhere in the
-schema: list them when several share a judgment.
+schema, and are required (with the one container os-scope exemption a
+`[[compatible]]` entry has): list them when several share a judgment.
 
 ## `[[compatible]]`
 
@@ -376,23 +381,69 @@ Licence mode (`match = "license"`):
 | `where` | array of strings | yes | Occurrence-identity prefixes, or `["/"]` for every occurrence. |
 | `comment` | string (non-empty) | no | What the rationale cannot carry. |
 
-Package mode (`match = "package"`):
+Package mode (`match = "package"`) — exactly one selector of `name`, `pattern`,
+and `packages`:
 
 | Field | Type | Required | Meaning |
 |-------|------|----------|---------|
 | `match` | `"package"` | yes | Selects package mode. |
-| `name` | string | exactly one of `name`/`pattern` | One package, by its exact display name. |
-| `pattern` | string (name glob) | exactly one of `name`/`pattern` | A family of packages by name — see [Name patterns](#name-patterns). |
-| `version` | string, or array of strings | no | The exact version, or versions, covered. Omit to cover all of them. |
+| `name` | string | one selector of `name`/`pattern`/`packages` | One package, by its exact display name. |
+| `pattern` | string (name glob) | one selector of `name`/`pattern`/`packages` | A family of packages by name — see [Name patterns](#name-patterns). |
+| `packages` | array of `{ name, version }` | one selector of `name`/`pattern`/`packages` | A bundle of disparate packages sharing this entry's other fields — see [The `packages` list](#the-packages-list). |
+| `version` | string, or array of strings | yes on a `name`/`pattern` entry (except a container os-scope one); not on a `packages` entry | The exact version, or versions, covered — see [Versions are required](#versions-are-required). |
 | `as-dependency-of` | array of strings | yes | Whose use of this package you judged — see below. |
 | `rationale` | string (closed set) | yes | Why the package is accepted — see below. |
 | `where` | array of strings | yes | Occurrence-identity prefixes, or `["/"]` for every occurrence. |
 | `comment` | string (non-empty) | no | What the rationale cannot carry. |
 
 Licence mode allows a whole licence, such as a weak copyleft you have reviewed
-and accepted like `MPL-2.0`. Package mode allows one dependency, or a family of
-them, for when only specific packages' obligations have been reviewed rather
-than a whole licence.
+and accepted like `MPL-2.0`. Package mode allows one dependency, a family of
+them, or an explicit bundle of unrelated ones, for when only specific packages'
+obligations have been reviewed rather than a whole licence.
+
+### Versions are required
+
+A `name` or `pattern` entry must pin a `version` — a single exact string, or a
+non-empty list. Omitting it would carry the acceptance silently into a future
+version, so a relicense in a new release could slip through unreviewed.
+
+The one exception is an entry scoped **entirely** to a container os-scope: when
+`where` is present and every element is a `docker:`-prefixed identity, `version`
+may be omitted. A base image's OS-package versions are not author-controlled and
+change on every rebuild, so pinning them would be churn rather than a guarantee.
+A mixed `where` — any element that is not `docker:`-prefixed, `["/"]` included —
+requires a version like any other entry. Clarify entries carry no `where` and so
+have no exemption: a `[[clarify]]` always pins a version.
+
+### The `packages` list
+
+`packages` is a third selector, for `[[compatible]]` only, that bundles disparate
+packages sharing the entry's other fields:
+
+```toml
+[[compatible]]
+match = "package"
+packages = [
+  { name = "left-pad", version = "1.3.0" },
+  { name = "right-pad", version = ["1.0.0", "1.0.1"] },
+]
+as-dependency-of = ["self"]
+rationale = "unused-transitive"
+where = ["apps/media"]
+comment = "Both padding helpers arrive transitively and are never reached at runtime; reviewed together."
+```
+
+Each member is an exact `{ name, version }`: no glob inside a member — the family
+selector stays the `pattern` mode — and every member pins its own `version`
+(a string or a non-empty list). The entry-level `where`, `as-dependency-of`,
+`rationale`, and optional `comment` are **shared** across every listed package;
+that shared judgment is the whole point of bundling, so list packages together
+only when they genuinely share it. An occurrence matches the entry when it
+matches **any** member, and the entry is one rule wherever a verdict cites it —
+one `compatible[i]` id, one voiding decision, one unused-entry report. It is
+mutually exclusive with `name` and `pattern`: exactly one selector per entry.
+`[[clarify]]` has no `packages` form, since a clarify's `detected` and
+`expression` are intrinsically per-package.
 
 ### `rationale` — the closed set
 
@@ -508,7 +559,9 @@ with a message naming its replacement:
 
 `where` was optional and is now required; `as-dependency-of` and `rationale`
 are new and required. An entry using `as-dependency-of` at licence level is
-rejected as inapplicable.
+rejected as inapplicable. `version` was optional and is now required on a
+`name`/`pattern` entry — except one scoped entirely to a container os-scope,
+which may still omit it (see [Versions are required](#versions-are-required)).
 
 ## `[[workspace.copyleft_suppressed]]`
 

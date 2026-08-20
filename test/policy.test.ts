@@ -213,6 +213,7 @@ const scopedPackageFixture = (whereToml: string): string =>
     "[[compatible]]",
     'match = "package"',
     'name = "busybox"',
+    'version = "1.37.0"',
     'as-dependency-of = ["self"]',
     'rationale = "license-reviewed"',
     `where = ${whereToml}`,
@@ -396,6 +397,7 @@ const compatiblePackageFixture = (lines: ReadonlyArray<string>): string =>
 /** A minimal valid package-form entry. */
 const DEMO_COMPATIBLE = [
   'name = "demo-pkg"',
+  'version = "1.0.0"',
   'as-dependency-of = ["self"]',
   'rationale = "build-time-only"',
   'where = ["/"]',
@@ -413,6 +415,7 @@ describe("parsePolicy — the [[compatible]] package selector", () => {
       {
         match: "package",
         name: "demo-pkg",
+        version: "1.0.0",
         asDependencyOf: ["self"],
         rationale: "build-time-only",
         where: ["/"],
@@ -437,7 +440,7 @@ describe("parsePolicy — the [[compatible]] package selector", () => {
 
     for (const error of [both, neither]) {
       expect(error.message).toContain("compatible[0]");
-      expect(error.message).toContain('exactly one of "name" and "pattern"');
+      expect(error.message).toContain("exactly one selector");
     }
   });
 
@@ -455,15 +458,111 @@ describe("parsePolicy — the [[compatible]] package selector", () => {
 
   test("a version list parses; an empty list is rejected", () => {
     const policy = parsePolicy(
-      compatiblePackageFixture([...DEMO_COMPATIBLE, 'version = ["1.0.0", "2.0.0"]']),
+      compatiblePackageFixture([...compatibleWithout("version"), 'version = ["1.0.0", "2.0.0"]']),
     );
 
     expect(policy.compatible[0]).toMatchObject({ version: ["1.0.0", "2.0.0"] });
 
-    const error = expectPolicyError(compatiblePackageFixture([...DEMO_COMPATIBLE, "version = []"]));
+    const error = expectPolicyError(
+      compatiblePackageFixture([...compatibleWithout("version"), "version = []"]),
+    );
 
     expect(error.message).toContain("compatible[0]");
     expect(error.message).toContain('"version"');
+  });
+
+  test("a name/pattern entry outside container scope must pin a version", () => {
+    const error = expectPolicyError(compatiblePackageFixture(compatibleWithout("version")));
+
+    expect(error.message).toContain("compatible[0]");
+    expect(error.message).toContain('missing required key "version"');
+    expect(error.message).toContain("container os-scope");
+  });
+
+  test('a version-less entry scoped entirely to a "docker:" os-scope is accepted (the exemption)', () => {
+    const policy = parsePolicy(
+      compatiblePackageFixture([
+        ...compatibleWithout("version").filter((line) => !line.startsWith("where =")),
+        'where = ["docker:examples/docker-scan/Dockerfile"]',
+      ]),
+    );
+
+    expect(policy.compatible[0]).toMatchObject({ name: "demo-pkg" });
+    expect("version" in (policy.compatible[0] ?? {})).toBe(false);
+  });
+
+  test('a version-less entry with a MIXED "where" (one non-docker element) is still rejected', () => {
+    const error = expectPolicyError(
+      compatiblePackageFixture([
+        ...compatibleWithout("version").filter((line) => !line.startsWith("where =")),
+        'where = ["docker:examples/docker-scan/Dockerfile", "apps/web"]',
+      ]),
+    );
+
+    expect(error.message).toContain("compatible[0]");
+    expect(error.message).toContain('missing required key "version"');
+  });
+});
+
+describe("parsePolicy — the [[compatible]] `packages` list", () => {
+  /** A package-form entry carrying the given `packages` array TOML plus the shared fields. */
+  const packagesFixture = (packagesToml: string): string =>
+    compatiblePackageFixture([
+      ...compatibleWithout("name").filter((line) => !line.startsWith("version =")),
+      `packages = ${packagesToml}`,
+    ]);
+
+  test("a bundle of disparate packages parses, each member pinning its own version", () => {
+    const policy = parsePolicy(
+      packagesFixture(
+        '[{ name = "left-pad", version = "1.3.0" }, { name = "ms", version = ["2.1.3", "2.1.2"] }]',
+      ),
+    );
+
+    expect(policy.compatible[0]).toMatchObject({
+      match: "package",
+      packages: [
+        { name: "left-pad", version: "1.3.0" },
+        { name: "ms", version: ["2.1.3", "2.1.2"] },
+      ],
+      asDependencyOf: ["self"],
+    });
+    expect("name" in (policy.compatible[0] ?? {})).toBe(false);
+  });
+
+  test("a member missing its version is rejected, naming the member", () => {
+    const error = expectPolicyError(packagesFixture('[{ name = "left-pad" }]'));
+
+    expect(error.message).toContain("compatible[0].packages[0]");
+    expect(error.message).toContain('missing required key "version"');
+  });
+
+  test('"packages" alongside "name" is rejected — exactly one selector mode per entry', () => {
+    const error = expectPolicyError(
+      compatiblePackageFixture([
+        ...compatibleWithout("version"),
+        'packages = [{ name = "left-pad", version = "1.3.0" }]',
+      ]),
+    );
+
+    expect(error.message).toContain("compatible[0]");
+    expect(error.message).toContain("exactly one selector");
+  });
+
+  test("an empty packages list is rejected", () => {
+    const error = expectPolicyError(packagesFixture("[]"));
+
+    expect(error.message).toContain("compatible[0]");
+    expect(error.message).toContain('"packages"');
+  });
+
+  test("a glob name inside a member is rejected, pointing at the pattern selector", () => {
+    const error = expectPolicyError(
+      packagesFixture('[{ name = "@img/sharp-*", version = "1.0.0" }]'),
+    );
+
+    expect(error.message).toContain("compatible[0].packages[0]");
+    expect(error.message).toContain("pattern");
   });
 });
 
@@ -588,6 +687,7 @@ describe("evaluate — a [[compatible]] entry covering a family of packages", ()
   test("HEADLINE: one pattern entry accepts every matching package, each citing the same entry", () => {
     const policyText = compatiblePackageFixture([
       'pattern = "@img/sharp-*"',
+      'version = ["1.0.0", "2.0.0"]',
       'as-dependency-of = ["self"]',
       'rationale = "license-reviewed"',
       'where = ["/"]',
@@ -605,13 +705,14 @@ describe("evaluate — a [[compatible]] entry covering a family of packages", ()
       expect(verdict.rule).toBe("compatible[0]");
     }
 
-    expect(verdicts[0].reason).toContain('package "@img/sharp-*"');
+    expect(verdicts[0].reason).toContain('package "@img/sharp-*@1.0.0, 2.0.0"');
     expect(verdicts[0].reason).toContain("license-reviewed");
   });
 
   test("a package outside the pattern still fails — the entry covers the family, not the model", () => {
     const policyText = compatiblePackageFixture([
       'pattern = "@img/sharp-*"',
+      'version = ["1.0.0", "2.0.0"]',
       'as-dependency-of = ["self"]',
       'rationale = "license-reviewed"',
       'where = ["/"]',
@@ -656,6 +757,7 @@ describe("evaluate — `as-dependency-of` is recorded, not yet enforced", () => 
   test("a parent that governs nothing in the model still accepts the package", () => {
     const policyText = compatiblePackageFixture([
       'name = "governed-pkg"',
+      'version = "1.0.0"',
       'as-dependency-of = ["a-package-nothing-depends-on"]',
       'rationale = "unused-transitive"',
       'where = ["/"]',
@@ -673,6 +775,36 @@ describe("evaluate — `as-dependency-of` is recorded, not yet enforced", () => 
   });
 });
 
+describe("evaluate — a [[compatible]] `packages` list bundling disparate packages", () => {
+  const bundlePolicy = compatiblePackageFixture([
+    'packages = [{ name = "alpha-lib", version = "1.0.0" }, { name = "omega-lib", version = "2.5.0" }]',
+    'as-dependency-of = ["self"]',
+    'rationale = "license-reviewed"',
+    'where = ["/"]',
+  ]);
+
+  test("an occurrence matching a NON-first member is accepted, citing the one entry", () => {
+    const { verdicts } = runEngine(
+      [pkgSpec("omega-lib", "LGPL-3.0-or-later", ["backend"], "2.5.0")],
+      bundlePolicy,
+    );
+
+    expect(verdicts[0].status).toBe("ok");
+    expect(verdicts[0].rule).toBe("compatible[0]");
+    expect(verdicts[0].reason).toContain('"omega-lib@2.5.0"');
+  });
+
+  test("a member matches only at its pinned version — a version it does not name still fails", () => {
+    const { verdicts } = runEngine(
+      [pkgSpec("omega-lib", "LGPL-3.0-or-later", ["backend"], "9.9.9")],
+      bundlePolicy,
+    );
+
+    expect(verdicts[0].status).toBe("fail");
+    expect(verdicts[0].rule).toBe("default:copyleft");
+  });
+});
+
 // ===========================================================================
 // The [[clarify]] schema: the package selector, the mandatory `detected`
 // precondition, the closed justification set, evidence, and the pointed
@@ -683,9 +815,10 @@ describe("evaluate — `as-dependency-of` is recorded, not yet enforced", () => 
 const clarifyFixture = (lines: ReadonlyArray<string>): string =>
   ["[[clarify]]", ...lines].join("\n");
 
-/** A minimal valid entry: name, one recorded lane, justification, expression. */
+/** A minimal valid entry: name, version, one recorded lane, justification, expression. */
 const DEMO_CLARIFY = [
   'name = "demo-pkg"',
+  'version = "1.0.0"',
   'detected = { registry = "BSD" }',
   'justification = "scan-more-precise"',
   'expression = "BSD-3-Clause"',
@@ -703,6 +836,7 @@ describe("parsePolicy — the [[clarify]] package selector", () => {
       {
         identity: { space: "clarify", index: 0 },
         name: "demo-pkg",
+        version: "1.0.0",
         detected: { registry: "BSD" },
         justification: "scan-more-precise",
         expression: "BSD-3-Clause",
@@ -750,14 +884,24 @@ describe("parsePolicy — the [[clarify]] package selector", () => {
   });
 
   test("a version list parses; an empty list is rejected", () => {
-    const policy = parsePolicy(clarifyFixture([...DEMO_CLARIFY, 'version = ["1.0.0", "1.0.1"]']));
+    const policy = parsePolicy(
+      clarifyFixture([...clarifyWithout("version"), 'version = ["1.0.0", "1.0.1"]']),
+    );
 
     expect(policy.clarify[0]?.version).toEqual(["1.0.0", "1.0.1"]);
 
-    const error = expectPolicyError(clarifyFixture([...DEMO_CLARIFY, "version = []"]));
+    const error = expectPolicyError(clarifyFixture([...clarifyWithout("version"), "version = []"]));
 
     expect(error.message).toContain("clarify[0]");
     expect(error.message).toContain('"version"');
+  });
+
+  test("a clarify entry omitting version is rejected — there is no os-scope exemption here", () => {
+    const error = expectPolicyError(clarifyFixture(clarifyWithout("version")));
+
+    expect(error.message).toContain("clarify[0]");
+    expect(error.message).toContain('missing required key "version"');
+    expect(error.message).not.toContain("container os-scope");
   });
 });
 
@@ -766,6 +910,7 @@ describe("parsePolicy — the [[clarify]] `detected` precondition", () => {
     const policy = parsePolicy(
       clarifyFixture([
         'name = "demo-pkg"',
+        'version = "1.0.0"',
         'detected = { registry = "BSD", intensive = false }',
         'justification = "declared-more-complete"',
         'expression = "BSD-3-Clause"',
@@ -1009,6 +1154,7 @@ describe("parsePolicy — error aggregation", () => {
       "",
       "[[clarify]]",
       'name = "x"',
+      'version = "1.0.0"',
       'detected = { registry = "MIT" }',
       'justification = "scan-more-precise"',
       'expression = "not a license"',
@@ -1449,6 +1595,7 @@ describe("evaluate — precedence chain", () => {
       "[[compatible]]",
       'match = "package"',
       'name = "mpl-pkg"',
+      'version = "1.0.0"',
       'as-dependency-of = ["self"]',
       'rationale = "license-reviewed"',
       'where = ["/"]',
@@ -2047,6 +2194,7 @@ describe("evaluate — LicenseRef acceptance for commercial clarifies (A4/P-05)"
     const policyText = [
       "[[clarify]]",
       'name = "dual-ref-pkg"',
+      'version = "1.0.0"',
       "detected = { registry = false, intensive = false }",
       'justification = "license-not-found"',
       'expression = "LicenseRef-x OR MIT"',
@@ -2162,6 +2310,7 @@ describe("evaluate — staleness-guarded overrides", () => {
     const policyText = [
       "[[clarify]]",
       'name = "relicensed"',
+      'version = "1.0.0"',
       'detected = { registry = "BSD" }',
       'justification = "scan-more-precise"',
       'expression = "BSD-3-Clause"',
@@ -2179,6 +2328,7 @@ describe("evaluate — staleness-guarded overrides", () => {
     const policyText = [
       "[[clarify]]",
       'name = "ipython"',
+      'version = "1.0.0"',
       'detected = { registry = "BSD" }',
       'justification = "contradictory-claims-recorded"',
       'expression = "MIT"',
@@ -2258,6 +2408,7 @@ describe("evaluate — per-source detected preconditions", () => {
     [
       "[[clarify]]",
       'name = "detected-pkg"',
+      'version = "1.0.0"',
       `detected = ${table}`,
       `justification = "${justification}"`,
       'expression = "BSD-3-Clause"',
@@ -2318,6 +2469,7 @@ describe("evaluate — a [[clarify]] covering a family of packages", () => {
   const patternClarify = [
     "[[clarify]]",
     'pattern = "@dicts/*"',
+    'version = "1.0.0"',
     'detected = { registry = "BSD" }',
     'justification = "scan-more-precise"',
     'expression = "BSD-3-Clause"',
@@ -2376,6 +2528,7 @@ describe("evaluate — the reason a cited [[clarify]] surfaces", () => {
     [
       "[[clarify]]",
       'name = "cited-pkg"',
+      'version = "1.0.0"',
       'detected = { registry = "BSD" }',
       'justification = "scan-more-precise"',
       'expression = "BSD-3-Clause"',
@@ -2420,6 +2573,7 @@ describe("evaluate — a compound recorded detection", () => {
   const compoundClarify = [
     "[[clarify]]",
     'name = "compound-pkg"',
+    'version = "1.0.0"',
     `detected = { registry = ${JSON.stringify(compoundClaim)}, intensive = "MIT" }`,
     'justification = "declared-more-complete"',
     `expression = ${JSON.stringify(compoundClaim)}`,
@@ -2452,6 +2606,7 @@ describe("evaluate — a compound recorded detection", () => {
     const policyText = [
       "[[clarify]]",
       'name = "respelled-pkg"',
+      'version = "1.0.0"',
       `detected = { registry = ${JSON.stringify(respellClaim)}, intensive = "MIT" }`,
       'justification = "declared-more-complete"',
       `expression = ${JSON.stringify(respellClaim)}`,
@@ -2470,6 +2625,7 @@ describe("evaluate — a compound recorded detection", () => {
     const policyText = [
       "[[clarify]]",
       'name = "set-changed-pkg"',
+      'version = "1.0.0"',
       `detected = { registry = ${JSON.stringify(baseClaim)}, intensive = "MIT" }`,
       'justification = "declared-more-complete"',
       `expression = ${JSON.stringify(baseClaim)}`,
@@ -2490,6 +2646,7 @@ describe("evaluate — a compound recorded detection", () => {
     const policyText = [
       "[[clarify]]",
       'name = "noisy-pkg"',
+      'version = "1.0.0"',
       `detected = { registry = ${JSON.stringify(baseClaim)}, intensive = "MIT" }`,
       'justification = "declared-more-complete"',
       `expression = ${JSON.stringify(baseClaim)}`,
@@ -2508,6 +2665,7 @@ describe("evaluate — a compound recorded detection", () => {
     const policyText = [
       "[[clarify]]",
       'name = "or-compound-pkg"',
+      'version = "1.0.0"',
       `detected = { registry = ${JSON.stringify(orClaim)}, intensive = "MIT" }`,
       'justification = "declared-more-complete"',
       `expression = ${JSON.stringify(orClaim)}`,
@@ -2557,6 +2715,7 @@ describe("evaluate — conflict:scancode fail verdict", () => {
     const policyText = [
       "[[clarify]]",
       'name = "stale-and-conflicted"',
+      'version = "1.0.0"',
       'detected = { registry = "BSD" }',
       'justification = "contradictory-claims-recorded"',
       'expression = "MIT"',
@@ -2700,6 +2859,7 @@ describe("evaluate — conflict:cross-image-claims fail verdict", () => {
     const policyText = [
       "[[clarify]]",
       'name = "busybox"',
+      'version = "1.0.0"',
       "detected = { registry = false, intensive = false }",
       'justification = "license-not-found"',
       'expression = "MIT"',
@@ -2755,6 +2915,7 @@ describe("evaluate — conflict:scancode resolution via [[clarify]]", () => {
   const clarifyResolvesToScancode = [
     "[[clarify]]",
     'name = "disputed-pkg"',
+    'version = "1.0.0"',
     'detected = { registry = "MIT", intensive = "BSD-3-Clause" }',
     'justification = "scan-more-precise"',
     'expression = "BSD-3-Clause"',
@@ -2828,12 +2989,14 @@ describe("unusedRuleIds — stale-policy hygiene", () => {
       "[[compatible]]",
       'match = "package"',
       'name = "never-matches"',
+      'version = "1.0.0"',
       'as-dependency-of = ["self"]',
       'rationale = "license-reviewed"',
       'where = ["/"]',
       "",
       "[[clarify]]",
       'name = "never-clarified"',
+      'version = "1.0.0"',
       'detected = { registry = "MIT" }',
       'justification = "scan-overdetection"',
       'expression = "MIT"',
@@ -2871,6 +3034,7 @@ const scopedBusyboxPolicy = (where: ReadonlyArray<string>): string =>
     "[[compatible]]",
     'match = "package"',
     'name = "busybox"',
+    'version = "1.37.0"',
     'as-dependency-of = ["self"]',
     'rationale = "license-reviewed"',
     `where = ${JSON.stringify(where)}`,
@@ -2961,6 +3125,7 @@ describe("evaluate — where-scoped compatible matching", () => {
       "[[compatible]]",
       'match = "package"',
       'name = "busybox"',
+      'version = "1.37.0"',
       'as-dependency-of = ["self"]',
       'rationale = "license-reviewed"',
       'where = ["/"]',
@@ -2981,6 +3146,7 @@ describe("evaluate — where-scoped compatible matching", () => {
       "[[compatible]]",
       'match = "package"',
       'name = "mpl-pkg"',
+      'version = "1.0.0"',
       'as-dependency-of = ["self"]',
       'rationale = "license-reviewed"',
       'where = ["/"]',
@@ -3819,6 +3985,7 @@ describe("evaluate — deny is terminal OVER OVERRIDES (C#1: deny reads the pre-
       "",
       "[[clarify]]",
       'name = "evil"',
+      'version = "1.0.0"',
       'detected = { registry = "BUSL-1.1" }',
       'justification = "contradictory-claims-recorded"',
       'expression = "MIT"',
@@ -3859,6 +4026,7 @@ describe("evaluate — deny is terminal OVER OVERRIDES (C#1: deny reads the pre-
       "",
       "[[clarify]]",
       'name = "legit"',
+      'version = "1.0.0"',
       'detected = { registry = "Apache" }',
       'justification = "scan-more-precise"',
       'expression = "Apache-2.0"',
@@ -3876,6 +4044,7 @@ describe("evaluate — deny is terminal OVER OVERRIDES (C#1: deny reads the pre-
       "",
       "[[clarify]]",
       'name = "sspl-evil"',
+      'version = "1.0.0"',
       'detected = { registry = "SSPL-1.0" }',
       'justification = "contradictory-claims-recorded"',
       'expression = "MIT"',
@@ -4728,6 +4897,7 @@ describe("evaluate — accepted-AGPL container notices (acceptedContainerNotices
       "[[compatible]]",
       'match = "package"',
       'name = "gpl-os-accepted"',
+      'version = "1.0.0"',
       'as-dependency-of = ["self"]',
       'rationale = "license-reviewed"',
       'where = ["/"]',
@@ -4779,6 +4949,7 @@ describe("evaluate — accepted-AGPL container notices (acceptedContainerNotices
       "[[compatible]]",
       'match = "package"',
       'name = "zeta-agpl"',
+      'version = "1.0.0"',
       'as-dependency-of = ["self"]',
       'rationale = "license-reviewed"',
       'where = ["/"]',
@@ -4786,6 +4957,7 @@ describe("evaluate — accepted-AGPL container notices (acceptedContainerNotices
       "[[compatible]]",
       'match = "package"',
       'name = "alpha-agpl"',
+      'version = "1.0.0"',
       'as-dependency-of = ["self"]',
       'rationale = "license-reviewed"',
       'where = ["/"]',
@@ -5554,6 +5726,7 @@ describe("evaluate — an entry the introduction chains contradict", () => {
     "[[compatible]]",
     'match = "package"',
     'pattern = "*-lib"',
+    'version = "1.0.0"',
     'as-dependency-of = ["judged"]',
     'rationale = "license-reviewed"',
     `where = ["${GRAPH_TARGET}"]`,
@@ -5740,6 +5913,7 @@ describe("evaluate — a clarify entry the current signal disproves", () => {
   const DUAL_CHOICE = [
     "[[clarify]]",
     'name = "choice-lib"',
+    'version = "1.0.0"',
     'detected = { registry = "MIT OR Apache-2.0", intensive = "MIT" }',
     'justification = "dual-license-choice"',
     'expression = "MIT OR Apache-2.0"',
@@ -5761,6 +5935,7 @@ describe("evaluate — a clarify entry the current signal disproves", () => {
     const joined = [
       "[[clarify]]",
       'name = "choice-lib"',
+      'version = "1.0.0"',
       'detected = { registry = "MIT OR Apache-2.0", intensive = "Apache-2.0 AND MIT" }',
       'justification = "dual-license-choice"',
       'expression = "MIT OR Apache-2.0"',
@@ -5778,6 +5953,7 @@ describe("evaluate — a clarify entry the current signal disproves", () => {
     const policyText = [
       "[[clarify]]",
       'name = "choice-lib"',
+      'version = "1.0.0"',
       'detected = { registry = "MIT OR Apache-2.0", intensive = "MIT" }',
       'justification = "dual-license-choice"',
       'expression = "MIT OR Apache-2.0"',
@@ -5829,6 +6005,7 @@ describe("evaluate — the clarifications file's own citation space", () => {
     [
       "[[clarify]]",
       `name = ${JSON.stringify(name)}`,
+      'version = "1.0.0"',
       'detected = { registry = "Public Domain" }',
       'justification = "license-not-found"',
       `expression = ${JSON.stringify(expression)}`,
@@ -5895,6 +6072,7 @@ describe("evaluate — the clarifications file's own citation space", () => {
       [
         "[[clarify]]",
         'name = "choice-lib"',
+        'version = "1.0.0"',
         'detected = { registry = "MIT OR Apache-2.0", intensive = "MIT" }',
         'justification = "dual-license-choice"',
         'expression = "MIT OR Apache-2.0"',
@@ -5925,6 +6103,7 @@ describe("evaluate — the clarifications file's own citation space", () => {
       [
         "[[clarify]]",
         'name = "choice-lib"',
+        'version = "1.0.0"',
         'detected = { registry = "MIT OR Apache-2.0", intensive = "MIT" }',
         'justification = "dual-license-choice"',
         'expression = "MIT OR Apache-2.0"',
@@ -5942,6 +6121,7 @@ describe("evaluate — the clarifications file's own citation space", () => {
       [
         "[[clarify]]",
         'name = "settled-lib"',
+        'version = "1.0.0"',
         'detected = { registry = "MIT", intensive = "MIT" }',
         'justification = "contradictory-claims-recorded"',
         'expression = "MIT"',
@@ -5977,6 +6157,7 @@ describe("unnecessaryClarifyEntries — the entries a maintainer can drop", () =
   const AGREED = [
     "[[clarify]]",
     'name = "settled-lib"',
+    'version = "1.0.0"',
     'detected = { registry = "MIT", intensive = "MIT" }',
     'justification = "contradictory-claims-recorded"',
     'expression = "MIT"',
@@ -6009,6 +6190,7 @@ describe("unnecessaryClarifyEntries — the entries a maintainer can drop", () =
       [
         "[[clarify]]",
         'pattern = "settled-*"',
+        'version = ["1.0.0", "2.0.0"]',
         'detected = { registry = "MIT" }',
         'justification = "contradictory-claims-recorded"',
         'expression = "MIT AND BSD-3-Clause"',
@@ -6097,6 +6279,7 @@ describe("a justification and the detections it speaks for", () => {
     [
       "[[clarify]]",
       'name = "spoken-for"',
+      'version = "1.0.0"',
       `detected = ${detected}`,
       `justification = "${justification}"`,
       'expression = "MIT"',

@@ -120,15 +120,6 @@ describe("upgrade-ascertain", () => {
     expect(findings.upgrades[0]?.outcome).toBe("settled");
   });
 
-  test("an entry naming no version already covers every one, so it is never offered more", () => {
-    const { findings } = run("", bsdEntry("lib"), [
-      scanned("lib", "1.0.0", "BSD"),
-      scanned("lib", "2.0.0", "BSD"),
-    ]);
-
-    expect(findings.upgrades).toEqual([]);
-  });
-
   test("a version the entry already covers is not offered again", () => {
     const { findings } = run("", bsdEntry("lib", "1.0.0"), [scanned("lib", "1.0.0", "BSD")]);
 
@@ -176,7 +167,7 @@ describe("upgrade-ascertain", () => {
 
 describe("the stale sweep", () => {
   test("an entry that matched nothing is reported in its own file's space", () => {
-    const { findings } = run(bsdEntry("policy-only"), bsdEntry("imported-only"), [
+    const { findings } = run(bsdEntry("policy-only", "1.0.0"), bsdEntry("imported-only", "1.0.0"), [
       scanned("elsewhere", "1.0.0", "MIT"),
     ]);
 
@@ -187,6 +178,7 @@ describe("the stale sweep", () => {
     const entry = [
       "[[clarify]]",
       'name = "settled-lib"',
+      'version = "1.0.0"',
       'detected = { registry = "MIT", intensive = "MIT" }',
       'justification = "contradictory-claims-recorded"',
       'expression = "MIT"',
@@ -220,7 +212,9 @@ describe("the stale sweep", () => {
 
 describe("the shadow report", () => {
   test("an imported entry a policy entry decides ahead of is reported, naming both", () => {
-    const { findings } = run(bsdEntry("lib"), bsdEntry("lib"), [scanned("lib", "1.0.0", "BSD")]);
+    const { findings } = run(bsdEntry("lib", "1.0.0"), bsdEntry("lib", "1.0.0"), [
+      scanned("lib", "1.0.0", "BSD"),
+    ]);
 
     expect(findings.shadowed).toEqual([{ shadowing: "clarify[0]", shadowed: "clarifications[0]" }]);
   });

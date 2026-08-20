@@ -191,8 +191,12 @@ comment = "Dual-licensed Apache-2.0 AND LGPL-3.0-or-later; the LGPL obligations 
 
 `rationale` comes from a fixed list, so the tool can check the claim; `comment`
 carries what the list cannot. `where` is required — state which occurrences you
-judged, or `["/"]` for every one of them. One entry can cover a family of
-packages with `pattern` instead of `name`. Every field, the rationale list, and
+judged, or `["/"]` for every one of them. `version` is required too, so a silent
+relicense in a new release cannot inherit the acceptance; the one exception is an
+entry scoped entirely to a container os-scope (`where` all `docker:…`), whose
+base-image versions you do not control. One entry can cover a family of packages
+with `pattern` instead of `name`, or an explicit bundle of disparate ones that
+share these fields with a `packages` list. Every field, the rationale list, and
 the `AND`-rejection rule:
 [policy.md#compatible](../reference/policy.md#compatible).
 
@@ -235,6 +239,7 @@ Say a bulk entry accepts a family of codecs as used by one toolkit:
 [[compatible]]
 match = "package"
 pattern = "@acme/codec-*"
+version = "2.1.0"
 as-dependency-of = ["media-toolkit"]
 rationale = "license-reviewed"
 where = ["apps/media"]
@@ -250,6 +255,7 @@ first so it decides before the family pattern reaches that package:
 [[compatible]]
 match = "package"
 name = "@acme/codec-webm"
+version = "2.1.0"
 as-dependency-of = ["web-player"]
 rationale = "license-reviewed"
 where = ["apps/media"]
@@ -258,6 +264,7 @@ comment = "The player bundles this codec; its obligations were reviewed for that
 [[compatible]]
 match = "package"
 pattern = "@acme/codec-*"
+version = "2.1.0"
 as-dependency-of = ["media-toolkit"]
 rationale = "license-reviewed"
 where = ["apps/media"]
@@ -351,6 +358,7 @@ audit trail.
 [[compatible]]
 match = "package"
 name = "some-lgpl-lib"
+version = "3.0.0"
 as-dependency-of = ["self"]
 rationale = "license-reviewed"
 where = ["apps/studio"]

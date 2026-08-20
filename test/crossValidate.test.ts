@@ -102,12 +102,31 @@ function validate(model: CanonicalDependencies, toml: string): void {
   crossValidatePolicy(model, parsePolicy(toml), new Set([GRAPH_TARGET]));
 }
 
+/** The version each model package is pinned at, so an injected `version` still matches it. */
+const MODEL_VERSION: Readonly<Record<string, string>> = {
+  '"left-pad"': '"1.3.0"',
+  '"right-pad"': '"1.0.0"',
+  '"ms"': '"2.1.3"',
+  '"busybox"': '"1.0.0"',
+  '"absent"': '"9.9.9"',
+};
+
 function packageEntry(fields: Record<string, string>): string {
-  return [
+  const lines = [
     "[[compatible]]",
     'match = "package"',
     ...Object.entries(fields).map(([key, value]) => `${key} = ${value}`),
-  ].join("\n");
+  ];
+
+  if (!("version" in fields) && !("packages" in fields)) {
+    lines.push(
+      "pattern" in fields
+        ? 'version = ["1.3.0", "1.0.0"]'
+        : `version = ${MODEL_VERSION[fields["name"] ?? ""] ?? '"1.0.0"'}`,
+    );
+  }
+
+  return lines.join("\n");
 }
 
 describe("crossValidatePolicy — parents that can be checked", () => {

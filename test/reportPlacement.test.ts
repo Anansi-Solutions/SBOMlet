@@ -1566,6 +1566,7 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
       UNKNOWN_WARN,
       "[[clarify]]",
       'name = "moved-on-lib"',
+      'version = "1.0.0"',
       'detected = { registry = "BSD" }',
       'justification = "scan-more-precise"',
       'expression = "BSD-3-Clause"',
@@ -2500,6 +2501,7 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
       "[[compatible]]",
       'match = "package"',
       'pattern = "voided-compatible-*-lib"',
+      'version = "1.0.0"',
       'as-dependency-of = ["voided-compatible-judged"]',
       'rationale = "unused-transitive"',
       `where = ["${WORKSPACE}"]`,
@@ -2577,6 +2579,7 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
       UNKNOWN_WARN,
       "[[clarify]]",
       'name = "choice-lib"',
+      'version = "1.0.0"',
       'detected = { registry = "MIT OR Apache-2.0", intensive = "MIT" }',
       'justification = "dual-license-choice"',
       // A leaf no source states, so the assertion below can tell an applied expression from the

@@ -1235,6 +1235,7 @@ function scenarioPolicy(osHandling: string, scoped: boolean): string {
     "[[compatible]]",
     'match = "package"',
     'name = "busybox"',
+    'version = "1.37.0-r19"',
     'as-dependency-of = ["self"]',
     'rationale = "os-package-unmodified"',
     `where = ${scoped ? '["docker:a/Dockerfile"]' : '["/"]'}`,

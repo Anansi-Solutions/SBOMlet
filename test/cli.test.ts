@@ -1666,6 +1666,7 @@ describe("check — stale-override exit lane", () => {
       "",
       "[[clarify]]",
       'name = "mit-lib"',
+      'version = "3.0.0"',
       'detected = { registry = "BSD" }',
       'justification = "scan-more-precise"',
       'expression = "BSD-3-Clause"',
@@ -1695,6 +1696,7 @@ describe("check — stale-override exit lane", () => {
       "",
       "[[clarify]]",
       'name = "mit-lib"',
+      'version = "3.0.0"',
       'detected = { registry = "MIT" }', // still what the registry reports → applies
       'justification = "contradictory-claims-recorded"',
       'expression = "MIT"',
@@ -2678,7 +2680,7 @@ describe("refresh-clarifications", () => {
   }
 
   test("an entry covering every scanned version leaves nothing to suggest, and exits 0", async () => {
-    const { root, policyPath } = makeRefreshTree(dualLibEntry());
+    const { root, policyPath } = makeRefreshTree(dualLibEntry("1.0.0", "2.0.0"));
     let result: RefreshClarificationsResult | undefined;
 
     await withCapturedStderr(async () => {
@@ -2795,7 +2797,7 @@ describe("refresh-clarifications", () => {
   });
 
   test("a # comment refuses nothing when there is nothing to apply", async () => {
-    const settled = `# researched in the ticket, do not lose this\n${dualLibEntry()}\n`;
+    const settled = `# researched in the ticket, do not lose this\n${dualLibEntry("1.0.0", "2.0.0")}\n`;
     const { root, policyPath, clarificationsPath } = makeRefreshTree(
       'clarifications = "clarifications.toml"\n',
       settled,

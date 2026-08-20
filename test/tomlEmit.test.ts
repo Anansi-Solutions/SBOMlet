@@ -23,6 +23,7 @@ const FULL = [
 const PATTERNED = [
   "[[clarify]]",
   'pattern = "types-*"',
+  'version = "1.0.0"',
   "detected = { registry = false }",
   'justification = "license-not-found"',
   'expression = "MIT"',
@@ -122,6 +123,7 @@ describe("rewriteWouldDropText", () => {
     const text = [
       "[[clarify]]",
       'name = "sharp"',
+      'version = "1.0.0"',
       'detected = { registry = "C#" }',
       'justification = "license-not-found"',
       'expression = "MIT"',
