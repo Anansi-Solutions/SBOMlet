@@ -76,7 +76,8 @@ const USAGE =
   "the stored license (run before a release/audit, or when the cache changes).\n" +
   "           exit codes: 0 all match, 1 at least one mismatch, 3 tool/network " +
   "error\n" +
-  "  refresh-clarifications [--repo-root <path>] [--policy <path>] [--write] " +
+  "  refresh-clarifications [--repo-root <path>] [--target <path>] " +
+  "[--policy <path>] [--write] " +
   "[--base-dir <path>] [--enrichment-cache <path>] [--scancode-cache <path>] " +
   "[--verbose]\n" +
   "           OFFLINE maintainer audit of the [[clarify]] entries — versions an " +

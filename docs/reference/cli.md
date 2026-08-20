@@ -314,6 +314,7 @@ policy-file entry decides ahead of, so it is left with nothing to do.
 | Flag | Meaning | Default |
 | --- | --- | --- |
 | `--repo-root <path>` | The repository to scan. | working directory |
+| `--target <path>` | Single-target mode: audit the entries against one lockfile or Terraform directory rather than the whole repository. For debugging one ecosystem; it takes precedence over `--repo-root`. | — |
 | `--policy <path>` | The policy whose entries are audited. | `.sbomlet.policy.toml` at the repo root |
 | `--write` | Apply what was ascertained to the clarifications file. | off |
 | `--exclude <glob>` | Repeatable; skip matching targets. | none |
