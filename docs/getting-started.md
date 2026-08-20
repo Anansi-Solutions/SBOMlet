@@ -199,7 +199,10 @@ workflow is shipped at
 [`examples/licenses-refresh.yml`](../examples/licenses-refresh.yml); copy it
 into `.github/workflows/` and fill in the dependency-install placeholder
 (marked in the file) for your stack. On your first pull request it delivers
-the initial inventory the same way.
+the initial inventory the same way. Its companion,
+[`examples/licenses-refresh-intensive.yml`](../examples/licenses-refresh-intensive.yml),
+runs the slower deep scan on a monthly schedule and opens its own refresh PR,
+which keeps the per-PR gate fast.
 
 **Or generate once from a clone.** If you have [mise](https://mise.jdx.dev) on
 some machine, clone SBOMlet anywhere and point its `generate` task at your

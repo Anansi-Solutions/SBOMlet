@@ -1,0 +1,88 @@
+# A scheduled deep-scan refresh of the licence inventory, built on the SBOMlet
+# action.
+#
+# The action's intensive mode reads the local sources of every package whose
+# licence the fast scan could not resolve, which takes far too long for a pull
+# request. This workflow runs it on a schedule instead: it regenerates the
+# inventory (mode: generate, intensive: true) and, when that changed any
+# files, opens a `licenses-refresh-intensive/scheduled` pull request against
+# the default branch. It never fails a build — the per-PR gate in
+# licenses-refresh.yml stays fast, and this job keeps the inventory it
+# compares against current.
+#
+# To use it, copy this file into .github/workflows/ in your repository and
+# fill in the placeholder steps for your stack. It lives under examples/ so
+# it never runs in this repository.
+
+name: Licenses intensive refresh
+
+on:
+  schedule:
+    - cron: "17 4 1 * *" # monthly; the unresolved set shrinks slowly
+  workflow_dispatch:
+
+# create-pull-request pushes the refresh branch and opens the PR.
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  licenses:
+    runs-on: ubuntu-latest
+    # The deep scan works through every unresolved package's sources and runs
+    # for hours on a large repository. Six hours is the ceiling a GitHub-hosted
+    # runner enforces regardless; raise it on a self-hosted runner.
+    timeout-minutes: 360
+
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v6
+        with:
+          # No step needs authenticated git, so the token is not left behind in
+          # the workspace for later steps to read.
+          persist-credentials: false
+          # submodules: recursive # if dependencies of yours live in submodules
+
+      - name: Setup CI environment
+        uses: jdx/mise-action@e6a8b3978addb5a52f2b4cd9d91eafa7f0ab959d # v4.2
+
+      # optionally restore/save your dependency caches here
+      # install your dependencies here — the deep scan reads the packages' own
+      # source files, so they have to be on disk
+
+      - name: Regenerate licenses with the deep scan
+        uses: Anansi-Solutions/SBOMlet@main # pin the SBOMlet tag or SHA you reviewed
+        with:
+          mode: generate
+          policy: .sbomlet.policy.toml
+          intensive: true
+          # docker: true # if your repository ships Dockerfiles to scan
+
+      - name: Check for changes
+        id: git-check
+        run: |
+          if [ -n "$(git status --porcelain)" ]; then
+            echo "modified=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "modified=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      # Schedule and manual runs only ever happen in this repository, so no
+      # fork check guards this step.
+      - name: Open a PR with the refreshed inventory
+        if: steps.git-check.outputs.modified == 'true'
+        uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8.1.1
+        with:
+          commit-message: "chore: refresh third-party licence inventory (deep scan)"
+          title: "license refresh: scheduled deep scan"
+          body: |
+            The scheduled deep scan resolved licences the per-PR scan leaves open, so the committed
+            inventory has changed.
+
+            Review the diff and merge it to bring the inventory the licence gate compares against up
+            to date.
+          branch: licenses-refresh-intensive/scheduled
+          labels: |
+            licenses
+            automated pr
+          delete-branch: true
