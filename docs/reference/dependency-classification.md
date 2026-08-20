@@ -115,8 +115,9 @@ highest to lowest:
    the whole entry's, not one package's — splitting it into narrower entries
    is how a bulk acceptance recovers. On a target without a dependency graph
    no chain exists to check, so `self` is the only value allowed there and it
-   accepts every occurrence the entry's `where` reaches
-   (`docs/reference/policy.md`).
+   accepts every occurrence the entry's `where` reaches — an acceptance nothing
+   chain-scopes, and no verdict it decides says otherwise
+   ([policy.md](./policy.md#as-dependency-of--whose-use-you-judged)).
 6. **The target-compatibility lane** — entered only when a target profile
    governs this occurrence *and* the finding has a parseable, non-imprecise
    expression. The tree below.

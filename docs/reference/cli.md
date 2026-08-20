@@ -325,6 +325,22 @@ policy-file entry decides ahead of, so it is left with nothing to do.
 A policy is required: without one there are no entries to audit, and the run is a
 config error rather than a clean pass.
 
+This is the one subcommand with no Taskfile entry point — it is maintenance, not
+part of a build. Run it from the directory the tool is vendored into, pointing
+it back at the repository:
+
+```sh
+cd tools/sbomlet
+mise x -- bun src/cli.ts refresh-clarifications --repo-root ../.. --policy ../../.sbomlet.policy.toml
+```
+
+The report prints to stderr, one block per finding: the label, then what it is
+about — the entry's citation, plus the package and version where the finding is
+about one — with the detail on the line under it. The closing line says what was
+written, or what is left for a person to apply and where. The
+[writing-policy guide](../guides/writing-policy.md#refresh-your-clarifications-after-an-upgrade)
+covers when to reach for it.
+
 ### What `--write` may touch
 
 `--write` rewrites the file named by the policy's
@@ -464,8 +480,8 @@ directory.
 ## Exit codes
 
 Codes 1 and 2 come only from a structured result — `check` produces both,
-`verify-cache` and `refresh-clarifications` produce 1 — never from an exception. Every error, in any
-subcommand, exits 3 or higher.
+`verify-cache` and `refresh-clarifications` produce 1 — never from an exception.
+Every error, in any subcommand, exits 3 or higher.
 
 | Code | Meaning |
 | --- | --- |

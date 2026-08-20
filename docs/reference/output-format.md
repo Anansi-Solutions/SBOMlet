@@ -217,7 +217,7 @@ A table with no rows is omitted entirely, so a base-image-only container shows
 just System packages and vice versa. Which container subsection(s) a package
 rows in, including one present in several containers, is placement inventory
 completeness — see
-[report-placement.md](./report-placement.md#inventory-sections-placement-driven-complete-nothing-is-ever-dropped).
+[report-placement.md](./report-placement.md#inventory-sections-placement-driven-complete--nothing-is-ever-dropped).
 There is no standalone Docker section any more: every container package is
 listed under Production or Development-only by that container's
 classification.

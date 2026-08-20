@@ -11,6 +11,16 @@ can't determine a value with confidence, it abstains: an unknowable licence is
 left blank rather than guessed, and a dependency whose provenance can't be traced
 is surfaced without one. See [honest residual](#honest-residual).
 
+### clarifications file
+
+The separate file a policy can keep its [clarify](#policy-lanes) entries in,
+named by a top-level `clarifications` key. It holds those tables and nothing
+else, and its entries are cited `clarifications[j]`, numbered within that file.
+It is machine-maintained — `refresh-clarifications` rewrites it whole — so notes
+about an entry belong in the entry's own fields, never in comment lines around
+it. See
+[policy.md](reference/policy.md#a-separate-clarifications-file).
+
 ### collector
 
 The component that turns one [target](#target) into a list of dependencies with
@@ -25,11 +35,11 @@ instead of an occurrence's licence being judged only by hand-authored
 `[[compatible]]`/`[[deny]]` rules, it is judged by directional compatibility
 against the target, using a vetted licence-compatibility matrix. Sits below
 `[[compatible]]` and above workspace copyleft suppression in
-[precedence](../reference/policy.md#precedence); absent a declared target,
+[precedence](reference/policy.md#precedence); absent a declared target,
 the lane never activates and routing is unchanged. The matrix models
 absorption into a combined work under the target licence, not linking mode
 — see
-[policy.md#targetworkspace](../reference/policy.md#targetworkspace) for
+[policy.md#targetworkspace](reference/policy.md#targetworkspace) for
 that assumption stated in full.
 
 ### CycloneDX
@@ -44,12 +54,30 @@ A licence that requires you to release your own changes (and sometimes the whole
 work that includes it) under the same terms. GPL, LGPL, AGPL, MPL. The policy
 flags copyleft dependencies because they carry an obligation when you distribute.
 
+### dependency graph
+
+The per-[target](#target) record of which package pulls in which. Only the
+collector lanes that can reconstruct one do: the npm/Yarn lane and the Python
+(poetry) lane. Every other source — Terraform, the committed Docker image SBOM,
+bun — reports a flat list, so those targets carry no
+[introduction path](#introduction-path) to check. Which lane collected the
+target decides this, not whether its data happens to carry edges.
+
 ### dependency provenance
 
 Why a dependency is present: whether your project depends on it **directly** (you
 declared it) or **transitively** (something you declared pulls it in), and which
 parent — the **introducer** — does the pulling. Shown in the "Why" column.
-Available for Yarn 4 workspaces and Python (poetry); other ecosystems show "—".
+Recorded for the targets that have a [dependency graph](#dependency-graph);
+other ecosystems show "—".
+
+### detection record
+
+What a [clarify](#policy-lanes) entry's `detected` key holds: what each source
+reported when the entry was written, one value per source — the registry answer
+and the in-depth scan's. The entry applies only while every source it records
+still reports what was written down, so a later relicence reopens the judgment
+instead of being masked by an old answer.
 
 ### development-only and production
 
@@ -87,6 +115,14 @@ the package registry (npm, PyPI). The answers are written to a committed
 enriching (an empty cache is still a cache); the bytes change only when it
 fetches a licence the cache doesn't already hold. `check` only ever reads it.
 
+### everywhere token
+
+The reserved `where` element `/`, covering every [occurrence](#occurrence).
+`where` is required on a `[[compatible]]` entry, so a repository-wide acceptance
+is written out rather than reached by omission. No target identity can be `/`,
+since a leading or trailing slash is rejected wherever a path is validated, so
+the token is unambiguous.
+
 ### the gate (`check`)
 
 The `check` command: the part that makes the tool a CI gate. It regenerates the
@@ -112,6 +148,23 @@ A licence the data names only by family — "BSD", "Apache" — with no clause o
 version, so it can't be turned into a precise SPDX id without guessing. The tool
 records it as imprecise and flags it for a human to pin down with a
 [clarify](#policy-lanes) override.
+
+### introduction path
+
+The chain by which a dependency reaches your project at one [target](#target):
+the package your project declared, then each package that pulls in the next,
+down to the dependency itself. Recorded only where the target has a
+[dependency graph](#dependency-graph). A package-level `[[compatible]]` entry
+states whose use of a package was judged, and is checked against these paths.
+
+### justification
+
+The closed set a [clarify](#policy-lanes) entry picks from to say why its
+recorded expression is preferred over what detection reports. Each value asserts
+something the tool can re-check, so an entry the current signal disproves fails
+the gate instead of applying; free prose goes in the entry's `comment`. The
+values are in [policy.md](reference/policy.md#justification--the-closed-set).
+Compare [rationale](#rationale), the equivalent set for an acceptance.
 
 ### license claim
 
@@ -156,15 +209,28 @@ One dependency in the merged inventory: its name, version, [purl](#purl),
 The ordered rules in `.sbomlet.policy.toml`, highest precedence first:
 **deny** (force-fail a source-available or named licence — terminal),
 **clarify** (correct a package's finding to a precise expression),
-**compatible** (allow a licence or an exact package), and
+**compatible** (allow a package, or a licence), the
+[compatibility lane](#compatibility-lane) a declared
+[target profile](#target-profile) activates, and
 **workspace copyleft suppression** (stop flagging in-family copyleft inside a
-workspace that itself ships under that copyleft licence).
+workspace that itself ships under that copyleft licence). Under all of them sit
+the category defaults for unknown, development-only, and OS-scope packages. The
+full table is [policy.md](reference/policy.md#precedence).
 
 ### purl
 
 A package URL — the standard, ecosystem-agnostic identifier for a package
 version, like `pkg:npm/react@19.2.3` or `pkg:deb/debian/bash@5.2`. It's the key
 the [merge](#merge) joins on.
+
+### rationale
+
+The closed set a `[[compatible]]` entry picks from to say why a package or a
+licence is accepted. Two of its values state something a scan can contradict and
+are rejected outright when it does; the rest state a judgment about how your
+software is built, which no scan observes, so they are taken as written. The
+values are in [policy.md](reference/policy.md#rationale--the-closed-set).
+Compare [justification](#justification), the equivalent set for a clarification.
 
 ### SBOM
 
@@ -184,6 +250,15 @@ can gate them differently — base-image GPL is expected and isn't a
 violation, but an application package baked into an image gates like any
 other application dependency.
 
+### the `self` token
+
+The reserved `as-dependency-of` value naming your own software rather than a
+package that pulls one in. On a target with a
+[dependency graph](#dependency-graph) it covers exactly one edge: the package
+your project declared directly. On a target without one it is the only value a
+policy may name, and it accepts every occurrence the entry's `where` reaches —
+an acceptance no [introduction path](#introduction-path) scopes.
+
 ### source-available
 
 A licence that lets you read and modify the source but restricts production or
@@ -199,9 +274,13 @@ speaks SPDX everywhere a licence is named.
 
 ### staleness
 
-The condition [check](#the-gate-check) reports (exit code 2) when a committed
-document no longer matches what the tool would generate today — usually because a
-dependency changed and the inventory wasn't regenerated.
+Two things go stale. A committed **document** is stale when it no longer matches
+what the tool would generate today — usually because a dependency changed and
+the inventory wasn't regenerated — which [check](#the-gate-check) reports with
+exit code 2. An **override** is stale when a source no longer reports what its
+[detection record](#detection-record) wrote down; the recorded expression is not
+applied, and the gate fails naming the source, the recorded value, and the
+current one.
 
 ### target
 
@@ -218,7 +297,7 @@ Your own software's declared licence and usage — not the scan
 distribute externally or keep the software internal. Declaring one
 activates the [compatibility lane](#compatibility-lane); `[[target.workspace]]`
 overrides the profile per workspace. See
-[policy.md#target](../reference/policy.md#target).
+[policy.md#target](reference/policy.md#target).
 
 ### verdict
 
@@ -226,3 +305,12 @@ The policy's decision about one package in one [occurrence](#occurrence):
 `ok`, `warn`, `fail`, or `suppressed`, with the rule that decided it and a
 reason. The rendered documents and the [gate](#the-gate-check) both read
 verdicts; neither decides anything itself.
+
+### voided entry
+
+A package-level `[[compatible]]` entry whose judgment the recorded
+[introduction paths](#introduction-path) contradict at one
+[target](#target): something it accepts arrives there through a chain passing
+none of the parents it names. The entry then accepts nothing at that target, and
+every occurrence it governs there fails as `compatible:voided[i]`, naming the
+chain. Splitting the entry so each part covers one way in is the recovery.

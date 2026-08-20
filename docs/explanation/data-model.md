@@ -63,12 +63,21 @@ collectors produce these; the merge consumes them.
 | `prodPurlSet?`     | `ReadonlySet<string>`                         | The purl set of the `--production` run. When present (Yarn-4 plugin targets), the dual-run diff decides dev: an occurrence is dev when its purl is absent from this set. When absent, the cdxgen property markers decide instead. |
 | `firstPartyNames?` | `ReadonlySet<string>`                         | First-party workspace and portal member names from the target's own lockfile. Used to drop first-party members from the inventory, but only paired with a second signal (see below).            |
 | `scope?`           | `ScopeTaxonomy`                               | The scope of every component this input contributes. Absent defaults to `"app"`; the Docker-OS input sets `"os"`.                                                                               |
+| `derivesDependencyGraph?` | `boolean`                              | Did the lane that produced this input reconstruct a root-anchored [dependency graph](../glossary.md#dependency-graph)? Declared by the collector registration, never inferred from the data.     |
 | `introductions?`   | `ReadonlyMap<string, DependencyIntroduction>` | Per-purl dependency provenance for this target, keyed by purl. Present for the npm/yarn and python lanes; absent for sources that carry no dependency graph.                                     |
 
 The wrapper exists because the dev/prod signal, the scope, and the provenance are
 per-target facts that the CycloneDX document either does not carry or carries
 unreliably. Keeping them next to the document lets the merge attach them when it
 creates each occurrence.
+
+`derivesDependencyGraph` is declared by the collector registration rather than
+read back off the data. Reading it off the data would let a generator regression
+silently reclassify a target as graph-less, and with it widen every acceptance
+scoped there from one declared edge to every occurrence. So that the declaration
+stays honest in the other direction, a target whose lane claims a graph while
+none of its packages carries an introduction aborts the run instead of being
+treated as flat.
 
 ### Dropping a first-party member needs two signals
 
@@ -141,7 +150,7 @@ One consuming target of a package.
 
 ```ts
 interface Occurrence {
-  target: string; // "apps/scratch" — forward-slash, never backslash
+  target: string; // "apps/media" — forward-slash, never backslash
   isDevDependency: boolean; // scope of THIS package in THIS target
   introduction?: DependencyIntroduction;
 }
@@ -367,6 +376,20 @@ lanes. One caveat is part of the contract: a multi-parent transitive has several
 real introducer chains, so `introducedBy` is the complete set while `path` is one
 deterministic representative.
 
+### What the policy engine reads it for
+
+A package-level `[[compatible]]` entry states whose use of a package was judged.
+To check that, the engine reverses these per-occurrence records into one
+introducer graph per target and asks, for every package the entry accepts there,
+whether it can still reach the project through a chain passing none of the named
+parents. One that can makes the entry's claim untrue, and the whole entry stops
+deciding at that target.
+
+Which targets get asked comes from `derivesDependencyGraph`, not from whether a
+particular occurrence happens to carry an introduction. Within a target that has
+a graph, an occurrence with no introduction is covered by no parent — the
+fail-closed direction, since nothing is known about how it arrives.
+
 ### Optionality is out of scope
 
 There is no `optional` field, on purpose. The npm BOM never carried optional or
@@ -431,7 +454,7 @@ after a policy run has attached the finding:
   "scope": "app",
   "occurrences": [
     {
-      "target": "apps/scratch",
+      "target": "apps/media",
       "isDevDependency": false,
       "introduction": {
         "direct": false,
@@ -459,12 +482,12 @@ after a policy run has attached the finding:
 ```
 
 There is one package and two occurrences: the purl is the identity, and
-`apps/scratch` and `docs` each contribute an `Occurrence`. In `apps/scratch` the
+`apps/media` and `docs` each contribute an `Occurrence`. In `apps/media` the
 package is a transitive production dependency introduced by `@babel/core`; in
 `docs` it is a direct dev dependency, which is why its `introducedBy` is empty and
 it has no `path`.
 
-The dev/prod split is per occurrence. `apps/scratch` says production, `docs` says
+The dev/prod split is per occurrence. `apps/media` says production, `docs` says
 dev. Both are true, and neither overwrites the other.
 
 The finding is precise. A single `MIT` claim parses verbatim, so `confidence` is
@@ -563,4 +586,4 @@ regenerate the inventory in memory and compare it byte-for-byte against the
 committed outputs. See [design-principles](design-principles.md) for the full
 determinism rationale.
 
-Source: `model/dependencies.ts`, `merge/merge.ts`, `normalize/normalize.ts`, `policy/evaluate.ts`, `collectors/provenanceGraph.ts`, `render/markdown.ts`.
+Source: `model/dependencies.ts`, `merge/merge.ts`, `merge/dependencyGraphs.ts`, `normalize/normalize.ts`, `policy/evaluate.ts`, `policy/chain.ts`, `collectors/provenanceGraph.ts`, `render/markdown.ts`.
