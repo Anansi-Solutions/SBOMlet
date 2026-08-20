@@ -214,10 +214,14 @@ source, the recorded value, and the current one:
 
 A stale entry is never applied, so an old entry cannot silently mask a
 relicence. Staleness also covers a licence appearing *beside* what you
-recorded: if any source reports a precise licence your `expression` does not
-account for, the entry is stale even though everything you wrote down still
-holds. Without that, a lingering obsolete `BSD` label would license out a
-co-present new `GPL-3.0-only` claim.
+recorded: if any source reports a licence your `expression` does not account
+for, the entry is stale even though everything you wrote down still holds.
+Without that, a lingering obsolete `BSD` label would license out a co-present
+new `GPL-3.0-only` claim. A bare family label counts here too — an `AGPL`
+next to a recorded `MIT` is not something a `MIT` expression answers for —
+unless you recorded that family yourself, which is the ordinary `BSD` →
+`BSD-3-Clause` disambiguation. A label naming no family the tool recognises
+contradicts nothing and is passed over.
 
 One entry stays valid through a divergence it did not intend to hide: when a
 source upgrades its own imprecise label to exactly the licence you asserted —

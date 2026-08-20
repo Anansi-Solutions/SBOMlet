@@ -351,3 +351,74 @@ describe("annotateFindings — redundant override when metadata catches up (gap 
     expect(finding.staleOverride).toBeUndefined();
   });
 });
+
+// ===========================================================================
+// The staleness sweep and the imprecise member. A bare family label appearing
+// beside a still-matching recorded value carries a real license statement -
+// "this is somewhere in the AGPL family" - even though it names no exact
+// license. Skipping it let a clarify entry absorb an appended copyleft label
+// and hand the package back as the permissive licence it used to be.
+// ===========================================================================
+
+describe("annotateFindings — an imprecise member the assertion cannot account for", () => {
+  const OLD_SIGNAL_ONLY: ClarifyInput[] = [
+    { name: "family-appended", detected: { registry: "MIT" }, expression: "MIT" },
+  ];
+
+  test("control: with no entry at all, the appended AGPL label reaches the finding", () => {
+    const entry = pkg("family-appended", "1.0.0", [claim("MIT"), claim("AGPL", "name")]);
+    const { model } = annotateFindings(modelOf(entry), []);
+    const finding = model.packages[0]!.finding!;
+
+    expect(finding.expression).not.toBe("MIT");
+  });
+
+  test("an entry recording only the old signal goes stale on the appended family label", () => {
+    const entry = pkg("family-appended", "1.0.0", [claim("MIT"), claim("AGPL", "name")]);
+    const { model } = annotateFindings(modelOf(entry), OLD_SIGNAL_ONLY);
+    const finding = model.packages[0]!.finding!;
+
+    expect(finding.source).not.toBe("override");
+    expect(finding.staleOverride).toBeDefined();
+    expect(finding.staleOverride!.level).toBe("clarify");
+    expect(finding.staleOverride!.unaccounted).toBe("AGPL");
+  });
+
+  test("control: the same label spelled precisely goes stale exactly as it always did", () => {
+    const entry = pkg("family-appended", "1.0.0", [claim("MIT"), claim("AGPL-3.0-only")]);
+    const { model } = annotateFindings(modelOf(entry), OLD_SIGNAL_ONLY);
+    const finding = model.packages[0]!.finding!;
+
+    expect(finding.source).not.toBe("override");
+    expect(finding.staleOverride!.unaccounted).toBe("AGPL-3.0-only");
+  });
+
+  test("the disambiguation case is untouched: a recorded BSD label still upgrades to BSD-3-Clause", () => {
+    const entry = pkg("disambiguated", "1.0.0", [claim("BSD License", "name")]);
+    const clarify: ClarifyInput[] = [
+      { name: "disambiguated", detected: { registry: "BSD" }, expression: "BSD-3-Clause" },
+    ];
+    const { model } = annotateFindings(modelOf(entry), clarify);
+    const finding = model.packages[0]!.finding!;
+
+    expect(finding.source).toBe("override");
+    expect(finding.expression).toBe("BSD-3-Clause");
+    expect(finding.staleOverride).toBeUndefined();
+  });
+
+  test("a member naming no family at all is still skipped - there is nothing to contradict", () => {
+    const entry = pkg("unreadable-label", "1.0.0", [
+      claim("MIT"),
+      claim("Some Proprietary Thing", "name"),
+    ]);
+    const clarify: ClarifyInput[] = [
+      { name: "unreadable-label", detected: { registry: "MIT" }, expression: "MIT" },
+    ];
+    const { model } = annotateFindings(modelOf(entry), clarify);
+    const finding = model.packages[0]!.finding!;
+
+    expect(finding.source).toBe("override");
+    expect(finding.expression).toBe("MIT");
+    expect(finding.staleOverride).toBeUndefined();
+  });
+});

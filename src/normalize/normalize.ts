@@ -649,9 +649,14 @@ function signalMatchesCanonical(signal: ReadonlyArray<string>, recorded: string)
  * values under the same canonicalization the lane checks use, so a re-spelling of a recorded value
  * is not swept as if it were something new.
  *
- * Each swept member is re-derived to a precise expression via the normalizer; one the assertion
- * does not account for makes the override stale. Imprecise and unknown members carry no precise
- * contradicting license and never block the apply.
+ * Each swept member is re-derived through the normalizer. A precise one the assertion does not
+ * account for makes the override stale. So does an IMPRECISE one whose family the entry never
+ * recorded and the assertion is no part of: a bare `AGPL` appended beside a still-matching recorded
+ * `MIT` names an obligation the assertion answers for nowhere, and skipping it let a clarify absorb
+ * the appended copyleft. Recording the family is what tells the two apart - a recorded `BSD` label
+ * upgraded by an assertion of `BSD-3-Clause` is the ordinary disambiguation, so it is passed over
+ * by the family check exactly as it is by the recorded-value check above. A member naming no family
+ * at all contradicts nothing and is skipped.
  */
 function unaccountedMember(
   signal: ReadonlyArray<string>,
@@ -666,13 +671,23 @@ function unaccountedMember(
       continue;
     }
 
-    const precise = normalizeRaw(member).expression;
+    const read = normalizeRaw(member);
 
-    if (precise === null) {
+    if (read.expression === null) {
+      const family = read.impreciseFamily;
+
+      if (
+        family !== undefined &&
+        !wanted.has(fold(family)) &&
+        !expressionInFamily(expression, family)
+      ) {
+        return member;
+      }
+
       continue;
-    } // imprecise/unknown: no precise contradiction
+    }
 
-    if (!accountsFor(expression, precise)) {
+    if (!accountsFor(expression, read.expression)) {
       return member;
     }
   }
