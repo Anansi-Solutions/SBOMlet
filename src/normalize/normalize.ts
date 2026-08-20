@@ -688,7 +688,7 @@ function unaccountedMember(
  * CC-BY-3.0` accounts for an observed `MIT` while a `GPL-3.0-only` that appeared beside it is still
  * unaccounted for. Any throw leaves the license unaccounted for - fail closed.
  */
-function accountsFor(expression: string, precise: string): boolean {
+export function accountsFor(expression: string, precise: string): boolean {
   try {
     return satisfies(precise, [expression]);
   } catch {
