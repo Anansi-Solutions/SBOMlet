@@ -78,6 +78,7 @@ import {
   matchesIdentityPrefix,
   type AssessmentConflict,
   type CanonicalDependencies,
+  type DependencyIntroduction,
   type Occurrence,
   type PackageEntry,
   type StaleOverride,
@@ -244,12 +245,31 @@ function packageRuleFor(
 }
 
 /**
+ * Did the scan record how this occurrence arrives at its target?
+ *
+ * A direct dependency and a transitive one with at least one introducer both do. The two shapes
+ * that do not are an absent introduction and a transitive one nothing reachable introduces, and
+ * both are routine rather than exotic: the npm lane empties `introducedBy` for a component no chain
+ * from the project reaches, and the poetry lane produces the same for a name resolved at several
+ * versions.
+ */
+function recordsHowItArrives(introduction: DependencyIntroduction | undefined): boolean {
+  return (
+    introduction !== undefined && (introduction.direct || introduction.introducedBy.length > 0)
+  );
+}
+
+/**
  * The package-form entry deciding this occurrence, carrying what the chains at its target say.
  *
  * Undefined when no entry matches - and also when the target has a dependency graph while the scan
- * recorded no introduction for this occurrence: an entry says whose use of the package was judged,
- * which decides nothing where how it arrives went unrecorded. The occurrence falls through to the
- * lanes below rather than being accepted on a path nobody saw.
+ * did not record how this occurrence arrives ({@link recordsHowItArrives}): an entry says whose use
+ * of the package was judged, which decides nothing where how it arrives went unrecorded. The
+ * occurrence falls through to the lanes below rather than being accepted on a path nobody saw.
+ *
+ * @privateRemarks
+ * The voiding side deliberately does NOT mirror this. An arrival nobody recorded is not evidence of
+ * a bypass, so it never contradicts an entry - it only fails to support one.
  */
 function judgedPackageRule(
   entry: PackageEntry,
@@ -265,7 +285,7 @@ function judgedPackageRule(
     return undefined;
   }
 
-  if (targetsWithDependencyGraph.has(target) && occurrence.introduction === undefined) {
+  if (targetsWithDependencyGraph.has(target) && !recordsHowItArrives(occurrence.introduction)) {
     return undefined;
   }
 

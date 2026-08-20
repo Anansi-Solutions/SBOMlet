@@ -451,8 +451,9 @@ information, stated so each part is true.
 
 Two cases decide nothing rather than voiding anything. A package your project
 declares directly is covered by `self` and by nothing else. And an occurrence
-the scan recorded no introduction for is not covered by any parent, `self`
-included, and equally never voids an entry — nothing is known about how it
+whose arrival the scan did not record — no introduction at all, or a transitive
+one nothing reachable introduces — is not covered by any parent, `self`
+included, and equally never voids an entry: nothing is known about how it
 arrives, which is neither an acceptance nor evidence of a bypass.
 
 `as-dependency-of` is not applicable at licence level and is rejected there: a

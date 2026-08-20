@@ -5579,7 +5579,17 @@ describe("evaluate — an entry the introduction chains contradict", () => {
    * The workspace the entry is scoped to: "judged" and "other" are declared directly, both pull in
    * gpl-lib, and only "judged" pulls in mpl-lib.
    */
-  function runChainEngine(policyText: string): {
+  const SCANNED_INTRODUCTIONS: Readonly<Record<string, DependencyIntroduction>> = {
+    [JUDGED]: { direct: true, introducedBy: [] },
+    [OTHER]: { direct: true, introducedBy: [] },
+    [GPL_LIB]: { direct: false, introducedBy: [JUDGED, OTHER] },
+    [MPL_LIB]: { direct: false, introducedBy: [JUDGED] },
+  };
+
+  function runChainEngine(
+    policyText: string,
+    introductions: Readonly<Record<string, DependencyIntroduction>> = SCANNED_INTRODUCTIONS,
+  ): {
     verdicts: Verdict[];
     usedClarifyIndices: ReadonlySet<number>;
     policy: Policy;
@@ -5593,12 +5603,7 @@ describe("evaluate — an entry the introduction chains contradict", () => {
       { ...pkgSpec("mpl-lib", "MPL-2.0", []), occurrences: [{ target: GRAPH_TARGET, dev: true }] },
     ];
     const { model, usedClarifyIndices } = annotateFindings(
-      withIntroductions(makeModel(specs), {
-        [JUDGED]: { direct: true, introducedBy: [] },
-        [OTHER]: { direct: true, introducedBy: [] },
-        [GPL_LIB]: { direct: false, introducedBy: [JUDGED, OTHER] },
-        [MPL_LIB]: { direct: false, introducedBy: [JUDGED] },
-      }),
+      withIntroductions(makeModel(specs), introductions),
       policy.clarify,
       [],
     );
@@ -5610,6 +5615,12 @@ describe("evaluate — an entry the introduction chains contradict", () => {
       model,
     };
   }
+
+  /** gpl-lib as the scan reports a component no chain from the project reaches. */
+  const ORPHANED_GPL_LIB: Readonly<Record<string, DependencyIntroduction>> = {
+    ...SCANNED_INTRODUCTIONS,
+    [GPL_LIB]: { direct: false, introducedBy: [] },
+  };
 
   test("every package the entry governs there fails, not only the one that arrives around it", () => {
     const { verdicts } = runChainEngine(LIB_FAMILY_POLICY);
@@ -5660,6 +5671,18 @@ describe("evaluate — an entry the introduction chains contradict", () => {
 
     expect(voided.rule.startsWith("compatible[")).toBeFalse();
     expect(acceptedContainerNotices(model, verdicts)).toEqual([]);
+  });
+
+  test("a package recorded as arriving from nothing reachable is not accepted by the entry", () => {
+    const { verdicts } = runChainEngine(LIB_FAMILY_POLICY, ORPHANED_GPL_LIB);
+
+    expect(verdicts.find((v) => v.purl === GPL_LIB)?.rule).toBe("default:copyleft");
+  });
+
+  test("it does not void the entry either - the packages that do arrive stay accepted", () => {
+    const { verdicts } = runChainEngine(LIB_FAMILY_POLICY, ORPHANED_GPL_LIB);
+
+    expect(verdicts.find((v) => v.purl === MPL_LIB)?.rule).toBe("compatible[0]");
   });
 
   test("an entry judged under the project itself is contradicted by any chain into the package", () => {
