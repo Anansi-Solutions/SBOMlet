@@ -5,9 +5,10 @@
  * entry written there comes back as a suggestion for a person to act on.
  *
  * The write is guarded twice. A file carrying `#` comments is left alone, because the parser
- * discarded them before the entries were ever seen and the rewrite could not put them back. The new
- * text must also read back as the entries it was built from, or {@link emitClarifications} raises
- * before anything reaches the disk.
+ * discarded them before the entries were ever seen and the rewrite could not put them back - a
+ * guard raised only where there is a rewrite to raise it over. The new text must also read back as
+ * the entries it was built from, or {@link emitClarifications} raises before anything reaches the
+ * disk.
  */
 import { readFileSync, writeFileSync } from "node:fs";
 
@@ -64,6 +65,10 @@ function importedEntries(clarify: ReadonlyArray<ClarifyRule>): ClarifyRule[] {
  * Apply the findings to the imported file, or leave it alone. A policy declaring no imported file
  * has nothing machine-owned to rewrite, so its entries stay suggestions; a file carrying prose
  * outside the entries is refused, because the rewrite could not put that prose back.
+ *
+ * The rewrite is computed first, so the refusal is raised only over a rewrite there is. A run with
+ * nothing to apply would otherwise report a refusal - and exit 3 - for a file it was never going to
+ * touch, which reads as a failure where the entries are simply up to date.
  */
 function applyToFile(
   path: string | undefined,
@@ -74,18 +79,18 @@ function applyToFile(
     return {};
   }
 
+  const rewrite = rewriteClarifications(imported, findings);
+
+  if (rewrite === undefined) {
+    return {};
+  }
+
   if (rewriteWouldDropText(readFileSync(path, "utf8"), imported)) {
     return {
       refused:
         `${path} carries # comments a rewrite would destroy — move that prose into an entry's ` +
         "comment or evidence field first",
     };
-  }
-
-  const rewrite = rewriteClarifications(imported, findings);
-
-  if (rewrite === undefined) {
-    return {};
   }
 
   writeFileSync(path, rewrite.text);

@@ -2755,6 +2755,24 @@ describe("refresh-clarifications", () => {
     expect(report).toContain("nothing written");
   });
 
+  test("a # comment refuses nothing when there is nothing to apply", async () => {
+    const settled = `# researched in the ticket, do not lose this\n${dualLibEntry()}\n`;
+    const { root, policyPath, clarificationsPath } = makeRefreshTree(
+      'clarifications = "clarifications.toml"\n',
+      settled,
+    );
+    let result: RefreshClarificationsResult | undefined;
+
+    await withCapturedStderr(async () => {
+      result = await refresh(root, policyPath, true);
+    });
+
+    expect(readFileSync(clarificationsPath, "utf8")).toBe(settled);
+    expect(result?.refused).toBeUndefined();
+    expect(result?.applied).toBeUndefined();
+    expect(exitCodeForRefresh(result!)).toBe(0);
+  });
+
   test("without a policy there are no entries to refresh: a config error, never a clean run", () => {
     const root = mkdtempSync(join(tmpdir(), "licenses-refresh-nopolicy-"));
     const spawned = spawnSync(
