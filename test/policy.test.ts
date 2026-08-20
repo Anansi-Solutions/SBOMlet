@@ -15,7 +15,7 @@ import { denyRuleFor } from "../src/policy/denylist";
 import { AGPL_IDS, COPYLEFT_IDS } from "../src/policy/copyleft";
 import { COULD_BE_COPYLEFT_FAMILIES, WORKSPACE_ABSORBS } from "../src/policy/copyleftFamily";
 import { BUILTIN_OVERRIDES } from "../src/policy/builtinOverrides";
-import { JUSTIFICATION_VALUES } from "../src/policy/enums";
+import { JUSTIFICATION_VALUES, RATIONALE_VALUES } from "../src/policy/enums";
 import { parsePolicy, PolicyError, type Policy } from "../src/policy/schema";
 import type {
   CanonicalDependencies,
@@ -47,7 +47,8 @@ const licenseRuleFixture = (pattern: string): string =>
     "[[compatible]]",
     'match = "license"',
     `pattern = ${JSON.stringify(pattern)}`,
-    'reason = "test reason"',
+    'rationale = "license-reviewed"',
+    'where = ["/"]',
   ].join("\n");
 
 /** Minimal policy with a single suppression entry for `path`. */
@@ -61,8 +62,8 @@ const suppressionFixture = (path: string): string =>
 
 const SUPPRESSION_DESCRIPTION =
   "Workspace is itself distributed under AGPL-3.0; in-family copyleft is fine.";
-const MPL_REASON = "Weak copyleft; compatible under AGPL-3.0 and Apache License v2.0";
-const SHARP_REASON = "Dual-licensed Apache-2.0 AND LGPL-3.0-or-later; LGPL obligations accepted.";
+const MPL_COMMENT = "Weak copyleft; compatible under AGPL-3.0 and Apache License v2.0";
+const SHARP_COMMENT = "Dual-licensed Apache-2.0 AND LGPL-3.0-or-later; LGPL obligations accepted.";
 const CLARIFY_COMMENT = "Upstream declares Public Domain; mapped to Unlicense deliberately.";
 
 // Happy path: every table class present, exercising the full locked TOML
@@ -76,13 +77,18 @@ const VALID_POLICY = [
   "[[compatible]]",
   'match = "license"',
   'pattern = "MPL-2.0"',
-  `reason = ${JSON.stringify(MPL_REASON)}`,
+  'rationale = "license-reviewed"',
+  'where = ["/"]',
+  `comment = ${JSON.stringify(MPL_COMMENT)}`,
   "",
   "[[compatible]]",
   'match = "package"',
   'name = "@img/sharp-win32-x64"',
   'version = "0.34.5"',
-  `reason = ${JSON.stringify(SHARP_REASON)}`,
+  'as-dependency-of = ["self"]',
+  'rationale = "license-reviewed"',
+  'where = ["/"]',
+  `comment = ${JSON.stringify(SHARP_COMMENT)}`,
   "",
   "[[clarify]]",
   'name = "jsonify"',
@@ -113,13 +119,18 @@ describe("parsePolicy — happy path", () => {
         match: "license",
         pattern: "MPL-2.0",
         allowlist: ["MPL-2.0"],
-        reason: MPL_REASON,
+        rationale: "license-reviewed",
+        where: ["/"],
+        comment: MPL_COMMENT,
       },
       {
         match: "package",
         name: "@img/sharp-win32-x64",
         version: "0.34.5",
-        reason: SHARP_REASON,
+        asDependencyOf: ["self"],
+        rationale: "license-reviewed",
+        where: ["/"],
+        comment: SHARP_COMMENT,
       },
     ]);
     expect(policy.clarify).toEqual([
@@ -167,10 +178,10 @@ describe("parsePolicy — compatible pattern decomposition", () => {
 });
 
 // ===========================================================================
-// The optional `where` scope on BOTH [[compatible]] forms — an
-// array of occurrence-identity prefixes, each validated like a suppression
-// path. Empty arrays reject (a rule that can never match anywhere is a dead
-// rule by construction).
+// The REQUIRED `where` scope on BOTH [[compatible]] forms — an array of
+// occurrence-identity prefixes, each validated like a suppression path, or the
+// reserved everywhere token. Empty arrays reject (a rule that can never match
+// anywhere is a dead rule by construction).
 // ===========================================================================
 
 const DOCKER_ID = "docker:examples/docker-scan/Dockerfile";
@@ -181,7 +192,7 @@ const scopedLicenseFixture = (whereToml: string): string =>
     "[[compatible]]",
     'match = "license"',
     'pattern = "MPL-2.0"',
-    'reason = "test reason"',
+    'rationale = "license-reviewed"',
     `where = ${whereToml}`,
   ].join("\n");
 
@@ -191,7 +202,8 @@ const scopedPackageFixture = (whereToml: string): string =>
     "[[compatible]]",
     'match = "package"',
     'name = "busybox"',
-    'reason = "test reason"',
+    'as-dependency-of = ["self"]',
+    'rationale = "license-reviewed"',
     `where = ${whereToml}`,
   ].join("\n");
 
@@ -204,7 +216,7 @@ describe("parsePolicy — compatible `where` scope", () => {
         match: "license",
         pattern: "MPL-2.0",
         allowlist: ["MPL-2.0"],
-        reason: "test reason",
+        rationale: "license-reviewed",
         where: [DOCKER_ID],
       },
     ]);
@@ -217,7 +229,8 @@ describe("parsePolicy — compatible `where` scope", () => {
         'match = "package"',
         'name = "busybox"',
         'version = "1.37.0"',
-        'reason = "test reason"',
+        'as-dependency-of = ["self"]',
+        'rationale = "license-reviewed"',
         `where = ${JSON.stringify([DOCKER_ID, "docker:other/Dockerfile"])}`,
       ].join("\n"),
     );
@@ -227,17 +240,40 @@ describe("parsePolicy — compatible `where` scope", () => {
         match: "package",
         name: "busybox",
         version: "1.37.0",
-        reason: "test reason",
+        asDependencyOf: ["self"],
+        rationale: "license-reviewed",
         where: [DOCKER_ID, "docker:other/Dockerfile"],
       },
     ]);
   });
 
-  test("absent where stays absent-not-present on both parsed forms", () => {
-    const policy = parsePolicy(VALID_POLICY);
+  test("an absent where is rejected on both forms — stating a scope is a decision, not a default", () => {
+    for (const form of [
+      [
+        "[[compatible]]",
+        'match = "license"',
+        'pattern = "MPL-2.0"',
+        'rationale = "license-reviewed"',
+      ],
+      [
+        "[[compatible]]",
+        'match = "package"',
+        'name = "busybox"',
+        'as-dependency-of = ["self"]',
+        'rationale = "os-package-unmodified"',
+      ],
+    ]) {
+      const error = expectPolicyError(form.join("\n"));
 
-    expect("where" in (policy.compatible[0] ?? {})).toBe(false);
-    expect("where" in (policy.compatible[1] ?? {})).toBe(false);
+      expect(error.message).toContain("compatible[0]");
+      expect(error.message).toContain('missing required key "where"');
+    }
+  });
+
+  test("the everywhere token covers every occurrence without dropping the scope key", () => {
+    const policy = parsePolicy(scopedLicenseFixture('["/"]'));
+
+    expect(policy.compatible[0]?.where).toEqual(["/"]);
   });
 
   test("colons in entries pass validation (image refs are legal identities)", () => {
@@ -333,6 +369,296 @@ describe("parsePolicy — compatible `where` scope", () => {
 
     expect(error.message).toContain("compatible[0]");
     expect(error.message).toContain('"bogus"');
+  });
+});
+
+// ===========================================================================
+// The [[compatible]] schema: the package selector, the required
+// `as-dependency-of` list, the closed rationale set, and the pointed errors an
+// entry written against the previous schema gets.
+// ===========================================================================
+
+/** A package-form [[compatible]] entry built from the given key lines. */
+const compatiblePackageFixture = (lines: ReadonlyArray<string>): string =>
+  ["[[compatible]]", 'match = "package"', ...lines].join("\n");
+
+/** A minimal valid package-form entry. */
+const DEMO_COMPATIBLE = [
+  'name = "demo-pkg"',
+  'as-dependency-of = ["self"]',
+  'rationale = "build-time-only"',
+  'where = ["/"]',
+];
+
+/** DEMO_COMPATIBLE without the line starting with `key`. */
+const compatibleWithout = (key: string): string[] =>
+  DEMO_COMPATIBLE.filter((line) => !line.startsWith(`${key} =`));
+
+describe("parsePolicy — the [[compatible]] package selector", () => {
+  test("an exact name parses into the full rule shape", () => {
+    const policy = parsePolicy(compatiblePackageFixture(DEMO_COMPATIBLE));
+
+    expect(policy.compatible).toEqual([
+      {
+        match: "package",
+        name: "demo-pkg",
+        asDependencyOf: ["self"],
+        rationale: "build-time-only",
+        where: ["/"],
+      },
+    ]);
+  });
+
+  test("a name pattern covers a family, and is kept verbatim for the shared matcher", () => {
+    const policy = parsePolicy(
+      compatiblePackageFixture(['pattern = "@img/sharp-*"', ...compatibleWithout("name")]),
+    );
+
+    expect(policy.compatible[0]).toMatchObject({ pattern: "@img/sharp-*" });
+    expect("name" in (policy.compatible[0] ?? {})).toBe(false);
+  });
+
+  test("name AND pattern together, and neither, are both rejected", () => {
+    const both = expectPolicyError(
+      compatiblePackageFixture(['pattern = "demo-*"', ...DEMO_COMPATIBLE]),
+    );
+    const neither = expectPolicyError(compatiblePackageFixture(compatibleWithout("name")));
+
+    for (const error of [both, neither]) {
+      expect(error.message).toContain("compatible[0]");
+      expect(error.message).toContain('exactly one of "name" and "pattern"');
+    }
+  });
+
+  test("a glob-free pattern names the key to use instead; an anchor-less one is refused outright", () => {
+    const globFree = expectPolicyError(
+      compatiblePackageFixture(['pattern = "demo-pkg"', ...compatibleWithout("name")]),
+    );
+    const anchorLess = expectPolicyError(
+      compatiblePackageFixture(['pattern = "**"', ...compatibleWithout("name")]),
+    );
+
+    expect(globFree.message).toContain('use "name"');
+    expect(anchorLess.message).toContain("at least one literal character");
+  });
+
+  test("a version list parses; an empty list is rejected", () => {
+    const policy = parsePolicy(
+      compatiblePackageFixture([...DEMO_COMPATIBLE, 'version = ["1.0.0", "2.0.0"]']),
+    );
+
+    expect(policy.compatible[0]).toMatchObject({ version: ["1.0.0", "2.0.0"] });
+
+    const error = expectPolicyError(compatiblePackageFixture([...DEMO_COMPATIBLE, "version = []"]));
+
+    expect(error.message).toContain("compatible[0]");
+    expect(error.message).toContain('"version"');
+  });
+});
+
+describe("parsePolicy — the [[compatible]] `as-dependency-of` list", () => {
+  test("package names and the reserved self token both parse, in order", () => {
+    const policy = parsePolicy(
+      compatiblePackageFixture([
+        'as-dependency-of = ["build-tool", "self"]',
+        ...compatibleWithout("as-dependency-of"),
+      ]),
+    );
+
+    expect(policy.compatible[0]).toMatchObject({
+      asDependencyOf: ["build-tool", "self"],
+    });
+  });
+
+  test("it is required — an acceptance always states whose use of the package it judged", () => {
+    const error = expectPolicyError(
+      compatiblePackageFixture(compatibleWithout("as-dependency-of")),
+    );
+
+    expect(error.message).toContain("compatible[0]");
+    expect(error.message).toContain('missing required key "as-dependency-of"');
+  });
+
+  test("an empty list is rejected — it would state nothing at all", () => {
+    const error = expectPolicyError(
+      compatiblePackageFixture(["as-dependency-of = []", ...compatibleWithout("as-dependency-of")]),
+    );
+
+    expect(error.message).toContain("compatible[0]");
+    expect(error.message).toContain("as-dependency-of");
+  });
+
+  test("it is not applicable at license level and is rejected there, naming why", () => {
+    const error = expectPolicyError(
+      [
+        "[[compatible]]",
+        'match = "license"',
+        'pattern = "MPL-2.0"',
+        'as-dependency-of = ["self"]',
+        'rationale = "license-reviewed"',
+        'where = ["/"]',
+      ].join("\n"),
+    );
+
+    expect(error.message).toContain("compatible[0]");
+    expect(error.message).toContain("not applicable at license level");
+  });
+});
+
+describe("parsePolicy — the [[compatible]] closed rationale set", () => {
+  test("an invented value is rejected and the error names the whole set", () => {
+    const error = expectPolicyError(
+      compatiblePackageFixture([
+        'rationale = "seems-fine-to-me"',
+        ...compatibleWithout("rationale"),
+      ]),
+    );
+
+    expect(error.message).toContain("compatible[0]");
+    for (const value of RATIONALE_VALUES) {
+      expect(error.message).toContain(value);
+    }
+  });
+
+  test("a missing rationale is rejected on both forms", () => {
+    const packageForm = expectPolicyError(compatiblePackageFixture(compatibleWithout("rationale")));
+    const licenseForm = expectPolicyError(
+      ["[[compatible]]", 'match = "license"', 'pattern = "MPL-2.0"', 'where = ["/"]'].join("\n"),
+    );
+
+    for (const error of [packageForm, licenseForm]) {
+      expect(error.message).toContain("compatible[0]");
+      expect(error.message).toContain('"rationale"');
+    }
+  });
+});
+
+describe("parsePolicy — a [[compatible]] entry written against the previous schema", () => {
+  test('"reason" is rejected naming its replacement, not as a bare unknown key', () => {
+    const error = expectPolicyError(
+      compatiblePackageFixture([...DEMO_COMPATIBLE, 'reason = "reviewed and accepted"']),
+    );
+
+    expect(error.message).toContain("compatible[0]");
+    expect(error.message).toContain('"rationale"');
+    expect(error.message).toContain("docs/reference/policy.md");
+    expect(error.message).not.toContain('unknown key "reason"');
+  });
+
+  test("a complete old-shape policy names every migration hint in one aggregated error", () => {
+    // Both forms exactly as the previous schema spelled them: a free-text
+    // reason, no scope, no parents. Every replacement must be named at once, so
+    // one run migrates the whole file.
+    const error = expectPolicyError(
+      [
+        "[[compatible]]",
+        'match = "license"',
+        'pattern = "MPL-2.0"',
+        'reason = "weak copyleft, reviewed"',
+        "",
+        "[[compatible]]",
+        'match = "package"',
+        'name = "busybox"',
+        'reason = "unmodified base-image package"',
+      ].join("\n"),
+    );
+    const message = error.message;
+
+    expect(message).toContain('compatible[0]: key "reason" was replaced by "rationale"');
+    expect(message).toContain('compatible[0]: missing required key "where"');
+    expect(message).toContain('compatible[1]: key "reason" was replaced by "rationale"');
+    expect(message).toContain('compatible[1]: missing required key "as-dependency-of"');
+    expect(message).toContain('compatible[1]: missing required key "where"');
+    expect(message).toContain("docs/reference/policy.md");
+  });
+});
+
+describe("evaluate — a [[compatible]] entry covering a family of packages", () => {
+  test("HEADLINE: one pattern entry accepts every matching package, each citing the same entry", () => {
+    const policyText = compatiblePackageFixture([
+      'pattern = "@img/sharp-*"',
+      'as-dependency-of = ["self"]',
+      'rationale = "license-reviewed"',
+      'where = ["/"]',
+    ]);
+    const { verdicts } = runEngine(
+      [
+        pkgSpec("@img/sharp-win32-x64", "LGPL-3.0-or-later", ["backend"]),
+        pkgSpec("@img/sharp-linux-arm64", "LGPL-3.0-or-later", ["backend"]),
+      ],
+      policyText,
+    );
+
+    for (const verdict of verdicts) {
+      expect(verdict.status).toBe("ok");
+      expect(verdict.rule).toBe("compatible[0]");
+    }
+
+    expect(verdicts[0].reason).toContain('package "@img/sharp-*"');
+    expect(verdicts[0].reason).toContain("license-reviewed");
+  });
+
+  test("a package outside the pattern still fails — the entry covers the family, not the model", () => {
+    const policyText = compatiblePackageFixture([
+      'pattern = "@img/sharp-*"',
+      'as-dependency-of = ["self"]',
+      'rationale = "license-reviewed"',
+      'where = ["/"]',
+    ]);
+    const { verdicts } = runEngine(
+      [pkgSpec("@other/lib", "LGPL-3.0-or-later", ["backend"])],
+      policyText,
+    );
+
+    expect(verdicts[0].status).toBe("fail");
+    expect(verdicts[0].rule).toBe("default:copyleft");
+  });
+
+  test("a version list accepts exactly the versions it names, and nothing else", () => {
+    const policyText = compatiblePackageFixture([
+      'name = "pinned-copyleft"',
+      'version = ["1.0.0", "2.0.0"]',
+      'as-dependency-of = ["self"]',
+      'rationale = "license-reviewed"',
+      'where = ["/"]',
+    ]);
+    const covered = runEngine(
+      [pkgSpec("pinned-copyleft", "LGPL-3.0-or-later", ["backend"], "2.0.0")],
+      policyText,
+    ).verdicts;
+    const uncovered = runEngine(
+      [pkgSpec("pinned-copyleft", "LGPL-3.0-or-later", ["backend"], "3.0.0")],
+      policyText,
+    ).verdicts;
+
+    expect(covered[0].rule).toBe("compatible[0]");
+    expect(covered[0].reason).toContain('"pinned-copyleft@1.0.0, 2.0.0"');
+    expect(uncovered[0].rule).toBe("default:copyleft");
+  });
+});
+
+describe("evaluate — `as-dependency-of` is recorded, not yet enforced", () => {
+  // The list is parsed, validated, and carried onto the rule, and it does not
+  // narrow which occurrences the entry decides: the introduction-path walk that
+  // reads it lands separately. This test states that gap explicitly so the walk
+  // has a place to change when it arrives.
+  test("a parent that governs nothing in the model still accepts the package", () => {
+    const policyText = compatiblePackageFixture([
+      'name = "governed-pkg"',
+      'as-dependency-of = ["a-package-nothing-depends-on"]',
+      'rationale = "unused-transitive"',
+      'where = ["/"]',
+    ]);
+    const { verdicts, policy } = runEngine(
+      [pkgSpec("governed-pkg", "LGPL-3.0-or-later", ["backend"])],
+      policyText,
+    );
+
+    expect(policy.compatible[0]).toMatchObject({
+      asDependencyOf: ["a-package-nothing-depends-on"],
+    });
+    expect(verdicts[0].status).toBe("ok");
+    expect(verdicts[0].rule).toBe("compatible[0]");
   });
 });
 
@@ -659,11 +985,13 @@ describe("parsePolicy — error aggregation", () => {
       "[[compatible]]",
       'match = "license"',
       'pattern = "MIT"',
-      'reason = "ok"',
+      'rationale = "license-reviewed"',
+      'where = ["/"]',
       "",
       "[[compatible]]",
       'match = "license"',
       'pattern = "Apache-2.0"',
+      'where = ["/"]',
       "",
       "[[clarify]]",
       'name = "x"',
@@ -676,7 +1004,7 @@ describe("parsePolicy — error aggregation", () => {
     expect(error.problems).toHaveLength(3);
     expect(error.message).toContain('"compatibel"');
     expect(error.message).toContain("compatible[1]");
-    expect(error.message).toContain('"reason"');
+    expect(error.message).toContain('"rationale"');
     expect(error.message).toContain("clarify[0]");
   });
 });
@@ -813,17 +1141,18 @@ describe("parsePolicy — mandatory documentation text", () => {
     expect(error.message).toContain('"description"');
   });
 
-  test("empty-string reason does not count as documentation", () => {
+  test("an empty-string rationale does not count as documentation", () => {
     const fixture = [
       "[[compatible]]",
       'match = "license"',
       'pattern = "MPL-2.0"',
-      'reason = ""',
+      'rationale = ""',
+      'where = ["/"]',
     ].join("\n");
     const error = expectPolicyError(fixture);
 
     expect(error.message).toContain("compatible[0]");
-    expect(error.message).toContain('"reason"');
+    expect(error.message).toContain('"rationale"');
   });
 });
 
@@ -1087,12 +1416,15 @@ describe("evaluate — precedence chain", () => {
       "[[compatible]]",
       'match = "package"',
       'name = "mpl-pkg"',
-      'reason = "package-level acceptance"',
+      'as-dependency-of = ["self"]',
+      'rationale = "license-reviewed"',
+      'where = ["/"]',
       "",
       "[[compatible]]",
       'match = "license"',
       'pattern = "MPL-2.0"',
-      'reason = "license-level acceptance"',
+      'rationale = "license-reviewed"',
+      'where = ["/"]',
       "",
       SUPPRESS_SCRATCH,
     ].join("\n");
@@ -2457,12 +2789,15 @@ describe("unusedRuleIds — stale-policy hygiene", () => {
       "[[compatible]]",
       'match = "license"',
       'pattern = "MPL-2.0"',
-      'reason = "used by the MPL package below"',
+      'rationale = "license-reviewed"',
+      'where = ["/"]',
       "",
       "[[compatible]]",
       'match = "package"',
       'name = "never-matches"',
-      'reason = "no package by this name exists"',
+      'as-dependency-of = ["self"]',
+      'rationale = "license-reviewed"',
+      'where = ["/"]',
       "",
       "[[clarify]]",
       'name = "never-clarified"',
@@ -2503,7 +2838,8 @@ const scopedBusyboxPolicy = (where: ReadonlyArray<string>): string =>
     "[[compatible]]",
     'match = "package"',
     'name = "busybox"',
-    'reason = "accepted in the reviewed image"',
+    'as-dependency-of = ["self"]',
+    'rationale = "license-reviewed"',
     `where = ${JSON.stringify(where)}`,
   ].join("\n");
 
@@ -2513,7 +2849,7 @@ const scopedGplPolicy = (where: ReadonlyArray<string>): string =>
     "[[compatible]]",
     'match = "license"',
     'pattern = "GPL-2.0-only"',
-    'reason = "accepted in the reviewed image"',
+    'rationale = "license-reviewed"',
     `where = ${JSON.stringify(where)}`,
   ].join("\n");
 
@@ -2592,7 +2928,9 @@ describe("evaluate — where-scoped compatible matching", () => {
       "[[compatible]]",
       'match = "package"',
       'name = "busybox"',
-      'reason = "accepted everywhere else"',
+      'as-dependency-of = ["self"]',
+      'rationale = "license-reviewed"',
+      'where = ["/"]',
     ].join("\n");
     const { verdicts } = runEngine([busyboxAt([TARGET_A, TARGET_B])], policyText);
 
@@ -2610,12 +2948,15 @@ describe("evaluate — where-scoped compatible matching", () => {
       "[[compatible]]",
       'match = "package"',
       'name = "mpl-pkg"',
-      'reason = "package-level acceptance"',
+      'as-dependency-of = ["self"]',
+      'rationale = "license-reviewed"',
+      'where = ["/"]',
       "",
       "[[compatible]]",
       'match = "license"',
       'pattern = "MPL-2.0"',
-      'reason = "license-level acceptance"',
+      'rationale = "license-reviewed"',
+      'where = ["/"]',
       "",
       SUPPRESS_SCRATCH,
     ].join("\n");
@@ -2804,7 +3145,9 @@ describe("AGPL acceptance corpus", () => {
       'match = "package"',
       'name = "@img/sharp-win32-x64"',
       'version = "0.34.5"',
-      'reason = "Dual-licensed Apache-2.0 AND LGPL-3.0-or-later; LGPL obligations accepted."',
+      'as-dependency-of = ["self"]',
+      'rationale = "license-reviewed"',
+      'where = ["/"]',
     ].join("\n");
     const accepted = runEngine([spec], withRule).verdicts;
 
@@ -3335,7 +3678,8 @@ describe("evaluate — deny is terminal-0 (beats every accept lever)", () => {
       "[[compatible]]",
       'match = "license"',
       'pattern = "BUSL-1.1"',
-      'reason = "would-be accepted but deny wins"',
+      'rationale = "license-reviewed"',
+      'where = ["/"]',
     ].join("\n");
     const { verdicts } = runEngine([pkgSpec("busl-pkg", "BUSL-1.1", ["backend"])], policyText);
 
@@ -4182,7 +4526,8 @@ describe("evaluate — os-scope AGPL container escalation", () => {
       "[[compatible]]",
       'match = "package"',
       'name = "agpl-os-accepted"',
-      'reason = "explicitly accepted for this container"',
+      'as-dependency-of = ["self"]',
+      'rationale = "license-reviewed"',
       `where = ${JSON.stringify([AGPL_TARGET])}`,
     ].join("\n");
     const { verdicts } = runEngine(
@@ -4284,7 +4629,8 @@ describe("evaluate — accepted-AGPL container notices (acceptedContainerNotices
       "[[compatible]]",
       'match = "package"',
       'name = "agpl-os-notice"',
-      'reason = "network-copyleft obligation reviewed and accepted for this image"',
+      'as-dependency-of = ["self"]',
+      'rationale = "license-reviewed"',
       `where = ${JSON.stringify([NOTICE_TARGET])}`,
     ].join("\n");
     const { verdicts, model } = runEngine(
@@ -4317,7 +4663,8 @@ describe("evaluate — accepted-AGPL container notices (acceptedContainerNotices
       "[[compatible]]",
       'match = "package"',
       'name = "agpl-ish-notice"',
-      'reason = "network-copyleft obligation reviewed and accepted for this image"',
+      'as-dependency-of = ["self"]',
+      'rationale = "license-reviewed"',
       `where = ${JSON.stringify([NOTICE_TARGET])}`,
     ].join("\n");
     const { verdicts, model } = runEngine(
@@ -4348,7 +4695,9 @@ describe("evaluate — accepted-AGPL container notices (acceptedContainerNotices
       "[[compatible]]",
       'match = "package"',
       'name = "gpl-os-accepted"',
-      'reason = "reviewed base-image utility"',
+      'as-dependency-of = ["self"]',
+      'rationale = "license-reviewed"',
+      'where = ["/"]',
     ].join("\n");
     const { verdicts: acceptedVerdicts, model: acceptedModel } = runEngine(
       [
@@ -4397,12 +4746,16 @@ describe("evaluate — accepted-AGPL container notices (acceptedContainerNotices
       "[[compatible]]",
       'match = "package"',
       'name = "zeta-agpl"',
-      'reason = "accepted"',
+      'as-dependency-of = ["self"]',
+      'rationale = "license-reviewed"',
+      'where = ["/"]',
       "",
       "[[compatible]]",
       'match = "package"',
       'name = "alpha-agpl"',
-      'reason = "accepted"',
+      'as-dependency-of = ["self"]',
+      'rationale = "license-reviewed"',
+      'where = ["/"]',
     ].join("\n");
     const { verdicts, model } = runEngine(
       [

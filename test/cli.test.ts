@@ -954,7 +954,9 @@ describe("runGenerate --policy", () => {
         "[[compatible]]",
         'match = "license"',
         'pattern = "0BSD"',
-        'reason = "unused-rule-reason-marker"',
+        'rationale = "license-reviewed"',
+        'where = ["/"]',
+        'comment = "unused-rule-reason-marker"',
         "",
       ].join("\n"),
     );
@@ -980,7 +982,7 @@ describe("runGenerate --policy", () => {
 
     // Unused-entry warning names the rule id and its reason.
     expect(stderr).toContain(
-      "policy warning: unused entry compatible[0] — unused-rule-reason-marker",
+      "policy warning: unused entry compatible[0] — license-reviewed — unused-rule-reason-marker",
     );
   });
 
@@ -996,8 +998,9 @@ describe("runGenerate --policy", () => {
         "[[compatible]]",
         'match = "license"',
         'pattern = "AGPL-3.0-only"',
-        'reason = "scoped-dead-rule-marker"',
+        'rationale = "license-reviewed"',
         'where = ["docker:nonexistent/Dockerfile"]',
+        'comment = "scoped-dead-rule-marker"',
         "",
       ].join("\n"),
     );
@@ -1014,7 +1017,7 @@ describe("runGenerate --policy", () => {
 
     expect(stderr).toContain("policy fail: pkg:npm/copyleft-lib@1.0.0 in proj — default:copyleft:");
     expect(stderr).toContain(
-      "policy warning: unused entry compatible[0] — scoped-dead-rule-marker",
+      "policy warning: unused entry compatible[0] — license-reviewed — scoped-dead-rule-marker",
     );
   });
 
@@ -1045,7 +1048,7 @@ describe("runGenerate --policy", () => {
     expect(stderr).not.toContain("collecting");
     expect(stderr).not.toContain("warning: skipping");
 
-    // (b) Semantically invalid policy (missing reason) → PolicyError naming
+    // (b) Semantically invalid policy (missing rationale) → PolicyError naming
     // the table path.
     const semanticPath = writePolicy(root, '[[compatible]]\nmatch = "license"\npattern = "MIT"\n');
     let semanticThrown: Error | undefined;
@@ -1065,7 +1068,7 @@ describe("runGenerate --policy", () => {
     });
     expect(semanticThrown).toBeDefined();
     expect(semanticThrown!.message).toContain("compatible[0]");
-    expect(semanticThrown!.message).toContain('"reason"');
+    expect(semanticThrown!.message).toContain('"rationale"');
   });
 
   test("Test 5: annotated dump — findings + verdicts, sorted keys", async () => {
@@ -1148,7 +1151,7 @@ describe("runGenerate --policy", () => {
     const ESC = String.fromCharCode(27);
     const forgedReason =
       "real reason\npolicy: 0 fail, 0 warn, 0 suppressed, 9999 ok " + `(9999 verdicts)${ESC}[2K`;
-    // The 0BSD rule matches nothing in the fixture → its reason is printed
+    // The 0BSD rule matches nothing in the fixture → its comment is printed
     // via the unused-entry warning path.
     const policyPath = writePolicy(
       root,
@@ -1156,7 +1159,9 @@ describe("runGenerate --policy", () => {
         "[[compatible]]",
         'match = "license"',
         'pattern = "0BSD"',
-        `reason = ${JSON.stringify(forgedReason)}`,
+        'rationale = "license-reviewed"',
+        'where = ["/"]',
+        `comment = ${JSON.stringify(forgedReason)}`,
         "",
       ].join("\n"),
     );
@@ -1179,7 +1184,7 @@ describe("runGenerate --policy", () => {
     expect(stderr).not.toContain(ESC);
     // ...and the reason still surfaces, flattened onto ONE warning line.
     expect(stderr).toContain(
-      "policy warning: unused entry compatible[0] — real reason policy: 0 fail",
+      "policy warning: unused entry compatible[0] — license-reviewed — real reason policy: 0 fail",
     );
   });
 
@@ -1450,7 +1455,8 @@ describe("buildOutputs and the generate output set", () => {
         "[[compatible]]",
         'match = "license"',
         'pattern = "AGPL-3.0-only"',
-        'reason = "copyleft accepted for the CR-01 base-dir fixture"',
+        'rationale = "license-reviewed"',
+        'where = ["/"]',
         "",
       ].join("\n"),
     );
@@ -1556,7 +1562,8 @@ describe("check — stale-override exit lane", () => {
       "[[compatible]]",
       'match = "license"',
       'pattern = "AGPL-3.0-only"',
-      'reason = "accept the fixture AGPL so only the stale override gates"',
+      'rationale = "license-reviewed"',
+      'where = ["/"]',
       "",
       "[[clarify]]",
       'name = "mit-lib"',
@@ -1584,7 +1591,8 @@ describe("check — stale-override exit lane", () => {
       "[[compatible]]",
       'match = "license"',
       'pattern = "AGPL-3.0-only"',
-      'reason = "accept the fixture AGPL package"',
+      'rationale = "license-reviewed"',
+      'where = ["/"]',
       "",
       "[[clarify]]",
       'name = "mit-lib"',

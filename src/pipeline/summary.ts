@@ -21,14 +21,15 @@ function unusedRuleReason(policy: Policy, ruleId: string): string {
   }
 
   const index = Number(match[2]);
+  const rule = match[1] === "compatible" ? policy.compatible[index] : policy.clarify[index];
 
-  if (match[1] === "compatible") {
-    return policy.compatible[index]?.reason ?? "";
+  if (rule === undefined) {
+    return "";
   }
 
-  const rule = policy.clarify[index];
-
-  return rule === undefined ? "" : ruleReason(rule.justification, rule.comment);
+  return "rationale" in rule
+    ? ruleReason(rule.rationale, rule.comment)
+    : ruleReason(rule.justification, rule.comment);
 }
 
 /**

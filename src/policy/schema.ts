@@ -29,7 +29,12 @@ import { PolicyRoot, TOP_LEVEL_KEYS } from "../validate/policy";
 import { recordOf, stringOf } from "../validate/record";
 import { BUILTIN_DENY_RULES } from "./builtinDenylist";
 import { OSADL_MATRIX, type TargetLicense, type TargetProfile } from "./compat";
-import { JUSTIFICATION_VALUES, type Justification } from "./enums";
+import {
+  JUSTIFICATION_VALUES,
+  RATIONALE_VALUES,
+  type Justification,
+  type Rationale,
+} from "./enums";
 import { compileNamePattern, isGlobPattern } from "./namePattern";
 
 import type { DetectedSignal } from "../normalize/normalize";
@@ -52,29 +57,48 @@ export interface SuppressedWorkspace {
 
 export interface CompatibleLicenseRule {
   match: "license";
-  /** The pattern exactly as written in the policy file. */
+  /** The SPDX pattern exactly as written in the policy file. */
   pattern: string;
   /**
    * Pre-decomposed satisfies allowlist: rendered OR-leaves of the pattern (single ID, optionally
    * WITH ⇒ one entry). Computed at validation time, never at evaluate time.
    */
   allowlist: ReadonlyArray<string>;
-  reason: string;
+  /** Why this licence is accepted where the scope below covers it. */
+  rationale: Rationale;
   /**
-   * Optional occurrence scope: identity prefixes the rule is limited to, matched with the same
-   * segment-aware prefix comparison as suppression paths. Materialized present-only - an absent key
-   * means the rule applies at every occurrence (the pre-scoping behavior).
+   * The occurrence scope: identity prefixes the rule is limited to, matched with the same
+   * segment-aware prefix comparison as suppression paths, or the everywhere token {@link
+   * EVERYWHERE_SCOPE} for a deliberately repository-wide acceptance.
    */
-  where?: ReadonlyArray<string>;
+  where: ReadonlyArray<string>;
+  /** Free prose, for what the rationale alone cannot carry. */
+  comment?: string;
 }
 
 export interface CompatiblePackageRule {
   match: "package";
-  name: string;
-  version?: string;
-  reason: string;
-  /** Optional occurrence scope - see CompatibleLicenseRule.where. */
-  where?: ReadonlyArray<string>;
+  /** Exact display name; exactly one of `name` and `pattern` is present. */
+  name?: string;
+  /**
+   * Display-name pattern, in the dialect of {@link compileNamePattern}. The license form reads the
+   * same key as an SPDX expression instead - `match` decides which, as it does on the deny lane.
+   */
+  pattern?: string;
+  /** The exact version, or exact versions, covered. Absent covers every version. */
+  version?: string | ReadonlyArray<string>;
+  /**
+   * The packages whose use of this one the acceptance was judged under, by display name, or the
+   * reserved {@link SELF_PARENT} token. Parsed and carried here; which introduction paths a listed
+   * parent covers is not decided in this file.
+   */
+  asDependencyOf: ReadonlyArray<string>;
+  /** Why this package is accepted where the scope below covers it. */
+  rationale: Rationale;
+  /** The occurrence scope - see CompatibleLicenseRule.where. */
+  where: ReadonlyArray<string>;
+  /** Free prose, for what the rationale alone cannot carry. */
+  comment?: string;
 }
 
 export type CompatibleRule = CompatibleLicenseRule | CompatiblePackageRule;
@@ -759,13 +783,14 @@ function validateSuppressions(
 export const EVERYWHERE_SCOPE = "/";
 
 /**
- * Optional `where` scope on a [[compatible]] entry: a non-empty array of occurrence-identity
+ * The required `where` scope on a [[compatible]] entry: a non-empty array of occurrence-identity
  * prefixes, each validated exactly like a suppression path (the evaluator applies the same
  * segment-aware prefix comparison to both). An EMPTY array is rejected - a rule that could never
  * match anywhere is a dead rule by construction, the same posture as validatePath's
- * could-never-match segments. One element may be the everywhere token {@link EVERYWHERE_SCOPE}
- * in place of a path. `context` is the error-context string (conventionally named `where` elsewhere
- * in this file - renamed here because `where` is the TOML key under validation).
+ * could-never-match segments. An element may be the everywhere token {@link EVERYWHERE_SCOPE} in
+ * place of a path, so a deliberately repository-wide acceptance stays expressible while stating a
+ * scope stays a conscious choice. `context` is the error-context string (conventionally named
+ * `where` elsewhere in this file - renamed here because `where` is the TOML key under validation).
  */
 function validateWhere(
   entry: Record<string, unknown>,
@@ -773,7 +798,10 @@ function validateWhere(
   problems: string[],
 ): { where?: ReadonlyArray<string>; valid: boolean } {
   if (!("where" in entry)) {
-    return { valid: true };
+    problems.push(
+      `${context}: missing required key "where" (the occurrence-identity prefixes this acceptance covers, or ["${EVERYWHERE_SCOPE}"] for every occurrence)`,
+    );
+    return { valid: false };
   }
 
   const raw = entry["where"];
@@ -808,6 +836,72 @@ function validateWhere(
 
   return { where: scope, valid: true };
 }
+
+/**
+ * The reserved `as-dependency-of` element naming the project itself. On a target with a dependency
+ * graph it is the direct edge from the project; on a target without one every package is a direct
+ * dependency of the project, so it is the honest value there.
+ */
+export const SELF_PARENT = "self";
+
+/**
+ * The required `as-dependency-of` list on a package-form entry: the packages whose use of this one
+ * the acceptance was judged against, by display name, or {@link SELF_PARENT}. Parsed as text here
+ * and nothing more - which introduction paths a listed parent covers is decided against the model,
+ * not against the file.
+ */
+function validateAsDependencyOf(
+  entry: Record<string, unknown>,
+  context: string,
+  problems: string[],
+): { asDependencyOf?: ReadonlyArray<string>; valid: boolean } {
+  const key = "as-dependency-of";
+
+  if (!(key in entry)) {
+    problems.push(
+      `${context}: missing required key "${key}" (the package names this acceptance was judged under, or ["${SELF_PARENT}"] for the project itself)`,
+    );
+    return { valid: false };
+  }
+
+  const raw = entry[key];
+
+  if (!Array.isArray(raw) || raw.length === 0) {
+    problems.push(
+      `${context}: key "${key}" must be a non-empty array of package names, or ["${SELF_PARENT}"]`,
+    );
+    return { valid: false };
+  }
+
+  const parents: string[] = [];
+  const before = problems.length;
+
+  raw.forEach((value, index) => {
+    const text = stringOf(value);
+
+    if (text === undefined || text.trim() === "") {
+      problems.push(`${context}: ${key}[${index}] must be a non-empty package name`);
+      return;
+    }
+
+    parents.push(text);
+  });
+  return problems.length === before ? { asDependencyOf: parents, valid: true } : { valid: false };
+}
+
+/** Keys an earlier [[compatible]] schema used, each naming what replaced it. */
+const COMPATIBLE_REPLACED_KEYS: ReadonlyMap<string, string> = new Map([
+  ["reason", 'key "reason" was replaced by "rationale" (a closed set) plus an optional "comment"'],
+]);
+
+/** {@link COMPATIBLE_REPLACED_KEYS} plus the license form's own inapplicable key. */
+const COMPATIBLE_LICENSE_REPLACED_KEYS: ReadonlyMap<string, string> = new Map([
+  ...COMPATIBLE_REPLACED_KEYS,
+  [
+    "as-dependency-of",
+    'key "as-dependency-of" is not applicable at license level - a licence is accepted wherever "where" covers it, not through one package\'s use of another',
+  ],
+]);
 
 function validateCompatible(root: Record<string, unknown>, problems: string[]): CompatibleRule[] {
   const compatible: CompatibleRule[] = [];
@@ -852,16 +946,29 @@ function validateCompatible(root: Record<string, unknown>, problems: string[]): 
   return compatible;
 }
 
-/** License-form [[compatible]] entry → rule, or undefined when invalid. */
+/**
+ * License-form [[compatible]] entry -> rule, or undefined when invalid. Here `pattern` is the SPDX
+ * expression the acceptance covers; the package form reads the same key as a name glob instead, the
+ * split the deny lane already makes on its own `match` discriminator.
+ */
 function validateCompatibleLicense(
   entry: Record<string, unknown>,
   where: string,
   problems: string[],
 ): CompatibleLicenseRule | undefined {
-  checkKeys(entry, ["match", "pattern", "reason", "where"], where, problems);
+  const before = problems.length;
+
+  checkKeys(
+    entry,
+    ["match", "pattern", "rationale", "where", "comment"],
+    where,
+    problems,
+    COMPATIBLE_LICENSE_REPLACED_KEYS,
+  );
   const pattern = requireText(entry, "pattern", where, problems);
-  const reason = requireText(entry, "reason", where, problems);
+  const rationale = validateClosedSet(entry, "rationale", RATIONALE_VALUES, where, problems);
   const scope = validateWhere(entry, where, problems);
+  const comment = optionalText(entry, "comment", where, problems);
 
   if (pattern === undefined) {
     return undefined;
@@ -882,7 +989,7 @@ function validateCompatibleLicense(
     return undefined;
   }
 
-  if (reason === undefined || !scope.valid) {
+  if (problems.length !== before || rationale === undefined || scope.where === undefined) {
     return undefined;
   }
 
@@ -890,41 +997,52 @@ function validateCompatibleLicense(
     match: "license",
     pattern,
     allowlist,
-    reason,
-    ...(scope.where !== undefined ? { where: scope.where } : {}),
+    rationale,
+    where: scope.where,
+    ...(comment !== undefined ? { comment } : {}),
   };
 }
 
-/** Package-form [[compatible]] entry → rule, or undefined when invalid. */
+/** Package-form [[compatible]] entry -> rule, or undefined when invalid. */
 function validateCompatiblePackage(
   entry: Record<string, unknown>,
   where: string,
   problems: string[],
 ): CompatiblePackageRule | undefined {
-  checkKeys(entry, ["match", "name", "version", "reason", "where"], where, problems);
-  const name = requireText(entry, "name", where, problems);
-  const reason = requireText(entry, "reason", where, problems);
+  const before = problems.length;
+
+  checkKeys(
+    entry,
+    ["match", "name", "pattern", "version", "as-dependency-of", "rationale", "where", "comment"],
+    where,
+    problems,
+    COMPATIBLE_REPLACED_KEYS,
+  );
+  const selector = validateNameOrPattern(entry, where, problems);
+  const pin = validateVersionPin(entry, where, problems);
+  const parents = validateAsDependencyOf(entry, where, problems);
+  const rationale = validateClosedSet(entry, "rationale", RATIONALE_VALUES, where, problems);
   const scope = validateWhere(entry, where, problems);
-  let version: string | undefined;
+  const comment = optionalText(entry, "comment", where, problems);
 
-  if ("version" in entry) {
-    version = stringOf(entry["version"]);
-    if (version === undefined) {
-      problems.push(`${where}: key "version" must be a string`);
-      return undefined;
-    }
-  }
-
-  if (name === undefined || reason === undefined || !scope.valid) {
+  if (
+    problems.length !== before ||
+    parents.asDependencyOf === undefined ||
+    rationale === undefined ||
+    scope.where === undefined
+  ) {
     return undefined;
   }
 
   return {
     match: "package",
-    name,
-    ...(version !== undefined ? { version } : {}),
-    reason,
-    ...(scope.where !== undefined ? { where: scope.where } : {}),
+    ...(selector.name !== undefined ? { name: selector.name } : {}),
+    ...(selector.pattern !== undefined ? { pattern: selector.pattern } : {}),
+    ...(pin.version !== undefined ? { version: pin.version } : {}),
+    asDependencyOf: parents.asDependencyOf,
+    rationale,
+    where: scope.where,
+    ...(comment !== undefined ? { comment } : {}),
   };
 }
 

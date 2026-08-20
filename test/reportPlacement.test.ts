@@ -831,8 +831,9 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
       "[[compatible]]",
       'match = "package"',
       'name = "agpl-daemon"',
+      'as-dependency-of = ["self"]',
+      'rationale = "license-reviewed"',
       `where = ["${PROD_CONTAINER}"]`,
-      'reason = "reviewed and accepted for this image"',
       "",
     ].join("\n");
     const { doc, verdicts, scoped } = buildScenario(
@@ -925,8 +926,9 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
       "[[compatible]]",
       'match = "package"',
       'name = "relay-imprecise"',
+      'as-dependency-of = ["self"]',
+      'rationale = "license-reviewed"',
       `where = ["${PROD_CONTAINER}"]`,
-      'reason = "reviewed and accepted for this image"',
       "",
     ].join("\n");
     const { doc, verdicts, scoped } = buildScenario(
@@ -983,8 +985,9 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
       "[[compatible]]",
       'match = "package"',
       'name = "shared-agpl-daemon"',
+      'as-dependency-of = ["self"]',
+      'rationale = "license-reviewed"',
       `where = ["${OTHER_CONTAINER}"]`,
-      'reason = "reviewed and accepted for this image only"',
       "",
     ].join("\n");
     const { doc, verdicts, scoped } = buildScenario(
@@ -1407,7 +1410,8 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
       "[[compatible]]",
       'match = "license"',
       'pattern = "MIT"',
-      'reason = "would otherwise accept it"',
+      'rationale = "license-reviewed"',
+      'where = ["/"]',
       "",
     ].join("\n");
     const { doc, verdicts, scoped } = buildScenario(

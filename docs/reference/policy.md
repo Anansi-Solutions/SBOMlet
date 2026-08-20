@@ -31,7 +31,7 @@ decides:
 |-------|------|-------|--------|
 | 1 | Deny | `[[deny]]` | Force-fail. Terminal — nothing below can license it back in. |
 | 2 | Clarify | `[[clarify]]` | Replace the package's [licence finding](../glossary.md#license-finding) with a precise expression, then re-decide. |
-| 3 | Compatible (package) | `[[compatible]]` with `match = "package"` | Allow this exact package. |
+| 3 | Compatible (package) | `[[compatible]]` with `match = "package"` | Allow this package, or a family of them. |
 | 4 | Compatible (licence) | `[[compatible]]` with `match = "license"` | Allow this licence. |
 | 5 | Target compatibility | `[target]` / `[[target.workspace]]` | When a declared target profile governs this occurrence, decide the verdict from license-vs-target compatibility instead of the lanes below. |
 | 6 | Workspace suppression | `[[workspace.copyleft_suppressed]]` | Stop flagging absorbed copyleft inside a workspace that ships under that copyleft. |
@@ -57,15 +57,17 @@ silently.
 
 Validation is strict and rejects the whole file on the first run, reporting
 every problem at once. Each problem names the table path and key it came from
-(`compatible[2]: missing required key "reason"`), so you fix them in one pass
+(`compatible[2]: missing required key "where"`), so you fix them in one pass
 rather than one error per run.
 
 The rules that hold across the file:
 
-- Every override carries a `reason` (or, for suppression, a `description`), and
-  it must be present and non-empty. An empty or whitespace-only value is
-  rejected. These strings are the audit trail a reviewer reads, so the tool
-  treats a blank one as a missing one.
+- Every override states why it exists: a `rationale` or `justification` from a
+  closed set on `[[compatible]]` and `[[clarify]]`, a free-text `reason` on
+  `[[deny]]` and `[[allow_source_available]]`, a `description` on a suppression.
+  A closed-set value outside its set is rejected naming the whole set; a free
+  text one must be present and non-empty, since a blank audit trail is a missing
+  one.
 - Every `pattern`, `expression`, and workspace `license` is parsed against
   [SPDX](../glossary.md#spdx) grammar at load time. A typo like `Apache 2.0` (no
   hyphen) fails immediately, naming the field, rather than surfacing
@@ -275,47 +277,113 @@ list them when several share a judgment.
 ## `[[compatible]]`
 
 An array of tables. Each entry accepts a licence or a package that would
-otherwise be flagged as [copyleft](../glossary.md#copyleft). Acceptance applies
-at every occurrence unless the optional `where` narrows it. Absent table: no
-compatible rules.
+otherwise be flagged as [copyleft](../glossary.md#copyleft), scoped to the
+occurrences the required `where` covers. Absent table: no compatible rules.
 
-Exactly one of two match modes per entry.
+Exactly one of two match modes per entry. `match` also decides how `pattern` is
+read: an SPDX expression at licence level, a package-name glob at package
+level.
 
 Licence mode (`match = "license"`):
 
 | Field | Type | Required | Meaning |
 |-------|------|----------|---------|
 | `match` | `"license"` | yes | Selects licence mode. |
-| `pattern` | string | yes | An SPDX id or `OR` of ids, satisfies-matched. `AND` is rejected. |
-| `reason` | string (non-empty) | yes | The documented judgment call. |
-| `where` | array of strings | no | Occurrence-identity prefixes the rule is limited to; omit to apply everywhere. |
+| `pattern` | string (SPDX) | yes | An SPDX id or `OR` of ids, satisfies-matched. `AND` is rejected. |
+| `rationale` | string (closed set) | yes | Why the licence is accepted — see below. |
+| `where` | array of strings | yes | Occurrence-identity prefixes, or `["/"]` for every occurrence. |
+| `comment` | string (non-empty) | no | What the rationale cannot carry. |
 
 Package mode (`match = "package"`):
 
 | Field | Type | Required | Meaning |
 |-------|------|----------|---------|
 | `match` | `"package"` | yes | Selects package mode. |
-| `name` | string | yes | Exact package name, as the inventory reports it. |
-| `version` | string | no | Pin to one version; omit to cover all versions. |
-| `reason` | string (non-empty) | yes | The documented judgment call. |
-| `where` | array of strings | no | Occurrence-identity prefixes the rule is limited to; omit to apply everywhere. |
+| `name` | string | exactly one of `name`/`pattern` | One package, by its exact display name. |
+| `pattern` | string (name glob) | exactly one of `name`/`pattern` | A family of packages by name — see [Name patterns](#name-patterns). |
+| `version` | string, or array of strings | no | The exact version, or versions, covered. Omit to cover all of them. |
+| `as-dependency-of` | array of strings | yes | Whose use of this package you judged — see below. |
+| `rationale` | string (closed set) | yes | Why the package is accepted — see below. |
+| `where` | array of strings | yes | Occurrence-identity prefixes, or `["/"]` for every occurrence. |
+| `comment` | string (non-empty) | no | What the rationale cannot carry. |
 
 Licence mode allows a whole licence, such as a weak copyleft you have reviewed
-and accepted like `MPL-2.0`. Package mode allows one specific dependency,
-optionally one version of it, for when only a single package's obligations have
-been reviewed rather than a whole licence.
+and accepted like `MPL-2.0`. Package mode allows one dependency, or a family of
+them, for when only specific packages' obligations have been reviewed rather
+than a whole licence.
+
+### `rationale` — the closed set
+
+The tool can only check a claim it understands, so the reason is chosen from a
+fixed list. `comment` carries anything the list cannot.
+
+| Value | Meaning |
+|-------|---------|
+| `build-time-only` | Consumed while building, absent from what ships. |
+| `development-tool-only` | A tool for working on the repository, never reached by the product. |
+| `license-reviewed` | A human read the licence and accepted its obligations. The sanctioned fallback when no structural reason applies. |
+| `os-package-unmodified` | A distribution package shipped inside a container image exactly as it arrived, not linked into the software. |
+| `unused-transitive` | Pulled in by a dependency but never reached at runtime. |
+
+Wherever a verdict cites the entry, its reason is the rationale value, and the
+comment after an em-dash when one is present.
+
+### `as-dependency-of` — whose use you judged
+
+Package-mode acceptances are about how a package arrives, not only about the
+package. A build tool's copyleft is fine while a build tool pulls it in; the
+same package reaching your shipped code through a different chain is a
+different question, and the same entry should not silently answer both.
+
+Each element is a package's display name, or the reserved token `self`, meaning
+your own software. On a target with a dependency graph, `self` is the direct
+edge from your project. On a target without one — a container image's OS layer,
+for instance — every package is a direct dependency of the project, so `self`
+is the honest value there, and it accepts every introduction path because there
+are no paths to distinguish. State that plainly to yourself when you write it:
+on a graphless target the entry is not chain-scoped, and nothing in the report
+will imply that it was.
+
+The list is parsed and carried here; it does not yet narrow which occurrences
+an entry decides. That check arrives with the introduction-path walk.
+
+`as-dependency-of` is not applicable at licence level and is rejected there: a
+licence is accepted wherever `where` covers it, not through one package's use
+of another.
+
+### `where` — which occurrences you judged
 
 `where` limits either form to the occurrences whose target matches one of its
 entries: the target is the entry itself, or sits under it as a whole segment.
-`docker:a` covers `docker:a/Dockerfile`; `apps/scratch`
-never covers `apps/scratch-helper`. Docker targets are
-`docker:<source>` — the Dockerfile's repo-relative path for a built
-image, the image reference verbatim for an `--image` scan; app targets are
-workspace paths. Entries are validated like suppression paths (forward slashes
-only, no `..` segment, no leading or trailing slash); an empty array is
-rejected. Rules are consulted in file order per occurrence, and the first whose
-match and scope both hold decides. A scoped rule that matches no occurrence is
-reported as an unused entry on stderr.
+`docker:a` covers `docker:a/Dockerfile`; `apps/media` never covers
+`apps/media-helper`. Docker targets are `docker:<source>` — the Dockerfile's
+repo-relative path for a built image, the image reference verbatim for an
+`--image` scan; app targets are workspace paths. Entries are validated like
+suppression paths (forward slashes only, no `..` segment, no leading or
+trailing slash); an empty array is rejected.
+
+`where` is required so that scoping stays a decision rather than a default. A
+deliberately repository-wide acceptance is still expressible, and visibly so:
+the reserved element `/` covers every occurrence. No target identity can be
+`/`, since a leading or trailing slash is rejected wherever a path is
+validated, so the token is unambiguous.
+
+Rules are consulted in file order per occurrence, and the first whose match and
+scope both hold decides. A rule that matches no occurrence is reported as an
+unused entry on stderr.
+
+### Migrating from the previous schema
+
+The keys below were replaced outright. An entry still carrying one is rejected
+with a message naming its replacement:
+
+| Removed | Replacement |
+|---------|-------------|
+| `reason` | `rationale`, plus `comment` for what it cannot carry. |
+
+`where` was optional and is now required; `as-dependency-of` and `rationale`
+are new and required. An entry using `as-dependency-of` at licence level is
+rejected as inapplicable.
 
 ## `[[workspace.copyleft_suppressed]]`
 

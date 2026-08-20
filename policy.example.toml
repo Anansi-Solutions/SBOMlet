@@ -120,14 +120,40 @@ description = "apps/scratch and its scratch-editor submodule are themselves dist
 # ---------------------------------------------------------------------------
 # Compatible overrides
 #
-# Two match modes, both excluded from copyleft flagging EVERYWHERE (not per
-# workspace). Use sparingly and document the judgment call in `reason`.
+# Two match modes. `match` also decides how `pattern` is read: an SPDX
+# expression at license level, a package-name glob at package level.
 #
 #   match = "license"  -- pattern is an SPDX ID or an OR of IDs, matched via
 #                         spdx-satisfies semantics (never substring). AND
 #                         patterns are rejected: an AND cannot be satisfied
 #                         by a single allowlist entry.
-#   match = "package"  -- exact package name, optionally pinned to a version.
+#   match = "package"  -- one exact `name`, or a `pattern` covering a family
+#                         of names, optionally pinned to versions.
+#
+# `where` is REQUIRED on both: state which occurrences you judged. Use
+# ["/"] to mean every occurrence -- deliberately repository-wide, and
+# visibly so.
+#
+# `rationale` is a closed set -- the tool can only check a claim it
+# understands. `comment` carries what it cannot, and is optional by design.
+#
+#   build-time-only        consumed while building, absent from what ships
+#   development-tool-only  a tool for working on the repository, never
+#                          reached by the product
+#   license-reviewed       a human read the license and accepted its
+#                          obligations. The fallback when no structural
+#                          reason applies
+#   os-package-unmodified  a distribution package shipped inside a container
+#                          image exactly as it arrived, not linked into the
+#                          software
+#   unused-transitive      pulled in by a dependency but never reached at
+#                          runtime
+#
+# `as-dependency-of` is REQUIRED at package level: the packages whose use of
+# this one you judged, by name, or ["self"] for your own software. It scopes
+# the acceptance to how the package arrives, so the same package arriving
+# through some other chain does not inherit the judgment. It is NOT
+# applicable at license level, where `where` alone scopes the acceptance.
 # ---------------------------------------------------------------------------
 
 [[compatible]]
@@ -135,19 +161,24 @@ match = "license"
 # A single SPDX ID; "(MPL-2.0 OR MPL-1.1)" would also be accepted, while
 # "MPL-2.0 AND MIT" would be rejected at validation time.
 pattern = "MPL-2.0"
-# Mandatory: the documented judgment call.
-reason = "Weak copyleft; compatible under AGPL-3.0 and Apache License v2.0"
+rationale = "license-reviewed"
+where = ["/"]
+comment = "Weak copyleft; compatible under AGPL-3.0 and Apache License v2.0."
 
 [[compatible]]
 match = "package"
-# Exact package name (the inventory's name, e.g. the npm name).
+# Exact package name (the inventory's name, e.g. the npm name). Swap for
+# `pattern = "@img/sharp-*"` to cover the whole family of platform binaries.
 name = "@img/sharp-win32-x64"
-# Optional: pin the exception to one version; omit to cover all versions.
+# Optional: pin the exception to one version, or to a list; omit to cover
+# all versions.
 version = "0.34.5"
-# Optional: scope the acceptance to the occurrence(s) it was judged in --
-# omitted, the rule applies everywhere (see `where` in docs/reference/policy.md).
-# where = ["docker:examples/docker-scan/Dockerfile"]
-reason = "Dual-licensed Apache-2.0 AND LGPL-3.0-or-later; the LGPL obligations are reviewed and accepted for these prebuilt sharp binaries."
+# The acceptance was judged for the image pipeline's use of it, not for any
+# other chain that might pull the same binaries in.
+as-dependency-of = ["image-pipeline"]
+rationale = "license-reviewed"
+where = ["apps/media"]
+comment = "Dual-licensed Apache-2.0 AND LGPL-3.0-or-later; the LGPL obligations are reviewed and accepted for these prebuilt binaries."
 
 # ---------------------------------------------------------------------------
 # Target-license compatibility lane ([target] / [[target.workspace]])

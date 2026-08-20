@@ -205,19 +205,18 @@ interface IndexedRule<T> {
 }
 
 /**
- * A compatible rule applies at a target iff it is unscoped, or some `where` entry is the everywhere
- * token, or some `where` entry covers the target as an identity prefix.
+ * A compatible rule applies at a target iff some `where` entry is the everywhere token, or some
+ * `where` entry covers the target as an identity prefix.
  */
 function appliesAt(rule: CompatibleRule, target: string): boolean {
-  return (
-    rule.where === undefined ||
-    rule.where.some((path) => path === EVERYWHERE_SCOPE || matchesIdentityPrefix(target, path))
+  return rule.where.some(
+    (path) => path === EVERYWHERE_SCOPE || matchesIdentityPrefix(target, path),
   );
 }
 
 /**
- * First compatible package rule matching exact name (+ version when pinned) whose `where` scope,
- * when present, covers the occurrence target.
+ * First compatible package rule whose selector covers the package and whose `where` scope covers
+ * the occurrence target.
  */
 function packageRuleFor(
   entry: PackageEntry,
@@ -225,12 +224,7 @@ function packageRuleFor(
   policy: Policy,
 ): IndexedRule<CompatiblePackageRule> | undefined {
   for (const [index, rule] of policy.compatible.entries()) {
-    if (
-      rule.match === "package" &&
-      rule.name === entry.name &&
-      (rule.version === undefined || rule.version === entry.version) &&
-      appliesAt(rule, target)
-    ) {
+    if (rule.match === "package" && matchesPackage(rule, entry) && appliesAt(rule, target)) {
       return { index, rule };
     }
   }
@@ -240,9 +234,9 @@ function packageRuleFor(
 
 /**
  * First compatible license rule whose pre-decomposed allowlist satisfies the finding's expression
- * and whose `where` scope, when present, covers the occurrence target. The allowlist was validated
- * and decomposed by the schema - the pattern is never re-parsed here; the catch is purely defensive
- * (never-throws posture).
+ * and whose `where` scope covers the occurrence target. The allowlist was validated and decomposed
+ * by the schema - the pattern is never re-parsed here; the catch is purely defensive (never-throws
+ * posture).
  */
 function licenseRuleFor(
   expression: string,
@@ -1143,6 +1137,19 @@ function targetVerdict(
   }
 }
 
+/** How a package-form rule names what it governs, quoted for the verdict reason. */
+function packageRuleSubject(rule: CompatiblePackageRule): string {
+  const selector = rule.name ?? (rule.pattern as string);
+
+  if (rule.version === undefined) {
+    return `"${selector}"`;
+  }
+
+  const versions = typeof rule.version === "string" ? rule.version : rule.version.join(", ");
+
+  return `"${selector}@${versions}"`;
+}
+
 /**
  * Tier 1/2 compatible-rule verdict (package form pinned before license form, mirroring the caller's
  * own selection order), split out of verdictFor to keep the precedence walk within the complexity
@@ -1157,13 +1164,12 @@ function compatibleRuleVerdict(
 ): Verdict | undefined {
   if (packageRule !== undefined) {
     const { index, rule } = packageRule;
-    const pin = rule.version === undefined ? "" : `@${rule.version}`;
 
     return {
       ...base,
       status: "ok",
       rule: `compatible[${index}]`,
-      reason: `package "${rule.name}${pin}" accepted by compatible package rule: ${rule.reason}`,
+      reason: `package ${packageRuleSubject(rule)} accepted by compatible package rule: ${ruleReason(rule.rationale, rule.comment)}`,
     };
   }
 
@@ -1174,7 +1180,7 @@ function compatibleRuleVerdict(
       ...base,
       status: "ok",
       rule: `compatible[${index}]`,
-      reason: `"${assessment.expression}" satisfies compatible license pattern "${rule.pattern}": ${rule.reason}`,
+      reason: `"${assessment.expression}" satisfies compatible license pattern "${rule.pattern}": ${ruleReason(rule.rationale, rule.comment)}`,
     };
   }
 

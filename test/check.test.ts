@@ -165,12 +165,15 @@ const WARN_ONLY_POLICY = [
   "[[compatible]]",
   'match = "license"',
   'pattern = "AGPL-3.0-only"',
-  'reason = "copyleft accepted for the warn-only fixture"',
+  'rationale = "license-reviewed"',
+  'where = ["/"]',
   "",
   "[[compatible]]",
   'match = "license"',
   'pattern = "0BSD"',
-  'reason = "unused-entry-marker"',
+  'rationale = "license-reviewed"',
+  'where = ["/"]',
+  'comment = "unused-entry-marker"',
   "",
 ].join("\n");
 
@@ -355,7 +358,9 @@ describe("runCheck + exitCodeFor — the CI gate", () => {
     expect(exitCodeFor(result!)).toBe(0);
     // The warnings still PRINT (gate-theater prevention)...
     expect(stderr).toContain("policy warn:");
-    expect(stderr).toContain("policy warning: unused entry compatible[1] — unused-entry-marker");
+    expect(stderr).toContain(
+      "policy warning: unused entry compatible[1] — license-reviewed — unused-entry-marker",
+    );
     // ...and zero fail lines exist to gate on.
     expect(stderr).not.toContain("policy fail:");
   });
@@ -950,13 +955,15 @@ const SCOPED_DOCKER_POLICY = [
   "[[compatible]]",
   'match = "package"',
   'name = "musl"',
-  'reason = "scoped to the postgres image occurrence"',
+  'as-dependency-of = ["self"]',
+  'rationale = "os-package-unmodified"',
   'where = ["docker:postgres:18"]',
   "",
   "[[compatible]]",
   'match = "license"',
   'pattern = "AGPL-3.0-only"',
-  'reason = "app fixture acceptance"',
+  'rationale = "license-reviewed"',
+  'where = ["/"]',
   "",
 ].join("\n");
 
@@ -1189,13 +1196,15 @@ function scenarioPolicy(osHandling: string, scoped: boolean): string {
     "[[compatible]]",
     'match = "package"',
     'name = "busybox"',
-    'reason = "reviewed in the image-A OS layer"',
-    ...(scoped ? ['where = ["docker:a/Dockerfile"]'] : []),
+    'as-dependency-of = ["self"]',
+    'rationale = "os-package-unmodified"',
+    `where = ${scoped ? '["docker:a/Dockerfile"]' : '["/"]'}`,
     "",
     "[[compatible]]",
     'match = "license"',
     'pattern = "AGPL-3.0-only"',
-    'reason = "app fixture acceptance"',
+    'rationale = "license-reviewed"',
+    'where = ["/"]',
     "",
   ].join("\n");
 }

@@ -31,8 +31,8 @@ _Non-blocking: 5 copyleft warning(s) (dev/os-downgraded or suppressed). See the 
 
 A container system package's AGPL network-copyleft obligation was accepted by policy configuration — recorded here as a non-blocking notice, not counted toward the copyleft warning total:
 
-- licensed-relay@1.0.0 (AGPL) in docker:services/api/Dockerfile — accepted via compatible\[2\]: package "licensed-relay" accepted by compatible package rule: imprecise AGPL family reviewed and accepted for the api image
-- licensed-daemon@2.1.0 (AGPL-3.0-only) in docker:services/api/Dockerfile — accepted via compatible\[1\]: package "licensed-daemon" accepted by compatible package rule: AGPL network-copyleft obligation reviewed and accepted for the api image
+- licensed-relay@1.0.0 (AGPL) in docker:services/api/Dockerfile — accepted via compatible\[2\]: package "licensed-relay" accepted by compatible package rule: license-reviewed — imprecise AGPL family accepted for the api image
+- licensed-daemon@2.1.0 (AGPL-3.0-only) in docker:services/api/Dockerfile — accepted via compatible\[1\]: package "licensed-daemon" accepted by compatible package rule: license-reviewed — AGPL network-copyleft obligation accepted for the api image
 
 The packages listed below carry copyleft or special license obligations in at least one non-suppressed workspace.
 

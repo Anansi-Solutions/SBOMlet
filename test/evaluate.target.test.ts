@@ -116,7 +116,8 @@ describe("target lane — precedence (deny/stale/conflict/compatible decide abov
       "[[compatible]]",
       'match = "license"',
       'pattern = "Apache-2.0"',
-      'reason = "accepted regardless of the target"',
+      'rationale = "license-reviewed"',
+      'where = ["/"]',
       "",
     ].join("\n");
     const { verdicts } = runEngine(

@@ -9,9 +9,11 @@ field, every validation rule, and the full precedence table live in the
 [policy reference](../reference/policy.md); this page only tells you when to
 reach for which lane and shows you the shape of a working entry.
 
-Every override needs a written `reason` (or, for suppression, a `description`)
-— validation rejects a missing or empty one, because that text is the audit
-trail a reviewer reads later. The rest of what validation checks is
+Every override states why it exists: `[[compatible]]` and `[[clarify]]` choose
+from a closed set the tool can check, and `[[deny]]` and suppression carry free
+text. Validation rejects a value outside the set, and a missing or empty free
+text, because that is the audit trail a reviewer reads later. The rest of what
+validation checks is
 [policy.md#validation](../reference/policy.md#validation).
 
 Start from the shipped [`policy.example.toml`](../../policy.example.toml),
@@ -95,7 +97,10 @@ is its own line in the audit trail.
 [[compatible]]
 match = "package"
 name = "some-lgpl-lib"
-reason = "Dynamically linked via its published API; the boundary satisfies LGPL-3.0-only's relinkability requirement."
+as-dependency-of = ["self"]
+rationale = "license-reviewed"
+where = ["apps/studio"]
+comment = "Dynamically linked via its published API; the boundary satisfies LGPL-3.0-only's relinkability requirement."
 ```
 
 ### The declared profile must be true
@@ -240,7 +245,9 @@ default, or one specific package is reviewed and accepted. Use
 [[compatible]]
 match = "license"
 pattern = "MPL-2.0"
-reason = "Weak copyleft; compatible under AGPL-3.0 and Apache-2.0."
+rationale = "license-reviewed"
+where = ["/"]
+comment = "Weak copyleft; compatible under AGPL-3.0 and Apache-2.0."
 ```
 
 ```toml
@@ -248,12 +255,19 @@ reason = "Weak copyleft; compatible under AGPL-3.0 and Apache-2.0."
 match = "package"
 name = "@img/sharp-win32-x64"
 version = "0.34.5"
-reason = "Dual-licensed Apache-2.0 AND LGPL-3.0-or-later; the LGPL obligations are reviewed and accepted for these prebuilt sharp binaries."
+as-dependency-of = ["image-pipeline"]
+rationale = "license-reviewed"
+where = ["apps/media"]
+comment = "Dual-licensed Apache-2.0 AND LGPL-3.0-or-later; the LGPL obligations are reviewed and accepted for these prebuilt binaries."
 ```
 
-Both forms accept the match everywhere unless you add `where` to narrow it —
-see the next recipe. Pattern syntax, the `AND`-rejection rule, and both
-modes' fields: [policy.md#compatible](../reference/policy.md#compatible).
+`rationale` comes from a fixed list, so the tool can check the claim; `comment`
+carries what the list cannot. `where` is required — state which occurrences you
+judged, or `["/"]` for every one of them. At package level `as-dependency-of` is
+required too: name whose use of the package you judged, or `["self"]` for your
+own software. One entry can cover a family of packages with `pattern` instead of
+`name`. Every field, the rationale list, and the `AND`-rejection rule:
+[policy.md#compatible](../reference/policy.md#compatible).
 
 ## Accept a package only where you reviewed it
 
@@ -265,15 +279,17 @@ unreviewed image. Add `where` to limit the rule to what you judged:
 [[compatible]]
 match = "package"
 name = "busybox"
+as-dependency-of = ["self"]
+rationale = "os-package-unmodified"
 where = ["docker:a/Dockerfile"]
-reason = "Reviewed in a/Dockerfile's image: shipped unmodified in the OS layer."
 ```
 
-`where` is opt-in and narrows, never widens — omit it and the rule applies
-everywhere, which is rarely what a per-image review means to say. Prefer the
-narrowest identity you actually reviewed, usually the full `docker:<source>`
-of one image, and check a scoped rule against the Used-in column: an entry
-matching nothing prints an unused-rule warning. Target-matching rules and
+`where` narrows, never widens. It is required precisely because the everywhere
+case, `["/"]`, is rarely what a per-image review means to say, and writing it
+out makes that a decision rather than an omission. Prefer the narrowest identity
+you actually reviewed, usually the full `docker:<source>` of one image, and
+check a scoped rule against the Used-in column: an entry matching nothing prints
+an unused-rule warning. Target-matching rules and
 both target forms (`docker:<source>`, workspace path):
 [policy.md#compatible](../reference/policy.md#compatible).
 
