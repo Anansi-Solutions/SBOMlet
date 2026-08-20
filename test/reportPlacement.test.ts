@@ -12,6 +12,7 @@ import {
   type CanonicalDependencies,
   type Verdict,
 } from "../src/model/dependencies";
+import { withCacheClaim } from "../src/enrich/enrich";
 import { mergeSboms } from "../src/merge/merge";
 import { annotateFindings } from "../src/normalize/normalize";
 import { applyContainerScopes } from "../src/pipeline/containerScope";
@@ -67,6 +68,7 @@ const PLACEMENT_PATHS = [
   "suppressed-workspace-copyleft",
   "denied-license-terminal",
   "system-package-in-dev-container-counts-dev",
+  "conflict-scancode",
   "cross-image-claim-divergence",
   "target-ok-permissive",
   "target-incompatible-prod",
@@ -200,6 +202,8 @@ interface ComponentSpec {
   license?: string;
   /** A free-text label, set on `license.name` (imprecise/ambiguous inputs). */
   licenseName?: string;
+  /** The in-depth scan's answer, appended as a ScanCode claim after the merge. */
+  intensive?: string;
   dev?: boolean;
 }
 
@@ -278,14 +282,48 @@ function resolveDevelopmentContainers(
   return resolved;
 }
 
-/** merge -> annotate -> resolve dev containers -> re-scope -> evaluate -> render. */
+/**
+ * Append every declared in-depth answer as a ScanCode claim, through the same production helper the
+ * enrichment stage uses, so a scenario exercising the intensive lane exercises the real one.
+ */
+function withIntensiveClaims(
+  model: CanonicalDependencies,
+  inputs: ReadonlyArray<ScenarioInput>,
+): CanonicalDependencies {
+  const byPurl = new Map<string, string>();
+
+  for (const input of inputs) {
+    for (const spec of input.components) {
+      if (spec.intensive !== undefined) {
+        byPurl.set(spec.purl, spec.intensive);
+      }
+    }
+  }
+
+  if (byPurl.size === 0) {
+    return model;
+  }
+
+  return {
+    packages: model.packages.map((entry) => {
+      const raw = byPurl.get(entry.purl);
+
+      return raw === undefined ? entry : withCacheClaim(entry, raw, "scancode");
+    }),
+  };
+}
+
+/** merge -> intensive claims -> annotate -> resolve dev containers -> re-scope -> evaluate -> render. */
 function buildScenario(inputs: ReadonlyArray<ScenarioInput>, policyToml: string): ScenarioResult {
-  const merged = mergeSboms(
-    inputs.map((input) => ({
-      sbom: sbomDoc(input.components.map(sbomComponent)),
-      targetIdentity: input.targetIdentity,
-      ...(input.scope !== undefined ? { scope: input.scope } : {}),
-    })),
+  const merged = withIntensiveClaims(
+    mergeSboms(
+      inputs.map((input) => ({
+        sbom: sbomDoc(input.components.map(sbomComponent)),
+        targetIdentity: input.targetIdentity,
+        ...(input.scope !== undefined ? { scope: input.scope } : {}),
+      })),
+    ),
+    inputs,
   );
   const policy = parsePolicy(policyToml);
   const { model: annotated } = annotateFindings(merged, policy.clarify, BUILTIN_OVERRIDES);
@@ -1434,6 +1472,49 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
         devSection.includes("sys-in-dev-container"),
       slug,
       "its container's System packages table sits under the Development-only subsection",
+    );
+  },
+
+  "conflict-scancode": () => {
+    const slug = "conflict-scancode";
+    const purl = "pkg:npm/disputed-lib@1.0.0";
+    const { doc, verdicts, scoped } = buildScenario(
+      [
+        {
+          targetIdentity: WORKSPACE,
+          components: [{ name: "disputed-lib", purl, license: "Apache-2.0", intensive: "MIT" }],
+        },
+      ],
+      UNKNOWN_WARN,
+    );
+
+    assertClassificationOutcome(
+      scoped,
+      verdicts,
+      purl,
+      WORKSPACE,
+      slug,
+      "app",
+      "fail",
+      "conflict:scancode",
+    );
+    assertPlacement(
+      section(doc, "## Problematic licenses").includes("disputed-lib"),
+      slug,
+      "an unresolved in-depth-vs-quick-check disagreement is a fail verdict, so it rows in Problematic licenses",
+    );
+    const conflicts = section(doc, "## Assessment conflicts");
+
+    assertPlacement(
+      conflicts.includes("### ScanCode assessment vs quick check") &&
+        conflicts.includes("disputed-lib"),
+      slug,
+      "the disagreement rows in the Assessment conflicts section's ScanCode-assessment-vs-quick-check sub-table",
+    );
+    assertPlacement(
+      appTableOnly(doc, "## Production dependencies").includes("disputed-lib"),
+      slug,
+      "the package keeps its inventory row in Production dependencies (inventory is never dropped by a conflict)",
     );
   },
 

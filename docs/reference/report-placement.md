@@ -183,7 +183,7 @@ helpers).
 
 ## Path index (verified end to end)
 
-The same 46 paths as
+The same 47 paths as
 [dependency-classification.md](./dependency-classification.md#path-index-verified-end-to-end),
 one row each, stating where the package lands in the markdown report instead
 of its Stage-1/Stage-2 outcome — the two tables share one slug set, verified
@@ -216,6 +216,7 @@ by the same suite (`test/reportPlacement.test.ts`).
 | `suppressed-workspace-copyleft` | family-justified `[[workspace.copyleft_suppressed]]` | suppressed-workspaces list in Copyleft and special notices; no flagged row |
 | `denied-license-terminal` | a `[[deny]]` match with a `[[compatible]]` rule that would otherwise accept it | Problematic licenses (deny is terminal) |
 | `system-package-in-dev-container-counts-dev` | apk permissive package whose only container is dev-marked | counted Development-only (via the container's classification); System packages table under the Development-only subsection |
+| `conflict-scancode` | npm workspace package whose in-depth scan answer disagrees with the declared claim, no `[[clarify]]` resolving it | Problematic licenses + Assessment conflicts (ScanCode assessment vs quick check sub-table) + Production dependencies (app table) |
 | `cross-image-claim-divergence` | apk purl baked into two prod containers with different declared licenses | Problematic licenses + Assessment conflicts (Cross-image license claims sub-table) + both containers' System packages tables |
 | `target-ok-permissive` | MIT dep under a (MIT, network=false, external) target | Production dependencies (app table) only |
 | `target-incompatible-prod` | GPL-3.0-only dep under a (MIT, external) target, prod occurrence | Problematic licenses |
