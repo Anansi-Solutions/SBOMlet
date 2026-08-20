@@ -5993,3 +5993,69 @@ describe("unnecessaryClarifyEntries — the entries a maintainer can drop", () =
     expect(unnecessaryClarifyEntries(model, policy)).toEqual([]);
   });
 });
+
+// ===========================================================================
+// Path-shaped policy fields are repository-relative, always. A drive specifier
+// is a legal path segment, so a policy naming one used to read - and, through
+// refresh-clarifications --write, rewrite - a file outside the repository the
+// scan was pointed at.
+// ===========================================================================
+
+describe("path-shaped policy fields never leave the repository", () => {
+  test("a drive-lettered cache dir rejects", () => {
+    expect(expectPolicyError('[cache]\ndir = "C:/anywhere"\n').message).toContain(
+      "must be repository-relative",
+    );
+  });
+
+  test("a drive-relative cache dir rejects", () => {
+    expect(expectPolicyError('[cache]\ndir = "C:anywhere"\n').message).toContain(
+      "must be repository-relative",
+    );
+  });
+
+  test("a drive-lettered docker ignore glob rejects", () => {
+    expect(expectPolicyError('[docker]\nignore = ["C:/anywhere/**"]\n').message).toContain(
+      "must be repository-relative",
+    );
+  });
+
+  test("a drive-lettered where scope rejects", () => {
+    expect(
+      expectPolicyError(
+        [
+          "[[compatible]]",
+          'match = "license"',
+          'pattern = "MIT"',
+          'rationale = "license-reviewed"',
+          'where = ["C:/anywhere"]',
+          "",
+        ].join("\n"),
+      ).message,
+    ).toContain("must be repository-relative");
+  });
+
+  test("a docker: scope is not a drive specifier and still parses", () => {
+    const policy = parsePolicy(
+      [
+        "[[compatible]]",
+        'match = "license"',
+        'pattern = "MIT"',
+        'rationale = "license-reviewed"',
+        'where = ["docker:img/Dockerfile", "docker:ghcr.io/acme/api:1.2.3"]',
+        "",
+      ].join("\n"),
+    );
+
+    expect(policy.compatible[0]?.where).toEqual([
+      "docker:img/Dockerfile",
+      "docker:ghcr.io/acme/api:1.2.3",
+    ]);
+  });
+
+  test("a docker: ignore glob is not a drive specifier and still parses", () => {
+    expect(parsePolicy('[docker]\nignore = ["docker/dev/**"]\n').docker?.ignore).toEqual([
+      "docker/dev/**",
+    ]);
+  });
+});

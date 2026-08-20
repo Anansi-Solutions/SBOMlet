@@ -4,7 +4,7 @@
  */
 
 import { mkdirSync, writeFileSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
+import { dirname, join, resolve, sep } from "node:path";
 
 /**
  * Resolve one user-supplied path against the invocation base directory: an absolute path passes
@@ -13,6 +13,31 @@ import { dirname, join, resolve } from "node:path";
  */
 export function resolveFrom(baseDir: string | undefined, path: string): string {
   return resolve(process.cwd(), baseDir ?? ".", path);
+}
+
+/**
+ * {@link resolveFrom}, with the result asserted to be inside `anchor`.
+ *
+ * @throws Error naming `what`, the written path, and where it resolved to, when the resolved path
+ * is neither the anchor itself nor under it. Containment is compared on whole path segments, so a
+ * sibling directory whose name merely starts with the anchor's is outside it.
+ *
+ * @privateRemarks
+ * The policy schema already refuses absolute and drive-lettered paths, so nothing a valid policy
+ * can say reaches this. It is the last stop before a read or a write leaves the repository, which
+ * is worth a second check that does not depend on the first one staying correct.
+ */
+export function resolveContained(anchor: string | undefined, path: string, what: string): string {
+  const base = resolve(process.cwd(), anchor ?? ".");
+  const resolved = resolveFrom(anchor, path);
+
+  if (resolved !== base && !resolved.startsWith(base + sep)) {
+    throw new Error(
+      `${what}: "${path}" resolves to ${resolved}, outside ${base} - a policy path may never leave the repository`,
+    );
+  }
+
+  return resolved;
 }
 
 /**

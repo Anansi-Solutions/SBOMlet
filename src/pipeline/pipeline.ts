@@ -41,7 +41,7 @@ import { renderMarkdown, type PolicyView, type TargetProfileSummary } from "../r
 import { renderNotices } from "../render/notices";
 import { globToRegExp } from "../targets/discover";
 import { applyContainerScopes } from "./containerScope";
-import { resolveFrom } from "./paths";
+import { resolveContained, resolveFrom } from "./paths";
 import { sanitizeForLog, writePolicySummary } from "./summary";
 import { collectTargets } from "./targets";
 import type { TargetProfile } from "../policy/compat";
@@ -471,12 +471,19 @@ export function resolveCacheDir(opts: {
 /**
  * Where this policy's `clarifications` file lives, or undefined when it declares none. The path
  * anchors to the SCANNED repo - the same anchor the default policy is discovered under - so one
- * text resolves identically from the repository, an in-process caller, and the Action.
+ * text resolves identically from the repository, an in-process caller, and the Action. Both the
+ * read and refresh-clarifications' rewrite go through here, so the containment check covers each.
+ *
+ * @throws Error when the declared path resolves outside the scanned repository.
  */
 export function clarificationsFilePath(opts: RepoAnchor, policy: Policy): string | undefined {
   return policy.clarifications === undefined
     ? undefined
-    : resolveFrom(resolvedRepoRoot(opts) ?? opts.baseDir, policy.clarifications);
+    : resolveContained(
+        resolvedRepoRoot(opts) ?? opts.baseDir,
+        policy.clarifications,
+        "clarifications",
+      );
 }
 
 /**

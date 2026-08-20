@@ -38,7 +38,7 @@ import {
 } from "../src/cli";
 import { exitCodeFor, runCheck } from "../src/gate/check";
 import { classifyCoverage, coverageSkipReason } from "../src/pipeline/coverage";
-import { defaultNoticesPath, resolveFrom } from "../src/pipeline/paths";
+import { defaultNoticesPath, resolveContained, resolveFrom } from "../src/pipeline/paths";
 import { buildOutputs, runGenerate } from "../src/pipeline/pipeline";
 import {
   runRefreshClarifications,
@@ -504,6 +504,60 @@ describe("resolveFrom — base-dir path anchoring (CR-01)", () => {
 
     expect(resolveFrom(base, absolute)).toBe(absolute);
     expect(resolveFrom(undefined, "x.md")).toBe(resolve(process.cwd(), "x.md"));
+  });
+});
+
+describe("resolveContained — a policy path resolved outside its anchor is refused", () => {
+  test("a path inside the anchor resolves exactly as resolveFrom does", () => {
+    const base = mkdtempSync(join(tmpdir(), "licenses-contained-"));
+
+    expect(resolveContained(base, "policy/clarifications.toml", "clarifications")).toBe(
+      resolveFrom(base, "policy/clarifications.toml"),
+    );
+    expect(resolveContained(base, ".", "clarifications")).toBe(resolve(base));
+  });
+
+  test("a path resolving above the anchor throws, naming the field and the resolved path", () => {
+    const base = mkdtempSync(join(tmpdir(), "licenses-contained-"));
+    const escape = join(base, "..", "elsewhere.toml");
+
+    expect(() => resolveContained(base, escape, "clarifications")).toThrow("clarifications");
+    expect(() => resolveContained(base, escape, "clarifications")).toThrow("outside");
+  });
+
+  test("a sibling sharing the anchor's name as a prefix is outside it, not under it", () => {
+    const base = mkdtempSync(join(tmpdir(), "licenses-contained-"));
+
+    expect(() => resolveContained(base, `${base}-sibling/x.toml`, "clarifications")).toThrow(
+      "outside",
+    );
+  });
+});
+
+describe("a policy path may never leave the repository — end to end", () => {
+  test("a drive-lettered clarifications path is a config error (exit 3), and the run writes nothing", () => {
+    const root = mkdtempSync(join(tmpdir(), "licenses-escape-"));
+    const policyPath = join(root, ".sbomlet.policy.toml");
+
+    writeFileSync(policyPath, 'clarifications = "C:/anywhere/evil.toml"\n');
+
+    const spawned = spawnSync(
+      process.execPath,
+      [
+        "src/cli.ts",
+        "refresh-clarifications",
+        "--repo-root",
+        root,
+        "--policy",
+        policyPath,
+        "--write",
+      ],
+      { encoding: "utf8" },
+    );
+
+    expect(spawned.status).toBe(3);
+    expect(spawned.stderr).toContain("must be repository-relative");
+    expect(readdirSync(root)).toEqual([".sbomlet.policy.toml"]);
   });
 });
 

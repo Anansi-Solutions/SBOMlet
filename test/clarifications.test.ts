@@ -96,6 +96,18 @@ describe("the clarifications key", () => {
     );
   });
 
+  test("a drive-lettered absolute path rejects", () => {
+    expect(expectPolicyError('clarifications = "C:/anywhere/evil.toml"').message).toContain(
+      "must be repository-relative",
+    );
+  });
+
+  test("a drive-relative path rejects", () => {
+    expect(expectPolicyError('clarifications = "C:evil.toml"').message).toContain(
+      "must be repository-relative",
+    );
+  });
+
   test("a non-string value rejects", () => {
     expect(expectPolicyError("clarifications = 7").problems).toContain(
       "clarifications: must be a non-empty path string",

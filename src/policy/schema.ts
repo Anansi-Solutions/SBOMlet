@@ -13,13 +13,16 @@
  * values anywhere - patterns flow through spdx-expression-parse + orLeaves only.
  *
  * Policy text is untrusted config (repo-tampered or user-authored). Suppression paths are validated
- * - non-empty, forward slashes only, no ".." segments, no leading/trailing slash - so a crafted
- * path can never suppress everything or escape the target namespace; compatible `where` scopes
- * reuse the same validation, so a crafted scope cannot escape the identity namespace either.
- * smol-toml is a spec-compliant TOML 1.0 parser with no eval; duplicate tables throw per spec.
+ * - non-empty, forward slashes only, no ".." segments, no leading/trailing slash, no drive
+ * specifier - so a crafted path can never suppress everything, escape the target namespace, or name
+ * a file outside the repository; compatible `where` scopes reuse the same validation, so a crafted
+ * scope cannot escape the identity namespace either. smol-toml is a spec-compliant TOML 1.0 parser
+ * with no eval; duplicate tables throw per spec.
  *
  * Pure function: no I/O, no logging - the CLI reads the file and owns stderr.
  */
+import { win32 } from "node:path";
+
 import { type } from "arktype";
 import { parse as parseToml } from "smol-toml";
 import parseSpdx from "spdx-expression-parse";
@@ -710,6 +713,9 @@ function parseSpdxChecked(
   }
 }
 
+/** A leading Windows drive specifier: `C:/x`, `C:\\x`, and the drive-relative `C:x` alike. */
+const DRIVE_SPECIFIER = /^[A-Za-z]:/;
+
 /**
  * Suppression path rules: forward-slash repo-relative identity prefix. Empty paths are rejected by
  * requireText (an empty prefix would suppress everything); ".." segments, backslashes, and
@@ -719,12 +725,25 @@ function parseSpdxChecked(
  * path can never match - and because suppression entries are excluded from unused-rule reporting, a
  * typo here would otherwise be silently dead forever.
  *
+ * A leading drive specifier is rejected outright. `C:/elsewhere/x.toml` is a legal chain of
+ * segments and passes every check below, but the fields sharing this validator name files the tool
+ * reads and, for `clarifications` under refresh-clarifications --write, rewrites: one would reach
+ * outside the scanned repository entirely. `C:x` - drive-relative, resolved against that drive's
+ * own working directory - is refused for the same reason. The test is a single letter followed by a
+ * colon, so the multi-letter "docker:" prefix a `where` scope carries is untouched.
+ *
  * Shared by every path-shaped policy field - a "docker:"-prefixed path is fine here (a
  * [[compatible]] `where` scope deliberately targets a container occurrence). The suppression-only
  * "docker:" fence lives in validateSuppressions instead, since only a workspace suppression must
  * never absorb a container.
  */
 function validatePath(path: string, where: string, problems: string[]): void {
+  if (DRIVE_SPECIFIER.test(path) || win32.isAbsolute(path)) {
+    problems.push(
+      `${where}: path "${path}" must be repository-relative (an absolute or drive-lettered path names a file outside the repository)`,
+    );
+  }
+
   if (path.includes("\\")) {
     problems.push(
       `${where}: path "${path}" must use forward slashes only (target identities are forward-slash)`,
