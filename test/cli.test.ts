@@ -31,13 +31,19 @@ import { afterAll, beforeAll, describe, expect, mock, test } from "bun:test";
 import {
   dockerSbomOptionsFrom,
   dockerSbomModeConflict,
+  exitCodeForRefresh,
   optionsFrom,
+  reportRefreshClarifications,
   reportVerifyCache,
 } from "../src/cli";
 import { exitCodeFor, runCheck } from "../src/gate/check";
 import { classifyCoverage, coverageSkipReason } from "../src/pipeline/coverage";
 import { defaultNoticesPath, resolveFrom } from "../src/pipeline/paths";
 import { buildOutputs, runGenerate } from "../src/pipeline/pipeline";
+import {
+  runRefreshClarifications,
+  type RefreshClarificationsResult,
+} from "../src/pipeline/refreshClarifications";
 import { sanitizeForLog, writePolicySummary } from "../src/pipeline/summary";
 import { parsePolicy } from "../src/policy/schema";
 import { MAX_BUN_LOCK_BYTES } from "../src/collectors/bunLock";
@@ -2482,5 +2488,238 @@ describe("reportVerifyCache — the scancode memo line", () => {
     const mismatchedLines = mismatched.trim().split("\n");
 
     expect(mismatchedLines.at(-1)).toContain("scancode memo: 3 entries");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// refresh-clarifications. The scanner is stubbed to a two-version fixture so
+// the upgrade lane has an uncovered version to ascertain; everything else —
+// policy load, clarifications import, annotate, evaluate, the rewrite — runs
+// for real, offline.
+// ---------------------------------------------------------------------------
+
+/** Two versions of one package, so an entry pinned to the first leaves the second uncovered. */
+const TWO_VERSION_SBOM = {
+  bomFormat: "CycloneDX",
+  specVersion: "1.6",
+  components: [
+    {
+      purl: "pkg:npm/dual-lib@1.0.0",
+      name: "dual-lib",
+      version: "1.0.0",
+      licenses: [{ license: { id: "MIT" } }],
+    },
+    {
+      purl: "pkg:npm/dual-lib@2.0.0",
+      name: "dual-lib",
+      version: "2.0.0",
+      licenses: [{ license: { id: "MIT" } }],
+    },
+  ],
+};
+
+async function fakeTwoVersionScan(): Promise<cdxgenModule.CollectorSbomFile> {
+  const tempDir = mkdtempSync(join(tmpdir(), "licenses-refresh-scan-"));
+  const sbomPath = join(tempDir, "bom.json");
+
+  writeFileSync(sbomPath, JSON.stringify(TWO_VERSION_SBOM));
+  return { sbomPath, cacheKey: "fake", tool: REAL_CDXGEN.CDXGEN_TOOL };
+}
+
+/** An entry over dual-lib, optionally pinned to versions, adopting the declared claim. */
+function dualLibEntry(...versions: string[]): string {
+  return [
+    "[[clarify]]",
+    'name = "dual-lib"',
+    ...(versions.length === 0
+      ? []
+      : [
+          `version = ${versions.length === 1 ? JSON.stringify(versions[0]) : JSON.stringify(versions)}`,
+        ]),
+    'detected = { registry = "MIT" }',
+    'justification = "declared-more-complete"',
+    'expression = "MIT"',
+  ].join("\n");
+}
+
+describe("refresh-clarifications", () => {
+  beforeAll(() => {
+    mock.module("../src/collectors/cdxgen", () => ({
+      ...REAL_CDXGEN,
+      collectWithCdxgen: fakeTwoVersionScan,
+    }));
+  });
+
+  afterAll(() => {
+    mock.module("../src/collectors/cdxgen", () => REAL_CDXGEN);
+  });
+
+  /** A scannable tree whose policy imports `clarifications`, when any text is given for it. */
+  function makeRefreshTree(
+    policyText: string,
+    clarificationsText?: string,
+  ): { root: string; policyPath: string; clarificationsPath: string } {
+    const { root } = makeScannableTree();
+    const clarificationsPath = join(root, "clarifications.toml");
+
+    if (clarificationsText !== undefined) {
+      writeFileSync(clarificationsPath, clarificationsText);
+    }
+
+    return { root, policyPath: writePolicy(root, policyText), clarificationsPath };
+  }
+
+  function refresh(
+    root: string,
+    policyPath: string,
+    write = false,
+  ): Promise<RefreshClarificationsResult> {
+    return runRefreshClarifications({
+      repoRoot: root,
+      baseDir: root,
+      policyPath,
+      enrichmentCachePath: enrichCache(),
+      verbose: false,
+      write,
+    });
+  }
+
+  test("an entry covering every scanned version leaves nothing to suggest, and exits 0", async () => {
+    const { root, policyPath } = makeRefreshTree(dualLibEntry());
+    let result: RefreshClarificationsResult | undefined;
+
+    await withCapturedStderr(async () => {
+      result = await refresh(root, policyPath);
+    });
+
+    expect(result?.findings.upgrades).toEqual([]);
+    expect(exitCodeForRefresh(result!)).toBe(0);
+  });
+
+  test("a version the entry does not cover is offered, and exits 1", async () => {
+    const { root, policyPath } = makeRefreshTree(dualLibEntry("1.0.0"));
+    let result: RefreshClarificationsResult | undefined;
+
+    const report = await withCapturedStderr(async () => {
+      result = await refresh(root, policyPath);
+      reportRefreshClarifications(result);
+    });
+
+    expect(result?.findings.upgrades).toEqual([
+      {
+        rule: "clarify[0]",
+        name: "dual-lib",
+        version: "2.0.0",
+        outcome: "extend",
+        detail: "every recorded detection still holds at 2.0.0",
+      },
+    ]);
+    expect(exitCodeForRefresh(result!)).toBe(1);
+    expect(report).toContain("EXTEND   clarify[0]  dual-lib@2.0.0");
+  });
+
+  test("a policy holding its own entries is never rewritten, whatever --write says", async () => {
+    const { root, policyPath } = makeRefreshTree(dualLibEntry("1.0.0"));
+    const before = readFileSync(policyPath, "utf8");
+    let result: RefreshClarificationsResult | undefined;
+
+    const report = await withCapturedStderr(async () => {
+      result = await refresh(root, policyPath, true);
+      reportRefreshClarifications(result);
+    });
+
+    expect(readFileSync(policyPath, "utf8")).toBe(before);
+    expect(result?.applied).toBeUndefined();
+    expect(result?.clarificationsPath).toBeUndefined();
+    expect(report).toContain("none of them applicable without a person");
+  });
+
+  test("--write extends the imported entry's version list, and re-running has nothing left to say", async () => {
+    const { root, policyPath, clarificationsPath } = makeRefreshTree(
+      'clarifications = "clarifications.toml"\n',
+      `${dualLibEntry("1.0.0")}\n`,
+    );
+    let applied: RefreshClarificationsResult | undefined;
+    let again: RefreshClarificationsResult | undefined;
+
+    await withCapturedStderr(async () => {
+      applied = await refresh(root, policyPath, true);
+      again = await refresh(root, policyPath, true);
+    });
+
+    expect(applied?.applied?.extended).toEqual(["clarifications[0]"]);
+    expect(readFileSync(clarificationsPath, "utf8")).toBe(
+      [
+        "[[clarify]]",
+        'name = "dual-lib"',
+        'version = [ "1.0.0", "2.0.0" ]',
+        'detected = { registry = "MIT" }',
+        'justification = "declared-more-complete"',
+        'expression = "MIT"',
+        "",
+      ].join("\n"),
+    );
+    expect(again?.applied).toBeUndefined();
+    expect(exitCodeForRefresh(again!)).toBe(0);
+  });
+
+  test("a second --write over the applied file leaves the same bytes", async () => {
+    const { root, policyPath, clarificationsPath } = makeRefreshTree(
+      'clarifications = "clarifications.toml"\n',
+      `${dualLibEntry("1.0.0")}\n`,
+    );
+
+    await withCapturedStderr(async () => {
+      await refresh(root, policyPath, true);
+    });
+
+    const once = readFileSync(clarificationsPath, "utf8");
+
+    await withCapturedStderr(async () => {
+      await refresh(root, policyPath, true);
+    });
+
+    expect(readFileSync(clarificationsPath, "utf8")).toBe(once);
+  });
+
+  test("a clarifications file carrying a # comment is refused, untouched, and exits 3", async () => {
+    const commented = `# researched in the ticket, do not lose this\n${dualLibEntry("1.0.0")}\n`;
+    const { root, policyPath, clarificationsPath } = makeRefreshTree(
+      'clarifications = "clarifications.toml"\n',
+      commented,
+    );
+    let result: RefreshClarificationsResult | undefined;
+
+    const report = await withCapturedStderr(async () => {
+      result = await refresh(root, policyPath, true);
+      reportRefreshClarifications(result);
+    });
+
+    expect(readFileSync(clarificationsPath, "utf8")).toBe(commented);
+    expect(result?.refused).toContain("# comments a rewrite would destroy");
+    expect(exitCodeForRefresh(result!)).toBe(3);
+    expect(report).toContain("nothing written");
+  });
+
+  test("without a policy there are no entries to refresh: a config error, never a clean run", () => {
+    const root = mkdtempSync(join(tmpdir(), "licenses-refresh-nopolicy-"));
+    const spawned = spawnSync(
+      process.execPath,
+      ["src/cli.ts", "refresh-clarifications", "--repo-root", root, "--base-dir", root],
+      { encoding: "utf8" },
+    );
+
+    expect(spawned.status).toBe(3);
+    expect(spawned.stderr).toContain("refresh-clarifications needs a policy");
+  });
+
+  test("the usage names the subcommand and what --write may touch", () => {
+    const spawned = spawnSync(process.execPath, ["src/cli.ts", "not-a-subcommand"], {
+      encoding: "utf8",
+    });
+
+    expect(spawned.status).toBe(3);
+    expect(spawned.stderr).toContain("refresh-clarifications [--repo-root <path>]");
+    expect(spawned.stderr).toContain("0 nothing to suggest, 1 suggestions exist or were applied");
   });
 });

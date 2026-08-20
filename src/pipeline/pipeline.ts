@@ -198,6 +198,10 @@ export interface BuiltOutputs {
   policy?: Policy;
   /** Merged package count, for the generate progress line. */
   packageCount: number;
+  /** The annotated, container-rescoped model every surface downstream reads. */
+  model: CanonicalDependencies;
+  /** Positions in the combined clarify list that decided something, for unused-entry accounting. */
+  usedClarifyIndices: ReadonlySet<number>;
   /**
    * Purls of unknowns the enrichment stage could not satisfy from the committed cache in check mode
    * (no entry, no fetch allowed). Empty in generate mode (generate fetches on a miss). check maps
@@ -410,13 +414,16 @@ function policyPointerPath(opts: GenerateOptions): string {
   return relative(repoRoot, policyFile).replaceAll("\\", "/");
 }
 
+/** What anchoring a repo-relative path takes: the scanned root, and what it resolves against. */
+export type RepoAnchor = Pick<GenerateOptions, "repoRoot" | "baseDir">;
+
 /**
  * The scanned repo's absolute root, or undefined in single-target mode (no --repo-root). Committed
  * artifacts - the cache dir and the policy pointer line - anchor here so they bind to the repo
  * being scanned, not the invocation directory (--base-dir), which diverges for in-process callers
  * and the Action.
  */
-function resolvedRepoRoot(opts: GenerateOptions): string | undefined {
+function resolvedRepoRoot(opts: RepoAnchor): string | undefined {
   return opts.repoRoot === undefined ? undefined : resolveFrom(opts.baseDir, opts.repoRoot);
 }
 
@@ -462,20 +469,28 @@ export function resolveCacheDir(opts: {
 }
 
 /**
+ * Where this policy's `clarifications` file lives, or undefined when it declares none. The path
+ * anchors to the SCANNED repo - the same anchor the default policy is discovered under - so one
+ * text resolves identically from the repository, an in-process caller, and the Action.
+ */
+export function clarificationsFilePath(opts: RepoAnchor, policy: Policy): string | undefined {
+  return policy.clarifications === undefined
+    ? undefined
+    : resolveFrom(resolvedRepoRoot(opts) ?? opts.baseDir, policy.clarifications);
+}
+
+/**
  * The policy with the entries of its `clarifications` file appended, or the policy unchanged when
- * it declares none. The path anchors to the SCANNED repo - the same anchor the default policy is
- * discovered under - so one text resolves identically from the repository, an in-process caller,
- * and the Action. A file that is not there is a config error naming both the policy that declared
+ * it declares none. A file that is not there is a config error naming both the policy that declared
  * it and the path searched: a policy must never run as though it had said nothing.
  */
 function withClarificationsFile(opts: GenerateOptions, policy: Policy, policyFile: string): Policy {
-  const declared = policy.clarifications;
+  const file = clarificationsFilePath(opts, policy);
 
-  if (declared === undefined) {
+  if (file === undefined) {
     return policy;
   }
 
-  const file = resolveFrom(resolvedRepoRoot(opts) ?? opts.baseDir, declared);
   let text: string;
 
   try {
@@ -483,7 +498,7 @@ function withClarificationsFile(opts: GenerateOptions, policy: Policy, policyFil
   } catch {
     throw new Error(
       `clarifications file is missing or unreadable: ${policyFile} declares ` +
-        `clarifications = "${declared}", expected ${file}`,
+        `clarifications = "${policy.clarifications}", expected ${file}`,
     );
   }
 
@@ -848,6 +863,8 @@ export async function buildOutputs(opts: GenerateOptions): Promise<BuiltOutputs>
     ...(verdicts !== undefined ? { verdicts } : {}),
     ...(policy !== undefined ? { policy } : {}),
     packageCount: scoped.packages.length,
+    model: scoped,
+    usedClarifyIndices,
     staleUnknowns,
   };
 }

@@ -189,14 +189,19 @@ export function refreshFindings(
   };
 }
 
+/** How much here needs a maintainer's attention, counting every lane's rows alike. */
+export function suggestionCount(findings: RefreshFindings): number {
+  return (
+    findings.upgrades.length +
+    findings.unused.length +
+    findings.unnecessary.length +
+    findings.shadowed.length
+  );
+}
+
 /** Does anything here need a maintainer's attention? The subcommand's exit code rests on this. */
 export function anySuggestion(findings: RefreshFindings): boolean {
-  return (
-    findings.upgrades.length > 0 ||
-    findings.unused.length > 0 ||
-    findings.unnecessary.length > 0 ||
-    findings.shadowed.length > 0
-  );
+  return suggestionCount(findings) > 0;
 }
 
 /** The new text of the imported file, and which entries it differs from the old one by. */

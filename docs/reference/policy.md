@@ -299,6 +299,12 @@ Keep prose about an entry in its `comment` and `evidence` keys rather than in
 `#` lines above it. The imported file is written to be machine-maintainable,
 and comment lines around the tables are not part of what an entry records.
 
+[`refresh-clarifications`](cli.md#refresh-clarifications) is what maintains it.
+That subcommand rewrites this file whole — the entries come out in the key order
+documented above, one blank line apart — so a `#` comment would not survive the
+next `--write`. Rather than lose it, the subcommand refuses to write at all while
+the file carries one. The policy proper is never rewritten, whatever it holds.
+
 ### Migrating from the previous schema
 
 The keys below were replaced outright. An entry still carrying one is rejected

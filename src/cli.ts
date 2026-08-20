@@ -29,6 +29,8 @@
  *      failure, coverage assertion, invalid policy file (TomlError/PolicyError messages printed
  *      verbatim), --dump-model on check. Codes 1 and 2 come only from check's structured-result
  *      mapping - exceptions can never surface as 0/1/2.
+ *   refresh-clarifications reads the same way as check's 0/1: 0 nothing to suggest, 1 suggestions
+ *      exist or were applied, 3 a config error or a write it refused to make.
  */
 
 import { existsSync } from "node:fs";
@@ -39,10 +41,17 @@ import { runGenerateDockerSbom, type GenerateDockerSbomOptions } from "./pipelin
 import { exitCodeFor, runCheck, type CheckResult } from "./gate/check";
 import { defaultNoticesPath, resolveFrom } from "./pipeline/paths";
 import { runGenerate, type GenerateOptions } from "./pipeline/pipeline";
+import {
+  runRefreshClarifications,
+  type RefreshClarificationsResult,
+} from "./pipeline/refreshClarifications";
+import { sanitizeForLog } from "./pipeline/summary";
+import { suggestionCount } from "./maintain/refreshClarifications";
 import { runVerifyCache, type VerifyCacheResult } from "./pipeline/verifyCache";
 
 const USAGE =
-  "usage: sbomlet <generate|check|verify-cache|generate-docker-sbom> [options]\n" +
+  "usage: sbomlet <generate|check|verify-cache|refresh-clarifications|" +
+  "generate-docker-sbom> [options]\n" +
   "  generate [--repo-root <path> | --target <path>] [--exclude <glob>]... " +
   "[--policy <path>] [--output <path>] [--notices <path>] " +
   "[--cyclonedx <path>] [--dump-model <path>] [--base-dir <path>] " +
@@ -67,6 +76,19 @@ const USAGE =
   "the stored license (run before a release/audit, or when the cache changes).\n" +
   "           exit codes: 0 all match, 1 at least one mismatch, 3 tool/network " +
   "error\n" +
+  "  refresh-clarifications [--repo-root <path>] [--policy <path>] [--write] " +
+  "[--base-dir <path>] [--enrichment-cache <path>] [--scancode-cache <path>] " +
+  "[--verbose]\n" +
+  "           OFFLINE maintainer audit of the [[clarify]] entries — versions an " +
+  "entry could be extended to, entries nothing needs any more, and imported " +
+  "entries a policy entry decides ahead of. It reads the committed caches only, " +
+  "so a version they say nothing about is reported unknown, never fetched (run " +
+  "generate, or generate --intensive, to record one).\n" +
+  "           --write: apply the removals and the version extensions to the " +
+  "clarifications file the policy declares, and to nothing else — the policy " +
+  "proper is only ever suggested against, and a pinned version never leaves.\n" +
+  "           exit codes: 0 nothing to suggest, 1 suggestions exist or were " +
+  "applied, 3 tool/config error or a refused write\n" +
   "  generate-docker-sbom (--dockerfile <path>... | " +
   "--repo-root <dir> [--policy <file>] [--exclude <glob>]... | " +
   "--image <ref>... | --list-dockerfiles --repo-root <dir>) " +
@@ -132,7 +154,96 @@ export function reportVerifyCache(result: VerifyCacheResult): void {
   );
 }
 
-/** The parseArgs value shape shared by both subcommands. */
+/** "1 entry" / "2 entries" - a count with the noun it belongs to, never a bare "1 entries". */
+function counted(count: number, one: string, many: string): string {
+  return `${count} ${count === 1 ? one : many}`;
+}
+
+/** The closing line: what was written, or what is left for a person and where to apply it. */
+function refreshSummary(result: RefreshClarificationsResult): string {
+  const lead = "refresh-clarifications:";
+
+  if (result.refused !== undefined) {
+    return `${lead} nothing written — ${result.refused}`;
+  }
+
+  if (result.applied !== undefined) {
+    return (
+      `${lead} rewrote ${result.clarificationsPath} — ` +
+      `${counted(result.applied.removed.length, "entry", "entries")} removed, ` +
+      `${counted(result.applied.extended.length, "entry", "entries")} extended`
+    );
+  }
+
+  const total = suggestionCount(result.findings);
+
+  if (total === 0) {
+    return `${lead} nothing to suggest`;
+  }
+
+  const suggestions = counted(total, "suggestion", "suggestions");
+
+  if (result.writeRequested) {
+    return `${lead} ${suggestions}, none of them applicable without a person`;
+  }
+
+  return result.clarificationsPath === undefined
+    ? `${lead} ${suggestions} — the policy holds its own entries, which are never rewritten; ` +
+        `apply these by hand`
+    : `${lead} ${suggestions} — --write applies the removals and the version extensions in ` +
+        `${result.clarificationsPath}`;
+}
+
+/**
+ * Print the maintainer audit to stderr (the tool's message channel; the exit code is the machine
+ * signal). Each row leads with what it is and the entry's citation, then the finding underneath, in
+ * the deterministic order the lanes produced. Every value is policy- or model-derived, so it routes
+ * through sanitizeForLog exactly as the policy summary's lines do.
+ */
+export function reportRefreshClarifications(result: RefreshClarificationsResult): void {
+  const heading = (tag: string, text: string): void => {
+    process.stderr.write(`${tag.padEnd(8)} ${sanitizeForLog(text)}\n`);
+  };
+  const detail = (text: string): void => {
+    process.stderr.write(`  ${sanitizeForLog(text)}\n`);
+  };
+
+  for (const row of result.findings.upgrades) {
+    heading(row.outcome.toUpperCase(), `${row.rule}  ${row.name}@${row.version}`);
+    detail(row.detail);
+  }
+
+  for (const id of result.findings.unused) {
+    heading("UNUSED", id);
+    detail("decided nothing in this scan — remove it once its package is gone for good");
+  }
+
+  for (const entry of result.findings.unnecessary) {
+    heading("FINISHED", entry.rule);
+    detail(entry.reason);
+  }
+
+  for (const pair of result.findings.shadowed) {
+    heading("SHADOWED", pair.shadowed);
+    detail(`${pair.shadowing} decides ahead of it`);
+  }
+
+  process.stderr.write(`${sanitizeForLog(refreshSummary(result))}\n`);
+}
+
+/**
+ * A run that could not do what it was asked is a tool error; otherwise the exit code says only
+ * whether anything needs a maintainer, which is what a script wants to branch on.
+ */
+export function exitCodeForRefresh(result: RefreshClarificationsResult): number {
+  if (result.refused !== undefined) {
+    return 3;
+  }
+
+  return suggestionCount(result.findings) === 0 ? 0 : 1;
+}
+
+/** The parseArgs value shape every subcommand reads its flags out of. */
 interface CliValues {
   target?: string;
   "repo-root"?: string;
@@ -184,6 +295,11 @@ interface CliValues {
    * check never scans, so passing it there is accepted but unread.
    */
   "package-timeout-mins"?: string;
+  /**
+   * refresh-clarifications --write: apply what the run ascertained to the clarifications file the
+   * policy declares. Inert on every other subcommand.
+   */
+  write?: boolean;
 }
 
 /**
@@ -432,6 +548,34 @@ async function runVerifyCacheCommand(values: CliValues): Promise<never> {
   process.exit(result.mismatches.length === 0 ? 0 : 1);
 }
 
+/**
+ * Run `refresh-clarifications`, the offline maintainer audit. Like check, the "there is something
+ * to do" code comes ONLY from the structured result; a missing policy, an invalid one, or a write
+ * the run refused stays on 3.
+ */
+async function runRefreshClarificationsCommand(values: CliValues): Promise<never> {
+  let result: RefreshClarificationsResult;
+
+  try {
+    result = await runRefreshClarifications({
+      baseDir: values["base-dir"],
+      repoRoot: values["repo-root"],
+      targetArg: values.target,
+      excludes: values.exclude,
+      policyPath: values.policy ?? discoverDefaultPolicy(values),
+      enrichmentCachePath: values["enrichment-cache"],
+      scancodeCachePath: values["scancode-cache"],
+      verbose: values.verbose ?? false,
+      write: values.write ?? false,
+    });
+  } catch (error) {
+    fail(`${error instanceof Error ? error.message : String(error)}\n`);
+  }
+
+  reportRefreshClarifications(result);
+  process.exit(exitCodeForRefresh(result));
+}
+
 async function main(argv: string[]): Promise<void> {
   const [subcommand, ...rest] = argv;
 
@@ -459,6 +603,7 @@ async function main(argv: string[]): Promise<void> {
         "list-dockerfiles": { type: "boolean", default: false },
         intensive: { type: "boolean" },
         "package-timeout-mins": { type: "string" },
+        write: { type: "boolean", default: false },
       },
       allowPositionals: true,
     }));
@@ -478,6 +623,9 @@ async function main(argv: string[]): Promise<void> {
       return;
     case "verify-cache":
       await runVerifyCacheCommand(values);
+      return;
+    case "refresh-clarifications":
+      await runRefreshClarificationsCommand(values);
       return;
     default:
       fail(`unknown subcommand: ${subcommand ?? "(none)"}\n${USAGE}`);
