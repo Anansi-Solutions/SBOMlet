@@ -29,6 +29,12 @@ describe("justificationValidity — dual-license-choice", () => {
     });
   });
 
+  test("recording the branch taken, rather than the choice offered, is disproved", () => {
+    const result = dual("MIT", signal(["(MIT OR CC0-1.0)"], ["CC0-1.0 AND MIT"]));
+
+    expect(result.outcome).toBe("invalid");
+  });
+
   test("nothing was AND-joined: the scan's leaves are not the recorded choice", () => {
     const result = dual("MIT OR Apache-2.0", signal(["(MIT OR Apache-2.0)"], ["MIT"]));
 

@@ -35,8 +35,8 @@ export type Rationale = (typeof RATIONALE_VALUES)[number];
  * - `contradictory-claims-recorded`: the sources disagree irreconcilably and the recorded
  *   expression is the reading the maintainer stands behind. The sanctioned fallback.
  * - `declared-more-complete`: the package's own metadata names licenses the scan cannot see.
- * - `dual-license-choice`: the package offers a choice of licenses and the entry records the one
- *   taken.
+ * - `dual-license-choice`: the package offers a choice of licenses that the intensive scan read as
+ *   one joined license, and the expression restores the choice it offers - not the branch taken.
  * - `license-not-found`: no source states a license; the expression comes from evidence outside
  *   detection.
  * - `scan-found-additional-content`: the intensive scan sees further licenses that do govern

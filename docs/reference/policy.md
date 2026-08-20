@@ -245,7 +245,7 @@ fixed list. `comment` carries anything the list cannot.
 |-------|---------|---------------------|
 | `contradictory-claims-recorded` | The sources disagree irreconcilably and the expression is the reading you stand behind. The sanctioned fallback. | never — it becomes unnecessary instead, below |
 | `declared-more-complete` | The package's own metadata names licences the scan cannot see. | the declared claim no longer names part of the expression |
-| `dual-license-choice` | The package offers a choice of licences and the entry records the one taken. | the scan's licences are not the recorded choice — nothing was joined — or the declared claim offers none of them |
+| `dual-license-choice` | The package offers a choice of licences that the in-depth scan read as one joined licence; the expression restores the choice it offers, not the branch you took. | the scan's licences are not the recorded choice — nothing was joined — or the declared claim offers none of them |
 | `license-not-found` | No source states a licence; the expression comes from evidence outside detection. | either source now states a licence |
 | `scan-found-additional-content` | The in-depth scan sees further licences that do govern content the package ships. | the expression no longer accounts for what the scan reads |
 | `scan-more-precise` | The in-depth scan resolves an under-specified declared label to the exact licence. | the expression no longer accounts for what the scan reads |
