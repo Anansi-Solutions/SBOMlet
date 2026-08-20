@@ -1597,9 +1597,9 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
       "a clarify entry whose recorded detection no longer holds is a fail verdict, so it rows in Problematic licenses",
     );
     assertPlacement(
-      !section(doc, "## Problematic licenses").includes("BSD-3-Clause"),
+      !doc.includes("BSD-3-Clause"),
       slug,
-      "the stale expression is never applied, so the recorded license never reaches the report",
+      "the stale expression is never applied, so the recorded license reaches no part of the report - not the Problematic section, not the inventory row",
     );
     assertPlacement(
       appTableOnly(doc, "## Production dependencies").includes("moved-on-lib"),
@@ -2579,7 +2579,9 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
       'name = "choice-lib"',
       'detected = { registry = "MIT OR Apache-2.0", intensive = "MIT" }',
       'justification = "dual-license-choice"',
-      'expression = "MIT OR Apache-2.0"',
+      // A leaf no source states, so the assertion below can tell an applied expression from the
+      // observed reading - both of which read "MIT OR Apache-2.0" without it.
+      'expression = "MIT OR Apache-2.0 OR ISC"',
       "",
     ].join("\n");
     const { doc, verdicts, scoped } = buildScenario(
@@ -2616,9 +2618,9 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
       "a clarify entry the current signal disproves is a fail verdict, so it rows in Problematic licenses",
     );
     assertPlacement(
-      section(doc, "## Problematic licenses").includes("Apache-2.0"),
+      section(doc, "## Problematic licenses").includes("ISC"),
       slug,
-      "the recorded detections still hold, so the entry's expression was applied and is what the row shows",
+      "the recorded detections still hold, so the entry's expression was applied and is what the row shows - the ISC leaf is in the entry and in no source",
     );
     assertPlacement(
       appTableOnly(doc, "## Production dependencies").includes("choice-lib"),
