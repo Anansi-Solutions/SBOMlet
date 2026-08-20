@@ -9,7 +9,12 @@ import {
   normalizeRaw,
   type BuiltinOverrideInput,
 } from "../src/normalize/normalize";
-import { acceptedContainerNotices, evaluate, unusedRuleIds } from "../src/policy/evaluate";
+import {
+  acceptedContainerNotices,
+  evaluate,
+  unnecessaryClarifyEntries,
+  unusedRuleIds,
+} from "../src/policy/evaluate";
 import { BUILTIN_DENY_RULES } from "../src/policy/builtinDenylist";
 import { denyRuleFor } from "../src/policy/denylist";
 import { AGPL_IDS, COPYLEFT_IDS } from "../src/policy/copyleft";
@@ -2480,7 +2485,7 @@ describe("evaluate — a compound recorded detection", () => {
       "[[clarify]]",
       'name = "or-compound-pkg"',
       `detected = { registry = ${JSON.stringify(orClaim)}, intensive = "MIT" }`,
-      'justification = "dual-license-choice"',
+      'justification = "declared-more-complete"',
       `expression = ${JSON.stringify(orClaim)}`,
     ].join("\n");
     const { verdicts } = runEngine(
@@ -5670,5 +5675,140 @@ describe("evaluate — a target without a dependency graph says so", () => {
     expect(verdicts[0].rule).toBe("compatible[0]");
     expect(verdicts[0].reason).not.toContain("→");
     expect(verdicts[0].reason).not.toContain("as-dependency-of");
+  });
+});
+
+// ===========================================================================
+// The invalid-justification lane. An entry whose recorded detections still
+// hold, but whose stated reason the current signal disproves, fails on its
+// own rule id; an entry whose reason has nothing left to correct is reported
+// to maintainer tooling and never reaches a verdict.
+// ===========================================================================
+
+describe("evaluate — a clarify entry the current signal disproves", () => {
+  const DUAL_CHOICE = [
+    "[[clarify]]",
+    'name = "choice-lib"',
+    'detected = { registry = "MIT OR Apache-2.0", intensive = "MIT" }',
+    'justification = "dual-license-choice"',
+    'expression = "MIT OR Apache-2.0"',
+  ].join("\n");
+
+  test("a disproved justification fails on its own rule id, naming the refile", () => {
+    const { verdicts } = runEngine(
+      [scanPkgSpec("choice-lib", "MIT OR Apache-2.0", "MIT", ["backend"])],
+      DUAL_CHOICE,
+    );
+
+    expect(verdicts[0].status).toBe("fail");
+    expect(verdicts[0].rule).toBe("clarify:invalid[0]");
+    expect(verdicts[0].reason).toContain("choice-lib@1.0.0");
+    expect(verdicts[0].reason).toContain("contradictory-claims-recorded");
+  });
+
+  test("a justification the signal still supports decides nothing here", () => {
+    const joined = [
+      "[[clarify]]",
+      'name = "choice-lib"',
+      'detected = { registry = "MIT OR Apache-2.0", intensive = "Apache-2.0 AND MIT" }',
+      'justification = "dual-license-choice"',
+      'expression = "MIT OR Apache-2.0"',
+    ].join("\n");
+    const { verdicts } = runEngine(
+      [scanPkgSpec("choice-lib", "MIT OR Apache-2.0", "Apache-2.0 AND MIT", ["backend"])],
+      joined,
+    );
+
+    expect(verdicts[0].status).toBe("ok");
+    expect(verdicts[0].rule).toBe("clarify[0]");
+  });
+
+  test("a diverged detection is the more urgent answer and decides first", () => {
+    const policyText = [
+      "[[clarify]]",
+      'name = "choice-lib"',
+      'detected = { registry = "MIT OR Apache-2.0", intensive = "MIT" }',
+      'justification = "dual-license-choice"',
+      'expression = "MIT OR Apache-2.0"',
+    ].join("\n");
+    const { verdicts } = runEngine(
+      [scanPkgSpec("choice-lib", "GPL-3.0-only", "MIT", ["backend"])],
+      policyText,
+    );
+
+    expect(verdicts[0].rule).toBe("override:stale[clarify]");
+  });
+
+  test("the failing entry is never also reported as an unused entry", () => {
+    const { verdicts, usedClarifyIndices, policy } = runEngine(
+      [scanPkgSpec("choice-lib", "MIT OR Apache-2.0", "MIT", ["backend"])],
+      DUAL_CHOICE,
+    );
+
+    expect(verdicts[0].rule).toBe("clarify:invalid[0]");
+    expect(unusedRuleIds(policy, verdicts, usedClarifyIndices)).toEqual([]);
+  });
+
+  test("a builtin override carries no justification and never enters this lane", () => {
+    const { verdicts } = runEngine(
+      [scanPkgSpec("choice-lib", "MIT OR Apache-2.0", "MIT", ["backend"])],
+      "",
+      [
+        {
+          name: "choice-lib",
+          detected: { registry: "MIT OR Apache-2.0", intensive: "MIT" },
+          expression: "MIT OR Apache-2.0",
+        },
+      ],
+    );
+
+    expect(verdicts[0].status).toBe("ok");
+    expect(verdicts[0].rule).toBe("override:builtin[0]");
+  });
+});
+
+describe("unnecessaryClarifyEntries — the entries a maintainer can drop", () => {
+  const AGREED = [
+    "[[clarify]]",
+    'name = "settled-lib"',
+    'detected = { registry = "MIT", intensive = "MIT" }',
+    'justification = "contradictory-claims-recorded"',
+    'expression = "MIT"',
+  ].join("\n");
+
+  test("an entry whose sources now agree is reported, and fails nothing", () => {
+    const { verdicts, model, policy } = runEngine(
+      [scanPkgSpec("settled-lib", "MIT", "MIT", ["backend"])],
+      AGREED,
+    );
+
+    expect(verdicts[0].status).toBe("ok");
+    expect(verdicts[0].rule).toBe("clarify[0]");
+    expect(unnecessaryClarifyEntries(model, policy)).toEqual([
+      {
+        rule: "clarify[0]",
+        reason:
+          '"contradictory-claims-recorded" has nothing left to correct: the declared claim and ' +
+          "the in-depth scan now agree on the same licences.",
+      },
+    ]);
+  });
+
+  test("an entry still doing its job anywhere is not reported", () => {
+    const { model, policy } = runEngine(
+      [
+        scanPkgSpec("settled-lib", "MIT", "MIT", ["backend"]),
+        scanPkgSpec("settled-lib", "MIT", "MIT AND BSD-3-Clause", ["frontend"], "2.0.0"),
+      ],
+      [
+        "[[clarify]]",
+        'pattern = "settled-*"',
+        'detected = { registry = "MIT" }',
+        'justification = "contradictory-claims-recorded"',
+        'expression = "MIT AND BSD-3-Clause"',
+      ].join("\n"),
+    );
+
+    expect(unnecessaryClarifyEntries(model, policy)).toEqual([]);
   });
 });

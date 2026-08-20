@@ -94,6 +94,7 @@ const PLACEMENT_PATHS = [
   "target-os-agpl-network-false-ignored-notice",
   "target-held-survives-purl-fail",
   "voided-compatible",
+  "invalid-justification",
 ] as const;
 
 type PlacementPath = (typeof PLACEMENT_PATHS)[number];
@@ -2566,6 +2567,63 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
       appTableOnly(doc, "## Production dependencies").includes("voided-compatible-mpl-lib"),
       slug,
       "a voided package keeps its inventory row in Production dependencies",
+    );
+  },
+
+  "invalid-justification": () => {
+    const slug = "invalid-justification";
+    const purl = "pkg:npm/choice-lib@1.0.0";
+    const policy = [
+      UNKNOWN_WARN,
+      "[[clarify]]",
+      'name = "choice-lib"',
+      'detected = { registry = "MIT OR Apache-2.0", intensive = "MIT" }',
+      'justification = "dual-license-choice"',
+      'expression = "MIT OR Apache-2.0"',
+      "",
+    ].join("\n");
+    const { doc, verdicts, scoped } = buildScenario(
+      [
+        {
+          targetIdentity: WORKSPACE,
+          components: [
+            { name: "choice-lib", purl, license: "MIT OR Apache-2.0", intensive: "MIT" },
+          ],
+        },
+      ],
+      policy,
+    );
+
+    assertClassificationOutcome(
+      scoped,
+      verdicts,
+      purl,
+      WORKSPACE,
+      slug,
+      "app",
+      "fail",
+      "clarify:invalid[0]",
+    );
+    assertClassification(
+      findVerdict(verdicts, purl, WORKSPACE)?.reason.includes("contradictory-claims-recorded") ===
+        true,
+      slug,
+      "the failure names the values the entry can legally move to",
+    );
+    assertPlacement(
+      section(doc, "## Problematic licenses").includes("choice-lib"),
+      slug,
+      "a clarify entry the current signal disproves is a fail verdict, so it rows in Problematic licenses",
+    );
+    assertPlacement(
+      section(doc, "## Problematic licenses").includes("Apache-2.0"),
+      slug,
+      "the recorded detections still hold, so the entry's expression was applied and is what the row shows",
+    );
+    assertPlacement(
+      appTableOnly(doc, "## Production dependencies").includes("choice-lib"),
+      slug,
+      "the package keeps its inventory row in Production dependencies",
     );
   },
 };

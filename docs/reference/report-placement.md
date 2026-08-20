@@ -82,7 +82,7 @@ page states only where a package lands.
   `[[compatible]]` keeps a package out of the flagged rows for every
   ecosystem and scope, because an accepted occurrence never reaches the
   copyleft lane at all
-  ([dependency-classification.md](./dependency-classification.md), tier 4
+  ([dependency-classification.md](./dependency-classification.md), tier 5
   decides first); the accepted-notice mechanism above exists only for the two
   cases that would otherwise fail (or go silently `ok`) unconditionally, the
   container-system AGPL escalation and its network=false-demoted sibling.
@@ -240,3 +240,4 @@ by the same suite (`test/reportPlacement.test.ts`).
 | `target-os-agpl-network-false-ignored-notice` | apk AGPL-3.0-only, project target `network = false`, `os_dependencies = "ignore"` | accepted-AGPL notice in Copyleft and special notices; not Problematic |
 | `target-held-survives-purl-fail` | one purl, two workspace occurrences: one fails (project MIT/external target), the other holds (a `[[target.workspace]]` MIT/internal override) | Problematic licenses (workspace A's fail) + Target compatibility (held-for-internal-use list, workspace B's hold - never dropped by the Problematic dedup, which applies to the flagged table only) + Production dependencies (app table) |
 | `voided-compatible` | a `[[compatible]]` package entry judged under one introducer, in a workspace where a package it accepts also arrives through another | Problematic licenses, one row per package the entry governs there, each naming the chain that voided it; every one keeps its Production dependencies (app table) row |
+| `invalid-justification` | npm workspace package whose `[[clarify]]` entry records a choice of licences the in-depth scan never joined | Problematic licenses + Production dependencies (app table); the entry's expression still stands, so the recorded licence is what both rows show |

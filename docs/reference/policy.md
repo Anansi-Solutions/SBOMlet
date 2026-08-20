@@ -229,18 +229,32 @@ so the disagreement stays open and the gate keeps asking.
 The tool can only check a claim it understands, so the reason is chosen from a
 fixed list. `comment` carries anything the list cannot.
 
-| Value | Meaning |
-|-------|---------|
-| `contradictory-claims-recorded` | The sources disagree irreconcilably and the expression is the reading you stand behind. The sanctioned fallback. |
-| `declared-more-complete` | The package's own metadata names licences the scan cannot see. |
-| `dual-license-choice` | The package offers a choice of licences and the entry records the one taken. |
-| `license-not-found` | No source states a licence; the expression comes from evidence outside detection. |
-| `scan-found-additional-content` | The in-depth scan sees further licences that do govern content the package ships. |
-| `scan-more-precise` | The in-depth scan resolves an under-specified declared label to the exact licence. |
-| `scan-overdetection` | The in-depth scan reports licences from files that do not govern the package. |
+| Value | Meaning | Proven invalid when |
+|-------|---------|---------------------|
+| `contradictory-claims-recorded` | The sources disagree irreconcilably and the expression is the reading you stand behind. The sanctioned fallback. | never — it becomes unnecessary instead, below |
+| `declared-more-complete` | The package's own metadata names licences the scan cannot see. | the declared claim no longer names part of the expression |
+| `dual-license-choice` | The package offers a choice of licences and the entry records the one taken. | the scan's licences are not the recorded choice — nothing was joined — or the declared claim offers none of them |
+| `license-not-found` | No source states a licence; the expression comes from evidence outside detection. | either source now states a licence |
+| `scan-found-additional-content` | The in-depth scan sees further licences that do govern content the package ships. | the expression no longer accounts for what the scan reads |
+| `scan-more-precise` | The in-depth scan resolves an under-specified declared label to the exact licence. | the expression no longer accounts for what the scan reads |
+| `scan-overdetection` | The in-depth scan reports licences from files that do not govern the package. | never — it becomes unnecessary instead, below |
 
 Wherever a verdict cites the entry, its reason is the justification value, and
 the comment after an em-dash when one is present.
+
+The invalidity check runs only once `detected` still holds: staleness is the
+earlier and more urgent question, and an entry that fails it never reaches this
+one. An entry the evidence disproves fails the gate as `clarify:invalid[i]`,
+and the failure names where the entry can legally go instead — the
+justification the evidence now supports, `contradictory-claims-recorded` when
+the sources genuinely disagree, or a `[[compatible]]` entry with rationale
+`license-reviewed` when the licence is simply accepted.
+
+Two values are undone by their own success rather than by contrary evidence.
+`scan-overdetection` has nothing left to drop once the scan stops reporting
+licences outside the expression, and `contradictory-claims-recorded` has
+nothing left to record once the two sources read the same licences. Neither
+fails the gate: the entry has become unnecessary, not wrong.
 
 The tool also ships its own curated clarifications for commonly-ambiguous
 projects, applied without your re-authoring them, and preconditioned the same

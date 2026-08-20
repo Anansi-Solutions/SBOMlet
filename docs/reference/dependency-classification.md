@@ -78,14 +78,23 @@ highest to lowest:
    can license a denied finding back in.
 2. **A stale override** — an override's precondition no longer matches what's
    observed: fail.
-3. **An assessment conflict** — fail, via one of two independent triggers for
+3. **An invalid justification** — a `[[clarify]]` entry whose recorded
+   detections all still hold, but whose stated reason the current signal
+   disproves: fail, `clarify:invalid[i]`. The remedy is a different one from
+   the tier above — the detection record is right and the reason for
+   preferring the entry's expression is not, so the entry is re-filed rather
+   than re-recorded. Each value of the closed justification set asserts
+   something checkable about the two lanes; the per-value conditions are in
+   [policy.md](./policy.md). A value whose subject has simply gone away
+   leaves the entry unnecessary rather than wrong, and never fails the gate.
+4. **An assessment conflict** — fail, via one of two independent triggers for
    the assessment-conflicts surface, either one independent of everything that
    follows: the in-depth scan disagreeing with the declared/registry quick
    check, or two-or-more docker occurrences of the same purl declaring
    different license claims (a cross-image divergence, detected at merge
    time, claim-SET comparison so listing the same claims in a different order
    is never a divergence).
-4. **A `[[compatible]]` package or license rule** — ok. (`[[clarify]]` isn't a
+5. **A `[[compatible]]` package or license rule** — ok. (`[[clarify]]` isn't a
    tier of its own here: it rewrites the finding *before* this precedence walk
    runs, so a clarified package falls through the same lanes as any other
    finding. One that clears every lane below cites `clarify[i]` at the
@@ -104,16 +113,16 @@ highest to lowest:
    no chain exists to check, so `self` is the only value allowed there and it
    accepts every occurrence the entry's `where` reaches
    (`docs/reference/policy.md`).
-5. **The target-compatibility lane** — entered only when a target profile
+6. **The target-compatibility lane** — entered only when a target profile
    governs this occurrence *and* the finding has a parseable, non-imprecise
    expression. The tree below.
-6. **The copyleft lane** — entered only when the elected SPDX branch is
+7. **The copyleft lane** — entered only when the elected SPDX branch is
    copyleft. The tree below.
-7. **The imprecise-family lane** — entered when the finding names only a
+8. **The imprecise-family lane** — entered when the finding names only a
    family, with no elected expression.
-8. **The unknown lane** — entered when the finding has no expression and isn't
+9. **The unknown lane** — entered when the finding has no expression and isn't
    imprecise: follows `[unknown]` handling (`warn` or `fail`).
-9. **Default: ok.**
+10. **Default: ok.**
 
 ### The target-compatibility lane
 
@@ -183,7 +192,7 @@ still never governs `os`-scope packages.
   profile declares `network = false` (the reconciliation above), which
   demotes it to the routine would-be `default:copyleft` fail instead. The
   practical accept path for the undemoted escalation is a `[[compatible]]`
-  rule (tier 4 above — it never even reaches this lane); that acceptance is
+  rule (tier 5 above — it never even reaches this lane); that acceptance is
   recorded and surfaced by the output layer — see
   [report-placement.md](./report-placement.md) for the markdown report's
   accepted-AGPL notice, which a network=false-demoted row landing `ok` (via
@@ -304,3 +313,4 @@ tables are about slug coverage, not about every classification being unique.
 | `target-os-agpl-network-false-ignored-notice` | apk AGPL-3.0-only, project target `network = false`, `os_dependencies = "ignore"` | `os · ok · default:copyleft` |
 | `target-held-survives-purl-fail` | one purl, two workspace occurrences: one fails (project MIT/external target), the other holds (a `[[target.workspace]]` MIT/internal override) | `app · fail · target:incompatible` (workspace A) and `app · ok · target:internal-use` (workspace B) |
 | `voided-compatible` | a `[[compatible]]` package entry judged under one introducer, in a workspace where a package it accepts also arrives through another | `app · fail · compatible:voided[0]` — for every package the entry governs there, not only the one that arrives around it |
+| `invalid-justification` | npm workspace package whose `[[clarify]]` entry records a choice of licences the in-depth scan never joined | `app · fail · clarify:invalid[0]` |

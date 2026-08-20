@@ -57,7 +57,9 @@
  *      - its content is unknowable to the tool; otherwise ok (default:ok).
  *   Clarify sits above all of these by having already replaced the finding in annotateFindings; a
  *   clarified package whose verdict falls through to
- *   default:ok cites clarify[i] instead, so usage stays visible.
+ *   default:ok cites clarify[i] instead, so usage stays visible. An entry whose recorded detections
+ *   still hold but whose stated justification the current signal disproves fails as
+ *   clarify:invalid[i], directly below the stale lane and above everything numbered here.
  *
  * Every verdict-affecting match is exact-ID or satisfies-based - package rules compare name/version
  * by string equality, license rules go through spdx-satisfies on validated allowlists (never
@@ -89,6 +91,7 @@ import {
   renderNode,
   type ExpressionNode,
 } from "../normalize/expression";
+import { observedSignalBySource } from "../normalize/normalize";
 import { BUILTIN_DENY_RULE_ID } from "./builtinDenylist";
 import {
   classifyExpression,
@@ -109,6 +112,7 @@ import {
 import { AGPL_IDS, COPYLEFT_FAMILY } from "./copyleft";
 import { COULD_BE_COPYLEFT_FAMILIES, WORKSPACE_ABSORBS } from "./copyleftFamily";
 import { denyRuleFor, type IndexedDenyRule } from "./denylist";
+import { justificationValidity, type JustificationValidity } from "./justificationValidity";
 import { voidedCompatibleEntries, voidedEntryKey, type VoidedEntry } from "./chain";
 import { matchesPackage, scopeCoversTarget } from "./packageMatch";
 import { resolveTargetProfile } from "./target";
@@ -545,6 +549,66 @@ function staleVerdict(
       `STALE override on "${entry.name}@${entry.version}": ${staleDivergence(s)} — the ` +
       `disambiguation was NOT applied (a stale override could mask a ` +
       `relicense). Update or remove the ${s.level} override.`,
+  };
+}
+
+/** The [[clarify]] entry governing a package, and whether its stated reason still holds. */
+interface ClarifyDecision {
+  readonly index: number;
+  readonly validity: JustificationValidity;
+}
+
+/**
+ * What the entry governing this package says of itself against the signal seen now, or undefined
+ * when no [[clarify]] entry governs it. The signal is re-partitioned from the package's own claims,
+ * so it is the same view the recorded detections were weighed against.
+ */
+function clarifyDecision(entry: PackageEntry, policy: Policy): ClarifyDecision | undefined {
+  const finding = entry.finding;
+
+  if (finding === undefined) {
+    return undefined;
+  }
+
+  const index = clarifyIndexFor(entry, policy);
+  const rule = policy.clarify[index];
+
+  if (rule === undefined) {
+    return undefined;
+  }
+
+  return {
+    index,
+    validity: justificationValidity(rule, observedSignalBySource(entry.licenseClaims, finding)),
+  };
+}
+
+/**
+ * An entry whose recorded detections all still hold, but whose stated reason the current signal
+ * disproves, fails directly below the stale lane. The expression WAS applied - the detection record
+ * is right and only the reason for preferring the expression is not - so the remedy is to re-file
+ * the entry, and the reason names the values it can move to.
+ */
+function invalidJustificationVerdict(
+  base: { purl: string; occurrenceTarget: string },
+  entry: PackageEntry,
+  decided: ClarifyDecision | undefined,
+): Verdict | undefined {
+  if (decided === undefined) {
+    return undefined;
+  }
+
+  const validity = decided.validity;
+
+  if (validity.outcome !== "invalid") {
+    return undefined;
+  }
+
+  return {
+    ...base,
+    status: "fail",
+    rule: `clarify:invalid[${decided.index}]`,
+    reason: `INVALID justification on "${entry.name}@${entry.version}": ${validity.reason}`,
   };
 }
 
@@ -1278,6 +1342,7 @@ function verdictFor(
   packageRule: JudgedPackageRule | undefined,
   licenseRule: IndexedRule<CompatibleLicenseRule> | undefined,
   denyRule: IndexedDenyRule | undefined,
+  clarifyDecided: ClarifyDecision | undefined,
   policy: Policy,
 ): Verdict {
   const target = occurrence.target;
@@ -1294,6 +1359,14 @@ function verdictFor(
 
   if (stale !== undefined) {
     return staleVerdict(base, entry, stale);
+  }
+
+  // Directly below stale, and never reached by an entry that failed it: the recorded detections
+  // hold, and what the entry concluded from them no longer does.
+  const disproved = invalidJustificationVerdict(base, entry, clarifyDecided);
+
+  if (disproved !== undefined) {
+    return disproved;
   }
 
   // conflict:scancode sits directly below stale and above compatible - a fail, not a warn, because
@@ -1397,6 +1470,8 @@ export function evaluate(
     // (passed null here) is inert per observed expression - it already matched via entry.name
     // above.
     const denyRule = firstDeny(policy, entry, assessment.expression);
+    // Decided once per package: the clarify entry governing it is the same at every occurrence.
+    const clarifyDecided = clarifyDecision(entry, policy);
 
     for (const occurrence of entry.occurrences) {
       // Compatible matches are per occurrence: an unscoped rule accepts the package at every
@@ -1415,7 +1490,16 @@ export function evaluate(
           : undefined;
 
       verdicts.push(
-        verdictFor(entry, occurrence, assessment, packageRule, licenseRule, denyRule, policy),
+        verdictFor(
+          entry,
+          occurrence,
+          assessment,
+          packageRule,
+          licenseRule,
+          denyRule,
+          clarifyDecided,
+          policy,
+        ),
       );
     }
   }
@@ -1575,9 +1659,57 @@ export function unusedRuleIds(
     }
   });
   policy.clarify.forEach((_, index) => {
-    if (!usedClarifyIndices.has(index)) {
+    // An entry the signal disproved decided every occurrence it governs - as a failure. Reporting
+    // it "unused" beside those failures would contradict them.
+    if (!usedClarifyIndices.has(index) && !cited.has(`clarify:invalid[${index}]`)) {
       unused.push(`clarify[${index}]`);
     }
   });
   return unused;
+}
+
+/** A [[clarify]] entry the current signal has left with nothing to correct. */
+export interface UnnecessaryClarifyEntry {
+  /** The entry's citation id, as every other surface spells it. */
+  readonly rule: string;
+  /** Which of the entry's own assertions has become moot, in the words the maintainer reads. */
+  readonly reason: string;
+}
+
+/**
+ * The entries a maintainer can drop: those whose justification was true and whose subject has since
+ * gone away - a scan that stopped over-reporting, two sources that came to agree.
+ *
+ * Never a verdict and never printed. An entry is reported only when EVERY package it governs says
+ * the same thing, so one package still needing it - or one where the recorded detection itself
+ * diverged - keeps it. Sorted by entry position for a stable answer.
+ */
+export function unnecessaryClarifyEntries(
+  model: CanonicalDependencies,
+  policy: Policy,
+): UnnecessaryClarifyEntry[] {
+  const moot = new Map<number, string>();
+  const needed = new Set<number>();
+
+  for (const entry of model.packages) {
+    const decided = clarifyDecision(entry, policy);
+
+    if (decided === undefined) {
+      continue;
+    }
+
+    const stillDoingSomething =
+      entry.finding?.staleOverride !== undefined || decided.validity.outcome !== "unnecessary";
+
+    if (stillDoingSomething) {
+      needed.add(decided.index);
+    } else if (!moot.has(decided.index)) {
+      moot.set(decided.index, decided.validity.reason);
+    }
+  }
+
+  return [...moot]
+    .filter(([index]) => !needed.has(index))
+    .sort(([a], [b]) => a - b)
+    .map(([index, reason]) => ({ rule: `clarify[${index}]`, reason }));
 }
