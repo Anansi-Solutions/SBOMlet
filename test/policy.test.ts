@@ -297,6 +297,29 @@ describe("parsePolicy — compatible `where` scope", () => {
     }
   });
 
+  test('the everywhere token "/" parses on both forms', () => {
+    for (const fixture of [scopedLicenseFixture, scopedPackageFixture]) {
+      const policy = parsePolicy(fixture('["/"]'));
+
+      expect(policy.compatible[0]).toMatchObject({ where: ["/"] });
+    }
+  });
+
+  test("the everywhere token is legal alongside ordinary prefixes", () => {
+    const policy = parsePolicy(scopedPackageFixture(JSON.stringify(["/", "src"])));
+
+    expect(policy.compatible[0]).toMatchObject({ where: ["/", "src"] });
+  });
+
+  test('only the exact string "/" is special: other slash forms still reject', () => {
+    for (const bad of ["/src", "src/", "//"]) {
+      const error = expectPolicyError(scopedPackageFixture(JSON.stringify([bad])));
+
+      expect(error.message).toContain("compatible[0].where[0]");
+      expect(error.message).toContain("leading or trailing slash");
+    }
+  });
+
   test("an unknown key alongside where still rejects naming the key", () => {
     const error = expectPolicyError(
       scopedLicenseFixture(JSON.stringify([DOCKER_ID])) + '\nbogus = "x"',
@@ -2307,6 +2330,33 @@ describe("evaluate — where-scoped compatible matching", () => {
       ["proj", "ok", "compatible[0]"],
       ["backend", "ok", "compatible[1]"],
       ["proj", "ok", "compatible[1]"],
+    ]);
+  });
+
+  test('the everywhere token "/" decides at every occurrence identity (both forms)', () => {
+    for (const policyText of [scopedBusyboxPolicy(["/"]), scopedGplPolicy(["/"])]) {
+      const { verdicts } = runEngine(
+        [busyboxAt([TARGET_A, TARGET_B, TARGET_A_PREFIX])],
+        policyText,
+      );
+
+      expect(verdicts.map((v) => [v.status, v.rule])).toEqual([
+        ["ok", "compatible[0]"],
+        ["ok", "compatible[0]"],
+        ["ok", "compatible[0]"],
+      ]);
+    }
+  });
+
+  test("the everywhere token beside a narrower prefix still covers every occurrence", () => {
+    const { verdicts } = runEngine(
+      [busyboxAt([TARGET_A, TARGET_B])],
+      scopedBusyboxPolicy([TARGET_A, "/"]),
+    );
+
+    expect(verdicts.map((v) => [v.occurrenceTarget, v.status, v.rule])).toEqual([
+      [TARGET_A, "ok", "compatible[0]"],
+      [TARGET_B, "ok", "compatible[0]"],
     ]);
   });
 

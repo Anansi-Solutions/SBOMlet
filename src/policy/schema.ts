@@ -718,12 +718,21 @@ function validateSuppressions(
 }
 
 /**
+ * The reserved `where` element that scopes an entry to every occurrence. No target identity can be
+ * "/" - a leading or trailing slash is rejected wherever a path is validated - so the token is
+ * unambiguous, and a deliberately repository-wide entry stays expressible without dropping the
+ * scope key.
+ */
+export const EVERYWHERE_SCOPE = "/";
+
+/**
  * Optional `where` scope on a [[compatible]] entry: a non-empty array of occurrence-identity
  * prefixes, each validated exactly like a suppression path (the evaluator applies the same
  * segment-aware prefix comparison to both). An EMPTY array is rejected - a rule that could never
  * match anywhere is a dead rule by construction, the same posture as validatePath's
- * could-never-match segments. `context` is the error-context string (conventionally named `where`
- * elsewhere in this file - renamed here because `where` is the TOML key under validation).
+ * could-never-match segments. One element may be the everywhere token {@link EVERYWHERE_SCOPE}
+ * in place of a path. `context` is the error-context string (conventionally named `where` elsewhere
+ * in this file - renamed here because `where` is the TOML key under validation).
  */
 function validateWhere(
   entry: Record<string, unknown>,
@@ -754,7 +763,10 @@ function validateWhere(
       return;
     }
 
-    validatePath(text, `${context}.where[${index}]`, problems);
+    if (text !== EVERYWHERE_SCOPE) {
+      validatePath(text, `${context}.where[${index}]`, problems);
+    }
+
     scope.push(text);
   });
   if (problems.length !== before) {

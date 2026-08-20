@@ -109,12 +109,13 @@ import { AGPL_IDS, COPYLEFT_FAMILY } from "./copyleft";
 import { COULD_BE_COPYLEFT_FAMILIES, WORKSPACE_ABSORBS } from "./copyleftFamily";
 import { denyRuleFor, type IndexedDenyRule } from "./denylist";
 import { resolveTargetProfile } from "./target";
-import type {
-  CompatibleLicenseRule,
-  CompatiblePackageRule,
-  CompatibleRule,
-  Policy,
-  SuppressedWorkspace,
+import {
+  EVERYWHERE_SCOPE,
+  type CompatibleLicenseRule,
+  type CompatiblePackageRule,
+  type CompatibleRule,
+  type Policy,
+  type SuppressedWorkspace,
 } from "./schema";
 
 /** Per-package facts computed once before the per-occurrence walk. */
@@ -201,11 +202,14 @@ interface IndexedRule<T> {
 }
 
 /**
- * A compatible rule applies at a target iff it is unscoped or some `where` entry covers the target
- * as an identity prefix.
+ * A compatible rule applies at a target iff it is unscoped, or some `where` entry is the everywhere
+ * token, or some `where` entry covers the target as an identity prefix.
  */
 function appliesAt(rule: CompatibleRule, target: string): boolean {
-  return rule.where === undefined || rule.where.some((path) => matchesIdentityPrefix(target, path));
+  return (
+    rule.where === undefined ||
+    rule.where.some((path) => path === EVERYWHERE_SCOPE || matchesIdentityPrefix(target, path))
+  );
 }
 
 /**
