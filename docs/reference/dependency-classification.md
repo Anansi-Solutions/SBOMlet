@@ -259,7 +259,7 @@ surfacing it on the finding).
 
 ## Path index (verified end to end)
 
-The same 49 paths as
+The same 50 paths as
 [report-placement.md](./report-placement.md#path-index-verified-end-to-end),
 one row each, stating the Stage-1/Stage-2 outcome (scope, verdict status,
 rule) instead of the markdown destination — the two tables share one slug

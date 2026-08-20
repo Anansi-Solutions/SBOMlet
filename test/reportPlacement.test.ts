@@ -2656,6 +2656,31 @@ describe("dependency classification and report placement — Path index structur
     );
   });
 
+  test("both Path index intros state the number of rows the suite carries", () => {
+    const stated = (doc: string, docLabel: string): number => {
+      const match = /^The same (\d+) paths as\s*$/m.exec(doc);
+
+      if (match?.[1] === undefined) {
+        throw new Error(`${docLabel} is missing its "The same N paths as" Path index intro`);
+      }
+
+      return Number(match[1]);
+    };
+    const expectation = `the intro must state ${PLACEMENT_PATHS.length} paths, the number of rows PLACEMENT_PATHS carries`;
+
+    assertStructural(
+      stated(readDependencyClassificationDoc(), "dependency-classification.md") ===
+        PLACEMENT_PATHS.length,
+      "dependency-classification.md's Path index intro vs the suite",
+      expectation,
+    );
+    assertStructural(
+      stated(readReportPlacementDoc(), "report-placement.md") === PLACEMENT_PATHS.length,
+      "report-placement.md's Path index intro vs the suite",
+      expectation,
+    );
+  });
+
   test("dependency-classification.md and report-placement.md carry the same slug set", () => {
     const classificationIds = parseDocPathIndexIds(
       readDependencyClassificationDoc(),

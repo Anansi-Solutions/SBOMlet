@@ -183,7 +183,7 @@ helpers).
 
 ## Path index (verified end to end)
 
-The same 49 paths as
+The same 50 paths as
 [dependency-classification.md](./dependency-classification.md#path-index-verified-end-to-end),
 one row each, stating where the package lands in the markdown report instead
 of its Stage-1/Stage-2 outcome — the two tables share one slug set, verified
