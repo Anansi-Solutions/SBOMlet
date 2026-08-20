@@ -746,7 +746,7 @@ function withStaleOverride(base: LicenseFinding, stale: StaleOverride): LicenseF
 }
 
 /** The lanes an override records, checked in this order so a reported divergence is stable. */
-const DETECTED_LANES = ["registry", "intensive"] as const;
+export const DETECTED_LANES = ["registry", "intensive"] as const;
 
 /** The recorded detections, for the guard that sweeps everything the entry did NOT write down. */
 function recordedValues(detected: DetectedSignal): string[] {
