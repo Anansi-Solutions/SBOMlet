@@ -64,7 +64,7 @@ collectors produce these; the merge consumes them.
 | `firstPartyNames?` | `ReadonlySet<string>`                         | First-party workspace and portal member names from the target's own lockfile. Used to drop first-party members from the inventory, but only paired with a second signal (see below).            |
 | `scope?`           | `ScopeTaxonomy`                               | The scope of every component this input contributes. Absent defaults to `"app"`; the Docker-OS input sets `"os"`.                                                                               |
 | `derivesDependencyGraph?` | `boolean`                              | Did the lane that produced this input reconstruct a root-anchored [dependency graph](../glossary.md#dependency-graph)? Declared by the collector registration, never inferred from the data.     |
-| `introductions?`   | `ReadonlyMap<string, DependencyIntroduction>` | Per-purl dependency provenance for this target, keyed by purl. Present for the npm/yarn and python lanes; absent for sources that carry no dependency graph.                                     |
+| `introductions?`   | `ReadonlyMap<string, DependencyIntroduction>` | Per-purl dependency provenance for this target, keyed by purl. Present for the Yarn-4 plugin lane and the poetry lane; absent for every source that reports a flat list, npm included.          |
 
 The wrapper exists because the dev/prod signal, the scope, and the provenance are
 per-target facts that the CycloneDX document either does not carry or carries

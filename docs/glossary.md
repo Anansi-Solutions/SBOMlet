@@ -56,12 +56,14 @@ flags copyleft dependencies because they carry an obligation when you distribute
 
 ### dependency graph
 
-The per-[target](#target) record of which package pulls in which. Only the
-collector lanes that can reconstruct one do: the npm/Yarn lane and the Python
-(poetry) lane. Every other source — Terraform, the committed Docker image SBOM,
-bun — reports a flat list, so those targets carry no
-[introduction path](#introduction-path) to check. Which lane collected the
-target decides this, not whether its data happens to carry edges.
+The per-[target](#target) record of which package pulls in which. Two lanes
+reconstruct one: the Yarn lane, and only where the lockfile is Yarn 4 or later
+— an earlier, empty, or unreadable one falls back to the flat generator — and
+the Python (poetry) lane. Every other source, npm and bun and Terraform and the
+committed Docker image SBOM alike, reports a flat list, so those targets carry
+no [introduction path](#introduction-path) to check. The collector registration
+decides this, from the lockfile it is about to read, never from whether the
+document it gets back happens to carry edges.
 
 ### dependency provenance
 

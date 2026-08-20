@@ -74,12 +74,12 @@ export interface CollectedSbom {
    */
   scope?: ScopeTaxonomy;
   /**
-   * Per-purl dependency provenance for this target, keyed by purl. When present (the npm/yarn and
-   * python lanes), each component's occurrence gets the matching introduction; a purl absent from
-   * the map gets none (the honest residual). Absent entirely for graph-less sources (terraform /
-   * Docker OS / bun) - every occurrence then carries no introduction and goldens stay
-   * byte-identical. Introduction is per-target, so it is attached at occurrence creation and rides
-   * through the merge unchanged (no cross-purl reconciliation).
+   * Per-purl dependency provenance for this target, keyed by purl. When present (the Yarn-4 plugin
+   * lane and the poetry lane), each component's occurrence gets the matching introduction; a purl
+   * absent from the map gets none (the honest residual). Absent entirely for the sources that
+   * report a flat list (npm, bun, terraform, Docker OS) - every occurrence then carries no
+   * introduction and goldens stay byte-identical. Introduction is per-target, so it is attached at
+   * occurrence creation and rides through the merge unchanged (no cross-purl reconciliation).
    */
   introductions?: ReadonlyMap<string, DependencyIntroduction>;
 }
