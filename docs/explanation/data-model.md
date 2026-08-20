@@ -218,7 +218,7 @@ run; without `--policy` the field is absent.
 | `confidence`           | `FindingConfidence`  | `"exact" \| "corrected" \| "none" \| "imprecise"` — see below.                                                                                                                      |
 | `impreciseFamily?`     | `string`             | The faithful ambiguous family label (`"BSD"`, `"Apache"`, `"GPL"`). Present only when `confidence` is `"imprecise"`.                                                                |
 | `overrideRule?`        | `string`             | The citation for a tool-level builtin override that decided this finding, such as `"override:builtin[3]"`. A project `[[clarify]]` keeps its own `clarify[i]` citation, so this is absent for those. |
-| `staleOverride?`       | `StaleOverride`      | Set when an override's `expects` precondition no longer matches the observed signal. The override is not applied, and the engine fails the gate loudly.                              |
+| `staleOverride?`       | `StaleOverride`      | Set when a source no longer reports what an override recorded for it. The override is not applied, and the engine fails the gate loudly.                                             |
 | `observedExpression?`  | `string`             | The pre-override observed expression, set when an override rewrote `expression`. The deny terminal reads it so a denied observed license can never be licensed back in.              |
 | `observedExpressions?` | `readonly string[]`  | The set of every observed per-claim precise expression, deduped and sorted. The deny terminal also reads this so a denied member is seen even when combination elected an imprecise family or collapsed to unknown. |
 | `conflict?`            | `AssessmentConflict` | Set when the in-depth ScanCode assessment disagrees with a quick-check claim. Carries the assessed expression and the disagreeing members, and drives a `conflict:scancode` fail. Absent when no ScanCode claim exists or the assessment agrees. |
@@ -278,16 +278,20 @@ so deny stays terminal.
 ```ts
 interface StaleOverride {
   level: "clarify" | "builtin"; // which override carried the precondition
-  expected: string; // the value the override expected to still see
-  observed: ReadonlyArray<string>; // the now-observed signal members
+  source: "registry" | "intensive" | "observed"; // where the divergence was found
+  expected?: string | false; // what the override recorded there; false recorded "nothing"
+  observed: ReadonlyArray<string>; // what that lane reports now
+  unaccounted?: string; // a reported licence the expression does not account for
 }
 ```
 
-An override, a project `[[clarify]]` or a shipped builtin, may carry an `expects`
-precondition. When the package's pre-override observed signal no longer matches
-`expects`, the asserted expression is not applied, and the engine emits a `fail`
-naming the package, the expected value, and the now-observed value. A stale
-override must never silently mask a relicense.
+Every override, a project `[[clarify]]` or a shipped builtin, records what each
+source reported when it was written. When a source no longer reports it, the
+asserted expression is not applied, and the engine emits a `fail` naming the
+package, the source, the recorded value, and what that source reports now. The
+same happens when a source reports a licence the asserted expression does not
+account for, which `unaccounted` carries instead of `expected`. A stale override
+must never silently mask a relicense.
 
 ### `AssessmentConflict`
 

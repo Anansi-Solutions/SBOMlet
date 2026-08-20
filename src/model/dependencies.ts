@@ -82,11 +82,11 @@ export interface LicenseFinding {
    */
   overrideRule?: string;
   /**
-   * A STALE override: an override (project clarify or tool-level builtin) carried an `expects`
-   * precondition that NO LONGER matches the package's pre-override observed signal. The asserted
-   * expression is NOT applied (this finding keeps its un-overridden value); instead the engine
-   * emits a loud fail verdict naming the package, the expected value, and the now-observed value
-   * - a stale override must never silently mask a relicense.
+   * A STALE override: an override (project clarify or tool-level builtin) recorded a detection that
+   * its source NO LONGER reports. The asserted expression is NOT applied (this finding keeps its
+   * un-overridden value); instead the engine emits a loud fail verdict naming the package, the
+   * source, the recorded value, and what that source reports now - a stale override must never
+   * silently mask a relicense.
    */
   staleOverride?: StaleOverride;
   /**
@@ -143,10 +143,16 @@ export interface LicenseFinding {
 export interface StaleOverride {
   /** "clarify" (project) or "builtin" (shipped tool-level) - for the message. */
   level: "clarify" | "builtin";
-  /** The value the override expected to still observe. */
-  expected: string;
-  /** The package's now-observed signal members (the relicensed values). */
+  /** Where the divergence was found: one producing lane, or the observed signal as a whole. */
+  source: "registry" | "intensive" | "observed";
+  /** What the override recorded for that lane; `false` recorded that the lane detects nothing. */
+  expected?: string | false;
+  /** What that lane reports now - the relicensed values; empty when it reports nothing. */
   observed: ReadonlyArray<string>;
+  /**
+   * A reported license the override's expression does not account for; set instead of `expected`.
+   */
+  unaccounted?: string;
 }
 
 /** A ScanCode-vs-quick-check disagreement surfaced to the policy engine. */

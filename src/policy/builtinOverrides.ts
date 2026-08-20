@@ -7,12 +7,12 @@
  * project-specific judgments live in the consuming repo's .sbomlet.policy.toml `[[clarify]]` table,
  * which WINS over this set on conflict (project-wins).
  *
- * Each entry is a PRECONDITIONED assertion, never a blind replacement. `expects` records the
- * dependency license value the override disambiguates FROM; at evaluation the engine applies the
- * asserted `expression` ONLY when the dependency's pre-override observed signal still matches
- * `expects` (see normalize.ts / evaluate.ts). A MISMATCH is a STALE override that FAILS the gate
- * loudly rather than silently masking a relicense - the staleness guard is the whole point of the
- * shipped set.
+ * Each entry is a PRECONDITIONED assertion, never a blind replacement. `detected` records what each
+ * producing lane reported for the dependency; at evaluation the engine applies the asserted
+ * `expression` ONLY while every recorded lane still reports it (see normalize.ts / evaluate.ts). A
+ * divergence is a STALE override that FAILS the gate loudly rather than silently masking a
+ * relicense - the staleness guard is the whole point of the shipped set. This is the same mechanism
+ * a consumer's own `[[clarify]]` entries run through, not a second one.
  *
  * The data is a literal, reviewable list - never computed at runtime and never read from disk
  * inside the pure engine (it is imported like other config; no eval, no fs). Mirrors the
@@ -27,6 +27,7 @@
  * to the Phase-6 dogfood .sbomlet.policy.toml - it is a project-specific call, not a general
  * well-known disambiguation, so it does NOT belong here.
  */
+import type { DetectedSignal } from "../normalize/normalize";
 
 /** One shipped tool-level disambiguation override. */
 export interface BuiltinOverride {
@@ -35,11 +36,11 @@ export interface BuiltinOverride {
   /** Reserved: an override never pins a version (kept for shape parity with clarify). */
   version?: string;
   /**
-   * The pre-override observed value this override disambiguates FROM. Matched (case-insensitive,
-   * trimmed) against the package's pre-override observed signal (normalized raw claim strings ∪ the
-   * impreciseFamily token); on mismatch the override is STALE and fails the gate.
+   * What each producing lane reported for the package when this override was written. Compared lane
+   * by lane against the package's pre-override observed signal; on a divergence the override is
+   * STALE and fails the gate.
    */
-  expects: string;
+  detected: DetectedSignal;
   /** The asserted precise SPDX expression (validated against spdx in tests). */
   expression: string;
   /** Mandatory documentation: why this disambiguation is correct. */
@@ -80,7 +81,7 @@ const JUPYTER_BSD_REASON =
 export const BUILTIN_OVERRIDES: ReadonlyArray<BuiltinOverride> = [
   {
     name: "python-dateutil",
-    expects: "Dual License",
+    detected: { registry: "Dual License" },
     expression: "Apache-2.0 OR BSD-3-Clause",
     reason:
       "python-dateutil is dual-licensed Apache-2.0 OR BSD-3-Clause; PyPI " +
@@ -89,7 +90,7 @@ export const BUILTIN_OVERRIDES: ReadonlyArray<BuiltinOverride> = [
   ...JUPYTER_BSD_PROJECTS.map(
     (name): BuiltinOverride => ({
       name,
-      expects: "BSD",
+      detected: { registry: "BSD" },
       expression: "BSD-3-Clause",
       reason: JUPYTER_BSD_REASON,
     }),

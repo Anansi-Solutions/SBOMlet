@@ -77,7 +77,7 @@ record it:
 A row here means the source only named a license family — `BSD`, `Apache` —
 with no clause, so the tool won't guess which precise SPDX id you mean. It's
 not a failure by itself, but it stays open until you resolve it. State the
-precise id with a `[[clarify]]` `expects` override, the same lane as Assessment
+precise id with a `[[clarify]]` entry, the same lane as Assessment
 conflicts:
 [Correct a wrongly-detected or imprecise licence](./writing-policy.md#correct-a-wrongly-detected-or-imprecise-licence).
 

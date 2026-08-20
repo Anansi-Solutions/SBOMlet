@@ -168,52 +168,109 @@ corrected value. Absent table: no clarifications.
 
 | Field | Type | Required | Meaning |
 |-------|------|----------|---------|
-| `package` | inline table `{ name, version? }` | yes | Which package. `name` is required; omit `version` to match all versions. |
+| `name` | string | exactly one of `name`/`pattern` | One package, by its exact display name. |
+| `pattern` | string (name glob) | exactly one of `name`/`pattern` | A family of packages by name — see [Name patterns](#name-patterns). |
+| `version` | string, or array of strings | no | The exact version, or versions, covered. Omit to cover all of them. |
+| `detected` | inline table | yes | What each source reported when you wrote the entry — see below. |
+| `justification` | string (closed set) | yes | Why your expression is preferred over what detection reports. |
 | `expression` | string (SPDX) | yes | The corrected SPDX expression, parsed at load time. |
-| `expects` | string | no | A staleness precondition — the pre-override value you're disambiguating *from*. |
-| `reason` | string (non-empty) | yes | Where the correction comes from. |
+| `evidence` | array of strings | no | Files or URLs a reader can check. Recorded verbatim; never fetched or verified. |
+| `comment` | string (non-empty) | no | What the justification cannot carry. |
 
-There are two kinds, distinguished by whether `expects` is present.
+### `detected` — the staleness precondition
 
-Without `expects`, the entry is a misdetection correction: `expression`
-replaces the finding unconditionally. Use it to fix garbage or missing upstream
-metadata, such as a package that declares `Public Domain` mapped to
-`Unlicense`.
+Every entry records what each source reported when it was written:
 
-With `expects`, the entry is a staleness-guarded disambiguation: the override
-applies only while the package's currently-observed licence still matches
-`expects`. If the observed value has moved on, such as a `BSD` → `BSD-3-Clause`
-override on a package now reporting `GPL-3.0`, the override is stale, and the
-gate fails naming the package, the expected value, and the observed one. A stale
-assertion is never applied, so an old override cannot silently mask a relicence.
+| Key | Meaning |
+|-----|---------|
+| `registry` | The quick answer: the package's own metadata, plus whatever registry enrichment resolved. Often not SPDX at all — `BSD`, `Dual License` — so record it exactly as reported. |
+| `intensive` | The in-depth source scan's answer. |
 
-**Compound claims.** The staleness check falls back to canonical claim-string equality
-— instead of the per-licence comparison above — when `expects` is itself a compound
-`AND`/`OR` expression (a registry declaring `(MIT AND CC-BY-3.0)`, say, or even a
-plain `(MIT OR Apache-2.0)`), or when `expression` contains an `AND` anywhere and so
-cannot be reduced to a set of OR-only branches. An `expression` that is OR-only —
-even multi-branch — still goes through the ordinary per-licence comparison as long
-as `expects` names a single licence.
+Both keys are optional and at least one is required. A key's value is that
+source's reported value, or `false` to record that the source reports
+**nothing**.
 
-In the fallback, `expects` must canonically equal one of the package's observed
-licence claims: both sides run through the same boolean-algebra canonicalization
-(flatten, dedupe, absorb, sort) that governs the ScanCode assessment and
-cross-image comparisons in
-[output-format.md](./output-format.md#assessment-conflicts), then a
-case-insensitive, whitespace-trimmed comparison — never re-derived or corrected
-beyond that. A registry re-spelling the same licence set, `MIT AND CC0-1.0` read
-back as `CC0-1.0 AND MIT`, canonicalizes to the same structure and never reopens
-the override. There is still no redundancy path for a compound override — a
-compound claim already names the exact multi-licence reading it was written
-against, so a real change to the licence SET, not merely its spelling, is
-staleness. This exists because the underlying SPDX-satisfies check that powers
-the simple case cannot take an `AND` expression as an allowlist entry (the same
-restriction the Validation section describes for `[[deny]]` and `[[compatible]]`
-patterns).
+The entry applies only while every source you recorded still reports what you
+wrote down. Comparison is case-insensitive, whitespace-trimmed, and blind to
+boolean-algebra re-spelling: a registry that reports `MIT AND CC0-1.0` one day
+and `CC0-1.0 AND MIT` the next has not changed anything, and neither reading
+reopens the entry. Anything else is staleness, and the gate fails naming the
+source, the recorded value, and the current one:
+
+- the source reports a different value — a relicence;
+- the source reports nothing where you recorded a value — the evidence has
+  disappeared, so the entry is unverifiable rather than vacuously satisfied;
+- the source reports something where you recorded `false`.
+
+A stale entry is never applied, so an old entry cannot silently mask a
+relicence. Staleness also covers a licence appearing *beside* what you
+recorded: if any source reports a precise licence your `expression` does not
+account for, the entry is stale even though everything you wrote down still
+holds. Without that, a lingering obsolete `BSD` label would license out a
+co-present new `GPL-3.0-only` claim.
+
+One entry stays valid through a divergence it did not intend to hide: when a
+source upgrades its own imprecise label to exactly the licence you asserted —
+`BSD` becoming `BSD-3-Clause` — the entry is redundant rather than stale, and
+the observed finding stands unchanged. That does not extend to a `false`
+record: you asserted that a source says nothing, and a source that has started
+speaking is new evidence to read, whether or not it happens to agree.
+
+A disagreement between the two sources — reported as an [assessment
+conflict](./output-format.md#assessment-conflicts) — is only settled by an
+entry that recorded the `intensive` source. That is the entry stating which
+side you stand behind; recording `registry` alone says nothing about the scan,
+so the disagreement stays open and the gate keeps asking.
+
+### `justification` — the closed set
+
+The tool can only check a claim it understands, so the reason is chosen from a
+fixed list. `comment` carries anything the list cannot.
+
+| Value | Meaning |
+|-------|---------|
+| `contradictory-claims-recorded` | The sources disagree irreconcilably and the expression is the reading you stand behind. The sanctioned fallback. |
+| `declared-more-complete` | The package's own metadata names licences the scan cannot see. |
+| `dual-license-choice` | The package offers a choice of licences and the entry records the one taken. |
+| `license-not-found` | No source states a licence; the expression comes from evidence outside detection. |
+| `scan-found-additional-content` | The in-depth scan sees further licences that do govern content the package ships. |
+| `scan-more-precise` | The in-depth scan resolves an under-specified declared label to the exact licence. |
+| `scan-overdetection` | The in-depth scan reports licences from files that do not govern the package. |
+
+Wherever a verdict cites the entry, its reason is the justification value, and
+the comment after an em-dash when one is present.
 
 The tool also ships its own curated clarifications for commonly-ambiguous
-projects, applied without your re-authoring them. When a project-level
-`[[clarify]]` names the same package, your entry takes precedence.
+projects, applied without your re-authoring them, and preconditioned the same
+way. When a project-level `[[clarify]]` names the same package, your entry
+takes precedence.
+
+### Migrating from the previous schema
+
+The keys below were replaced outright. An entry still carrying one is rejected
+with a message naming its replacement:
+
+| Removed | Replacement |
+|---------|-------------|
+| `package = { name, version }` | `name` (or `pattern`) and `version`, written directly on the entry. |
+| `expects` | `detected`, which records each source separately. |
+| `reason` | `justification`, plus `comment` for what it cannot carry. |
+
+### Name patterns
+
+`pattern` selects a family of packages by their display name:
+
+| Form | Covers |
+|------|--------|
+| `@scope/thing-*` | One name segment: `@scope/thing-a`, not `@scope/thing/a`. |
+| `@scope/**` | Any depth beneath the scope. |
+| `@scope/` | Shorthand for `@scope/**`. |
+
+Matching is case-sensitive and covers the whole name. A pattern must carry a
+wildcard — a pattern without one names a single package, so write `name`
+instead — and at least one literal character, so a pattern of wildcards alone
+cannot become a blanket rule. Versions have no wildcard anywhere in the schema:
+list them when several share a judgment.
 
 ## `[[compatible]]`
 

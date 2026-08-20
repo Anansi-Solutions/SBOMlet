@@ -69,6 +69,7 @@ const PLACEMENT_PATHS = [
   "denied-license-terminal",
   "system-package-in-dev-container-counts-dev",
   "conflict-scancode",
+  "detected-mismatch",
   "cross-image-claim-divergence",
   "target-ok-permissive",
   "target-incompatible-prod",
@@ -1515,6 +1516,55 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
       appTableOnly(doc, "## Production dependencies").includes("disputed-lib"),
       slug,
       "the package keeps its inventory row in Production dependencies (inventory is never dropped by a conflict)",
+    );
+  },
+
+  "detected-mismatch": () => {
+    const slug = "detected-mismatch";
+    const purl = "pkg:npm/moved-on-lib@1.0.0";
+    const policy = [
+      UNKNOWN_WARN,
+      "[[clarify]]",
+      'name = "moved-on-lib"',
+      'detected = { registry = "BSD" }',
+      'justification = "scan-more-precise"',
+      'expression = "BSD-3-Clause"',
+      "",
+    ].join("\n");
+    const { doc, verdicts, scoped } = buildScenario(
+      [
+        {
+          targetIdentity: WORKSPACE,
+          components: [{ name: "moved-on-lib", purl, license: "GPL-3.0-only" }],
+        },
+      ],
+      policy,
+    );
+
+    assertClassificationOutcome(
+      scoped,
+      verdicts,
+      purl,
+      WORKSPACE,
+      slug,
+      "app",
+      "fail",
+      "override:stale[clarify]",
+    );
+    assertPlacement(
+      section(doc, "## Problematic licenses").includes("moved-on-lib"),
+      slug,
+      "a clarify entry whose recorded detection no longer holds is a fail verdict, so it rows in Problematic licenses",
+    );
+    assertPlacement(
+      !section(doc, "## Problematic licenses").includes("BSD-3-Clause"),
+      slug,
+      "the stale expression is never applied, so the recorded license never reaches the report",
+    );
+    assertPlacement(
+      appTableOnly(doc, "## Production dependencies").includes("moved-on-lib"),
+      slug,
+      "the package keeps its inventory row in Production dependencies (inventory is never dropped by a stale entry)",
     );
   },
 

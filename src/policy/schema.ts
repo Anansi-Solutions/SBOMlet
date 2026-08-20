@@ -29,6 +29,10 @@ import { PolicyRoot, TOP_LEVEL_KEYS } from "../validate/policy";
 import { recordOf, stringOf } from "../validate/record";
 import { BUILTIN_DENY_RULES } from "./builtinDenylist";
 import { OSADL_MATRIX, type TargetLicense, type TargetProfile } from "./compat";
+import { JUSTIFICATION_VALUES, type Justification } from "./enums";
+import { compileNamePattern, isGlobPattern } from "./namePattern";
+
+import type { DetectedSignal } from "../normalize/normalize";
 import type { DenyRule } from "./denylist";
 
 export type { DenyRule } from "./denylist";
@@ -76,21 +80,27 @@ export interface CompatiblePackageRule {
 export type CompatibleRule = CompatibleLicenseRule | CompatiblePackageRule;
 
 export interface ClarifyRule {
-  name: string;
-  version?: string;
+  /** Exact display name; exactly one of `name` and `pattern` is present. */
+  name?: string;
+  /** Display-name pattern, in the dialect of {@link compileNamePattern}. */
+  pattern?: string;
+  /** The exact version, or exact versions, covered. Absent covers every version. */
+  version?: string | ReadonlyArray<string>;
   /**
-   * Optional staleness precondition: the pre-override observed license value this clarify
-   * disambiguates FROM. When present, the engine applies the `expression` ONLY if the dependency's
-   * currently-observed signal still matches `expects` - a mismatch is a STALE override that fails
-   * the gate loudly (it must never silently mask a relicense). OPTIONAL for backward compatibility:
-   * the existing Phase-3 misdetection-correction clarify (e.g.
-   * jsonify → Unlicense) keeps working WITHOUT it, applying blindly as before;
-   * `expects` is the precondition for the new staleness-guarded disambiguation.
+   * The staleness precondition: what each producing lane reported when the entry was written. The
+   * engine applies the `expression` only while every recorded lane still reports what is written
+   * here - a divergence is a STALE entry that fails the gate loudly, so a relicense can never be
+   * silently masked.
    */
-  expects?: string;
+  detected: DetectedSignal;
+  /** Why the recorded expression is preferred over what detection reports. */
+  justification: Justification;
   /** A valid SPDX expression - parsed eagerly here. */
   expression: string;
-  reason: string;
+  /** Files or URLs a reader can check; recorded verbatim, never fetched or verified. */
+  evidence?: ReadonlyArray<string>;
+  /** Free prose, for what the justification alone cannot carry. */
+  comment?: string;
 }
 
 /**
@@ -273,6 +283,15 @@ export interface Policy {
   target?: TargetConfig;
 }
 
+/**
+ * The reason an entry surfaces wherever a verdict cites it: the closed-set value it chose, and the
+ * comment appended after an em-dash when it carries one. One derivation for every entry kind, so a
+ * rendered reason reads the same whatever cited it.
+ */
+export function ruleReason(value: string, comment: string | undefined): string {
+  return comment === undefined ? value : `${value} — ${comment}`;
+}
+
 /** All semantic problems aggregated; message = problems joined with "\n". */
 export class PolicyError extends Error {
   readonly problems: ReadonlyArray<string>;
@@ -284,16 +303,30 @@ export class PolicyError extends Error {
   }
 }
 
+/**
+ * Reject every key outside `allowed`. A key an earlier schema used is reported with the replacement
+ * `replaced` names, so a file written against that schema is told what to write instead of only
+ * that something is wrong.
+ */
 function checkKeys(
   entry: Record<string, unknown>,
   allowed: ReadonlyArray<string>,
   where: string,
   problems: string[],
+  replaced: ReadonlyMap<string, string> = new Map(),
 ): void {
   for (const key of Object.keys(entry)) {
-    if (!allowed.includes(key)) {
-      problems.push(`${where}: unknown key "${key}"`);
+    if (allowed.includes(key)) {
+      continue;
     }
+
+    const replacement = replaced.get(key);
+
+    problems.push(
+      replacement === undefined
+        ? `${where}: unknown key "${key}"`
+        : `${where}: ${replacement} (see docs/reference/policy.md)`,
+    );
   }
 }
 
@@ -895,69 +928,332 @@ function validateCompatiblePackage(
   };
 }
 
-interface ClarifyPackage {
+/** Package selector fields shared by every entry that names the packages it governs. */
+interface SelectorFields {
   name?: string;
-  version?: string;
-  versionValid: boolean;
+  pattern?: string;
+  valid: boolean;
 }
 
 /**
- * Inline-table { name, version? } extraction for a clarify entry. Extracted to keep
- * validateClarify's loop body within the max-depth bar; messages and push order are unchanged from
- * the inline form.
+ * The `name`/`pattern` pair: exactly one is required. `name` is compared verbatim; `pattern` must
+ * use the glob dialect - a glob-free pattern names one package and belongs under `name` - and must
+ * compile, which refuses a pattern with no literal character to anchor it.
  */
-function validateClarifyPackage(
+function validateNameOrPattern(
   entry: Record<string, unknown>,
   where: string,
   problems: string[],
-): ClarifyPackage {
-  if (!("package" in entry)) {
-    problems.push(`${where}: missing required key "package"`);
-    return { versionValid: true };
+): SelectorFields {
+  const hasName = "name" in entry;
+  const hasPattern = "pattern" in entry;
+
+  if (hasName === hasPattern) {
+    problems.push(
+      `${where}: exactly one of "name" and "pattern" is required (${hasName ? "both are present" : "neither is present"})`,
+    );
+    return { valid: false };
   }
 
-  const pkg = recordOf(entry["package"]);
+  if (hasName) {
+    const name = requireText(entry, "name", where, problems);
 
-  if (pkg === undefined) {
-    problems.push(`${where}: key "package" must be an inline table { name, version? }`);
-    return { versionValid: true };
+    return name === undefined ? { valid: false } : { name, valid: true };
   }
 
-  checkKeys(pkg, ["name", "version"], `${where}: package`, problems);
-  const name = requireText(pkg, "name", `${where}: package`, problems);
+  const pattern = requireText(entry, "pattern", where, problems);
 
-  if (!("version" in pkg)) {
-    return { name, versionValid: true };
+  if (pattern === undefined) {
+    return { valid: false };
   }
 
-  const version = stringOf(pkg["version"]);
-
-  if (version === undefined) {
-    problems.push(`${where}: package key "version" must be a string`);
-    return { name, versionValid: false };
+  if (!isGlobPattern(pattern)) {
+    problems.push(
+      `${where}: pattern "${pattern}" carries no wildcard - use "name" to select a single package`,
+    );
+    return { valid: false };
   }
 
-  return { name, version, versionValid: true };
+  try {
+    compileNamePattern(pattern);
+  } catch (error) {
+    problems.push(`${where}: ${(error as Error).message}`);
+    return { valid: false };
+  }
+
+  return { pattern, valid: true };
+}
+
+/** The parsed `version` pin - see {@link validateVersionPin}. */
+interface VersionPin {
+  version?: string | ReadonlyArray<string>;
+  valid: boolean;
 }
 
 /**
- * Build a ClarifyRule with only the present optional keys materialized (version, expects). Keeping
- * the absent keys OFF the object - rather than `undefined`-but-present - keeps "no precondition"
- * observable and the parsed shape minimal, matching the compatible-package-rule idiom above.
+ * The optional `version` pin: one exact version, or a non-empty list of them. Absent covers every
+ * version. The schema has no wildcard version anywhere - version churn is a maintenance task, not a
+ * matching rule - so every element is compared literally.
  */
-function makeClarifyRule(
-  name: string,
-  version: string | undefined,
-  expects: string | undefined,
-  expression: string,
-  reason: string,
-): ClarifyRule {
+function validateVersionPin(
+  entry: Record<string, unknown>,
+  where: string,
+  problems: string[],
+): VersionPin {
+  if (!("version" in entry)) {
+    return { valid: true };
+  }
+
+  const raw = entry["version"];
+
+  if (!Array.isArray(raw)) {
+    const version = stringOf(raw);
+
+    if (version === undefined || version.trim() === "") {
+      problems.push(
+        `${where}: key "version" must be an exact version string, or a non-empty array of them`,
+      );
+      return { valid: false };
+    }
+
+    return { version, valid: true };
+  }
+
+  if (raw.length === 0) {
+    problems.push(`${where}: key "version" must be a non-empty array of exact versions`);
+    return { valid: false };
+  }
+
+  const versions: string[] = [];
+  const before = problems.length;
+
+  raw.forEach((value, index) => {
+    const text = stringOf(value);
+
+    if (text === undefined || text.trim() === "") {
+      problems.push(`${where}: version[${index}] must be a non-empty string`);
+      return;
+    }
+
+    versions.push(text);
+  });
+  return problems.length === before ? { version: versions, valid: true } : { valid: false };
+}
+
+/** The lanes `detected` may record, in the order the documented table and the checks use. */
+const DETECTED_SOURCES = ["registry", "intensive"] as const;
+
+/** The parsed `detected` table - see {@link validateDetected}. */
+interface DetectedFields {
+  detected?: DetectedSignal;
+  valid: boolean;
+}
+
+/**
+ * The mandatory `detected` table: what each producing lane reported when the entry was written. At
+ * least one lane must be recorded. A lane's value is the raw value that lane produces, which is
+ * often not SPDX - a registry classifier like "BSD" or "Dual License" is exactly what an entry
+ * exists to disambiguate - or `false`, which records that the lane reports nothing at all.
+ */
+function validateDetected(
+  entry: Record<string, unknown>,
+  where: string,
+  problems: string[],
+): DetectedFields {
+  if (!("detected" in entry)) {
+    problems.push(
+      `${where}: missing required key "detected" (an inline table of ${DETECTED_SOURCES.join(" and ")} detections)`,
+    );
+    return { valid: false };
+  }
+
+  const table = recordOf(entry["detected"]);
+
+  if (table === undefined) {
+    problems.push(
+      `${where}: key "detected" must be an inline table { registry = ..., intensive = ... }`,
+    );
+    return { valid: false };
+  }
+
+  const before = problems.length;
+
+  checkKeys(table, DETECTED_SOURCES, `${where}: detected`, problems);
+
+  const detected: DetectedSignal = {};
+
+  for (const source of DETECTED_SOURCES) {
+    if (!(source in table)) {
+      continue;
+    }
+
+    const value = table[source];
+
+    if (value === false) {
+      detected[source] = false;
+      continue;
+    }
+
+    const text = stringOf(value);
+
+    if (text === undefined || text.trim() === "") {
+      problems.push(
+        `${where}: detected.${source} must be that source's detected value as a non-empty string, or false when it detects nothing`,
+      );
+      continue;
+    }
+
+    detected[source] = text;
+  }
+
+  if (problems.length === before && Object.keys(detected).length === 0) {
+    problems.push(
+      `${where}: key "detected" must record at least one of ${DETECTED_SOURCES.join(", ")}`,
+    );
+  }
+
+  return problems.length === before ? { detected, valid: true } : { valid: false };
+}
+
+/**
+ * A closed-set key: required, a string, and one of `values`. The error names the whole set, so a
+ * mistyped or invented value is told what may be written instead.
+ */
+function validateClosedSet<T extends string>(
+  entry: Record<string, unknown>,
+  key: string,
+  values: ReadonlyArray<T>,
+  where: string,
+  problems: string[],
+): T | undefined {
+  const value = requireText(entry, key, where, problems);
+
+  if (value === undefined) {
+    return undefined;
+  }
+
+  if (!(values as ReadonlyArray<string>).includes(value)) {
+    problems.push(`${where}: key "${key}" must be one of ${values.join(", ")} (got "${value}")`);
+    return undefined;
+  }
+
+  return value as T;
+}
+
+/** The parsed `evidence` list - see {@link validateEvidence}. */
+interface EvidenceFields {
+  evidence?: ReadonlyArray<string>;
+  valid: boolean;
+}
+
+/**
+ * The optional `evidence` list: files or URLs a reader can check for themselves. Recorded verbatim
+ * and never fetched or verified, so the only rules are that the list is non-empty and every element
+ * carries text.
+ */
+function validateEvidence(
+  entry: Record<string, unknown>,
+  where: string,
+  problems: string[],
+): EvidenceFields {
+  if (!("evidence" in entry)) {
+    return { valid: true };
+  }
+
+  const raw = entry["evidence"];
+
+  if (!Array.isArray(raw) || raw.length === 0) {
+    problems.push(`${where}: key "evidence" must be a non-empty array of file paths or URLs`);
+    return { valid: false };
+  }
+
+  const evidence: string[] = [];
+  const before = problems.length;
+
+  raw.forEach((value, index) => {
+    const text = stringOf(value);
+
+    if (text === undefined || text.trim() === "") {
+      problems.push(`${where}: evidence[${index}] must be a non-empty string`);
+      return;
+    }
+
+    evidence.push(text);
+  });
+  return problems.length === before ? { evidence, valid: true } : { valid: false };
+}
+
+const CLARIFY_KEYS = [
+  "name",
+  "pattern",
+  "version",
+  "detected",
+  "justification",
+  "expression",
+  "evidence",
+  "comment",
+] as const;
+
+/** Keys an earlier [[clarify]] schema used, each naming what replaced it. */
+const CLARIFY_REPLACED_KEYS: ReadonlyMap<string, string> = new Map([
+  [
+    "package",
+    'the "package" inline table was flattened - write "name" (or "pattern") and "version" directly on the entry',
+  ],
+  ["expects", 'key "expects" was replaced by detected = { registry = ..., intensive = ... }'],
+  [
+    "reason",
+    'key "reason" was replaced by "justification" (a closed set) plus an optional "comment"',
+  ],
+]);
+
+/** One [[clarify]] entry -> rule, or undefined when any field is invalid. */
+function validateClarifyEntry(
+  entry: Record<string, unknown>,
+  where: string,
+  problems: string[],
+): ClarifyRule | undefined {
+  const before = problems.length;
+
+  checkKeys(entry, CLARIFY_KEYS, where, problems, CLARIFY_REPLACED_KEYS);
+
+  const selector = validateNameOrPattern(entry, where, problems);
+  const pin = validateVersionPin(entry, where, problems);
+  const detection = validateDetected(entry, where, problems);
+  const justification = validateClosedSet(
+    entry,
+    "justification",
+    JUSTIFICATION_VALUES,
+    where,
+    problems,
+  );
+  const expression = requireText(entry, "expression", where, problems);
+
+  if (expression !== undefined) {
+    parseSpdxChecked(expression, `${where}: expression`, problems);
+  }
+
+  const evidence = validateEvidence(entry, where, problems);
+  const comment = optionalText(entry, "comment", where, problems);
+
+  if (
+    problems.length !== before ||
+    expression === undefined ||
+    justification === undefined ||
+    detection.detected === undefined
+  ) {
+    return undefined;
+  }
+
   return {
-    name,
-    ...(version !== undefined ? { version } : {}),
-    ...(expects !== undefined ? { expects } : {}),
+    ...(selector.name !== undefined ? { name: selector.name } : {}),
+    ...(selector.pattern !== undefined ? { pattern: selector.pattern } : {}),
+    ...(pin.version !== undefined ? { version: pin.version } : {}),
+    detected: detection.detected,
+    justification,
     expression,
-    reason,
+    ...(evidence.evidence !== undefined ? { evidence: evidence.evidence } : {}),
+    ...(comment !== undefined ? { comment } : {}),
   };
 }
 
@@ -983,38 +1279,10 @@ function validateClarify(root: Record<string, unknown>, problems: string[]): Cla
       return;
     }
 
-    checkKeys(entry, ["package", "expects", "expression", "reason"], where, problems);
-    const { name, version, versionValid } = validateClarifyPackage(entry, where, problems);
-    // `expects` is OPTIONAL (backward-compat) but, when present, must be a non-empty string - a
-    // blank precondition could never match an observed signal and would be silently dead.
-    // requireText records the existing aggregated-PolicyError messages naming clarify[i].
-    let expects: string | undefined;
-    let expectsValid = true;
+    const rule = validateClarifyEntry(entry, where, problems);
 
-    if ("expects" in entry) {
-      expects = requireText(entry, "expects", `${where}: expects`, problems);
-      expectsValid = expects !== undefined;
-    }
-
-    const expression = requireText(entry, "expression", where, problems);
-    let expressionValid = false;
-
-    if (expression !== undefined) {
-      expressionValid =
-        parseSpdxChecked(expression, `${where}: expression`, problems) !== undefined;
-    }
-
-    const reason = requireText(entry, "reason", where, problems);
-
-    if (
-      name !== undefined &&
-      versionValid &&
-      expectsValid &&
-      expressionValid &&
-      expression !== undefined &&
-      reason !== undefined
-    ) {
-      clarify.push(makeClarifyRule(name, version, expects, expression, reason));
+    if (rule !== undefined) {
+      clarify.push(rule);
     }
   });
   return clarify;

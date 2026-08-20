@@ -143,9 +143,11 @@ describe("target lane — overrideCitation preserved on the compatible outcome",
     const policy = [
       MIT_TARGET_EXTERNAL,
       "[[clarify]]",
-      'package = { name = "clarified-target-ok" }',
+      'name = "clarified-target-ok"',
+      'detected = { registry = "totally-not-a-license" }',
+      'justification = "contradictory-claims-recorded"',
       'expression = "MIT"',
-      'reason = "misdetected upstream; corrected to MIT"',
+      'comment = "misdetected upstream; corrected to MIT"',
       "",
     ].join("\n");
     const { verdicts } = runEngine(

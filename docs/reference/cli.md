@@ -78,17 +78,20 @@ registry calls `MIT` while ScanCode reads
 
 ```toml
 [[clarify]]
-package = { name = "example-pkg", version = "1.2.3" }
-expects = "MIT"             # the quick-check answer you are overriding away from
+name = "example-pkg"
+version = "1.2.3"
+detected = { registry = "MIT", intensive = "BSD-3-Clause" }
+justification = "scan-more-precise"
 expression = "BSD-3-Clause" # the reading you trust
-reason = "ScanCode read BSD-3-Clause from the vendored LICENSE file."
+comment = "The vendored LICENSE file carries the three-clause text."
 ```
 
-The `expects` guard keeps the decision honest: if the registry later relicenses
-off `MIT`, the override no longer matches and the gate fails as
+The `detected` record keeps the decision honest: if the registry later
+relicenses off `MIT`, the entry no longer matches and the gate fails as
 [stale](../glossary.md#staleness), so a resolved conflict cannot silently mask a
-real relicence. See the [policy reference](policy.md#clarify) for the full
-`[[clarify]]` semantics.
+real relicence. Recording the `intensive` source is what settles the
+disagreement — an entry that records the registry alone leaves it open. See the
+[policy reference](policy.md#clarify) for the full `[[clarify]]` semantics.
 
 ScanCode's answers live in their own committed memo, `scancode.cache.json`, keyed
 by package version — override its path with `--scancode-cache`. The memo also

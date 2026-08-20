@@ -28,13 +28,12 @@ import {
   type StaleOverride,
 } from "../model/dependencies";
 import { COULD_BE_COPYLEFT_FAMILIES } from "../policy/copyleftFamily";
+import { matchesPackage } from "../policy/packageMatch";
 import {
   canonicalizeExpression,
   elect,
-  isCompoundClaim,
   isCopyleft,
   leafIds,
-  orLeaves,
   renderNode,
   type ExpressionNode,
 } from "./expression";
@@ -483,30 +482,39 @@ function combinePrecise(preciseResults: ReadonlyArray<NormalizeResult>): License
 }
 
 /**
+ * What each producing lane reported for a package, as an override records it. The counterpart of
+ * {@link ObservedSignal}: the two name the same lanes, and an override applies only while each lane
+ * it records still reports what is written here.
+ */
+export interface DetectedSignal {
+  /**
+   * The collector metadata and registry enrichment lane; `false` records that it reports nothing.
+   */
+  registry?: string | false;
+  /** The intensive source scan; `false` records that it reports nothing. */
+  intensive?: string | false;
+}
+
+/**
  * Inline structural type for project clarify rules - no import from policy/ (the validated policy
  * is structurally compatible). `expression` must be a valid SPDX expression: policy schema
- * validation parses it eagerly before evaluation. `expects` is the OPTIONAL staleness precondition:
- * when present, the override applies only while the package's pre-override observed signal still
- * matches it; absent = blind apply (backward-compat).
+ * validation parses it eagerly before evaluation. `detected` is the staleness precondition; the
+ * selector is the same one {@link matchesPackage} reads everywhere else.
  */
 export interface ClarifyInput {
-  name: string;
-  version?: string;
-  expects?: string;
+  name?: string;
+  pattern?: string;
+  version?: string | readonly string[];
+  detected: DetectedSignal;
   expression: string;
 }
 
 /**
- * Inline structural type for the shipped TOOL-LEVEL override set, structurally compatible with
- * BUILTIN_OVERRIDES. `expects` is always present (every shipped default is a preconditioned
- * assertion); version-agnostic.
+ * The shipped TOOL-LEVEL override set's input shape, structurally compatible with
+ * BUILTIN_OVERRIDES. Identical to a project clarify entry by design: the shipped defaults and a
+ * consumer's own entries run through one preconditioned-override mechanism, not two.
  */
-export interface BuiltinOverrideInput {
-  name: string;
-  version?: string;
-  expects: string;
-  expression: string;
-}
+export type BuiltinOverrideInput = ClarifyInput;
 
 export interface AnnotatedFindings {
   model: CanonicalDependencies;
@@ -562,10 +570,9 @@ function laneSignal(
 
 /**
  * The set of normalized raw claim strings (each claim's trimmed raw value) UNION the un-overridden
- * finding's impreciseFamily token, split by the lane that produced each member. An override's
- * `expects` is compared (case-insensitive, trimmed equality) against the members of the UNION,
- * whose membership and order are what they have always been. The lane views let a recorded
- * per-source detection be checked against the lane that would produce it.
+ * finding's impreciseFamily token, split by the lane that produced each member. Each recorded
+ * detection is compared against the lane view that would produce it; the UNION carries the members
+ * no lane owns, and is what the fail-closed guard sweeps.
  */
 export function observedSignalBySource(
   claims: ReadonlyArray<LicenseClaim>,
@@ -606,54 +613,56 @@ function observedExpressions(claims: ReadonlyArray<LicenseClaim>): readonly stri
   return [...seen].sort(compareCodeUnits);
 }
 
-/** Case-insensitive, trimmed equality of `expects` against any signal member. */
-function signalMatches(signal: ReadonlyArray<string>, expects: string): boolean {
-  const want = expects.trim().toLowerCase();
+/** Case-insensitive, trimmed equality of a recorded value against any signal member. */
+function signalMatches(signal: ReadonlyArray<string>, recorded: string): boolean {
+  const want = recorded.trim().toLowerCase();
 
   return signal.some((s) => s.trim().toLowerCase() === want);
 }
 
 /**
- * {@link signalMatches}, canonicalized first: both `expects` and each signal member run through
+ * {@link signalMatches}, canonicalized first: the recorded value and each signal member run through
  * {@link canonicalizeExpression} before the same case-insensitive, trimmed equality, so a
  * boolean-algebra re-spelling of the same license set (`MIT AND CC0-1.0` read back as `CC0-1.0 AND
- * MIT`, a duplicated conjunct, an absorbable branch) never counts as a mismatch. Canonicalization
+ * MIT`, a duplicated conjunct, an absorbable branch) never counts as a divergence. Canonicalization
  * runs FIRST because it is the coarser, structural normalization; layering it under trim/lowercase
- * keeps the existing text normalization doing its job unchanged - canonicalizeExpression's contract
- * returns unparseable input verbatim, so a non-expression claim reaches signalMatches's own
- * comparison exactly as before. Used ONLY by the compound `expects` fallback ({@link
- * needsLiteralExpectsMatch}); the non-compound path stays satisfies-based and semantic, so it has
- * no equivalent need.
+ * keeps the text normalization doing its job unchanged - canonicalizeExpression's contract returns
+ * unparseable input verbatim, so a non-expression claim reaches signalMatches's own comparison as
+ * it would have anyway.
  */
-function signalMatchesCanonical(signal: ReadonlyArray<string>, expects: string): boolean {
+function signalMatchesCanonical(signal: ReadonlyArray<string>, recorded: string): boolean {
   return signalMatches(
     signal.map((s) => canonicalizeExpression(s)),
-    canonicalizeExpression(expects),
+    canonicalizeExpression(recorded),
   );
 }
 
 /**
- * Fail-closed staleness guard: an override may apply ONLY when no non-`expects` member of the
- * observed signal carries a PRECISE license that the asserted `expression` does not account for.
- * The any-member `expects` match alone is fail-OPEN - a lingering obsolete label (`BSD`) would
- * license out a co-present new precise copyleft claim (`GPL-3.0-only`) during a relicense - the
- * exact masking the staleness guard exists to prevent.
+ * Fail-closed staleness guard: the first member of the observed signal that is not itself recorded
+ * in `detected` and carries a PRECISE license the asserted `expression` does not account for, or
+ * undefined when none does.
  *
- * For each signal member that is NOT `expects`, we re-derive a precise expression via the
- * normalizer. A member that normalizes to a precise id which the asserted expression does not
- * SATISFY contradicts the assertion → the override is stale (fail closed). Imprecise / unknown
- * members carry no precise contradicting license and never block the apply. spdx-satisfies is
- * defensive: any throw is treated as a contradiction (fail closed).
+ * Matching the recorded detections alone is fail-OPEN - a lingering obsolete label (`BSD`) sitting
+ * beside a co-present new precise copyleft claim (`GPL-3.0-only`) would license the copyleft out
+ * during a relicense, the exact masking this guard exists to prevent. The sweep runs over the UNION
+ * signal so a claim source that belongs to neither lane is covered too, and skips the recorded
+ * values under the same canonicalization the lane checks use, so a re-spelling of a recorded value
+ * is not swept as if it were something new.
+ *
+ * Each swept member is re-derived to a precise expression via the normalizer; one the assertion
+ * does not account for makes the override stale. Imprecise and unknown members carry no precise
+ * contradicting license and never block the apply.
  */
-function signalContradicts(
+function unaccountedMember(
   signal: ReadonlyArray<string>,
-  expects: string,
+  recorded: ReadonlyArray<string>,
   expression: string,
-): boolean {
-  const want = expects.trim().toLowerCase();
+): string | undefined {
+  const fold = (value: string): string => canonicalizeExpression(value).trim().toLowerCase();
+  const wanted = new Set(recorded.map(fold));
 
   for (const member of signal) {
-    if (member.trim().toLowerCase() === want) {
+    if (wanted.has(fold(member))) {
       continue;
     }
 
@@ -663,29 +672,45 @@ function signalContradicts(
       continue;
     } // imprecise/unknown: no precise contradiction
 
-    let ok: boolean;
-
-    try {
-      ok = satisfies(precise, [expression]);
-    } catch {
-      ok = false; // unparseable against the assertion → fail closed
-    }
-
-    if (!ok) {
-      return true;
+    if (!accountsFor(expression, precise)) {
+      return member;
     }
   }
 
-  return false;
+  return undefined;
+}
+
+/**
+ * True when the asserted expression accounts for an observed precise license.
+ *
+ * spdx-satisfies answers this directly whenever the assertion can be an allowlist entry. An
+ * assertion carrying an AND cannot be one, so its conjuncts are compared as ids instead: `MIT AND
+ * CC-BY-3.0` accounts for an observed `MIT` while a `GPL-3.0-only` that appeared beside it is still
+ * unaccounted for. Any throw leaves the license unaccounted for - fail closed.
+ */
+function accountsFor(expression: string, precise: string): boolean {
+  try {
+    return satisfies(precise, [expression]);
+  } catch {
+    /* an AND assertion cannot be an allowlist entry - compare its conjuncts below */
+  }
+
+  try {
+    const asserted = new Set(leafIds(parse(expression) as ExpressionNode).ids);
+
+    return leafIds(parse(precise) as ExpressionNode).ids.every((id) => asserted.has(id));
+  } catch {
+    return false; // unparseable against the assertion → fail closed
+  }
 }
 
 /**
  * True when the un-overridden finding ALREADY carries a precise expression that SATISFIES the
  * asserted override expression (the redundancy path). When the registry upgrades an imprecise label
  * to the exact precise license the override asserts (PyPI now reports ipython/ipykernel/
- * jupyter-core as the precise "BSD-3-Clause" the "expects: BSD" override disambiguates TO), the
- * override has nothing to do: the observed precise finding already satisfies the assertion, so it
- * is REDUNDANT - not stale, not applied - and the observed finding stands unchanged. This is
+ * jupyter-core as the precise "BSD-3-Clause" a recorded "BSD" was disambiguating TO), the override
+ * has nothing to do: the observed precise finding already satisfies the assertion, so it is
+ * REDUNDANT - not stale, not applied - and the observed finding stands unchanged. This is
  * fail-safe: a base that does NOT satisfy the assertion (a real relicense to MIT/GPL) is NOT
  * redundant and falls through to the stale-fail path. spdx-satisfies is defensive - any throw is
  * treated as NOT satisfying (fail closed).
@@ -720,122 +745,164 @@ function withStaleOverride(base: LicenseFinding, stale: StaleOverride): LicenseF
   return { ...base, staleOverride: stale };
 }
 
+/** The lanes an override records, checked in this order so a reported divergence is stable. */
+const DETECTED_LANES = ["registry", "intensive"] as const;
+
+/** The recorded detections, for the guard that sweeps everything the entry did NOT write down. */
+function recordedValues(detected: DetectedSignal): string[] {
+  return DETECTED_LANES.map((lane) => detected[lane]).filter(
+    (value): value is string => typeof value === "string",
+  );
+}
+
 /**
- * True when this override must compare `expects` by canonicalized string equality ({@link
- * signalMatchesCanonical}) instead of running the signal/satisfies decision tree: `expects` is
- * itself a compound claim, or `expression` contains an AND (spdx-satisfies's allowlist argument can
- * only take OR-decomposable expressions).
+ * The first recorded lane that no longer reports what the override wrote down, or undefined when
+ * every one of them still does.
+ *
+ * A recorded value holds while that lane - and only that lane - still carries it, compared through
+ * {@link signalMatchesCanonical} so a boolean-algebra re-spelling of the same license set is not a
+ * divergence. A recorded `false` holds only while the lane reports nothing, and a lane that reports
+ * nothing can never satisfy a recorded value: an override whose evidence has disappeared is stale,
+ * never a vacuous match.
  */
-function needsLiteralExpectsMatch(expects: string, expression: string): boolean {
-  return isCompoundClaim(expects) || orLeaves(parse(expression) as ExpressionNode) === null;
+function firstUnmetDetection(
+  detected: DetectedSignal,
+  signal: ObservedSignal,
+): Omit<StaleOverride, "level"> | undefined {
+  for (const source of DETECTED_LANES) {
+    const expected = detected[source];
+
+    if (expected === undefined) {
+      continue;
+    }
+
+    const observed = signal[source];
+    const met =
+      expected === false ? observed.length === 0 : signalMatchesCanonical(observed, expected);
+
+    if (!met) {
+      return { source, expected, observed };
+    }
+  }
+
+  return undefined;
+}
+
+/** Where in the observed signal an unaccounted license was reported, for the stale message. */
+function laneOf(member: string, signal: ObservedSignal): StaleOverride["source"] {
+  if (signalMatches(signal.registry, member)) {
+    return "registry";
+  }
+
+  return signalMatches(signal.intensive, member) ? "intensive" : "observed";
 }
 
 /**
  * Apply one preconditioned override to a package, given its un-overridden finding and observed
- * signal. Returns the override finding on a match, the UNCHANGED base finding on a redundant match
- * (the gap fix below), a stale-marked finding on a genuine mismatch, or undefined when this
- * override does not apply (no `expects` blind path is the only undefined caller path).
+ * signal. Returns the override finding when the precondition holds, the UNCHANGED base finding when
+ * the override has become redundant, and a stale-marked finding otherwise.
  *
- * `expects` undefined → blind apply (backward-compat). `expects` present → decision tree on the
- * observed signal S and the asserted expression E:
+ * The decision on the observed signal S and the asserted expression E:
  *
- *   IF compound (needsLiteralExpectsMatch): IF `expects` canonically ∈ S → APPLY E; ELSE → STALE
- *      [no redundancy path: a compound already names its exact reading; canonical equality means a
- *      boolean-algebra re-spelling of the same set still counts, only a real set change is STALE].
- *   IF expects ∈ S (signalMatches):
- *     IF a non-`expects` precise member contradicts E (signalContradicts)
+ *   IF every recorded detection still holds ({@link firstUnmetDetection}):
+ *     IF S carries a precise license E does not account for ({@link unaccountedMember})
  *        → STALE → fail closed [the relicense-metadata-lag mask].
  *     ELSE → APPLY E [normal disambiguation].
- *   ELSE (expects ∉ S):
- *     IF the observed finding already carries a precise expression that
- *        SATISFIES E → REDUNDANT: do NOT apply, do NOT fail - let the precise observed finding
- *        stand unchanged [GAP FIX - the registry upgraded the imprecise label to the exact license
- *        the override asserts].
- *     ELSE → STALE → fail closed [genuine drift: relicensed to a different or
- *        non-satisfying license, or still ambiguous-but-different].
+ *   ELSE (a recorded detection diverged):
+ *     IF a recorded VALUE diverged and the observed finding already carries a precise expression
+ *        that SATISFIES E → REDUNDANT: do NOT apply, do NOT fail - let the precise observed finding
+ *        stand unchanged [the source upgraded its imprecise label to the exact license the override
+ *        asserts, so there is nothing left to disambiguate].
+ *     ELSE → STALE → fail closed [genuine drift: relicensed to a different or non-satisfying
+ *        license, or still ambiguous-but-different].
  *
- * Fail-safe: the ONLY non-failing path added is the co-equal/satisfying precise observation. A
- * relicense to anything that does not satisfy E still fails.
+ * A recorded `false` proven wrong is always STALE, never redundant: the override asserted that a
+ * source says nothing, and a source that has started speaking is new evidence a person must read,
+ * whether or not it happens to agree.
+ *
+ * Fail-safe: the only non-failing path on a divergence is the co-equal/satisfying precise
+ * observation. A relicense to anything that does not satisfy E still fails.
  */
 function applyOverride(
-  expects: string | undefined,
+  detected: DetectedSignal,
   expression: string,
   overrideRule: string | undefined,
   level: StaleOverride["level"],
   base: LicenseFinding,
-  signal: ReadonlyArray<string>,
+  signal: ObservedSignal,
 ): LicenseFinding {
-  if (expects === undefined) {
-    return overrideFinding(expression, overrideRule);
-  }
+  const unmet = firstUnmetDetection(detected, signal);
 
-  if (needsLiteralExpectsMatch(expects, expression)) {
-    return signalMatchesCanonical(signal, expects)
-      ? overrideFinding(expression, overrideRule)
-      : withStaleOverride(base, { level, expected: expects, observed: signal });
-  }
+  if (unmet === undefined) {
+    const unaccounted = unaccountedMember(signal.union, recordedValues(detected), expression);
 
-  if (signalMatches(signal, expects)) {
-    if (!signalContradicts(signal, expects, expression)) {
+    if (unaccounted === undefined) {
       return overrideFinding(expression, overrideRule);
     }
-  } else if (baseSatisfiesAssertion(base, expression)) {
-    // The registry upgraded the imprecise label to the precise license the override asserts (or a
-    // satisfying one): nothing is masked - leave the observed precise finding untouched (redundant,
-    // not stale).
+
+    return withStaleOverride(base, {
+      level,
+      source: laneOf(unaccounted, signal),
+      observed: signal.union,
+      unaccounted,
+    });
+  }
+
+  if (unmet.expected !== false && baseSatisfiesAssertion(base, expression)) {
     return base;
   }
 
-  return withStaleOverride(base, {
-    level,
-    expected: expects,
-    observed: signal,
-  });
+  return withStaleOverride(base, { level, ...unmet });
 }
 
-/** First override (project clarify, then tool-level builtin) for a package. */
+/** First override (project clarify, then tool-level builtin) for a package, and what it decided. */
+interface ResolvedOverride {
+  finding: LicenseFinding;
+  /** True when the deciding entry recorded the intensive lane, either as a value or as `false`. */
+  coversIntensive: boolean;
+}
+
 function resolveOverride(
   entry: PackageEntry,
   clarify: ReadonlyArray<ClarifyInput>,
   builtins: ReadonlyArray<BuiltinOverrideInput>,
   base: LicenseFinding,
-  signal: ReadonlyArray<string>,
+  signal: ObservedSignal,
   usedClarifyIndices: Set<number>,
-): LicenseFinding | undefined {
+): ResolvedOverride | undefined {
   // Project clarify FIRST (project-wins-on-conflict).
-  const clarifyIndex = clarify.findIndex(
-    (rule) =>
-      rule.name === entry.name && (rule.version === undefined || rule.version === entry.version),
-  );
+  const clarifyIndex = clarify.findIndex((rule) => matchesPackage(rule, entry));
 
   if (clarifyIndex !== -1) {
     usedClarifyIndices.add(clarifyIndex);
     const rule = clarify[clarifyIndex] as ClarifyInput;
 
-    return applyOverride(
-      rule.expects,
-      rule.expression,
-      undefined, // project clarify keeps its clarify[i] citation in evaluate
-      "clarify",
-      base,
-      signal,
-    );
+    return {
+      /**
+       * A project clarify keeps its clarify[i] citation in evaluate, so it carries no rule id here.
+       */
+      finding: applyOverride(rule.detected, rule.expression, undefined, "clarify", base, signal),
+      coversIntensive: "intensive" in rule.detected,
+    };
   }
 
   // Tool-level builtin set, version-agnostic (overrides survive bumps).
-  const builtinIndex = builtins.findIndex((o) => o.name === entry.name);
+  const builtinIndex = builtins.findIndex((o) => matchesPackage(o, entry));
 
   if (builtinIndex !== -1) {
     const o = builtins[builtinIndex] as BuiltinOverrideInput;
 
-    return applyOverride(
-      o.expects,
-      o.expression,
-      `override:builtin[${builtinIndex}]`,
-      "builtin",
-      base,
-      signal,
-    );
+    return {
+      finding: applyOverride(
+        o.detected,
+        o.expression,
+        `override:builtin[${builtinIndex}]`,
+        "builtin",
+        base,
+        signal,
+      ),
+      coversIntensive: "intensive" in o.detected,
+    };
   }
 
   return undefined;
@@ -1072,15 +1139,34 @@ function withCrossImageConflict(
 }
 
 /**
+ * Carry an unsettled ScanCode disagreement onto an applied override's finding.
+ *
+ * An override settles the disagreement only when it recorded what the intensive lane reports: that
+ * is the entry stating which side of the disagreement the maintainer stands behind. An entry that
+ * recorded the registry lane alone says nothing about the scan, so the disagreement stays on the
+ * finding and the gate keeps asking for a decision.
+ */
+function withUnsettledConflict(
+  base: LicenseFinding,
+  finding: LicenseFinding,
+  coversIntensive: boolean,
+): LicenseFinding {
+  if (coversIntensive || finding.conflict !== undefined || base.conflict?.kind !== "scancode") {
+    return finding;
+  }
+
+  return { ...finding, conflict: base.conflict };
+}
+
+/**
  * Attach a LicenseFinding to every package (including the zero-claim population - expression null).
  * The two-level, staleness-guarded override chain runs in precedence order: project clarify FIRST
- * (project-wins), then the shipped tool-level builtins. A preconditioned override (`expects`
- * present) applies ONLY when the package's pre-override observed signal still matches `expects`; a
- * MISMATCH does NOT apply the assertion and instead marks the finding stale so the engine fails the
- * gate loudly. A no-`expects` override applies blindly (backward-compat). A tool-level override
- * that decides carries a distinct override:builtin[i] citation; a project clarify keeps its
- * clarify[i] citation via the engine. Returns new entries via object spread - the input model is
- * never mutated. Pure: no I/O, never throws on a stale override.
+ * (project-wins), then the shipped tool-level builtins. An override applies ONLY while every lane
+ * its `detected` table records still reports what was written down; a divergence does NOT apply the
+ * assertion and instead marks the finding stale so the engine fails the gate loudly. A tool-level
+ * override that decides carries a distinct override:builtin[i] citation; a project clarify keeps
+ * its clarify[i] citation via the engine. Returns new entries via object spread - the input model
+ * is never mutated. Pure: no I/O, never throws on a stale override.
  */
 export function annotateFindings(
   model: CanonicalDependencies,
@@ -1102,8 +1188,12 @@ export function annotateFindings(
     // - it only ever ADDS the marker when scancode did not already claim the conflict slot.
     const base = withCrossImageConflict(dockerClaimDivergence, scancodeAssessed);
 
-    const signal = observedSignalBySource(entry.licenseClaims, base).union;
-    const overridden = resolveOverride(entry, clarify, builtins, base, signal, usedClarifyIndices);
+    const signal = observedSignalBySource(entry.licenseClaims, base);
+    const resolved = resolveOverride(entry, clarify, builtins, base, signal, usedClarifyIndices);
+    const overridden =
+      resolved === undefined
+        ? undefined
+        : withUnsettledConflict(base, resolved.finding, resolved.coversIntensive);
     const finding = overridden ?? base;
 
     // Deny terminal over overrides: preserve the PRE-OVERRIDE observed expression whenever an

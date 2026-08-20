@@ -350,8 +350,8 @@ diverging docker occurrence and that image's own declared claims:
 | Claims by image | every docker occurrence, semicolon-joined as `<target>: <claims>`; an occurrence that declared no claim at all reads `(no declared license)` |
 
 Every comparison this report and the policy gate make — ScanCode vs quick
-check, the cross-image claim sets, and an `[[clarify]]`/`[[override]]`
-`expects` match ([policy.md#clarify](./policy.md#clarify)) — canonicalizes
+check, the cross-image claim sets, and a `[[clarify]]` entry against its
+recorded `detected` values ([policy.md#clarify](./policy.md#clarify)) — canonicalizes
 the boolean-algebra structure on every side before deciding agreement,
 divergence, or staleness, so a spelling-only reordering (`MIT AND CC0-1.0`
 read back as `CC0-1.0 AND MIT`) never manufactures a marker or reopens a

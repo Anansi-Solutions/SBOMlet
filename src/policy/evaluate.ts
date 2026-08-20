@@ -78,6 +78,7 @@ import {
   type CanonicalDependencies,
   type Occurrence,
   type PackageEntry,
+  type StaleOverride,
   type Verdict,
 } from "../model/dependencies";
 import {
@@ -108,9 +109,11 @@ import {
 import { AGPL_IDS, COPYLEFT_FAMILY } from "./copyleft";
 import { COULD_BE_COPYLEFT_FAMILIES, WORKSPACE_ABSORBS } from "./copyleftFamily";
 import { denyRuleFor, type IndexedDenyRule } from "./denylist";
+import { matchesPackage } from "./packageMatch";
 import { resolveTargetProfile } from "./target";
 import {
   EVERYWHERE_SCOPE,
+  ruleReason,
   type CompatibleLicenseRule,
   type CompatiblePackageRule,
   type CompatibleRule,
@@ -373,10 +376,7 @@ function suppressionJustification(
 
 /** Same matching as annotateFindings: first clarify rule for this package. */
 function clarifyIndexFor(entry: PackageEntry, policy: Policy): number {
-  return policy.clarify.findIndex(
-    (rule) =>
-      rule.name === entry.name && (rule.version === undefined || rule.version === entry.version),
-  );
+  return policy.clarify.findIndex((rule) => matchesPackage(rule, entry));
 }
 
 /**
@@ -476,13 +476,30 @@ function impreciseVerdict(
   };
 }
 
+/** What the override recorded and what is seen instead - the fact half of {@link staleVerdict}. */
+function staleDivergence(stale: StaleOverride): string {
+  const observed = stale.observed.length > 0 ? stale.observed.join(", ") : "(nothing)";
+
+  if (stale.unaccounted !== undefined) {
+    return `the ${stale.source} signal reports "${stale.unaccounted}", which the recorded expression does not account for`;
+  }
+
+  if (stale.expected === false) {
+    return `it recorded no ${stale.source} detection, but ${stale.source} now reports "${observed}"`;
+  }
+
+  return stale.observed.length === 0
+    ? `it recorded the ${stale.source} detection "${stale.expected}", but there is no current ${stale.source} detection`
+    : `it recorded the ${stale.source} detection "${stale.expected}", but ${stale.source} now reports "${observed}"`;
+}
+
 /**
- * A stale override fails the gate loudly before any other lane: the override's `expects`
- * precondition no longer matches the package's observed signal, so an old assertion could be
- * masking a relicense. The reason names the package, the expected value, and the now-observed
- * value; the rule id is distinct and actionable ("override:stale[clarify|builtin]") telling the
- * maintainer to update or remove the override. Mapped to exit 1 (a compliance-relevant gate
- * failure) via the violations → exitCodeFor mapping - the stale assertion is never applied.
+ * A stale override fails the gate loudly before any other lane: what the override recorded is no
+ * longer what the package shows, so an old assertion could be masking a relicense. The reason names
+ * the package and the divergence; the rule id is distinct and actionable
+ * ("override:stale[clarify|builtin]") telling the maintainer to update or remove the override.
+ * Mapped to exit 1 (a compliance-relevant gate failure) via the violations → exitCodeFor mapping
+ * - the stale assertion is never applied.
  */
 function staleVerdict(
   base: { purl: string; occurrenceTarget: string },
@@ -490,15 +507,13 @@ function staleVerdict(
   stale: NonNullable<PackageEntry["finding"]>["staleOverride"],
 ): Verdict {
   const s = stale as NonNullable<typeof stale>;
-  const observed = s.observed.length > 0 ? s.observed.join(", ") : "(unknown)";
 
   return {
     ...base,
     status: "fail",
     rule: `override:stale[${s.level}]`,
     reason:
-      `STALE override on "${entry.name}@${entry.version}": expected to ` +
-      `observe "${s.expected}" but now observes "${observed}" — the ` +
+      `STALE override on "${entry.name}@${entry.version}": ${staleDivergence(s)} — the ` +
       `disambiguation was NOT applied (a stale override could mask a ` +
       `relicense). Update or remove the ${s.level} override.`,
   };
@@ -597,7 +612,7 @@ function overrideCitation(
         ...base,
         status: "ok",
         rule: `clarify[${clarifyIndex}]`,
-        reason: `clarified to "${expression}": ${rule.reason}`,
+        reason: `clarified to "${expression}": ${ruleReason(rule.justification, rule.comment)}`,
       };
     }
   }

@@ -188,7 +188,13 @@ describe("annotateFindings — scancode senior assessment (the re-pinned fill ma
       claim("BSD", "name"),
       scancodeClaim("BSD-3-Clause"),
     ]);
-    const clarify: ClarifyInput[] = [{ name: "imprecise-clarified-pkg", expression: "MIT" }];
+    const clarify: ClarifyInput[] = [
+      {
+        name: "imprecise-clarified-pkg",
+        detected: { registry: "BSD", intensive: "BSD-3-Clause" },
+        expression: "MIT",
+      },
+    ];
     const { model } = annotateFindings(modelOf(entry), clarify);
     const finding = model.packages[0]!.finding!;
 
@@ -360,7 +366,13 @@ describe("annotateFindings — scancode senior assessment (the re-pinned fill ma
       claim("Apache-2.0"),
       scancodeClaim("MIT"),
     ]);
-    const clarify: ClarifyInput[] = [{ name: "conflicted-clarified-pkg", expression: "MIT" }];
+    const clarify: ClarifyInput[] = [
+      {
+        name: "conflicted-clarified-pkg",
+        detected: { registry: "Apache-2.0", intensive: "MIT" },
+        expression: "MIT",
+      },
+    ];
     const { model } = annotateFindings(modelOf(entry), clarify);
     const finding = model.packages[0]!.finding!;
 
@@ -373,7 +385,7 @@ describe("annotateFindings — scancode senior assessment (the re-pinned fill ma
   test("a STALE clarify override keeps the base finding, which carries BOTH markers — stale + conflict coexist (chain ordering is the policy engine's concern)", () => {
     const entry = pkg("stale-conflicted-pkg", "1.0.0", [claim("Apache-2.0"), scancodeClaim("MIT")]);
     const clarify: ClarifyInput[] = [
-      { name: "stale-conflicted-pkg", expects: "BSD", expression: "MIT" },
+      { name: "stale-conflicted-pkg", detected: { registry: "BSD" }, expression: "MIT" },
     ];
     const { model } = annotateFindings(modelOf(entry), clarify);
     const finding = model.packages[0]!.finding!;
@@ -386,7 +398,7 @@ describe("annotateFindings — scancode senior assessment (the re-pinned fill ma
     });
   });
 
-  test("resolution (guarded): a staleness-GUARDED clarify (expects present and matched) that applies STILL clears the conflict marker — the guarded-apply path, not only the blind path, drops it (worked example: registry MIT vs scancode BSD-3-Clause)", () => {
+  test("resolution: an entry recording BOTH lanes settles the disagreement and drops the marker (worked example: registry MIT vs an in-depth BSD-3-Clause)", () => {
     const entry = pkg("guarded-clarified-pkg", "1.0.0", [
       claim("MIT"),
       scancodeClaim("BSD-3-Clause"),
@@ -394,7 +406,7 @@ describe("annotateFindings — scancode senior assessment (the re-pinned fill ma
     const clarify: ClarifyInput[] = [
       {
         name: "guarded-clarified-pkg",
-        expects: "MIT",
+        detected: { registry: "MIT", intensive: "BSD-3-Clause" },
         expression: "BSD-3-Clause",
       },
     ];
@@ -405,6 +417,33 @@ describe("annotateFindings — scancode senior assessment (the re-pinned fill ma
     expect(finding.expression).toBe("BSD-3-Clause");
     expect(finding.conflict).toBeUndefined();
     expect(finding.staleOverride).toBeUndefined();
+  });
+
+  test("a REGISTRY-ONLY entry applies but does NOT settle the disagreement — the marker survives, so the gate keeps asking", () => {
+    // The entry says nothing about what the in-depth scan reports, so it is not
+    // a decision between the two sources: recording one lane cannot silence a
+    // disagreement between both.
+    const entry = pkg("registry-only-clarified-pkg", "1.0.0", [
+      claim("MIT"),
+      scancodeClaim("BSD-3-Clause"),
+    ]);
+    const clarify: ClarifyInput[] = [
+      {
+        name: "registry-only-clarified-pkg",
+        detected: { registry: "MIT" },
+        expression: "MIT AND BSD-3-Clause",
+      },
+    ];
+    const { model } = annotateFindings(modelOf(entry), clarify);
+    const finding = model.packages[0]!.finding!;
+
+    expect(finding.source).toBe("override");
+    expect(finding.expression).toBe("MIT AND BSD-3-Clause");
+    expect(finding.conflict).toEqual({
+      kind: "scancode",
+      assessed: "BSD-3-Clause",
+      disagreeing: ["MIT"],
+    });
   });
 
   test("deny visibility: a scancode win never drops the quick-check members from observedExpressions — a denied license present only in a non-scancode claim stays visible to the deny terminal", () => {
@@ -480,7 +519,13 @@ describe("annotateFindings — cross-image claim divergence overlay", () => {
       { target: "docker:image-a", claims: ["MIT"] },
       { target: "docker:image-b", claims: ["Apache-2.0"] },
     ]);
-    const clarify: ClarifyInput[] = [{ name: "clarified-divergent-pkg", expression: "MIT" }];
+    const clarify: ClarifyInput[] = [
+      {
+        name: "clarified-divergent-pkg",
+        detected: { registry: false, intensive: false },
+        expression: "MIT",
+      },
+    ];
     const { model } = annotateFindings(modelOf(entry), clarify);
     const finding = model.packages[0]!.finding!;
 

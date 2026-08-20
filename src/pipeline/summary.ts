@@ -6,7 +6,7 @@
 
 import { type Verdict } from "../model/dependencies";
 import { unusedRuleIds } from "../policy/evaluate";
-import { type Policy } from "../policy/schema";
+import { ruleReason, type Policy } from "../policy/schema";
 
 /**
  * Reason text of an unused compatible[i]/clarify[i] rule id - surfaced in the unused-entry warning
@@ -21,9 +21,14 @@ function unusedRuleReason(policy: Policy, ruleId: string): string {
   }
 
   const index = Number(match[2]);
-  const rule = match[1] === "compatible" ? policy.compatible[index] : policy.clarify[index];
 
-  return rule?.reason ?? "";
+  if (match[1] === "compatible") {
+    return policy.compatible[index]?.reason ?? "";
+  }
+
+  const rule = policy.clarify[index];
+
+  return rule === undefined ? "" : ruleReason(rule.justification, rule.comment);
 }
 
 /**

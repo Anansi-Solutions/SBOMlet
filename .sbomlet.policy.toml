@@ -113,31 +113,46 @@ name = "musl-utils"
 where = ["docker:examples/docker-scan/Dockerfile"]
 reason = "MIT AND BSD-2-Clause AND GPL-2.0-or-later; the GPL part covers unmodified musl utility binaries in the OS layer, aggregation with source available from Alpine aports."
 
-# Source-vs-registry assessment conflicts, resolved by hand.
+# Source-vs-registry assessment conflicts, resolved by hand. Each entry records
+# what both sources reported when it was written, so an upstream relicense
+# reopens the judgment instead of silently continuing to apply.
 
 [[clarify]]
-package = { name = "spdx-ranges", version = "2.1.1" }
-expects = "(MIT AND CC-BY-3.0)"
+name = "spdx-ranges"
+version = "2.1.1"
+detected = { registry = "(MIT AND CC-BY-3.0)", intensive = "MIT" }
+justification = "declared-more-complete"
 expression = "(MIT AND CC-BY-3.0)"
-reason = "The npm registry declares (MIT AND CC-BY-3.0); the in-depth scan read only the root LICENSE and saw MIT, missing the CC-BY-3.0 that covers the bundled SPDX range data this package ships. I record the broader registry reading so that data obligation stays on the inventory. expects locks this to the exact compound claim, so a future upstream relicense reopens it for review instead of silently continuing to apply."
+comment = "The scan read only the root LICENSE and saw MIT, missing the CC-BY-3.0 that covers the bundled SPDX range data this package ships; the registry reading keeps that data obligation on the inventory."
 
 [[clarify]]
-package = { name = "uri-js", version = "4.4.1" }
-expects = "BSD-2-Clause"
+name = "uri-js"
+version = "4.4.1"
+detected = { registry = "BSD-2-Clause", intensive = "BSD-2-Clause-Views" }
+justification = "scan-more-precise"
 expression = "BSD-2-Clause-Views"
-reason = "The scan read the actual LICENSE file and found the BSD-2-Clause-Views variant: plain BSD-2-Clause plus the views-and-conclusions advertising sentence. The registry flattened it to plain BSD-2-Clause. I adopt the precise variant the file carries."
+comment = "The LICENSE file carries the views-and-conclusions advertising sentence, which the registry flattened away."
 
 [[clarify]]
-package = { name = "type-fest", version = "5.8.0" }
+name = "type-fest"
+version = "5.8.0"
+detected = { registry = "(MIT OR CC0-1.0)", intensive = "CC0-1.0 AND MIT" }
+justification = "dual-license-choice"
 expression = "(MIT OR CC0-1.0)"
-reason = "The registry declares the author's dual-license (MIT OR CC0-1.0), a choice of either. The in-depth scan found both bundled license texts and mechanically joined them with AND. I adopt the declared choice-of-license."
+comment = "The scan found both bundled license texts and joined them mechanically with AND; the author offers a choice of either."
 
 [[clarify]]
-package = { name = "@cspell/dict-en-common-misspellings", version = "2.1.13" }
+name = "@cspell/dict-en-common-misspellings"
+version = "2.1.13"
+detected = { registry = "CC BY-SA 4.0", intensive = "CC-BY-SA-4.0 AND MIT" }
+justification = "scan-found-additional-content"
 expression = "CC-BY-SA-4.0 AND MIT"
-reason = "The in-depth scan read both the CC-BY-SA-4.0 misspellings data (Wikipedia-derived) and the MIT packaging; the quick check saw only CC-BY-SA-4.0. I record the complete reading so both obligations stay on the inventory."
+comment = "MIT covers the packaging around the Wikipedia-derived CC-BY-SA-4.0 misspellings data; both obligations stay on the inventory."
 
 [[clarify]]
-package = { name = "@cspell/dict-django", version = "4.1.6" }
+name = "@cspell/dict-django"
+version = "4.1.6"
+detected = { registry = "MIT", intensive = "WTFPL" }
+justification = "scan-found-additional-content"
 expression = "MIT AND WTFPL"
-reason = "The in-depth scan matched a WTFPL license file covering the bundled Django word-list data; the quick check declared only the MIT packaging. I record both: MIT for the package, WTFPL for the data it ships."
+comment = "WTFPL covers the bundled Django word-list data; MIT covers the package around it."

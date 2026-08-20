@@ -208,42 +208,75 @@ reason = "Dual-licensed Apache-2.0 AND LGPL-3.0-or-later; the LGPL obligations a
 # On conflict for the same package, the PROJECT level WINS (you can always
 # override a shipped default).
 #
-# Two flavours of [[clarify]]:
+# Every entry is a PRECONDITIONED assertion. `detected` records what each
+# source reported when you wrote the entry:
 #
-#   (a) Misdetection correction (no `expects`): the finding is REPLACED by
-#       `expression` blindly (source "override", highest precedence). Use this
-#       to fix garbage/missing upstream metadata.
+#   registry   -- the quick answer: the package's own metadata, plus whatever
+#                 registry enrichment resolved. Often not SPDX at all ("BSD",
+#                 "Dual License") -- record it exactly as reported.
+#   intensive  -- the in-depth source scan's answer.
 #
-#   (b) Staleness-guarded disambiguation (with `expects`): an override is a
-#       PRECONDITIONED assertion. `expects` records the value you are
-#       disambiguating FROM. The override applies ONLY when the dependency's
-#       currently-observed license still matches `expects`. If it no longer
-#       matches (a relicense, e.g. a "BSD"->BSD-3-Clause override on a package
-#       now reporting GPL-3.0), the override is STALE and the gate FAILS LOUDLY
-#       naming the package, the expected value, and the now-observed value --
-#       the stale assertion is NEVER applied, so an old override can never
-#       silently mask a relicense.
+# At least one source is required; `false` records that a source reports
+# NOTHING. The entry applies ONLY while every source you recorded still reports
+# what you wrote down. If one no longer does -- a relicense, a source that went
+# quiet, a source that started reporting where it did not before -- the entry is
+# STALE and the gate FAILS LOUDLY naming the source, the recorded value, and the
+# current one. The stale assertion is NEVER applied, so an old entry can never
+# silently mask a relicense.
+#
+# A disagreement between the two sources is only settled by an entry that
+# recorded the `intensive` source: that is the entry stating which side you
+# stand behind. Recording `registry` alone leaves the disagreement open.
+#
+# `justification` is a closed set -- the tool can only check a claim it
+# understands. `comment` carries what the justification cannot, and is optional
+# by design: use it only where it adds something.
+#
+#   contradictory-claims-recorded  sources disagree irreconcilably; the
+#                                  expression is the reading you stand behind
+#   declared-more-complete         the package's own metadata names licenses
+#                                  the scan cannot see
+#   dual-license-choice            the package offers a choice; the expression
+#                                  records the one taken
+#   license-not-found              no source states a license; the expression
+#                                  comes from evidence outside detection
+#   scan-found-additional-content  the scan sees further licenses that do
+#                                  govern content the package ships
+#   scan-more-precise              the scan resolves an under-specified
+#                                  declared label to the exact license
+#   scan-overdetection             the scan reports licenses from files that
+#                                  do not govern the package
+#
+# `evidence` is an optional list of files or URLs a reader can check. It is
+# recorded verbatim: the tool never fetches or verifies it.
 #
 # `expression` must be valid SPDX -- parsed at validation time, so a typo fails
 # fast instead of mid-evaluation.
 # ---------------------------------------------------------------------------
 
 [[clarify]]
-# Misdetection correction (no `expects`): apply blindly.
-# Inline table: name is required, version is optional (omit = all versions).
-package = { name = "jsonify", version = "0.0.1" }
-# The corrected SPDX expression for this package.
+# `name` is an exact package name; `version` is optional (omit = all versions)
+# and may be a list when several versions share the judgment.
+name = "jsonify"
+version = "0.0.1"
+# Neither source states a license: the registry value is the non-SPDX string
+# "Public Domain", and the scan found no license file at all.
+detected = { registry = "Public Domain", intensive = false }
+justification = "license-not-found"
 expression = "Unlicense"
-# Mandatory: where the correction comes from.
-reason = "Upstream declares the non-SPDX value 'Public Domain'; jsonify's README dedicates it to the public domain, mapped to Unlicense deliberately."
+comment = "The README dedicates the package to the public domain; mapped to Unlicense deliberately."
+evidence = ["node_modules/jsonify/README.md"]
 
 # [[clarify]]
-# Staleness-guarded disambiguation: applies only while the observed value still
-# matches `expects`; a mismatch fails the gate loudly (never masks a relicense).
-# package = { name = "some-package" }
-# expects = "BSD"                 # the imprecise value we are disambiguating FROM
-# expression = "BSD-3-Clause"     # the precise SPDX expression we assert
-# reason = "Confirmed BSD-3-Clause in the upstream LICENSE file."
+# `pattern` covers a FAMILY of packages by name instead of one exact name:
+# `*` fills one name segment, `**` reaches across segments, and a trailing
+# slash covers a whole scope. Exactly one of `name` and `pattern` per entry,
+# and a pattern must carry a wildcard and at least one literal character.
+# pattern = "@acme-dictionaries/"
+# version = ["1.0.0", "1.0.1"]
+# detected = { registry = "BSD", intensive = "BSD-3-Clause" }
+# justification = "scan-more-precise"
+# expression = "BSD-3-Clause"
 
 # ---------------------------------------------------------------------------
 # Unknown-license handling

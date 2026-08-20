@@ -17,6 +17,7 @@ describe("annotateFindings — clarify overrides", () => {
       {
         name: "@img/sharp-win32-x64",
         version: "0.34.5",
+        detected: { registry: "Apache-2.0 AND LGPL-3.0-or-later" },
         expression: "Apache-2.0",
       },
     ];
@@ -35,7 +36,12 @@ describe("annotateFindings — clarify overrides", () => {
       claim("Apache-2.0 AND LGPL-3.0-or-later", "expression"),
     ]);
     const clarify: ClarifyInput[] = [
-      { name: "@img/sharp-win32-x64", version: "9.9.9", expression: "MIT" },
+      {
+        name: "@img/sharp-win32-x64",
+        version: "9.9.9",
+        detected: { registry: "Apache-2.0 AND LGPL-3.0-or-later" },
+        expression: "MIT",
+      },
     ];
     const { model, usedClarifyIndices } = annotateFindings(modelOf(entry), clarify);
     const finding = model.packages[0]!.finding!;
@@ -47,7 +53,9 @@ describe("annotateFindings — clarify overrides", () => {
 
   test("version-less clarify matches any version of the named package", () => {
     const entry = pkg("jsonify", "0.0.1", [claim("Public Domain", "name")]);
-    const clarify: ClarifyInput[] = [{ name: "jsonify", expression: "Unlicense" }];
+    const clarify: ClarifyInput[] = [
+      { name: "jsonify", detected: { registry: "Public Domain" }, expression: "Unlicense" },
+    ];
     const { model, usedClarifyIndices } = annotateFindings(modelOf(entry), clarify);
 
     expect(model.packages[0]!.finding!.expression).toBe("Unlicense");
@@ -61,10 +69,10 @@ describe("annotateFindings — clarify overrides", () => {
 // ===========================================================================
 
 describe("annotateFindings — staleness-guarded clarify", () => {
-  test("expects matching the imprecise-BSD signal APPLIES the disambiguation", () => {
+  test("a recorded registry detection matching the imprecise-BSD signal APPLIES the disambiguation", () => {
     const entry = pkg("jupyter-thing", "1.0.0", [claim("BSD", "name")]);
     const clarify: ClarifyInput[] = [
-      { name: "jupyter-thing", expects: "BSD", expression: "BSD-3-Clause" },
+      { name: "jupyter-thing", detected: { registry: "BSD" }, expression: "BSD-3-Clause" },
     ];
     const { model, usedClarifyIndices } = annotateFindings(modelOf(entry), clarify);
     const finding = model.packages[0]!.finding!;
@@ -75,12 +83,12 @@ describe("annotateFindings — staleness-guarded clarify", () => {
     expect(usedClarifyIndices.has(0)).toBe(true);
   });
 
-  test("expects matching a raw claim string APPLIES (raw-string signal member)", () => {
+  test("a recorded detection matching a raw claim string APPLIES (raw-string signal member)", () => {
     const entry = pkg("dateutil-ish", "1.0.0", [claim("Dual License", "name")]);
     const clarify: ClarifyInput[] = [
       {
         name: "dateutil-ish",
-        expects: "Dual License",
+        detected: { registry: "Dual License" },
         expression: "Apache-2.0 OR BSD-3-Clause",
       },
     ];
@@ -92,10 +100,10 @@ describe("annotateFindings — staleness-guarded clarify", () => {
     expect(finding.staleOverride).toBeUndefined();
   });
 
-  test("STALE: expects BSD but the package now reports GPL-3.0 → not applied, staleOverride recorded", () => {
+  test("STALE: registry recorded BSD but the package now reports GPL-3.0 → not applied, staleOverride recorded", () => {
     const entry = pkg("relicensed", "2.0.0", [claim("GPL-3.0-only")]);
     const clarify: ClarifyInput[] = [
-      { name: "relicensed", expects: "BSD", expression: "BSD-3-Clause" },
+      { name: "relicensed", detected: { registry: "BSD" }, expression: "BSD-3-Clause" },
     ];
     const { model } = annotateFindings(modelOf(entry), clarify);
     const finding = model.packages[0]!.finding!;
@@ -105,23 +113,26 @@ describe("annotateFindings — staleness-guarded clarify", () => {
     expect(finding.expression).toBe("GPL-3.0-only");
     expect(finding.staleOverride).toBeDefined();
     expect(finding.staleOverride!.level).toBe("clarify");
+    expect(finding.staleOverride!.source).toBe("registry");
     expect(finding.staleOverride!.expected).toBe("BSD");
     expect(finding.staleOverride!.observed).toContain("GPL-3.0-only");
   });
 
-  test("expects is matched case-insensitively and trimmed", () => {
+  test("a recorded detection is matched case-insensitively and trimmed", () => {
     const entry = pkg("ci-pkg", "1.0.0", [claim("BSD", "name")]);
     const clarify: ClarifyInput[] = [
-      { name: "ci-pkg", expects: "  bsd  ", expression: "BSD-3-Clause" },
+      { name: "ci-pkg", detected: { registry: "  bsd  " }, expression: "BSD-3-Clause" },
     ];
     const { model } = annotateFindings(modelOf(entry), clarify);
 
     expect(model.packages[0]!.finding!.expression).toBe("BSD-3-Clause");
   });
 
-  test("no-expects clarify still applies blindly (backward-compat)", () => {
+  test("a non-SPDX registry value recorded verbatim still satisfies the precondition", () => {
     const entry = pkg("jsonify", "0.0.1", [claim("Public Domain", "name")]);
-    const clarify: ClarifyInput[] = [{ name: "jsonify", expression: "Unlicense" }];
+    const clarify: ClarifyInput[] = [
+      { name: "jsonify", detected: { registry: "Public Domain" }, expression: "Unlicense" },
+    ];
     const { model } = annotateFindings(modelOf(entry), clarify);
     const finding = model.packages[0]!.finding!;
 
@@ -133,7 +144,7 @@ describe("annotateFindings — staleness-guarded clarify", () => {
 
 describe("annotateFindings — tool-level BUILTIN overrides", () => {
   const jupyterBuiltin: BuiltinOverrideInput[] = [
-    { name: "ipython", expects: "BSD", expression: "BSD-3-Clause" },
+    { name: "ipython", detected: { registry: "BSD" }, expression: "BSD-3-Clause" },
   ];
 
   test("a tool-level override applies when no project clarify matches and is cited override:builtin[i]", () => {
@@ -157,7 +168,9 @@ describe("annotateFindings — tool-level BUILTIN overrides", () => {
 
   test("project clarify WINS over a tool-level override on conflict (project-wins)", () => {
     const entry = pkg("ipython", "8.0.0", [claim("BSD", "name")]);
-    const clarify: ClarifyInput[] = [{ name: "ipython", expects: "BSD", expression: "MIT" }];
+    const clarify: ClarifyInput[] = [
+      { name: "ipython", detected: { registry: "BSD" }, expression: "MIT" },
+    ];
     const { model, usedClarifyIndices } = annotateFindings(modelOf(entry), clarify, jupyterBuiltin);
     const finding = model.packages[0]!.finding!;
 
@@ -186,10 +199,10 @@ describe("annotateFindings — tool-level BUILTIN overrides", () => {
 
 // ===========================================================================
 // C1 (corrections): the staleness guard must FAIL CLOSED when an obsolete
-// signal member (matching `expects`) coexists with a NEW precise claim that
-// contradicts the asserted expression. A lingering label must never license-out
-// a co-present precise copyleft claim. The any-member `.some()` match on
-// `expects` alone is fail-OPEN.
+// signal member (the one the entry recorded) coexists with a NEW precise claim
+// that contradicts the asserted expression. A lingering label must never
+// license-out a co-present precise copyleft claim: matching the recorded
+// detections alone is fail-OPEN.
 // ===========================================================================
 
 describe("annotateFindings — staleness fails CLOSED on a contradicting co-claim (C1)", () => {
@@ -204,7 +217,7 @@ describe("annotateFindings — staleness fails CLOSED on a contradicting co-clai
     expect(finding.source).not.toBe("override");
     expect(finding.staleOverride).toBeDefined();
     expect(finding.staleOverride!.level).toBe("builtin");
-    expect(finding.staleOverride!.expected.toLowerCase()).toBe("bsd");
+    expect(finding.staleOverride!.unaccounted).toBe("GPL-3.0-only");
   });
 
   test("clean case: BSD alone still applies BSD-3-Clause (shipped ipython builtin)", () => {
@@ -244,7 +257,7 @@ describe("annotateFindings — staleness fails CLOSED on a contradicting co-clai
 // ===========================================================================
 // GAP FIX: when the registry UPGRADES the imprecise label
 // to the EXACT precise license the override asserts, the override is REDUNDANT
-// — NOT stale. expects "BSD" is no longer present in the signal (the dep now
+// — NOT stale. The recorded "BSD" is no longer in the signal (the dep now
 // reports precise "BSD-3-Clause"), but the observed precise finding already
 // SATISFIES the asserted expression, so nothing is masked: the observed finding
 // must stand unchanged and the gate must NOT fail. A relicense to a license that
@@ -252,10 +265,10 @@ describe("annotateFindings — staleness fails CLOSED on a contradicting co-clai
 // ===========================================================================
 
 describe("annotateFindings — redundant override when metadata catches up (gap fix)", () => {
-  test("REDUNDANT: precise BSD-3-Clause observed, expects BSD asserts BSD-3-Clause → finding stays, NOT stale (live ipython false-positive)", () => {
+  test("REDUNDANT: precise BSD-3-Clause observed, a recorded BSD asserts BSD-3-Clause → finding stays, NOT stale (live ipython false-positive)", () => {
     // The exact live case: modern PyPI reports ipython with the PRECISE
     // license_expression "BSD-3-Clause" — no bare "BSD" classifier — so the
-    // shipped "expects: BSD" override no longer matches the signal. But the
+    // shipped override recording "BSD" no longer matches the signal. But the
     // observed precise license is IDENTICAL to what the override asserts.
     const entry = pkg("ipython", "9.10.0", [claim("BSD-3-Clause", "spdx-id")]);
     const { model } = annotateFindings(modelOf(entry), [], [...BUILTIN_OVERRIDES]);
@@ -277,12 +290,12 @@ describe("annotateFindings — redundant override when metadata catches up (gap 
     }
   });
 
-  test("STALE: precise MIT observed, expects BSD asserts BSD-3-Clause → fail (MIT does not satisfy BSD-3-Clause)", () => {
+  test("STALE: precise MIT observed, a recorded BSD asserts BSD-3-Clause → fail (MIT does not satisfy BSD-3-Clause)", () => {
     const entry = pkg("relicensed-permissive", "2.0.0", [claim("MIT", "spdx-id")]);
     const clarify: ClarifyInput[] = [
       {
         name: "relicensed-permissive",
-        expects: "BSD",
+        detected: { registry: "BSD" },
         expression: "BSD-3-Clause",
       },
     ];
@@ -296,12 +309,12 @@ describe("annotateFindings — redundant override when metadata catches up (gap 
     expect(finding.staleOverride!.observed).toContain("MIT");
   });
 
-  test("STALE: precise GPL-3.0-only observed, expects BSD asserts BSD-3-Clause → fail (relicense to copyleft)", () => {
+  test("STALE: precise GPL-3.0-only observed, a recorded BSD asserts BSD-3-Clause → fail (relicense to copyleft)", () => {
     const entry = pkg("relicensed-copyleft", "2.0.0", [claim("GPL-3.0-only", "spdx-id")]);
     const clarify: ClarifyInput[] = [
       {
         name: "relicensed-copyleft",
-        expects: "BSD",
+        detected: { registry: "BSD" },
         expression: "BSD-3-Clause",
       },
     ];
@@ -314,9 +327,10 @@ describe("annotateFindings — redundant override when metadata catches up (gap 
     expect(finding.staleOverride!.level).toBe("clarify");
   });
 
-  test("the C1 masking case STILL fails closed (expects BSD present + co-present GPL contradicts)", () => {
-    // Regression guard: the gap fix must not reopen C1. Here expects IS in the
-    // signal, so the redundant path is never consulted; signalContradicts fires.
+  test("the C1 masking case STILL fails closed (the recorded BSD is present + a co-present GPL contradicts)", () => {
+    // Regression guard: the gap fix must not reopen C1. Here the recorded value
+    // IS in the signal, so the redundant path is never consulted; the
+    // unaccounted-license guard fires.
     const entry = pkg("ipython", "8.0.0", [claim("BSD", "name"), claim("GPL-3.0-only", "spdx-id")]);
     const { model } = annotateFindings(modelOf(entry), [], [...BUILTIN_OVERRIDES]);
     const finding = model.packages[0]!.finding!;
@@ -326,7 +340,7 @@ describe("annotateFindings — redundant override when metadata catches up (gap 
     expect(finding.staleOverride!.level).toBe("builtin");
   });
 
-  test("the normal disambiguation case STILL applies (observed imprecise BSD, expects BSD)", () => {
+  test("the normal disambiguation case STILL applies (observed imprecise BSD, recorded BSD)", () => {
     // Regression guard: the gap fix must not break the imprecise→precise path.
     const entry = pkg("traitlets", "5.0.0", [claim("BSD License", "name")]);
     const { model } = annotateFindings(modelOf(entry), [], [...BUILTIN_OVERRIDES]);

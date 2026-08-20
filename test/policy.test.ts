@@ -15,6 +15,7 @@ import { denyRuleFor } from "../src/policy/denylist";
 import { AGPL_IDS, COPYLEFT_IDS } from "../src/policy/copyleft";
 import { COULD_BE_COPYLEFT_FAMILIES, WORKSPACE_ABSORBS } from "../src/policy/copyleftFamily";
 import { BUILTIN_OVERRIDES } from "../src/policy/builtinOverrides";
+import { JUSTIFICATION_VALUES } from "../src/policy/enums";
 import { parsePolicy, PolicyError, type Policy } from "../src/policy/schema";
 import type {
   CanonicalDependencies,
@@ -62,7 +63,7 @@ const SUPPRESSION_DESCRIPTION =
   "Workspace is itself distributed under AGPL-3.0; in-family copyleft is fine.";
 const MPL_REASON = "Weak copyleft; compatible under AGPL-3.0 and Apache License v2.0";
 const SHARP_REASON = "Dual-licensed Apache-2.0 AND LGPL-3.0-or-later; LGPL obligations accepted.";
-const CLARIFY_REASON = "Upstream declares Public Domain; mapped to Unlicense deliberately.";
+const CLARIFY_COMMENT = "Upstream declares Public Domain; mapped to Unlicense deliberately.";
 
 // Happy path: every table class present, exercising the full locked TOML
 // surface.
@@ -84,9 +85,12 @@ const VALID_POLICY = [
   `reason = ${JSON.stringify(SHARP_REASON)}`,
   "",
   "[[clarify]]",
-  'package = { name = "jsonify", version = "0.0.1" }',
+  'name = "jsonify"',
+  'version = "0.0.1"',
+  'detected = { registry = "Public Domain", intensive = false }',
+  'justification = "license-not-found"',
   'expression = "Unlicense"',
-  `reason = ${JSON.stringify(CLARIFY_REASON)}`,
+  `comment = ${JSON.stringify(CLARIFY_COMMENT)}`,
   "",
   "[unknown]",
   'handling = "fail"',
@@ -122,8 +126,10 @@ describe("parsePolicy — happy path", () => {
       {
         name: "jsonify",
         version: "0.0.1",
+        detected: { registry: "Public Domain", intensive: false },
+        justification: "license-not-found",
         expression: "Unlicense",
-        reason: CLARIFY_REASON,
+        comment: CLARIFY_COMMENT,
       },
     ]);
   });
@@ -331,95 +337,228 @@ describe("parsePolicy — compatible `where` scope", () => {
 });
 
 // ===========================================================================
-// The optional `expects` precondition on [[clarify]] + the
-// shipped tool-level BUILTIN_OVERRIDES set.
+// The [[clarify]] schema: the package selector, the mandatory `detected`
+// precondition, the closed justification set, evidence, and the pointed
+// errors an entry written against the previous schema gets.
 // ===========================================================================
 
-/** A [[clarify]] entry carrying an `expects` precondition. */
-const clarifyWithExpects = (expects: string): string =>
-  [
-    "[[clarify]]",
-    'package = { name = "demo-pkg" }',
-    `expects = ${JSON.stringify(expects)}`,
-    'expression = "BSD-3-Clause"',
-    'reason = "disambiguate the imprecise BSD label to BSD-3-Clause"',
-  ].join("\n");
+/** A [[clarify]] entry built from the given key lines. */
+const clarifyFixture = (lines: ReadonlyArray<string>): string =>
+  ["[[clarify]]", ...lines].join("\n");
 
-describe("parsePolicy — clarify `expects` precondition", () => {
-  test("a [[clarify]] WITH expects parses and the ClarifyRule carries it", () => {
-    const policy = parsePolicy(clarifyWithExpects("BSD"));
+/** A minimal valid entry: name, one recorded lane, justification, expression. */
+const DEMO_CLARIFY = [
+  'name = "demo-pkg"',
+  'detected = { registry = "BSD" }',
+  'justification = "scan-more-precise"',
+  'expression = "BSD-3-Clause"',
+];
+
+/** DEMO_CLARIFY without the line starting with `key`, for missing-key cases. */
+const clarifyWithout = (key: string): string[] =>
+  DEMO_CLARIFY.filter((line) => !line.startsWith(`${key} `) && !line.startsWith(`${key} =`));
+
+describe("parsePolicy — the [[clarify]] package selector", () => {
+  test("an exact name parses, and no absent optional key materializes", () => {
+    const policy = parsePolicy(clarifyFixture(DEMO_CLARIFY));
 
     expect(policy.clarify).toEqual([
       {
         name: "demo-pkg",
-        expects: "BSD",
+        detected: { registry: "BSD" },
+        justification: "scan-more-precise",
         expression: "BSD-3-Clause",
-        reason: "disambiguate the imprecise BSD label to BSD-3-Clause",
       },
     ]);
   });
 
-  test("a [[clarify]] WITHOUT expects still parses (optional-for-backward-compat)", () => {
+  test("a name pattern parses and is kept verbatim for the shared matcher", () => {
     const policy = parsePolicy(
-      [
-        "[[clarify]]",
-        'package = { name = "jsonify", version = "0.0.1" }',
-        'expression = "Unlicense"',
-        `reason = ${JSON.stringify(CLARIFY_REASON)}`,
-      ].join("\n"),
+      clarifyFixture(['pattern = "@cspell/dict-*"', ...clarifyWithout("name")]),
     );
 
-    expect(policy.clarify).toEqual([
-      {
-        name: "jsonify",
-        version: "0.0.1",
-        expression: "Unlicense",
-        reason: CLARIFY_REASON,
-      },
+    expect(policy.clarify[0]?.pattern).toBe("@cspell/dict-*");
+    expect("name" in (policy.clarify[0] ?? {})).toBe(false);
+  });
+
+  test("name AND pattern together is rejected — the selector must be unambiguous", () => {
+    const error = expectPolicyError(clarifyFixture(['pattern = "demo-*"', ...DEMO_CLARIFY]));
+
+    expect(error.message).toContain("clarify[0]");
+    expect(error.message).toContain('exactly one of "name" and "pattern"');
+  });
+
+  test("neither name nor pattern is rejected", () => {
+    const error = expectPolicyError(clarifyFixture(clarifyWithout("name")));
+
+    expect(error.message).toContain("clarify[0]");
+    expect(error.message).toContain('exactly one of "name" and "pattern"');
+  });
+
+  test("a glob-free pattern is rejected, naming the key to use instead", () => {
+    const error = expectPolicyError(
+      clarifyFixture(['pattern = "demo-pkg"', ...clarifyWithout("name")]),
+    );
+
+    expect(error.message).toContain("clarify[0]");
+    expect(error.message).toContain('use "name"');
+  });
+
+  test("an anchor-less pattern is rejected — it would cover every package in the model", () => {
+    const error = expectPolicyError(clarifyFixture(['pattern = "**"', ...clarifyWithout("name")]));
+
+    expect(error.message).toContain("clarify[0]");
+    expect(error.message).toContain("at least one literal character");
+  });
+
+  test("a version list parses; an empty list is rejected", () => {
+    const policy = parsePolicy(clarifyFixture([...DEMO_CLARIFY, 'version = ["1.0.0", "1.0.1"]']));
+
+    expect(policy.clarify[0]?.version).toEqual(["1.0.0", "1.0.1"]);
+
+    const error = expectPolicyError(clarifyFixture([...DEMO_CLARIFY, "version = []"]));
+
+    expect(error.message).toContain("clarify[0]");
+    expect(error.message).toContain('"version"');
+  });
+});
+
+describe("parsePolicy — the [[clarify]] `detected` precondition", () => {
+  test("both lanes parse, and `false` records that a lane detects nothing", () => {
+    const policy = parsePolicy(
+      clarifyFixture([
+        'detected = { registry = "BSD", intensive = false }',
+        ...clarifyWithout("detected"),
+      ]),
+    );
+
+    expect(policy.clarify[0]?.detected).toEqual({
+      registry: "BSD",
+      intensive: false,
+    });
+  });
+
+  test("a missing detected is rejected — every entry states what it was written against", () => {
+    const error = expectPolicyError(clarifyFixture(clarifyWithout("detected")));
+
+    expect(error.message).toContain("clarify[0]");
+    expect(error.message).toContain('missing required key "detected"');
+  });
+
+  test("an empty detected table is rejected — at least one lane must be recorded", () => {
+    const error = expectPolicyError(
+      clarifyFixture(["detected = {}", ...clarifyWithout("detected")]),
+    );
+
+    expect(error.message).toContain("clarify[0]");
+    expect(error.message).toContain("at least one of registry, intensive");
+  });
+
+  test("an unknown detected key is rejected naming the inline table", () => {
+    const error = expectPolicyError(
+      clarifyFixture(['detected = { guessed = "MIT" }', ...clarifyWithout("detected")]),
+    );
+
+    expect(error.message).toContain("clarify[0]: detected");
+    expect(error.message).toContain('"guessed"');
+  });
+
+  test("`true` is not a detection — only a reported value or `false` is legal", () => {
+    const error = expectPolicyError(
+      clarifyFixture(["detected = { registry = true }", ...clarifyWithout("detected")]),
+    );
+
+    expect(error.message).toContain("clarify[0]");
+    expect(error.message).toContain("detected.registry");
+  });
+});
+
+describe("parsePolicy — the [[clarify]] closed justification set", () => {
+  test("an invented value is rejected and the error names the whole set", () => {
+    const error = expectPolicyError(
+      clarifyFixture(['justification = "because-i-said-so"', ...clarifyWithout("justification")]),
+    );
+
+    expect(error.message).toContain("clarify[0]");
+    for (const value of JUSTIFICATION_VALUES) {
+      expect(error.message).toContain(value);
+    }
+  });
+
+  test("a missing justification is rejected", () => {
+    const error = expectPolicyError(clarifyFixture(clarifyWithout("justification")));
+
+    expect(error.message).toContain("clarify[0]");
+    expect(error.message).toContain('"justification"');
+  });
+});
+
+describe("parsePolicy — [[clarify]] evidence and comment", () => {
+  test("evidence is recorded verbatim, and a comment parses beside it", () => {
+    const policy = parsePolicy(
+      clarifyFixture([
+        ...DEMO_CLARIFY,
+        'evidence = ["node_modules/demo-pkg/LICENSE", "https://example.invalid/license"]',
+        'comment = "the file carries the three-clause text"',
+      ]),
+    );
+
+    expect(policy.clarify[0]?.evidence).toEqual([
+      "node_modules/demo-pkg/LICENSE",
+      "https://example.invalid/license",
     ]);
-    // No expects key materializes when absent.
-    expect("expects" in (policy.clarify[0] ?? {})).toBe(false);
+    expect(policy.clarify[0]?.comment).toBe("the file carries the three-clause text");
   });
 
-  test("a malformed (non-string) expects is rejected naming clarify[i]", () => {
-    const error = expectPolicyError(
-      [
-        "[[clarify]]",
-        'package = { name = "demo-pkg" }',
-        "expects = 42",
-        'expression = "BSD-3-Clause"',
-        'reason = "r"',
-      ].join("\n"),
-    );
+  test("an empty evidence list is rejected — an empty list records nothing", () => {
+    const error = expectPolicyError(clarifyFixture([...DEMO_CLARIFY, "evidence = []"]));
 
     expect(error.message).toContain("clarify[0]");
-    expect(error.message).toContain("expects");
+    expect(error.message).toContain('"evidence"');
   });
+});
 
-  test("an empty-string expects is rejected (a precondition must carry a value)", () => {
+describe("parsePolicy — a [[clarify]] entry written against the previous schema", () => {
+  const REPLACED: ReadonlyArray<[string, string, string]> = [
+    ["package", 'package = { name = "demo-pkg" }', '"name"'],
+    ["expects", 'expects = "BSD"', "detected"],
+    ["reason", 'reason = "confirmed in the LICENSE file"', '"justification"'],
+  ];
+
+  for (const [key, line, replacement] of REPLACED) {
+    test(`"${key}" is rejected naming its replacement, not as a bare unknown key`, () => {
+      const error = expectPolicyError(clarifyFixture([...DEMO_CLARIFY, line]));
+
+      expect(error.message).toContain("clarify[0]");
+      expect(error.message).toContain(replacement);
+      expect(error.message).toContain("docs/reference/policy.md");
+      expect(error.message).not.toContain(`unknown key "${key}"`);
+    });
+  }
+
+  test("a complete old-shape entry names every replacement in one aggregated error", () => {
     const error = expectPolicyError(
-      [
-        "[[clarify]]",
-        'package = { name = "demo-pkg" }',
-        'expects = "   "',
+      clarifyFixture([
+        'package = { name = "demo-pkg", version = "1.0.0" }',
+        'expects = "BSD"',
         'expression = "BSD-3-Clause"',
-        'reason = "r"',
-      ].join("\n"),
+        'reason = "confirmed in the LICENSE file"',
+      ]),
     );
 
-    expect(error.message).toContain("clarify[0]");
-    expect(error.message).toContain("expects");
+    expect(error.message).toContain('"name"');
+    expect(error.message).toContain("detected");
+    expect(error.message).toContain('"justification"');
   });
 });
 
 describe("BUILTIN_OVERRIDES — the shipped tool-level set", () => {
-  test("is a non-empty literal array; every entry has name, expects, expression, reason", () => {
+  test("is a non-empty literal array; every entry has name, detected, expression, reason", () => {
     expect(BUILTIN_OVERRIDES.length).toBeGreaterThan(0);
     for (const o of BUILTIN_OVERRIDES) {
       expect(typeof o.name).toBe("string");
       expect(o.name.trim().length).toBeGreaterThan(0);
-      expect(typeof o.expects).toBe("string");
-      expect(o.expects.trim().length).toBeGreaterThan(0);
+      expect(Object.keys(o.detected).length).toBeGreaterThan(0);
       expect(typeof o.expression).toBe("string");
       expect(typeof o.reason).toBe("string");
       expect(o.reason.trim().length).toBeGreaterThan(0);
@@ -466,7 +605,7 @@ describe("BUILTIN_OVERRIDES — the shipped tool-level set", () => {
     const entry = BUILTIN_OVERRIDES.find((o) => o.name === "python-dateutil");
 
     expect(entry).toBeDefined();
-    expect(entry?.expects).toBe("Dual License");
+    expect(entry?.detected).toEqual({ registry: "Dual License" });
     expect(entry?.expression).toBe("Apache-2.0 OR BSD-3-Clause");
     // The exact value from CONTEXT.md parses as a valid OR expression.
     const node = parseSpdxId(entry?.expression ?? "") as {
@@ -490,8 +629,8 @@ describe("BUILTIN_OVERRIDES — the shipped tool-level set", () => {
       const entry = BUILTIN_OVERRIDES.find((o) => o.name === name);
 
       expect(entry).toBeDefined();
-      // expects the imprecise BSD value the normalizer produces.
-      expect(entry?.expects).toBe("BSD");
+      // Records the imprecise BSD value the registry lane produces.
+      expect(entry?.detected).toEqual({ registry: "BSD" });
       expect(entry?.expression).toBe("BSD-3-Clause");
     }
   });
@@ -527,9 +666,10 @@ describe("parsePolicy — error aggregation", () => {
       'pattern = "Apache-2.0"',
       "",
       "[[clarify]]",
-      'package = { name = "x" }',
+      'name = "x"',
+      'detected = { registry = "MIT" }',
+      'justification = "scan-more-precise"',
       'expression = "not a license"',
-      'reason = "r"',
     ].join("\n");
     const error = expectPolicyError(fixture);
 
@@ -1493,9 +1633,12 @@ describe("evaluate — clarify usage visibility", () => {
   test("a clarified package falling through to ok cites clarify[0]", () => {
     const policyText = [
       "[[clarify]]",
-      'package = { name = "weird-pkg", version = "1.0.0" }',
+      'name = "weird-pkg"',
+      'version = "1.0.0"',
+      'detected = { registry = "Public Domain" }',
+      'justification = "license-not-found"',
       'expression = "MIT"',
-      'reason = "upstream metadata is garbage; MIT confirmed in the repository"',
+      'comment = "upstream metadata is garbage; MIT confirmed in the repository"',
     ].join("\n");
     const { verdicts, usedClarifyIndices } = runEngine(
       [pkgSpec("weird-pkg", "Public Domain", ["backend"])],
@@ -1512,9 +1655,12 @@ describe("evaluate — LicenseRef acceptance for commercial clarifies (A4/P-05)"
   test("a [[clarify]] with a LicenseRef- expression on an honest-unknown pkg:maven component VALIDATES and the verdict cites clarify[0] with the LicenseRef expression", () => {
     const policyText = [
       "[[clarify]]",
-      'package = { name = "proprietary-reporting-engine", version = "9.0.0" }',
+      'name = "proprietary-reporting-engine"',
+      'version = "9.0.0"',
+      "detected = { registry = false, intensive = false }",
+      'justification = "license-not-found"',
       'expression = "LicenseRef-commercial-vendor-agreement"',
-      'reason = "system-scoped commercial jar; the vendor agreement governs, not a public license"',
+      'comment = "system-scoped commercial jar; the vendor agreement governs, not a public license"',
     ].join("\n");
     const spec: PackageSpec = {
       purl: "pkg:maven/com.example.vendor/proprietary-reporting-engine@9.0.0",
@@ -1535,9 +1681,11 @@ describe("evaluate — LicenseRef acceptance for commercial clarifies (A4/P-05)"
   test("a LicenseRef- expression inside a compound (LicenseRef-x OR MIT) is LOCKED to whatever the in-tree machinery already does — no compound handling is extended here", () => {
     const policyText = [
       "[[clarify]]",
-      'package = { name = "dual-ref-pkg" }',
+      'name = "dual-ref-pkg"',
+      "detected = { registry = false, intensive = false }",
+      'justification = "license-not-found"',
       'expression = "LicenseRef-x OR MIT"',
-      'reason = "dual: a proprietary ref or MIT, whichever the consumer prefers"',
+      'comment = "dual: a proprietary ref or MIT, whichever the consumer prefers"',
     ].join("\n");
     const spec: PackageSpec = {
       purl: "pkg:maven/com.example/dual-ref-pkg@1.0.0",
@@ -1618,7 +1766,7 @@ describe("evaluate — an unassessed LicenseRef never reaches default:ok (silent
 describe("evaluate — staleness-guarded overrides", () => {
   test("a tool-level override that decides a verdict cites override:builtin[i], not default:ok", () => {
     const builtins: BuiltinOverrideInput[] = [
-      { name: "ipython", expects: "BSD", expression: "BSD-3-Clause" },
+      { name: "ipython", detected: { registry: "BSD" }, expression: "BSD-3-Clause" },
     ];
     const { verdicts } = runEngine([pkgSpec("ipython", "BSD", ["backend"])], "", builtins);
 
@@ -1630,7 +1778,7 @@ describe("evaluate — staleness-guarded overrides", () => {
 
   test("HEADLINE: a stale BSD→BSD-3-Clause override on a now-GPL-3.0 dep FAILS naming pkg/expected/observed", () => {
     const builtins: BuiltinOverrideInput[] = [
-      { name: "relicensed", expects: "BSD", expression: "BSD-3-Clause" },
+      { name: "relicensed", detected: { registry: "BSD" }, expression: "BSD-3-Clause" },
     ];
     const { verdicts } = runEngine(
       [pkgSpec("relicensed", "GPL-3.0-only", ["backend"])],
@@ -1648,10 +1796,10 @@ describe("evaluate — staleness-guarded overrides", () => {
   test("a stale project clarify also fails (level surfaced in the message)", () => {
     const policyText = [
       "[[clarify]]",
-      'package = { name = "relicensed" }',
-      'expects = "BSD"',
+      'name = "relicensed"',
+      'detected = { registry = "BSD" }',
+      'justification = "scan-more-precise"',
       'expression = "BSD-3-Clause"',
-      'reason = "was BSD-3-Clause upstream"',
     ].join("\n");
     const { verdicts } = runEngine(
       [pkgSpec("relicensed", "GPL-3.0-only", ["backend"])],
@@ -1665,13 +1813,14 @@ describe("evaluate — staleness-guarded overrides", () => {
   test("project clarify WINS over tool-level on conflict, end-to-end", () => {
     const policyText = [
       "[[clarify]]",
-      'package = { name = "ipython" }',
-      'expects = "BSD"',
+      'name = "ipython"',
+      'detected = { registry = "BSD" }',
+      'justification = "contradictory-claims-recorded"',
       'expression = "MIT"',
-      'reason = "project says MIT"',
+      'comment = "project says MIT"',
     ].join("\n");
     const builtins: BuiltinOverrideInput[] = [
-      { name: "ipython", expects: "BSD", expression: "BSD-3-Clause" },
+      { name: "ipython", detected: { registry: "BSD" }, expression: "BSD-3-Clause" },
     ];
     const { verdicts } = runEngine([pkgSpec("ipython", "BSD", ["backend"])], policyText, builtins);
 
@@ -1688,11 +1837,11 @@ describe("evaluate — staleness-guarded overrides", () => {
 
   test("REDUNDANT override (metadata caught up to a precise satisfying license) does NOT fail — observed finding stands ok (gap fix)", () => {
     // The live false-positive: PyPI now reports ipython precisely as
-    // "BSD-3-Clause" (no bare "BSD"). expects "BSD" is absent from the signal,
-    // but the observed precise license already satisfies the asserted
+    // "BSD-3-Clause" (no bare "BSD"). The recorded "BSD" is absent from the
+    // signal, but the observed precise license already satisfies the asserted
     // BSD-3-Clause — nothing is masked, so the gate must NOT fire override:stale.
     const builtins: BuiltinOverrideInput[] = [
-      { name: "ipython", expects: "BSD", expression: "BSD-3-Clause" },
+      { name: "ipython", detected: { registry: "BSD" }, expression: "BSD-3-Clause" },
     ];
     const { verdicts } = runEngine([pkgSpec("ipython", "BSD-3-Clause", ["backend"])], "", builtins);
 
@@ -1701,10 +1850,10 @@ describe("evaluate — staleness-guarded overrides", () => {
   });
 
   test("a genuine relicense to a NON-satisfying license still FAILS override:stale (gap fix is fail-safe)", () => {
-    // expects "BSD" absent AND the observed precise license (MIT) does not
-    // satisfy the asserted BSD-3-Clause → genuine drift → must fail closed.
+    // The recorded "BSD" is absent AND the observed precise license (MIT) does
+    // not satisfy the asserted BSD-3-Clause → genuine drift → must fail closed.
     const builtins: BuiltinOverrideInput[] = [
-      { name: "relicensed", expects: "BSD", expression: "BSD-3-Clause" },
+      { name: "relicensed", detected: { registry: "BSD" }, expression: "BSD-3-Clause" },
     ];
     const { verdicts } = runEngine([pkgSpec("relicensed", "MIT", ["backend"])], "", builtins);
 
@@ -1712,11 +1861,11 @@ describe("evaluate — staleness-guarded overrides", () => {
     expect(verdicts[0].rule).toContain("override:stale");
   });
 
-  test("a SIMPLE single-id expects paired with an OR-only expression still takes the normal signal/satisfies decision tree, not the compound literal fallback (proves the classifier's finer AND-vs-OR boundary on the expression side)", () => {
+  test("an OR-only expression applies while the recorded detection still holds", () => {
     const builtins: BuiltinOverrideInput[] = [
       {
         name: "or-expression-pkg",
-        expects: "MIT",
+        detected: { registry: "MIT" },
         expression: "MIT OR Apache-2.0",
       },
     ];
@@ -1733,34 +1882,185 @@ describe("evaluate — staleness-guarded overrides", () => {
 });
 
 // ===========================================================================
-// COMPOUND `expects`: a clarify written against a multi-license (AND/OR)
-// registry claim. signalContradicts/baseSatisfiesAssertion both feed
-// `expression` into spdx-satisfies's allowlist argument, which throws on an
-// AND entry - so a compound override (either half compound) instead compares
-// `expects` against the observed signal by CANONICAL claim-string equality:
-// both sides run through canonicalizeExpression (flatten, dedupe, absorb,
-// sort) before the case-insensitive, trimmed comparison signalMatches always
-// applied, so a registry re-spelling of the same license set - reordered
-// operands, a duplicated conjunct, an absorbable branch - never reopens the
-// override. Only a genuine change to the license SET does. Modeled on the
-// real spdx-ranges dogfood case: npm declares "(MIT AND CC-BY-3.0)", the
-// in-depth scan reads only the root LICENSE and sees "MIT" - two co-present
-// signal members, one of which is the compound the clarify names.
+// The per-source `detected` precondition at verdict level: which lane a
+// recorded value is checked against, what `false` asserts, what a lane that
+// has gone quiet does, and how the reason names each.
 // ===========================================================================
 
-describe("evaluate — COMPOUND expects (the AND/OR registry-claim precondition)", () => {
-  const compoundClaim = "(MIT AND CC-BY-3.0)";
+describe("evaluate — per-source detected preconditions", () => {
+  /** A [[clarify]] on `detected-pkg` recording exactly the given inline table. */
+  const detectedClarify = (table: string): string =>
+    [
+      "[[clarify]]",
+      'name = "detected-pkg"',
+      `detected = ${table}`,
+      'justification = "scan-more-precise"',
+      'expression = "BSD-3-Clause"',
+    ].join("\n");
 
-  /** A [[clarify]] whose `expects` AND `expression` are the same compound claim. */
-  const compoundClarify = [
+  test("HEADLINE: a value is checked against ITS OWN lane — a registry value the intensive lane happens to report does not satisfy it", () => {
+    const { verdicts } = runEngine(
+      [scanPkgSpec("detected-pkg", null, "BSD", ["backend"])],
+      detectedClarify('{ registry = "BSD" }'),
+    );
+
+    expect(verdicts[0].status).toBe("fail");
+    expect(verdicts[0].rule).toBe("override:stale[clarify]");
+    expect(verdicts[0].reason).toContain("no current registry detection");
+  });
+
+  test("the same value recorded against the lane that reports it APPLIES", () => {
+    const { verdicts } = runEngine(
+      [scanPkgSpec("detected-pkg", null, "BSD", ["backend"])],
+      detectedClarify('{ intensive = "BSD" }'),
+    );
+
+    expect(verdicts[0].status).toBe("ok");
+    expect(verdicts[0].rule).toBe("clarify[0]");
+  });
+
+  test("`false` records that a lane reports nothing, and holds while it stays quiet", () => {
+    const { verdicts } = runEngine(
+      [pkgSpec("detected-pkg", "BSD", ["backend"])],
+      detectedClarify('{ registry = "BSD", intensive = false }'),
+    );
+
+    expect(verdicts[0].status).toBe("ok");
+    expect(verdicts[0].rule).toBe("clarify[0]");
+  });
+
+  test("a `false` record is PROVEN WRONG once that lane starts reporting, even when the new report AGREES — a source that has started speaking is evidence to read", () => {
+    const { verdicts } = runEngine(
+      [scanPkgSpec("detected-pkg", "BSD", "BSD-3-Clause", ["backend"])],
+      detectedClarify('{ registry = "BSD", intensive = false }'),
+    );
+
+    expect(verdicts[0].status).toBe("fail");
+    expect(verdicts[0].rule).toBe("override:stale[clarify]");
+    expect(verdicts[0].reason).toContain("recorded no intensive detection");
+    expect(verdicts[0].reason).toContain("BSD-3-Clause");
+  });
+});
+
+// ===========================================================================
+// Selecting a FAMILY of packages: one entry covers every name a pattern
+// matches, and one entry covers several pinned versions. Both go through the
+// shared matcher, so annotate and evaluate agree on which packages an entry
+// governs.
+// ===========================================================================
+
+describe("evaluate — a [[clarify]] covering a family of packages", () => {
+  const patternClarify = [
     "[[clarify]]",
-    'package = { name = "compound-pkg" }',
-    `expects = ${JSON.stringify(compoundClaim)}`,
-    `expression = ${JSON.stringify(compoundClaim)}`,
-    'reason = "the registry declares the compound claim; the in-depth scan only sees the root MIT license"',
+    'pattern = "@dicts/*"',
+    'detected = { registry = "BSD" }',
+    'justification = "scan-more-precise"',
+    'expression = "BSD-3-Clause"',
   ].join("\n");
 
-  test("HEADLINE: a compound expects APPLIES while the registry claim still matches, alongside a co-present scancode claim", () => {
+  test("HEADLINE: one pattern entry clarifies every matching package, each citing the same entry", () => {
+    const { verdicts, usedClarifyIndices } = runEngine(
+      [pkgSpec("@dicts/en", "BSD", ["backend"]), pkgSpec("@dicts/fr", "BSD", ["backend"])],
+      patternClarify,
+    );
+
+    expect(usedClarifyIndices.has(0)).toBe(true);
+    for (const verdict of verdicts) {
+      expect(verdict.status).toBe("ok");
+      expect(verdict.rule).toBe("clarify[0]");
+      expect(verdict.reason).toContain("BSD-3-Clause");
+    }
+  });
+
+  test("a package outside the pattern is untouched — the entry governs the family, not the model", () => {
+    const { verdicts } = runEngine([pkgSpec("@other/en", "BSD", ["backend"])], patternClarify);
+
+    expect(verdicts[0].rule).toBe("default:imprecise");
+  });
+
+  test("a version list covers exactly the versions it names, and nothing else", () => {
+    const policyText = [
+      "[[clarify]]",
+      'name = "pinned-pkg"',
+      'version = ["1.0.0", "2.0.0"]',
+      'detected = { registry = "BSD" }',
+      'justification = "scan-more-precise"',
+      'expression = "BSD-3-Clause"',
+    ].join("\n");
+    const covered = runEngine(
+      [pkgSpec("pinned-pkg", "BSD", ["backend"], "2.0.0")],
+      policyText,
+    ).verdicts;
+    const uncovered = runEngine(
+      [pkgSpec("pinned-pkg", "BSD", ["backend"], "3.0.0")],
+      policyText,
+    ).verdicts;
+
+    expect(covered[0].rule).toBe("clarify[0]");
+    expect(uncovered[0].rule).toBe("default:imprecise");
+  });
+});
+
+// ===========================================================================
+// The reason a cited entry surfaces: the closed-set value, and the comment
+// after an em-dash when the entry carries one.
+// ===========================================================================
+
+describe("evaluate — the reason a cited [[clarify]] surfaces", () => {
+  const citingClarify = (extra: ReadonlyArray<string>): string =>
+    [
+      "[[clarify]]",
+      'name = "cited-pkg"',
+      'detected = { registry = "BSD" }',
+      'justification = "scan-more-precise"',
+      'expression = "BSD-3-Clause"',
+      ...extra,
+    ].join("\n");
+
+  test("without a comment the reason is the justification value alone", () => {
+    const { verdicts } = runEngine([pkgSpec("cited-pkg", "BSD", ["backend"])], citingClarify([]));
+
+    expect(verdicts[0].reason).toContain("scan-more-precise");
+    expect(verdicts[0].reason).not.toContain("—");
+  });
+
+  test("with a comment the reason is the value, an em-dash, then the comment", () => {
+    const { verdicts } = runEngine(
+      [pkgSpec("cited-pkg", "BSD", ["backend"])],
+      citingClarify(['comment = "the LICENSE file carries the three-clause text"']),
+    );
+
+    expect(verdicts[0].reason).toContain(
+      "scan-more-precise — the LICENSE file carries the three-clause text",
+    );
+  });
+});
+
+// ===========================================================================
+// A COMPOUND recorded detection: an entry written against a multi-license
+// (AND/OR) registry claim. Both sides of the lane comparison run through
+// canonicalizeExpression (flatten, dedupe, absorb, sort) before the
+// case-insensitive, trimmed comparison, so a registry re-spelling of the same
+// license set - reordered operands, a duplicated conjunct, an absorbable
+// branch - never reopens the entry. Only a genuine change to the license SET
+// does. Modeled on the real spdx-ranges dogfood case: npm declares
+// "(MIT AND CC-BY-3.0)", the in-depth scan reads only the root LICENSE and
+// sees "MIT" - two lanes, one of which reports the compound the entry names.
+// ===========================================================================
+
+describe("evaluate — a compound recorded detection", () => {
+  const compoundClaim = "(MIT AND CC-BY-3.0)";
+
+  /** A [[clarify]] whose recorded registry value AND expression are the same compound claim. */
+  const compoundClarify = [
+    "[[clarify]]",
+    'name = "compound-pkg"',
+    `detected = { registry = ${JSON.stringify(compoundClaim)}, intensive = "MIT" }`,
+    'justification = "declared-more-complete"',
+    `expression = ${JSON.stringify(compoundClaim)}`,
+  ].join("\n");
+
+  test("HEADLINE: a compound record APPLIES while the registry claim still matches, alongside a co-present in-depth claim", () => {
     const { verdicts } = runEngine(
       [scanPkgSpec("compound-pkg", compoundClaim, "MIT", ["backend"])],
       compoundClarify,
@@ -1782,14 +2082,14 @@ describe("evaluate — COMPOUND expects (the AND/OR registry-claim precondition)
     expect(verdicts[0].reason).toContain("(MIT AND CC0-1.0)"); // now-observed
   });
 
-  test("a re-spelling of the SAME license set — a parenthesized `expects` (the dogfood shape) against an unparenthesized, reordered claim — stays APPLIED — canonical comparison, not a stale trigger", () => {
+  test("a re-spelling of the SAME license set — a parenthesized recorded value (the dogfood shape) against an unparenthesized, reordered claim — stays APPLIED — canonical comparison, not a stale trigger", () => {
     const respellClaim = "(MIT AND CC0-1.0)";
     const policyText = [
       "[[clarify]]",
-      'package = { name = "respelled-pkg" }',
-      `expects = ${JSON.stringify(respellClaim)}`,
+      'name = "respelled-pkg"',
+      `detected = { registry = ${JSON.stringify(respellClaim)}, intensive = "MIT" }`,
+      'justification = "declared-more-complete"',
       `expression = ${JSON.stringify(respellClaim)}`,
-      'reason = "the registry declares (MIT AND CC0-1.0); the in-depth scan only sees the root MIT license"',
     ].join("\n");
     const { verdicts } = runEngine(
       [scanPkgSpec("respelled-pkg", "CC0-1.0 AND MIT", "MIT", ["backend"])],
@@ -1804,10 +2104,10 @@ describe("evaluate — COMPOUND expects (the AND/OR registry-claim precondition)
     const baseClaim = "MIT AND CC0-1.0";
     const policyText = [
       "[[clarify]]",
-      'package = { name = "set-changed-pkg" }',
-      `expects = ${JSON.stringify(baseClaim)}`,
+      'name = "set-changed-pkg"',
+      `detected = { registry = ${JSON.stringify(baseClaim)}, intensive = "MIT" }`,
+      'justification = "declared-more-complete"',
       `expression = ${JSON.stringify(baseClaim)}`,
-      'reason = "the registry declares MIT AND CC0-1.0; the in-depth scan only sees the root MIT license"',
     ].join("\n");
     const { verdicts } = runEngine(
       [scanPkgSpec("set-changed-pkg", "MIT AND Apache-2.0", "MIT", ["backend"])],
@@ -1824,10 +2124,10 @@ describe("evaluate — COMPOUND expects (the AND/OR registry-claim precondition)
     const baseClaim = "MIT AND CC0-1.0";
     const policyText = [
       "[[clarify]]",
-      'package = { name = "noisy-pkg" }',
-      `expects = ${JSON.stringify(baseClaim)}`,
+      'name = "noisy-pkg"',
+      `detected = { registry = ${JSON.stringify(baseClaim)}, intensive = "MIT" }`,
+      'justification = "declared-more-complete"',
       `expression = ${JSON.stringify(baseClaim)}`,
-      'reason = "the registry declares MIT AND CC0-1.0; the in-depth scan only sees the root MIT license"',
     ].join("\n");
     const { verdicts } = runEngine(
       [scanPkgSpec("noisy-pkg", "MIT AND CC0-1.0 AND (MIT OR Apache-2.0)", "MIT", ["backend"])],
@@ -1842,10 +2142,10 @@ describe("evaluate — COMPOUND expects (the AND/OR registry-claim precondition)
     const orClaim = "(MIT OR Apache-2.0)";
     const policyText = [
       "[[clarify]]",
-      'package = { name = "or-compound-pkg" }',
-      `expects = ${JSON.stringify(orClaim)}`,
+      'name = "or-compound-pkg"',
+      `detected = { registry = ${JSON.stringify(orClaim)}, intensive = "MIT" }`,
+      'justification = "dual-license-choice"',
       `expression = ${JSON.stringify(orClaim)}`,
-      'reason = "the registry declares a dual-license OR claim"',
     ].join("\n");
     const { verdicts } = runEngine(
       [scanPkgSpec("or-compound-pkg", orClaim, "MIT", ["backend"])],
@@ -1856,10 +2156,10 @@ describe("evaluate — COMPOUND expects (the AND/OR registry-claim precondition)
     expect(verdicts[0].rule).toBe("clarify[0]");
   });
 
-  test("parsePolicy ACCEPTS a compound expects — validation never restricts its shape", () => {
+  test("parsePolicy ACCEPTS a compound recorded detection — validation never restricts its shape", () => {
     const policy = parsePolicy(compoundClarify);
 
-    expect(policy.clarify[0]?.expects).toBe(compoundClaim);
+    expect(policy.clarify[0]?.detected.registry).toBe(compoundClaim);
   });
 });
 
@@ -1891,10 +2191,10 @@ describe("evaluate — conflict:scancode fail verdict", () => {
   test("chain order: an entry with BOTH a stale override and a conflict fires override:stale FIRST (a stale override is strictly more urgent)", () => {
     const policyText = [
       "[[clarify]]",
-      'package = { name = "stale-and-conflicted" }',
-      'expects = "BSD"',
+      'name = "stale-and-conflicted"',
+      'detected = { registry = "BSD" }',
+      'justification = "contradictory-claims-recorded"',
       'expression = "MIT"',
-      'reason = "was BSD upstream"',
     ].join("\n");
     const { verdicts } = runEngine(
       [scanPkgSpec("stale-and-conflicted", "Apache-2.0", "MIT", ["backend"])],
@@ -2034,9 +2334,11 @@ describe("evaluate — conflict:cross-image-claims fail verdict", () => {
   test("resolution: a [[clarify]] override APPLIES, clears the conflict, and the verdict is clarify[0] ok (exit 0) — the same remedy path as a ScanCode conflict", () => {
     const policyText = [
       "[[clarify]]",
-      'package = { name = "busybox" }',
+      'name = "busybox"',
+      "detected = { registry = false, intensive = false }",
+      'justification = "contradictory-claims-recorded"',
       'expression = "MIT"',
-      'reason = "reviewed: image-a is correct"',
+      'comment = "reviewed: image-a is correct"',
     ].join("\n");
     const { verdicts } = runEngine(
       [
@@ -2081,17 +2383,16 @@ describe("evaluate — conflict:cross-image-claims fail verdict", () => {
 // ===========================================================================
 
 describe("evaluate — conflict:scancode resolution via [[clarify]]", () => {
-  // The human's recorded call: "I still expect the quick check to read MIT, and
-  // I decide the license IS BSD-3-Clause (the in-depth scan is right)." expects
-  // MIT is present in the signal and no non-expects member contradicts
-  // BSD-3-Clause, so the override APPLIES — the conflict is the human's to
-  // resolve, and it is.
+  // The human's recorded call: "the quick check reads MIT, the in-depth scan
+  // reads BSD-3-Clause, and I decide the scan is right." Both sources still
+  // report what the entry recorded, and recording the intensive source is what
+  // settles the disagreement, so the override APPLIES and the conflict is gone.
   const clarifyResolvesToScancode = [
     "[[clarify]]",
-    'package = { name = "disputed-pkg" }',
-    'expects = "MIT"',
+    'name = "disputed-pkg"',
+    'detected = { registry = "MIT", intensive = "BSD-3-Clause" }',
+    'justification = "scan-more-precise"',
     'expression = "BSD-3-Clause"',
-    'reason = "reviewed: the in-depth scan is correct"',
   ].join("\n");
 
   test("HEADLINE: a [[clarify]] recording the decision APPLIES, clears the conflict, and the verdict is clarify[0] ok (exit 0) — never a lingering conflict:scancode", () => {
@@ -2121,10 +2422,10 @@ describe("evaluate — conflict:scancode resolution via [[clarify]]", () => {
   });
 
   test("the stale guard reopens it: after the registry relicenses away from the recorded expectation, the SAME clarify FAILS override:stale (the guard works both ways with zero new machinery)", () => {
-    // The declared/registry answer has moved from MIT to GPL-3.0-only; expects
-    // "MIT" is no longer in the signal and the standing base (GPL-3.0-only) does
-    // not satisfy the asserted BSD-3-Clause → the override is stale, fail closed,
-    // and fires above the co-present conflict.
+    // The registry answer has moved from MIT to GPL-3.0-only, so the recorded
+    // registry detection no longer holds, and the standing base (GPL-3.0-only)
+    // does not satisfy the asserted BSD-3-Clause → the override is stale, fail
+    // closed, and fires above the co-present conflict.
     const { verdicts } = runEngine(
       [scanPkgSpec("disputed-pkg", "GPL-3.0-only", "BSD-3-Clause", ["backend"])],
       clarifyResolvesToScancode,
@@ -2164,9 +2465,11 @@ describe("unusedRuleIds — stale-policy hygiene", () => {
       'reason = "no package by this name exists"',
       "",
       "[[clarify]]",
-      'package = { name = "never-clarified" }',
+      'name = "never-clarified"',
+      'detected = { registry = "MIT" }',
+      'justification = "scan-overdetection"',
       'expression = "MIT"',
-      'reason = "no package by this name exists"',
+      'comment = "no package by this name exists"',
     ].join("\n");
     const { verdicts, usedClarifyIndices, policy } = runEngine(
       [pkgSpec("mpl-pkg", "MPL-2.0", ["backend"])],
@@ -2820,7 +3123,7 @@ describe("evaluate — precedence is preserved (downgrade is last)", () => {
     // The load-bearing precedence guard: a stale override is a compliance gate
     // failure that must NEVER be dev-downgraded.
     const builtins: BuiltinOverrideInput[] = [
-      { name: "relicensed", expects: "BSD", expression: "BSD-3-Clause" },
+      { name: "relicensed", detected: { registry: "BSD" }, expression: "BSD-3-Clause" },
     ];
     const { verdicts } = runEngine(
       [pkgSpec("relicensed", "GPL-3.0-only", [{ target: "apps/a", dev: true }])],
@@ -3072,10 +3375,10 @@ describe("evaluate — deny is terminal-0 (beats every accept lever)", () => {
   });
 
   test("deny BEATS a would-be stale override: deny is terminal-0", () => {
-    // The package carries a stale builtin override (expects BSD, observes
+    // The package carries a stale builtin override (recorded BSD, observes
     // BUSL-1.1) AND the observed license is denied → deny wins over stale.
     const builtins: BuiltinOverrideInput[] = [
-      { name: "relicensed", expects: "BSD", expression: "BSD-3-Clause" },
+      { name: "relicensed", detected: { registry: "BSD" }, expression: "BSD-3-Clause" },
     ];
     const { verdicts } = runEngine(
       [pkgSpec("relicensed", "BUSL-1.1", ["backend"])],
@@ -3131,16 +3434,18 @@ describe("evaluate — deny is terminal-0 (beats every accept lever)", () => {
 
 describe("evaluate — deny is terminal OVER OVERRIDES (C#1: deny reads the pre-override observed license)", () => {
   test("a blind clarify rewriting a DENIED observed license to MIT still FAILS (deny terminal)", () => {
-    // Observed BUSL-1.1; a blind [[clarify]] (no expects) rewrites it to MIT.
-    // Pre-fix the override ran before evaluate, so deny saw MIT and passed it
-    // back in. Deny must consult the PRE-OVERRIDE observed BUSL-1.1 and fail.
+    // Observed BUSL-1.1; a [[clarify]] rewrites it to MIT. Pre-fix the override
+    // ran before evaluate, so deny saw MIT and passed it back in. Deny must
+    // consult the PRE-OVERRIDE observed BUSL-1.1 and fail.
     const policyText = [
       denyLicenseFixture("BUSL-1.1"),
       "",
       "[[clarify]]",
-      'package = { name = "evil" }',
+      'name = "evil"',
+      'detected = { registry = "BUSL-1.1" }',
+      'justification = "contradictory-claims-recorded"',
       'expression = "MIT"',
-      'reason = "claims MIT but observed signal is BUSL-1.1"',
+      'comment = "claims MIT but the observed signal is BUSL-1.1"',
     ].join("\n");
     const { verdicts } = runEngine([pkgSpec("evil", "BUSL-1.1", ["backend"])], policyText);
 
@@ -3148,14 +3453,14 @@ describe("evaluate — deny is terminal OVER OVERRIDES (C#1: deny reads the pre-
     expect(verdicts[0].rule).toBe("denied[0]");
   });
 
-  test("a SUCCESSFULLY-APPLIED matching-expects builtin over a denied observed license still FAILS", () => {
-    // expects BUSL-1.1 MATCHES observed BUSL-1.1 → the builtin applies and
-    // rewrites the finding to Apache-2.0. Deny must still fire on the observed
-    // BUSL-1.1 (a denied OBSERVED license can never be licensed back in).
+  test("a SUCCESSFULLY-APPLIED builtin over a denied observed license still FAILS", () => {
+    // The recorded BUSL-1.1 still holds → the builtin applies and rewrites the
+    // finding to Apache-2.0. Deny must still fire on the observed BUSL-1.1 (a
+    // denied OBSERVED license can never be licensed back in).
     const builtins: BuiltinOverrideInput[] = [
       {
         name: "relicensed-evil",
-        expects: "BUSL-1.1",
+        detected: { registry: "BUSL-1.1" },
         expression: "Apache-2.0",
       },
     ];
@@ -3176,9 +3481,10 @@ describe("evaluate — deny is terminal OVER OVERRIDES (C#1: deny reads the pre-
       denyLicenseFixture("BUSL-1.1"),
       "",
       "[[clarify]]",
-      'package = { name = "legit" }',
+      'name = "legit"',
+      'detected = { registry = "Apache" }',
+      'justification = "scan-more-precise"',
       'expression = "Apache-2.0"',
-      'reason = "disambiguate the imprecise Apache family"',
     ].join("\n");
     const { verdicts } = runEngine([pkgSpec("legit", "Apache", ["backend"])], policyText);
 
@@ -3187,15 +3493,16 @@ describe("evaluate — deny is terminal OVER OVERRIDES (C#1: deny reads the pre-
   });
 
   test("a denied observed license is denied even when the override REWRITES it (project clarify)", () => {
-    // Mirror of the builtin case for a project clarify with a matching expects.
+    // Mirror of the builtin case for a project clarify whose record still holds.
     const policyText = [
       denyLicenseFixture("SSPL-1.0"),
       "",
       "[[clarify]]",
-      'package = { name = "sspl-evil" }',
-      'expects = "SSPL-1.0"',
+      'name = "sspl-evil"',
+      'detected = { registry = "SSPL-1.0" }',
+      'justification = "contradictory-claims-recorded"',
       'expression = "MIT"',
-      'reason = "rewrites a denied observed license"',
+      'comment = "rewrites a denied observed license"',
     ].join("\n");
     const { verdicts } = runEngine([pkgSpec("sspl-evil", "SSPL-1.0", ["backend"])], policyText);
 

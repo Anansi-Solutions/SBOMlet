@@ -195,32 +195,40 @@ Both match modes and full validation: [policy.md#deny](../reference/policy.md#de
 A package reports a licence that's wrong, missing, or named only by family
 ("BSD" with no clause), and you know the right answer.
 
-The plain form replaces the finding unconditionally:
+Record what each source reported, and the answer you stand behind:
 
 ```toml
 [[clarify]]
-package = { name = "jsonify", version = "0.0.1" }
+name = "jsonify"
+version = "0.0.1"
+detected = { registry = "Public Domain", intensive = false }
+justification = "license-not-found"
 expression = "Unlicense"
-reason = "Upstream declares the non-SPDX value 'Public Domain'; jsonify's README dedicates it to the public domain, mapped to Unlicense deliberately."
+comment = "The README dedicates the package to the public domain; mapped to Unlicense deliberately."
 ```
 
 For an [imprecise family](../glossary.md#imprecise-family) — pinning down
-which `BSD` you mean — add an `expects` precondition instead:
+which `BSD` you mean — record the family the source reports:
 
 ```toml
 [[clarify]]
-package = { name = "some-package" }
-expects = "BSD"
+name = "some-package"
+detected = { registry = "BSD", intensive = "BSD-3-Clause" }
+justification = "scan-more-precise"
 expression = "BSD-3-Clause"
-reason = "Confirmed BSD-3-Clause in the upstream LICENSE file."
 ```
 
-`expects` is a staleness guard: the override applies only while the package's
-observed licence still matches it, so a later relicense fails loudly instead
-of silently keeping the old answer. The tool also ships curated
-clarifications for commonly-ambiguous projects, such as the Jupyter/IPython
-BSD stack — yours wins on any conflict. Both forms, the `expects` mechanics,
-and validation: [policy.md#clarify](../reference/policy.md#clarify).
+`detected` is a staleness guard: the entry applies only while every source it
+records still reports what you wrote down, so a later relicence fails loudly
+instead of silently keeping the old answer. `justification` comes from a fixed
+list, so the tool can check the claim; `comment` carries what the list cannot.
+
+One entry can cover a whole family of packages with `pattern` instead of
+`name`, and several pinned versions with a `version` list. The tool also ships
+curated clarifications for commonly-ambiguous projects, such as the
+Jupyter/IPython BSD stack — yours wins on any conflict. Every field, the
+justification list, and validation:
+[policy.md#clarify](../reference/policy.md#clarify).
 
 ## Allow a licence pattern or an exact package
 

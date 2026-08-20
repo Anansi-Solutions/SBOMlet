@@ -1504,7 +1504,7 @@ describe("buildOutputs and the generate output set", () => {
 // ---------------------------------------------------------------------------
 // End-to-end stale-override exit-lane regression through the
 // real generate → check → exitCodeFor path. The shared FIXTURE_SBOM's mit-lib
-// (a precise MIT package) is the seam: a [[clarify]] expecting "BSD" on it is
+// (a precise MIT package) is the seam: a [[clarify]] recording "BSD" on it is
 // STALE (observed MIT, not BSD) → a fail verdict → exit 1 via the EXISTING
 // violations→exitCodeFor mapping, with no reshaping of the fixed summary
 // shapes. Re-uses the runGenerate --policy stub installed below.
@@ -1548,7 +1548,7 @@ describe("check — stale-override exit lane", () => {
     return { result: result!, checkStderr };
   }
 
-  test("a stale [[clarify]] (expects BSD on a now-MIT dep) makes check exit 1 with an actionable message", async () => {
+  test("a stale [[clarify]] (BSD recorded on a now-MIT dep) makes check exit 1 with an actionable message", async () => {
     const policyText = [
       "[unknown]",
       'handling = "warn"', // isolate: only the stale override gates
@@ -1559,10 +1559,10 @@ describe("check — stale-override exit lane", () => {
       'reason = "accept the fixture AGPL so only the stale override gates"',
       "",
       "[[clarify]]",
-      'package = { name = "mit-lib" }',
-      'expects = "BSD"',
+      'name = "mit-lib"',
+      'detected = { registry = "BSD" }',
+      'justification = "scan-more-precise"',
       'expression = "BSD-3-Clause"',
-      'reason = "was BSD-3-Clause upstream"',
       "",
     ].join("\n");
     const { result, checkStderr } = await generateThenCheck(policyText);
@@ -1587,10 +1587,10 @@ describe("check — stale-override exit lane", () => {
       'reason = "accept the fixture AGPL package"',
       "",
       "[[clarify]]",
-      'package = { name = "mit-lib" }',
-      'expects = "MIT"', // matches the observed signal → applies, not stale
+      'name = "mit-lib"',
+      'detected = { registry = "MIT" }', // still what the registry reports → applies
+      'justification = "contradictory-claims-recorded"',
       'expression = "MIT"',
-      'reason = "confirmed MIT"',
       "",
     ].join("\n");
     const { result } = await generateThenCheck(policyText);

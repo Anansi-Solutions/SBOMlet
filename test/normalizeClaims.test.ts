@@ -407,7 +407,9 @@ describe("annotateFindings — imprecise findings", () => {
 
   test("a clarify override on an imprecise package wins (precise expression, source override)", () => {
     const entry = pkg("jupyter-thing", "1.0.0", [claim("BSD", "name")]);
-    const clarify: ClarifyInput[] = [{ name: "jupyter-thing", expression: "BSD-3-Clause" }];
+    const clarify: ClarifyInput[] = [
+      { name: "jupyter-thing", detected: { registry: "BSD" }, expression: "BSD-3-Clause" },
+    ];
     const { model } = annotateFindings(modelOf(entry), clarify);
     const finding = model.packages[0]!.finding!;
 
