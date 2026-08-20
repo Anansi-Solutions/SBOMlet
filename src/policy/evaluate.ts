@@ -109,6 +109,7 @@ import {
 import { AGPL_IDS, COPYLEFT_FAMILY } from "./copyleft";
 import { COULD_BE_COPYLEFT_FAMILIES, WORKSPACE_ABSORBS } from "./copyleftFamily";
 import { denyRuleFor, type IndexedDenyRule } from "./denylist";
+import { voidedCompatibleEntries, voidedEntryKey, type VoidedEntry } from "./chain";
 import { matchesPackage, scopeCoversTarget } from "./packageMatch";
 import { resolveTargetProfile } from "./target";
 import {
@@ -203,6 +204,12 @@ interface IndexedRule<T> {
   rule: T;
 }
 
+/** The package-form entry deciding an occurrence, plus what the chains at that target say of it. */
+interface JudgedPackageRule extends IndexedRule<CompatiblePackageRule> {
+  /** Present when a package the entry accepts here arrives around every parent it names. */
+  voidedBy?: VoidedEntry;
+}
+
 /**
  * A compatible rule applies at a target iff some `where` entry is the everywhere token, or some
  * `where` entry covers the target as an identity prefix.
@@ -227,6 +234,37 @@ function packageRuleFor(
   }
 
   return undefined;
+}
+
+/**
+ * The package-form entry deciding this occurrence, carrying what the chains at its target say.
+ *
+ * Undefined when no entry matches - and also when the target has a dependency graph while the scan
+ * recorded no introduction for this occurrence: an entry says whose use of the package was judged,
+ * which decides nothing where how it arrives went unrecorded. The occurrence falls through to the
+ * lanes below rather than being accepted on a path nobody saw.
+ */
+function judgedPackageRule(
+  entry: PackageEntry,
+  occurrence: Occurrence,
+  policy: Policy,
+  voided: ReadonlyMap<string, VoidedEntry>,
+  targetsWithDependencyGraph: ReadonlySet<string>,
+): JudgedPackageRule | undefined {
+  const target = occurrence.target;
+  const matched = packageRuleFor(entry, target, policy);
+
+  if (matched === undefined) {
+    return undefined;
+  }
+
+  if (targetsWithDependencyGraph.has(target) && occurrence.introduction === undefined) {
+    return undefined;
+  }
+
+  const voidedBy = voided.get(voidedEntryKey(matched.index, target));
+
+  return voidedBy === undefined ? matched : { ...matched, voidedBy };
 }
 
 /**
@@ -1148,6 +1186,18 @@ function packageRuleSubject(rule: CompatiblePackageRule): string {
 }
 
 /**
+ * Why an entry decides nothing here: the chain that arrives past everything it was judged under,
+ * named first, because it is the cause and the failing row may only be collateral. One text for
+ * every occurrence the entry governs at this target - what went wrong is the entry's, not any one
+ * package's.
+ */
+function voidedReason(rule: CompatiblePackageRule, voided: VoidedEntry, target: string): string {
+  const judged = rule.asDependencyOf.map((parent) => `"${parent}"`).join(", ");
+
+  return `${voided.chain.join(" → ")} introduces "${voided.name}" in "${target}" past everything this acceptance was judged under (${judged}): "as-dependency-of" does not cover how it arrives, so the entry accepts nothing here. Name the introducer, or split the entry so each acceptance covers one way in.`;
+}
+
+/**
  * Tier 1/2 compatible-rule verdict (package form pinned before license form, mirroring the caller's
  * own selection order), split out of verdictFor to keep the precedence walk within the complexity
  * budget. Returns undefined when neither rule matched, so the caller falls through to the lanes
@@ -1156,11 +1206,20 @@ function packageRuleSubject(rule: CompatiblePackageRule): string {
 function compatibleRuleVerdict(
   base: { purl: string; occurrenceTarget: string },
   assessment: Assessment,
-  packageRule: IndexedRule<CompatiblePackageRule> | undefined,
+  packageRule: JudgedPackageRule | undefined,
   licenseRule: IndexedRule<CompatibleLicenseRule> | undefined,
 ): Verdict | undefined {
   if (packageRule !== undefined) {
-    const { index, rule } = packageRule;
+    const { index, rule, voidedBy } = packageRule;
+
+    if (voidedBy !== undefined) {
+      return {
+        ...base,
+        status: "fail",
+        rule: `compatible:voided[${index}]`,
+        reason: voidedReason(rule, voidedBy, base.occurrenceTarget),
+      };
+    }
 
     return {
       ...base,
@@ -1216,7 +1275,7 @@ function verdictFor(
   entry: PackageEntry,
   occurrence: Occurrence,
   assessment: Assessment,
-  packageRule: IndexedRule<CompatiblePackageRule> | undefined,
+  packageRule: JudgedPackageRule | undefined,
   licenseRule: IndexedRule<CompatibleLicenseRule> | undefined,
   denyRule: IndexedDenyRule | undefined,
   policy: Policy,
@@ -1304,8 +1363,15 @@ function verdictFor(
  * treated as unknown - defensive, documented. Returns one verdict per (package × occurrence),
  * sorted compareCodeUnits on (purl, occurrenceTarget).
  */
-export function evaluate(model: CanonicalDependencies, policy: Policy): Verdict[] {
+export function evaluate(
+  model: CanonicalDependencies,
+  policy: Policy,
+  targetsWithDependencyGraph: ReadonlySet<string>,
+): Verdict[] {
   const verdicts: Verdict[] = [];
+  // Which package entries the recorded introduction chains contradict, decided once per entry and
+  // target before the walk below reads the answer per occurrence.
+  const voided = voidedCompatibleEntries(model, policy, targetsWithDependencyGraph);
 
   for (const entry of model.packages) {
     const assessment = assessPackage(entry);
@@ -1336,7 +1402,13 @@ export function evaluate(model: CanonicalDependencies, policy: Policy): Verdict[
       // Compatible matches are per occurrence: an unscoped rule accepts the package at every
       // occurrence; a `where`-scoped rule only at the occurrences its identity prefixes cover.
       // First match in TOML order wins per occurrence, package form before license form.
-      const packageRule = packageRuleFor(entry, occurrence.target, policy);
+      const packageRule = judgedPackageRule(
+        entry,
+        occurrence,
+        policy,
+        voided,
+        targetsWithDependencyGraph,
+      );
       const licenseRule =
         packageRule === undefined && assessment.expression !== null
           ? licenseRuleFor(assessment.expression, occurrence.target, policy)
@@ -1496,7 +1568,9 @@ export function unusedRuleIds(
   policy.compatible.forEach((_, index) => {
     const id = `compatible[${index}]`;
 
-    if (!cited.has(id)) {
+    // An entry whose judgment the chains contradicted decided every occurrence it governs - as a
+    // failure. Reporting it "unused" beside those failures would contradict them.
+    if (!cited.has(id) && !cited.has(`compatible:voided[${index}]`)) {
       unused.push(id);
     }
   });

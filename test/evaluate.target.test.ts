@@ -13,6 +13,9 @@ import { parsePolicy, PolicyError, type Policy } from "../src/policy/schema";
 import { renderMarkdown } from "../src/render/markdown";
 import type { CanonicalDependencies, Verdict } from "../src/model/dependencies";
 
+/** No scanned target in these scenarios is collected by a lane that derives a dependency graph. */
+const WITHOUT_DEPENDENCY_GRAPHS: ReadonlySet<string> = new Set();
+
 interface OccurrenceSpec {
   target: string;
   dev?: boolean;
@@ -61,7 +64,7 @@ function runEngine(
   const policy = parsePolicy(policyText);
   const { model } = annotateFindings(makeModel(specs), policy.clarify, []);
 
-  return { verdicts: evaluate(model, policy), policy, model };
+  return { verdicts: evaluate(model, policy, WITHOUT_DEPENDENCY_GRAPHS), policy, model };
 }
 
 function findVerdict(
@@ -309,8 +312,8 @@ describe("target lane — determinism", () => {
     const policy = parsePolicy(MIT_TARGET_EXTERNAL);
     const { model } = annotateFindings(makeModel(specs), policy.clarify, []);
 
-    const first = evaluate(model, policy);
-    const second = evaluate(model, policy);
+    const first = evaluate(model, policy, WITHOUT_DEPENDENCY_GRAPHS);
+    const second = evaluate(model, policy, WITHOUT_DEPENDENCY_GRAPHS);
 
     expect(second).toEqual(first);
   });
@@ -330,7 +333,7 @@ describe("target lane — election flip locks (both directions)", () => {
 
     const noTargetPolicy = parsePolicy('[unknown]\nhandling = "warn"\n');
     const { model: noTargetModel } = annotateFindings(makeModel(specs), noTargetPolicy.clarify, []);
-    const noTargetVerdicts = evaluate(noTargetModel, noTargetPolicy);
+    const noTargetVerdicts = evaluate(noTargetModel, noTargetPolicy, WITHOUT_DEPENDENCY_GRAPHS);
     const noTargetVerdict = findVerdict(noTargetVerdicts, purl, TARGET)!;
 
     // Today's non-target-aware elect() prefers the non-copyleft branch.
@@ -340,7 +343,7 @@ describe("target lane — election flip locks (both directions)", () => {
 
     const targetPolicy = parsePolicy(GPL2_TARGET_EXTERNAL);
     const { model: targetModel } = annotateFindings(makeModel(specs), targetPolicy.clarify, []);
-    const targetVerdicts = evaluate(targetModel, targetPolicy);
+    const targetVerdicts = evaluate(targetModel, targetPolicy, WITHOUT_DEPENDENCY_GRAPHS);
     const targetVerdict = findVerdict(targetVerdicts, purl, TARGET)!;
 
     // The target-aware election picks the GPL-2.0-only branch instead (the matrix diagonal),

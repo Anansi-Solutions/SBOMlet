@@ -12,7 +12,9 @@ import {
   type CanonicalDependencies,
   type Verdict,
 } from "../src/model/dependencies";
+import { npmIntroductions } from "../src/collectors/npmProvenance";
 import { withCacheClaim } from "../src/enrich/enrich";
+import { targetsWithDependencyGraph } from "../src/merge/dependencyGraphs";
 import { mergeSboms } from "../src/merge/merge";
 import { annotateFindings } from "../src/normalize/normalize";
 import { applyContainerScopes } from "../src/pipeline/containerScope";
@@ -91,6 +93,7 @@ const PLACEMENT_PATHS = [
   "target-supersedes-suppression",
   "target-os-agpl-network-false-ignored-notice",
   "target-held-survives-purl-fail",
+  "voided-compatible",
 ] as const;
 
 type PlacementPath = (typeof PLACEMENT_PATHS)[number];
@@ -221,6 +224,7 @@ function sbomComponent(spec: ComponentSpec): Record<string, unknown> {
     name: spec.name,
     version: spec.version ?? "1.0.0",
     purl: spec.purl,
+    "bom-ref": spec.purl,
     ...(licenses !== undefined ? { licenses } : {}),
     ...(spec.dev === true
       ? { properties: [{ name: "cdx:npm:package:development", value: "true" }] }
@@ -228,19 +232,46 @@ function sbomComponent(spec: ComponentSpec): Record<string, unknown> {
   };
 }
 
-function sbomDoc(components: ReadonlyArray<Record<string, unknown>>): unknown {
+/** The synthetic project a graphed input's dependency edges hang off. */
+const ROOT_REF = "project@workspace:.";
+const ROOT_PURL = "pkg:npm/project@0.0.0";
+
+/** The key standing for the project itself in a scenario's dependency edges. */
+const ROOT_EDGE = ".";
+
+function sbomDoc(
+  components: ReadonlyArray<Record<string, unknown>>,
+  edges?: DependencyEdges,
+): unknown {
+  if (edges === undefined) {
+    return { bomFormat: "CycloneDX", specVersion: "1.6", components: [...components] };
+  }
+
   return {
     bomFormat: "CycloneDX",
     specVersion: "1.6",
+    metadata: { component: { "bom-ref": ROOT_REF, purl: ROOT_PURL } },
     components: [...components],
+    dependencies: Object.entries(edges).map(([from, to]) => ({
+      ref: from === ROOT_EDGE ? ROOT_REF : from,
+      dependsOn: [...to],
+    })),
   };
 }
+
+/** Introducer purl (or {@link ROOT_EDGE} for the project) -> the purls it pulls in. */
+type DependencyEdges = Readonly<Record<string, ReadonlyArray<string>>>;
 
 interface ScenarioInput {
   targetIdentity: string;
   /** Docker-image inputs pass "os"; a workspace input omits this (defaults app). */
   scope?: "os";
   components: ReadonlyArray<ComponentSpec>;
+  /**
+   * Root-anchored dependency edges. Present makes this a target collected by a lane that derives a
+   * dependency graph, provenance and all - the yarn-plugin shape.
+   */
+  dependencies?: DependencyEdges;
 }
 
 interface ScenarioResult {
@@ -316,21 +347,25 @@ function withIntensiveClaims(
 
 /** merge -> intensive claims -> annotate -> resolve dev containers -> re-scope -> evaluate -> render. */
 function buildScenario(inputs: ReadonlyArray<ScenarioInput>, policyToml: string): ScenarioResult {
-  const merged = withIntensiveClaims(
-    mergeSboms(
-      inputs.map((input) => ({
-        sbom: sbomDoc(input.components.map(sbomComponent)),
-        targetIdentity: input.targetIdentity,
-        ...(input.scope !== undefined ? { scope: input.scope } : {}),
-      })),
-    ),
-    inputs,
-  );
+  const collected = inputs.map((input) => {
+    const sbom = sbomDoc(input.components.map(sbomComponent), input.dependencies);
+
+    return {
+      sbom,
+      targetIdentity: input.targetIdentity,
+      ...(input.scope !== undefined ? { scope: input.scope } : {}),
+      ...(input.dependencies !== undefined
+        ? { introductions: npmIntroductions(sbom), derivesDependencyGraph: true }
+        : {}),
+    };
+  });
+  const merged = withIntensiveClaims(mergeSboms(collected), inputs);
+  const graphTargets = targetsWithDependencyGraph(collected);
   const policy = parsePolicy(policyToml);
   const { model: annotated } = annotateFindings(merged, policy.clarify, BUILTIN_OVERRIDES);
   const developmentContainers = resolveDevelopmentContainers(annotated, policy);
   const scoped = applyContainerScopes(annotated, developmentContainers);
-  const verdicts = evaluate(scoped, policy);
+  const verdicts = evaluate(scoped, policy, graphTargets);
   const policyView: PolicyView = {
     policyPath: "policy.toml",
     suppressedWorkspaces: policy.suppressedWorkspaces,
@@ -2446,6 +2481,91 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
       appTableOnly(doc, "## Production dependencies").includes("target-held-survives-purl-fail"),
       slug,
       "it keeps one inventory row in Production dependencies spanning both workspaces",
+    );
+  },
+
+  // A [[compatible]] package entry states whose use of a package was judged. Where the workspace
+  // has a dependency graph and one of the packages it accepts also arrives around every introducer
+  // it names, the entry says something the scan contradicts: it accepts nothing there, and every
+  // package it governs in that workspace fails with it.
+  "voided-compatible": () => {
+    const slug = "voided-compatible";
+    const gpl = "pkg:npm/voided-compatible-gpl-lib@1.0.0";
+    const mpl = "pkg:npm/voided-compatible-mpl-lib@1.0.0";
+    const judged = "pkg:npm/voided-compatible-judged@1.0.0";
+    const other = "pkg:npm/voided-compatible-other@1.0.0";
+    const policy = [
+      UNKNOWN_WARN,
+      "[[compatible]]",
+      'match = "package"',
+      'pattern = "voided-compatible-*-lib"',
+      'as-dependency-of = ["voided-compatible-judged"]',
+      'rationale = "unused-transitive"',
+      `where = ["${WORKSPACE}"]`,
+      "",
+    ].join("\n");
+    const { doc, verdicts, scoped } = buildScenario(
+      [
+        {
+          targetIdentity: WORKSPACE,
+          components: [
+            { name: "voided-compatible-judged", purl: judged, license: "MIT" },
+            { name: "voided-compatible-other", purl: other, license: "MIT" },
+            { name: "voided-compatible-gpl-lib", purl: gpl, license: "GPL-3.0-only" },
+            { name: "voided-compatible-mpl-lib", purl: mpl, license: "MPL-2.0" },
+          ],
+          dependencies: {
+            ".": [judged, other],
+            [judged]: [gpl, mpl],
+            [other]: [gpl],
+          },
+        },
+      ],
+      policy,
+    );
+
+    assertClassificationOutcome(
+      scoped,
+      verdicts,
+      gpl,
+      WORKSPACE,
+      slug,
+      "app",
+      "fail",
+      "compatible:voided[0]",
+    );
+    assertClassificationOutcome(
+      scoped,
+      verdicts,
+      mpl,
+      WORKSPACE,
+      slug,
+      "app",
+      "fail",
+      "compatible:voided[0]",
+    );
+
+    const reason = findVerdict(verdicts, mpl, WORKSPACE)?.reason ?? "";
+
+    assertClassification(
+      reason.indexOf("voided-compatible-other → voided-compatible-gpl-lib") <
+        reason.indexOf("as-dependency-of"),
+      slug,
+      "the reason leads with the chain and the package that arrives through it, before the entry's own terms - the package that carries the collateral failure is not the cause",
+    );
+
+    const problematic = section(doc, "## Problematic licenses");
+
+    assertPlacement(
+      problematic.includes("voided-compatible-gpl-lib") &&
+        problematic.includes("voided-compatible-mpl-lib"),
+      slug,
+      "every package the entry governs in that workspace rows in Problematic licenses, not only the one that arrives around the judged introducer",
+    );
+    assertPlacement(
+      appTableOnly(doc, "## Production dependencies").includes("voided-compatible-mpl-lib"),
+      slug,
+      "a voided package keeps its inventory row in Production dependencies",
     );
   },
 };

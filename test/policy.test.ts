@@ -19,10 +19,14 @@ import { JUSTIFICATION_VALUES, RATIONALE_VALUES } from "../src/policy/enums";
 import { parsePolicy, PolicyError, type Policy } from "../src/policy/schema";
 import type {
   CanonicalDependencies,
+  DependencyIntroduction,
   LicenseClaimKind,
   LicenseFinding,
   Verdict,
 } from "../src/model/dependencies";
+
+/** No scanned target in these scenarios is collected by a lane that derives a dependency graph. */
+const WITHOUT_DEPENDENCY_GRAPHS: ReadonlySet<string> = new Set();
 
 // Inline TOML fixtures (dispatch.test.ts idiom) — each one is commented with
 // the trap it encodes. Policy text is untrusted config: schema validation
@@ -1392,7 +1396,7 @@ function runEngine(
   );
 
   return {
-    verdicts: evaluate(model, policy),
+    verdicts: evaluate(model, policy, WITHOUT_DEPENDENCY_GRAPHS),
     usedClarifyIndices,
     policy,
     model,
@@ -1898,8 +1902,8 @@ describe("evaluate — imprecise findings route to a safe lane", () => {
       ],
     };
 
-    expect(() => evaluate(model, parsePolicy(""))).not.toThrow();
-    const verdicts = evaluate(model, parsePolicy(""));
+    expect(() => evaluate(model, parsePolicy(""), WITHOUT_DEPENDENCY_GRAPHS)).not.toThrow();
+    const verdicts = evaluate(model, parsePolicy(""), WITHOUT_DEPENDENCY_GRAPHS);
 
     expect(verdicts).toHaveLength(1);
     expect(verdicts[0].rule).toBe("default:imprecise-copyleft");
@@ -5494,5 +5498,177 @@ reason = "diverging outbound license for this workspace"
     );
 
     expect(error.message).toContain('unknown key "weird"');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// A [[compatible]] package entry states whose use of a package was judged. On
+// a target with a dependency graph, a package it accepts that also arrives
+// around every introducer it names contradicts that statement, and the entry
+// accepts nothing there.
+// ---------------------------------------------------------------------------
+
+describe("evaluate — an entry the introduction chains contradict", () => {
+  const GRAPH_TARGET = "apps/web";
+  const WITH_A_DEPENDENCY_GRAPH: ReadonlySet<string> = new Set([GRAPH_TARGET]);
+  const JUDGED = "pkg:npm/judged@1.0.0";
+  const OTHER = "pkg:npm/other@1.0.0";
+  const GPL_LIB = "pkg:npm/gpl-lib@1.0.0";
+  const MPL_LIB = "pkg:npm/mpl-lib@1.0.0";
+
+  /** The judged entry: both -lib packages, accepted as dependencies of "judged" alone. */
+  const LIB_FAMILY_POLICY = [
+    "[[compatible]]",
+    'match = "package"',
+    'pattern = "*-lib"',
+    'as-dependency-of = ["judged"]',
+    'rationale = "license-reviewed"',
+    `where = ["${GRAPH_TARGET}"]`,
+  ].join("\n");
+
+  /** Attach the provenance a lane deriving a dependency graph would have recorded. */
+  function withIntroductions(
+    model: CanonicalDependencies,
+    byPurl: Readonly<Record<string, DependencyIntroduction>>,
+  ): CanonicalDependencies {
+    for (const entry of model.packages) {
+      const introduction = byPurl[entry.purl];
+
+      for (const occurrence of entry.occurrences) {
+        if (introduction !== undefined) {
+          occurrence.introduction = introduction;
+        }
+      }
+    }
+
+    return model;
+  }
+
+  /**
+   * The workspace the entry is scoped to: "judged" and "other" are declared directly, both pull in
+   * gpl-lib, and only "judged" pulls in mpl-lib.
+   */
+  function runChainEngine(policyText: string): {
+    verdicts: Verdict[];
+    usedClarifyIndices: ReadonlySet<number>;
+    policy: Policy;
+    model: CanonicalDependencies;
+  } {
+    const policy = parsePolicy(policyText);
+    const specs = [
+      pkgSpec("judged", "MIT", [GRAPH_TARGET]),
+      pkgSpec("other", "MIT", [GRAPH_TARGET]),
+      pkgSpec("gpl-lib", "GPL-3.0-only", [GRAPH_TARGET]),
+      { ...pkgSpec("mpl-lib", "MPL-2.0", []), occurrences: [{ target: GRAPH_TARGET, dev: true }] },
+    ];
+    const { model, usedClarifyIndices } = annotateFindings(
+      withIntroductions(makeModel(specs), {
+        [JUDGED]: { direct: true, introducedBy: [] },
+        [OTHER]: { direct: true, introducedBy: [] },
+        [GPL_LIB]: { direct: false, introducedBy: [JUDGED, OTHER] },
+        [MPL_LIB]: { direct: false, introducedBy: [JUDGED] },
+      }),
+      policy.clarify,
+      [],
+    );
+
+    return {
+      verdicts: evaluate(model, policy, WITH_A_DEPENDENCY_GRAPH),
+      usedClarifyIndices,
+      policy,
+      model,
+    };
+  }
+
+  test("every package the entry governs there fails, not only the one that arrives around it", () => {
+    const { verdicts } = runChainEngine(LIB_FAMILY_POLICY);
+    const decided = verdicts.filter((v) => v.purl === GPL_LIB || v.purl === MPL_LIB);
+
+    expect(decided.map((v) => [v.purl, v.status, v.rule])).toEqual([
+      [GPL_LIB, "fail", "compatible:voided[0]"],
+      [MPL_LIB, "fail", "compatible:voided[0]"],
+    ]);
+  });
+
+  test("the reason names the chain and the package that arrives through it first", () => {
+    const { verdicts } = runChainEngine(LIB_FAMILY_POLICY);
+    const reason = verdicts.find((v) => v.purl === MPL_LIB)?.reason ?? "";
+
+    expect(reason).toStartWith('other → gpl-lib introduces "gpl-lib" in "apps/web"');
+    expect(reason).toContain('"as-dependency-of" does not cover how it arrives');
+    expect(reason).toContain("split the entry");
+  });
+
+  test("a dev-only occurrence fails with the rest - a contradicted entry is not an obligation to downgrade", () => {
+    const { verdicts } = runChainEngine(
+      [LIB_FAMILY_POLICY, "", "[dev_dependencies]", 'handling = "warn"'].join("\n"),
+    );
+
+    expect(verdicts.find((v) => v.purl === MPL_LIB)?.status).toBe("fail");
+  });
+
+  test("naming every introducer leaves the entry standing", () => {
+    const { verdicts } = runChainEngine(
+      LIB_FAMILY_POLICY.replace('["judged"]', '["judged", "other"]'),
+    );
+
+    expect(verdicts.find((v) => v.purl === GPL_LIB)?.rule).toBe("compatible[0]");
+    expect(verdicts.find((v) => v.purl === MPL_LIB)?.rule).toBe("compatible[0]");
+  });
+
+  test("a contradicted entry is never reported unused - it decided every occurrence it governs", () => {
+    const { verdicts, usedClarifyIndices, policy } = runChainEngine(LIB_FAMILY_POLICY);
+
+    expect(verdicts.some((v) => v.rule === "compatible:voided[0]")).toBeTrue();
+    expect(unusedRuleIds(policy, verdicts, usedClarifyIndices)).toEqual([]);
+  });
+
+  test("its id stays outside the compatible[ prefix, so no acceptance surface reads it as one", () => {
+    const { verdicts, model } = runChainEngine(LIB_FAMILY_POLICY);
+    const voided = verdicts.find((v) => v.rule.startsWith("compatible:voided")) as Verdict;
+
+    expect(voided.rule.startsWith("compatible[")).toBeFalse();
+    expect(acceptedContainerNotices(model, verdicts)).toEqual([]);
+  });
+
+  test("an entry judged under the project itself is contradicted by any chain into the package", () => {
+    const { verdicts } = runChainEngine(LIB_FAMILY_POLICY.replace('["judged"]', '["self"]'));
+
+    expect(verdicts.find((v) => v.purl === GPL_LIB)?.rule).toBe("compatible:voided[0]");
+  });
+
+  test("a package the project declares directly is covered by the project itself", () => {
+    const { verdicts } = runChainEngine(
+      LIB_FAMILY_POLICY.replace('pattern = "*-lib"', 'name = "judged"').replace(
+        '["judged"]',
+        '["self"]',
+      ),
+    );
+
+    expect(verdicts.find((v) => v.purl === JUDGED)?.rule).toBe("compatible[0]");
+  });
+});
+
+describe("evaluate — a target without a dependency graph says so", () => {
+  const FLAT_TARGET = "docker:img/Dockerfile";
+
+  test("an entry judged under the project accepts, and no output implies a chain was checked", () => {
+    const policyText = [
+      "[[compatible]]",
+      'match = "package"',
+      'name = "busybox"',
+      'as-dependency-of = ["self"]',
+      'rationale = "os-package-unmodified"',
+      `where = ["${FLAT_TARGET}"]`,
+    ].join("\n");
+    const { verdicts } = runEngine(
+      [osPkgSpec("pkg:apk/alpine/busybox@1.0.0", "busybox", "GPL-2.0-only", [FLAT_TARGET])],
+      policyText,
+    );
+
+    expect(verdicts[0].status).toBe("ok");
+    expect(verdicts[0].rule).toBe("compatible[0]");
+    expect(verdicts[0].reason).not.toContain("→");
+    expect(verdicts[0].reason).not.toContain("as-dependency-of");
   });
 });

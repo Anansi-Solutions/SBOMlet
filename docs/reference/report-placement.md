@@ -183,7 +183,7 @@ helpers).
 
 ## Path index (verified end to end)
 
-The same 48 paths as
+The same 49 paths as
 [dependency-classification.md](./dependency-classification.md#path-index-verified-end-to-end),
 one row each, stating where the package lands in the markdown report instead
 of its Stage-1/Stage-2 outcome — the two tables share one slug set, verified
@@ -239,3 +239,4 @@ by the same suite (`test/reportPlacement.test.ts`).
 | `target-supersedes-suppression` | a governed occurrence matching a family-justified `[[workspace.copyleft_suppressed]]` | Production dependencies (app table) only; no suppressed-workspaces entry decides it |
 | `target-os-agpl-network-false-ignored-notice` | apk AGPL-3.0-only, project target `network = false`, `os_dependencies = "ignore"` | accepted-AGPL notice in Copyleft and special notices; not Problematic |
 | `target-held-survives-purl-fail` | one purl, two workspace occurrences: one fails (project MIT/external target), the other holds (a `[[target.workspace]]` MIT/internal override) | Problematic licenses (workspace A's fail) + Target compatibility (held-for-internal-use list, workspace B's hold - never dropped by the Problematic dedup, which applies to the flagged table only) + Production dependencies (app table) |
+| `voided-compatible` | a `[[compatible]]` package entry judged under one introducer, in a workspace where a package it accepts also arrives through another | Problematic licenses, one row per package the entry governs there, each naming the chain that voided it; every one keeps its Production dependencies (app table) row |

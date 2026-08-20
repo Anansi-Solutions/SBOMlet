@@ -90,6 +90,20 @@ highest to lowest:
    runs, so a clarified package falls through the same lanes as any other
    finding. One that clears every lane below cites `clarify[i]` at the
    default-ok tier instead of a bare `default:ok`.)
+
+   A package-mode acceptance is conditional. It states whose use of the
+   package was judged, and it holds only while that is how the package
+   arrives. On a target with a dependency graph, if any package the entry
+   accepts there also reaches the project through a chain that passes none of
+   the parents it names, the entry's statement is untrue: every occurrence it
+   governs in that target fails as `compatible:voided[i]` instead, the reason
+   naming the chain. Dev-only occurrences fail with the rest — a statement the
+   scan contradicts is not a licence obligation to downgrade. The failure is
+   the whole entry's, not one package's — splitting it into narrower entries
+   is how a bulk acceptance recovers. On a target without a dependency graph
+   no chain exists to check, so `self` is the only value allowed there and it
+   accepts every occurrence the entry's `where` reaches
+   (`docs/reference/policy.md`).
 5. **The target-compatibility lane** — entered only when a target profile
    governs this occurrence *and* the finding has a parseable, non-imprecise
    expression. The tree below.
@@ -231,7 +245,7 @@ surfacing it on the finding).
 
 ## Path index (verified end to end)
 
-The same 48 paths as
+The same 49 paths as
 [report-placement.md](./report-placement.md#path-index-verified-end-to-end),
 one row each, stating the Stage-1/Stage-2 outcome (scope, verdict status,
 rule) instead of the markdown destination — the two tables share one slug
@@ -289,3 +303,4 @@ tables are about slug coverage, not about every classification being unique.
 | `target-supersedes-suppression` | a governed occurrence matching a family-justified `[[workspace.copyleft_suppressed]]` | `app · ok · target:ok` (never `suppressed`) |
 | `target-os-agpl-network-false-ignored-notice` | apk AGPL-3.0-only, project target `network = false`, `os_dependencies = "ignore"` | `os · ok · default:copyleft` |
 | `target-held-survives-purl-fail` | one purl, two workspace occurrences: one fails (project MIT/external target), the other holds (a `[[target.workspace]]` MIT/internal override) | `app · fail · target:incompatible` (workspace A) and `app · ok · target:internal-use` (workspace B) |
+| `voided-compatible` | a `[[compatible]]` package entry judged under one introducer, in a workspace where a package it accepts also arrives through another | `app · fail · compatible:voided[0]` — for every package the entry governs there, not only the one that arrives around it |

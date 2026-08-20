@@ -18,7 +18,8 @@ import {
   purlDisplayName,
   type CanonicalDependencies,
 } from "../model/dependencies";
-import { SELF_PARENT } from "./schema";
+import { matchesPackage, scopeCoversTarget } from "./packageMatch";
+import { SELF_PARENT, type CompatiblePackageRule, type Policy } from "./schema";
 
 /** One target's introducer graph over the packages the scan reported for it. */
 export interface TargetDependencyGraph {
@@ -237,4 +238,88 @@ export function firstUncoveredIntroduction(
   }
 
   return undefined;
+}
+
+/** An entry's judgment contradicted at one target: what arrives, and by which chain. */
+export interface VoidedEntry {
+  /** Display name of the package whose arrival the entry never judged - the cause to report. */
+  readonly name: string;
+  /** Display names from the project's own dependency down to that package. */
+  readonly chain: readonly string[];
+}
+
+/** How one entry's standing at one target is keyed. */
+export function voidedEntryKey(index: number, target: string): string {
+  return `${index}\u0000${target}`;
+}
+
+/** The purls of the packages an entry decides at one target, in model order. */
+function governedPurlsAt(
+  model: CanonicalDependencies,
+  rule: CompatiblePackageRule,
+  target: string,
+): string[] {
+  const purls: string[] = [];
+
+  for (const entry of model.packages) {
+    if (!matchesPackage(rule, entry)) {
+      continue;
+    }
+
+    if (entry.occurrences.some((occurrence) => occurrence.target === target)) {
+      purls.push(entry.purl);
+    }
+  }
+
+  return purls;
+}
+
+/** A chain of purls read back as the names an `as-dependency-of` list would spell. */
+function namedChain(graph: TargetDependencyGraph, chain: readonly string[]): string[] {
+  return chain.map((purl) => graph.names.get(purl) ?? purl);
+}
+
+/**
+ * Every (package entry, target) pair whose judgment the recorded chains contradict, computed once
+ * per pair rather than per occurrence: an entry states one thing about a target, so it stands or
+ * falls there as a whole, and every occurrence it governs carries the same answer.
+ *
+ * Only targets with a dependency graph are asked. Elsewhere there is no chain to walk, which is why
+ * the reserved token is the only parent a policy may name there.
+ */
+export function voidedCompatibleEntries(
+  model: CanonicalDependencies,
+  policy: Policy,
+  targetsWithGraph: ReadonlySet<string>,
+): ReadonlyMap<string, VoidedEntry> {
+  const voided = new Map<string, VoidedEntry>();
+  const graphs = dependencyGraphsByTarget(model);
+
+  policy.compatible.forEach((rule, index) => {
+    if (rule.match !== "package") {
+      return;
+    }
+
+    const judgedUnder = new Set(rule.asDependencyOf);
+
+    for (const target of targetsWithGraph) {
+      const graph = graphs.get(target);
+
+      if (graph === undefined || !scopeCoversTarget(rule.where, target)) {
+        continue;
+      }
+
+      const governed = governedPurlsAt(model, rule, target);
+      const uncovered = firstUncoveredIntroduction(graph, governed, judgedUnder);
+
+      if (uncovered !== undefined) {
+        voided.set(voidedEntryKey(index, target), {
+          name: graph.names.get(uncovered.purl) ?? uncovered.purl,
+          chain: namedChain(graph, uncovered.chain),
+        });
+      }
+    }
+  });
+
+  return voided;
 }

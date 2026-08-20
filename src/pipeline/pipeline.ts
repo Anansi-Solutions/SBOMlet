@@ -734,7 +734,7 @@ export async function buildOutputs(opts: GenerateOptions): Promise<BuiltOutputs>
   // occurrences.
   const model = mergeSboms(inputs);
 
-  checkedDependencyGraphTargets(model, inputs, policy);
+  const graphTargets = checkedDependencyGraphTargets(model, inputs, policy);
 
   // ENRICH stage - runs BEFORE annotate so an appended source:"registry" claim flows through the
   // SAME normalizeRaw as a generator claim (one SPDX path), and clarify > registry > generator
@@ -790,7 +790,7 @@ export async function buildOutputs(opts: GenerateOptions): Promise<BuiltOutputs>
   let policyView: PolicyView | undefined;
 
   if (policy !== undefined && opts.policyPath !== undefined) {
-    verdicts = evaluate(scoped, policy);
+    verdicts = evaluate(scoped, policy, graphTargets);
     writePolicySummary(policy, verdicts, usedClarifyIndices);
     writeTargetHygieneNotices(scoped, policy);
     policyView = projectPolicyView(

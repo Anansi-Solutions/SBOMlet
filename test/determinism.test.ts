@@ -32,6 +32,9 @@ import { renderMarkdown, type PolicyView } from "../src/render/markdown";
 import { renderNotices } from "../src/render/notices";
 import type { Target } from "../src/targets/target";
 
+/** No scanned target in these scenarios is collected by a lane that derives a dependency graph. */
+const WITHOUT_DEPENDENCY_GRAPHS: ReadonlySet<string> = new Set();
+
 const TARGET = "libraries/iframe-rpc";
 
 const fixtureRaw = readFileSync(
@@ -173,7 +176,7 @@ describe("determinism — policy-annotated dump", () => {
       { sbom: JSON.parse(shapesRaw), targetIdentity: "apps/shapes" },
     ]);
     const { model: annotated } = annotateFindings(model, policy.clarify);
-    const verdicts = evaluate(annotated, policy);
+    const verdicts = evaluate(annotated, policy, WITHOUT_DEPENDENCY_GRAPHS);
     const evaluated: EvaluatedDependencies = {
       packages: annotated.packages,
       verdicts,
@@ -773,8 +776,8 @@ describe("target lane — no-target corpus byte-identity", () => {
     // annotateFindings depends only on policy.clarify (empty for both policies here), so a
     // single shared annotated model is the honest input to both evaluate() calls.
     const { model } = annotateFindings(merged, noTargetPolicy.clarify, []);
-    const noTargetVerdicts = evaluate(model, noTargetPolicy);
-    const inertTargetVerdicts = evaluate(model, inertTargetPolicy);
+    const noTargetVerdicts = evaluate(model, noTargetPolicy, WITHOUT_DEPENDENCY_GRAPHS);
+    const inertTargetVerdicts = evaluate(model, inertTargetPolicy, WITHOUT_DEPENDENCY_GRAPHS);
 
     expect(inertTargetVerdicts).toEqual(noTargetVerdicts);
 
@@ -808,7 +811,7 @@ describe("target lane — double-generate determinism with an active profile", (
     const { model } = annotateFindings(merged, policy.clarify, []);
 
     const build = (): { md: string; notices: string; verdicts: string } => {
-      const verdicts = evaluate(model, policy);
+      const verdicts = evaluate(model, policy, WITHOUT_DEPENDENCY_GRAPHS);
       const view: PolicyView = { policyPath: "policy.toml", suppressedWorkspaces: [], verdicts };
 
       return {

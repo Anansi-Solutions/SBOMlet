@@ -17,6 +17,9 @@ import { alignTables } from "../src/render/alignTables";
 import { renderMarkdown, type PolicyView } from "../src/render/markdown";
 import { globToRegExp } from "../src/targets/discover";
 
+/** No scanned target in these scenarios is collected by a lane that derives a dependency graph. */
+const WITHOUT_DEPENDENCY_GRAPHS: ReadonlySet<string> = new Set();
+
 /**
  * A synthetic scenario shaped like the real-world report that motivated the
  * container-aware restructure: a monorepo with one app workspace and two
@@ -327,7 +330,7 @@ function renderScenario(): string {
   const { model: annotated } = annotateFindings(rawModel, policy.clarify, BUILTIN_OVERRIDES);
   const developmentContainers = resolveDevelopmentContainersForTest(annotated, policy);
   const scoped = applyContainerScopes(annotated, developmentContainers);
-  const verdicts = evaluate(scoped, policy);
+  const verdicts = evaluate(scoped, policy, WITHOUT_DEPENDENCY_GRAPHS);
   const policyView: PolicyView = {
     policyPath: "policy.toml",
     suppressedWorkspaces: policy.suppressedWorkspaces,
@@ -388,7 +391,7 @@ describe("containerReport — multi-container golden scenario", () => {
         annotated,
         resolveDevelopmentContainersForTest(annotated, policy),
       );
-      const relayAgentVerdict = evaluate(scoped, policy).find(
+      const relayAgentVerdict = evaluate(scoped, policy, WITHOUT_DEPENDENCY_GRAPHS).find(
         (v) => v.purl === "pkg:golang/relay-agent@0.4.0",
       );
 
@@ -481,7 +484,7 @@ describe("containerReport — multi-container golden scenario", () => {
         annotated,
         resolveDevelopmentContainersForTest(annotated, policy),
       );
-      const verdicts = evaluate(scoped, policy);
+      const verdicts = evaluate(scoped, policy, WITHOUT_DEPENDENCY_GRAPHS);
       const notices = acceptedContainerNotices(scoped, verdicts);
 
       // Sorted by purl: "pkg:apk/..." < "pkg:deb/..." (apk before deb).
@@ -528,7 +531,7 @@ describe("containerReport — multi-container golden scenario", () => {
     test("the [[compatible]] where-scoped acceptance decides coreutils via compatible[0], not a fail", () => {
       const policy = parsePolicy(POLICY_TOML);
       const { model: annotated } = annotateFindings(rawModel, policy.clarify, BUILTIN_OVERRIDES);
-      const coreutilsVerdict = evaluate(annotated, policy).find(
+      const coreutilsVerdict = evaluate(annotated, policy, WITHOUT_DEPENDENCY_GRAPHS).find(
         (v) => v.purl === "pkg:deb/coreutils@9.1-1",
       );
 
@@ -575,7 +578,7 @@ describe("containerReport — multi-container golden scenario", () => {
         annotated,
         resolveDevelopmentContainersForTest(annotated, policy),
       );
-      const verdicts = evaluate(scoped, policy);
+      const verdicts = evaluate(scoped, policy, WITHOUT_DEPENDENCY_GRAPHS);
       const diagToolsVerdict = verdicts.find((v) => v.purl === "pkg:apk/diag-tools@3.0.1");
       const metricsDaemonVerdict = verdicts.find(
         (v) => v.purl === "pkg:golang/metrics-daemon@1.2.0",
@@ -710,7 +713,7 @@ describe("a shared workspace+docker package through the real merge/scope/evaluat
     const { model: annotated } = annotateFindings(merged, policy.clarify, BUILTIN_OVERRIDES);
     const developmentContainers = resolveDevelopmentContainersForTest(annotated, policy);
     const scoped = applyContainerScopes(annotated, developmentContainers);
-    const verdicts = evaluate(scoped, policy);
+    const verdicts = evaluate(scoped, policy, WITHOUT_DEPENDENCY_GRAPHS);
     const policyView: PolicyView = {
       policyPath: "policy.toml",
       suppressedWorkspaces: policy.suppressedWorkspaces,

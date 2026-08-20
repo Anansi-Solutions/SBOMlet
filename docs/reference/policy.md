@@ -328,6 +328,13 @@ fixed list. `comment` carries anything the list cannot.
 Wherever a verdict cites the entry, its reason is the rationale value, and the
 comment after an em-dash when one is present.
 
+Two of them state something the scan can contradict, and a contradiction is
+rejected before any verdict: `os-package-unmodified` on a package outside a
+container image's OS layer, and `unused-transitive` on a package your project
+declares directly. The rest state a judgment about how your software is built
+that no scan observes — overriding what the tool concluded is exactly what they
+are for — so they are taken as written.
+
 ### `as-dependency-of` — whose use you judged
 
 Package-mode acceptances are about how a package arrives, not only about the
@@ -337,15 +344,51 @@ different question, and the same entry should not silently answer both.
 
 Each element is a package's display name, or the reserved token `self`, meaning
 your own software. On a target with a dependency graph, `self` is the direct
-edge from your project. On a target without one — a container image's OS layer,
-for instance — every package is a direct dependency of the project, so `self`
-is the honest value there, and it accepts every introduction path because there
-are no paths to distinguish. State that plainly to yourself when you write it:
-on a graphless target the entry is not chain-scoped, and nothing in the report
-will imply that it was.
+edge from your project — that package, declared by you, and nothing else. On a
+target without one — a container image's OS layer, for instance — every package
+is a direct dependency of the project, so `self` is the honest value there, and
+it accepts every introduction path because there are no paths to distinguish.
+State that plainly to yourself when you write it: on a target without a graph
+the entry is not chain-scoped, and nothing in the report will imply that it
+was.
 
-The list is parsed and carried here; it does not yet narrow which occurrences
-an entry decides. That check arrives with the introduction-path walk.
+#### What the tool checks
+
+A parent must be checkable where the entry is scoped, and the scan settles that
+before any verdict is decided. Two things are rejected outright, with the entry,
+the target and the fix named:
+
+- a parent other than `self` at a target with no dependency graph — there is no
+  chain to check there, so scope `where` to the targets that have one, or say
+  `self` and mean it;
+- a parent no node of the target's graph carries. Your own workspace members
+  count as nodes even though they never appear in the inventory: a package
+  arriving through one is `as-dependency-of = ["<the member>"]`, never `self`.
+
+Both depend on what the scan found, so a policy that was fine yesterday can be
+rejected today — adding a first target without a dependency graph is enough.
+That is the point: the entry says something the new scan cannot check.
+
+#### When the judgment turns out to be untrue
+
+Where the target has a dependency graph, the tool walks every chain by which
+the packages the entry accepts reach your project. If one of them arrives
+through a chain passing none of the parents you named, what the entry claims is
+not what the scan sees, and the tool refuses to apply it: **the whole entry is
+void at that target**. Every occurrence it governs there fails, cited as
+`compatible:voided[i]`, and the reason names the offending chain and the
+package that arrives through it.
+
+The failure is the entry's, not one package's — a bulk entry accepting a family
+of packages fails for all of them at that target. Splitting it into narrower
+entries, each covering one way in, is how you recover: it is the same
+information, stated so each part is true.
+
+Two cases decide nothing rather than voiding anything. A package your project
+declares directly is covered by `self` and by nothing else. And an occurrence
+the scan recorded no introduction for is not covered by any parent, `self`
+included, and equally never voids an entry — nothing is known about how it
+arrives, which is neither an acceptance nor evidence of a bypass.
 
 `as-dependency-of` is not applicable at licence level and is rejected there: a
 licence is accepted wherever `where` covers it, not through one package's use
