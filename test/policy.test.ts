@@ -144,6 +144,7 @@ describe("parsePolicy — happy path", () => {
     ]);
     expect(policy.clarify).toEqual([
       {
+        identity: { space: "clarify", index: 0 },
         name: "jsonify",
         version: "0.0.1",
         detected: { registry: "Public Domain", intensive: false },
@@ -699,6 +700,7 @@ describe("parsePolicy — the [[clarify]] package selector", () => {
 
     expect(policy.clarify).toEqual([
       {
+        identity: { space: "clarify", index: 0 },
         name: "demo-pkg",
         detected: { registry: "BSD" },
         justification: "scan-more-precise",
@@ -5224,6 +5226,10 @@ describe("parsePolicy — [target] table", () => {
         reason: "diverging outbound license for this workspace",
       },
     ]);
+  });
+
+  test("TOP_LEVEL_KEYS accepts clarifications (no unknown-top-level-key rejection)", () => {
+    expect(() => parsePolicy('clarifications = "clarifications.toml"')).not.toThrow();
   });
 
   test("TOP_LEVEL_KEYS accepts target (no unknown-top-level-key rejection)", () => {

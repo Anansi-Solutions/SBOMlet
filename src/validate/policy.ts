@@ -18,6 +18,7 @@ export const TOP_LEVEL_KEYS = [
   "workspace",
   "compatible",
   "clarify",
+  "clarifications",
   "deny",
   "unknown",
   "dev_dependencies",

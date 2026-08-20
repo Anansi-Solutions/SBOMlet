@@ -16,6 +16,7 @@ import {
   targetsWithDependencyGraph,
 } from "../merge/dependencyGraphs";
 import { mergeSboms, type CollectedSbom } from "../merge/merge";
+import { parseClarificationsAt, withImportedClarifications } from "../policy/clarifications";
 import { crossValidatePolicy } from "../policy/crossValidate";
 import {
   compareCodeUnits,
@@ -461,6 +462,35 @@ export function resolveCacheDir(opts: {
 }
 
 /**
+ * The policy with the entries of its `clarifications` file appended, or the policy unchanged when
+ * it declares none. The path anchors to the SCANNED repo - the same anchor the default policy is
+ * discovered under - so one text resolves identically from the repository, an in-process caller,
+ * and the Action. A file that is not there is a config error naming both the policy that declared
+ * it and the path searched: a policy must never run as though it had said nothing.
+ */
+function withClarificationsFile(opts: GenerateOptions, policy: Policy, policyFile: string): Policy {
+  const declared = policy.clarifications;
+
+  if (declared === undefined) {
+    return policy;
+  }
+
+  const file = resolveFrom(resolvedRepoRoot(opts) ?? opts.baseDir, declared);
+  let text: string;
+
+  try {
+    text = readFileSync(file, "utf8");
+  } catch {
+    throw new Error(
+      `clarifications file is missing or unreadable: ${policyFile} declares ` +
+        `clarifications = "${declared}", expected ${file}`,
+    );
+  }
+
+  return withImportedClarifications(policy, parseClarificationsAt(file, text));
+}
+
+/**
  * The committed enrichment cache path: {@link ENRICHMENT_CACHE_FILE} inside the cache `dir`, unless
  * --enrichment-cache overrides it (resolved against the repo root, as before). check reads it
  * offline; generate may write it on a miss.
@@ -707,7 +737,7 @@ export async function buildOutputs(opts: GenerateOptions): Promise<BuiltOutputs>
       throw new Error(`policy file is missing or unreadable: expected ${policyFile}`);
     }
 
-    policy = parsePolicy(policyText);
+    policy = withClarificationsFile(opts, parsePolicy(policyText), policyFile);
   }
 
   // The committed-artifact directory (the enrichment cache + Docker OS SBOM), resolved once from

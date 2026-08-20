@@ -103,7 +103,30 @@ export interface CompatiblePackageRule {
 
 export type CompatibleRule = CompatibleLicenseRule | CompatiblePackageRule;
 
+/**
+ * Where a clarify entry was written, which is the id space every citation of it is spelled in:
+ * `clarify[i]` for the policy's own entries, `clarifications[j]` for those imported from the
+ * separate file. An imported entry is numbered within THAT file, so a reader given a citation knows
+ * both which file to open and which table in it.
+ */
+export interface ClarifyIdentity {
+  space: "clarify" | "clarifications";
+  index: number;
+}
+
+/** The citation every surface spells for one entry. */
+export function clarifyCitation(rule: ClarifyRule): string {
+  return `${rule.identity.space}[${rule.identity.index}]`;
+}
+
+/** The rule id of a fail on an entry whose stated justification the signal disproved. */
+export function clarifyInvalidRuleId(rule: ClarifyRule): string {
+  return `${rule.identity.space}:invalid[${rule.identity.index}]`;
+}
+
 export interface ClarifyRule {
+  /** Which file wrote this entry, and its position there - see {@link clarifyCitation}. */
+  identity: ClarifyIdentity;
   /** Exact display name; exactly one of `name` and `pattern` is present. */
   name?: string;
   /** Display-name pattern, in the dialect of {@link compileNamePattern}. */
@@ -273,6 +296,11 @@ export interface Policy {
   suppressedWorkspaces: ReadonlyArray<SuppressedWorkspace>;
   compatible: ReadonlyArray<CompatibleRule>;
   clarify: ReadonlyArray<ClarifyRule>;
+  /**
+   * The declared path of a file holding further `[[clarify]]` entries, repo-root-relative. Absent
+   * when the policy declares none; the entries themselves arrive appended to `clarify`.
+   */
+  clarifications?: string;
   /**
    * Terminal deny-list: the HIGHEST-precedence lane. A matching package FORCE-FAILS regardless of
    * compatible/suppression/dev-scope. Absent [[deny]] table yields [].
@@ -639,6 +667,33 @@ function validateCache(root: Record<string, unknown>, problems: string[]): Cache
   }
 
   return { dir };
+}
+
+/**
+ * The optional top-level `clarifications` key: where the imported `[[clarify]]` entries live.
+ * Validated exactly like `cache.dir` - repo-root-relative, forward slashes, no ".." segments - so a
+ * policy can never point the loader outside the scanned repository. Absent yields undefined; a
+ * malformed value yields undefined after recording the problem.
+ */
+function validateClarificationsPath(
+  root: Record<string, unknown>,
+  problems: string[],
+): string | undefined {
+  if (!("clarifications" in root)) {
+    return undefined;
+  }
+
+  const value = stringOf(root["clarifications"]);
+
+  if (value === undefined || value.trim() === "") {
+    problems.push("clarifications: must be a non-empty path string");
+    return undefined;
+  }
+
+  const before = problems.length;
+
+  validatePath(value, "clarifications", problems);
+  return problems.length === before ? value : undefined;
 }
 
 /** Eager SPDX parse; a problem is recorded on failure. */
@@ -1329,6 +1384,7 @@ const CLARIFY_REPLACED_KEYS: ReadonlyMap<string, string> = new Map([
 function validateClarifyEntry(
   entry: Record<string, unknown>,
   where: string,
+  identity: ClarifyIdentity,
   problems: string[],
 ): ClarifyRule | undefined {
   const before = problems.length;
@@ -1364,6 +1420,7 @@ function validateClarifyEntry(
   }
 
   return {
+    identity,
     ...(selector.name !== undefined ? { name: selector.name } : {}),
     ...(selector.pattern !== undefined ? { pattern: selector.pattern } : {}),
     ...(pin.version !== undefined ? { version: pin.version } : {}),
@@ -1375,9 +1432,18 @@ function validateClarifyEntry(
   };
 }
 
-function validateClarify(root: Record<string, unknown>, problems: string[]): ClarifyRule[] {
+/**
+ * The `[[clarify]]` array of ONE file, validated into entries citable in `space`. Shared by the
+ * policy proper and the separate clarifications file so both mean exactly the same thing by an
+ * entry; problem paths name the TOML position (`clarify[i]`) and the imported file's reader
+ * prefixes them with its own path.
+ */
+export function validateClarifyTables(
+  raw: unknown,
+  space: ClarifyIdentity["space"],
+  problems: string[],
+): ClarifyRule[] {
   const clarify: ClarifyRule[] = [];
-  const raw = root["clarify"];
 
   if (raw === undefined) {
     return clarify;
@@ -1397,7 +1463,7 @@ function validateClarify(root: Record<string, unknown>, problems: string[]): Cla
       return;
     }
 
-    const rule = validateClarifyEntry(entry, where, problems);
+    const rule = validateClarifyEntry(entry, where, { space, index }, problems);
 
     if (rule !== undefined) {
       clarify.push(rule);
@@ -2032,7 +2098,8 @@ export function parsePolicy(text: string): Policy {
 
   const suppressedWorkspaces = validateSuppressions(root, problems);
   const compatible = validateCompatible(root, problems);
-  const clarify = validateClarify(root, problems);
+  const clarify = validateClarifyTables(root["clarify"], "clarify", problems);
+  const clarifications = validateClarificationsPath(root, problems);
   const deny = validateDeny(root, problems);
   const unknownHandling = validateUnknown(root, problems);
   const devDependencies = validateDevDependencies(root, problems);
@@ -2056,6 +2123,7 @@ export function parsePolicy(text: string): Policy {
     clarify,
     deny,
     allowSourceAvailable,
+    ...(clarifications !== undefined ? { clarifications } : {}),
     ...(document !== undefined ? { document } : {}),
     ...(docker !== undefined ? { docker } : {}),
     ...(cache !== undefined ? { cache } : {}),
