@@ -390,6 +390,41 @@ export function purlEcosystem(purl: string): string {
 }
 
 /**
+ * The display name a purl carries: its namespace and name, percent-decoded and joined with a slash
+ * ("pkg:npm/%40acme/ui@0.0.0-use.local" -> "@acme/ui"). Qualifiers and subpaths are dropped.
+ *
+ * @returns undefined for anything that is not a `pkg:<type>/<name>@<version>` purl.
+ *
+ * @privateRemarks
+ * The composition matches the display name the merge builds from a component's group and name, so
+ * the two agree for the ecosystems whose collectors reconstruct a dependency graph. It is a
+ * fallback for graph nodes the merged model carries no package for - a first-party workspace member
+ * that the merge excluded - where there is no recorded name to prefer.
+ */
+export function purlDisplayName(purl: string): string | undefined {
+  const rest = purl.startsWith("pkg:") ? purl.slice(4) : undefined;
+  const slash = rest?.indexOf("/") ?? -1;
+
+  if (rest === undefined || slash === -1) {
+    return undefined;
+  }
+
+  const nameAtVersion = rest.slice(slash + 1).split(/[?#]/, 1)[0] as string;
+  const at = nameAtVersion.lastIndexOf("@");
+  const name = at > 0 ? nameAtVersion.slice(0, at) : nameAtVersion;
+
+  if (name === "") {
+    return undefined;
+  }
+
+  try {
+    return name.split("/").map(decodeURIComponent).join("/");
+  } catch {
+    return name; // a malformed percent escape is kept verbatim rather than dropped
+  }
+}
+
+/**
  * JSON.stringify replacer that sorts object keys (arrays untouched) by {@link compareCodeUnits}.
  * Exported so the committed enrichment cache shares the exact tool-wide sorted-key serialization
  * contract - there must be one sorter, not two.

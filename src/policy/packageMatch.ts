@@ -1,6 +1,6 @@
+import { matchesIdentityPrefix, type PackageEntry } from "../model/dependencies";
 import { compileNamePattern } from "./namePattern";
-
-import type { PackageEntry } from "../model/dependencies";
+import { EVERYWHERE_SCOPE } from "./schema";
 
 /** The package fields a selector compares against. */
 export type PackageMatchTarget = Pick<PackageEntry, "name" | "version">;
@@ -51,4 +51,14 @@ export function matchesPackage(selector: PackageSelector, target: PackageMatchTa
   }
 
   return coversVersion(selector.version, target.version);
+}
+
+/**
+ * Does a `where` scope cover this occurrence target? An element covers the target when it IS the
+ * target or the target sits under it as a whole path segment, and the everywhere token covers every
+ * one. The single scope comparison behind every policy surface that decides which occurrences an
+ * entry reaches.
+ */
+export function scopeCoversTarget(where: ReadonlyArray<string>, target: string): boolean {
+  return where.some((path) => path === EVERYWHERE_SCOPE || matchesIdentityPrefix(target, path));
 }

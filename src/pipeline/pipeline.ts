@@ -16,6 +16,7 @@ import {
   targetsWithDependencyGraph,
 } from "../merge/dependencyGraphs";
 import { mergeSboms, type CollectedSbom } from "../merge/merge";
+import { crossValidatePolicy } from "../policy/crossValidate";
 import {
   compareCodeUnits,
   DOCKER_IDENTITY_PREFIX,
@@ -662,6 +663,29 @@ function projectPolicyView(
  * check byte-compares them against the committed files, so check can never overwrite the files it
  * is gating on.
  */
+/**
+ * The targets whose collector lane derives a dependency graph, established once the model exists
+ * and before anything reads it.
+ *
+ * @throws Error when a target whose lane derives a graph arrived without one, or PolicyError when
+ * the policy says something the scanned model cannot check - both the config-error exit path. They
+ * run here, together, because each would otherwise surface as a wall of misleading verdicts.
+ */
+function checkedDependencyGraphTargets(
+  model: CanonicalDependencies,
+  inputs: ReadonlyArray<CollectedSbom>,
+  policy: Policy | undefined,
+): ReadonlySet<string> {
+  const targets = targetsWithDependencyGraph(inputs);
+
+  assertDependencyGraphCoverage(model, targets);
+  if (policy !== undefined) {
+    crossValidatePolicy(model, policy, targets);
+  }
+
+  return targets;
+}
+
 export async function buildOutputs(opts: GenerateOptions): Promise<BuiltOutputs> {
   // Load + validate the policy before any target resolution or scan: an invalid policy must abort
   // through the exit-3 config-error path immediately, never after minutes of scanning. TomlError
@@ -710,12 +734,7 @@ export async function buildOutputs(opts: GenerateOptions): Promise<BuiltOutputs>
   // occurrences.
   const model = mergeSboms(inputs);
 
-  // A target collected by a lane that derives a dependency graph must have arrived with one. This
-  // runs before any verdict: reading such a target as graphless would widen every
-  // "as-dependency-of" acceptance scoped to it.
-  const graphTargets = targetsWithDependencyGraph(inputs);
-
-  assertDependencyGraphCoverage(model, graphTargets);
+  checkedDependencyGraphTargets(model, inputs, policy);
 
   // ENRICH stage - runs BEFORE annotate so an appended source:"registry" claim flows through the
   // SAME normalizeRaw as a generator claim (one SPDX path), and clarify > registry > generator

@@ -109,10 +109,9 @@ import {
 import { AGPL_IDS, COPYLEFT_FAMILY } from "./copyleft";
 import { COULD_BE_COPYLEFT_FAMILIES, WORKSPACE_ABSORBS } from "./copyleftFamily";
 import { denyRuleFor, type IndexedDenyRule } from "./denylist";
-import { matchesPackage } from "./packageMatch";
+import { matchesPackage, scopeCoversTarget } from "./packageMatch";
 import { resolveTargetProfile } from "./target";
 import {
-  EVERYWHERE_SCOPE,
   ruleReason,
   type CompatibleLicenseRule,
   type CompatiblePackageRule,
@@ -209,9 +208,7 @@ interface IndexedRule<T> {
  * `where` entry covers the target as an identity prefix.
  */
 function appliesAt(rule: CompatibleRule, target: string): boolean {
-  return rule.where.some(
-    (path) => path === EVERYWHERE_SCOPE || matchesIdentityPrefix(target, path),
-  );
+  return scopeCoversTarget(rule.where, target);
 }
 
 /**
