@@ -1,7 +1,7 @@
 # SBOMlet — Third-Party Licenses
 
 <!-- AUTO-GENERATED - do not edit. Regenerate with: task generate -->
-This report was audited against the declared target: MIT, network-deployed, distributed externally. Its findings assert license validity against that target and the declared configuration only.
+This report was audited against the declared target: AGPL-3.0-only, network-deployed, distributed externally. Its findings assert license validity against that target and the declared configuration only.
 Compatibility verdicts draw on the OSADL compatibility matrix and copyleft class table (snapshot 2026-08-04T15:39:00+0000, osadl.org) and the ScanCode LicenseDB category index (snapshot 2026-08-10T16:21:01Z, scancode-licensedb.aboutcode.org) - this is automated, data-driven output, not legal advice.
 
 Copyleft notice rules are configured in .sbomlet.policy.toml.
