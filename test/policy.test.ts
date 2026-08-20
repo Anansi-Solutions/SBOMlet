@@ -15,6 +15,7 @@ import {
   unnecessaryClarifyEntries,
   unusedRuleIds,
 } from "../src/policy/evaluate";
+import { parseClarifications, withImportedClarifications } from "../src/policy/clarifications";
 import { BUILTIN_DENY_RULES } from "../src/policy/builtinDenylist";
 import { denyRuleFor } from "../src/policy/denylist";
 import { AGPL_IDS, COPYLEFT_IDS } from "../src/policy/copyleft";
@@ -1385,9 +1386,9 @@ function scanPkgSpec(
 }
 
 /** parse policy → annotateFindings (clarify + optional builtins) → evaluate. */
-function runEngine(
+function runEngineWith(
+  policy: Policy,
   specs: ReadonlyArray<PackageSpec>,
-  policyText: string,
   builtins: ReadonlyArray<BuiltinOverrideInput> = [],
 ): {
   verdicts: Verdict[];
@@ -1395,7 +1396,6 @@ function runEngine(
   policy: Policy;
   model: CanonicalDependencies;
 } {
-  const policy = parsePolicy(policyText);
   const { model, usedClarifyIndices } = annotateFindings(
     makeModel(specs),
     policy.clarify,
@@ -1408,6 +1408,26 @@ function runEngine(
     policy,
     model,
   };
+}
+
+function runEngine(
+  specs: ReadonlyArray<PackageSpec>,
+  policyText: string,
+  builtins: ReadonlyArray<BuiltinOverrideInput> = [],
+): ReturnType<typeof runEngineWith> {
+  return runEngineWith(parsePolicy(policyText), specs, builtins);
+}
+
+/** {@link runEngine} over both files, combined exactly as the pipeline combines them. */
+function runEngineWithImports(
+  specs: ReadonlyArray<PackageSpec>,
+  policyText: string,
+  clarificationsText: string,
+): ReturnType<typeof runEngineWith> {
+  return runEngineWith(
+    withImportedClarifications(parsePolicy(policyText), parseClarifications(clarificationsText)),
+    specs,
+  );
 }
 
 /** Suppression-only fixture policy: apps/scratch absorbs copyleft. */
@@ -5770,6 +5790,161 @@ describe("evaluate — a clarify entry the current signal disproves", () => {
 
     expect(verdicts[0].status).toBe("ok");
     expect(verdicts[0].rule).toBe("override:builtin[0]");
+  });
+});
+
+// ===========================================================================
+// Entries imported from the clarifications file are cited in their OWN id
+// space, indexed within that file. No combined-array position may reach a
+// reader: a citation names the file to open and the table in it.
+// ===========================================================================
+
+describe("evaluate — the clarifications file's own citation space", () => {
+  const importable = (name: string, expression: string): string =>
+    [
+      "[[clarify]]",
+      `name = ${JSON.stringify(name)}`,
+      'detected = { registry = "Public Domain" }',
+      'justification = "license-not-found"',
+      `expression = ${JSON.stringify(expression)}`,
+    ].join("\n");
+
+  test("HEADLINE: an imported entry cites clarifications[j], never its combined position", () => {
+    const { verdicts } = runEngineWithImports(
+      [pkgSpec("jsonify", "Public Domain", ["backend"])],
+      importable("policy-only", "MIT"),
+      importable("jsonify", "Unlicense"),
+    );
+
+    expect(verdicts[0].status).toBe("ok");
+    expect(verdicts[0].rule).toBe("clarifications[0]");
+    expect(verdicts[0].reason).toBe('clarified to "Unlicense": license-not-found');
+  });
+
+  test("the policy's own entry keeps clarify[i] with imported entries beside it", () => {
+    const { verdicts } = runEngineWithImports(
+      [pkgSpec("jsonify", "Public Domain", ["backend"])],
+      importable("jsonify", "Unlicense"),
+      importable("imported-only", "MIT"),
+    );
+
+    expect(verdicts[0].rule).toBe("clarify[0]");
+  });
+
+  test("the second imported entry is clarifications[1], with two policy entries ahead of it", () => {
+    const { verdicts } = runEngineWithImports(
+      [pkgSpec("jsonify", "Public Domain", ["backend"])],
+      [importable("policy-one", "MIT"), importable("policy-two", "MIT")].join("\n"),
+      [importable("imported-one", "MIT"), importable("jsonify", "Unlicense")].join("\n"),
+    );
+
+    expect(verdicts[0].rule).toBe("clarifications[1]");
+  });
+
+  test("a stale imported entry names the entry to update", () => {
+    const { verdicts } = runEngineWithImports(
+      [pkgSpec("jsonify", "GPL-3.0-only", ["backend"])],
+      "",
+      importable("jsonify", "Unlicense"),
+    );
+
+    expect(verdicts[0].rule).toBe("override:stale[clarify]");
+    expect(verdicts[0].reason).toContain("Update or remove clarifications[0].");
+  });
+
+  test("a stale policy entry names its own citation", () => {
+    const { verdicts } = runEngineWithImports(
+      [pkgSpec("jsonify", "GPL-3.0-only", ["backend"])],
+      importable("jsonify", "Unlicense"),
+      "",
+    );
+
+    expect(verdicts[0].rule).toBe("override:stale[clarify]");
+    expect(verdicts[0].reason).toContain("Update or remove clarify[0].");
+  });
+
+  test("an imported entry the signal disproves fails on clarifications:invalid[j]", () => {
+    const { verdicts } = runEngineWithImports(
+      [scanPkgSpec("choice-lib", "MIT OR Apache-2.0", "MIT", ["backend"])],
+      "",
+      [
+        "[[clarify]]",
+        'name = "choice-lib"',
+        'detected = { registry = "MIT OR Apache-2.0", intensive = "MIT" }',
+        'justification = "dual-license-choice"',
+        'expression = "MIT OR Apache-2.0"',
+      ].join("\n"),
+    );
+
+    expect(verdicts[0].status).toBe("fail");
+    expect(verdicts[0].rule).toBe("clarifications:invalid[0]");
+  });
+
+  test("unused accounting reports each file's own ids, policy file first", () => {
+    const { verdicts, usedClarifyIndices, policy } = runEngineWithImports(
+      [pkgSpec("unrelated", "MIT", ["backend"])],
+      importable("policy-only", "MIT"),
+      importable("imported-only", "MIT"),
+    );
+
+    expect(unusedRuleIds(policy, verdicts, usedClarifyIndices)).toEqual([
+      "clarify[0]",
+      "clarifications[0]",
+    ]);
+  });
+
+  test("a failing imported entry is never also reported as an unused entry", () => {
+    const { verdicts, usedClarifyIndices, policy } = runEngineWithImports(
+      [scanPkgSpec("choice-lib", "MIT OR Apache-2.0", "MIT", ["backend"])],
+      "",
+      [
+        "[[clarify]]",
+        'name = "choice-lib"',
+        'detected = { registry = "MIT OR Apache-2.0", intensive = "MIT" }',
+        'justification = "dual-license-choice"',
+        'expression = "MIT OR Apache-2.0"',
+      ].join("\n"),
+    );
+
+    expect(verdicts[0].rule).toBe("clarifications:invalid[0]");
+    expect(unusedRuleIds(policy, verdicts, usedClarifyIndices)).toEqual([]);
+  });
+
+  test("an imported entry with nothing left to correct is reported in the imported space", () => {
+    const { model, policy } = runEngineWithImports(
+      [scanPkgSpec("settled-lib", "MIT", "MIT", ["backend"])],
+      "",
+      [
+        "[[clarify]]",
+        'name = "settled-lib"',
+        'detected = { registry = "MIT", intensive = "MIT" }',
+        'justification = "contradictory-claims-recorded"',
+        'expression = "MIT"',
+      ].join("\n"),
+    );
+
+    expect(unnecessaryClarifyEntries(model, policy).map((entry) => entry.rule)).toEqual([
+      "clarifications[0]",
+    ]);
+  });
+
+  test("an imported citation is not read as a [[compatible]] acceptance of an AGPL obligation", () => {
+    const purl = "pkg:deb/debian/agpl-imported@1.0.0";
+    const target = "docker:img/Dockerfile";
+    const model = annotateFindings(
+      makeModel([osPkgSpec(purl, "agpl-imported", "AGPL-3.0-only", [target])]),
+      [],
+    ).model;
+    const base = {
+      purl,
+      occurrenceTarget: target,
+      status: "ok" as const,
+      reason: 'clarified to "AGPL-3.0-only": license-reviewed',
+    };
+
+    expect(acceptedContainerNotices(model, [{ ...base, rule: "clarifications[0]" }])).toEqual([]);
+    expect(acceptedContainerNotices(model, [{ ...base, rule: "clarify[0]" }])).toEqual([]);
+    expect(acceptedContainerNotices(model, [{ ...base, rule: "compatible[0]" }])).toHaveLength(1);
   });
 });
 

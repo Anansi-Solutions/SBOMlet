@@ -117,7 +117,10 @@ import { voidedCompatibleEntries, voidedEntryKey, type VoidedEntry } from "./cha
 import { matchesPackage, scopeCoversTarget } from "./packageMatch";
 import { resolveTargetProfile } from "./target";
 import {
+  clarifyCitation,
+  clarifyInvalidRuleId,
   ruleReason,
+  type ClarifyRule,
   type CompatibleLicenseRule,
   type CompatiblePackageRule,
   type CompatibleRule,
@@ -530,7 +533,8 @@ function staleDivergence(stale: StaleOverride): string {
  * A stale override fails the gate loudly before any other lane: what the override recorded is no
  * longer what the package shows, so an old assertion could be masking a relicense. The reason names
  * the package and the divergence; the rule id is distinct and actionable
- * ("override:stale[clarify|builtin]") telling the maintainer to update or remove the override.
+ * ("override:stale[clarify|builtin]"), and the remedy names the project entry to open - in the id
+ * space of the file holding it - or the shipped set when no project entry governs the package.
  * Mapped to exit 1 (a compliance-relevant gate failure) via the violations → exitCodeFor mapping
  * - the stale assertion is never applied.
  */
@@ -538,8 +542,13 @@ function staleVerdict(
   base: { purl: string; occurrenceTarget: string },
   entry: PackageEntry,
   stale: NonNullable<PackageEntry["finding"]>["staleOverride"],
+  decided: ClarifyDecision | undefined,
 ): Verdict {
   const s = stale as NonNullable<typeof stale>;
+  const remedy =
+    s.level === "clarify" && decided !== undefined
+      ? clarifyCitation(decided.rule)
+      : `the ${s.level} override`;
 
   return {
     ...base,
@@ -548,13 +557,16 @@ function staleVerdict(
     reason:
       `STALE override on "${entry.name}@${entry.version}": ${staleDivergence(s)} — the ` +
       `disambiguation was NOT applied (a stale override could mask a ` +
-      `relicense). Update or remove the ${s.level} override.`,
+      `relicense). Update or remove ${remedy}.`,
   };
 }
 
 /** The [[clarify]] entry governing a package, and whether its stated reason still holds. */
 interface ClarifyDecision {
+  /** Position in the combined entry list - what unused accounting counts. */
   readonly index: number;
+  /** The entry itself, which every id naming it is spelled from. */
+  readonly rule: ClarifyRule;
   readonly validity: JustificationValidity;
 }
 
@@ -579,6 +591,7 @@ function clarifyDecision(entry: PackageEntry, policy: Policy): ClarifyDecision |
 
   return {
     index,
+    rule,
     validity: justificationValidity(rule, observedSignalBySource(entry.licenseClaims, finding)),
   };
 }
@@ -607,7 +620,7 @@ function invalidJustificationVerdict(
   return {
     ...base,
     status: "fail",
-    rule: `clarify:invalid[${decided.index}]`,
+    rule: clarifyInvalidRuleId(decided.rule),
     reason: `INVALID justification on "${entry.name}@${entry.version}": ${validity.reason}`,
   };
 }
@@ -679,8 +692,8 @@ function conflictVerdict(
 
 /**
  * Citation for an override that fell through to the default:ok lane. A project clarify
- * (clarifyIndexFor !== -1) keeps its "clarify[i]" citation; a tool-level builtin (no clarify entry)
- * cites the distinct "override:builtin[i]" rule id it carries - never plain default:ok, so a
+ * (clarifyIndexFor !== -1) is cited in its own file's id space; a tool-level builtin (no clarify
+ * entry) cites the distinct "override:builtin[i]" rule id it carries - never plain default:ok, so a
  * shipped disambiguation stays auditable. Returns undefined when this is not an override-decided
  * verdict (the caller then falls through to default:ok).
  */
@@ -704,7 +717,7 @@ function overrideCitation(
       return {
         ...base,
         status: "ok",
-        rule: `clarify[${clarifyIndex}]`,
+        rule: clarifyCitation(rule),
         reason: `clarified to "${expression}": ${ruleReason(rule.justification, rule.comment)}`,
       };
     }
@@ -1358,7 +1371,7 @@ function verdictFor(
   const stale = entry.finding?.staleOverride;
 
   if (stale !== undefined) {
-    return staleVerdict(base, entry, stale);
+    return staleVerdict(base, entry, stale, clarifyDecided);
   }
 
   // Directly below stale, and never reached by an entry that failed it: the recorded detections
@@ -1658,11 +1671,11 @@ export function unusedRuleIds(
       unused.push(id);
     }
   });
-  policy.clarify.forEach((_, index) => {
+  policy.clarify.forEach((rule, index) => {
     // An entry the signal disproved decided every occurrence it governs - as a failure. Reporting
     // it "unused" beside those failures would contradict them.
-    if (!usedClarifyIndices.has(index) && !cited.has(`clarify:invalid[${index}]`)) {
-      unused.push(`clarify[${index}]`);
+    if (!usedClarifyIndices.has(index) && !cited.has(clarifyInvalidRuleId(rule))) {
+      unused.push(clarifyCitation(rule));
     }
   });
   return unused;
@@ -1711,5 +1724,5 @@ export function unnecessaryClarifyEntries(
   return [...moot]
     .filter(([index]) => !needed.has(index))
     .sort(([a], [b]) => a - b)
-    .map(([index, reason]) => ({ rule: `clarify[${index}]`, reason }));
+    .map(([index, reason]) => ({ rule: clarifyCitation(policy.clarify[index]!), reason }));
 }

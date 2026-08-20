@@ -10,12 +10,15 @@ import { join } from "node:path";
 import { describe, expect, test } from "bun:test";
 
 import { annotateFindings } from "../src/normalize/normalize";
+import { writePolicySummary } from "../src/pipeline/summary";
 import { buildOutputs, resolveCacheDir } from "../src/pipeline/pipeline";
 import {
   parseClarifications,
   parseClarificationsAt,
+  shadowedClarifications,
   withImportedClarifications,
 } from "../src/policy/clarifications";
+import { renderMarkdown, type PolicyView } from "../src/render/markdown";
 import { parsePolicy, PolicyError } from "../src/policy/schema";
 import { claim, modelOf, pkg } from "./normalizeTestSupport";
 
@@ -261,6 +264,86 @@ describe("combining the two files", () => {
     );
 
     expect(model.packages[0]!.finding!.expression).toBe("0BSD");
+  });
+});
+
+describe("shadowed imported entries", () => {
+  const shadowingCase = (): ReturnType<typeof withImportedClarifications> =>
+    withImportedClarifications(
+      parsePolicy(clarifyTable("jsonify", "Unlicense")),
+      parseClarifications(
+        [clarifyTable("jsonify", "0BSD"), clarifyTable("elsewhere", "MIT")].join("\n\n"),
+      ),
+    );
+
+  test("the entry the policy decides ahead of is reported, naming both citations", () => {
+    expect(
+      shadowedClarifications(
+        modelOf(pkg("jsonify", "0.0.1", [claim("Public Domain", "name")])),
+        shadowingCase(),
+      ),
+    ).toEqual([{ shadowing: "clarify[0]", shadowed: "clarifications[0]" }]);
+  });
+
+  test("an imported entry no policy entry stands ahead of is not reported", () => {
+    expect(
+      shadowedClarifications(
+        modelOf(pkg("elsewhere", "1.0.0", [claim("Public Domain", "name")])),
+        shadowingCase(),
+      ),
+    ).toEqual([]);
+  });
+});
+
+describe("an imported entry on the reader-facing surfaces", () => {
+  test("the unused-entry warning carries the imported entry's own reason, not an empty one", () => {
+    const policy = withImportedClarifications(
+      parsePolicy(""),
+      parseClarifications(clarifyTable("never-scanned", "Unlicense")),
+    );
+    const original = process.stderr.write.bind(process.stderr);
+    let captured = "";
+
+    process.stderr.write = ((chunk: unknown): boolean => {
+      captured += String(chunk);
+      return true;
+    }) as typeof process.stderr.write;
+    try {
+      writePolicySummary(policy, [], new Set());
+    } finally {
+      process.stderr.write = original;
+    }
+
+    expect(captured).toContain(
+      "policy warning: unused entry clarifications[0] — license-not-found\n",
+    );
+  });
+
+  test("a fail on an imported entry rows in the Problematic roll-up like any other", () => {
+    const { model } = annotateFindings(
+      modelOf(pkg("choice-lib", "1.0.0", [claim("MIT", "spdx-id")])),
+      [],
+    );
+    const view: PolicyView = {
+      policyPath: "policy.toml",
+      suppressedWorkspaces: [],
+      verdicts: [
+        {
+          purl: "pkg:npm/choice-lib@1.0.0",
+          occurrenceTarget: "frontend",
+          status: "fail",
+          rule: "clarifications:invalid[0]",
+          reason: 'INVALID justification on "choice-lib@1.0.0"',
+        },
+      ],
+    };
+    const markdown = renderMarkdown(model, view);
+
+    expect(markdown).toContain("## Problematic licenses");
+    // The Rule cell escapes brackets, as it does for every other id shape.
+    expect(markdown.slice(markdown.indexOf("## Problematic licenses"))).toContain(
+      "| fail | clarifications:invalid\\[0\\] | choice-lib |",
+    );
   });
 });
 

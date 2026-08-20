@@ -10,7 +10,16 @@
 import { parse as parseToml } from "smol-toml";
 
 import { recordOf } from "../validate/record";
-import { PolicyError, validateClarifyTables, type ClarifyRule, type Policy } from "./schema";
+import { matchesPackage } from "./packageMatch";
+import {
+  clarifyCitation,
+  PolicyError,
+  validateClarifyTables,
+  type ClarifyRule,
+  type Policy,
+} from "./schema";
+
+import type { CanonicalDependencies } from "../model/dependencies";
 
 /** The one table a clarifications file may carry. */
 const CLARIFY_TABLE = "clarify";
@@ -58,6 +67,46 @@ export function parseClarificationsAt(path: string, text: string): ClarifyRule[]
 
     throw new Error(`${path}: ${(error as Error).message}`, { cause: error });
   }
+}
+
+/** An imported entry a policy-file entry decides ahead of, both named by their citations. */
+export interface ShadowedClarification {
+  /** The policy-file entry that decides. */
+  readonly shadowing: string;
+  /** The imported entry it leaves nothing for. */
+  readonly shadowed: string;
+}
+
+/**
+ * Imported entries a policy-file entry takes precedence over on some scanned package. Reported
+ * rather than rejected: the same imported entry may still decide other packages, and a maintainer
+ * comparing the two citations is the one who can say which was meant. The scanned model arrives
+ * purl-sorted, so the pairs come out in a stable order.
+ */
+export function shadowedClarifications(
+  model: CanonicalDependencies,
+  policy: Policy,
+): ShadowedClarification[] {
+  const pairs = new Map<string, ShadowedClarification>();
+
+  for (const entry of model.packages) {
+    const matching = policy.clarify.filter((rule) => matchesPackage(rule, entry));
+    const deciding = matching[0];
+
+    if (deciding === undefined || deciding.identity.space !== "clarify") {
+      continue;
+    }
+
+    for (const rule of matching.slice(1)) {
+      if (rule.identity.space === "clarifications") {
+        const pair = { shadowing: clarifyCitation(deciding), shadowed: clarifyCitation(rule) };
+
+        pairs.set(`${pair.shadowing}\u0000${pair.shadowed}`, pair);
+      }
+    }
+  }
+
+  return [...pairs.values()];
 }
 
 /** The policy with `imported` appended after its own entries - the order shadowing rests on. */

@@ -217,7 +217,7 @@ run; without `--policy` the field is absent.
 | `source`               | `LicenseClaimSource` | `"generator"` for an exact parse or unknown, `"scancode"` when a ScanCode assessment became the finding, or `"corrected"`, `"registry"`, or `"override"` for a clarify or builtin. |
 | `confidence`           | `FindingConfidence`  | `"exact" \| "corrected" \| "none" \| "imprecise"` — see below.                                                                                                                      |
 | `impreciseFamily?`     | `string`             | The faithful ambiguous family label (`"BSD"`, `"Apache"`, `"GPL"`). Present only when `confidence` is `"imprecise"`.                                                                |
-| `overrideRule?`        | `string`             | The citation for a tool-level builtin override that decided this finding, such as `"override:builtin[3]"`. A project `[[clarify]]` keeps its own `clarify[i]` citation, so this is absent for those. |
+| `overrideRule?`        | `string`             | The citation for a tool-level builtin override that decided this finding, such as `"override:builtin[3]"`. A project `[[clarify]]` keeps its own citation instead, so this is absent for those. |
 | `staleOverride?`       | `StaleOverride`      | Set when a source no longer reports what an override recorded for it. The override is not applied, and the engine fails the gate loudly.                                             |
 | `observedExpression?`  | `string`             | The pre-override observed expression, set when an override rewrote `expression`. The deny terminal reads it so a denied observed license can never be licensed back in.              |
 | `observedExpressions?` | `readonly string[]`  | The set of every observed per-claim precise expression, deduped and sorted. The deny terminal also reads this so a denied member is seen even when combination elected an imprecise family or collapsed to unknown. |
@@ -396,11 +396,15 @@ about. There is exactly one verdict per occurrence, and `evaluate` sorts them by
 build), or `suppressed` (a family-justified workspace copyleft suppression).
 
 `rule` is the machine-readable deciding rule id, such as `compatible[1]`,
-`clarify[0]`, `denied[2]`, `workspace.copyleft_suppressed[0]`, `default:copyleft`,
+`clarify[0]`, `clarifications[0]`, `denied[2]`,
+`workspace.copyleft_suppressed[0]`, `default:copyleft`,
 `default:unknown`, `default:imprecise`, `default:imprecise-copyleft`,
 `default:ok`, `override:builtin[3]`, `override:stale[clarify|builtin]`, or
-`conflict:scancode`. The renderer and the gate are pure consumers of these
-structured ids; neither re-derives policy.
+`conflict:scancode`. A `[[clarify]]` entry is cited in the id space of the
+file holding it — `clarify[i]` in the policy, `clarifications[j]` in the
+clarifications file, each numbered from zero within that file — so a citation
+names both where to look and which table. The renderer and the gate are pure
+consumers of these structured ids; neither re-derives policy.
 
 `reason` is a sentence naming the deciding input, such as the matched license,
 the workspace path, or the elected expression, so the rendered document carries

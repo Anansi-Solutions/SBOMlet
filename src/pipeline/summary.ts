@@ -6,22 +6,20 @@
 
 import { type Verdict } from "../model/dependencies";
 import { unusedRuleIds } from "../policy/evaluate";
-import { ruleReason, type Policy } from "../policy/schema";
+import { clarifyCitation, ruleReason, type Policy } from "../policy/schema";
 
 /**
- * Reason text of an unused compatible[i]/clarify[i] rule id - surfaced in the unused-entry warning
- * so the stale policy line is self-explanatory. Defensive empty string for an unrecognized id shape
- * (unusedRuleIds only emits these two shapes).
+ * Reason text of an unused rule id - surfaced in the unused-entry warning so the stale policy line
+ * is self-explanatory. A clarify id is resolved by citation rather than by position: an imported
+ * entry is numbered within its own file, not within the combined list. Defensive empty string for
+ * an unrecognized id shape (unusedRuleIds only emits these three shapes).
  */
 function unusedRuleReason(policy: Policy, ruleId: string): string {
-  const match = /^(compatible|clarify)\[(\d+)\]$/.exec(ruleId);
-
-  if (match === null) {
-    return "";
-  }
-
-  const index = Number(match[2]);
-  const rule = match[1] === "compatible" ? policy.compatible[index] : policy.clarify[index];
+  const compatible = /^compatible\[(\d+)\]$/.exec(ruleId);
+  const rule =
+    compatible === null
+      ? policy.clarify.find((entry) => clarifyCitation(entry) === ruleId)
+      : policy.compatible[Number(compatible[1])];
 
   if (rule === undefined) {
     return "";

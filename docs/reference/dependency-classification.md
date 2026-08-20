@@ -80,7 +80,9 @@ highest to lowest:
    observed: fail.
 3. **An invalid justification** — a `[[clarify]]` entry whose recorded
    detections all still hold, but whose stated reason the current signal
-   disproves: fail, `clarify:invalid[i]`. The remedy is a different one from
+   disproves: fail, `clarify:invalid[i]` — `clarifications:invalid[j]` when
+   the entry came from the clarifications file, which numbers its entries
+   itself. The remedy is a different one from
    the tier above — the detection record is right and the reason for
    preferring the entry's expression is not, so the entry is re-filed rather
    than re-recorded. Each value of the closed justification set asserts
@@ -97,8 +99,10 @@ highest to lowest:
 5. **A `[[compatible]]` package or license rule** — ok. (`[[clarify]]` isn't a
    tier of its own here: it rewrites the finding *before* this precedence walk
    runs, so a clarified package falls through the same lanes as any other
-   finding. One that clears every lane below cites `clarify[i]` at the
-   default-ok tier instead of a bare `default:ok`.)
+   finding. One that clears every lane below cites the entry that clarified
+   it — `clarify[i]`, or `clarifications[j]` for one imported from the
+   clarifications file — at the default-ok tier instead of a bare
+   `default:ok`.)
 
    A package-mode acceptance is conditional. It states whose use of the
    package was judged, and it holds only while that is how the package
@@ -140,7 +144,7 @@ vetted OSADL-matrix-first tier chain) always decides the *verdict* for an
 in-scope obligation — a flag never hardcodes an outcome. Five outcomes:
 
 - **compatible** → ok, `target:ok` (a clarified package landing here still
-  cites `clarify[i]`, exactly like the default-ok tier above).
+  cites the entry that clarified it, exactly like the default-ok tier above).
 - **held-internal** — a positively-known copyleft/AGPL obligation the profile
   takes out of scope (`distribution = "internal"` for copyleft; additionally
   `network = false` for AGPL, since `network = true` keeps the AGPL class in
