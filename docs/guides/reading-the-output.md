@@ -46,6 +46,22 @@ in. What to do depends on the rule:
   See
   [Deny a source-available licence or a named package](./writing-policy.md#deny-a-source-available-licence-or-a-named-package)
   to see why, or to find and remove the entry if it's yours to remove.
+- `override:stale[clarify]` or `override:stale[builtin]` — a clarification
+  recorded what a source reported, and that source now reports something
+  else, so the recorded expression is not applied. Read the new value and
+  update or retire the entry:
+  [Correct a wrongly-detected or imprecise licence](./writing-policy.md#correct-a-wrongly-detected-or-imprecise-licence).
+- `clarify:invalid[N]`, or `clarifications:invalid[N]` for an entry in the
+  separate clarifications file — every detection the entry recorded still
+  holds, but the reason it gives for preferring its expression is one the
+  current signal disproves. The failure names where the entry can go
+  instead; re-file it under that justification.
+- `compatible:voided[N]` — a `[[compatible]]` package entry names whose use
+  of a package it judged, and something it accepts arrives through a chain
+  passing none of them. The entry then accepts nothing at that target, so
+  every package it governs there fails, not only the one that arrives
+  around it:
+  [Split an acceptance the chains contradict](./writing-policy.md#split-an-acceptance-the-chains-contradict).
 - `default:copyleft` — an unaccepted copyleft dependency. Accept it with
   [Allow a licence pattern or an exact package](./writing-policy.md#allow-a-licence-pattern-or-an-exact-package),
   scope that acceptance to where you actually reviewed it with

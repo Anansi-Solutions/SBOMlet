@@ -53,6 +53,12 @@ workspace suppression either: the target lane decides it first, so a
 governs is **superseded** — surfaced as a notice naming both, never
 silently.
 
+The table above is where an applied verdict comes from. The tiers that fail an
+entry instead of applying it — a stale precondition, a justification the
+evidence disproves, a chain the acceptance never judged — sit inside this order
+and are laid out in the normative routing tree,
+[dependency-classification.md](./dependency-classification.md#stage-2--verdict-routing).
+
 ## Validation
 
 Validation is strict and rejects the whole file on the first run, reporting
@@ -326,11 +332,13 @@ with a message naming its replacement:
 | `@scope/**` | Any depth beneath the scope. |
 | `@scope/` | Shorthand for `@scope/**`. |
 
-Matching is case-sensitive and covers the whole name. A pattern must carry a
-wildcard — a pattern without one names a single package, so write `name`
-instead — and at least one literal character, so a pattern of wildcards alone
-cannot become a blanket rule. Versions have no wildcard anywhere in the schema:
-list them when several share a judgment.
+Both `name` and `pattern` select a package's canonical display name — the value
+the report's Package column shows, such as `@img/sharp-win32-x64` — never its
+purl. Matching is case-sensitive and covers the whole name. A pattern must
+carry a wildcard — a pattern without one names a single package, so write
+`name` instead — and at least one literal character, so a pattern of wildcards
+alone cannot become a blanket rule. Versions have no wildcard anywhere in the
+schema: list them when several share a judgment.
 
 ## `[[compatible]]`
 
@@ -403,12 +411,11 @@ different question, and the same entry should not silently answer both.
 Each element is a package's display name, or the reserved token `self`, meaning
 your own software. On a target with a dependency graph, `self` is the direct
 edge from your project — that package, declared by you, and nothing else. On a
-target without one — a container image's OS layer, for instance — every package
-is a direct dependency of the project, so `self` is the honest value there, and
-it accepts every introduction path because there are no paths to distinguish.
-State that plainly to yourself when you write it: on a target without a graph
-the entry is not chain-scoped, and nothing in the report will imply that it
-was.
+target without one — a container image's OS layer, for instance — there are no
+recorded chains to check, so `self` is the only value allowed there and it
+accepts every occurrence the entry's `where` reaches. That acceptance is not
+chain-scoped, and no verdict it decides claims it is; `where` is what scopes
+it.
 
 #### What the tool checks
 
@@ -500,8 +507,8 @@ a copyleft licence. Absent: no suppressions.
 
 Suppression is per [occurrence](../glossary.md#occurrence) rather than per
 package, so the same dependency in a non-suppressed workspace still flags. The
-`path` match is segment-aware, so `apps/scratch` covers occurrences under it but
-never a sibling like `apps/scratch-helper`. `path` is also rejected outright if
+`path` match is segment-aware, so `apps/reporting` covers occurrences under it
+but never a sibling like `apps/reporting-helper`. `path` is also rejected if
 it starts with `docker:` — a container image is not a workspace, so accept a
 container's copyleft package with a scoped [`[[compatible]]`](#compatible) rule
 instead.
