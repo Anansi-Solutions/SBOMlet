@@ -204,9 +204,12 @@ the bare artifact:
 
 ```toml
 [[clarify]]
-package = { name = "com.example.vendor/reporting-engine-pro", version = "9.0.0" }
+name = "com.example.vendor/reporting-engine-pro"
+version = "9.0.0"
+detected = { registry = false, intensive = false }
+justification = "license-not-found"
 expression = "LicenseRef-reporting-engine-pro-commercial"
-reason = "Commercial reporting-engine licence, vendored under lib/; no public SPDX id exists."
+comment = "Commercial reporting-engine licence, vendored under lib/; no public SPDX id exists."
 ```
 
 ## check
