@@ -6149,7 +6149,13 @@ describe("a justification and the detections it speaks for", () => {
   test("license-not-found rejects a recorded value that is itself a licence", () => {
     expect(
       expectPolicyError(clarifyWith('{ registry = "MIT" }', "license-not-found")).message,
-    ).toContain("which is one");
+    ).toContain('records "MIT", which states MIT');
+  });
+
+  test("license-not-found rejects a label the tool reads as a licence", () => {
+    expect(
+      expectPolicyError(clarifyWith('{ registry = "MIT License" }', "license-not-found")).message,
+    ).toContain('records "MIT License", which states MIT');
   });
 
   test("license-not-found accepts a recorded label that states no licence", () => {

@@ -58,10 +58,18 @@ function unnecessary(detail: string, justification: Justification): Justificatio
   };
 }
 
+/**
+ * The licence a recorded value states, or null when it only labels one - the normalizer reads "MIT
+ * License" as MIT, and "Public Domain" as no licence at all.
+ */
+export function statedLicense(value: string): string | null {
+  return normalizeRaw(value).expression;
+}
+
 /** Every lane member the normalizer reads as a precise expression, in lane order. */
 function preciseMembers(lane: ReadonlyArray<string>): string[] {
   return lane
-    .map((member) => normalizeRaw(member).expression)
+    .map((member) => statedLicense(member))
     .filter((expression): expression is string => expression !== null);
 }
 

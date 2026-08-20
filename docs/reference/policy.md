@@ -258,8 +258,10 @@ values for `intensive`; recording `false` there says that source reported
 nothing, which is the opposite of the claim. Leaving a lane out is different
 and stays allowed — `detected` records what you checked. And
 `license-not-found` says no source states a licence, so neither recorded value
-may be one; a non-licence label such as `Public Domain` is exactly the case it
-is for. A policy breaking either rule is rejected when it is read.
+may be one — including a label that names one, such as `MIT License`, which
+the tool resolves to `MIT`. A value that names no licence, such as
+`Public Domain`, is exactly the case it is for. A policy breaking either rule
+is rejected when it is read.
 
 Wherever a verdict cites the entry, its reason is the justification value, and
 the comment after an em-dash when one is present.

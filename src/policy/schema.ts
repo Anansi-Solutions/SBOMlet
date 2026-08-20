@@ -38,6 +38,7 @@ import {
   type Justification,
   type Rationale,
 } from "./enums";
+import { statedLicense } from "./justificationValidity";
 import { compileNamePattern, isGlobPattern } from "./namePattern";
 
 import type { DetectedSignal } from "../normalize/normalize";
@@ -1396,16 +1397,6 @@ const JUSTIFICATION_LANES: Readonly<Record<Justification, ReadonlyArray<Detected
   "scan-overdetection": ["intensive"],
 };
 
-/** Does this recorded value read as SPDX - a licence, rather than a label about one? */
-function isSpdxExpression(value: string): boolean {
-  try {
-    parseSpdx(value);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
 /**
  * The stated justification against the entry's own `detected`.
  *
@@ -1434,10 +1425,11 @@ function validateJustificationDetection(
 
   for (const source of DETECTED_SOURCES) {
     const value = detected[source];
+    const stated = typeof value === "string" ? statedLicense(value) : null;
 
-    if (typeof value === "string" && isSpdxExpression(value)) {
+    if (stated !== null) {
       problems.push(
-        `${where}: justification "license-not-found" says no source states a licence, but detected.${source} records "${value}", which is one. Record the reason the stated licence is wrong instead, or choose the justification that fits.`,
+        `${where}: justification "license-not-found" says no source states a licence, but detected.${source} records "${value}", which states ${stated}. Record the reason the stated licence is wrong instead, or choose the justification that fits.`,
       );
     }
   }
