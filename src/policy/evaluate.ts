@@ -1742,6 +1742,20 @@ function mootReason(
 }
 
 /**
+ * The concrete versions a clarify entry pins. Empty when it pins none - such an entry covers every
+ * version, so there is no absent version to guard.
+ */
+function pinnedVersions(rule: ClarifyRule): string[] {
+  const { version } = rule;
+
+  if (version === undefined) {
+    return [];
+  }
+
+  return typeof version === "string" ? [version] : [...version];
+}
+
+/**
  * The entries a maintainer can drop: those the sources have caught up with, and those whose
  * justification was true and whose subject has since gone away - a scan that stopped
  * over-reporting, two sources that came to agree.
@@ -1756,6 +1770,7 @@ export function unnecessaryClarifyEntries(
 ): UnnecessaryClarifyEntry[] {
   const moot = new Map<number, string>();
   const needed = new Set<number>();
+  const seenVersions = new Map<number, Set<string>>();
 
   for (const entry of model.packages) {
     const decided = clarifyDecision(entry, policy);
@@ -1763,6 +1778,20 @@ export function unnecessaryClarifyEntries(
     if (decided === undefined) {
       continue;
     }
+
+    // Record that this pinned version was actually present this run. An entry is finished only when
+    // every version it pins was seen AND found moot: a pinned version absent from the scan may be a
+    // temporarily-absent package the entry must keep guarding, so it blocks removal below
+    // - dropping the whole entry would discard that pin and leave the gate without a clarification
+    // when the version reappears.
+    let seen = seenVersions.get(decided.index);
+
+    if (seen === undefined) {
+      seen = new Set();
+      seenVersions.set(decided.index, seen);
+    }
+
+    seen.add(entry.version);
 
     const reason = mootReason(entry.finding, decided);
 
@@ -1773,8 +1802,14 @@ export function unnecessaryClarifyEntries(
     }
   }
 
+  const allPinnedVersionsSeen = (index: number): boolean => {
+    const seen = seenVersions.get(index) ?? new Set<string>();
+
+    return pinnedVersions(policy.clarify[index]!).every((version) => seen.has(version));
+  };
+
   return [...moot]
-    .filter(([index]) => !needed.has(index))
+    .filter(([index]) => !needed.has(index) && allPinnedVersionsSeen(index))
     .sort(([a], [b]) => a - b)
     .map(([index, reason]) => ({ rule: clarifyCitation(policy.clarify[index]!), reason }));
 }

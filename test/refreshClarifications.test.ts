@@ -283,6 +283,39 @@ describe("rewriting the imported file", () => {
     expect(rewriteClarifications(second.imported, second.findings)?.text ?? once).toBe(once);
   });
 
+  const MULTI_VERSION_FOO = [
+    "[[clarify]]",
+    'name = "foo"',
+    'version = [ "1.0.0", "2.0.0" ]',
+    'detected = { registry = "BSD" }',
+    'justification = "license-not-found"',
+    'expression = "BSD-3-Clause"',
+  ].join("\n");
+
+  test("M1: an entry pinning a version absent from the scan is not removed on a present, moot one", () => {
+    // foo@1.0.0 is moot - the sources now report the precise BSD-3-Clause the entry recorded - but
+    // foo@2.0.0 is not in this scan at all, so the entry must be kept: dropping it would discard the
+    // 2.0.0 pin the gate still needs when that version reappears.
+    const { findings, imported } = run("", MULTI_VERSION_FOO, [
+      scanned("foo", "1.0.0", "BSD-3-Clause"),
+    ]);
+    const rewrite = rewriteClarifications(imported, findings);
+
+    expect(findings.unnecessary.map((entry) => entry.rule)).not.toContain("clarifications[0]");
+    expect(rewrite?.removed ?? []).not.toContain("clarifications[0]");
+  });
+
+  test("M1 control: an entry IS removed when every version it pins is present and moot", () => {
+    const { findings, imported } = run("", MULTI_VERSION_FOO, [
+      scanned("foo", "1.0.0", "BSD-3-Clause"),
+      scanned("foo", "2.0.0", "BSD-3-Clause"),
+    ]);
+    const rewrite = rewriteClarifications(imported, findings);
+
+    expect(findings.unnecessary.map((entry) => entry.rule)).toEqual(["clarifications[0]"]);
+    expect(rewrite?.removed).toEqual(["clarifications[0]"]);
+  });
+
   test("a policy-file entry is never rewritten, however droppable it is", () => {
     const { findings, imported } = run(bsdEntry("lib", "1.0.0"), "", [
       scanned("lib", "1.0.0", "BSD-3-Clause"),
