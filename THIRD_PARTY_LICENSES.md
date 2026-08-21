@@ -21,7 +21,7 @@ Copyleft notice rules are configured in .sbomlet.policy.toml.
 
 ✅ No blocking policy violations.
 
-_Non-blocking: 10 target warning(s) (dev/os-downgraded or suppressed). See the sections below._
+_Non-blocking: 10 target warning(s) (dev/os-downgraded or suppressed). Detailed under Target compatibility._
 
 ## Copyleft and special notices
 

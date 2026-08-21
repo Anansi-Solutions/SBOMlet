@@ -2668,6 +2668,54 @@ describe("renderMarkdown — Problematic licenses summary", () => {
     expect(section.includes("1 other warning(s)")).toBe(false);
   });
 
+  test("the non-blocking pointer names the section that actually shows each warn, and that section carries the row", () => {
+    // A target-lane warn points the reader at Target compatibility - where the row really is - not
+    // at the immediately-following Copyleft section, which renders empty here (the reviewer finding
+    // this reconciles: a counted warning must be findable where the count says).
+    const targetDoc = renderMarkdown(
+      { packages: [warnOnly] },
+      {
+        policyPath: "policy.toml",
+        suppressedWorkspaces: [],
+        verdicts: [
+          {
+            purl: "pkg:npm/warn-pkg@4.0.0",
+            occurrenceTarget: "apps/a",
+            status: "warn",
+            rule: TARGET_RULE_INCOMPATIBLE,
+            reason: "incompatible with target",
+          },
+        ],
+      },
+    );
+
+    expect(targetDoc).toContain("Detailed under Target compatibility.");
+    expect(targetDoc.slice(targetDoc.indexOf("## Target compatibility"))).toContain("| warn-pkg |");
+
+    // A copyleft-lane warn points at Copyleft and special notices, where its own row lives.
+    const copyleftDoc = renderMarkdown(
+      { packages: [warnOnly] },
+      {
+        policyPath: "policy.toml",
+        suppressedWorkspaces: [],
+        verdicts: [
+          {
+            purl: "pkg:npm/warn-pkg@4.0.0",
+            occurrenceTarget: "apps/a",
+            status: "warn",
+            rule: "default:copyleft",
+            reason: "dev-downgraded copyleft",
+          },
+        ],
+      },
+    );
+
+    expect(copyleftDoc).toContain("Detailed under Copyleft and special notices.");
+    expect(copyleftDoc.slice(copyleftDoc.indexOf("## Copyleft and special notices"))).toContain(
+      "| warn-pkg |",
+    );
+  });
+
   test("(d) the summary sits ABOVE the detailed copyleft section; a fail-flagged package is excluded from it by the copyleft-only dedup", () => {
     const model: CanonicalDependencies = { packages: [copyleftFail] };
     const view: PolicyView = {
