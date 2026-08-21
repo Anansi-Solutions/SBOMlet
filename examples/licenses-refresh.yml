@@ -30,8 +30,6 @@ permissions:
 jobs:
   licenses:
     # Never gate the refresh PRs themselves, or a failed refresh would recurse.
-    # Both prefixes need their own test: `licenses-refresh-intensive/x` does
-    # not start with `licenses-refresh/`.
     if: >-
       startsWith(github.head_ref, 'licenses-refresh/') == false &&
       startsWith(github.head_ref, 'licenses-refresh-intensive/') == false
@@ -68,7 +66,9 @@ jobs:
         with:
           mode: generate
           policy: .sbomlet.policy.toml
-          # docker: true # if your repository ships Dockerfiles to scan
+          # Enable Docker scanning here, if your repository ships Dockerfiles
+          # and you've setup pre-reqs to ensure they can be built
+          # docker: true
 
       - name: Check for changes
         id: git-check
