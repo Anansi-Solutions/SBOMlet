@@ -212,6 +212,15 @@ export default tseslint.config(
   // forcing it back on flags this codebase's field-level JSDoc idiom and comments
   // that sit directly above the one object property or spread they explain, and
   // neither has a matching allowlist option in the rule.
+  {
+    // The root dependency-cruiser config is CommonJS by extension and is
+    // run by dependency-cruiser (task arch:check / arch:graph), not bundled
+    // into the tool. Give it the CommonJS globals its module.exports needs.
+    files: [".dependency-cruiser.cjs"],
+    languageOptions: {
+      globals: { module: "writable", require: "readonly" },
+    },
+  },
   eslintPluginPrettierRecommended,
   {
     // eslint-config-prettier (above) blanket-disables `curly` as a

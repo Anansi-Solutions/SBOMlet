@@ -10,7 +10,8 @@ If you want to adopt and run the tool rather than change it, start with the
 [`README.md`](../../README.md) and [getting-started](../getting-started.md). The
 canonical model is laid out in [data-model](data-model.md), the per-stage flow
 in [data-flow](data-flow.md), and the reasoning behind the design in
-[design-principles](design-principles.md).
+[design-principles](design-principles.md), and how the folders depend on one
+another in [module-dependencies](module-dependencies.md).
 
 ## What the tool does
 

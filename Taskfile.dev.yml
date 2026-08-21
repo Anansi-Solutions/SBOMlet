@@ -163,3 +163,37 @@ tasks:
     deps: [install]
     cmds:
       - mise x -- bun scripts/dotnet-canary.ts
+
+  arch:check:
+    summary: |
+      Validate the tool's own source against the architecture rules in
+      .dependency-cruiser.cjs: no dependency cycles, no orphan modules, no
+      import from test/ into src/, and the layering invariants (a
+      dependency-free model/validate foundation, collectors that stay below
+      policy and render, render that never reaches back into data production).
+      Proposed governance only — NOT wired into `task check` or CI; adopt it by
+      raising the rules to error severity and adding it to the gate once the
+      tree passes clean. dependency-cruiser is run through bunx at a pinned
+      version and is deliberately kept out of package.json so its transitive
+      tree never enters the tool's own dependency inventory; it borrows the
+      typescript already installed for typecheck via NODE_PATH. Exit code is the
+      number of error-level violations (cycles are surfaced as warnings today).
+    deps: [install]
+    env:
+      NODE_PATH: '{{.ROOT_DIR}}/node_modules'
+    cmds:
+      - mise x -- bunx dependency-cruiser@18.2.0 --config .dependency-cruiser.cjs --output-type err src
+
+  arch:graph:
+    summary: |
+      Print the directory-level dependency graph of src/ as Mermaid text on
+      stdout — own code only, collapsed to one node per top-level folder. Paste
+      it into any Mermaid viewer, or into a Markdown file where it renders on
+      GitHub without graphviz. A regenerable snapshot lives in
+      docs/explanation/module-dependencies.md. Same pinned-bunx / NODE_PATH
+      setup as arch:check; writes nothing.
+    deps: [install]
+    env:
+      NODE_PATH: '{{.ROOT_DIR}}/node_modules'
+    cmds:
+      - mise x -- bunx dependency-cruiser@18.2.0 --config .dependency-cruiser.cjs --include-only "^src" --collapse "^src/[^/]+" --output-type mermaid src
