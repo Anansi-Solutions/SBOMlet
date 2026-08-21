@@ -406,7 +406,7 @@ describe("annotateFindings — an imprecise member the assertion cannot account 
     expect(finding.staleOverride).toBeUndefined();
   });
 
-  test("a member naming no family at all is still skipped - there is nothing to contradict", () => {
+  test("a member naming no family at all is now UNACCOUNTED - a proprietary claim contradicts a permissive assertion", () => {
     const entry = pkg("unreadable-label", "1.0.0", [
       claim("MIT"),
       claim("Some Proprietary Thing", "name"),
@@ -417,6 +417,58 @@ describe("annotateFindings — an imprecise member the assertion cannot account 
     const { model } = annotateFindings(modelOf(entry), clarify);
     const finding = model.packages[0]!.finding!;
 
+    expect(finding.source).not.toBe("override");
+    expect(finding.staleOverride).toBeDefined();
+    expect(finding.staleOverride!.unaccounted).toBe("Some Proprietary Thing");
+  });
+});
+
+// ===========================================================================
+// H1: a null-expression member that names no family - a proprietary/UNLICENSED
+// marker, or any other genuinely-unknown claim - is NOT recorded in the entry
+// and contradicts a permissive assertion. Skipping it let a clarify hand a
+// proprietary package back as the permissive licence it never was. The base
+// combiner poisons the whole finding to unknown on such a claim; the override
+// must fail closed the same way.
+// ===========================================================================
+
+describe("annotateFindings — a null-expression member naming no family (H1)", () => {
+  test("a newly-appeared UNLICENSED claim beside MIT goes STALE, not licensed out as MIT", () => {
+    const entry = pkg("proprietary-slipped-in", "1.0.0", [claim("MIT"), claim("UNLICENSED")]);
+    const clarify: ClarifyInput[] = [
+      { name: "proprietary-slipped-in", detected: { registry: "MIT" }, expression: "MIT" },
+    ];
+    const { model } = annotateFindings(modelOf(entry), clarify);
+    const finding = model.packages[0]!.finding!;
+
+    expect(finding.source).not.toBe("override");
+    expect(finding.staleOverride).toBeDefined();
+    expect(finding.staleOverride!.level).toBe("clarify");
+    expect(finding.staleOverride!.unaccounted).toBe("UNLICENSED");
+  });
+
+  test("a bare Proprietary marker beside MIT goes STALE the same way", () => {
+    const entry = pkg("proprietary-marker", "1.0.0", [claim("MIT"), claim("Proprietary", "name")]);
+    const clarify: ClarifyInput[] = [
+      { name: "proprietary-marker", detected: { registry: "MIT" }, expression: "MIT" },
+    ];
+    const { model } = annotateFindings(modelOf(entry), clarify);
+    const finding = model.packages[0]!.finding!;
+
+    expect(finding.source).not.toBe("override");
+    expect(finding.staleOverride).toBeDefined();
+  });
+
+  test("a null-expression member the entry RECORDED is still accounted (no regression)", () => {
+    const entry = pkg("recorded-unlicensed", "1.0.0", [claim("MIT"), claim("UNLICENSED")]);
+    const clarify: ClarifyInput[] = [
+      { name: "recorded-unlicensed", detected: { registry: "UNLICENSED" }, expression: "MIT" },
+    ];
+    const { model } = annotateFindings(modelOf(entry), clarify);
+    const finding = model.packages[0]!.finding!;
+
+    // A recorded UNLICENSED is not a NEW claim - the guard skips it, and the MIT the assertion
+    // covers is accounted, so the override applies cleanly.
     expect(finding.source).toBe("override");
     expect(finding.expression).toBe("MIT");
     expect(finding.staleOverride).toBeUndefined();

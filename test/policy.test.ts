@@ -2306,6 +2306,28 @@ describe("evaluate — staleness-guarded overrides", () => {
     expect(verdicts[0].reason).toContain("GPL-3.0-only"); // now-observed
   });
 
+  test("H1: a clarify cannot mask a newly-appeared UNLICENSED claim beside MIT (fail closed)", () => {
+    const policyText = [
+      "[[clarify]]",
+      'name = "proprietary-slipped-in"',
+      'version = "1.0.0"',
+      'detected = { registry = "MIT" }',
+      'justification = "declared-more-complete"',
+      'expression = "MIT"',
+    ].join("\n");
+    const spec: PackageSpec = {
+      purl: "pkg:npm/proprietary-slipped-in@1.0.0",
+      name: "proprietary-slipped-in",
+      version: "1.0.0",
+      claims: ["MIT", "UNLICENSED"],
+      occurrences: ["backend"],
+    };
+    const { verdicts } = runEngineWith(parsePolicy(policyText), [spec]);
+
+    expect(verdicts[0].status).toBe("fail");
+    expect(verdicts[0].rule).toContain("override:stale");
+  });
+
   test("a stale project clarify also fails (level surfaced in the message)", () => {
     const policyText = [
       "[[clarify]]",

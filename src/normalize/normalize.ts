@@ -655,8 +655,11 @@ function signalMatchesCanonical(signal: ReadonlyArray<string>, recorded: string)
  * `MIT` names an obligation the assertion answers for nowhere, and sweeping past it is how an
  * appended copyleft gets absorbed. Recording the family is what tells the two apart - a recorded
  * `BSD` label upgraded by an assertion of `BSD-3-Clause` is the ordinary disambiguation, passed
- * over by the family check exactly as it is by the recorded-value check above. A member naming no
- * family at all contradicts nothing and is skipped.
+ * over by the family check exactly as it is by the recorded-value check above. A member the
+ * normalizer reads as no license AND no family - a proprietary/UNLICENSED marker, or any other
+ * genuinely-unknown claim - is unaccounted too: it is not one of the recorded values, and it names
+ * an obligation a permissive assertion answers for nowhere, so licensing it out would mask exactly
+ * the kind of claim the base combiner poisons the whole finding to unknown on.
  */
 function unaccountedMember(
   signal: ReadonlyArray<string>,
@@ -676,11 +679,15 @@ function unaccountedMember(
     if (read.expression === null) {
       const family = read.impreciseFamily;
 
-      if (
-        family !== undefined &&
-        !wanted.has(fold(family)) &&
-        !expressionInFamily(expression, family)
-      ) {
+      // No family at all: a proprietary/UNLICENSED marker or other genuinely-unknown claim not
+      // recorded in `detected`. It contradicts a permissive assertion - fail closed.
+      if (family === undefined) {
+        return member;
+      }
+
+      // A family label is accounted only when the entry recorded that family or the assertion falls
+      // within it; otherwise the appended family obligation is unaccounted.
+      if (!wanted.has(fold(family)) && !expressionInFamily(expression, family)) {
         return member;
       }
 
