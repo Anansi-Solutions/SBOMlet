@@ -1,10 +1,12 @@
 // Commits regenerated scan artifacts back with a verified bot commit, or fails
 // loudly if the working tree changed outside the expected scope.
 //
-// Shared by docker-scan.yml (full changed set, committed to the pushed branch)
-// and intensive-scan.yml (artifact-scoped, and `pullRequest: true` so its
-// scheduled output reaches the repository's DEFAULT branch through a reviewable
-// PR, never an unreviewed direct commit). Called from a github-script step;
+// Shared by docker-scan.yml (full changed set, committed to the pushed branch),
+// intensive-scan.yml and compat-data-refresh.yml (both artifact-scoped, and
+// `pullRequest: true` so their scheduled output reaches the repository's DEFAULT
+// branch through a reviewable PR, never an unreviewed direct commit). A
+// PR-opening caller passes `branchPrefix` and `prBody` for its own lane; the
+// defaults below keep the intensive-scan wording. Called from a github-script step;
 // `github`/`context` are the step's authenticated octokit client and event
 // context. GraphQL's createCommitOnBranch takes additions/deletions as base64
 // file contents directly, so there is no temp file and no argv size limit to
@@ -53,7 +55,10 @@ function changedPaths(status) {
     .map((line) => line.slice(3));
 }
 
-module.exports = async ({ github, context, core }, { scope, message, pullRequest } = {}) => {
+module.exports = async (
+  { github, context, core },
+  { scope, message, pullRequest, branchPrefix = "intensive-scan-refresh", prBody = PR_BODY } = {},
+) => {
   // intensive-scan passes `scope`: the tree may only ever be dirty inside it.
   // Anything else dirty is an earlier step's bug -- refuse to sweep it into
   // this commit.
@@ -62,7 +67,7 @@ module.exports = async ({ github, context, core }, { scope, message, pullRequest
     const scoped = porcelainStatus(scope);
     if (full !== scoped) {
       core.setFailed(
-        `workspace drift outside the intensive-scan artifacts; refusing to commit:\n${full}`,
+        `workspace drift outside the expected refresh artifacts; refusing to commit:\n${full}`,
       );
       return;
     }
@@ -96,7 +101,7 @@ module.exports = async ({ github, context, core }, { scope, message, pullRequest
       ...context.repo,
     });
     baseBranch = repository.default_branch;
-    targetBranch = `chore/intensive-scan-refresh-${context.runId}`;
+    targetBranch = `chore/${branchPrefix}-${context.runId}`;
     try {
       await github.rest.git.createRef({
         ...context.repo,
@@ -144,7 +149,7 @@ module.exports = async ({ github, context, core }, { scope, message, pullRequest
     head: targetBranch,
     base: baseBranch,
     title: message,
-    body: PR_BODY,
+    body: prBody,
   });
   core.info(`opened #${pr.data.number} into ${baseBranch} (commit ${oid})`);
 };
