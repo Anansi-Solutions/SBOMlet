@@ -21,7 +21,7 @@ Copyleft notice rules are configured in .sbomlet.policy.toml.
 
 ✅ No blocking policy violations.
 
-_Non-blocking: 5 target warning(s) (dev/os-downgraded or suppressed). See the sections below._
+_Non-blocking: 10 target warning(s) (dev/os-downgraded or suppressed). See the sections below._
 
 ## Copyleft and special notices
 
@@ -38,6 +38,11 @@ The packages listed below need review against the declared target profile.
 | @cspell/dict-en-common-misspellings | npm       | 2.1.13  | CC-BY-SA-4.0 AND MIT | .       | —   |
 | @cspell/dict-en-gb                  | npm       | 5.0.30  | LGPL-3.0-only        | .       | —   |
 | @cspell/dict-en-gb-ise              | npm       | 1.0.30  | LGPL-3.0-only        | .       | —   |
+| spdx-exceptions                     | npm       | 2.5.0   | CC-BY-3.0            | .       | —   |
+| spdx-license-ids                    | npm       | 3.0.23  | CC0-1.0              | .       | —   |
+| spdx-license-list                   | npm       | 6.11.0  | CC0-1.0              | .       | —   |
+| spdx-ranges                         | npm       | 2.1.1   | (MIT AND CC-BY-3.0)  | .       | —   |
+| uri-js                              | npm       | 4.4.1   | BSD-2-Clause-Views   | .       | —   |
 
 ## Containers
 

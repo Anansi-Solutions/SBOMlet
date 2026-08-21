@@ -122,8 +122,9 @@ function matrixTier(
 /**
  * Maps an OSADL copyleft class to an axis class. Proprietary targets get a real boundary tier (`No`
  * -> compatible, `Yes (restricted)` -> boundary, `Yes` -> incompatible, `Questionable` ->
- * residual); OSS targets falling back to this tier have no pairwise data, so only `No` may decide
- * `compatible` - every other class is an honest `residual`, never `incompatible`.
+ * residual); OSS targets falling back to this tier have no pairwise data, so every class is an
+ * honest `residual` - only the tier-1 matrix (Same/Yes) decides `compatible` for an OSS target, and
+ * no coarse copyleft class is ever read as one.
  */
 function classifyOsadlClass(kind: TargetLicense["kind"], cls: OsadlCopyleftClass): AxisClass {
   if (kind === "proprietary") {
@@ -139,7 +140,7 @@ function classifyOsadlClass(kind: TargetLicense["kind"], cls: OsadlCopyleftClass
     }
   }
 
-  return cls === "No" ? "compatible" : "residual";
+  return "residual";
 }
 
 /** Tier 2: the leaf's own OSADL copyleft class, tried under both lookup keys. */
@@ -162,18 +163,19 @@ function osadlClassTier(
 }
 
 /**
- * Maps a ScanCode LicenseDB category to an axis class. Permissive/Public Domain are compatible for
- * both target kinds; a proprietary target additionally distinguishes Copyleft Limited (boundary)
- * from Copyleft (incompatible), the same boundary-tier extension the OSADL class table gets; every
- * other category (and the whole OSS fallback branch) is residual - no pairwise data, no fail.
+ * Maps a ScanCode LicenseDB category to an axis class. For an OSS target this tier has no pairwise
+ * data, so every category is an honest `residual` - a coarse "Permissive"/"Public Domain" bucket
+ * holds GPL-incompatible ids too, so only the tier-1 matrix decides `compatible` for OSS. A
+ * proprietary target keeps its boundary tier: Permissive/Public Domain compatible, Copyleft Limited
+ * boundary, Copyleft incompatible, every other category residual.
  */
 function classifyScancodeCategory(kind: TargetLicense["kind"], category: string): AxisClass {
-  if (category === "Permissive" || category === "Public Domain") {
-    return "compatible";
-  }
-
   if (kind !== "proprietary") {
     return "residual";
+  }
+
+  if (category === "Permissive" || category === "Public Domain") {
+    return "compatible";
   }
 
   if (category === "Copyleft Limited") {

@@ -89,10 +89,10 @@ describe("classifyLeaf - orientation lock (the transposition tripwire on the ENG
 });
 
 describe("classifyLeaf - OSS target, fallback tiers (leaf or target not a matrix row)", () => {
-  test("OSADL class No is compatible when the target is not itself a matrix row", () => {
+  test("OSADL class No is residual for an OSS target not itself a matrix row (no vetted pair)", () => {
     const result = classifyLeaf(oss("CC0-1.0"), "MIT");
 
-    expect(result.class).toBe("compatible");
+    expect(result.class).toBe("residual");
     expect(result.source).toBe("OSADL copyleft class: No");
   });
 
@@ -102,10 +102,10 @@ describe("classifyLeaf - OSS target, fallback tiers (leaf or target not a matrix
     expect(classifyLeaf(oss("CC0-1.0"), "MS-PL").class).toBe("residual");
   });
 
-  test("ScanCode Permissive/Public Domain is compatible - CC0-1.0 as a LEAF classifies compatible whichever tier catches it", () => {
+  test("ScanCode Permissive/Public Domain is residual for an OSS target - CC0-1.0 as a LEAF", () => {
     const result = classifyLeaf(oss("MIT"), "CC0-1.0");
 
-    expect(result.class).toBe("compatible");
+    expect(result.class).toBe("residual");
     expect(result.source).toBe("ScanCode LicenseDB: Public Domain");
   });
 
@@ -130,6 +130,38 @@ describe("classifyLeaf - OSS target, fallback tiers (leaf or target not a matrix
       source: "not a known copyleft license",
       obligation: "none",
     });
+  });
+});
+
+describe("classifyLeaf - H2: OSS targets never promote a coarse category to compatible", () => {
+  test("CECILL-B (a known-copyleft id caught by tier 3) is NEVER compatible under an OSS target", () => {
+    // Declaring a target must not flip a copyleft-fail into a pass: the default lane fails CECILL-B
+    // as copyleft, yet tier 3 read its coarse ScanCode "Permissive" category as compatible.
+    expect(classifyLeaf(oss("MIT"), "CECILL-B").class).not.toBe("compatible");
+  });
+
+  test("JSON (json.org, GPL-incompatible) is residual under a GPL-3.0-only target, never compatible", () => {
+    expect(classifyLeaf(oss("GPL-3.0-only"), "JSON").class).toBe("residual");
+  });
+
+  test("tier 2 OSADL class No is residual for an OSS target (only vetted pairwise data decides compatible)", () => {
+    const result = classifyLeaf(oss("CC0-1.0"), "MIT");
+
+    expect(result.class).toBe("residual");
+    expect(result.source).toBe("OSADL copyleft class: No");
+  });
+
+  test("tier 3 ScanCode Permissive/Public Domain is residual for an OSS target", () => {
+    const result = classifyLeaf(oss("MIT"), "CC0-1.0");
+
+    expect(result.class).toBe("residual");
+    expect(result.source).toBe("ScanCode LicenseDB: Public Domain");
+  });
+
+  test("PROPRIETARY targets are UNAFFECTED - tier 2/tier 3 permissive still resolve compatible", () => {
+    expect(classifyLeaf(proprietary, "MIT").class).toBe("compatible");
+    expect(classifyLeaf(proprietary, "CC0-1.0").class).toBe("compatible");
+    expect(classifyLeaf(proprietary, "CECILL-B").class).toBe("compatible");
   });
 });
 
