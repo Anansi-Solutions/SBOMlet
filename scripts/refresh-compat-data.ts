@@ -188,8 +188,9 @@ export function diffEntries(
  * The inter-tier gate: compare the DOWNLOADED pair's disagreements against the CURRENTLY
  * COMMITTED pair's disagreements (computed live via the same enumerator, never a separately
  * maintained literal - the test file's pinned list and this comparison can never drift apart from
- * each other because both read the one committed snapshot). A newly introduced disagreement must
- * abort the refresh; a resolved one is reported only, since removing a disagreement is always safe.
+ * each other because both read the one committed snapshot). A newly introduced disagreement aborts
+ * the refresh unless the maintainer accepts it (see {@link assertInterTierGateAccepted}); a resolved
+ * one is reported only, since removing a disagreement is safe for classification.
  */
 export interface InterTierGateResult {
   readonly newEntries: readonly string[];
@@ -207,6 +208,40 @@ export function compareInterTierDisagreements(
     newEntries: downloaded.filter((entry) => !committedSet.has(entry)).sort(compareCodeUnits),
     resolvedEntries: committed.filter((entry) => !downloadedSet.has(entry)).sort(compareCodeUnits),
   };
+}
+
+/**
+ * Abort the refresh when it introduces an inter-tier disagreement the maintainer has not accepted.
+ *
+ * A newly introduced disagreement aborts so a human reviews it before it lands; a resolved one never
+ * aborts, since removing a disagreement is safe for classification. Passing `acceptNewDisagreements`
+ * lets a reviewed refresh proceed and write the download as the new committed baseline.
+ *
+ * @privateRemarks
+ * The baseline the "new" entries are measured against is the committed snapshot itself, recomputed
+ * live each run - there is no separate allowlist to drift. So a bad upstream refresh that REMOVES a
+ * real disagreement reads as a safe resolution, is accepted, and lands in the snapshot; a later
+ * corrected refresh restoring that disagreement then reads as new and would abort. The override is
+ * the escape: the maintainer reviews the restored pair and re-runs to accept it, rather than
+ * hand-editing the committed JSON. That is why the masking slips through by default yet stays
+ * recoverable without deleting the cached data.
+ */
+export function assertInterTierGateAccepted(
+  gate: InterTierGateResult,
+  acceptNewDisagreements: boolean,
+): void {
+  if (gate.newEntries.length === 0 || acceptNewDisagreements) {
+    return;
+  }
+
+  throw new Error(
+    `inter-tier gate: the download introduces ${gate.newEntries.length} NEW disagreement(s) not ` +
+      `in the currently committed snapshot:\n` +
+      `${gate.newEntries.map((entry) => `  - ${entry}`).join("\n")}\n` +
+      `Review each by hand. If they are correct - including a real disagreement an earlier refresh ` +
+      `had masked - re-run with --accept-new-disagreements to write the download as the new ` +
+      `baseline, then update the pinned allowlist in test/compatData.test.ts to match.`,
+  );
 }
 
 /** Inputs for one PROVENANCE.md source-file section. */
@@ -412,11 +447,14 @@ export interface ValidatedDownload {
  * function has returned successfully, so a validation failure at any step leaves every committed
  * file untouched.
  */
-export function validateDownloadedSnapshots(downloads: {
-  matrixText: string;
-  copyleftText: string;
-  scancodeText: string;
-}): ValidatedDownload {
+export function validateDownloadedSnapshots(
+  downloads: {
+    matrixText: string;
+    copyleftText: string;
+    scancodeText: string;
+  },
+  options: { acceptNewDisagreements?: boolean } = {},
+): ValidatedDownload {
   assertWithinSizeGate(Buffer.byteLength(downloads.matrixText, "utf8"), SIZE_GATES.matrix);
   assertWithinSizeGate(Buffer.byteLength(downloads.copyleftText, "utf8"), SIZE_GATES.copyleft);
   assertWithinSizeGate(Buffer.byteLength(downloads.scancodeText, "utf8"), SIZE_GATES.scancode);
@@ -440,20 +478,14 @@ export function validateDownloadedSnapshots(downloads: {
     downloadedDisagreements,
   );
 
-  if (interTierGate.newEntries.length > 0) {
-    throw new Error(
-      `inter-tier gate: the download introduces ${interTierGate.newEntries.length} NEW ` +
-        `disagreement(s) not in the committed allowlist:\n` +
-        `${interTierGate.newEntries.map((entry) => `  - ${entry}`).join("\n")}\n` +
-        `Review these by hand (update the pinned allowlist in test/compatData.test.ts if they are ` +
-        `accepted) before re-running the refresh.`,
-    );
-  }
+  assertInterTierGateAccepted(interTierGate, options.acceptNewDisagreements ?? false);
 
   return { matrix, copyleftClass, scancodeCategory, interTierGate };
 }
 
 async function main(): Promise<void> {
+  const acceptNewDisagreements = process.argv.includes("--accept-new-disagreements");
+
   console.log(`probing ${OSADL_TIMESTAMP_URL} for freshness...`);
   const probe = await fetch(OSADL_TIMESTAMP_URL);
   const upstreamTimestamp = probe.ok ? (await probe.text()).trim() : null;
@@ -477,11 +509,23 @@ async function main(): Promise<void> {
     copyleftClass: downloadedCopyleft,
     scancodeCategory: downloadedScancode,
     interTierGate,
-  } = validateDownloadedSnapshots({
-    matrixText: matrixDl.text,
-    copyleftText: copyleftDl.text,
-    scancodeText: scancodeDl.text,
-  });
+  } = validateDownloadedSnapshots(
+    {
+      matrixText: matrixDl.text,
+      copyleftText: copyleftDl.text,
+      scancodeText: scancodeDl.text,
+    },
+    { acceptNewDisagreements },
+  );
+
+  if (acceptNewDisagreements && interTierGate.newEntries.length > 0) {
+    console.log(
+      `inter-tier gate OVERRIDDEN by --accept-new-disagreements: writing ` +
+        `${interTierGate.newEntries.length} newly introduced disagreement(s) into the committed ` +
+        `baseline:\n` +
+        interTierGate.newEntries.map((entry) => `  - ${entry}`).join("\n"),
+    );
+  }
 
   if (interTierGate.resolvedEntries.length > 0) {
     console.log(

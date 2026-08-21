@@ -14,11 +14,13 @@ import {
   SCANCODE_CATEGORY,
 } from "../src/policy/compat/data";
 import {
+  assertInterTierGateAccepted,
   assertStructuralShape,
   assertWithinSizeGate,
   compareInterTierDisagreements,
   diffEntries,
   diffMatrix,
+  type InterTierGateResult,
   renderProvenance,
   SIZE_GATES,
   validateDownloadedSnapshots,
@@ -410,6 +412,29 @@ describe("refresh-compat-data.ts pure core", () => {
 
     expect(result.newEntries).toEqual([]);
     expect(result.resolvedEntries).toEqual([]);
+  });
+
+  test("a new disagreement aborts the refresh, but the explicit accept override lets it through", () => {
+    const withNew: InterTierGateResult = {
+      newEntries: ["C: class No but D→C = No"],
+      resolvedEntries: [],
+    };
+
+    expect(() => assertInterTierGateAccepted(withNew, false)).toThrow(/--accept-new-disagreements/);
+    // The override is the escape from the masking corner: a corrected refresh that re-introduces a
+    // disagreement an earlier bad refresh had removed proceeds once the maintainer accepts it,
+    // rather than needing the committed snapshot hand-edited.
+    expect(() => assertInterTierGateAccepted(withNew, true)).not.toThrow();
+  });
+
+  test("a resolved-only disagreement never aborts, with or without the accept override", () => {
+    const resolvedOnly: InterTierGateResult = {
+      newEntries: [],
+      resolvedEntries: ["C: class No but D→C = No"],
+    };
+
+    expect(() => assertInterTierGateAccepted(resolvedOnly, false)).not.toThrow();
+    expect(() => assertInterTierGateAccepted(resolvedOnly, true)).not.toThrow();
   });
 
   test("diffMatrix is deterministic and caps the named-flip sample at 20", () => {
