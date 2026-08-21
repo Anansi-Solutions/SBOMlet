@@ -341,6 +341,16 @@ describe("refresh-compat-data.ts pure core", () => {
     expect(() => assertWithinSizeGate(500, SIZE_GATES.copyleft)).toThrow(/osadl-copyleft\.json/);
   });
 
+  test("the tightened lower bounds reject a download only slightly smaller than the real file", () => {
+    // A partial truncation that lands just under each committed size - the case the old
+    // 100_000 / 1_000 / 100_000 floors would have waved straight through.
+    expect(() => assertWithinSizeGate(240_000, SIZE_GATES.matrix)).toThrow(/osadl-matrix\.json/);
+    expect(() => assertWithinSizeGate(4_000, SIZE_GATES.copyleft)).toThrow(/osadl-copyleft\.json/);
+    expect(() => assertWithinSizeGate(900_000, SIZE_GATES.scancode)).toThrow(
+      /scancode-licensedb-index\.json/,
+    );
+  });
+
   test("structural assertions accept the real committed shape", () => {
     expect(() =>
       assertStructuralShape(OSADL_MATRIX, OSADL_COPYLEFT_CLASS, SCANCODE_CATEGORY),

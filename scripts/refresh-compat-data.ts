@@ -50,10 +50,18 @@ export interface SizeGate {
   readonly maxBytes: number;
 }
 
+/**
+ * The per-file windows. Each lower bound sits roughly ten percent under that file's current
+ * committed size: these upstream tables grow far more often than they shrink, so a legitimate minor
+ * curation drop stays inside the window while a truncated download or an HTML error page - both far
+ * smaller - is rejected before the JSON even parses. The upper bounds leave generous room for years
+ * of growth. Tighten a lower bound after a refresh only if the committed size has climbed enough to
+ * warrant it; never loosen one to wave a shrunken download through without review.
+ */
 export const SIZE_GATES = {
-  matrix: { label: "osadl-matrix.json", minBytes: 100_000, maxBytes: 1_000_000 },
-  copyleft: { label: "osadl-copyleft.json", minBytes: 1_000, maxBytes: 50_000 },
-  scancode: { label: "scancode-licensedb-index.json", minBytes: 100_000, maxBytes: 5_000_000 },
+  matrix: { label: "osadl-matrix.json", minBytes: 250_000, maxBytes: 1_000_000 },
+  copyleft: { label: "osadl-copyleft.json", minBytes: 4_400, maxBytes: 50_000 },
+  scancode: { label: "scancode-licensedb-index.json", minBytes: 950_000, maxBytes: 5_000_000 },
 } as const satisfies Record<string, SizeGate>;
 
 /** Throw if a downloaded file's byte length falls outside its size gate. */
