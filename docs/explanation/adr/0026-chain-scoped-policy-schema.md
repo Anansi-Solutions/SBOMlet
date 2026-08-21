@@ -3,87 +3,115 @@
 - **Status:** Accepted
 - **Date:** 2026-08-20
 
-## Context and problem
+## Context
 
-A policy override is an assertion about a dependency, written once and read
-years later. The schema recorded them in a shape nobody could re-check. An
-acceptance covered a package wherever its optional scope reached, whatever
-pulled it in, so a judgment made about a build tool's use of a package silently
-also accepted the same package arriving in shipped code. A clarification carried
-one free-text reason and one string covering both detection sources at once, so
-the only thing the tool could verify was that a single string had not moved.
-Neither shape let the gate tell a judgment that still held from one that had
-quietly stopped being true.
-
-## Decision drivers
-
-- Fail closed: a claim the scan cannot check must never be applied as though it
-  had been checked.
-- Honest residual (ADR-0007): where nothing was recorded about a package,
-  decide nothing rather than assume the favourable reading.
+A policy override is written once and read years later. The old shapes
+recorded a judgment the gate could not re-check: an acceptance covered a
+package wherever its scope reached, whatever pulled it in, and a clarification
+carried one free-text reason plus one string standing in for both detection
+sources. The tool could confirm only that a string had not moved — never that
+the judgment still held.
 
 ## Decision
 
-A package-level acceptance now names whose use of the package was judged. Where
-the target has a dependency graph the claim is checked against it, and a package
-that arrives past every name the entry lists makes the claim untrue — the entry
-then decides nothing at that target rather than part of it. The bluntness is the
-point: an entry wrong about one package was wrong as written, and splitting it
-into narrower entries states the same information truthfully. Where a target has
-no graph, a container image's OS layer being the usual one, nothing can be
-chain-scoped: only the reserved name for the project itself is accepted there,
-and both the documentation and the verdicts say so rather than implying a check
-that never ran.
+Rewrite both entry shapes so every claim is checkable against the current
+scan.
 
-Free-text reasons on an acceptance and on a clarification give way to a value
-from a closed set, with prose moved to a separate comment field. A closed value
-is what makes a reason checkable: the tool knows what each one asserts, so it
-can fail an entry the current evidence disproves, and can tell that apart from
-an entry whose subject has merely gone away — the second is a maintenance
-signal, not a failure. Letting the tool infer the reason from the licences
-involved was rejected: that puts the tool's guess in the audit trail in place of
-the author's judgment.
+A package-form `[[compatible]]` acceptance, old then new:
 
-The single precondition string becomes one record per detection source, each
-holding what that source reported or the fact that it reported nothing. Two
-sources disagreeing is the case most worth recording and one string could not
-hold it; recording "nothing" is what lets a source that later starts speaking
-reopen the judgment.
+```toml
+[[compatible]]
+match = "package"
+name = "@img/sharp-win32-x64"
+version = "0.34.5"          # optional
+reason = "LGPL obligations reviewed and accepted."
+```
+
+```toml
+[[compatible]]
+match = "package"
+name = "@img/sharp-win32-x64"
+version = "0.34.5"          # required
+as-dependency-of = ["image-pipeline"]
+where = ["apps/media"]
+rationale = "license-reviewed"
+comment = "LGPL obligations accepted for these prebuilt binaries."
+```
+
+A `[[clarify]]` override, old then new:
+
+```toml
+[[clarify]]
+package = { name = "jsonify", version = "0.0.1" }
+expects = "BSD"             # optional, single precondition
+expression = "BSD-3-Clause"
+reason = "Confirmed BSD-3-Clause in the upstream LICENSE file."
+```
+
+```toml
+[[clarify]]
+name = "jsonify"
+version = "0.0.1"           # required
+detected = { registry = "BSD", intensive = "BSD-3-Clause" }
+justification = "scan-more-precise"
+expression = "BSD-3-Clause"
+comment = "Confirmed BSD-3-Clause in the upstream LICENSE file."
+```
+
+The rationale for each material change:
+
+- **`as-dependency-of` (required on a package entry).** Names whose use of the
+  package was judged. On a target with a dependency graph the claim is checked
+  against it — a package arriving past every named parent voids the entry
+  rather than riding a judgment that never covered that path. A graph-less
+  target (a container OS layer) accepts only the reserved `self`, and the
+  report calls that acceptance unscoped rather than implying a check that
+  never ran.
+- **`where` and `version` required.** An unscoped, unpinned acceptance
+  silently followed a package into a relicensed release or an unrelated
+  occurrence. Both are now stated, so the blast radius is auditable; only a
+  container os-scope `where` may omit `version`, since base-image versions are
+  not author-controlled.
+- **Closed `rationale` / `justification`, replacing free-text `reason`.** A
+  value from a fixed set has a meaning the tool knows, so it can fail an entry
+  the evidence disproves and tell that apart from one whose subject merely
+  went away. Prose moves to `comment`; inferring the reason from the licences
+  was rejected, as it would put the tool's guess in the audit trail in place
+  of the author's.
+- **Per-source `detected`, replacing one `expects` string.** One record per
+  detection source (`registry`, `intensive`), each holding what that source
+  reported or `false` for nothing. Two sources disagreeing is the case most
+  worth recording and one string could not hold it; a `false` that later
+  starts speaking reopens the judgment.
+- **The `packages` list.** One entry may bundle disparate packages that share
+  a `where`, `as-dependency-of`, `rationale`, and `comment`, each pinning its
+  own version — the "reviewed together" case without repeating four fields.
+- **A separate clarifications file.** Clarify entries may live in a file named
+  by an explicit top-level key, never found by convention. That file is
+  machine-owned: an offline maintainer subcommand rewrites it whole, so the
+  version churn these entries accumulate is tooling's work, not hand-editing.
 
 There is no compatibility shim. A removed key is rejected by name with its
-replacement, so the tool's own error is the migration guide. A deprecation
-window was rejected because the rewrite is mechanical and a period in which both
-shapes parse means two sets of semantics to keep honest at once. Wildcard
-versions were rejected too: a list of exact versions is what a reviewer can
-audit, and the tooling below removes the churn that would otherwise argue for
-them.
-
-Clarifications may live in a file of their own, named by an explicit key rather
-than found by convention — a policy that silently picks up a file it never named
-is one nobody can read. That file is machine-owned: an offline maintainer
-subcommand rewrites it whole, so the version churn that dominates these entries
-is tooling's work rather than hand-editing.
+replacement, so the tool's own error is the migration guide.
 
 ## Consequences
 
-- **Good:** an acceptance records which use was judged and the gate notices when
-  that stops being how the package arrives; a stated reason can be disproved
-  rather than merely believed; version churn has somewhere to go.
-- **Bad / cost:** every existing policy is rewritten once, by hand; validity now
-  depends on the scan, so adding a first target without a dependency graph can
-  reject a policy nobody edited; a voided entry fails packages that were never
-  the problem.
-- **Neutral:** an acceptance on a graph-less target is unscoped, and nothing in
-  the report suggests otherwise; the closed sets change only with a release, so
-  a reason nobody anticipated goes in the comment beside the nearest value.
+- Every existing policy is rewritten once, by hand.
+- Validity now depends on the scan: adding a first graph-less target can
+  reject a policy nobody edited, and a voided entry fails packages that were
+  never the problem. The bluntness is deliberate — an entry wrong about one
+  package was wrong as written, and splitting it into narrower entries states
+  the same fact truthfully.
+- An acceptance records which use was judged, a stated reason can be disproved
+  rather than merely believed, and version churn has somewhere to go.
 
 ## See also
 
-- Related: [ADR-0007](0007-honest-residual.md) (the residual principle an
-  unrecorded introduction follows), [ADR-0014](0014-dependency-provenance.md)
-  (the provenance the chains are walked over),
-  [ADR-0025](0025-target-license-compatibility-lane.md) (the lane these entries
-  still decide ahead of)
+- Related: [ADR-0007](0007-honest-residual.md) (the residual an unrecorded
+  introduction follows), [ADR-0014](0014-dependency-provenance.md) (the
+  provenance the chains are walked over),
+  [ADR-0025](0025-target-license-compatibility-lane.md) (the lane these
+  entries decide ahead of)
 - Code: `src/policy/schema.ts`, `src/policy/chain.ts`,
   `src/policy/crossValidate.ts`, `src/policy/justificationValidity.ts`,
   `src/policy/clarifications.ts`, `src/maintain/refreshClarifications.ts`
