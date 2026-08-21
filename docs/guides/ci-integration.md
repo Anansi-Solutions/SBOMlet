@@ -73,7 +73,11 @@ write the inventory instead. It is exactly the mise + Task pipeline above, wrapp
 For a pull-request pattern built on the action — run the gate, and when it fails
 because the inventory is out of date, regenerate and open a refresh PR against the
 contributor's branch — see the shipped
-[`examples/licenses-refresh.yml`](../../examples/licenses-refresh.yml).
+[`examples/licenses-refresh.yml`](../../examples/licenses-refresh.yml). Its
+companion,
+[`examples/licenses-refresh-intensive.yml`](../../examples/licenses-refresh-intensive.yml),
+runs the same action in intensive mode on a monthly schedule and opens a refresh
+PR whenever the deep scan changes the inventory.
 
 ## What the exit code means
 
