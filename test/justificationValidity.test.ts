@@ -3,7 +3,7 @@ import { describe, expect, test } from "bun:test";
 import {
   justificationValidity,
   type JustificationValidity,
-} from "../src/policy/justificationValidity";
+} from "../src/policy/engine/justificationValidity";
 import type { ObservedSignal } from "../src/normalize/normalize";
 
 // Per-value predicates over a partitioned signal. A stale entry - one whose

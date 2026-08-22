@@ -8,7 +8,7 @@
 import { describe, expect, test } from "bun:test";
 
 import { annotateFindings } from "../src/normalize/normalize";
-import { evaluate } from "../src/policy/evaluate";
+import { evaluate } from "../src/policy/engine/evaluate";
 import { PolicyError } from "../src/policy/schema/diagnostics";
 import { parsePolicy } from "../src/policy/parse/parse";
 import { renderMarkdown } from "../src/render/markdown";

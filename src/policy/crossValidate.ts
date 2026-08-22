@@ -18,7 +18,7 @@
  */
 
 import { dependencyGraphsByTarget, type TargetDependencyGraph } from "./chain";
-import { matchesPackage, scopeCoversTarget } from "./packageMatch";
+import { matchesPackage, scopeCoversTarget } from "./engine/match";
 import { SELF_PARENT } from "./schema/dependencyChain";
 import { PolicyError } from "./schema/diagnostics";
 import type { CompatiblePackageRule } from "./schema/compatible";

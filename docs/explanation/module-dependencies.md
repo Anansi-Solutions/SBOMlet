@@ -131,26 +131,25 @@ task into `check` once the tree passes clean.
 
 ## Cycles today
 
-`no-circular` is set to warn, not error, because the tree still has cycles to
-untangle. dependency-cruiser reports seven; under this toolchain it counts
-type-only imports as edges and cannot tell them apart, so most of the seven are
-harmless: they close through an `import type`, which TypeScript erases at
-compile time, and so are not runtime cycles.
+`no-circular` is set to warn, not error, because the tree still has type-only
+cycles to untangle. dependency-cruiser reports five; under this toolchain it
+counts type-only imports as edges and cannot tell them apart, so all five are
+harmless: each closes through an `import type`, which TypeScript erases at
+compile time, so none is a runtime cycle. They sit in three pre-existing spots —
+the `deny`/`schema` type graph (`schema/index` ⇄ `denylist` ⇄ `builtinDenylist`
+⇄ `schema/exemptions`), `compat/classify` ⇄ `compat/profile`, and `pipeline` ⇄
+`targets`.
 
-One is real. At runtime these four modules import one another in a loop:
+The one genuine runtime cycle is now resolved. It used to couple `policy` and
+`normalize` into a single unit: `statedLicense` and `EVERYWHERE_SCOPE` were the
+value imports that closed the loop through the schema and the package matcher.
+Both now live in leaf modules — `EVERYWHERE_SCOPE` in `policy/schema/scope`,
+`statedLicense` in `policy/statedLicense` — that either side imports without
+importing the other, so `normalize` no longer forms a value cycle with `policy`.
 
-```
-policy/schema.ts        --statedLicense-->      policy/justificationValidity.ts
-policy/justificationValidity.ts --accountsFor--> normalize/normalize.ts
-normalize/normalize.ts  --matchesPackage-->      policy/packageMatch.ts
-policy/packageMatch.ts  --EVERYWHERE_SCOPE-->    policy/schema.ts
-```
-
-Every edge is a value import, so the cycle survives compilation. It couples
-`policy` and `normalize` into a single unit that can only be understood and
-changed together. Breaking it — for example, by moving `EVERYWHERE_SCOPE` or
-`statedLicense` to a leaf both sides can import — is the prerequisite for
-raising `no-circular` to error and adding `arch:check` to the gate.
+Raising `no-circular` to error additionally requires untangling the remaining
+type-only cycles above, or scoping the rule to ignore type-only edges; adding
+`arch:check` to the gate follows once the tree passes clean.
 
 ## Running the checks
 

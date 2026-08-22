@@ -13,14 +13,14 @@ import {
   shadowedClarifications,
   type ShadowedClarification,
 } from "../policy/parse/clarificationsFile";
-import { justificationValidity } from "../policy/justificationValidity";
-import { matchesPackage, type PackageSelector } from "../policy/packageMatch";
+import { justificationValidity } from "../policy/engine/justificationValidity";
+import { matchesPackage, type PackageSelector } from "../policy/engine/match";
 import {
   staleDivergence,
   unnecessaryClarifyEntries,
   unusedRuleIds,
   type UnnecessaryClarifyEntry,
-} from "../policy/evaluate";
+} from "../policy/engine/evaluate";
 import { clarifyCitation, type ClarifyRule } from "../policy/schema/clarify";
 import { emitClarifications } from "./tomlEmit";
 import type { Policy } from "../policy/schema";

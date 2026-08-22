@@ -13,7 +13,7 @@ import {
   type RefreshFindings,
 } from "../src/maintain/refreshClarifications";
 import { annotateFindings } from "../src/normalize/normalize";
-import { evaluate } from "../src/policy/evaluate";
+import { evaluate } from "../src/policy/engine/evaluate";
 import {
   parseClarifications,
   withImportedClarifications,

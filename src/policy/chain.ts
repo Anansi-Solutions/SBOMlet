@@ -18,7 +18,7 @@ import {
   purlDisplayName,
   type CanonicalDependencies,
 } from "../model/dependencies";
-import { matchesPackage, scopeCoversTarget } from "./packageMatch";
+import { matchesPackage, scopeCoversTarget } from "./engine/match";
 import { SELF_PARENT } from "./schema/dependencyChain";
 import type { CompatiblePackageRule } from "./schema/compatible";
 import type { Policy } from "./schema";

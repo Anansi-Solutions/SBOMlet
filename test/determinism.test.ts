@@ -25,7 +25,7 @@ import {
   type Verdict,
 } from "../src/model/dependencies";
 import { annotateFindings } from "../src/normalize/normalize";
-import { evaluate } from "../src/policy/evaluate";
+import { evaluate } from "../src/policy/engine/evaluate";
 import { parsePolicy } from "../src/policy/parse/parse";
 import { renderCyclonedx } from "../src/render/cyclonedx";
 import { renderMarkdown, type PolicyView } from "../src/render/markdown";

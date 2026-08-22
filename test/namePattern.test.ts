@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { compileNamePattern, isGlobPattern } from "../src/policy/namePattern";
+import { compileNamePattern, isGlobPattern } from "../src/policy/engine/namePattern";
 
 // The package-name pattern dialect: `*` fills one name segment, `**` crosses
 // segment boundaries, and a trailing slash is shorthand for "everything inside

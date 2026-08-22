@@ -9,10 +9,10 @@ import {
   DOCKER_IDENTITY_PREFIX,
   matchesIdentityPrefix,
   type CanonicalDependencies,
-} from "../model/dependencies";
-import type { TargetProfile } from "./compat";
-import type { TargetWorkspaceEntry } from "./schema/targetProfile";
-import type { Policy } from "./schema";
+} from "../../model/dependencies";
+import type { TargetProfile } from "../compat";
+import type { TargetWorkspaceEntry } from "../schema/targetProfile";
+import type { Policy } from "../schema";
 
 /**
  * The governing target profile for one occurrence, or undefined when nothing governs it.

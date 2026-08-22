@@ -10,8 +10,8 @@ import {
 import { mergeSboms } from "../src/merge/merge";
 import { annotateFindings } from "../src/normalize/normalize";
 import { applyContainerScopes } from "../src/pipeline/containerScope";
-import { BUILTIN_OVERRIDES } from "../src/policy/builtinOverrides";
-import { acceptedContainerNotices, evaluate } from "../src/policy/evaluate";
+import { BUILTIN_OVERRIDES } from "../src/policy/engine/builtinOverrides";
+import { acceptedContainerNotices, evaluate } from "../src/policy/engine/evaluate";
 import { parsePolicy } from "../src/policy/parse/parse";
 import { alignTables } from "../src/render/alignTables";
 import { renderMarkdown, type PolicyView } from "../src/render/markdown";

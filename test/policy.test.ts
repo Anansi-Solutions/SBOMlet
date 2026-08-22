@@ -14,7 +14,7 @@ import {
   evaluate,
   unnecessaryClarifyEntries,
   unusedRuleIds,
-} from "../src/policy/evaluate";
+} from "../src/policy/engine/evaluate";
 import {
   parseClarifications,
   withImportedClarifications,
@@ -22,8 +22,8 @@ import {
 import { BUILTIN_DENY_RULES } from "../src/policy/builtinDenylist";
 import { denyRuleFor } from "../src/policy/denylist";
 import { AGPL_IDS, COPYLEFT_IDS } from "../src/policy/copyleft";
-import { COULD_BE_COPYLEFT_FAMILIES, WORKSPACE_ABSORBS } from "../src/policy/copyleftFamily";
-import { BUILTIN_OVERRIDES } from "../src/policy/builtinOverrides";
+import { COULD_BE_COPYLEFT_FAMILIES, WORKSPACE_ABSORBS } from "../src/policy/engine/copyleftFamily";
+import { BUILTIN_OVERRIDES } from "../src/policy/engine/builtinOverrides";
 import { JUSTIFICATION_VALUES } from "../src/policy/schema/clarify";
 import { RATIONALE_VALUES } from "../src/policy/schema/compatible";
 import { PolicyError } from "../src/policy/schema/diagnostics";

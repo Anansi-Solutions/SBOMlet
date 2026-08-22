@@ -5,7 +5,7 @@ import {
   type ClarifyInput,
   type BuiltinOverrideInput,
 } from "../src/normalize/normalize";
-import { BUILTIN_OVERRIDES } from "../src/policy/builtinOverrides";
+import { BUILTIN_OVERRIDES } from "../src/policy/engine/builtinOverrides";
 import { claim, pkg, modelOf } from "./normalizeTestSupport";
 
 describe("annotateFindings — clarify overrides", () => {

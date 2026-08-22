@@ -1,6 +1,6 @@
-import { matchesIdentityPrefix, type PackageEntry } from "../model/dependencies";
+import { matchesIdentityPrefix, type PackageEntry } from "../../model/dependencies";
+import { EVERYWHERE_SCOPE } from "../schema/scope";
 import { compileNamePattern } from "./namePattern";
-import { EVERYWHERE_SCOPE } from "./schema/scope";
 
 /** The package fields a selector compares against. */
 export type PackageMatchTarget = Pick<PackageEntry, "name" | "version">;

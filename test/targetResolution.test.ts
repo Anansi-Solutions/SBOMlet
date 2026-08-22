@@ -10,7 +10,7 @@ import {
   resolveTargetProfile,
   suppressionOverlapNotices,
   unusedWorkspaceTargetWarnings,
-} from "../src/policy/target";
+} from "../src/policy/engine/target";
 import type { CanonicalDependencies, PackageEntry } from "../src/model/dependencies";
 
 function pkg(purl: string, targets: readonly string[]): PackageEntry {

@@ -14,9 +14,10 @@
 
 import parseSpdx from "spdx-expression-parse";
 
-import { leafIds, orLeaves, type ExpressionNode } from "../normalize/expression";
-import { accountsFor, normalizeRaw, type ObservedSignal } from "../normalize/normalize";
-import { type Justification } from "./schema/clarify";
+import { leafIds, orLeaves, type ExpressionNode } from "../../normalize/expression";
+import { accountsFor, type ObservedSignal } from "../../normalize/normalize";
+import { statedLicense } from "../statedLicense";
+import { type Justification } from "../schema/clarify";
 
 /** What a validity check reads off an entry: its stated reason and the expression it records. */
 export interface JustifiedExpression {
@@ -56,14 +57,6 @@ function unnecessary(detail: string, justification: Justification): Justificatio
     outcome: "unnecessary",
     reason: `"${justification}" has nothing left to correct: ${detail}.`,
   };
-}
-
-/**
- * The licence a recorded value states, or null when it only labels one - the normalizer reads "MIT
- * License" as MIT, and "Public Domain" as no licence at all.
- */
-export function statedLicense(value: string): string | null {
-  return normalizeRaw(value).expression;
 }
 
 /** Every lane member the normalizer reads as a precise expression, in lane order. */

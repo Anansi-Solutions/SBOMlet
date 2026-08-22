@@ -5,7 +5,7 @@
  */
 
 import { type Verdict } from "../model/dependencies";
-import { unusedRuleIds } from "../policy/evaluate";
+import { unusedRuleIds } from "../policy/engine/evaluate";
 import { clarifyCitation } from "../policy/schema/clarify";
 import { ruleReason } from "../policy/schema/diagnostics";
 import type { Policy } from "../policy/schema";

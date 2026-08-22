@@ -27,7 +27,7 @@
  * to the Phase-6 dogfood .sbomlet.policy.toml - it is a project-specific call, not a general
  * well-known disambiguation, so it does NOT belong here.
  */
-import type { DetectedSignal } from "../normalize/normalize";
+import type { DetectedSignal } from "../../normalize/normalize";
 
 /** One shipped tool-level disambiguation override. */
 export interface BuiltinOverride {

@@ -1,5 +1,5 @@
 import { recordOf, stringOf } from "../../validate/record";
-import { statedLicense } from "../justificationValidity";
+import { statedLicense } from "../statedLicense";
 
 import {
   checkKeys,

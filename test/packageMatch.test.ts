@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { matchesPackage, type PackageMatchTarget } from "../src/policy/packageMatch";
+import { matchesPackage, type PackageMatchTarget } from "../src/policy/engine/match";
 import { JUSTIFICATION_VALUES } from "../src/policy/schema/clarify";
 import { RATIONALE_VALUES } from "../src/policy/schema/compatible";
 

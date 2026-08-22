@@ -27,8 +27,8 @@ import {
   type ScopeTaxonomy,
   type StaleOverride,
 } from "../model/dependencies";
-import { COULD_BE_COPYLEFT_FAMILIES } from "../policy/copyleftFamily";
-import { matchesPackage } from "../policy/packageMatch";
+import { COULD_BE_COPYLEFT_FAMILIES } from "../policy/engine/copyleftFamily";
+import { matchesPackage } from "../policy/engine/match";
 import {
   canonicalizeExpression,
   elect,

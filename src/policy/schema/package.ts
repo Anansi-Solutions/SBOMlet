@@ -1,5 +1,5 @@
 import { recordOf, stringOf } from "../../validate/record";
-import { compileNamePattern, isGlobPattern } from "../namePattern";
+import { compileNamePattern, isGlobPattern } from "../engine/namePattern";
 
 import { checkKeys, requireText } from "./diagnostics";
 import { whereIsEntirelyContainerScope } from "./scope";

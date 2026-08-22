@@ -30,14 +30,14 @@ import {
   type Verdict,
 } from "../model/dependencies";
 import { annotateFindings } from "../normalize/normalize";
-import { BUILTIN_OVERRIDES } from "../policy/builtinOverrides";
-import { acceptedContainerNotices, evaluate } from "../policy/evaluate";
+import { BUILTIN_OVERRIDES } from "../policy/engine/builtinOverrides";
+import { acceptedContainerNotices, evaluate } from "../policy/engine/evaluate";
 import { parsePolicy } from "../policy/parse/parse";
 import {
   resolveTargetProfile,
   suppressionOverlapNotices,
   unusedWorkspaceTargetWarnings,
-} from "../policy/target";
+} from "../policy/engine/target";
 import { alignTables } from "../render/alignTables";
 import { renderCyclonedx } from "../render/cyclonedx";
 import { renderMarkdown, type PolicyView, type TargetProfileSummary } from "../render/markdown";
