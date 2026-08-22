@@ -586,4 +586,4 @@ regenerate the inventory in memory and compare it byte-for-byte against the
 committed outputs. See [design-principles](design-principles.md) for the full
 determinism rationale.
 
-Source: `model/dependencies.ts`, `merge/merge.ts`, `merge/dependencyGraphs.ts`, `normalize/normalize.ts`, `policy/evaluate.ts`, `policy/chain.ts`, `collectors/provenanceGraph.ts`, `render/markdown.ts`.
+Source: `model/dependencies.ts`, `merge/merge.ts`, `merge/dependencyGraphs.ts`, `normalize/normalize.ts`, `policy/engine/evaluate.ts`, `policy/engine/chain.ts`, `collectors/provenanceGraph.ts`, `render/markdown.ts`.

@@ -1,7 +1,7 @@
 # Dependency classification
 
 This page is for the classification engine — `src/merge/merge.ts`,
-`src/pipeline/containerScope.ts`, `src/policy/evaluate.ts` — and anyone
+`src/pipeline/containerScope.ts`, `src/policy/engine/evaluate.ts` — and anyone
 changing it. It is the normative [scope](../glossary.md#scope-app-and-os) and
 [verdict](../glossary.md#verdict) decision tree: for any
 [package entry](../glossary.md#package-entry), what kind of package it is and
@@ -65,7 +65,7 @@ target that would mint one fails the run instead of silently colliding with it.
 Source: `src/merge/merge.ts` (`mergeInto`, `assertNotReservedIdentity`),
 `src/pipeline/pipeline.ts` (`readCommittedDockerSbom`),
 `src/pipeline/containerScope.ts` (`applyContainerScopes`),
-`src/policy/osEcosystems.ts` (`OS_PACKAGE_ECOSYSTEMS`).
+`src/policy/engine/osEcosystems.ts` (`OS_PACKAGE_ECOSYSTEMS`).
 
 ## Stage 2 — verdict routing
 
@@ -183,7 +183,7 @@ still never governs `os`-scope packages.
 - A target-governed occurrence never reaches this lane at all — the
   target-compatibility lane above decides it first, so a
   `[[workspace.copyleft_suppressed]]` entry a target governs is effectively
-  dead there (surfaced by `policy/target.ts`'s `suppressionOverlapNotices`,
+  dead there (surfaced by `policy/engine/target.ts`'s `suppressionOverlapNotices`,
   never silently).
 - A family-justified workspace copyleft suppression (the occurrence sits under
   the suppressed path, and the elected copyleft is absorbed by that
@@ -231,10 +231,10 @@ branch before this lane and never reaches it. A ref-carrying elected branch
 under a target-aware election falls through here too, from the
 target-compatibility lane above.
 
-Source: `src/policy/evaluate.ts` (`verdictFor`, `targetVerdict`,
+Source: `src/policy/engine/evaluate.ts` (`verdictFor`, `targetVerdict`,
 `copyleftVerdict`, `impreciseVerdict`, `unknownVerdict`, `refUnknownVerdict`,
-`acceptedContainerNotices`), `src/policy/target.ts` (`resolveTargetProfile`),
-`src/policy/compat/classify.ts` (`classifyExpression`), `src/policy/copyleft.ts`
+`acceptedContainerNotices`), `src/policy/engine/target.ts` (`resolveTargetProfile`),
+`src/policy/compat/classify.ts` (`classifyExpression`), `src/policy/engine/copyleft.ts`
 (`AGPL_IDS`), `src/merge/merge.ts` (`crossImageClaimDivergence`, detecting the
 divergence), `src/normalize/normalize.ts` (`withCrossImageConflict`,
 surfacing it on the finding).

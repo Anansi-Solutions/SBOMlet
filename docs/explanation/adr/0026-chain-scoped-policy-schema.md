@@ -112,6 +112,6 @@ replacement, so the tool's own error is the migration guide.
   provenance the chains are walked over),
   [ADR-0025](0025-target-license-compatibility-lane.md) (the lane these
   entries decide ahead of)
-- Code: `src/policy/schema.ts`, `src/policy/chain.ts`,
-  `src/policy/crossValidate.ts`, `src/policy/justificationValidity.ts`,
-  `src/policy/clarifications.ts`, `src/maintain/refreshClarifications.ts`
+- Code: `src/policy/schema/`, `src/policy/engine/chain.ts`,
+  `src/policy/engine/crossValidate.ts`, `src/policy/engine/justificationValidity.ts`,
+  `src/policy/parse/clarificationsFile.ts`, `src/policy/refresh/refreshClarifications.ts`

@@ -57,7 +57,7 @@ page states only where a package lands.
     target governs never decides anything (the target-compatibility lane
     intercepts the occurrence first — see
     [dependency-classification.md](./dependency-classification.md)), but it
-    still renders here unconditionally when configured; `policy/target.ts`'s
+    still renders here unconditionally when configured; `policy/engine/target.ts`'s
     `suppressionOverlapNotices` is a stderr-only diagnostic, not a placement
     change.
   - Accepted-AGPL container notices: a scope-`os` package whose AGPL

@@ -83,5 +83,5 @@ the declared target.
   (the deny-precedence this lane sits below),
   [ADR-0015](0015-abstain-over-fragile-parsing.md) (the vetted-data-over-
   hand-authored-rules precedent)
-- Code: `src/policy/compat/`, `src/policy/target.ts`,
-  `src/policy/evaluate.ts`, `src/render/markdown.ts`
+- Code: `src/policy/compat/`, `src/policy/engine/target.ts`,
+  `src/policy/engine/evaluate.ts`, `src/render/markdown.ts`
