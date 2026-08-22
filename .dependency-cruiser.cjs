@@ -17,14 +17,12 @@ module.exports = {
     {
       name: "no-circular",
       comment:
-        "Modules should not form dependency cycles. Kept at warn for now: the " +
-        "tree still has type-only cycles to untangle (deny/schema, compat, " +
-        "pipeline/targets) - each closes through an import type that TypeScript " +
-        "erases, so none is a runtime cycle. The genuine policy/normalize runtime " +
-        "cycle is resolved. Promote to error once the type-only cycles are gone, " +
-        "or once the rule is scoped to ignore type-only edges. See " +
+        "Modules must not form dependency cycles. The graph is fully acyclic: the " +
+        "former policy/normalize runtime cycle and the type-only cycles " +
+        "(deny/schema, compat, pipeline/targets) are all resolved, each shared " +
+        "type lifted to a leaf both sides import one-way. See " +
         "docs/explanation/module-dependencies.md.",
-      severity: "warn",
+      severity: "error",
       from: {},
       to: { circular: true },
     },

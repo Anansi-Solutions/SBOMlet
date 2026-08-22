@@ -109,12 +109,13 @@ D-->E
 
 ## The rules
 
-The rules live in `.dependency-cruiser.cjs` at the repository root. They are
-proposed governance, not part of the blocking gate — run them by hand with
-`task arch:check`. Adopt them by raising the severities to error and wiring the
-task into `check` once the tree passes clean.
+The rules live in `.dependency-cruiser.cjs` at the repository root. Run them by
+hand with `task arch:check`. Most are enforced at error, including
+`no-circular` now that the graph is acyclic; a couple of advisory checks stay
+at warn. Wiring the task into `check` is the remaining step to make them part
+of the blocking gate.
 
-- **no-circular** (warn) — no dependency cycles between modules.
+- **no-circular** (error) — no dependency cycles between modules.
 - **no-orphans** (warn) — no modules imported by nothing (the CLI entry point
   and declaration files are exempt).
 - **not-to-test** (error) — production code under `src/` must never import from
@@ -129,27 +130,24 @@ task into `check` once the tree passes clean.
 - **render-consumes-not-collects** (error) — `render` must not import
   `collectors`, `enrich`, `merge`, or `targets`.
 
-## Cycles today
+## Cycles
 
-`no-circular` is set to warn, not error, because the tree still has type-only
-cycles to untangle. dependency-cruiser reports five; under this toolchain it
-counts type-only imports as edges and cannot tell them apart, so all five are
-harmless: each closes through an `import type`, which TypeScript erases at
-compile time, so none is a runtime cycle. They sit in three pre-existing spots —
-the `deny`/`schema` type graph (`schema/index` ⇄ `denylist` ⇄ `builtinDenylist`
-⇄ `schema/exemptions`), `compat/classify` ⇄ `compat/profile`, and `pipeline` ⇄
-`targets`.
+The module graph is fully acyclic, so `no-circular` is enforced at error.
 
-The one genuine runtime cycle is now resolved. It used to couple `policy` and
-`normalize` into a single unit: `statedLicense` and `EVERYWHERE_SCOPE` were the
-value imports that closed the loop through the schema and the package matcher.
-Both now live in leaf modules — `EVERYWHERE_SCOPE` in `policy/schema/scope`,
-`statedLicense` in `policy/statedLicense` — that either side imports without
-importing the other, so `normalize` no longer forms a value cycle with `policy`.
+Getting there meant untangling one genuine runtime cycle and several type-only
+ones. The runtime cycle used to couple `policy` and `normalize` into a single
+unit: `statedLicense` and `EVERYWHERE_SCOPE` were the value imports that closed
+the loop through the schema and the package matcher. Both now live in leaf
+modules — `EVERYWHERE_SCOPE` in `policy/schema/scope`, `statedLicense` in
+`policy/statedLicense` — that either side imports without importing the other.
 
-Raising `no-circular` to error additionally requires untangling the remaining
-type-only cycles above, or scoping the rule to ignore type-only edges; adding
-`arch:check` to the gate follows once the tree passes clean.
+The rest were type-only: dependency-cruiser counts an `import type` as an edge
+even though TypeScript erases it at compile time, so none was a runtime cycle,
+but each is resolved now too. They sat in three spots — the `deny`/`schema`
+type graph, `compat/classify` ⇄ `compat/profile`, and `pipeline` ⇄
+`pipeline/targets` — each broken by lifting the shared types into a leaf module
+both sides import one-way: `policy/schema/deny`, `policy/compat/classification`,
+and `pipeline/options`.
 
 ## Running the checks
 
