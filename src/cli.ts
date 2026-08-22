@@ -46,7 +46,7 @@ import {
   type RefreshClarificationsResult,
 } from "./pipeline/refreshClarifications";
 import { sanitizeForLog } from "./pipeline/summary";
-import { suggestionCount } from "./maintain/refreshClarifications";
+import { suggestionCount } from "./policy/refresh/refreshClarifications";
 import { runVerifyCache, type VerifyCacheResult } from "./pipeline/verifyCache";
 
 const USAGE =

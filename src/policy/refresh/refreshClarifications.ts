@@ -8,29 +8,26 @@
  * Pure: the caller builds the model and owns any file it writes.
  */
 
-import { annotateFindings, observedSignalBySource } from "../normalize/normalize";
-import {
-  shadowedClarifications,
-  type ShadowedClarification,
-} from "../policy/parse/clarificationsFile";
-import { justificationValidity } from "../policy/engine/justificationValidity";
-import { matchesPackage, type PackageSelector } from "../policy/engine/match";
+import { annotateFindings, observedSignalBySource } from "../../normalize/normalize";
+import { shadowedClarifications, type ShadowedClarification } from "../parse/clarificationsFile";
+import { justificationValidity } from "../engine/justificationValidity";
+import { matchesPackage, type PackageSelector } from "../engine/match";
 import {
   staleDivergence,
   unnecessaryClarifyEntries,
   unusedRuleIds,
   type UnnecessaryClarifyEntry,
-} from "../policy/engine/evaluate";
-import { clarifyCitation, type ClarifyRule } from "../policy/schema/clarify";
-import { emitClarifications } from "./tomlEmit";
-import type { Policy } from "../policy/schema";
+} from "../engine/evaluate";
+import { clarifyCitation, type ClarifyRule } from "../schema/clarify";
+import { emitClarifications } from "./emit";
+import type { Policy } from "../schema";
 
 import type {
   CanonicalDependencies,
   LicenseFinding,
   PackageEntry,
   Verdict,
-} from "../model/dependencies";
+} from "../../model/dependencies";
 
 /**
  * What extending an entry to one uncovered version would mean.

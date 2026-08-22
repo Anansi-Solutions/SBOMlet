@@ -11,7 +11,7 @@ import {
   refreshFindings,
   rewriteClarifications,
   type RefreshFindings,
-} from "../src/maintain/refreshClarifications";
+} from "../src/policy/refresh/refreshClarifications";
 import { annotateFindings } from "../src/normalize/normalize";
 import { evaluate } from "../src/policy/engine/evaluate";
 import {

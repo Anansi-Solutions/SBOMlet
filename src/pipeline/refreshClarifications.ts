@@ -17,8 +17,8 @@ import {
   rewriteClarifications,
   type ClarificationsRewrite,
   type RefreshFindings,
-} from "../maintain/refreshClarifications";
-import { rewriteWouldDropText } from "../maintain/tomlEmit";
+} from "../policy/refresh/refreshClarifications";
+import { rewriteWouldDropText } from "../policy/refresh/emit";
 import { buildOutputs, clarificationsFilePath } from "./pipeline";
 import { defaultNoticesPath } from "./paths";
 

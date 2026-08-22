@@ -11,10 +11,10 @@
 
 import { parse as parseToml, stringify as stringifyToml } from "smol-toml";
 
-import { compareCodeUnits } from "../model/dependencies";
-import { DETECTED_LANES, type DetectedSignal } from "../normalize/normalize";
+import { compareCodeUnits } from "../../model/dependencies";
+import { DETECTED_LANES, type DetectedSignal } from "../../normalize/normalize";
 
-import type { ClarifyRule } from "../policy/schema/clarify";
+import type { ClarifyRule } from "../schema/clarify";
 
 /**
  * The order an entry's keys are written in, matching the schema reference. `name` and `pattern` are
