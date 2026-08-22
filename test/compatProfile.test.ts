@@ -5,7 +5,7 @@ import {
   type ModulatedClass,
   type TargetProfile,
 } from "../src/policy/compat/profile";
-import type { AxisClass, AxisResult, ObligationClass } from "../src/policy/compat/classify";
+import type { AxisClass, AxisResult, ObligationClass } from "../src/policy/compat/classification";
 
 const AXIS_CLASSES: readonly AxisClass[] = [
   "compatible",

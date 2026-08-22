@@ -1,7 +1,8 @@
 import { describe, expect, test } from "bun:test";
 
-import { classifyLeaf, type TargetLicense } from "../src/policy/compat/classify";
+import { classifyLeaf } from "../src/policy/compat/classify";
 import { OSADL_COPYLEFT_CLASS, SCANCODE_CATEGORY } from "../src/policy/compat/data";
+import type { TargetLicense } from "../src/policy/compat/classification";
 
 const oss = (id: string): TargetLicense => ({ kind: "oss", id });
 const proprietary: TargetLicense = { kind: "proprietary" };

@@ -1,11 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import parseSpdx from "spdx-expression-parse";
 
-import {
-  classifyExpression,
-  classifyLeaf,
-  type TargetLicense,
-} from "../src/policy/compat/classify";
+import { classifyExpression, classifyLeaf } from "../src/policy/compat/classify";
 import {
   formatProfileLabel,
   targetBoundaryReason,
@@ -20,6 +16,7 @@ import {
   TARGET_RULE_UNKNOWN_PAIR,
 } from "../src/policy/compat/reasons";
 import { renderNode, type ExpressionNode } from "../src/normalize/expression";
+import type { TargetLicense } from "../src/policy/compat/classification";
 import type { TargetProfile } from "../src/policy/compat/profile";
 
 const oss = (id: string): TargetLicense => ({ kind: "oss", id });

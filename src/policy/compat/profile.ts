@@ -12,7 +12,7 @@
  * untouched. The same dependency under an MIT network-deployed target stays `incompatible` for the
  * identical reason: the flag never manufactures a verdict, in either direction.
  */
-import type { AxisResult, TargetLicense } from "./classify";
+import type { AxisResult, TargetLicense } from "./classification";
 
 /** The declared usage profile: license + the two scope-gating flags, all mandatory. */
 export interface TargetProfile {
