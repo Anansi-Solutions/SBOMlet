@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import { matchesPackage, type PackageMatchTarget } from "../src/policy/packageMatch";
-import { JUSTIFICATION_VALUES, RATIONALE_VALUES } from "../src/policy/enums";
+import { JUSTIFICATION_VALUES, RATIONALE_VALUES } from "../src/policy/schema";
 
 // One matcher decides, for every policy surface, whether an entry covers a
 // package: an exact `name` or a `pattern` over the display name, narrowed by an

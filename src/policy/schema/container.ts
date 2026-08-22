@@ -1,0 +1,196 @@
+import { recordOf, stringOf } from "../../validate/record";
+
+import { checkKeys, requireText } from "./diagnostics";
+import { validatePath } from "./scope";
+
+/**
+ * One [[docker.development]] entry: marks every container whose Dockerfile identity matches
+ * `source` as development-only (never shipped).
+ */
+export interface DockerDevelopmentEntry {
+  /**
+   * Repo-relative glob over Dockerfile identities, in the EXACT same dialect as `[docker].ignore`
+   * (globToRegExp in targets/discover.ts: `*` within a segment, `**` across segments,
+   * case-insensitive, anchored - a literal path is a valid glob). Here the pattern is only
+   * validated and stored verbatim; matching against discovered containers happens where the report
+   * is rendered. A matching container's packages are listed under Development-only in the report
+   * - placement only, it never affects a verdict.
+   */
+  source: string;
+  /** Mandatory documentation: why this container never ships. */
+  reason: string;
+}
+
+/**
+ * The optional [docker] table: Dockerfile-discovery exclusion globs plus per-container development
+ * marking. When `generate-docker-sbom --repo-root` discovers Dockerfiles, every Dockerfile whose
+ * repo-relative forward-slash identity matches an `ignore` glob is EXCLUDED ENTIRELY - its base
+ * image is never derived, never scanned. `ignore` defaults to [] when the [docker] table is present
+ * without the key, and the whole table is undefined when absent. Each glob is validated with the
+ * SAME posture as suppression paths (forward slashes only, no ".." segments, no leading/trailing
+ * slash) so a crafted glob can never escape the repo namespace. `development` defaults to [] the
+ * same way; every analyzed container is production unless a `[[docker.development]]` entry's
+ * `source` glob matches it - the conservative default.
+ */
+export interface DockerConfig {
+  /** Repo-relative forward-slash globs; a matching Dockerfile is excluded. */
+  ignore: ReadonlyArray<string>;
+  /** Per-container development marking; absent key defaults to []. */
+  development: ReadonlyArray<DockerDevelopmentEntry>;
+}
+
+/**
+ * Parse the optional [docker] table: an absent table yields undefined;
+ * a non-table value rejects; a present table (with or without `ignore`) yields a DockerConfig whose
+ * `ignore` defaults to []. Each ignore entry must be a non-empty string and a repo-relative
+ * forward-slash glob - reusing validatePath EXACTLY (no backslashes, no ".." segments, no
+ * leading/trailing slash, no empty/"."/whitespace-padded segments) so a crafted glob can never
+ * escape the repo namespace. Unknown keys reject via checkKeys. A malformed entry pushes the
+ * aggregated PolicyError message naming docker.ignore[i]; only a fully-valid table materializes
+ * (matching the present-key idiom elsewhere).
+ */
+/**
+ * Parse one [[docker.development]] entry: `source` must be a valid glob (validatePath - the same
+ * posture as a docker.ignore entry) that does not
+ * start with "docker:" (the table already scopes the Dockerfile identity;
+ * the prefix would double up and could never match); `reason` is mandatory documentation. `seen`
+ * collects already-accepted source strings so a duplicate pattern - silently dead, since only the
+ * first entry could ever decide anything - is rejected too.
+ */
+function validateDockerDevelopmentEntry(
+  rawEntry: unknown,
+  where: string,
+  seen: Set<string>,
+  problems: string[],
+): DockerDevelopmentEntry | undefined {
+  const entry = recordOf(rawEntry);
+
+  if (entry === undefined) {
+    problems.push(`${where}: must be a table`);
+    return undefined;
+  }
+
+  checkKeys(entry, ["source", "reason"], where, problems);
+  const source = requireText(entry, "source", where, problems);
+  const reason = requireText(entry, "reason", where, problems);
+
+  if (source === undefined || reason === undefined) {
+    return undefined;
+  }
+
+  const before = problems.length;
+
+  validatePath(source, where, problems);
+  if (source.startsWith("docker:")) {
+    problems.push(
+      `${where}: source "${source}" must not start with "docker:" (the table already scopes the Dockerfile identity; the prefix would double up and could never match)`,
+    );
+  }
+
+  if (seen.has(source)) {
+    problems.push(
+      `${where}: source "${source}" duplicates an earlier [[docker.development]] entry (the first match wins; the duplicate would be dead)`,
+    );
+  }
+
+  if (problems.length !== before) {
+    return undefined;
+  }
+
+  seen.add(source);
+  return { source, reason };
+}
+
+/**
+ * Parse the optional `development` array inside [docker]: each entry marks a glob-matched container
+ * as development-only. Absent → []. Every malformed
+ * entry pushes the aggregated PolicyError message naming docker.development[i];
+ * only fully-valid entries materialize.
+ */
+function validateDockerDevelopment(
+  table: Record<string, unknown>,
+  problems: string[],
+): DockerDevelopmentEntry[] {
+  if (!("development" in table)) {
+    return [];
+  }
+
+  const raw = table["development"];
+
+  if (!Array.isArray(raw)) {
+    problems.push("docker.development: must be an array of tables ([[docker.development]])");
+    return [];
+  }
+
+  const development: DockerDevelopmentEntry[] = [];
+  const seen = new Set<string>();
+
+  raw.forEach((rawEntry, index) => {
+    const entry = validateDockerDevelopmentEntry(
+      rawEntry,
+      `docker.development[${index}]`,
+      seen,
+      problems,
+    );
+
+    if (entry !== undefined) {
+      development.push(entry);
+    }
+  });
+  return development;
+}
+
+export function validateDocker(
+  root: Record<string, unknown>,
+  problems: string[],
+): DockerConfig | undefined {
+  if (!("docker" in root)) {
+    return undefined;
+  }
+
+  const table = recordOf(root["docker"]);
+
+  if (table === undefined) {
+    problems.push("docker: must be a table ([docker])");
+    return undefined;
+  }
+
+  checkKeys(table, ["ignore", "development"], "docker", problems);
+  const development = validateDockerDevelopment(table, problems);
+
+  if (!("ignore" in table)) {
+    return { ignore: [], development };
+  }
+
+  const raw = table["ignore"];
+
+  if (!Array.isArray(raw)) {
+    problems.push("docker.ignore: must be an array of strings");
+    return { ignore: [], development };
+  }
+
+  const ignore: string[] = [];
+
+  raw.forEach((rawEntry, index) => {
+    const where = `docker.ignore[${index}]`;
+    const value = stringOf(rawEntry);
+
+    if (value === undefined) {
+      problems.push(`${where}: must be a string`);
+      return;
+    }
+
+    if (value.trim() === "") {
+      problems.push(`${where}: must be a non-empty string`);
+      return;
+    }
+
+    const before = problems.length;
+
+    validatePath(value, where, problems);
+    if (problems.length === before) {
+      ignore.push(value);
+    }
+  });
+  return { ignore, development };
+}
