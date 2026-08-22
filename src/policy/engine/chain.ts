@@ -17,11 +17,11 @@ import {
   compareCodeUnits,
   purlDisplayName,
   type CanonicalDependencies,
-} from "../model/dependencies";
-import { matchesPackage, scopeCoversTarget } from "./engine/match";
-import { SELF_PARENT } from "./schema/dependencyChain";
-import type { CompatiblePackageRule } from "./schema/compatible";
-import type { Policy } from "./schema";
+} from "../../model/dependencies";
+import { SELF_PARENT } from "../schema/dependencyChain";
+import { matchesPackage, scopeCoversTarget } from "./match";
+import type { CompatiblePackageRule } from "../schema/compatible";
+import type { Policy } from "../schema";
 
 /** One target's introducer graph over the packages the scan reported for it. */
 export interface TargetDependencyGraph {

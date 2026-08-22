@@ -13,7 +13,7 @@ import type { DocumentConfig } from "./document";
 import type { AllowSourceAvailable, SuppressedWorkspace } from "./exemptions";
 import type { TargetConfig } from "./targetProfile";
 
-import type { DenyRule } from "../denylist";
+import type { DenyRule } from "./deny";
 
 export interface Policy {
   /** Default "warn" when the [unknown] table is absent. */

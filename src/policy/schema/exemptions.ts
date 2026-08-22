@@ -1,6 +1,6 @@
 import { recordOf } from "../../validate/record";
-import { BUILTIN_DENY_RULES } from "../builtinDenylist";
 
+import { SOURCE_AVAILABLE_LICENSE_IDS } from "./deny";
 import { checkKeys, parseSpdxChecked, requireText } from "./diagnostics";
 import { validatePath } from "./scope";
 
@@ -111,9 +111,7 @@ export interface AllowSourceAvailable {
 }
 
 /** The shipped source-available licence ids - the only ones an exemption may name. */
-const BUILTIN_DENY_PATTERNS: ReadonlyArray<string> = BUILTIN_DENY_RULES.filter(
-  (rule) => rule.match === "license",
-).map((rule) => rule.pattern);
+const BUILTIN_DENY_PATTERNS: ReadonlyArray<string> = SOURCE_AVAILABLE_LICENSE_IDS;
 
 /**
  * Parse [[allow_source_available]] (ADR-0013 opt-out): each entry exempts ONE built-in

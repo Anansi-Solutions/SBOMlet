@@ -20,7 +20,7 @@ import {
   parseClarificationsAt,
   withImportedClarifications,
 } from "../policy/parse/clarificationsFile";
-import { crossValidatePolicy } from "../policy/crossValidate";
+import { crossValidatePolicy } from "../policy/engine/crossValidate";
 import {
   compareCodeUnits,
   DOCKER_IDENTITY_PREFIX,

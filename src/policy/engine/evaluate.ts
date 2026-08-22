@@ -93,7 +93,6 @@ import {
   type ExpressionNode,
 } from "../../normalize/expression";
 import { observedSignalBySource } from "../../normalize/normalize";
-import { BUILTIN_DENY_RULE_ID } from "../builtinDenylist";
 import {
   classifyExpression,
   formatProfileLabel,
@@ -110,11 +109,12 @@ import {
   type ReasonContext,
   type TargetProfile,
 } from "../compat";
-import { AGPL_IDS, COPYLEFT_FAMILY } from "../copyleft";
-import { denyRuleFor, type IndexedDenyRule } from "../denylist";
-import { voidedCompatibleEntries, voidedEntryKey, type VoidedEntry } from "../chain";
 import { clarifyCitation, clarifyInvalidRuleId, type ClarifyRule } from "../schema/clarify";
 import { ruleReason } from "../schema/diagnostics";
+import { BUILTIN_DENY_RULE_ID } from "./builtinDenylist";
+import { AGPL_IDS, COPYLEFT_FAMILY } from "./copyleft";
+import { denyRuleFor, type IndexedDenyRule } from "./deny";
+import { voidedCompatibleEntries, voidedEntryKey, type VoidedEntry } from "./chain";
 import { COULD_BE_COPYLEFT_FAMILIES, WORKSPACE_ABSORBS } from "./copyleftFamily";
 import { justificationValidity, type JustificationValidity } from "./justificationValidity";
 import { matchesPackage, scopeCoversTarget } from "./match";

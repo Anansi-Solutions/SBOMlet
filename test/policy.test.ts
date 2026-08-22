@@ -19,9 +19,9 @@ import {
   parseClarifications,
   withImportedClarifications,
 } from "../src/policy/parse/clarificationsFile";
-import { BUILTIN_DENY_RULES } from "../src/policy/builtinDenylist";
-import { denyRuleFor } from "../src/policy/denylist";
-import { AGPL_IDS, COPYLEFT_IDS } from "../src/policy/copyleft";
+import { BUILTIN_DENY_RULES } from "../src/policy/engine/builtinDenylist";
+import { denyRuleFor } from "../src/policy/engine/deny";
+import { AGPL_IDS, COPYLEFT_IDS } from "../src/policy/engine/copyleft";
 import { COULD_BE_COPYLEFT_FAMILIES, WORKSPACE_ABSORBS } from "../src/policy/engine/copyleftFamily";
 import { BUILTIN_OVERRIDES } from "../src/policy/engine/builtinOverrides";
 import { JUSTIFICATION_VALUES } from "../src/policy/schema/clarify";

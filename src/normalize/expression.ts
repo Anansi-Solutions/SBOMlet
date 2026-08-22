@@ -16,7 +16,7 @@
 import parseSpdx from "spdx-expression-parse";
 
 import { compareCodeUnits } from "../model/dependencies";
-import { COPYLEFT_IDS } from "../policy/copyleft";
+import { COPYLEFT_IDS } from "../policy/engine/copyleft";
 
 export type ExpressionNode =
   | { license: string; plus?: true; exception?: string }

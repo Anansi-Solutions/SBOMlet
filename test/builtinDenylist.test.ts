@@ -3,8 +3,8 @@ import { join } from "node:path";
 
 import { describe, expect, test } from "bun:test";
 
-import { BUILTIN_DENY_RULES, BUILTIN_DENY_RULE_ID } from "../src/policy/builtinDenylist";
-import { denyRuleFor } from "../src/policy/denylist";
+import { BUILTIN_DENY_RULES, BUILTIN_DENY_RULE_ID } from "../src/policy/engine/builtinDenylist";
+import { denyRuleFor } from "../src/policy/engine/deny";
 import type { Policy } from "../src/policy/schema";
 
 // A minimal policy with no consumer rules — proves the defaults fire on their own.

@@ -17,13 +17,13 @@
  * point: the entry says something the new scan cannot check.
  */
 
+import { SELF_PARENT } from "../schema/dependencyChain";
+import { PolicyError } from "../schema/diagnostics";
 import { dependencyGraphsByTarget, type TargetDependencyGraph } from "./chain";
-import { matchesPackage, scopeCoversTarget } from "./engine/match";
-import { SELF_PARENT } from "./schema/dependencyChain";
-import { PolicyError } from "./schema/diagnostics";
-import type { CompatiblePackageRule } from "./schema/compatible";
-import type { Policy } from "./schema";
-import type { CanonicalDependencies, Occurrence, PackageEntry } from "../model/dependencies";
+import { matchesPackage, scopeCoversTarget } from "./match";
+import type { CompatiblePackageRule } from "../schema/compatible";
+import type { Policy } from "../schema";
+import type { CanonicalDependencies, Occurrence, PackageEntry } from "../../model/dependencies";
 
 /** One package an entry covers, at one occurrence its `where` scope reaches. */
 interface Governed {

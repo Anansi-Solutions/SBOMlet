@@ -71,24 +71,10 @@ import satisfies from "spdx-satisfies";
 
 import parseSpdx from "spdx-expression-parse";
 
-import { type ExpressionNode } from "../normalize/expression";
+import { type ExpressionNode } from "../../normalize/expression";
 import { BUILTIN_DENY_RULES, BUILTIN_DENY_RULE_ID } from "./builtinDenylist";
-import type { Policy } from "./schema";
-
-/**
- * A validated deny entry. License mode carries the pre-decomposed allowlist (orLeaves), name mode
- * carries only the verbatim package name to compare.
- */
-export type DenyRule =
-  | {
-      match: "license";
-      /** The pattern exactly as written in the policy file. */
-      pattern: string;
-      /** Pre-decomposed satisfies allowlist (OR-leaves), computed at validation. */
-      allowlist: ReadonlyArray<string>;
-      reason: string;
-    }
-  | { match: "name"; pattern: string; reason: string };
+import type { DenyRule } from "../schema/deny";
+import type { Policy } from "../schema";
 
 /**
  * A matched deny rule plus the rule id it is cited under: `denied[i]` for a consumer policy rule,

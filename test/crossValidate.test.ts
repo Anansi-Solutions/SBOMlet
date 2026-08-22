@@ -8,7 +8,7 @@ import { describe, expect, test } from "bun:test";
 
 import { npmIntroductions } from "../src/collectors/npmProvenance";
 import { mergeSboms, type CollectedSbom } from "../src/merge/merge";
-import { crossValidatePolicy } from "../src/policy/crossValidate";
+import { crossValidatePolicy } from "../src/policy/engine/crossValidate";
 import { parsePolicy } from "../src/policy/parse/parse";
 import type { CanonicalDependencies } from "../src/model/dependencies";
 

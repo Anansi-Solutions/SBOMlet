@@ -55,7 +55,7 @@ import {
   TARGET_RULE_UNKNOWN_PAIR,
   type TargetProfile,
 } from "../policy/compat";
-import { OS_PACKAGE_ECOSYSTEMS } from "../policy/osEcosystems";
+import { OS_PACKAGE_ECOSYSTEMS } from "../policy/engine/osEcosystems";
 import { isUnknownLicense } from "./unknownLicense";
 import type { AcceptedContainerNotice } from "../policy/engine/evaluate";
 import type { SuppressedWorkspace } from "../policy/schema/exemptions";

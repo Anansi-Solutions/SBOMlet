@@ -3,7 +3,26 @@ import { recordOf, stringOf } from "../../validate/record";
 
 import { checkKeys, parseSpdxChecked, requireText } from "./diagnostics";
 
-import type { DenyRule } from "../denylist";
+/**
+ * A validated deny entry. License mode carries the pre-decomposed allowlist (orLeaves), name mode
+ * carries only the verbatim package name to compare.
+ */
+export type DenyRule =
+  | {
+      match: "license";
+      /** The pattern exactly as written in the policy file. */
+      pattern: string;
+      /** Pre-decomposed satisfies allowlist (OR-leaves), computed at validation. */
+      allowlist: ReadonlyArray<string>;
+      reason: string;
+    }
+  | { match: "name"; pattern: string; reason: string };
+
+/**
+ * The shipped source-available SPDX ids denied out of the box (ADR-0013): the closed vocabulary an
+ * [[allow_source_available]] exemption may name, and the defaults the engine pairs with rationale.
+ */
+export const SOURCE_AVAILABLE_LICENSE_IDS = ["BUSL-1.1", "SSPL-1.0", "Elastic-2.0"] as const;
 
 /**
  * One [[deny]] entry → a DenyRule, mirroring validateCompatible EXACTLY. A license-mode entry

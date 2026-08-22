@@ -12,7 +12,7 @@ import {
   dependencyGraphsByTarget,
   firstUncoveredIntroduction,
   type TargetDependencyGraph,
-} from "../src/policy/chain";
+} from "../src/policy/engine/chain";
 
 const TARGET = "apps/web";
 const UI_PURL = "pkg:npm/%40acme/ui@0.0.0-use.local";

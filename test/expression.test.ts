@@ -5,8 +5,8 @@ import { describe, expect, test } from "bun:test";
 import parse from "spdx-expression-parse";
 import satisfies from "spdx-satisfies";
 
-import { COPYLEFT_IDS } from "../src/policy/copyleft";
-import { denyRuleFor } from "../src/policy/denylist";
+import { COPYLEFT_IDS } from "../src/policy/engine/copyleft";
+import { denyRuleFor } from "../src/policy/engine/deny";
 import {
   canonicalizeExpression,
   elect,

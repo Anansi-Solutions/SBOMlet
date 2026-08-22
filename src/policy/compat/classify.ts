@@ -17,7 +17,7 @@
  */
 import { compareCodeUnits } from "../../model/dependencies";
 import { hasRefLeaf, renderNode, type ExpressionNode } from "../../normalize/expression";
-import { AGPL_IDS, COPYLEFT_IDS } from "../copyleft";
+import { AGPL_IDS, COPYLEFT_IDS } from "../engine/copyleft";
 import {
   OSADL_COPYLEFT_CLASS,
   OSADL_MATRIX,
