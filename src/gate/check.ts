@@ -7,8 +7,9 @@
 import { readFileSync } from "node:fs";
 
 import { resolveFrom } from "../pipeline/paths";
-import { buildOutputs, type GenerateOptions } from "../pipeline/pipeline";
+import { buildOutputs } from "../pipeline/pipeline";
 import { sanitizeForLog } from "../pipeline/summary";
+import type { GenerateOptions } from "../pipeline/options";
 
 /** Structured check outcome - the only source of exit codes 1 and 2. */
 export interface CheckResult {

@@ -28,7 +28,8 @@ import * as cdxgenModule from "../src/collectors/cdxgen";
 import * as yarnPluginModule from "../src/collectors/yarnPlugin";
 import { mergeSboms } from "../src/merge/merge";
 import { collectTargets } from "../src/pipeline/targets";
-import { runGenerate, type GenerateOptions } from "../src/pipeline/pipeline";
+import { runGenerate } from "../src/pipeline/pipeline";
+import type { GenerateOptions } from "../src/pipeline/options";
 import type { Target } from "../src/targets/target";
 
 /** Original exports captured BEFORE any mock.module call (restore target). */

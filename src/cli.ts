@@ -40,7 +40,7 @@ import { parseArgs } from "node:util";
 import { runGenerateDockerSbom, type GenerateDockerSbomOptions } from "./pipeline/dockerSbom";
 import { exitCodeFor, runCheck, type CheckResult } from "./gate/check";
 import { defaultNoticesPath, resolveFrom } from "./pipeline/paths";
-import { runGenerate, type GenerateOptions } from "./pipeline/pipeline";
+import { runGenerate } from "./pipeline/pipeline";
 import {
   runRefreshClarifications,
   type RefreshClarificationsResult,
@@ -48,6 +48,7 @@ import {
 import { sanitizeForLog } from "./pipeline/summary";
 import { suggestionCount } from "./policy/refresh/refreshClarifications";
 import { runVerifyCache, type VerifyCacheResult } from "./pipeline/verifyCache";
+import type { GenerateOptions } from "./pipeline/options";
 
 const USAGE =
   "usage: sbomlet <generate|check|verify-cache|refresh-clarifications|" +

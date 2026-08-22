@@ -28,7 +28,7 @@ import { yarnWorkspaceMembers } from "../targets/firstParty";
 import { resolveTarget } from "../targets/target";
 import { classifyCoverage, componentCountOf, coverageSkipReason } from "./coverage";
 import { resolveFrom } from "./paths";
-import { type GenerateOptions } from "./pipeline";
+import type { GenerateOptions } from "./options";
 
 /**
  * Generator wall-clock budget PER SCAN (cold plugin runs hit ~70s on large targets; the first
