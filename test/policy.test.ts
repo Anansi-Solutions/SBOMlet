@@ -15,7 +15,10 @@ import {
   unnecessaryClarifyEntries,
   unusedRuleIds,
 } from "../src/policy/evaluate";
-import { parseClarifications, withImportedClarifications } from "../src/policy/clarifications";
+import {
+  parseClarifications,
+  withImportedClarifications,
+} from "../src/policy/parse/clarificationsFile";
 import { BUILTIN_DENY_RULES } from "../src/policy/builtinDenylist";
 import { denyRuleFor } from "../src/policy/denylist";
 import { AGPL_IDS, COPYLEFT_IDS } from "../src/policy/copyleft";
@@ -24,7 +27,8 @@ import { BUILTIN_OVERRIDES } from "../src/policy/builtinOverrides";
 import { JUSTIFICATION_VALUES } from "../src/policy/schema/clarify";
 import { RATIONALE_VALUES } from "../src/policy/schema/compatible";
 import { PolicyError } from "../src/policy/schema/diagnostics";
-import { parsePolicy, type Policy } from "../src/policy/schema";
+import { parsePolicy } from "../src/policy/parse/parse";
+import type { Policy } from "../src/policy/schema";
 import type {
   CanonicalDependencies,
   DependencyIntroduction,

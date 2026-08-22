@@ -10,8 +10,9 @@ import { describe, expect, test } from "bun:test";
 import { annotateFindings } from "../src/normalize/normalize";
 import { evaluate } from "../src/policy/evaluate";
 import { PolicyError } from "../src/policy/schema/diagnostics";
-import { parsePolicy, type Policy } from "../src/policy/schema";
+import { parsePolicy } from "../src/policy/parse/parse";
 import { renderMarkdown } from "../src/render/markdown";
+import type { Policy } from "../src/policy/schema";
 import type { CanonicalDependencies, Verdict } from "../src/model/dependencies";
 
 /** No scanned target in these scenarios is collected by a lane that derives a dependency graph. */

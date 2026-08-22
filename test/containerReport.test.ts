@@ -12,10 +12,11 @@ import { annotateFindings } from "../src/normalize/normalize";
 import { applyContainerScopes } from "../src/pipeline/containerScope";
 import { BUILTIN_OVERRIDES } from "../src/policy/builtinOverrides";
 import { acceptedContainerNotices, evaluate } from "../src/policy/evaluate";
-import { parsePolicy, type Policy } from "../src/policy/schema";
+import { parsePolicy } from "../src/policy/parse/parse";
 import { alignTables } from "../src/render/alignTables";
 import { renderMarkdown, type PolicyView } from "../src/render/markdown";
 import { globToRegExp } from "../src/targets/discover";
+import type { Policy } from "../src/policy/schema";
 
 /** No scanned target in these scenarios is collected by a lane that derives a dependency graph. */
 const WITHOUT_DEPENDENCY_GRAPHS: ReadonlySet<string> = new Set();

@@ -17,10 +17,10 @@ import {
   parseClarificationsAt,
   shadowedClarifications,
   withImportedClarifications,
-} from "../src/policy/clarifications";
+} from "../src/policy/parse/clarificationsFile";
 import { renderMarkdown, type PolicyView } from "../src/render/markdown";
 import { PolicyError } from "../src/policy/schema/diagnostics";
-import { parsePolicy } from "../src/policy/schema";
+import { parsePolicy } from "../src/policy/parse/parse";
 import { claim, modelOf, pkg } from "./normalizeTestSupport";
 
 /** One `[[clarify]]` table naming `name`, recording the registry lane, electing `expression`. */

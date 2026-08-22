@@ -14,9 +14,12 @@ import {
 } from "../src/maintain/refreshClarifications";
 import { annotateFindings } from "../src/normalize/normalize";
 import { evaluate } from "../src/policy/evaluate";
-import { parseClarifications, withImportedClarifications } from "../src/policy/clarifications";
+import {
+  parseClarifications,
+  withImportedClarifications,
+} from "../src/policy/parse/clarificationsFile";
 import { type ClarifyRule } from "../src/policy/schema/clarify";
-import { parsePolicy } from "../src/policy/schema";
+import { parsePolicy } from "../src/policy/parse/parse";
 import { claim, modelOf, pkg } from "./normalizeTestSupport";
 
 import type { LicenseClaim, PackageEntry } from "../src/model/dependencies";

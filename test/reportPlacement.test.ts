@@ -20,12 +20,13 @@ import { annotateFindings } from "../src/normalize/normalize";
 import { applyContainerScopes } from "../src/pipeline/containerScope";
 import { BUILTIN_OVERRIDES } from "../src/policy/builtinOverrides";
 import { acceptedContainerNotices, evaluate } from "../src/policy/evaluate";
-import { parsePolicy, type Policy } from "../src/policy/schema";
+import { parsePolicy } from "../src/policy/parse/parse";
 import { suppressionOverlapNotices } from "../src/policy/target";
 import { alignTables } from "../src/render/alignTables";
 import { renderMarkdown, type PolicyView } from "../src/render/markdown";
 import { renderNotices } from "../src/render/notices";
 import { globToRegExp } from "../src/targets/discover";
+import type { Policy } from "../src/policy/schema";
 
 const DEPENDENCY_CLASSIFICATION_DOC = join(
   import.meta.dir,

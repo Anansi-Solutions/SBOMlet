@@ -9,7 +9,10 @@
  */
 
 import { annotateFindings, observedSignalBySource } from "../normalize/normalize";
-import { shadowedClarifications, type ShadowedClarification } from "../policy/clarifications";
+import {
+  shadowedClarifications,
+  type ShadowedClarification,
+} from "../policy/parse/clarificationsFile";
 import { justificationValidity } from "../policy/justificationValidity";
 import { matchesPackage, type PackageSelector } from "../policy/packageMatch";
 import {

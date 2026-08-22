@@ -5,7 +5,7 @@
  */
 import { describe, expect, test } from "bun:test";
 
-import { parsePolicy } from "../src/policy/schema";
+import { parsePolicy } from "../src/policy/parse/parse";
 import {
   resolveTargetProfile,
   suppressionOverlapNotices,

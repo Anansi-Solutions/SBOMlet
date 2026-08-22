@@ -9,7 +9,7 @@ import { describe, expect, test } from "bun:test";
 import { npmIntroductions } from "../src/collectors/npmProvenance";
 import { mergeSboms, type CollectedSbom } from "../src/merge/merge";
 import { crossValidatePolicy } from "../src/policy/crossValidate";
-import { parsePolicy } from "../src/policy/schema";
+import { parsePolicy } from "../src/policy/parse/parse";
 import type { CanonicalDependencies } from "../src/model/dependencies";
 
 const GRAPH_TARGET = "apps/web";

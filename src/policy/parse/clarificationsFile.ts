@@ -9,13 +9,13 @@
  */
 import { parse as parseToml } from "smol-toml";
 
-import { recordOf } from "../validate/record";
-import { matchesPackage } from "./packageMatch";
-import { clarifyCitation, validateClarifyTables, type ClarifyRule } from "./schema/clarify";
-import { PolicyError } from "./schema/diagnostics";
-import type { Policy } from "./schema";
+import { recordOf } from "../../validate/record";
+import { matchesPackage } from "../packageMatch";
+import { clarifyCitation, validateClarifyTables, type ClarifyRule } from "../schema/clarify";
+import { PolicyError } from "../schema/diagnostics";
+import type { Policy } from "../schema";
 
-import type { CanonicalDependencies } from "../model/dependencies";
+import type { CanonicalDependencies } from "../../model/dependencies";
 
 /** The one table a clarifications file may carry. */
 const CLARIFY_TABLE = "clarify";

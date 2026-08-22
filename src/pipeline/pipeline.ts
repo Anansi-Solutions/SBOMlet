@@ -16,7 +16,10 @@ import {
   targetsWithDependencyGraph,
 } from "../merge/dependencyGraphs";
 import { mergeSboms, type CollectedSbom } from "../merge/merge";
-import { parseClarificationsAt, withImportedClarifications } from "../policy/clarifications";
+import {
+  parseClarificationsAt,
+  withImportedClarifications,
+} from "../policy/parse/clarificationsFile";
 import { crossValidatePolicy } from "../policy/crossValidate";
 import {
   compareCodeUnits,
@@ -29,7 +32,7 @@ import {
 import { annotateFindings } from "../normalize/normalize";
 import { BUILTIN_OVERRIDES } from "../policy/builtinOverrides";
 import { acceptedContainerNotices, evaluate } from "../policy/evaluate";
-import { parsePolicy, type Policy } from "../policy/schema";
+import { parsePolicy } from "../policy/parse/parse";
 import {
   resolveTargetProfile,
   suppressionOverlapNotices,
@@ -44,6 +47,7 @@ import { applyContainerScopes } from "./containerScope";
 import { resolveContained, resolveFrom } from "./paths";
 import { sanitizeForLog, writePolicySummary } from "./summary";
 import { collectTargets } from "./targets";
+import type { Policy } from "../policy/schema";
 import type { TargetProfile } from "../policy/compat";
 
 /**

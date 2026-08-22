@@ -46,7 +46,7 @@ import {
   type RefreshClarificationsResult,
 } from "../src/pipeline/refreshClarifications";
 import { sanitizeForLog, writePolicySummary } from "../src/pipeline/summary";
-import { parsePolicy } from "../src/policy/schema";
+import { parsePolicy } from "../src/policy/parse/parse";
 import { MAX_BUN_LOCK_BYTES } from "../src/collectors/bunLock";
 import * as cdxgenModule from "../src/collectors/cdxgen";
 import type { VerifyCacheResult } from "../src/pipeline/verifyCache";
