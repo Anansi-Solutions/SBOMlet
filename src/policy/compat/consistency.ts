@@ -8,8 +8,8 @@
  * matrix under-reports the obligation the class table carries). Runtime classification stays strict
  * first-tier-wins regardless - this enumerator exists purely to surface disagreements when the data
  * is reviewed: the test suite pins the CURRENT snapshot's list as an exact allowlist, and the
- * refresh task (scripts/refresh-compat-data.ts) runs this same function against a freshly
- * downloaded pair and aborts on any entry the allowlist does not already name.
+ * update task (scripts/update-compat-data.ts) runs this same function against a freshly downloaded
+ * pair and aborts on any entry the allowlist does not already name.
  */
 import type { OsadlCopyleftClass, OsadlMatrixCell } from "./data";
 
@@ -25,10 +25,10 @@ const compareCodeUnits = (a: string, b: string): number => (a < b ? -1 : a > b ?
  *
  * (a) a license classed "No" (not copyleft) that one or more OTHER leading licenses' rows still
  *     reject it as subordinate (cell "No") - the line names EVERY rejecting lead, sorted, not just
- *     the lexicographically smallest one: a refresh that adds a later-sorting lead to an
- *     already-disagreeing subordinate must still change the rendered line, or the refresh-time
- *     abort gate (compareInterTierDisagreements, which diffs these lines as opaque strings) would
- *     stay silent while classifyLeaf's own per-leaf matrix lookup starts seeing the new cell.
+ *     the lexicographically smallest one: an update that adds a later-sorting lead to an
+ *     already-disagreeing subordinate must still change the rendered line, or the update-time abort
+ *     gate (compareInterTierDisagreements, which diffs these lines as opaque strings) would stay
+ *     silent while classifyLeaf's own per-leaf matrix lookup starts seeing the new cell.
  * (b) a license classed "Yes" or "Yes (restricted)" that a permissive leading license (MIT,
  *     BSD-3-Clause, ISC) accepts as subordinate (cell "Yes") - one line per matching leading
  *     license, since each is independently informative.

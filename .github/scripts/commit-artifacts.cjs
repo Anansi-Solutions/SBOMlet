@@ -2,7 +2,7 @@
 // loudly if the working tree changed outside the expected scope.
 //
 // Shared by docker-scan.yml (full changed set, committed to the pushed branch),
-// intensive-scan.yml and compat-data-refresh.yml (both artifact-scoped, and
+// intensive-scan.yml and update-compat-data.yml (both artifact-scoped, and
 // `pullRequest: true` so their scheduled output reaches the repository's DEFAULT
 // branch through a reviewable PR, never an unreviewed direct commit). A
 // PR-opening caller passes `branchPrefix` and `prBody` for its own lane; the

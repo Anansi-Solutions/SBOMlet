@@ -25,7 +25,7 @@ import {
   SIZE_GATES,
   validateDownloadedSnapshots,
   withUpdatedScancodeTimestamp,
-} from "../scripts/refresh-compat-data";
+} from "../scripts/update-compat-data";
 
 const MATRIX_CELLS = new Set(["Same", "Yes", "No", "Unknown", "Check dependency"]);
 const COPYLEFT_CLASSES = new Set(["No", "Yes", "Yes (restricted)", "Questionable"]);
@@ -315,7 +315,7 @@ describe("honest failure on a malformed shape", () => {
   });
 });
 
-describe("refresh-compat-data.ts pure core", () => {
+describe("update-compat-data.ts pure core", () => {
   test("size gates accept the committed files' own byte lengths", () => {
     expect(() =>
       assertWithinSizeGate(

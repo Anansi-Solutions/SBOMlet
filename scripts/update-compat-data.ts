@@ -1,7 +1,7 @@
 /**
- * Maintainer-only refresh for the vendored license-compatibility snapshots.
+ * Maintainer-only update for the vendored license-compatibility snapshots.
  *
- * Run via `task compat:data:refresh` (never CI, never `task check`). Downloads the three fixed
+ * Run via `task compat:data:update` (never CI, never `task check`). Downloads the three fixed
  * upstream files, validates them with the SAME narrows the loader (src/policy/compat/data.ts) uses
  * - so a file this script accepts is guaranteed to load - plus the structural assertions and size
  * gates below, runs the inter-tier disagreement gate, prints a diff summary against the currently
@@ -270,8 +270,8 @@ third-party data. SBOMlet does not edit, reformat, or recompute any part of
 them - each is committed byte-for-byte as downloaded, and this file records
 where each came from, when, and under what license, so the retrieval
 provenance travels with the code rather than living only in a commit message
-or a person's memory. Refresh them with the maintainer-only
-\`compat:data:refresh\` task (\`task compat:data:refresh --summary\` explains its
+or a person's memory. Update them with the maintainer-only
+\`compat:data:update\` task (\`task compat:data:update --summary\` explains its
 checks); nothing in the automated test or build pipeline fetches these files
 over the network.
 

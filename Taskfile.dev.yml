@@ -131,9 +131,9 @@ tasks:
     cmds:
       - mise x -- bun scripts/new-adr.ts {{.TITLE | default "" | q}}
 
-  compat:data:refresh:
+  compat:data:update:
     summary: |
-      Refresh the vendored license-compatibility snapshots under
+      Update the vendored license-compatibility snapshots under
       src/policy/compat/ (the OSADL matrix, the OSADL copyleft class table,
       the ScanCode LicenseDB index). Probes the upstream freshness timestamp,
       downloads all three from their fixed URLs, size-gates them, validates
@@ -144,13 +144,13 @@ tasks:
       retrieval timestamps and sha256 hashes. Needs the network; never
       fingerprinted, never run by CI or `task check`. Run the full suite
       afterward: a pinning test failure means a reviewed verdict flipped and
-      needs human review before the refresh is committed. A newly introduced
+      needs human review before the update is committed. A newly introduced
       inter-tier disagreement aborts the run; pass
       `-- --accept-new-disagreements` only after reviewing the listed pairs, to
       write them into the committed baseline (the one way to restore a
-      disagreement an earlier bad refresh had masked).
+      disagreement an earlier bad update had masked).
     cmds:
-      - mise x -- bun scripts/refresh-compat-data.ts {{.CLI_ARGS}}
+      - mise x -- bun scripts/update-compat-data.ts {{.CLI_ARGS}}
 
   canary:dotnet:
     summary: |

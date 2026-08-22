@@ -1,14 +1,14 @@
-name: Compatibility data refresh
+name: Compatibility data update
 
-# Refreshes the vendored license-compatibility snapshots (the OSADL matrix, the
+# Updates the vendored license-compatibility snapshots (the OSADL matrix, the
 # OSADL copyleft class table, the ScanCode LicenseDB index) from their fixed
 # upstream URLs and opens a PR with whatever changed. Monthly plus manual
-# dispatch -- the upstream tables move on roughly that cadence. The refresh task
+# dispatch -- the upstream tables move on roughly that cadence. The update task
 # size-gates, validates, and runs the inter-tier disagreement gate before it
 # writes anything; a newly introduced disagreement aborts the task, which fails
-# this run visibly rather than opening a PR. The refreshed data reaches the
+# this run visibly rather than opening a PR. The updated data reaches the
 # default branch only through a reviewable PR, never an unreviewed direct commit
-# -- and a refresh that flips a verdict leaves the committed dogfood stale, so
+# -- and an update that flips a verdict leaves the committed dogfood stale, so
 # the PR's own CI turns red for a human to confirm the new value. Triggers on
 # schedule/dispatch only, so merging the PR it opens never re-triggers it.
 on:
@@ -17,11 +17,11 @@ on:
   workflow_dispatch: {}
 
 jobs:
-  refresh:
+  update:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
-      contents: write # createCommitOnBranch writes the refresh onto its own branch
+      contents: write # createCommitOnBranch writes the update onto its own branch
       pull-requests: write # ...which is opened as a PR rather than committed to the default branch
     steps:
       - name: Check out repository code
@@ -34,27 +34,27 @@ jobs:
       - name: Set up the SBOMlet toolchain
         uses: jdx/mise-action@v4
 
-      - name: Refresh the vendored compatibility data
+      - name: Update the vendored compatibility data
         # Same command a maintainer runs locally. No --accept-new-disagreements
         # here: a newly introduced inter-tier disagreement must abort the task
         # and fail this run for review, never be accepted unattended.
-        run: mise x -- task compat:data:refresh
+        run: mise x -- task compat:data:update
 
-      - name: Open a PR with the refreshed data
+      - name: Open a PR with the updated data
         uses: actions/github-script@v8
         with:
           script: |
             await require('./.github/scripts/commit-artifacts.cjs')(
               { github, context, core },
               {
-                // The refresh may only ever touch the vendored data directory;
+                // The update may only ever touch the vendored data directory;
                 // anything else dirty is an earlier step's bug, not something to
-                // sweep into this refresh.
+                // sweep into this update.
                 scope: ["src/policy/compat"],
-                message: "chore: refresh vendored license-compatibility data",
-                branchPrefix: "compat-data-refresh",
+                message: "chore: update vendored license-compatibility data",
+                branchPrefix: "compat-data-update",
                 prBody:
-                  "Automated monthly refresh of the vendored license-compatibility data " +
+                  "Automated monthly update of the vendored license-compatibility data " +
                   "(OSADL matrix, OSADL copyleft class table, ScanCode LicenseDB index) and its " +
                   "PROVENANCE. Review the data diff, then run the full suite locally: a pinning-test " +
                   "or dogfood-check failure means a reviewed verdict flipped and needs confirmation " +
