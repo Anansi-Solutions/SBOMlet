@@ -58,7 +58,7 @@ import {
 import { OS_PACKAGE_ECOSYSTEMS } from "../policy/osEcosystems";
 import { isUnknownLicense } from "./unknownLicense";
 import type { AcceptedContainerNotice } from "../policy/evaluate";
-import type { SuppressedWorkspace } from "../policy/schema";
+import type { SuppressedWorkspace } from "../policy/schema/exemptions";
 
 const HEADER_LINE = "<!-- AUTO-GENERATED - do not edit. Regenerate with: task generate -->";
 

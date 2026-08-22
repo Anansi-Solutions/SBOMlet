@@ -51,33 +51,6 @@ import { validateTarget, type TargetConfig } from "./targetProfile";
 
 import type { DenyRule } from "../denylist";
 
-export { PolicyError, ruleReason } from "./diagnostics";
-export { EVERYWHERE_SCOPE } from "./scope";
-export { SELF_PARENT } from "./dependencyChain";
-export { RATIONALE_VALUES } from "./compatible";
-export {
-  clarifyCitation,
-  clarifyInvalidRuleId,
-  JUSTIFICATION_VALUES,
-  validateClarifyTables,
-} from "./clarify";
-
-export type { DenyRule } from "../denylist";
-export type {
-  Rationale,
-  CompatibleLicenseRule,
-  CompatiblePackageRule,
-  CompatibleRule,
-} from "./compatible";
-export type { CompatiblePackageElement } from "./package";
-export type { Justification, ClarifyIdentity, ClarifyRule } from "./clarify";
-export type { SuppressedWorkspace, AllowSourceAvailable } from "./exemptions";
-export type { DevDependencyHandling, OsDependencyHandling } from "./categories";
-export type { DocumentConfig } from "./document";
-export type { DockerDevelopmentEntry, DockerConfig } from "./container";
-export type { CacheConfig } from "./cache";
-export type { TargetWorkspaceEntry, TargetConfig } from "./targetProfile";
-
 export interface Policy {
   /** Default "warn" when the [unknown] table is absent. */
   unknownHandling: "warn" | "fail";

@@ -9,7 +9,8 @@ import { describe, expect, test } from "bun:test";
 
 import { annotateFindings } from "../src/normalize/normalize";
 import { evaluate } from "../src/policy/evaluate";
-import { parsePolicy, PolicyError, type Policy } from "../src/policy/schema";
+import { PolicyError } from "../src/policy/schema/diagnostics";
+import { parsePolicy, type Policy } from "../src/policy/schema";
 import { renderMarkdown } from "../src/render/markdown";
 import type { CanonicalDependencies, Verdict } from "../src/model/dependencies";
 

@@ -19,7 +19,10 @@
 
 import { dependencyGraphsByTarget, type TargetDependencyGraph } from "./chain";
 import { matchesPackage, scopeCoversTarget } from "./packageMatch";
-import { PolicyError, SELF_PARENT, type CompatiblePackageRule, type Policy } from "./schema";
+import { SELF_PARENT } from "./schema/dependencyChain";
+import { PolicyError } from "./schema/diagnostics";
+import type { CompatiblePackageRule } from "./schema/compatible";
+import type { Policy } from "./schema";
 import type { CanonicalDependencies, Occurrence, PackageEntry } from "../model/dependencies";
 
 /** One package an entry covers, at one occurrence its `where` scope reaches. */

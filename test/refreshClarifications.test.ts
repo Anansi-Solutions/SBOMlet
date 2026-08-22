@@ -15,7 +15,8 @@ import {
 import { annotateFindings } from "../src/normalize/normalize";
 import { evaluate } from "../src/policy/evaluate";
 import { parseClarifications, withImportedClarifications } from "../src/policy/clarifications";
-import { parsePolicy, type ClarifyRule } from "../src/policy/schema";
+import { type ClarifyRule } from "../src/policy/schema/clarify";
+import { parsePolicy } from "../src/policy/schema";
 import { claim, modelOf, pkg } from "./normalizeTestSupport";
 
 import type { LicenseClaim, PackageEntry } from "../src/model/dependencies";

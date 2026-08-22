@@ -18,8 +18,9 @@ import {
   unusedRuleIds,
   type UnnecessaryClarifyEntry,
 } from "../policy/evaluate";
-import { clarifyCitation, type ClarifyRule, type Policy } from "../policy/schema";
+import { clarifyCitation, type ClarifyRule } from "../policy/schema/clarify";
 import { emitClarifications } from "./tomlEmit";
+import type { Policy } from "../policy/schema";
 
 import type {
   CanonicalDependencies,

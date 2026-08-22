@@ -22,7 +22,7 @@ import { rewriteWouldDropText } from "../maintain/tomlEmit";
 import { buildOutputs, clarificationsFilePath } from "./pipeline";
 import { defaultNoticesPath } from "./paths";
 
-import type { ClarifyRule } from "../policy/schema";
+import type { ClarifyRule } from "../policy/schema/clarify";
 
 /** Where the licenses document would go; nothing is written, but the renderer names a path. */
 const UNWRITTEN_OUTPUT = "THIRD_PARTY_LICENSES.md";

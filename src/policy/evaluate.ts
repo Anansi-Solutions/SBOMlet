@@ -117,17 +117,15 @@ import { justificationValidity, type JustificationValidity } from "./justificati
 import { voidedCompatibleEntries, voidedEntryKey, type VoidedEntry } from "./chain";
 import { matchesPackage, scopeCoversTarget } from "./packageMatch";
 import { resolveTargetProfile } from "./target";
-import {
-  clarifyCitation,
-  clarifyInvalidRuleId,
-  ruleReason,
-  type ClarifyRule,
-  type CompatibleLicenseRule,
-  type CompatiblePackageRule,
-  type CompatibleRule,
-  type Policy,
-  type SuppressedWorkspace,
-} from "./schema";
+import { clarifyCitation, clarifyInvalidRuleId, type ClarifyRule } from "./schema/clarify";
+import { ruleReason } from "./schema/diagnostics";
+import type {
+  CompatibleLicenseRule,
+  CompatiblePackageRule,
+  CompatibleRule,
+} from "./schema/compatible";
+import type { SuppressedWorkspace } from "./schema/exemptions";
+import type { Policy } from "./schema";
 
 /** Per-package facts computed once before the per-occurrence walk. */
 interface Assessment {

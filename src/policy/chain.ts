@@ -19,7 +19,9 @@ import {
   type CanonicalDependencies,
 } from "../model/dependencies";
 import { matchesPackage, scopeCoversTarget } from "./packageMatch";
-import { SELF_PARENT, type CompatiblePackageRule, type Policy } from "./schema";
+import { SELF_PARENT } from "./schema/dependencyChain";
+import type { CompatiblePackageRule } from "./schema/compatible";
+import type { Policy } from "./schema";
 
 /** One target's introducer graph over the packages the scan reported for it. */
 export interface TargetDependencyGraph {

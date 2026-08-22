@@ -11,7 +11,8 @@ import {
   type CanonicalDependencies,
 } from "../model/dependencies";
 import type { TargetProfile } from "./compat";
-import type { Policy, TargetWorkspaceEntry } from "./schema";
+import type { TargetWorkspaceEntry } from "./schema/targetProfile";
+import type { Policy } from "./schema";
 
 /**
  * The governing target profile for one occurrence, or undefined when nothing governs it.

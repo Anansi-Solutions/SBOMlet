@@ -19,7 +19,8 @@ import {
   withImportedClarifications,
 } from "../src/policy/clarifications";
 import { renderMarkdown, type PolicyView } from "../src/render/markdown";
-import { parsePolicy, PolicyError } from "../src/policy/schema";
+import { PolicyError } from "../src/policy/schema/diagnostics";
+import { parsePolicy } from "../src/policy/schema";
 import { claim, modelOf, pkg } from "./normalizeTestSupport";
 
 /** One `[[clarify]]` table naming `name`, recording the registry lane, electing `expression`. */

@@ -16,7 +16,7 @@ import parseSpdx from "spdx-expression-parse";
 
 import { leafIds, orLeaves, type ExpressionNode } from "../normalize/expression";
 import { accountsFor, normalizeRaw, type ObservedSignal } from "../normalize/normalize";
-import { type Justification } from "./schema";
+import { type Justification } from "./schema/clarify";
 
 /** What a validity check reads off an entry: its stated reason and the expression it records. */
 export interface JustifiedExpression {
