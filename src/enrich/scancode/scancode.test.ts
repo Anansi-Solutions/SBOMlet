@@ -23,8 +23,8 @@ import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
 import { afterAll, afterEach, beforeAll, describe, expect, mock, test } from "bun:test";
 
-import * as cdxgenModule from "../src/collectors/cdxgen";
-import * as execModule from "../src/collectors/exec";
+import * as cdxgenModule from "../../collectors/cdxgen";
+import * as execModule from "../../collectors/exec";
 import {
   electCopyrights,
   electExpression,
@@ -37,21 +37,17 @@ import {
   sourceDirsFor,
   SCANCODE_TOOL,
   type ScanCandidate,
-} from "../src/enrich/scancode";
-import {
-  isRootLevelOrDistInfoLicensesPath,
-  isRootLevelPath,
-  sitePackagesDir,
-} from "../src/enrich/scancode/sources";
-import { serializeCache } from "../src/enrich/cache";
-import { annotateFindings } from "../src/normalize/normalize";
-import { runGenerate } from "../src/pipeline/pipeline";
-import { assessPackages } from "../src/enrich/assess";
+} from "../scancode";
+import { serializeCache } from "../cache";
+import { annotateFindings } from "../../normalize/normalize";
+import { runGenerate } from "../../pipeline/pipeline";
+import { assessPackages } from "../assess";
 import {
   toSortedDependenciesJson,
   type LicenseClaim,
   type PackageEntry,
-} from "../src/model/dependencies";
+} from "../../model/dependencies";
+import { isRootLevelOrDistInfoLicensesPath, isRootLevelPath, sitePackagesDir } from "./sources";
 
 /** Original exec export captured BEFORE any mock.module call (restore target). */
 const REAL_EXEC = { ...execModule };
@@ -63,7 +59,15 @@ const REAL_CDXGEN = { ...cdxgenModule };
 let invocations: string[][] = [];
 
 /** The fixture path, loaded once and JSON.parse'd for in-test variant surgery. */
-const FIXTURE_PATH = join(__dirname, "fixtures", "scancode-license-file-trimmed.json");
+const FIXTURE_PATH = join(
+  __dirname,
+  "..",
+  "..",
+  "..",
+  "test",
+  "fixtures",
+  "scancode-license-file-trimmed.json",
+);
 
 /**
  * A minimal {@link ScanCandidate} for tests that only care about the scanned dir, defaulting to
@@ -160,14 +164,14 @@ describe("scanPackageSources (subprocess-free, exec recorder harness)", () => {
   let tempDir: string;
 
   beforeAll(() => {
-    mock.module("../src/collectors/exec", () => ({
+    mock.module("../../collectors/exec", () => ({
       ...REAL_EXEC,
       execTool: fakeExecTool,
     }));
   });
 
   afterAll(() => {
-    mock.module("../src/collectors/exec", () => REAL_EXEC);
+    mock.module("../../collectors/exec", () => REAL_EXEC);
   });
 
   afterEach(() => {
@@ -223,7 +227,7 @@ describe("scanPackageSources (subprocess-free, exec recorder harness)", () => {
       files: fixture.files.filter((f) => f.path !== "ajv/LICENSE"),
     };
 
-    mock.module("../src/collectors/exec", () => ({
+    mock.module("../../collectors/exec", () => ({
       ...REAL_EXEC,
       execTool: makeFakeExecToolWithDoc(withoutLicenseFile),
     }));
@@ -237,7 +241,7 @@ describe("scanPackageSources (subprocess-free, exec recorder harness)", () => {
       expect(result?.via).toBe(`${SCANCODE_TOOL.name}@${SCANCODE_TOOL.version}/manifest`);
     } finally {
       // Restore the shared fixture-based stub for subsequent tests.
-      mock.module("../src/collectors/exec", () => ({
+      mock.module("../../collectors/exec", () => ({
         ...REAL_EXEC,
         execTool: fakeExecTool,
       }));
@@ -254,7 +258,7 @@ describe("scanPackageSources (subprocess-free, exec recorder harness)", () => {
       files: fixture.files.filter((f) => f.path === "ajv/NOTICE.txt"),
     };
 
-    mock.module("../src/collectors/exec", () => ({
+    mock.module("../../collectors/exec", () => ({
       ...REAL_EXEC,
       execTool: makeFakeExecToolWithDoc(onlyNoise),
     }));
@@ -265,7 +269,7 @@ describe("scanPackageSources (subprocess-free, exec recorder harness)", () => {
 
       expect(result).toBeNull();
     } finally {
-      mock.module("../src/collectors/exec", () => ({
+      mock.module("../../collectors/exec", () => ({
         ...REAL_EXEC,
         execTool: fakeExecTool,
       }));
@@ -288,7 +292,7 @@ describe("scanPackageSources (subprocess-free, exec recorder harness)", () => {
         .map((f) => ({ ...f, path: "LICENSE" })),
     };
 
-    mock.module("../src/collectors/exec", () => ({
+    mock.module("../../collectors/exec", () => ({
       ...REAL_EXEC,
       execTool: makeFakeExecToolWithDoc(noiseAsLicense),
     }));
@@ -299,7 +303,7 @@ describe("scanPackageSources (subprocess-free, exec recorder harness)", () => {
 
       expect(result).toBeNull();
     } finally {
-      mock.module("../src/collectors/exec", () => ({
+      mock.module("../../collectors/exec", () => ({
         ...REAL_EXEC,
         execTool: fakeExecTool,
       }));
@@ -316,7 +320,7 @@ describe("scanPackageSources (subprocess-free, exec recorder harness)", () => {
       headers: [{ ...fixture.headers[0], tool_version: "31.0.0" }],
     };
 
-    mock.module("../src/collectors/exec", () => ({
+    mock.module("../../collectors/exec", () => ({
       ...REAL_EXEC,
       execTool: makeFakeExecToolWithDoc(wrongVersion),
     }));
@@ -327,7 +331,7 @@ describe("scanPackageSources (subprocess-free, exec recorder harness)", () => {
         /31\.0\.0.*32\.5\.0|invocation:/s,
       );
     } finally {
-      mock.module("../src/collectors/exec", () => ({
+      mock.module("../../collectors/exec", () => ({
         ...REAL_EXEC,
         execTool: fakeExecTool,
       }));
@@ -335,7 +339,7 @@ describe("scanPackageSources (subprocess-free, exec recorder harness)", () => {
   });
 
   test("size gate: an oversized output file rejects BEFORE any parse", async () => {
-    mock.module("../src/collectors/exec", () => ({
+    mock.module("../../collectors/exec", () => ({
       ...REAL_EXEC,
       execTool: makeFakeExecToolOversized(),
     }));
@@ -346,7 +350,7 @@ describe("scanPackageSources (subprocess-free, exec recorder harness)", () => {
         /over the.*byte cap/,
       );
     } finally {
-      mock.module("../src/collectors/exec", () => ({
+      mock.module("../../collectors/exec", () => ({
         ...REAL_EXEC,
         execTool: fakeExecTool,
       }));
@@ -354,7 +358,7 @@ describe("scanPackageSources (subprocess-free, exec recorder harness)", () => {
   });
 
   test("missing tool: an ENOENT-shaped spawn error rejects with the mise install hint", async () => {
-    mock.module("../src/collectors/exec", () => ({
+    mock.module("../../collectors/exec", () => ({
       ...REAL_EXEC,
       execTool: fakeExecToolEnoent,
     }));
@@ -365,7 +369,7 @@ describe("scanPackageSources (subprocess-free, exec recorder harness)", () => {
         /run mise install/,
       );
     } finally {
-      mock.module("../src/collectors/exec", () => ({
+      mock.module("../../collectors/exec", () => ({
         ...REAL_EXEC,
         execTool: fakeExecTool,
       }));
@@ -391,7 +395,7 @@ describe("scanPackageSources (subprocess-free, exec recorder harness)", () => {
       );
     };
 
-    mock.module("../src/collectors/exec", () => ({
+    mock.module("../../collectors/exec", () => ({
       ...REAL_EXEC,
       execTool: failButWroteFixture,
     }));
@@ -403,7 +407,7 @@ describe("scanPackageSources (subprocess-free, exec recorder harness)", () => {
       expect(result?.raw).toBe("MIT");
       expect(result?.via).toBe(`${SCANCODE_TOOL.name}@${SCANCODE_TOOL.version}/license-file`);
     } finally {
-      mock.module("../src/collectors/exec", () => ({
+      mock.module("../../collectors/exec", () => ({
         ...REAL_EXEC,
         execTool: fakeExecTool,
       }));
@@ -419,7 +423,7 @@ describe("scanPackageSources (subprocess-free, exec recorder harness)", () => {
       return Promise.reject(new Error("scancode exited with code 1"));
     };
 
-    mock.module("../src/collectors/exec", () => ({
+    mock.module("../../collectors/exec", () => ({
       ...REAL_EXEC,
       execTool: failNoOutput,
     }));
@@ -430,7 +434,7 @@ describe("scanPackageSources (subprocess-free, exec recorder harness)", () => {
         /exited with code 1|produced no output/,
       );
     } finally {
-      mock.module("../src/collectors/exec", () => ({
+      mock.module("../../collectors/exec", () => ({
         ...REAL_EXEC,
         execTool: fakeExecTool,
       }));
@@ -460,7 +464,7 @@ describe("scanPackageSources (subprocess-free, exec recorder harness)", () => {
       return Promise.reject(new Error("scancode exited with code 1"));
     };
 
-    mock.module("../src/collectors/exec", () => ({
+    mock.module("../../collectors/exec", () => ({
       ...REAL_EXEC,
       execTool: failWrongVersion,
     }));
@@ -471,7 +475,7 @@ describe("scanPackageSources (subprocess-free, exec recorder harness)", () => {
         /31\.0\.0.*32\.5\.0|invocation:/s,
       );
     } finally {
-      mock.module("../src/collectors/exec", () => ({
+      mock.module("../../collectors/exec", () => ({
         ...REAL_EXEC,
         execTool: fakeExecTool,
       }));
@@ -499,7 +503,7 @@ describe("scanPackageSources (subprocess-free, exec recorder harness)", () => {
       return Promise.resolve({ stdout: "", stderr: "" });
     };
 
-    mock.module("../src/collectors/exec", () => ({
+    mock.module("../../collectors/exec", () => ({
       ...REAL_EXEC,
       execTool: writeOnceExecTool,
     }));
@@ -513,7 +517,7 @@ describe("scanPackageSources (subprocess-free, exec recorder harness)", () => {
         /produced no output/,
       );
     } finally {
-      mock.module("../src/collectors/exec", () => ({
+      mock.module("../../collectors/exec", () => ({
         ...REAL_EXEC,
         execTool: fakeExecTool,
       }));
@@ -570,7 +574,7 @@ describe("scanPackageSources (subprocess-free, exec recorder harness)", () => {
         ],
       };
 
-      mock.module("../src/collectors/exec", () => ({
+      mock.module("../../collectors/exec", () => ({
         ...REAL_EXEC,
         execTool: makeFakeExecToolWithDoc(pep639DistInfoLayout),
       }));
@@ -583,7 +587,7 @@ describe("scanPackageSources (subprocess-free, exec recorder harness)", () => {
         expect(result?.raw).toBe("MIT");
         expect(result?.via).toBe(`${SCANCODE_TOOL.name}@${SCANCODE_TOOL.version}/license-file`);
       } finally {
-        mock.module("../src/collectors/exec", () => ({
+        mock.module("../../collectors/exec", () => ({
           ...REAL_EXEC,
           execTool: fakeExecTool,
         }));
@@ -615,7 +619,7 @@ describe("scanPackageSources (subprocess-free, exec recorder harness)", () => {
       ],
     };
 
-    mock.module("../src/collectors/exec", () => ({
+    mock.module("../../collectors/exec", () => ({
       ...REAL_EXEC,
       execTool: makeFakeExecToolWithDoc(pep639DistInfoLayout),
     }));
@@ -640,7 +644,7 @@ describe("scanPackageSources (subprocess-free, exec recorder harness)", () => {
 
       expect(unwidened).toBeNull();
     } finally {
-      mock.module("../src/collectors/exec", () => ({
+      mock.module("../../collectors/exec", () => ({
         ...REAL_EXEC,
         execTool: fakeExecTool,
       }));
@@ -1392,14 +1396,14 @@ describe("assessPackages — ScanCode peer assessment stage", () => {
   let memoDir: string | undefined;
 
   beforeAll(() => {
-    mock.module("../src/collectors/exec", () => ({
+    mock.module("../../collectors/exec", () => ({
       ...REAL_EXEC,
       execTool: fakeExecTool,
     }));
   });
 
   afterAll(() => {
-    mock.module("../src/collectors/exec", () => REAL_EXEC);
+    mock.module("../../collectors/exec", () => REAL_EXEC);
   });
 
   afterEach(() => {
@@ -1460,11 +1464,9 @@ describe("assessPackages — ScanCode peer assessment stage", () => {
   }
 
   /** Seed a committed memo file with the given purl→entry map, returning the path. */
-  function seedMemo(
-    entries: Array<[string, import("../src/enrich/scancode").ScancodeMemoEntry]>,
-  ): string {
+  function seedMemo(entries: Array<[string, import("../scancode").ScancodeMemoEntry]>): string {
     const path = newMemoPath();
-    const memo = new Map<string, import("../src/enrich/scancode").ScancodeMemoEntry>();
+    const memo = new Map<string, import("../scancode").ScancodeMemoEntry>();
 
     for (const [purl, entry] of entries) {
       putMemoEntry(memo, purl, entry, () => new Date("2026-01-01T00:00:00.000Z"));
@@ -1855,7 +1857,7 @@ describe("assessPackages — ScanCode peer assessment stage", () => {
       ],
     };
 
-    mock.module("../src/collectors/exec", () => ({
+    mock.module("../../collectors/exec", () => ({
       ...REAL_EXEC,
       execTool: makeFakeExecToolWithDoc(noiseOnly),
     }));
@@ -1882,7 +1884,7 @@ describe("assessPackages — ScanCode peer assessment stage", () => {
       expect(entry?.scannedAt).toBe("2026-01-01T00:00:00.000Z");
       expect(scancodeClaim(assessed.packages[0])).toBeUndefined();
     } finally {
-      mock.module("../src/collectors/exec", () => ({
+      mock.module("../../collectors/exec", () => ({
         ...REAL_EXEC,
         execTool: fakeExecTool,
       }));
@@ -2019,7 +2021,7 @@ describe("assessPackages — ScanCode peer assessment stage", () => {
       ],
     };
 
-    mock.module("../src/collectors/exec", () => ({
+    mock.module("../../collectors/exec", () => ({
       ...REAL_EXEC,
       execTool: makeFakeExecToolWithDoc(apacheDoc),
     }));
@@ -2042,7 +2044,7 @@ describe("assessPackages — ScanCode peer assessment stage", () => {
       dumpGenerated = toSortedDependenciesJson(model as never);
       expect(dumpGenerated).toContain("conflict");
     } finally {
-      mock.module("../src/collectors/exec", () => ({
+      mock.module("../../collectors/exec", () => ({
         ...REAL_EXEC,
         execTool: fakeExecTool,
       }));
@@ -2051,7 +2053,7 @@ describe("assessPackages — ScanCode peer assessment stage", () => {
     invocations = [];
     // check NEVER receives intensive; the scanner is stubbed to throw so any
     // scan attempt would fail loudly. The replay alone reproduces the conflict.
-    mock.module("../src/collectors/exec", () => ({
+    mock.module("../../collectors/exec", () => ({
       ...REAL_EXEC,
       execTool: (): Promise<{ stdout: string; stderr: string }> => {
         throw new Error("check must never invoke scancode");
@@ -2069,7 +2071,7 @@ describe("assessPackages — ScanCode peer assessment stage", () => {
       expect(dumpChecked).toBe(dumpGenerated);
       expect(invocations.length).toBe(0);
     } finally {
-      mock.module("../src/collectors/exec", () => ({
+      mock.module("../../collectors/exec", () => ({
         ...REAL_EXEC,
         execTool: fakeExecTool,
       }));
@@ -2175,7 +2177,7 @@ describe("assessPackages — ScanCode peer assessment stage", () => {
 
 /** Structural alias so the test fixtures don't need the real model import at the top. */
 type CanonicalDependenciesLike = {
-  packages: import("../src/model/dependencies").PackageEntry[];
+  packages: import("../../model/dependencies").PackageEntry[];
 };
 
 // ---------------------------------------------------------------------------
@@ -2197,15 +2199,15 @@ describe("default generate path isolation lock (structural proof)", () => {
   let repoDir: string;
 
   beforeAll(() => {
-    mock.module("../src/collectors/exec", () => ({
+    mock.module("../../collectors/exec", () => ({
       ...REAL_EXEC,
       execTool: fakeExecTool,
     }));
   });
 
   afterAll(() => {
-    mock.module("../src/collectors/exec", () => REAL_EXEC);
-    mock.module("../src/collectors/cdxgen", () => REAL_CDXGEN);
+    mock.module("../../collectors/exec", () => REAL_EXEC);
+    mock.module("../../collectors/cdxgen", () => REAL_CDXGEN);
   });
 
   afterEach(() => {
@@ -2265,7 +2267,7 @@ describe("default generate path isolation lock (structural proof)", () => {
   }
 
   test("default generate over a repo with a scannable unknown-license bait spawns ZERO scancode invocations", async () => {
-    mock.module("../src/collectors/cdxgen", () => ({
+    mock.module("../../collectors/cdxgen", () => ({
       ...REAL_CDXGEN,
       collectWithCdxgen: fakeCollectWithCdxgen,
     }));
@@ -2296,7 +2298,7 @@ describe("default generate path isolation lock (structural proof)", () => {
       expect(scancodeInvocations).toEqual([]);
     } finally {
       rmSync(cacheDir, { recursive: true, force: true });
-      mock.module("../src/collectors/cdxgen", () => REAL_CDXGEN);
+      mock.module("../../collectors/cdxgen", () => REAL_CDXGEN);
     }
   });
 });

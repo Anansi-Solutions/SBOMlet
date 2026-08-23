@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
-import { githubLicenseRefsFor, githubRepoFor, resolveGithubLicense } from "../src/enrich/github";
-import { narrowGithubLicense } from "../src/validate/registry";
+import { narrowGithubLicense } from "../validate/registry";
+import { githubLicenseRefsFor, githubRepoFor, resolveGithubLicense } from "./github";
 
 /** A parsed terraform purl, mirroring enrich.ts ParsedPurl for the resolver. */
 function parsed(

@@ -3,48 +3,38 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, test } from "bun:test";
 
-import { TROVE_TO_SPDX, isAmbiguousTroveClassifier, troveToSpdx } from "../src/enrich/trove";
 import {
   narrowNpmPackument,
   narrowNugetCatalogEntry,
   narrowNugetLeaf,
   narrowPypiResponse,
-} from "../src/validate/registry";
-import { fetchJson, fetchJsonOr404, mapLimit } from "../src/enrich/fetch";
-import {
-  catalogEntryUrlOf,
-  nugetRegistrationLeafUrl,
-  resolveNugetCatalogLicense,
-} from "../src/enrich/nuget";
+} from "../validate/registry";
+import { annotateFindings } from "../normalize/normalize";
+import { TROVE_TO_SPDX, isAmbiguousTroveClassifier, troveToSpdx } from "./trove";
+import { fetchJson, fetchJsonOr404, mapLimit } from "./fetch";
+import { catalogEntryUrlOf, nugetRegistrationLeafUrl, resolveNugetCatalogLicense } from "./nuget";
 import {
   DEPS_DEV_API_HOST,
   depsDevVersionUrl,
   mavenVersionWithoutQualifiers,
   resolveMavenLicenses,
-} from "../src/enrich/maven";
-import { resolvePypiLicense } from "../src/enrich/pypi";
-import { resolveNpmLicense } from "../src/enrich/npm";
-import {
-  getEntry,
-  putEntry,
-  readCache,
-  serializeCache,
-  type CacheEntry,
-} from "../src/enrich/cache";
-import { enrichUnknowns } from "../src/enrich/enrich";
-import { annotateFindings } from "../src/normalize/normalize";
-import type { CanonicalDependencies, LicenseClaim, PackageEntry } from "../src/model/dependencies";
+} from "./maven";
+import { resolvePypiLicense } from "./pypi";
+import { resolveNpmLicense } from "./npm";
+import { getEntry, putEntry, readCache, serializeCache, type CacheEntry } from "./cache";
+import { enrichUnknowns } from "./enrich";
+import type { CanonicalDependencies, LicenseClaim, PackageEntry } from "../model/dependencies";
 
 /** Load a captured registry fixture as parsed JSON (the live response shape). */
 function registryFixture(name: string): unknown {
   return JSON.parse(
-    readFileSync(join(import.meta.dir, "fixtures", "registry", name), "utf8"),
+    readFileSync(join(import.meta.dir, "..", "..", "test", "fixtures", "registry", name), "utf8"),
   ) as unknown;
 }
 
 /** SPDX ids known to spdx-license-ids (current + deprecated), as the parser sees them. */
 function knownSpdxIds(): Set<string> {
-  const dataDir = join(import.meta.dir, "..", "node_modules", "spdx-license-ids");
+  const dataDir = join(import.meta.dir, "..", "..", "node_modules", "spdx-license-ids");
   const current = JSON.parse(readFileSync(join(dataDir, "index.json"), "utf8")) as string[];
   const deprecated = JSON.parse(readFileSync(join(dataDir, "deprecated.json"), "utf8")) as string[];
 
