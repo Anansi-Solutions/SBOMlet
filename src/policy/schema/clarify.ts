@@ -3,10 +3,15 @@ import { type } from "arktype";
 import { recordOf, stringOf } from "../../validate/record";
 import { statedLicense } from "../statedLicense";
 
-import { collectArkProblems, formatProblems, type DomainProblem } from "./arkAdapter";
+import {
+  collectArkProblems,
+  formatProblems,
+  nonBlankString,
+  toDomainProblems,
+  type DomainProblem,
+} from "./arkAdapter";
 import { checkKeys, unknownKeyProblems } from "./diagnostics";
 import { nameOrPatternProblems, versionPinProblems } from "./package";
-import { nonEmptyString } from "./scalars";
 import { validatePath } from "./scope";
 import { spdxExpression } from "./spdx";
 
@@ -110,10 +115,11 @@ export function validateClarificationsPath(
     return undefined;
   }
 
+  const trimmed = value.trim();
   const before = problems.length;
 
-  validatePath(value, "clarifications", problems);
-  return problems.length === before ? value : undefined;
+  validatePath(trimmed, "clarifications", problems);
+  return problems.length === before ? trimmed : undefined;
 }
 
 /** The lanes `detected` may record, in the order the documented table and the checks use. */
@@ -180,7 +186,7 @@ function detectedProblems(entry: Record<string, unknown>): {
       continue;
     }
 
-    detected[source] = text;
+    detected[source] = text.trim();
   }
 
   if (problems.length === 0 && Object.keys(detected).length === 0) {
@@ -197,6 +203,11 @@ function detectedProblems(entry: Record<string, unknown>): {
  * and never fetched or verified, so the only rules are that the list is non-empty and every element
  * carries text. Faults are entry-relative.
  */
+const evidenceList = nonBlankString
+  .array()
+  .atLeastLength(1)
+  .configure({ message: `key "evidence" must be a non-empty array of file paths or URLs` });
+
 function evidenceProblems(entry: Record<string, unknown>): {
   evidence?: ReadonlyArray<string>;
   problems: DomainProblem[];
@@ -205,28 +216,13 @@ function evidenceProblems(entry: Record<string, unknown>): {
     return { problems: [] };
   }
 
-  const raw = entry["evidence"];
+  const result = evidenceList(entry["evidence"]);
 
-  if (!Array.isArray(raw) || raw.length === 0) {
-    return {
-      problems: [{ message: `key "evidence" must be a non-empty array of file paths or URLs` }],
-    };
+  if (result instanceof type.errors) {
+    return { problems: toDomainProblems(result, ["evidence"]) };
   }
 
-  const evidence: string[] = [];
-  const problems: DomainProblem[] = [];
-
-  raw.forEach((value, index) => {
-    const text = stringOf(value);
-
-    if (text === undefined || text.trim() === "") {
-      problems.push({ message: `evidence[${index}] must be a non-empty string` });
-      return;
-    }
-
-    evidence.push(text);
-  });
-  return problems.length === 0 ? { evidence, problems } : { problems };
+  return { evidence: result, problems: [] };
 }
 
 /**
@@ -316,7 +312,7 @@ const CLARIFY_REPLACED_KEYS: ReadonlyMap<string, string> = new Map([
 const clarifyEnvelope = type({
   justification: type.enumerated(...JUSTIFICATION_VALUES),
   expression: spdxExpression,
-  "comment?": nonEmptyString,
+  "comment?": nonBlankString,
 });
 
 /** One [[clarify]] entry -> rule, or undefined when any field is invalid. */

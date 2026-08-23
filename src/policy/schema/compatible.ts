@@ -2,11 +2,10 @@ import { type } from "arktype";
 
 import { recordOf, stringOf } from "../../validate/record";
 
-import { collectArkProblems, formatProblems, wrapErrors } from "./arkAdapter";
+import { collectArkProblems, formatProblems, nonBlankString, wrapErrors } from "./arkAdapter";
 import { asDependencyOfProblems } from "./dependencyChain";
 import { checkKeys } from "./diagnostics";
 import { compatibleSelectorProblems, type CompatiblePackageElement } from "./package";
-import { nonEmptyString } from "./scalars";
 import { whereProblems } from "./scope";
 import { licenseAllowlist } from "./spdx";
 
@@ -129,10 +128,10 @@ const COMPATIBLE_PACKAGE_KEYS = [
  */
 const compatibleLicense = type({
   match: "'license'",
-  pattern: nonEmptyString,
+  pattern: nonBlankString,
   rationale: rationaleValue,
   where: "string[]",
-  "comment?": nonEmptyString,
+  "comment?": nonBlankString,
 })
   .narrow(wrapErrors((entry) => whereProblems(entry.where)))
   .pipe((entry, ctx): CompatibleLicenseRule => {
@@ -162,7 +161,7 @@ const compatiblePackageEnvelope = type({
   match: "'package'",
   rationale: rationaleValue,
   where: "string[]",
-  "comment?": nonEmptyString,
+  "comment?": nonBlankString,
 });
 
 export function validateCompatible(

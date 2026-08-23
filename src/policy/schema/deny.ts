@@ -2,9 +2,8 @@ import { type } from "arktype";
 
 import { recordOf, stringOf } from "../../validate/record";
 
-import { collectArkProblems } from "./arkAdapter";
+import { collectArkProblems, nonBlankString } from "./arkAdapter";
 import { checkKeys } from "./diagnostics";
-import { nonEmptyString } from "./scalars";
 import { licenseAllowlist } from "./spdx";
 
 /**
@@ -36,8 +35,8 @@ const DENY_KEYS = ["match", "pattern", "reason"] as const;
  */
 const denyLicense = type({
   match: "'license'",
-  pattern: nonEmptyString,
-  reason: nonEmptyString,
+  pattern: nonBlankString,
+  reason: nonBlankString,
 }).pipe((entry, ctx): DenyRule => {
   const { allowlist, problem } = licenseAllowlist(entry.pattern);
 
@@ -56,8 +55,8 @@ const denyLicense = type({
 /** The name form: a verbatim package name and the mandatory `reason`. */
 const denyName = type({
   match: "'name'",
-  pattern: nonEmptyString,
-  reason: nonEmptyString,
+  pattern: nonBlankString,
+  reason: nonBlankString,
 }).pipe((entry): DenyRule => ({ match: "name", pattern: entry.pattern, reason: entry.reason }));
 
 /**

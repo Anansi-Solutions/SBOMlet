@@ -6,7 +6,18 @@
  * rejected. {@link collectArkProblems} flattens both into the `${where}: <problem>` lines the rest
  * of the parser already speaks, so a caller pushes them onto its shared problem list unchanged.
  */
-import type { ArkErrors, Traversal } from "arktype";
+import { type, type ArkErrors, type Traversal } from "arktype";
+
+/**
+ * A required, present, non-blank string, normalized by trimming. A missing key is a required fault;
+ * a non-string is a type fault; an empty or whitespace-only value is rejected, since a reason or
+ * description that is only spaces documents nothing. Leading and trailing whitespace is stripped,
+ * so every field carries the padding-free text the policy meant, compared and rendered the same
+ * everywhere. Shared by every non-blank field kind across the schema constructs.
+ */
+export const nonBlankString = type("string.trim").to(
+  type("string > 0").configure({ message: "must be a non-empty string" }),
+);
 
 /**
  * A single domain fault a pure cross-field check reports. `path` locates it relative to the entry
@@ -128,4 +139,24 @@ export function collectArkProblems(errors: ArkErrors, where: string): string[] {
   }
 
   return lines;
+}
+
+/**
+ * Map one value-shape validation's {@link ArkErrors} to {@link DomainProblem}s rooted at
+ * `basePath`. The {@link DomainProblem} counterpart of {@link collectArkProblems}, for a check
+ * whose faults a caller still composes as domain problems - a list element, a selector union
+ * - before formatting.
+ */
+export function toDomainProblems(
+  errors: ArkErrors,
+  basePath: ReadonlyArray<string | number> = [],
+): DomainProblem[] {
+  return [...errors].map((error) => {
+    const path = [...error.path].filter(
+      (segment): segment is string | number =>
+        typeof segment === "number" || (typeof segment === "string" && !isDisambiguator(segment)),
+    );
+
+    return { path: [...basePath, ...path], message: trimMessage(error.message, path.at(-1)) };
+  });
 }

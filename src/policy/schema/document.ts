@@ -2,9 +2,8 @@ import { type } from "arktype";
 
 import { recordOf } from "../../validate/record";
 
-import { collectArkProblems } from "./arkAdapter";
+import { collectArkProblems, nonBlankString } from "./arkAdapter";
 import { checkKeys } from "./diagnostics";
-import { nonEmptyString } from "./scalars";
 
 /**
  * The optional [document] table: author-supplied presentation prose for the LICENSES document only
@@ -20,7 +19,7 @@ export interface DocumentConfig {
 }
 
 /** Both keys optional; each, when present, a non-empty string. */
-const documentShape = type({ "title?": nonEmptyString, "preamble?": nonEmptyString });
+const documentShape = type({ "title?": nonBlankString, "preamble?": nonBlankString });
 
 /**
  * Parse the optional [document] table: an absent table yields undefined; a non-table value rejects;

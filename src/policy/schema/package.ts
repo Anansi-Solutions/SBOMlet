@@ -1,7 +1,9 @@
-import { recordOf, stringOf } from "../../validate/record";
+import { type } from "arktype";
+
+import { recordOf } from "../../validate/record";
 import { compileNamePattern, isGlobPattern } from "../engine/namePattern";
 
-import { atPath, type DomainProblem } from "./arkAdapter";
+import { atPath, nonBlankString, toDomainProblems, type DomainProblem } from "./arkAdapter";
 import { requiredText, unknownKeyProblems } from "./diagnostics";
 import { whereIsEntirelyContainerScope } from "./scope";
 
@@ -23,6 +25,49 @@ interface NameOrPattern {
 }
 
 /**
+ * The presence problems of an exactly-one-of selector: the entry is projected to just the selector
+ * keys and matched against a union whose branches each reject the sibling keys, so both-present and
+ * neither-present both fail. An empty result means exactly one is present; a non-empty one carries
+ * the configured message naming which keys the entry actually held.
+ */
+function presenceProblems(
+  selector: (data: unknown) => unknown,
+  entry: Record<string, unknown>,
+  keys: ReadonlyArray<string>,
+): DomainProblem[] {
+  const projected: Record<string, unknown> = {};
+
+  for (const key of keys) {
+    if (key in entry) {
+      projected[key] = entry[key];
+    }
+  }
+
+  const result = selector(projected);
+
+  return result instanceof type.errors ? toDomainProblems(result) : [];
+}
+
+/**
+ * The `name`/`pattern` mutual-exclusion message, naming whether both or neither key was present.
+ */
+function nameOrPatternMessage(data: unknown): string {
+  const has = (key: string): boolean => typeof data === "object" && data !== null && key in data;
+
+  return `exactly one of "name" and "pattern" is required (${has("name") && has("pattern") ? "both are present" : "neither is present"})`;
+}
+
+/**
+ * Exactly one of `name` and `pattern`: each branch rejects the other key, so both-present and
+ * neither-present fail; {@link nameOrPatternMessage} restores the pointed diagnostic the union's
+ * own wording would lose.
+ */
+const nameOrPatternSelector = type({ name: "unknown" })
+  .onUndeclaredKey("reject")
+  .or(type({ pattern: "unknown" }).onUndeclaredKey("reject"))
+  .configure({ message: (ctx) => nameOrPatternMessage(ctx.data) });
+
+/**
  * The `name`/`pattern` pair: exactly one is required. `name` is compared verbatim; `pattern` must
  * use the glob dialect - a glob-free pattern names one package and belongs under `name` - and must
  * compile, which refuses a pattern with no literal character to anchor it. Faults are
@@ -32,21 +77,13 @@ export function nameOrPatternProblems(entry: Record<string, unknown>): {
   selector: NameOrPattern;
   problems: DomainProblem[];
 } {
-  const hasName = "name" in entry;
-  const hasPattern = "pattern" in entry;
+  const presence = presenceProblems(nameOrPatternSelector, entry, ["name", "pattern"]);
 
-  if (hasName === hasPattern) {
-    return {
-      selector: {},
-      problems: [
-        {
-          message: `exactly one of "name" and "pattern" is required (${hasName ? "both are present" : "neither is present"})`,
-        },
-      ],
-    };
+  if (presence.length > 0) {
+    return { selector: {}, problems: presence };
   }
 
-  if (hasName) {
+  if ("name" in entry) {
     const name = requiredText(entry, "name");
 
     return {
@@ -80,6 +117,20 @@ export function nameOrPatternProblems(entry: Record<string, unknown>): {
 
   return { selector: { pattern: pattern.value }, problems: [] };
 }
+
+/**
+ * The version pin shape: one non-blank version string, or a non-empty list of them. Every value is
+ * trimmed and compared literally - the schema has no wildcard version anywhere. The list branch's
+ * `atLeastLength` rejects an empty list; an element failure lands on its own index.
+ */
+const versionList = nonBlankString
+  .array()
+  .atLeastLength(1)
+  .configure({ message: "must be a non-empty array of exact version strings" });
+
+const versionPin = nonBlankString
+  .or(versionList)
+  .configure({ message: "must be an exact version string, or a non-empty array of them" });
 
 /** How {@link versionPinProblems} treats an absent `version` key. */
 interface VersionPinOptions {
@@ -119,42 +170,13 @@ export function versionPinProblems(
     };
   }
 
-  const raw = entry["version"];
+  const result = versionPin(entry["version"]);
 
-  if (!Array.isArray(raw)) {
-    const version = stringOf(raw);
-
-    if (version === undefined || version.trim() === "") {
-      return {
-        problems: [
-          {
-            message: `key "version" must be an exact version string, or a non-empty array of them`,
-          },
-        ],
-      };
-    }
-
-    return { version, problems: [] };
+  if (result instanceof type.errors) {
+    return { problems: toDomainProblems(result, ["version"]) };
   }
 
-  if (raw.length === 0) {
-    return { problems: [{ message: `key "version" must be a non-empty array of exact versions` }] };
-  }
-
-  const versions: string[] = [];
-  const problems: DomainProblem[] = [];
-
-  raw.forEach((value, index) => {
-    const text = stringOf(value);
-
-    if (text === undefined || text.trim() === "") {
-      problems.push({ message: `version[${index}] must be a non-empty string` });
-      return;
-    }
-
-    versions.push(text);
-  });
-  return problems.length === 0 ? { version: versions, problems } : { problems };
+  return { version: result, problems: [] };
 }
 
 /**
@@ -223,6 +245,28 @@ export interface CompatibleSelector {
 }
 
 /**
+ * The `name`/`pattern`/`packages` mutual-exclusion message, naming which selector keys were
+ * present.
+ */
+function compatibleSelectorMessage(data: unknown): string {
+  const modes = ["name", "pattern", "packages"].filter(
+    (key) => typeof data === "object" && data !== null && key in data,
+  );
+
+  return `exactly one selector is required - "name", "pattern", or "packages" (${modes.length === 0 ? "none is present" : `${modes.map((key) => `"${key}"`).join(", ")} are present`})`;
+}
+
+/**
+ * Exactly one of `name`, `pattern`, and `packages`: each branch rejects the sibling keys, so any
+ * count other than one fails; {@link compatibleSelectorMessage} restores the pointed diagnostic.
+ */
+const compatibleSelector = type({ name: "unknown" })
+  .onUndeclaredKey("reject")
+  .or(type({ pattern: "unknown" }).onUndeclaredKey("reject"))
+  .or(type({ packages: "unknown" }).onUndeclaredKey("reject"))
+  .configure({ message: (ctx) => compatibleSelectorMessage(ctx.data) });
+
+/**
  * The package-form selector: exactly one of `name`, `pattern`, and `packages`. The `name`/`pattern`
  * forms carry an entry-level `version`, required unless `scopeWhere` is entirely a container
  * os-scope; the `packages` form bundles disparate packages that each pin their own version and
@@ -233,17 +277,10 @@ export function compatibleSelectorProblems(
   entry: Record<string, unknown>,
   scopeWhere: ReadonlyArray<string>,
 ): { selector: CompatibleSelector; problems: DomainProblem[] } {
-  const modes = ["name", "pattern", "packages"].filter((key) => key in entry);
+  const modeProblems = presenceProblems(compatibleSelector, entry, ["name", "pattern", "packages"]);
 
-  if (modes.length !== 1) {
-    return {
-      selector: {},
-      problems: [
-        {
-          message: `exactly one selector is required - "name", "pattern", or "packages" (${modes.length === 0 ? "none is present" : `${modes.map((key) => `"${key}"`).join(", ")} are present`})`,
-        },
-      ],
-    };
+  if (modeProblems.length > 0) {
+    return { selector: {}, problems: modeProblems };
   }
 
   if ("packages" in entry) {

@@ -2,9 +2,8 @@ import { type } from "arktype";
 
 import { recordOf } from "../../validate/record";
 
-import { collectArkProblems, formatProblems } from "./arkAdapter";
+import { collectArkProblems, formatProblems, nonBlankString } from "./arkAdapter";
 import { checkKeys } from "./diagnostics";
-import { nonEmptyString } from "./scalars";
 import { pathProblems } from "./scope";
 
 export interface CacheConfig {
@@ -13,7 +12,7 @@ export interface CacheConfig {
 }
 
 /** The optional, non-empty `dir`; its path segments are checked separately. */
-const cacheShape = type({ "dir?": nonEmptyString });
+const cacheShape = type({ "dir?": nonBlankString });
 
 /**
  * Parse the optional [cache] table: an absent table yields undefined; a non-table rejects; a

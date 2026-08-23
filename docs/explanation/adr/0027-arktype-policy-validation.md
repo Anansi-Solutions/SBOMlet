@@ -60,5 +60,5 @@ byte-identical. That relaxation is what made the rewrite affordable.
 
 - Related: [ADR-0026](0026-chain-scoped-policy-schema.md) (the entry shapes these
   checks validate)
-- Code: `src/policy/schema/` (`arkAdapter.ts`, `spdx.ts`, `scalars.ts`, and the
-  per-construct modules)
+- Code: `src/policy/schema/` (`arkAdapter.ts`, `spdx.ts`, and the per-construct
+  modules)

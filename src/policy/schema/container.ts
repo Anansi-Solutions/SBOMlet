@@ -2,9 +2,8 @@ import { type } from "arktype";
 
 import { recordOf, stringOf } from "../../validate/record";
 
-import { collectArkProblems } from "./arkAdapter";
+import { collectArkProblems, nonBlankString } from "./arkAdapter";
 import { checkKeys } from "./diagnostics";
-import { nonEmptyString } from "./scalars";
 import { validatePath } from "./scope";
 
 /**
@@ -56,7 +55,7 @@ export interface DockerConfig {
 /**
  * The two required fields of a `[[docker.development]]` entry; `source`'s glob is checked after.
  */
-const developmentEntry = type({ source: nonEmptyString, reason: nonEmptyString });
+const developmentEntry = type({ source: nonBlankString, reason: nonBlankString });
 
 /**
  * Parse one [[docker.development]] entry: `source` must be a valid glob (validatePath - the same
@@ -196,11 +195,12 @@ export function validateDocker(
       return;
     }
 
+    const trimmed = value.trim();
     const before = problems.length;
 
-    validatePath(value, where, problems);
+    validatePath(trimmed, where, problems);
     if (problems.length === before) {
-      ignore.push(value);
+      ignore.push(trimmed);
     }
   });
   return { ignore, development };

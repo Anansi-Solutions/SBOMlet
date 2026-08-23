@@ -2,10 +2,14 @@ import { type } from "arktype";
 
 import { recordOf } from "../../validate/record";
 
-import { collectArkProblems, formatProblems, type DomainProblem } from "./arkAdapter";
+import {
+  collectArkProblems,
+  formatProblems,
+  nonBlankString,
+  type DomainProblem,
+} from "./arkAdapter";
 import { SOURCE_AVAILABLE_LICENSE_IDS } from "./deny";
 import { checkKeys } from "./diagnostics";
-import { nonEmptyString } from "./scalars";
 import { pathProblems } from "./scope";
 import { parseSpdxNode } from "./spdx";
 
@@ -24,9 +28,9 @@ export interface SuppressedWorkspace {
 
 /** The three required fields of a `[[workspace.copyleft_suppressed]]` entry. */
 const suppressionEnvelope = type({
-  path: nonEmptyString,
-  license: nonEmptyString,
-  description: nonEmptyString,
+  path: nonBlankString,
+  license: nonBlankString,
+  description: nonBlankString,
 });
 
 /**
@@ -148,7 +152,7 @@ export interface AllowSourceAvailable {
 }
 
 /** The two required fields of an `[[allow_source_available]]` entry. */
-const exemptionEnvelope = type({ license: nonEmptyString, reason: nonEmptyString });
+const exemptionEnvelope = type({ license: nonBlankString, reason: nonBlankString });
 
 /**
  * Parse [[allow_source_available]] (ADR-0013 opt-out): each entry exempts ONE built-in
