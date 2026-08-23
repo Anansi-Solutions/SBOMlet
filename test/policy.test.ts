@@ -870,7 +870,7 @@ describe("parsePolicy — the [[clarify]] package selector", () => {
     const error = expectPolicyError(clarifyFixture(clarifyWithout("name")));
 
     expect(error.message).toContain("clarify[0]");
-    expect(error.message).toContain("must be present");
+    expect(error.message).toContain("was missing");
   });
 
   test("a glob-free pattern is rejected, naming the key to use instead", () => {

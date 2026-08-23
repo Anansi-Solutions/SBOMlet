@@ -8,9 +8,9 @@ import { DISAMBIGUATOR } from "./arkAdapter";
 const DRIVE_SPECIFIER = /^[A-Za-z]:/;
 
 /**
- * Suppression path rules: forward-slash repo-relative identity prefix. Empty paths are rejected by
- * requireText (an empty prefix would suppress everything); ".." segments, backslashes, and
- * leading/trailing slashes can never appear in target identities, so a path carrying them is a
+ * Suppression path rules: forward-slash repo-relative identity prefix. Empty paths are rejected
+ * here as an empty segment (an empty prefix would suppress everything); ".." segments, backslashes,
+ * and leading/trailing slashes can never appear in target identities, so a path carrying them is a
  * policy bug, not a match candidate. The same goes for empty ("a//b"), "." ("a/./b"), and
  * whitespace-padded ("a /b") segments: target identities are normalized segment text, so such a
  * path can never match - and because suppression entries are excluded from unused-rule reporting, a

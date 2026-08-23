@@ -4,7 +4,7 @@ import { recordOf } from "../../validate/record";
 import { compileNamePattern, isGlobPattern } from "../engine/namePattern";
 
 import { atPath, nonBlankString, toDomainProblems, type DomainProblem } from "./arkAdapter";
-import { requiredText, unknownKeyProblems } from "./diagnostics";
+import { unknownKeyProblems } from "./diagnostics";
 import { whereIsEntirelyContainerScope } from "./scope";
 
 /**
@@ -77,11 +77,15 @@ const exactPackageName = type("string").pipe((value, ctx): string =>
 
 /**
  * Exactly one of `name` and `pattern`: each branch rejects the other key, so both-present and
- * neither-present both fail on arktype's own union wording.
+ * neither-present both fail on arktype's own union wording. The chosen key's value must be a
+ * non-blank string, so a present-but-empty selector fails on the same union.
  */
-const nameOrPatternSelector = type({ name: "unknown" })
+const nameOrPatternSelector = type({ name: nonBlankString })
   .onUndeclaredKey("reject")
-  .or(type({ pattern: "unknown" }).onUndeclaredKey("reject"));
+  .or(type({ pattern: nonBlankString }).onUndeclaredKey("reject"));
+
+/** One `packages` member's mandatory non-blank `name`, before the glob refusal narrows it. */
+const packageElementName = type({ name: nonBlankString });
 
 /**
  * The `name`/`pattern` pair: exactly one is required. `name` is compared verbatim; `pattern` must
@@ -93,28 +97,25 @@ export function nameOrPatternProblems(entry: Record<string, unknown>): {
   selector: { name?: string; pattern?: string };
   problems: DomainProblem[];
 } {
-  const presence = presenceProblems(nameOrPatternSelector, entry, ["name", "pattern"]);
+  const projected: Record<string, unknown> = {};
 
-  if (presence.length > 0) {
-    return { selector: {}, problems: presence };
+  for (const key of ["name", "pattern"] as const) {
+    if (key in entry) {
+      projected[key] = entry[key];
+    }
   }
 
-  if ("name" in entry) {
-    const name = requiredText(entry, "name");
+  const chosen = nameOrPatternSelector(projected);
 
-    return {
-      selector: name.value !== undefined ? { name: name.value } : {},
-      problems: name.problems,
-    };
+  if (chosen instanceof type.errors) {
+    return { selector: {}, problems: toDomainProblems(chosen) };
   }
 
-  const pattern = requiredText(entry, "pattern");
-
-  if (pattern.value === undefined) {
-    return { selector: {}, problems: pattern.problems };
+  if ("name" in chosen) {
+    return { selector: { name: chosen.name }, problems: [] };
   }
 
-  const validated = globNamePattern(pattern.value);
+  const validated = globNamePattern(chosen.pattern);
 
   if (validated instanceof type.errors) {
     return { selector: {}, problems: toDomainProblems(validated) };
@@ -219,11 +220,13 @@ function packagesListProblems(entry: Record<string, unknown>): {
 
     problems.push(...atPath(at, unknownKeyProblems(element, ["name", "version"])));
 
-    const name = requiredText(element, "name");
+    const named = packageElementName(element);
 
-    problems.push(...atPath(at, name.problems));
+    if (named instanceof type.errors) {
+      problems.push(...atPath(at, toDomainProblems(named)));
+    }
 
-    const exactName = name.value !== undefined ? exactPackageName(name.value) : undefined;
+    const exactName = named instanceof type.errors ? undefined : exactPackageName(named.name);
 
     if (exactName instanceof type.errors) {
       problems.push(...atPath(at, toDomainProblems(exactName)));

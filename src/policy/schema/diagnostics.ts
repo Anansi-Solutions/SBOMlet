@@ -1,5 +1,3 @@
-import { stringOf } from "../../validate/record";
-
 import { type DomainProblem } from "./arkAdapter";
 
 /**
@@ -63,50 +61,4 @@ export function checkKeys(
   for (const problem of unknownKeyProblems(entry, allowed, replaced)) {
     problems.push(`${where}: ${problem.message}`);
   }
-}
-
-/** A parsed text field: its value when present-and-valid, else the fault that ruled it out. */
-export interface TextResult {
-  value?: string;
-  problems: DomainProblem[];
-}
-
-/**
- * A mandatory non-blank string field, normalized by trimming. Reasons and descriptions are
- * documentation - a missing key, a non-string, or an empty/whitespace-only value each rule the
- * field out with its own fault. The accepted value is returned trimmed, so surrounding padding
- * never survives into a stored field.
- */
-export function requiredText(entry: Record<string, unknown>, key: string): TextResult {
-  if (!(key in entry)) {
-    return { problems: [{ message: `missing required key "${key}"` }] };
-  }
-
-  const value = stringOf(entry[key]);
-
-  if (value === undefined) {
-    return { problems: [{ message: `key "${key}" must be a string` }] };
-  }
-
-  if (value.trim() === "") {
-    return { problems: [{ message: `key "${key}" must be a non-empty string` }] };
-  }
-
-  return { value: value.trim(), problems: [] };
-}
-
-/** {@link requiredText} pushed onto a string sink under the caller's `where`. */
-export function requireText(
-  entry: Record<string, unknown>,
-  key: string,
-  where: string,
-  problems: string[],
-): string | undefined {
-  const result = requiredText(entry, key);
-
-  for (const problem of result.problems) {
-    problems.push(`${where}: ${problem.message}`);
-  }
-
-  return result.value;
 }

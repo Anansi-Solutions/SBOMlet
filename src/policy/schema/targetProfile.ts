@@ -3,8 +3,8 @@ import { type } from "arktype";
 import { recordOf, stringOf } from "../../validate/record";
 import { OSADL_MATRIX, type TargetLicense, type TargetProfile } from "../compat";
 
-import { collectArkProblems } from "./arkAdapter";
-import { checkKeys, requireText } from "./diagnostics";
+import { collectArkProblems, nonBlankString } from "./arkAdapter";
+import { checkKeys } from "./diagnostics";
 import { repoRelativePathRejectingDocker } from "./scope";
 import { parseSpdxNode } from "./spdx";
 
@@ -239,29 +239,28 @@ const targetWorkspacePath = repoRelativePathRejectingDocker(
 );
 
 /**
- * `path`'s rejection rules for one [[target.workspace]] entry: the shared repo-relative-path
- * morph's segment rules and "docker:" fence (a container is never governed by a workspace
- * override), and a duplicate against `seen` (the first match always wins at resolution, so a repeat
- * would be dead). No-op when `path` is undefined (an earlier problem already covers a
- * missing/malformed path).
+ * The two always-required scalar fields of one [[target.workspace]] entry: the repo-relative `path`
+ * (trimmed, then its segment rules and "docker:" fence ride {@link targetWorkspacePath}) and the
+ * mandatory `reason`. license and the optional network/distribution flags stay imperative, each
+ * carrying its own cross-field rule. Cross-entry `path` deduplication is handled by the caller.
  */
-function validateTargetWorkspacePathOf(
+const targetWorkspaceScalars = type({
+  path: nonBlankString.to(targetWorkspacePath),
+  reason: nonBlankString,
+});
+
+/**
+ * Rejects a [[target.workspace]] `path` that repeats an earlier entry's: the first match always
+ * wins at resolution, so a duplicate would be dead. No-op for an undefined path - an earlier fault
+ * already covers a missing or malformed one.
+ */
+function rejectDuplicateWorkspacePath(
   path: string | undefined,
   where: string,
   seen: Set<string>,
   problems: string[],
 ): void {
-  if (path === undefined) {
-    return;
-  }
-
-  const result = targetWorkspacePath(path);
-
-  if (result instanceof type.errors) {
-    problems.push(...collectArkProblems(result, where));
-  }
-
-  if (seen.has(path)) {
+  if (path !== undefined && seen.has(path)) {
     problems.push(
       `${where}: path "${path}" duplicates an earlier [[target.workspace]] entry (the first match wins at resolution; the duplicate would be dead)`,
     );
@@ -294,11 +293,19 @@ function validateTargetWorkspaceEntry(
     license = validateTargetLicense(entry["license"], where, problems);
   }
 
-  const path = requireText(entry, "path", where, problems);
-  const reason = requireText(entry, "reason", where, problems);
+  const scalars = targetWorkspaceScalars(entry);
+  let path: string | undefined;
+  let reason: string | undefined;
+
+  if (scalars instanceof type.errors) {
+    problems.push(...collectArkProblems(scalars, where));
+  } else {
+    ({ path, reason } = scalars);
+  }
+
   const flags = validateTargetWorkspaceFlagsOf(entry, where, problems);
 
-  validateTargetWorkspacePathOf(path, where, seen, problems);
+  rejectDuplicateWorkspacePath(path, where, seen, problems);
 
   if (
     !hasProjectProfile &&
