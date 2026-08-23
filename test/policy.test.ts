@@ -3799,7 +3799,7 @@ describe("parsePolicy — [[deny]] parsing (mirrors compatible two-mode)", () =>
     );
 
     expect(error.message).toContain("deny[0]");
-    expect(error.message).toContain('"pattern"');
+    expect(error.message).toContain("pattern");
   });
 
   test("an unknown key inside a deny entry is rejected naming deny[i]", () => {
