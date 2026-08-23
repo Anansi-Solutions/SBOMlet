@@ -119,6 +119,9 @@ export default tseslint.config(
     // Shipped-source comments carry the strictest vocabulary bar; tests and
     // config narrate their own mechanics and are not checked.
     files: ["src/**/*.ts"],
+    // Colocated unit tests (src/**/*.test.ts) narrate their own mechanics, like
+    // the tests under test/; keep them out of the shipped-source comment bar.
+    ignores: ["**/*.test.ts", "**/*.spec.ts"],
     plugins: {
       sbomlet: { rules: { "no-comment-jargon": noCommentJargon } },
       tsdoc,

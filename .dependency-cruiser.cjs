@@ -134,6 +134,9 @@ module.exports = {
     exclude: {
       path: [
         "^test/",
+        // Colocated unit tests are not production modules; keep them out of the
+        // graph. The not-to-test rule still forbids production src importing test/.
+        "[.](spec|test)[.]ts$",
         "^scripts/",
         "^tools/",
         "^dist/",

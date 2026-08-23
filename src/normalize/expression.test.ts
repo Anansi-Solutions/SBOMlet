@@ -5,8 +5,8 @@ import { describe, expect, test } from "bun:test";
 import parse from "spdx-expression-parse";
 import satisfies from "spdx-satisfies";
 
-import { COPYLEFT_IDS } from "../src/policy/engine/copyleft";
-import { denyRuleFor } from "../src/policy/engine/deny";
+import { COPYLEFT_IDS } from "../policy/engine/copyleft";
+import { denyRuleFor } from "../policy/engine/deny";
 import {
   canonicalizeExpression,
   elect,
@@ -14,8 +14,8 @@ import {
   orLeaves,
   renderNode,
   type ExpressionNode,
-} from "../src/normalize/expression";
-import type { Policy } from "../src/policy/schema";
+} from "./expression";
+import type { Policy } from "../policy/schema";
 
 // parse() output is structurally compatible with ExpressionNode (inline-union
 // purity pattern: we never import the lib's internal types).
@@ -64,7 +64,7 @@ describe("COPYLEFT_IDS membership", () => {
     // node_modules (the same data spdx-expression-parse matches against):
     // a typo'd id here would never match a parsed leaf and would silently
     // recreate the CR-01 default:ok gap.
-    const dataDir = join(import.meta.dir, "..", "node_modules", "spdx-license-ids");
+    const dataDir = join(import.meta.dir, "..", "..", "node_modules", "spdx-license-ids");
     const current = JSON.parse(readFileSync(join(dataDir, "index.json"), "utf8")) as string[];
     const deprecated = JSON.parse(
       readFileSync(join(dataDir, "deprecated.json"), "utf8"),
