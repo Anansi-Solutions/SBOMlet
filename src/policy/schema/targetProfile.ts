@@ -1,8 +1,12 @@
+import { type } from "arktype";
+
 import { recordOf, stringOf } from "../../validate/record";
 import { OSADL_MATRIX, type TargetLicense, type TargetProfile } from "../compat";
 
-import { checkKeys, parseSpdxChecked, requireText } from "./diagnostics";
+import { collectArkProblems } from "./arkAdapter";
+import { checkKeys, requireText } from "./diagnostics";
 import { validatePath } from "./scope";
+import { parseSpdxNode } from "./spdx";
 
 export interface TargetWorkspaceEntry {
   /** Repo-relative target-identity prefix this override governs, e.g. "apps/studio". */
@@ -63,9 +67,10 @@ function validateTargetLicense(
     return { kind: "proprietary" };
   }
 
-  const node = parseSpdxChecked(value, `${where}: license`, problems);
+  const node = parseSpdxNode(value);
 
   if (node === undefined) {
+    problems.push(`${where}: license "${value}" is not a valid SPDX expression`);
     return undefined;
   }
 
@@ -122,26 +127,21 @@ function validateTargetProjectProfile(
   }
 
   const license = validateTargetLicense(table["license"], where, problems);
+  const flags = profileFlags({ network: table["network"], distribution: table["distribution"] });
 
-  if (!("network" in table) || typeof table["network"] !== "boolean") {
-    problems.push(`${where}: key "network" must be a boolean`);
+  if (flags instanceof type.errors) {
+    problems.push(...collectArkProblems(flags, where));
   }
 
-  const network = typeof table["network"] === "boolean" ? table["network"] : undefined;
-  const distributionRaw = stringOf(table["distribution"]);
-  const distribution =
-    distributionRaw === "external" || distributionRaw === "internal" ? distributionRaw : undefined;
-
-  if (distribution === undefined) {
-    problems.push(`${where}: key "distribution" must be "external" or "internal"`);
-  }
-
-  if (license === undefined || network === undefined || distribution === undefined) {
+  if (license === undefined || flags instanceof type.errors) {
     return undefined;
   }
 
-  return { license, network, distribution };
+  return { license, network: flags.network, distribution: flags.distribution };
 }
+
+/** The two non-license usage-profile flags, once the all-or-nothing gate has confirmed presence. */
+const profileFlags = type({ network: "boolean", distribution: "'external' | 'internal'" });
 
 /** [target] unknown_pair: the D4 residual knob, mirroring [unknown].handling. Absent -> "warn". */
 function validateTargetUnknownPair(

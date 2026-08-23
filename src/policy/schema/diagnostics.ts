@@ -1,10 +1,6 @@
-import parseSpdx from "spdx-expression-parse";
-
 import { stringOf } from "../../validate/record";
 
 import { type DomainProblem } from "./arkAdapter";
-
-import type { ExpressionNode } from "../../normalize/expression";
 
 /**
  * The reason an entry surfaces wherever a verdict cites it: the closed-set value it chose, and the
@@ -150,18 +146,4 @@ export function optionalText(
   }
 
   return result.value;
-}
-
-/** Eager SPDX parse; a problem is recorded on failure. */
-export function parseSpdxChecked(
-  value: string,
-  where: string,
-  problems: string[],
-): ExpressionNode | undefined {
-  try {
-    return parseSpdx(value) as ExpressionNode;
-  } catch {
-    problems.push(`${where} "${value}" is not a valid SPDX expression`);
-    return undefined;
-  }
 }

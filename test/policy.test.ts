@@ -5596,7 +5596,8 @@ reason = "diverging outbound license for this workspace"
       ),
     );
 
-    expect(error.message).toContain('key "network" must be a boolean');
+    expect(error.message).toContain("network");
+    expect(error.message).toContain("must be boolean");
   });
 
   test("rejects a distribution outside external|internal", () => {
