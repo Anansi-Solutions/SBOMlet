@@ -19,6 +19,21 @@ export interface DomainProblem {
 }
 
 /**
+ * Re-root a group of faults under `prefix`. A core check reports its faults relative to the value
+ * it was handed; a caller that embeds that value - a `packages` member inside its entry - prepends
+ * the sub-location so the composed fault points all the way down.
+ */
+export function atPath(
+  prefix: ReadonlyArray<string | number>,
+  problems: ReadonlyArray<DomainProblem>,
+): DomainProblem[] {
+  return problems.map((problem) => ({
+    path: [...prefix, ...(problem.path ?? [])],
+    message: problem.message,
+  }));
+}
+
+/**
  * A path segment {@link wrapErrors} appends to keep sibling rejections distinct. arktype folds two
  * rejections that share a path into one intersection node whose message getter throws on an
  * anonymous predicate, so every rejection must land on its own path; the adapter strips these
@@ -67,6 +82,17 @@ function renderLocation(path: ReadonlyArray<PropertyKey>): string {
  */
 function trimMessage(message: string): string {
   return message.replace(/^value at \S+ /, "");
+}
+
+/**
+ * Render domain faults as `${where}: <problem>` lines - the counterpart of {@link
+ * collectArkProblems} for a check run outside arktype, so a hybrid construct places both through
+ * one contract.
+ */
+export function formatProblems(where: string, problems: ReadonlyArray<DomainProblem>): string[] {
+  return problems.map(
+    (problem) => `${where}${renderLocation(problem.path ?? [])}: ${problem.message}`,
+  );
 }
 
 /**

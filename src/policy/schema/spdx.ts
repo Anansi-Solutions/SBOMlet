@@ -1,13 +1,13 @@
 /**
- * Shared arktype building blocks for the SPDX-valued policy fields.
+ * Shared building blocks for the SPDX-valued policy fields.
  *
  * Every license pattern, clarify expression, and workspace license is parsed eagerly at validation
- * so evaluation never meets an unparseable rule. These morphs carry that parse into the declarative
- * layer: a field typed {@link spdxExpression} rejects unparseable text in place, and {@link
- * withLicenseAllowlist} enriches a license-mode entry with its pre-decomposed satisfies allowlist,
+ * so evaluation never meets an unparseable rule. {@link spdxExpression} carries that parse into the
+ * declarative layer - a field typed with it rejects unparseable text in place - while {@link
+ * licenseAllowlist} decomposes a license pattern into the satisfies allowlist the evaluator reads,
  * rejecting an AND pattern up front (satisfies allowlists cannot hold AND expressions).
  */
-import { type, type Traversal } from "arktype";
+import { type } from "arktype";
 
 import parseSpdx from "spdx-expression-parse";
 import { orLeaves, type ExpressionNode } from "../../normalize/expression";
@@ -32,32 +32,28 @@ export const spdxExpression = type("string").pipe((value, ctx) =>
 );
 
 /**
- * Enrich a license-mode entry with the OR-leaf satisfies allowlist decomposed from its `pattern`.
- * Rejects at `pattern` when the text does not parse, or when it carries an AND - a satisfies
- * allowlist holds single ids (optionally WITH), never AND expressions. Shared by the
- * `[[compatible]]` and `[[deny]]` license forms, which decompose their pattern identically.
+ * The OR-leaf satisfies allowlist decomposed from a license pattern, or the one fault that ruled it
+ * out: an unparseable pattern, or an AND pattern (a satisfies allowlist holds single ids,
+ * optionally WITH, never AND expressions). Shared by the `[[compatible]]` and `[[deny]]` license
+ * forms, which decompose their pattern identically.
  */
-export function withLicenseAllowlist<T extends { readonly pattern: string }>(
-  entry: T,
-  ctx: Traversal,
-): (T & { allowlist: ReadonlyArray<string> }) | false {
-  const node = parseSpdxNode(entry.pattern);
+export function licenseAllowlist(pattern: string): {
+  allowlist?: ReadonlyArray<string>;
+  problem?: string;
+} {
+  const node = parseSpdxNode(pattern);
 
   if (node === undefined) {
-    return ctx.reject({
-      relativePath: ["pattern"],
-      message: `"${entry.pattern}" is not a valid SPDX expression`,
-    });
+    return { problem: `"${pattern}" is not a valid SPDX expression` };
   }
 
   const allowlist = orLeaves(node);
 
   if (allowlist === null) {
-    return ctx.reject({
-      relativePath: ["pattern"],
-      message: `"${entry.pattern}" must be a license ID or an OR of license IDs (AND is not allowed — satisfies allowlists cannot hold AND expressions)`,
-    });
+    return {
+      problem: `"${pattern}" must be a license ID or an OR of license IDs (AND is not allowed — satisfies allowlists cannot hold AND expressions)`,
+    };
   }
 
-  return { ...entry, allowlist };
+  return { allowlist };
 }

@@ -1,6 +1,6 @@
 import { win32 } from "node:path";
 
-import { stringOf } from "../../validate/record";
+import { type DomainProblem } from "./arkAdapter";
 
 /** A leading Windows drive specifier: `C:/x`, `C:\\x`, and the drive-relative `C:x` alike. */
 const DRIVE_SPECIFIER = /^[A-Za-z]:/;
@@ -26,33 +26,47 @@ const DRIVE_SPECIFIER = /^[A-Za-z]:/;
  * "docker:" fence lives in validateSuppressions instead, since only a workspace suppression must
  * never absorb a container.
  */
-export function validatePath(path: string, where: string, problems: string[]): void {
+export function pathProblems(path: string): string[] {
+  const problems: string[] = [];
+
   if (DRIVE_SPECIFIER.test(path) || win32.isAbsolute(path)) {
     problems.push(
-      `${where}: path "${path}" must be repository-relative (an absolute or drive-lettered path names a file outside the repository)`,
+      `path "${path}" must be repository-relative (an absolute or drive-lettered path names a file outside the repository)`,
     );
   }
 
   if (path.includes("\\")) {
     problems.push(
-      `${where}: path "${path}" must use forward slashes only (target identities are forward-slash)`,
+      `path "${path}" must use forward slashes only (target identities are forward-slash)`,
     );
   }
 
   if (path.startsWith("/") || path.endsWith("/")) {
-    problems.push(`${where}: path "${path}" must not have a leading or trailing slash`);
+    problems.push(`path "${path}" must not have a leading or trailing slash`);
   }
 
   const segments = path.split("/");
 
   if (segments.includes("..")) {
-    problems.push(`${where}: path "${path}" must not contain ".." segments`);
+    problems.push(`path "${path}" must not contain ".." segments`);
   }
 
   if (segments.some((s) => s === "" || s === "." || s !== s.trim())) {
     problems.push(
-      `${where}: path "${path}" contains an empty, ".", or whitespace-padded segment (it could never match a target identity)`,
+      `path "${path}" contains an empty, ".", or whitespace-padded segment (it could never match a target identity)`,
     );
+  }
+
+  return problems;
+}
+
+/**
+ * {@link pathProblems} prefixed onto the caller's `where` context - the shape a string[] sink
+ * wants.
+ */
+export function validatePath(path: string, where: string, problems: string[]): void {
+  for (const problem of pathProblems(path)) {
+    problems.push(`${where}: ${problem}`);
   }
 }
 
@@ -65,58 +79,32 @@ export function validatePath(path: string, where: string, problems: string[]): v
 export const EVERYWHERE_SCOPE = "/";
 
 /**
- * The required `where` scope on a [[compatible]] entry: a non-empty array of occurrence-identity
- * prefixes, each validated exactly like a suppression path (the evaluator applies the same
- * segment-aware prefix comparison to both). An EMPTY array is rejected - a rule that could never
- * match anywhere is a dead rule by construction, the same posture as validatePath's
- * could-never-match segments. An element may be the everywhere token {@link EVERYWHERE_SCOPE} in
- * place of a path, so a deliberately repository-wide acceptance stays expressible while stating a
- * scope stays a conscious choice. `context` is the error-context string (conventionally named
- * `where` elsewhere in this file - renamed here because `where` is the TOML key under validation).
+ * Domain faults in a `[[compatible]]` entry's `where` scope, once arktype has confirmed it is an
+ * array of strings. An EMPTY array is rejected - a rule that could never match anywhere is a dead
+ * rule by construction, the same posture as {@link pathProblems}'s could-never-match segments. Each
+ * element is validated exactly like a suppression path (the evaluator applies the same
+ * segment-aware prefix comparison to both), except the everywhere token {@link EVERYWHERE_SCOPE},
+ * which stands for a deliberately repository-wide acceptance in place of a path.
  */
-export function validateWhere(
-  entry: Record<string, unknown>,
-  context: string,
-  problems: string[],
-): { where?: ReadonlyArray<string>; valid: boolean } {
-  if (!("where" in entry)) {
-    problems.push(
-      `${context}: missing required key "where" (the occurrence-identity prefixes this acceptance covers, or ["${EVERYWHERE_SCOPE}"] for every occurrence)`,
-    );
-    return { valid: false };
+export function whereProblems(where: ReadonlyArray<string>): DomainProblem[] {
+  if (where.length === 0) {
+    return [
+      { path: ["where"], message: "must be a non-empty array of occurrence-identity prefixes" },
+    ];
   }
 
-  const raw = entry["where"];
+  const problems: DomainProblem[] = [];
 
-  if (!Array.isArray(raw) || raw.length === 0) {
-    problems.push(
-      `${context}: key "where" must be a non-empty array of occurrence-identity prefixes`,
-    );
-    return { valid: false };
-  }
-
-  const before = problems.length;
-  const scope: string[] = [];
-
-  raw.forEach((value, index) => {
-    const text = stringOf(value);
-
-    if (text === undefined) {
-      problems.push(`${context}: where[${index}] must be a string`);
+  where.forEach((element, index) => {
+    if (element === EVERYWHERE_SCOPE) {
       return;
     }
 
-    if (text !== EVERYWHERE_SCOPE) {
-      validatePath(text, `${context}.where[${index}]`, problems);
+    for (const problem of pathProblems(element)) {
+      problems.push({ path: ["where", index], message: problem });
     }
-
-    scope.push(text);
   });
-  if (problems.length !== before) {
-    return { valid: false };
-  }
-
-  return { where: scope, valid: true };
+  return problems;
 }
 
 /**

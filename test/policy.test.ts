@@ -337,7 +337,7 @@ describe("parsePolicy — compatible `where` scope", () => {
       const error = expectPolicyError(fixture('"docker:img"'));
 
       expect(error.message).toContain("compatible[0]");
-      expect(error.message).toContain('"where"');
+      expect(error.message).toContain("where");
     }
   });
 
@@ -353,7 +353,7 @@ describe("parsePolicy — compatible `where` scope", () => {
       const error = expectPolicyError(fixture("[]"));
 
       expect(error.message).toContain("compatible[0]");
-      expect(error.message).toContain('"where"');
+      expect(error.message).toContain("where");
     }
   });
 
@@ -1318,7 +1318,7 @@ describe("parsePolicy — mandatory documentation text", () => {
     const error = expectPolicyError(fixture);
 
     expect(error.message).toContain("compatible[0]");
-    expect(error.message).toContain('"rationale"');
+    expect(error.message).toContain("rationale");
   });
 });
 
