@@ -137,12 +137,7 @@ export interface AllowSourceAvailable {
  * closed enum; `reason` is mandatory documentation.
  */
 const exemptionEnvelope = type({
-  license: nonBlankString.to(
-    type.enumerated(...SOURCE_AVAILABLE_LICENSE_IDS).configure({
-      message: (ctx) =>
-        `license "${ctx.data}" is not a built-in source-available default — only ${SOURCE_AVAILABLE_LICENSE_IDS.join(", ")} can be exempted (a consumer's own [[deny]] is absolute and not exempted here)`,
-    }),
-  ),
+  license: nonBlankString.to(type.enumerated(...SOURCE_AVAILABLE_LICENSE_IDS)),
   reason: nonBlankString,
 });
 

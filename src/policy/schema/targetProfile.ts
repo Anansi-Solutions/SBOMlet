@@ -147,9 +147,7 @@ function validateTargetProjectProfile(
 const profileFlags = type({ network: "boolean", distribution: "'external' | 'internal'" });
 
 /** [target] unknown_pair: warn|fail as a closed enum, its rejection naming the table key. */
-const targetUnknownPair = type("'warn' | 'fail'").configure({
-  message: 'key "unknown_pair" must be "warn" or "fail"',
-});
+const targetUnknownPair = type("'warn' | 'fail'");
 
 /** [target] unknown_pair: the D4 residual knob, mirroring [unknown].handling. Absent -> "warn". */
 function validateTargetUnknownPair(

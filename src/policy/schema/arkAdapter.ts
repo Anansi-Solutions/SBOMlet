@@ -15,9 +15,7 @@ import { type, type ArkErrors } from "arktype";
  * so every field carries the padding-free text the policy meant, compared and rendered the same
  * everywhere. Shared by every non-blank field kind across the schema constructs.
  */
-export const nonBlankString = type("string.trim").to(
-  type("string > 0").configure({ message: "must be a non-empty string" }),
-);
+export const nonBlankString = type("string.trim").to("string > 0");
 
 /**
  * A single domain fault a pure cross-field check reports. `path` locates it relative to the entry

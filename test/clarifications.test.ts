@@ -112,7 +112,7 @@ describe("the clarifications key", () => {
 
   test("a non-string value rejects", () => {
     expect(expectPolicyError("clarifications = 7").problems).toContain(
-      "clarifications: must be a non-empty path string",
+      "clarifications: must be a string (was a number)",
     );
   });
 });

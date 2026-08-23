@@ -15,12 +15,7 @@ const KEY = "as-dependency-of";
 /**
  * A non-empty list of non-blank parent names (trimmed), the shape a valid `as-dependency-of` holds.
  */
-const parentList = nonBlankString
-  .array()
-  .atLeastLength(1)
-  .configure({
-    message: `key "${KEY}" must be a non-empty array of package names, or ["${SELF_PARENT}"]`,
-  });
+const parentList = nonBlankString.array().atLeastLength(1);
 
 /**
  * The required `as-dependency-of` list on a package-form entry: the packages whose use of this one

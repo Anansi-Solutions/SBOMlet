@@ -98,14 +98,10 @@ export interface ClarifyRule {
  * The optional top-level `clarifications` key: where the imported `[[clarify]]` entries live. A
  * non-empty repo-root-relative forward-slash path (no "..", no leading/trailing slash), so a policy
  * can never point the loader outside the scanned repository - the same posture as `cache.dir`. A
- * non-string or empty value reads as the one "non-empty path string" fault; the segment rules ride
- * the shared {@link repoRelativePath} morph.
+ * non-string reads as a string fault and an empty value as a non-empty-string fault; the segment
+ * rules ride the shared {@link repoRelativePath} morph.
  */
-const CLARIFICATIONS_NONBLANK = "must be a non-empty path string";
-const clarificationsPathType = type("string.trim")
-  .to(type("string > 0").configure({ message: CLARIFICATIONS_NONBLANK }))
-  .configure({ message: CLARIFICATIONS_NONBLANK })
-  .to(repoRelativePath);
+const clarificationsPathType = nonBlankString.to(repoRelativePath);
 
 export function validateClarificationsPath(
   root: Record<string, unknown>,
@@ -206,10 +202,7 @@ function detectedProblems(entry: Record<string, unknown>): {
  * and never fetched or verified, so the only rules are that the list is non-empty and every element
  * carries text. Faults are entry-relative.
  */
-const evidenceList = nonBlankString
-  .array()
-  .atLeastLength(1)
-  .configure({ message: `key "evidence" must be a non-empty array of file paths or URLs` });
+const evidenceList = nonBlankString.array().atLeastLength(1);
 
 function evidenceProblems(entry: Record<string, unknown>): {
   evidence?: ReadonlyArray<string>;

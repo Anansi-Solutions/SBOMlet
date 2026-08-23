@@ -474,7 +474,7 @@ describe("parsePolicy — the [[compatible]] package selector", () => {
     );
 
     expect(error.message).toContain("compatible[0].version");
-    expect(error.message).toContain("must be an exact version string, or a non-empty array");
+    expect(error.message).toContain("must be non-empty");
   });
 
   test("a name/pattern entry outside container scope must pin a version", () => {
@@ -863,14 +863,14 @@ describe("parsePolicy — the [[clarify]] package selector", () => {
     const error = expectPolicyError(clarifyFixture(['pattern = "demo-*"', ...DEMO_CLARIFY]));
 
     expect(error.message).toContain("clarify[0]");
-    expect(error.message).toContain('exactly one of "name" and "pattern"');
+    expect(error.message).toContain("must be removed");
   });
 
   test("neither name nor pattern is rejected", () => {
     const error = expectPolicyError(clarifyFixture(clarifyWithout("name")));
 
     expect(error.message).toContain("clarify[0]");
-    expect(error.message).toContain('exactly one of "name" and "pattern"');
+    expect(error.message).toContain("must be present");
   });
 
   test("a glob-free pattern is rejected, naming the key to use instead", () => {
@@ -899,7 +899,7 @@ describe("parsePolicy — the [[clarify]] package selector", () => {
     const error = expectPolicyError(clarifyFixture([...clarifyWithout("version"), "version = []"]));
 
     expect(error.message).toContain("clarify[0].version");
-    expect(error.message).toContain("must be an exact version string, or a non-empty array");
+    expect(error.message).toContain("must be non-empty");
   });
 
   test("a clarify entry omitting version is rejected — there is no os-scope exemption here", () => {
@@ -1005,7 +1005,7 @@ describe("parsePolicy — [[clarify]] evidence and comment", () => {
     const error = expectPolicyError(clarifyFixture([...DEMO_CLARIFY, "evidence = []"]));
 
     expect(error.message).toContain("clarify[0]");
-    expect(error.message).toContain('"evidence"');
+    expect(error.message).toContain("evidence");
   });
 });
 
@@ -5314,7 +5314,7 @@ describe("policy — [[allow_source_available]] validation", () => {
       ["[[allow_source_available]]", 'license = "MIT"', 'reason = "x"'].join("\n"),
     );
 
-    expect(error.message).toContain("not a built-in source-available default");
+    expect(error.message).toContain('"BUSL-1.1"');
   });
 
   test("rejects a missing reason", () => {
@@ -5622,7 +5622,7 @@ reason = "diverging outbound license for this workspace"
       ].join("\n"),
     );
 
-    expect(error.message).toContain('unknown_pair" must be "warn" or "fail"');
+    expect(error.message).toContain('must be "fail" or "warn"');
   });
 
   test("rejects an unknown key on the [target] table", () => {

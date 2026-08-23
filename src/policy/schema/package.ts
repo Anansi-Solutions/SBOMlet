@@ -18,12 +18,6 @@ export interface CompatiblePackageElement {
   version: string | ReadonlyArray<string>;
 }
 
-/** The parsed `name`/`pattern` selector - see {@link nameOrPatternProblems}. */
-interface NameOrPattern {
-  name?: string;
-  pattern?: string;
-}
-
 /**
  * The presence problems of an exactly-one-of selector: the entry is projected to just the selector
  * keys and matched against a union whose branches each reject the sibling keys, so both-present and
@@ -46,15 +40,6 @@ function presenceProblems(
   const result = selector(projected);
 
   return result instanceof type.errors ? toDomainProblems(result) : [];
-}
-
-/**
- * The `name`/`pattern` mutual-exclusion message, naming whether both or neither key was present.
- */
-function nameOrPatternMessage(data: unknown): string {
-  const has = (key: string): boolean => typeof data === "object" && data !== null && key in data;
-
-  return `exactly one of "name" and "pattern" is required (${has("name") && has("pattern") ? "both are present" : "neither is present"})`;
 }
 
 /**
@@ -92,13 +77,11 @@ const exactPackageName = type("string").pipe((value, ctx): string =>
 
 /**
  * Exactly one of `name` and `pattern`: each branch rejects the other key, so both-present and
- * neither-present fail; {@link nameOrPatternMessage} restores the pointed diagnostic the union's
- * own wording would lose.
+ * neither-present both fail on arktype's own union wording.
  */
 const nameOrPatternSelector = type({ name: "unknown" })
   .onUndeclaredKey("reject")
-  .or(type({ pattern: "unknown" }).onUndeclaredKey("reject"))
-  .configure({ message: (ctx) => nameOrPatternMessage(ctx.data) });
+  .or(type({ pattern: "unknown" }).onUndeclaredKey("reject"));
 
 /**
  * The `name`/`pattern` pair: exactly one is required. `name` is compared verbatim; `pattern` must
@@ -107,7 +90,7 @@ const nameOrPatternSelector = type({ name: "unknown" })
  * entry-relative, so a caller reports them under its own location.
  */
 export function nameOrPatternProblems(entry: Record<string, unknown>): {
-  selector: NameOrPattern;
+  selector: { name?: string; pattern?: string };
   problems: DomainProblem[];
 } {
   const presence = presenceProblems(nameOrPatternSelector, entry, ["name", "pattern"]);
@@ -145,14 +128,9 @@ export function nameOrPatternProblems(entry: Record<string, unknown>): {
  * trimmed and compared literally - the schema has no wildcard version anywhere. The list branch's
  * `atLeastLength` rejects an empty list; an element failure lands on its own index.
  */
-const versionList = nonBlankString
-  .array()
-  .atLeastLength(1)
-  .configure({ message: "must be a non-empty array of exact version strings" });
+const versionList = nonBlankString.array().atLeastLength(1);
 
-const versionPin = nonBlankString
-  .or(versionList)
-  .configure({ message: "must be an exact version string, or a non-empty array of them" });
+const versionPin = nonBlankString.or(versionList);
 
 /** How {@link versionPinProblems} treats an absent `version` key. */
 interface VersionPinOptions {
@@ -271,26 +249,17 @@ export interface CompatibleSelector {
 }
 
 /**
- * The `name`/`pattern`/`packages` mutual-exclusion message, naming which selector keys were
- * present.
- */
-function compatibleSelectorMessage(data: unknown): string {
-  const modes = ["name", "pattern", "packages"].filter(
-    (key) => typeof data === "object" && data !== null && key in data,
-  );
-
-  return `exactly one selector is required - "name", "pattern", or "packages" (${modes.length === 0 ? "none is present" : `${modes.map((key) => `"${key}"`).join(", ")} are present`})`;
-}
-
-/**
  * Exactly one of `name`, `pattern`, and `packages`: each branch rejects the sibling keys, so any
- * count other than one fails; {@link compatibleSelectorMessage} restores the pointed diagnostic.
+ * count other than one fails. The three-branch union's own summary reads as a confusing mix of
+ * "must be removed" and "must be present" across branches, so a single flat message names the rule.
  */
 const compatibleSelector = type({ name: "unknown" })
   .onUndeclaredKey("reject")
   .or(type({ pattern: "unknown" }).onUndeclaredKey("reject"))
   .or(type({ packages: "unknown" }).onUndeclaredKey("reject"))
-  .configure({ message: (ctx) => compatibleSelectorMessage(ctx.data) });
+  .configure({
+    message: 'exactly one selector is required - "name", "pattern", or "packages"',
+  });
 
 /**
  * The package-form selector: exactly one of `name`, `pattern`, and `packages`. The `name`/`pattern`
