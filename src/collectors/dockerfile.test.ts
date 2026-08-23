@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, test } from "bun:test";
 
-import { discoverDockerfiles, isDockerfileName } from "../src/collectors/dockerfile";
+import { discoverDockerfiles, isDockerfileName } from "./dockerfile";
 
 // Self-contained temp trees only — no reference to any host-project path.
 const tempRoots: string[] = [];

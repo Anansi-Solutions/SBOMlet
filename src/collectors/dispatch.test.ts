@@ -1,11 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import {
-  ecosystemFor,
-  isLockfileEmpty,
-  manifestFilesFor,
-  selectJsGenerator,
-} from "../src/collectors/dispatch";
+import { ecosystemFor, isLockfileEmpty, manifestFilesFor, selectJsGenerator } from "./dispatch";
 
 // Inline string fixtures — lockfile snippets are small and self-documenting.
 

@@ -15,16 +15,16 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 
-import { CDXGEN_TOOL, computeCacheKey } from "../src/collectors/cdxgen";
-import * as execModule from "../src/collectors/exec";
+import { CDXGEN_TOOL, computeCacheKey } from "./cdxgen";
+import * as execModule from "./exec";
 import {
   YARN_PLUGIN_TOOL,
   collectWithYarnPlugin,
   pluginEnv,
   yarnPluginArgs,
   yarnPluginCacheArgs,
-} from "../src/collectors/yarnPlugin";
-import type { Target } from "../src/targets/target";
+} from "./yarnPlugin";
+import type { Target } from "../targets/target";
 
 /** Original exports captured BEFORE any mock.module call (restore target). */
 const REAL_EXEC = { ...execModule };
@@ -291,7 +291,7 @@ describe("collectWithYarnPlugin — unit-aware cwd and cache key", () => {
 
   beforeEach(() => {
     capturedCwds = [];
-    mock.module("../src/collectors/exec", () => ({
+    mock.module("./exec", () => ({
       ...REAL_EXEC,
       execTool: async (
         _cmd: string,
@@ -310,7 +310,7 @@ describe("collectWithYarnPlugin — unit-aware cwd and cache key", () => {
   });
 
   afterEach(() => {
-    mock.module("../src/collectors/exec", () => REAL_EXEC);
+    mock.module("./exec", () => REAL_EXEC);
   });
 
   test("resolves yarn.lock from lockfileDir for the cache key while spawning with cwd = target.dir — no real spawn happens", async () => {

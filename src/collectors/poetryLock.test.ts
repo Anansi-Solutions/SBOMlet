@@ -20,7 +20,7 @@
 
 import { describe, expect, test } from "bun:test";
 
-import { poetryProdPurlSet } from "../src/collectors/poetryLock";
+import { poetryProdPurlSet } from "./poetryLock";
 
 /** Minimal poetry.lock with main-only, dev-only, and main+dev packages. */
 const POETRY_LOCK = [
