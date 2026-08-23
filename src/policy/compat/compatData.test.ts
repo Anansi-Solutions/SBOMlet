@@ -4,15 +4,6 @@ import { join } from "node:path";
 import { describe, expect, test } from "bun:test";
 import parse from "spdx-expression-parse";
 
-import { interTierDisagreements } from "../src/policy/compat/consistency";
-import {
-  narrowOsadlCopyleftClass,
-  narrowOsadlMatrix,
-  narrowScancodeCategory,
-  OSADL_COPYLEFT_CLASS,
-  OSADL_MATRIX,
-  SCANCODE_CATEGORY,
-} from "../src/policy/compat/data";
 import {
   assertInterTierGateAccepted,
   assertStructuralShape,
@@ -25,12 +16,21 @@ import {
   SIZE_GATES,
   validateDownloadedSnapshots,
   withUpdatedScancodeTimestamp,
-} from "../scripts/update-compat-data";
+} from "../../../scripts/update-compat-data";
+import { interTierDisagreements } from "./consistency";
+import {
+  narrowOsadlCopyleftClass,
+  narrowOsadlMatrix,
+  narrowScancodeCategory,
+  OSADL_COPYLEFT_CLASS,
+  OSADL_MATRIX,
+  SCANCODE_CATEGORY,
+} from "./data";
 
 const MATRIX_CELLS = new Set(["Same", "Yes", "No", "Unknown", "Check dependency"]);
 const COPYLEFT_CLASSES = new Set(["No", "Yes", "Yes (restricted)", "Questionable"]);
 
-const COMPAT_DIR = join(import.meta.dir, "..", "src", "policy", "compat");
+const COMPAT_DIR = import.meta.dir;
 const MATRIX_PATH = join(COMPAT_DIR, "osadl-matrix.json");
 const COPYLEFT_PATH = join(COMPAT_DIR, "osadl-copyleft.json");
 const SCANCODE_PATH = join(COMPAT_DIR, "scancode-licensedb-index.json");

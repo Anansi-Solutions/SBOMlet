@@ -1,11 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
-import {
-  applyUsageProfile,
-  type ModulatedClass,
-  type TargetProfile,
-} from "../src/policy/compat/profile";
-import type { AxisClass, AxisResult, ObligationClass } from "../src/policy/compat/classification";
+import { applyUsageProfile, type ModulatedClass, type TargetProfile } from "./profile";
+import type { AxisClass, AxisResult, ObligationClass } from "./classification";
 
 const AXIS_CLASSES: readonly AxisClass[] = [
   "compatible",

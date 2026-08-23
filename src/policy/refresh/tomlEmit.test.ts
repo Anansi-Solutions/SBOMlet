@@ -6,8 +6,8 @@
 
 import { describe, expect, test } from "bun:test";
 
-import { emitClarifications, rewriteWouldDropText } from "../src/policy/refresh/emit";
-import { parseClarifications } from "../src/policy/parse/clarificationsFile";
+import { parseClarifications } from "../parse/clarificationsFile";
+import { emitClarifications, rewriteWouldDropText } from "./emit";
 
 const FULL = [
   "[[clarify]]",

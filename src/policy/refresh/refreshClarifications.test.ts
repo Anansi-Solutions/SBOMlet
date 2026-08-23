@@ -6,23 +6,20 @@
 
 import { describe, expect, test } from "bun:test";
 
+import { annotateFindings } from "../../normalize/normalize";
+import { evaluate } from "../engine/evaluate";
+import { parseClarifications, withImportedClarifications } from "../parse/clarificationsFile";
+import { type ClarifyRule } from "../schema/clarify";
+import { parsePolicy } from "../parse/parse";
+import { claim, modelOf, pkg } from "../../../test/normalizeTestSupport";
 import {
   anySuggestion,
   refreshFindings,
   rewriteClarifications,
   type RefreshFindings,
-} from "../src/policy/refresh/refreshClarifications";
-import { annotateFindings } from "../src/normalize/normalize";
-import { evaluate } from "../src/policy/engine/evaluate";
-import {
-  parseClarifications,
-  withImportedClarifications,
-} from "../src/policy/parse/clarificationsFile";
-import { type ClarifyRule } from "../src/policy/schema/clarify";
-import { parsePolicy } from "../src/policy/parse/parse";
-import { claim, modelOf, pkg } from "./normalizeTestSupport";
+} from "./refreshClarifications";
 
-import type { LicenseClaim, PackageEntry } from "../src/model/dependencies";
+import type { LicenseClaim, PackageEntry } from "../../model/dependencies";
 
 const WITHOUT_DEPENDENCY_GRAPHS: ReadonlySet<string> = new Set();
 

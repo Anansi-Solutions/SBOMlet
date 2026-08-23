@@ -1,7 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import parseSpdx from "spdx-expression-parse";
 
-import { classifyExpression, classifyLeaf } from "../src/policy/compat/classify";
+import { renderNode, type ExpressionNode } from "../../normalize/expression";
+import { classifyExpression, classifyLeaf } from "./classify";
 import {
   formatProfileLabel,
   targetBoundaryReason,
@@ -14,10 +15,9 @@ import {
   TARGET_RULE_INTERNAL_USE,
   TARGET_RULE_OK,
   TARGET_RULE_UNKNOWN_PAIR,
-} from "../src/policy/compat/reasons";
-import { renderNode, type ExpressionNode } from "../src/normalize/expression";
-import type { TargetLicense } from "../src/policy/compat/classification";
-import type { TargetProfile } from "../src/policy/compat/profile";
+} from "./reasons";
+import type { TargetLicense } from "./classification";
+import type { TargetProfile } from "./profile";
 
 const oss = (id: string): TargetLicense => ({ kind: "oss", id });
 const proprietary: TargetLicense = { kind: "proprietary" };
