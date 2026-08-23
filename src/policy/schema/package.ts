@@ -58,6 +58,39 @@ function nameOrPatternMessage(data: unknown): string {
 }
 
 /**
+ * A `pattern` selector value: it must use the glob dialect (a glob-free pattern names one package
+ * and belongs under `name`) and must compile - which refuses a pattern with no literal character to
+ * anchor it. The verbatim text flows through.
+ */
+const globNamePattern = type("string").pipe((value, ctx): string => {
+  if (!isGlobPattern(value)) {
+    return ctx.reject({
+      message: `pattern "${value}" carries no wildcard - use "name" to select a single package`,
+    }) as never;
+  }
+
+  try {
+    compileNamePattern(value);
+  } catch (error) {
+    return ctx.reject({ message: (error as Error).message }) as never;
+  }
+
+  return value;
+});
+
+/**
+ * A `packages` member's `name`: one exact package, never a glob - the family selector is the
+ * entry-level `pattern` mode. The verbatim text flows through.
+ */
+const exactPackageName = type("string").pipe((value, ctx): string =>
+  isGlobPattern(value)
+    ? (ctx.reject({
+        message: `name "${value}" carries a wildcard - a "packages" member names one exact package; use the entry-level "pattern" selector for a family`,
+      }) as never)
+    : value,
+);
+
+/**
  * Exactly one of `name` and `pattern`: each branch rejects the other key, so both-present and
  * neither-present fail; {@link nameOrPatternMessage} restores the pointed diagnostic the union's
  * own wording would lose.
@@ -98,24 +131,13 @@ export function nameOrPatternProblems(entry: Record<string, unknown>): {
     return { selector: {}, problems: pattern.problems };
   }
 
-  if (!isGlobPattern(pattern.value)) {
-    return {
-      selector: {},
-      problems: [
-        {
-          message: `pattern "${pattern.value}" carries no wildcard - use "name" to select a single package`,
-        },
-      ],
-    };
+  const validated = globNamePattern(pattern.value);
+
+  if (validated instanceof type.errors) {
+    return { selector: {}, problems: toDomainProblems(validated) };
   }
 
-  try {
-    compileNamePattern(pattern.value);
-  } catch (error) {
-    return { selector: {}, problems: [{ message: (error as Error).message }] };
-  }
-
-  return { selector: { pattern: pattern.value }, problems: [] };
+  return { selector: { pattern: validated }, problems: [] };
 }
 
 /**
@@ -219,18 +241,22 @@ function packagesListProblems(entry: Record<string, unknown>): {
     const name = requiredText(element, "name");
 
     problems.push(...atPath(at, name.problems));
-    if (name.value !== undefined && isGlobPattern(name.value)) {
-      problems.push({
-        path: at,
-        message: `name "${name.value}" carries a wildcard - a "packages" member names one exact package; use the entry-level "pattern" selector for a family`,
-      });
+
+    const exactName = name.value !== undefined ? exactPackageName(name.value) : undefined;
+
+    if (exactName instanceof type.errors) {
+      problems.push(...atPath(at, toDomainProblems(exactName)));
     }
 
     const pin = versionPinProblems(element, { required: true, osScopeExemptible: false });
 
     problems.push(...atPath(at, pin.problems));
-    if (name.value !== undefined && !isGlobPattern(name.value) && pin.version !== undefined) {
-      packages.push({ name: name.value, version: pin.version });
+    if (
+      exactName !== undefined &&
+      !(exactName instanceof type.errors) &&
+      pin.version !== undefined
+    ) {
+      packages.push({ name: exactName, version: pin.version });
     }
   });
   return problems.length === 0 ? { packages, problems } : { problems };

@@ -6,7 +6,7 @@
  * rejected. {@link collectArkProblems} flattens both into the `${where}: <problem>` lines the rest
  * of the parser already speaks, so a caller pushes them onto its shared problem list unchanged.
  */
-import { type, type ArkErrors, type Traversal } from "arktype";
+import { type, type ArkErrors } from "arktype";
 
 /**
  * A required, present, non-blank string, normalized by trimming. A missing key is a required fault;
@@ -45,38 +45,15 @@ export function atPath(
 }
 
 /**
- * A path segment {@link wrapErrors} appends to keep sibling rejections distinct. arktype folds two
- * rejections that share a path into one intersection node whose message getter throws on an
- * anonymous predicate, so every rejection must land on its own path; the adapter strips these
- * before rendering a location.
+ * A path segment a single-field morph appends when it emits several diagnostics for one scalar (a
+ * repo-relative path, a `where` element). arktype folds two rejections that share a path into one
+ * intersection node whose message getter throws on an anonymous predicate, so every rejection must
+ * land on its own path; the adapter strips these before rendering a location.
  */
-const DISAMBIGUATOR = "\u00a7";
+export const DISAMBIGUATOR = "\u00a7";
 
 function isDisambiguator(segment: PropertyKey): boolean {
   return typeof segment === "string" && segment.startsWith(DISAMBIGUATOR);
-}
-
-/**
- * Bind a pure cross-field check as an arktype narrow. Each returned {@link DomainProblem} is
- * rejected on its own disambiguated path so the faults accumulate as siblings rather than
- * collapsing into one; the narrow passes only when the check returns nothing.
- *
- * @returns a predicate suitable for `.narrow(...)`, typed against the entry the shape infers.
- */
-export function wrapErrors<T>(
-  check: (entry: T) => ReadonlyArray<DomainProblem>,
-): (entry: T, ctx: Traversal) => boolean {
-  return (entry, ctx) => {
-    const problems = check(entry);
-
-    problems.forEach((problem, index) => {
-      ctx.reject({
-        relativePath: [...(problem.path ?? []), `${DISAMBIGUATOR}${index}`],
-        message: problem.message,
-      });
-    });
-    return problems.length === 0;
-  };
 }
 
 /** Render a location suffix from an arktype path: `.key` for a field, `[i]` for an index. */

@@ -2,24 +2,26 @@ import { type } from "arktype";
 
 import { recordOf } from "../../validate/record";
 
-import { collectArkProblems, formatProblems, nonBlankString } from "./arkAdapter";
+import { collectArkProblems, nonBlankString } from "./arkAdapter";
 import { checkKeys } from "./diagnostics";
-import { pathProblems } from "./scope";
+import { repoRelativePath } from "./scope";
 
 export interface CacheConfig {
   /** Repo-root-relative dir for committed artifacts; default applies when absent. */
   dir?: string;
 }
 
-/** The optional, non-empty `dir`; its path segments are checked separately. */
-const cacheShape = type({ "dir?": nonBlankString });
+/**
+ * The optional, non-empty `dir`: a repo-root-relative forward-slash path (no "..", no
+ * leading/trailing slash), so a committed artifact directory can never escape the repo. The path
+ * rules ride the shared {@link repoRelativePath} morph.
+ */
+const cacheShape = type({ "dir?": nonBlankString.to(repoRelativePath) });
 
 /**
  * Parse the optional [cache] table: an absent table yields undefined; a non-table rejects; a
- * present table with no `dir` yields {} (the default applies later). `dir`, when present, must be a
- * non-empty repo-root-relative forward-slash path (no "..", no leading/trailing slash), so a
- * committed artifact directory can never escape the repo. A malformed `dir` drops to {} after
- * recording the aggregated PolicyError naming cache.dir.
+ * present table with no `dir` yields {} (the default applies later). A malformed `dir` drops to {}
+ * after recording the aggregated PolicyError naming cache.dir.
  */
 export function validateCache(
   root: Record<string, unknown>,
@@ -45,16 +47,5 @@ export function validateCache(
     return {};
   }
 
-  if (result.dir === undefined) {
-    return {};
-  }
-
-  const dirProblems = pathProblems(result.dir).map((message) => ({ path: ["dir"], message }));
-
-  if (dirProblems.length > 0) {
-    problems.push(...formatProblems("cache", dirProblems));
-    return {};
-  }
-
-  return { dir: result.dir };
+  return result.dir === undefined ? {} : { dir: result.dir };
 }

@@ -1,10 +1,10 @@
 import { type } from "arktype";
 
-import { recordOf, stringOf } from "../../validate/record";
+import { recordOf } from "../../validate/record";
 
 import { collectArkProblems, nonBlankString } from "./arkAdapter";
 import { checkKeys } from "./diagnostics";
-import { validatePath } from "./scope";
+import { repoRelativePath, repoRelativePathRejectingDocker } from "./scope";
 
 /**
  * One [[docker.development]] entry: marks every container whose Dockerfile identity matches
@@ -43,27 +43,25 @@ export interface DockerConfig {
 }
 
 /**
- * Parse the optional [docker] table: an absent table yields undefined;
- * a non-table value rejects; a present table (with or without `ignore`) yields a DockerConfig whose
- * `ignore` defaults to []. Each ignore entry must be a non-empty string and a repo-relative
- * forward-slash glob - reusing validatePath EXACTLY (no backslashes, no ".." segments, no
- * leading/trailing slash, no empty/"."/whitespace-padded segments) so a crafted glob can never
- * escape the repo namespace. Unknown keys reject via checkKeys. A malformed entry pushes the
- * aggregated PolicyError message naming docker.ignore[i]; only a fully-valid table materializes
- * (matching the present-key idiom elsewhere).
+ * The two required fields of a `[[docker.development]]` entry. `source` rides the shared
+ * repo-relative-path morph, additionally forbidding a "docker:" prefix (the table already scopes
+ * the Dockerfile identity; the prefix would double up and could never match); `reason` is mandatory
+ * documentation. A duplicate `source` is caught cross-entry against `seen`, not here.
  */
-/**
- * The two required fields of a `[[docker.development]]` entry; `source`'s glob is checked after.
- */
-const developmentEntry = type({ source: nonBlankString, reason: nonBlankString });
+const developmentEntry = type({
+  source: nonBlankString.to(
+    repoRelativePathRejectingDocker(
+      (source) =>
+        `source "${source}" must not start with "docker:" (the table already scopes the Dockerfile identity; the prefix would double up and could never match)`,
+    ),
+  ),
+  reason: nonBlankString,
+});
 
 /**
- * Parse one [[docker.development]] entry: `source` must be a valid glob (validatePath - the same
- * posture as a docker.ignore entry) that does not
- * start with "docker:" (the table already scopes the Dockerfile identity;
- * the prefix would double up and could never match); `reason` is mandatory documentation. `seen`
- * collects already-accepted source strings so a duplicate pattern - silently dead, since only the
- * first entry could ever decide anything - is rejected too.
+ * Parse one [[docker.development]] entry: its declarative shape validates `source` and `reason`;
+ * `seen` collects already-accepted source strings so a duplicate pattern - silently dead, since
+ * only the first entry could ever decide anything - is rejected cross-entry.
  */
 function validateDockerDevelopmentEntry(
   rawEntry: unknown,
@@ -88,22 +86,11 @@ function validateDockerDevelopmentEntry(
   }
 
   const { source, reason } = envelope;
-  const before = problems.length;
-
-  validatePath(source, where, problems);
-  if (source.startsWith("docker:")) {
-    problems.push(
-      `${where}: source "${source}" must not start with "docker:" (the table already scopes the Dockerfile identity; the prefix would double up and could never match)`,
-    );
-  }
 
   if (seen.has(source)) {
     problems.push(
       `${where}: source "${source}" duplicates an earlier [[docker.development]] entry (the first match wins; the duplicate would be dead)`,
     );
-  }
-
-  if (problems.length !== before) {
     return undefined;
   }
 
@@ -150,6 +137,11 @@ function validateDockerDevelopment(
   return development;
 }
 
+/**
+ * Each `ignore` glob: a non-empty repo-relative forward-slash path, checked by the shared morph.
+ */
+const ignoreGlobs = nonBlankString.to(repoRelativePath).array();
+
 export function validateDocker(
   root: Record<string, unknown>,
   problems: string[],
@@ -179,29 +171,12 @@ export function validateDocker(
     return { ignore: [], development };
   }
 
-  const ignore: string[] = [];
+  const result = ignoreGlobs(raw);
 
-  raw.forEach((rawEntry, index) => {
-    const where = `docker.ignore[${index}]`;
-    const value = stringOf(rawEntry);
+  if (result instanceof type.errors) {
+    problems.push(...collectArkProblems(result, "docker.ignore"));
+    return { ignore: [], development };
+  }
 
-    if (value === undefined) {
-      problems.push(`${where}: must be a string`);
-      return;
-    }
-
-    if (value.trim() === "") {
-      problems.push(`${where}: must be a non-empty string`);
-      return;
-    }
-
-    const trimmed = value.trim();
-    const before = problems.length;
-
-    validatePath(trimmed, where, problems);
-    if (problems.length === before) {
-      ignore.push(trimmed);
-    }
-  });
-  return { ignore, development };
+  return { ignore: [...result], development };
 }

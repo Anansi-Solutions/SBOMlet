@@ -21,26 +21,31 @@ open question was how far to take it.
 
 Split validation by data dependency, not by "shape versus contents".
 
-- **arktype owns everything declarative:** field shape, primitive types, closed
-  enums, and SPDX parsing expressed as a morph (a parse-as-you-validate step that
-  hands back the typed value). Structural cross-field rules that fit a union go
-  here too — version-required-except-for-a-container-os-scope is one shape or the
-  other. Parsed, typed data flows straight out.
-- **Pure functions own the imperative residue:** the self-contained,
-  multi-fault cross-field checks — justification-versus-detected is the archetype
-  — written as plain functions returning a list of faults. A small adapter turns
-  arktype's own error set into the same `table[i]: <problem>` lines those functions
-  produce, so a construct reports both through one contract.
+- **arktype owns every single-field check:** field shape, primitive types, closed
+  enums, SPDX parsing, and every content rule on one field — a repo-relative path,
+  a `where` scope element, a target or workspace licence id, a name-glob pattern,
+  a `detected` lane's value — each expressed as a keyword, a union, or a morph (a
+  parse-as-you-validate step that hands back the typed value). A field that needs
+  several distinct diagnostics for one scalar (a path is absolute AND back-slashed)
+  is a morph that rejects each on its own disambiguated sub-path, since arktype's
+  scalar refinements short-circuit at the first failure. Parsed, typed data flows
+  straight out.
+- **Pure functions own the cross-field residue only:** rules that relate two or
+  more fields of an entry — justification-versus-detected, version-required-unless-
+  the-`where`-is-entirely-a-container-os-scope, the `name`/`pattern`/`packages`
+  exactly-one-of selector, `[target]`'s all-or-nothing profile — plus cross-entry
+  duplicate detection. A small adapter turns arktype's own error set into the same
+  `table[i]: <problem>` lines those functions produce, so a construct reports both
+  through one contract.
 - **Model-dependent checks stay in the pipeline.** As-dependency-of resolution and
   detected-versus-scan need the scan, not the policy text; they were never schema
   concerns and do not move.
 
-The split falls where the data does. The parse-heavy forms — a `[[compatible]]` or
-`[[deny]]` licence, a `[[clarify]]` expression — become a clean declarative shape.
-The imperative forms — the package selector's exactly-one-of-three, `[target]`'s
-all-or-nothing profile — keep a hand-rolled core, with arktype validating only
-their declarative envelope. That residue is the design working as intended, not a
-gap in it.
+The split falls where the data does. Anything that reads one field — its type, its
+closed set, its parseability, its path or glob or licence-id form — is declarative.
+Only a rule that reads two or more fields together keeps a hand-rolled core, with
+arktype validating every leaf around it. That residue is the design working as
+intended, not a gap in it.
 
 Error messages need only be semantically equivalent to the old ones, not
 byte-identical. That relaxation is what made the rewrite affordable.
@@ -53,8 +58,10 @@ byte-identical. That relaxation is what made the rewrite affordable.
 - Normalized-licence branding becomes reachable later: the parse morph is the one
   place a raw string becomes a canonical licence, so it can be made the sole mint
   point of a branded type.
-- arktype is now load-bearing for parsing. A contributor extending the schema
-  learns its morph-and-narrow model, where before they only read plain functions.
+- arktype is now load-bearing for parsing and for every single-field rule. A
+  contributor extending the schema learns its morph model (a validating parse that
+  may reject on disambiguated sub-paths), where before they only read plain
+  functions.
 
 ## See also
 

@@ -1,6 +1,6 @@
 import { type } from "arktype";
 
-import { recordOf, stringOf } from "../../validate/record";
+import { recordOf } from "../../validate/record";
 import { statedLicense } from "../statedLicense";
 
 import {
@@ -12,7 +12,7 @@ import {
 } from "./arkAdapter";
 import { checkKeys, unknownKeyProblems } from "./diagnostics";
 import { nameOrPatternProblems, versionPinProblems } from "./package";
-import { validatePath } from "./scope";
+import { repoRelativePath } from "./scope";
 import { spdxExpression } from "./spdx";
 
 import type { DetectedSignal } from "../../normalize/normalize";
@@ -95,11 +95,18 @@ export interface ClarifyRule {
 }
 
 /**
- * The optional top-level `clarifications` key: where the imported `[[clarify]]` entries live.
- * Validated exactly like `cache.dir` - repo-root-relative, forward slashes, no ".." segments - so a
- * policy can never point the loader outside the scanned repository. Absent yields undefined; a
- * malformed value yields undefined after recording the problem.
+ * The optional top-level `clarifications` key: where the imported `[[clarify]]` entries live. A
+ * non-empty repo-root-relative forward-slash path (no "..", no leading/trailing slash), so a policy
+ * can never point the loader outside the scanned repository - the same posture as `cache.dir`. A
+ * non-string or empty value reads as the one "non-empty path string" fault; the segment rules ride
+ * the shared {@link repoRelativePath} morph.
  */
+const CLARIFICATIONS_NONBLANK = "must be a non-empty path string";
+const clarificationsPathType = type("string.trim")
+  .to(type("string > 0").configure({ message: CLARIFICATIONS_NONBLANK }))
+  .configure({ message: CLARIFICATIONS_NONBLANK })
+  .to(repoRelativePath);
+
 export function validateClarificationsPath(
   root: Record<string, unknown>,
   problems: string[],
@@ -108,18 +115,14 @@ export function validateClarificationsPath(
     return undefined;
   }
 
-  const value = stringOf(root["clarifications"]);
+  const result = clarificationsPathType(root["clarifications"]);
 
-  if (value === undefined || value.trim() === "") {
-    problems.push("clarifications: must be a non-empty path string");
+  if (result instanceof type.errors) {
+    problems.push(...collectArkProblems(result, "clarifications"));
     return undefined;
   }
 
-  const trimmed = value.trim();
-  const before = problems.length;
-
-  validatePath(trimmed, "clarifications", problems);
-  return problems.length === before ? trimmed : undefined;
+  return result;
 }
 
 /** The lanes `detected` may record, in the order the documented table and the checks use. */
@@ -127,6 +130,13 @@ const DETECTED_SOURCES = ["registry", "intensive"] as const;
 
 /** One producing lane a `detected` table may record. */
 type DetectedSource = (typeof DETECTED_SOURCES)[number];
+
+/**
+ * One lane's recorded detection: the raw value that lane produced as a non-empty string (trimmed)
+ * - often not SPDX, since a registry label like "BSD" or "Dual License" is exactly what an entry
+ * exists to disambiguate - or the literal `false`, which records that the lane reports nothing.
+ */
+const detectedValue = type("false").or(nonBlankString);
 
 /**
  * The mandatory `detected` table: what each producing lane reported when the entry was written. At
@@ -170,23 +180,16 @@ function detectedProblems(entry: Record<string, unknown>): {
       continue;
     }
 
-    const value = table[source];
+    const value = detectedValue(table[source]);
 
-    if (value === false) {
-      detected[source] = false;
-      continue;
-    }
-
-    const text = stringOf(value);
-
-    if (text === undefined || text.trim() === "") {
+    if (value instanceof type.errors) {
       problems.push({
         message: `detected.${source} must be that source's detected value as a non-empty string, or false when it detects nothing`,
       });
       continue;
     }
 
-    detected[source] = text.trim();
+    detected[source] = value;
   }
 
   if (problems.length === 0 && Object.keys(detected).length === 0) {

@@ -1,6 +1,8 @@
 import { win32 } from "node:path";
 
-import { type DomainProblem } from "./arkAdapter";
+import { type } from "arktype";
+
+import { DISAMBIGUATOR } from "./arkAdapter";
 
 /** A leading Windows drive specifier: `C:/x`, `C:\\x`, and the drive-relative `C:x` alike. */
 const DRIVE_SPECIFIER = /^[A-Za-z]:/;
@@ -61,13 +63,41 @@ export function pathProblems(path: string): string[] {
 }
 
 /**
- * {@link pathProblems} prefixed onto the caller's `where` context - the shape a string[] sink
- * wants.
+ * A repo-relative-path field, declaratively. The verbatim text flows through unchanged; each fault
+ * {@link pathProblems} finds is rejected on its own disambiguated sub-path so several diagnostics
+ * accumulate for the one scalar, exactly as arktype cannot express through chained scalar
+ * refinements (which short-circuit at the first failure). Reused by every single-field path/glob
+ * the schema carries - the committed-artifact `cache.dir`, a `[docker].ignore` glob, a
+ * `[[docker.development]]` source, the `clarifications` file - so the shared segment rules live in
+ * ONE construct the field types reference.
  */
-export function validatePath(path: string, where: string, problems: string[]): void {
-  for (const problem of pathProblems(path)) {
-    problems.push(`${where}: ${problem}`);
-  }
+export const repoRelativePath = type("string").pipe((value, ctx): string => {
+  pathProblems(value).forEach((message, index) =>
+    ctx.reject({ relativePath: [`${DISAMBIGUATOR}${index}`], message }),
+  );
+  return value;
+});
+
+/**
+ * {@link repoRelativePath} that additionally forbids a leading `docker:` occurrence prefix - the
+ * path fields a container occurrence must never name (a workspace suppression, a
+ * `[[target.workspace]]` override, a `[[docker.development]]` source). The `docker:` rejection
+ * reads in the caller's own terms, so `dockerRejection` supplies the message for the offending
+ * value.
+ */
+export function repoRelativePathRejectingDocker(
+  dockerRejection: (path: string) => string,
+): typeof repoRelativePath {
+  return type("string").pipe((value, ctx): string => {
+    pathProblems(value).forEach((message, index) =>
+      ctx.reject({ relativePath: [`${DISAMBIGUATOR}${index}`], message }),
+    );
+    if (value.startsWith("docker:")) {
+      ctx.reject({ relativePath: [`${DISAMBIGUATOR}docker`], message: dockerRejection(value) });
+    }
+
+    return value;
+  });
 }
 
 /**
@@ -79,33 +109,29 @@ export function validatePath(path: string, where: string, problems: string[]): v
 export const EVERYWHERE_SCOPE = "/";
 
 /**
- * Domain faults in a `[[compatible]]` entry's `where` scope, once arktype has confirmed it is an
- * array of strings. An EMPTY array is rejected - a rule that could never match anywhere is a dead
- * rule by construction, the same posture as {@link pathProblems}'s could-never-match segments. Each
- * element is validated exactly like a suppression path (the evaluator applies the same
- * segment-aware prefix comparison to both), except the everywhere token {@link EVERYWHERE_SCOPE},
- * which stands for a deliberately repository-wide acceptance in place of a path.
+ * One `where` scope element: the everywhere token {@link EVERYWHERE_SCOPE}, which stands for a
+ * deliberately repository-wide acceptance in place of a path, or an occurrence-identity prefix
+ * validated exactly like a suppression path (the evaluator applies the same segment-aware prefix
+ * comparison to both). A "docker:"-prefixed prefix is legal here - a [[compatible]] `where` scope
+ * deliberately targets a container occurrence.
  */
-export function whereProblems(where: ReadonlyArray<string>): DomainProblem[] {
-  if (where.length === 0) {
-    return [
-      { path: ["where"], message: "must be a non-empty array of occurrence-identity prefixes" },
-    ];
+const whereElement = type("string").pipe((value, ctx): string => {
+  if (value === EVERYWHERE_SCOPE) {
+    return value;
   }
 
-  const problems: DomainProblem[] = [];
+  pathProblems(value).forEach((message, index) =>
+    ctx.reject({ relativePath: [`${DISAMBIGUATOR}${index}`], message }),
+  );
+  return value;
+});
 
-  where.forEach((element, index) => {
-    if (element === EVERYWHERE_SCOPE) {
-      return;
-    }
-
-    for (const problem of pathProblems(element)) {
-      problems.push({ path: ["where", index], message: problem });
-    }
-  });
-  return problems;
-}
+/**
+ * A `[[compatible]]` entry's `where` scope: a non-empty array of {@link whereElement} prefixes. The
+ * emptiness rule is declarative - a rule that could never match anywhere is a dead rule by
+ * construction, the same posture as {@link pathProblems}'s could-never-match segments.
+ */
+export const whereScope = whereElement.array().atLeastLength(1);
 
 /**
  * True when every `where` element targets a container os-scope. That is the one shape a

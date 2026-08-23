@@ -2,11 +2,11 @@ import { type } from "arktype";
 
 import { recordOf, stringOf } from "../../validate/record";
 
-import { collectArkProblems, formatProblems, nonBlankString, wrapErrors } from "./arkAdapter";
+import { collectArkProblems, formatProblems, nonBlankString } from "./arkAdapter";
 import { asDependencyOfProblems } from "./dependencyChain";
 import { checkKeys } from "./diagnostics";
 import { compatibleSelectorProblems, type CompatiblePackageElement } from "./package";
-import { whereProblems } from "./scope";
+import { whereScope } from "./scope";
 import { licenseAllowlist } from "./spdx";
 
 /**
@@ -130,26 +130,24 @@ const compatibleLicense = type({
   match: "'license'",
   pattern: nonBlankString,
   rationale: rationaleValue,
-  where: "string[]",
+  where: whereScope,
   "comment?": nonBlankString,
-})
-  .narrow(wrapErrors((entry) => whereProblems(entry.where)))
-  .pipe((entry, ctx): CompatibleLicenseRule => {
-    const { allowlist, problem } = licenseAllowlist(entry.pattern);
+}).pipe((entry, ctx): CompatibleLicenseRule => {
+  const { allowlist, problem } = licenseAllowlist(entry.pattern);
 
-    if (problem !== undefined) {
-      return ctx.reject({ relativePath: ["pattern"], message: problem }) as never;
-    }
+  if (problem !== undefined) {
+    return ctx.reject({ relativePath: ["pattern"], message: problem }) as never;
+  }
 
-    return {
-      match: "license",
-      pattern: entry.pattern,
-      allowlist: allowlist ?? [],
-      rationale: entry.rationale,
-      where: entry.where,
-      ...(entry.comment !== undefined ? { comment: entry.comment } : {}),
-    };
-  });
+  return {
+    match: "license",
+    pattern: entry.pattern,
+    allowlist: allowlist ?? [],
+    rationale: entry.rationale,
+    where: entry.where,
+    ...(entry.comment !== undefined ? { comment: entry.comment } : {}),
+  };
+});
 
 /**
  * The package form's declarative envelope: the closed `rationale`, the `where` scope, and an
@@ -160,7 +158,7 @@ const compatibleLicense = type({
 const compatiblePackageEnvelope = type({
   match: "'package'",
   rationale: rationaleValue,
-  where: "string[]",
+  where: whereScope,
   "comment?": nonBlankString,
 });
 
@@ -256,10 +254,6 @@ function validateCompatiblePackage(
   }
 
   const scope = whereArrayOf(entry["where"]);
-
-  if (scope !== undefined) {
-    problems.push(...formatProblems(where, whereProblems(scope)));
-  }
 
   const selector = compatibleSelectorProblems(entry, scope ?? []);
 

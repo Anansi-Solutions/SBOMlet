@@ -5,7 +5,7 @@ import { OSADL_MATRIX, type TargetLicense, type TargetProfile } from "../compat"
 
 import { collectArkProblems } from "./arkAdapter";
 import { checkKeys, requireText } from "./diagnostics";
-import { validatePath } from "./scope";
+import { repoRelativePathRejectingDocker } from "./scope";
 import { parseSpdxNode } from "./spdx";
 
 export interface TargetWorkspaceEntry {
@@ -51,18 +51,7 @@ const TARGET_WORKSPACE_KEYS = ["path", "license", "reason", "network", "distribu
  * dependency to the residual target:unknown-pair warn instead of a fail. `proprietary` is exempt
  * - tiers 2 and 3 already serve it a real incompatible verdict without needing a matrix row.
  */
-function validateTargetLicense(
-  raw: unknown,
-  where: string,
-  problems: string[],
-): TargetLicense | undefined {
-  const value = stringOf(raw);
-
-  if (value === undefined) {
-    problems.push(`${where}: key "license" must be a string`);
-    return undefined;
-  }
-
+const targetLicense = type("string").pipe((value, ctx): TargetLicense => {
   if (value === "proprietary") {
     return { kind: "proprietary" };
   }
@@ -70,32 +59,46 @@ function validateTargetLicense(
   const node = parseSpdxNode(value);
 
   if (node === undefined) {
-    problems.push(`${where}: license "${value}" is not a valid SPDX expression`);
-    return undefined;
+    return ctx.reject({ message: `license "${value}" is not a valid SPDX expression` }) as never;
   }
 
   if (!("license" in node)) {
-    problems.push(
-      `${where}: license "${value}" must be a single SPDX license id or the literal "proprietary", not a compound expression (dual-licensed targets are not supported in v1)`,
-    );
-    return undefined;
+    return ctx.reject({
+      message: `license "${value}" must be a single SPDX license id or the literal "proprietary", not a compound expression (dual-licensed targets are not supported in v1)`,
+    }) as never;
   }
 
   if (node.license.startsWith("LicenseRef-") || node.license.startsWith("DocumentRef-")) {
-    problems.push(
-      `${where}: license "${value}" must be a real SPDX license id or the literal "proprietary" - a LicenseRef-/DocumentRef- reference cannot anchor a compatibility target`,
-    );
-    return undefined;
+    return ctx.reject({
+      message: `license "${value}" must be a real SPDX license id or the literal "proprietary" - a LicenseRef-/DocumentRef- reference cannot anchor a compatibility target`,
+    }) as never;
   }
 
   if (!OSADL_MATRIX.has(node.license)) {
-    problems.push(
-      `${where}: license "${value}" is not covered by the compatibility matrix as a TARGET - the vetted OSADL data has no row for it, so the target lane could never classify a dependency against it; choose a target id the matrix covers, or govern the affected packages with per-package [[compatible]] rules instead`,
-    );
-    return undefined;
+    return ctx.reject({
+      message: `license "${value}" is not covered by the compatibility matrix as a TARGET - the vetted OSADL data has no row for it, so the target lane could never classify a dependency against it; choose a target id the matrix covers, or govern the affected packages with per-package [[compatible]] rules instead`,
+    }) as never;
   }
 
   return { kind: "oss", id: node.license };
+});
+
+/**
+ * {@link targetLicense} applied under `where`, its faults collected onto the shared problem sink.
+ */
+function validateTargetLicense(
+  raw: unknown,
+  where: string,
+  problems: string[],
+): TargetLicense | undefined {
+  const result = targetLicense(raw);
+
+  if (result instanceof type.errors) {
+    problems.push(...collectArkProblems(result, where));
+    return undefined;
+  }
+
+  return result;
 }
 
 /**
@@ -143,6 +146,11 @@ function validateTargetProjectProfile(
 /** The two non-license usage-profile flags, once the all-or-nothing gate has confirmed presence. */
 const profileFlags = type({ network: "boolean", distribution: "'external' | 'internal'" });
 
+/** [target] unknown_pair: warn|fail as a closed enum, its rejection naming the table key. */
+const targetUnknownPair = type("'warn' | 'fail'").configure({
+  message: 'key "unknown_pair" must be "warn" or "fail"',
+});
+
 /** [target] unknown_pair: the D4 residual knob, mirroring [unknown].handling. Absent -> "warn". */
 function validateTargetUnknownPair(
   table: Record<string, unknown>,
@@ -153,23 +161,23 @@ function validateTargetUnknownPair(
     return "warn";
   }
 
-  const value = stringOf(table["unknown_pair"]);
+  const result = targetUnknownPair(table["unknown_pair"]);
 
-  if (value === "warn" || value === "fail") {
-    return value;
+  if (result instanceof type.errors) {
+    problems.push(...collectArkProblems(result, where));
+    return "warn";
   }
 
-  problems.push(`${where}: key "unknown_pair" must be "warn" or "fail"`);
-  return "warn";
+  return result;
 }
 
 /**
  * One [[target.workspace]] entry: `path`/`license`/`reason` mandatory; `network`/`distribution`
  * optional and inherited from a complete project profile - but MANDATORY here too when no complete
- * project profile is declared (nothing to inherit from). `path` reuses validatePath, rejects a
- * "docker:" prefix (a container is never governed by a workspace override - the project profile
- * alone governs docker occurrences), and rejects a duplicate against `seen` (the first match would
- * always win at resolution time, making a repeat dead).
+ * project profile is declared (nothing to inherit from). `path` rides the shared repo-relative-path
+ * morph, rejects a "docker:" prefix (a container is never governed by a workspace override - the
+ * project profile alone governs docker occurrences), and rejects a duplicate against `seen` (the
+ * first match would always win at resolution time, making a repeat dead).
  */
 /**
  * network/distribution parse result for one [[target.workspace]] entry - see {@link
@@ -222,10 +230,22 @@ function validateTargetWorkspaceFlagsOf(
 }
 
 /**
- * `path`'s three rejection rules for one [[target.workspace]] entry: validatePath's shared segment
- * rules, a "docker:" prefix (a container is never governed by a workspace override), and a
- * duplicate against `seen` (the first match always wins at resolution, so a repeat would be dead).
- * No-op when `path` is undefined (an earlier problem already covers a missing/malformed path).
+ * A [[target.workspace]] `path`: the shared repo-relative-path morph, additionally forbidding a
+ * "docker:" prefix (a container image is never governed by a workspace override; the project
+ * profile alone governs docker occurrences). Duplicate detection is cross-entry, handled by the
+ * caller.
+ */
+const targetWorkspacePath = repoRelativePathRejectingDocker(
+  (path) =>
+    `path "${path}" must not start with "docker:" (a container image is never governed by a [[target.workspace]] override; the project profile alone governs docker occurrences)`,
+);
+
+/**
+ * `path`'s rejection rules for one [[target.workspace]] entry: the shared repo-relative-path
+ * morph's segment rules and "docker:" fence (a container is never governed by a workspace
+ * override), and a duplicate against `seen` (the first match always wins at resolution, so a repeat
+ * would be dead). No-op when `path` is undefined (an earlier problem already covers a
+ * missing/malformed path).
  */
 function validateTargetWorkspacePathOf(
   path: string | undefined,
@@ -237,11 +257,10 @@ function validateTargetWorkspacePathOf(
     return;
   }
 
-  validatePath(path, where, problems);
-  if (path.startsWith("docker:")) {
-    problems.push(
-      `${where}: path "${path}" must not start with "docker:" (a container image is never governed by a [[target.workspace]] override; the project profile alone governs docker occurrences)`,
-    );
+  const result = targetWorkspacePath(path);
+
+  if (result instanceof type.errors) {
+    problems.push(...collectArkProblems(result, where));
   }
 
   if (seen.has(path)) {
