@@ -128,7 +128,10 @@ export function nameOrPatternProblems(entry: Record<string, unknown>): {
  * trimmed and compared literally - the schema has no wildcard version anywhere. The list branch's
  * `atLeastLength` rejects an empty list; an element failure lands on its own index.
  */
-const versionList = nonBlankString.array().atLeastLength(1);
+const versionList = nonBlankString
+  .array()
+  .atLeastLength(1)
+  .describe("a non-empty array of version strings");
 
 const versionPin = nonBlankString.or(versionList);
 

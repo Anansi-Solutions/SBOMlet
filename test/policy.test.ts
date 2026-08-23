@@ -474,7 +474,7 @@ describe("parsePolicy — the [[compatible]] package selector", () => {
     );
 
     expect(error.message).toContain("compatible[0].version");
-    expect(error.message).toContain("must be non-empty");
+    expect(error.message).toContain("must be a non-empty array of version strings");
   });
 
   test("a name/pattern entry outside container scope must pin a version", () => {
@@ -899,7 +899,7 @@ describe("parsePolicy — the [[clarify]] package selector", () => {
     const error = expectPolicyError(clarifyFixture([...clarifyWithout("version"), "version = []"]));
 
     expect(error.message).toContain("clarify[0].version");
-    expect(error.message).toContain("must be non-empty");
+    expect(error.message).toContain("must be a non-empty array of version strings");
   });
 
   test("a clarify entry omitting version is rejected — there is no os-scope exemption here", () => {
