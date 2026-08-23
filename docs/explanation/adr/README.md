@@ -53,3 +53,4 @@ something we no longer do but haven't replaced.
 | [0024](0024-container-aware-licenses-report.md) | Container-aware licenses report: copyleft-only dedup, the AGPL container exception, per-container prod/dev fold | Accepted |
 | [0025](0025-target-license-compatibility-lane.md) | Target-license compatibility lane: vetted-matrix compatibility replaces hand-authored accept-lists | Accepted |
 | [0026](0026-chain-scoped-policy-schema.md) | Chain-scoped acceptances and re-checkable overrides: an acceptance names whose use was judged, a stated reason is one the scan can disprove | Accepted |
+| [0027](0027-arktype-policy-validation.md) | Validate policy shape with arktype, hand-roll the domain rules: the split falls on data dependency, not shape versus contents | Accepted |
