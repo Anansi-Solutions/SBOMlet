@@ -5,6 +5,58 @@
  * reserves fields so later work is purely additive: provenance layers, scope taxonomy for Docker,
  * and the dev/prod marker.
  */
+import { type } from "arktype";
+
+/**
+ * The four license-string brands. Each is a compile-time-only `string` refinement (arktype
+ * `.brand`): a plain `string` is NOT assignable to a brand, but a brand widens to `string` for
+ * free, so they erase at runtime and every serializer/renderer treats them as ordinary strings. The
+ * brand consts are validators used only through `typeof x.infer`; nothing mints a brand by running
+ * them.
+ *
+ * The lifecycle they separate: untrusted {@link RawLicense} text enters as a {@link LicenseClaim},
+ * `normalizeRaw` resolves it to a {@link NormalizedLicense} (valid SPDX, source spelling),
+ * `canonicalizeExpression` further reduces that to a {@link CanonicalExpression} (sorted/flattened,
+ * so `===` is set-equality), and policy-authored SPDX enters as its own {@link SpdxExpression}.
+ * Keeping them distinct is what stops a raw claim reaching a site that assumes a resolved
+ * expression.
+ */
+const _rawLicense = type("string").brand("rawLicense");
+const _normalizedLicense = type("string").brand("normalizedLicense");
+const _canonicalExpression = type("string").brand("canonicalExpression");
+const _spdxExpression = type("string").brand("spdxExpression");
+
+/**
+ * Untrusted, unresolved license text as it entered the tool - the type of {@link LicenseClaim.raw}.
+ */
+export type RawLicense = typeof _rawLicense.infer;
+
+/**
+ * Valid, resolved SPDX in source spelling (NOT necessarily sorted/flattened): the output of
+ * `normalizeRaw` and the type every tool-derived finding expression carries.
+ */
+export type NormalizedLicense = typeof _normalizedLicense.infer;
+
+/**
+ * A {@link NormalizedLicense} additionally flattened, deduped, absorbed, and sorted, so `===` is
+ * set-equality: the output of `canonicalizeExpression`, consumed on both sides of every license
+ * `===`.
+ */
+export type CanonicalExpression = typeof _canonicalExpression.infer;
+
+/**
+ * A policy-authored SPDX expression validated by the schema morph (`policy/schema/spdx.ts`).
+ * Carries the same "valid SPDX" guarantee as {@link NormalizedLicense} from a different source, so
+ * the two stay nominally distinct.
+ */
+export type SpdxExpression = typeof _spdxExpression.infer;
+
+/**
+ * Any resolved/validated SPDX expression that may legitimately reach spdx-satisfies / spdx-parse:
+ * every brand EXCEPT {@link RawLicense} (raw text must be normalized first). Used where a single
+ * parameter genuinely receives more than one of these brands.
+ */
+export type SatisfiableExpression = NormalizedLicense | CanonicalExpression | SpdxExpression;
 
 /**
  * Provenance of a license claim. "generator" is the source produced by the collectors; "registry"

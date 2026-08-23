@@ -23,6 +23,7 @@ import {
   type LicenseClaim,
   type LicenseClaimSource,
   type LicenseFinding,
+  type NormalizedLicense,
   type PackageEntry,
   type ScopeTaxonomy,
   type StaleOverride,
@@ -209,7 +210,7 @@ function isCommaLicenseList(value: string): boolean {
  * never a guessed precise id and never silently unknown.
  */
 export interface NormalizeResult {
-  expression: string | null;
+  expression: NormalizedLicense | null;
   source: "generator" | "corrected";
   imprecise?: true;
   impreciseFamily?: string;
@@ -230,7 +231,8 @@ export function normalizeRaw(raw: string): NormalizeResult {
 
   try {
     parse(trimmed);
-    return { expression: trimmed, source: "generator" }; // exact
+    // The sole NormalizedLicense mint: a raw value that parses verbatim is resolved SPDX.
+    return { expression: trimmed as NormalizedLicense, source: "generator" }; // exact
   } catch {
     /* fall through */
   }
@@ -253,7 +255,7 @@ export function normalizeRaw(raw: string): NormalizeResult {
   const fixup = PRECISE_LABEL_FIXUP.get(folded);
 
   if (fixup !== undefined) {
-    return { expression: fixup, source: "corrected" };
+    return { expression: fixup as NormalizedLicense, source: "corrected" };
   }
 
   // Debian/DEP-5 copyright shorthands → canonical SPDX. MUST run BEFORE correct(): correct() either
@@ -263,7 +265,7 @@ export function normalizeRaw(raw: string): NormalizeResult {
   const debian = DEBIAN_SHORTHAND.get(folded);
 
   if (debian !== undefined) {
-    return { expression: debian, source: "corrected" };
+    return { expression: debian as NormalizedLicense, source: "corrected" };
   }
 
   if (isCommaLicenseList(trimmed)) {
@@ -275,7 +277,7 @@ export function normalizeRaw(raw: string): NormalizeResult {
   if (fixed !== null) {
     try {
       parse(fixed); // belt-and-braces: corrected output must parse
-      return { expression: fixed, source: "corrected" };
+      return { expression: fixed as NormalizedLicense, source: "corrected" };
     } catch {
       /* corrected output unparseable - treat as unknown */
     }

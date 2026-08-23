@@ -5,8 +5,23 @@ import { describe, expect, test } from "bun:test";
 import parse from "spdx-expression-parse";
 
 import { claim, pkg, osPkg, modelOf } from "../../test/normalizeTestSupport";
-import { annotateFindings, normalizeRaw, type ClarifyInput } from "./normalize";
+import {
+  annotateFindings,
+  normalizeRaw as resolveRaw,
+  type ClarifyInput,
+  type NormalizeResult,
+} from "./normalize";
 import type { LicenseClaim, LicenseClaimKind } from "../model/dependencies";
+
+/**
+ * {@link resolveRaw} with its branded expression widened to a plain string, so value assertions
+ * compare against string literals without minting a brand in every expectation.
+ */
+const normalizeRaw = (
+  raw: string,
+): Omit<NormalizeResult, "expression"> & {
+  expression: string | null;
+} => resolveRaw(raw);
 
 // ---------------------------------------------------------------------------
 // normalizeRaw + annotateFindings (Task 3)

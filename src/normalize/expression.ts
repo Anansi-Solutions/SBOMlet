@@ -15,7 +15,11 @@
  */
 import parseSpdx from "spdx-expression-parse";
 
-import { compareCodeUnits } from "../model/dependencies";
+import {
+  compareCodeUnits,
+  type CanonicalExpression,
+  type NormalizedLicense,
+} from "../model/dependencies";
 import { COPYLEFT_IDS } from "../policy/engine/copyleft";
 
 export type ExpressionNode =
@@ -315,14 +319,15 @@ function canonicalizeNode(node: ExpressionNode): CanonicalNode {
  * under re-factoring - `(A OR B) AND (A OR C)` and `A OR (B AND C)` stay distinct - so that
  * direction fails safe as a visible conflict instead of a silently-accepted rewrite.
  */
-export function canonicalizeExpression(text: string): string {
+export function canonicalizeExpression(text: NormalizedLicense | string): CanonicalExpression {
   let parsed: ExpressionNode;
 
   try {
     parsed = parseSpdx(text) as ExpressionNode;
   } catch {
-    return text;
+    // Unparseable input is canonical by the idempotence/round-trip contract - returned verbatim.
+    return text as CanonicalExpression;
   }
 
-  return serializeCanonical(canonicalizeNode(parsed));
+  return serializeCanonical(canonicalizeNode(parsed)) as CanonicalExpression;
 }
