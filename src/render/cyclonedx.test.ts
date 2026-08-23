@@ -14,11 +14,11 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, test } from "bun:test";
 
-import { renderCyclonedx } from "../src/render/cyclonedx";
-import type { CanonicalDependencies, PackageEntry, Verdict } from "../src/model/dependencies";
+import { renderCyclonedx } from "./cyclonedx";
+import type { CanonicalDependencies, PackageEntry, Verdict } from "../model/dependencies";
 
 function golden(name: string): string {
-  return readFileSync(join(import.meta.dir, "golden", name), "utf-8");
+  return readFileSync(join(import.meta.dir, "..", "..", "test", "golden", name), "utf-8");
 }
 
 /** Hand-built PackageEntry with sensible defaults for contract tests. */

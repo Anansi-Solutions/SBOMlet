@@ -8,7 +8,7 @@
 
 import { describe, expect, test } from "bun:test";
 
-import { extractCopyrightLines } from "../src/extract/copyright";
+import { extractCopyrightLines } from "./copyright";
 
 describe("extractCopyrightLines — concrete lines", () => {
   test("an MIT text with a concrete (c) line yields exactly that trimmed line", () => {

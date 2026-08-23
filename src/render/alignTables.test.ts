@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { alignTables } from "../src/render/alignTables";
+import { alignTables } from "./alignTables";
 
 const lineWidths = (md: string): Set<number> => new Set(md.split("\n").map((line) => line.length));
 

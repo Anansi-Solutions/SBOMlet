@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
-import { applyContainerScopes } from "../src/pipeline/containerScope";
-import type { CanonicalDependencies, PackageEntry } from "../src/model/dependencies";
+import { applyContainerScopes } from "./containerScope";
+import type { CanonicalDependencies, PackageEntry } from "../model/dependencies";
 
 const API_CONTAINER = "docker:services/api/Dockerfile";
 const BUILD_CONTAINER = "docker:tools/build/Dockerfile";

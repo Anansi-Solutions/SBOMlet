@@ -24,8 +24,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, test } from "bun:test";
 
-import { classifyCoverage, coverageSkipReason } from "../src/pipeline/coverage";
-import { MAX_TERRAFORM_LOCK_BYTES } from "../src/collectors/terraform";
+import { MAX_TERRAFORM_LOCK_BYTES } from "../collectors/terraform";
+import { classifyCoverage, coverageSkipReason } from "./coverage";
 
 const tempDirs: string[] = [];
 
