@@ -1371,21 +1371,21 @@ describe("parsePolicy — [document] title + preamble", () => {
     const error = expectPolicyError(["[document]", 'title = ""'].join("\n"));
 
     expect(error.message).toContain("document");
-    expect(error.message).toContain('"title"');
+    expect(error.message).toContain("title");
   });
 
   test("non-string title is rejected", () => {
     const error = expectPolicyError(["[document]", "title = 42"].join("\n"));
 
     expect(error.message).toContain("document");
-    expect(error.message).toContain('"title"');
+    expect(error.message).toContain("title");
   });
 
   test("empty-string preamble is rejected", () => {
     const error = expectPolicyError(["[document]", 'preamble = "   "'].join("\n"));
 
     expect(error.message).toContain("document");
-    expect(error.message).toContain('"preamble"');
+    expect(error.message).toContain("preamble");
   });
 
   test("unknown key under [document] is rejected", () => {
@@ -3473,9 +3473,13 @@ describe("dev_dependencies knob — parsing (mirrors unknown.handling)", () => {
   test("an invalid handling value rejects naming dev_dependencies.handling", () => {
     const error = expectPolicyError('[dev_dependencies]\nhandling = "skip"');
 
-    expect(error.problems).toContain(
-      'dev_dependencies.handling: must be "warn", "fail", or "ignore"',
-    );
+    expect(
+      error.problems.some(
+        (p) =>
+          p.includes("dev_dependencies.handling") &&
+          ["warn", "fail", "ignore"].every((value) => p.includes(value)),
+      ),
+    ).toBe(true);
   });
 
   test("a non-table [dev_dependencies] value rejects", () => {
@@ -4353,9 +4357,13 @@ describe("os_dependencies knob — parsing (mirrors dev_dependencies EXACTLY)", 
   test("an invalid handling value rejects naming os_dependencies.handling", () => {
     const error = expectPolicyError('[os_dependencies]\nhandling = "skip"');
 
-    expect(error.problems).toContain(
-      'os_dependencies.handling: must be "warn", "fail", or "ignore"',
-    );
+    expect(
+      error.problems.some(
+        (p) =>
+          p.includes("os_dependencies.handling") &&
+          ["warn", "fail", "ignore"].every((value) => p.includes(value)),
+      ),
+    ).toBe(true);
   });
 
   test("a non-table [os_dependencies] value rejects", () => {

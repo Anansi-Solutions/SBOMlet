@@ -76,12 +76,18 @@ function renderLocation(path: ReadonlyArray<PropertyKey>): string {
 }
 
 /**
- * arktype restates the full path in a nested message (`value at [1].version must be ...`), which
- * duplicates the location the adapter already prints; the prefix is trimmed to the bare predicate.
- * A message a narrow supplied verbatim carries no such prefix and passes through untouched.
+ * arktype prefixes a fault with the location it already printed - the full path on a nested value
+ * (`value at [1].version must be ...`), the key name on a field (`handling must be ...`) - both of
+ * which duplicate what the adapter renders. The redundant lead is trimmed to the bare predicate. A
+ * message a narrow supplied verbatim leads with neither and passes through untouched (its own text
+ * never opens with the field key, by construction).
  */
-function trimMessage(message: string): string {
-  return message.replace(/^value at \S+ /, "");
+function trimMessage(message: string, lastKey: PropertyKey | undefined): string {
+  const trimmed = message.replace(/^value at \S+ /, "");
+
+  return typeof lastKey === "string" && trimmed.startsWith(`${lastKey} `)
+    ? trimmed.slice(lastKey.length + 1)
+    : trimmed;
 }
 
 /**
@@ -116,7 +122,9 @@ export function collectArkProblems(errors: ArkErrors, where: string): string[] {
       continue;
     }
 
-    lines.push(`${where}${renderLocation(path)}: ${trimMessage(error.message)}`);
+    lines.push(
+      `${where}${renderLocation(path)}: ${trimMessage(error.message, path[path.length - 1])}`,
+    );
   }
 
   return lines;

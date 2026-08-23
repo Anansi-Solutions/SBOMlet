@@ -1,19 +1,26 @@
+import { type } from "arktype";
+
 import { recordOf } from "../../validate/record";
 
-import { checkKeys, requireText } from "./diagnostics";
-import { validatePath } from "./scope";
+import { collectArkProblems, formatProblems } from "./arkAdapter";
+import { checkKeys } from "./diagnostics";
+import { nonEmptyString } from "./scalars";
+import { pathProblems } from "./scope";
 
 export interface CacheConfig {
   /** Repo-root-relative dir for committed artifacts; default applies when absent. */
   dir?: string;
 }
 
+/** The optional, non-empty `dir`; its path segments are checked separately. */
+const cacheShape = type({ "dir?": nonEmptyString });
+
 /**
  * Parse the optional [cache] table: an absent table yields undefined; a non-table rejects; a
  * present table with no `dir` yields {} (the default applies later). `dir`, when present, must be a
- * non-empty repo-root-relative forward-slash path (validatePath: no "..", no leading/trailing
- * slash), so a committed artifact directory can never escape the repo. A malformed `dir` drops to
- * {} after recording the aggregated PolicyError naming cache.dir.
+ * non-empty repo-root-relative forward-slash path (no "..", no leading/trailing slash), so a
+ * committed artifact directory can never escape the repo. A malformed `dir` drops to {} after
+ * recording the aggregated PolicyError naming cache.dir.
  */
 export function validateCache(
   root: Record<string, unknown>,
@@ -31,22 +38,24 @@ export function validateCache(
   }
 
   checkKeys(table, ["dir"], "cache", problems);
-  if (!("dir" in table)) {
+
+  const result = cacheShape(table);
+
+  if (result instanceof type.errors) {
+    problems.push(...collectArkProblems(result, "cache"));
     return {};
   }
 
-  const dir = requireText(table, "dir", "cache", problems);
-
-  if (dir === undefined) {
+  if (result.dir === undefined) {
     return {};
   }
 
-  const before = problems.length;
+  const dirProblems = pathProblems(result.dir).map((message) => ({ path: ["dir"], message }));
 
-  validatePath(dir, "cache.dir", problems);
-  if (problems.length !== before) {
+  if (dirProblems.length > 0) {
+    problems.push(...formatProblems("cache", dirProblems));
     return {};
   }
 
-  return { dir };
+  return { dir: result.dir };
 }
