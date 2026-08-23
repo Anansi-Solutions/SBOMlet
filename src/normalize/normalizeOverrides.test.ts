@@ -1,12 +1,8 @@
 import { describe, expect, test } from "bun:test";
 
-import {
-  annotateFindings,
-  type ClarifyInput,
-  type BuiltinOverrideInput,
-} from "../src/normalize/normalize";
-import { BUILTIN_OVERRIDES } from "../src/policy/engine/builtinOverrides";
-import { claim, pkg, modelOf } from "./normalizeTestSupport";
+import { BUILTIN_OVERRIDES } from "../policy/engine/builtinOverrides";
+import { claim, pkg, modelOf } from "../../test/normalizeTestSupport";
+import { annotateFindings, type ClarifyInput, type BuiltinOverrideInput } from "./normalize";
 
 describe("annotateFindings — clarify overrides", () => {
   test("matching name+version replaces the finding with source override", () => {

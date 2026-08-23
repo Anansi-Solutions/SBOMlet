@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
-import { observedSignalBySource } from "../src/normalize/normalize";
-import type { LicenseClaim, LicenseClaimSource, LicenseFinding } from "../src/model/dependencies";
+import { observedSignalBySource } from "./normalize";
+import type { LicenseClaim, LicenseClaimSource, LicenseFinding } from "../model/dependencies";
 
 // The pre-override observed signal, split by the lane that produced it. The
 // union is what the override machinery has always consumed and stays

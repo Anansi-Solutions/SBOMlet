@@ -1,17 +1,13 @@
 import { describe, expect, test } from "bun:test";
 
-import {
-  annotateFindings,
-  applyScancodeAssessment,
-  type ClarifyInput,
-} from "../src/normalize/normalize";
-import { claim, pkg, osPkg, modelOf } from "./normalizeTestSupport";
+import { claim, pkg, osPkg, modelOf } from "../../test/normalizeTestSupport";
+import { annotateFindings, applyScancodeAssessment, type ClarifyInput } from "./normalize";
 import type {
   LicenseClaim,
   LicenseClaimKind,
   LicenseFinding,
   PackageEntry,
-} from "../src/model/dependencies";
+} from "../model/dependencies";
 
 // ---------------------------------------------------------------------------
 // ScanCode senior assessment. applyScancodeAssessment

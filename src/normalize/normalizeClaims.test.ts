@@ -4,9 +4,9 @@ import { describe, expect, test } from "bun:test";
 
 import parse from "spdx-expression-parse";
 
-import { annotateFindings, normalizeRaw, type ClarifyInput } from "../src/normalize/normalize";
-import { claim, pkg, osPkg, modelOf } from "./normalizeTestSupport";
-import type { LicenseClaim, LicenseClaimKind } from "../src/model/dependencies";
+import { claim, pkg, osPkg, modelOf } from "../../test/normalizeTestSupport";
+import { annotateFindings, normalizeRaw, type ClarifyInput } from "./normalize";
+import type { LicenseClaim, LicenseClaimKind } from "../model/dependencies";
 
 // ---------------------------------------------------------------------------
 // normalizeRaw + annotateFindings (Task 3)
@@ -600,7 +600,7 @@ describe("normalizeRaw — Debian/DEP-5 shorthand map", () => {
   }
 
   test("every Debian-shorthand TARGET is a real SPDX id (typo-proof)", () => {
-    const dataDir = join(import.meta.dir, "..", "node_modules", "spdx-license-ids");
+    const dataDir = join(import.meta.dir, "..", "..", "node_modules", "spdx-license-ids");
     const current = JSON.parse(readFileSync(join(dataDir, "index.json"), "utf8")) as string[];
     const deprecated = JSON.parse(
       readFileSync(join(dataDir, "deprecated.json"), "utf8"),
