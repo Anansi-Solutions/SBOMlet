@@ -27,10 +27,10 @@ import { afterAll, beforeAll, describe, expect, mock, test } from "bun:test";
 import * as cdxgenModule from "../collectors/cdxgen";
 import * as yarnPluginModule from "../collectors/yarnPlugin";
 import { mergeSboms } from "../merge/merge";
-import { collectTargets } from "../pipeline/targets";
-import { runGenerate } from "../pipeline/pipeline";
-import type { GenerateOptions } from "../pipeline/options";
-import type { Target } from "./target";
+import { collectTargets } from "./targets";
+import { runGenerate } from "./pipeline";
+import type { GenerateOptions } from "./options";
+import type { Target } from "../targets/target";
 
 /** Original exports captured BEFORE any mock.module call (restore target). */
 const REAL_YARN_PLUGIN = { ...yarnPluginModule };
