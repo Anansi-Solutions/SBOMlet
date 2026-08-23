@@ -1,6 +1,10 @@
+import { type } from "arktype";
+
 import { recordOf, stringOf } from "../../validate/record";
 
-import { checkKeys, requireText } from "./diagnostics";
+import { collectArkProblems } from "./arkAdapter";
+import { checkKeys } from "./diagnostics";
+import { nonEmptyString } from "./scalars";
 import { validatePath } from "./scope";
 
 /**
@@ -50,6 +54,11 @@ export interface DockerConfig {
  * (matching the present-key idiom elsewhere).
  */
 /**
+ * The two required fields of a `[[docker.development]]` entry; `source`'s glob is checked after.
+ */
+const developmentEntry = type({ source: nonEmptyString, reason: nonEmptyString });
+
+/**
  * Parse one [[docker.development]] entry: `source` must be a valid glob (validatePath - the same
  * posture as a docker.ignore entry) that does not
  * start with "docker:" (the table already scopes the Dockerfile identity;
@@ -71,13 +80,15 @@ function validateDockerDevelopmentEntry(
   }
 
   checkKeys(entry, ["source", "reason"], where, problems);
-  const source = requireText(entry, "source", where, problems);
-  const reason = requireText(entry, "reason", where, problems);
 
-  if (source === undefined || reason === undefined) {
+  const envelope = developmentEntry(entry);
+
+  if (envelope instanceof type.errors) {
+    problems.push(...collectArkProblems(envelope, where));
     return undefined;
   }
 
+  const { source, reason } = envelope;
   const before = problems.length;
 
   validatePath(source, where, problems);
