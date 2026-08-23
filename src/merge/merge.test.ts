@@ -2,26 +2,25 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, test } from "bun:test";
 
-import { npmIntroductions } from "../src/collectors/npmProvenance";
-import { poetryIntroductions } from "../src/collectors/poetryProvenance";
-import {
-  assertDependencyGraphCoverage,
-  targetsWithDependencyGraph,
-} from "../src/merge/dependencyGraphs";
-import { mergeSboms, purlSetOf } from "../src/merge/merge";
+import { npmIntroductions } from "../collectors/npmProvenance";
+import { poetryIntroductions } from "../collectors/poetryProvenance";
 import {
   comparePackages,
   toSortedDependenciesJson,
   type CanonicalDependencies,
   type DependencyIntroduction,
   type PackageEntry,
-} from "../src/model/dependencies";
+} from "../model/dependencies";
+import { assertDependencyGraphCoverage, targetsWithDependencyGraph } from "./dependencyGraphs";
+import { mergeSboms, purlSetOf } from "./merge";
 
 const TARGET = "libraries/iframe-rpc";
 const SYNTHETIC_TARGET = "apps/synthetic";
 
 function loadFixture(name: string): unknown {
-  return JSON.parse(readFileSync(join(import.meta.dir, "fixtures", name), "utf-8"));
+  return JSON.parse(
+    readFileSync(join(import.meta.dir, "..", "..", "test", "fixtures", name), "utf-8"),
+  );
 }
 
 const volatileDoc = loadFixture("volatile-retained.json");
@@ -1626,7 +1625,7 @@ describe("mergeSboms — evidence parsing into attribution", () => {
     // attribution is ABSENT, not empty, when no evidence exists — the model
     // change is invisible to every existing golden.
     const golden = readFileSync(
-      join(import.meta.dir, "golden", "license-shapes.model.json"),
+      join(import.meta.dir, "..", "..", "test", "golden", "license-shapes.model.json"),
       "utf-8",
     );
 
