@@ -3,9 +3,9 @@ import { join } from "node:path";
 
 import { describe, expect, test } from "bun:test";
 
-import { BUILTIN_DENY_RULES, BUILTIN_DENY_RULE_ID } from "../src/policy/engine/builtinDenylist";
-import { denyRuleFor } from "../src/policy/engine/deny";
-import type { Policy } from "../src/policy/schema";
+import { BUILTIN_DENY_RULES, BUILTIN_DENY_RULE_ID } from "./builtinDenylist";
+import { denyRuleFor } from "./deny";
+import type { Policy } from "../schema";
 
 // A minimal policy with no consumer rules — proves the defaults fire on their own.
 const EMPTY_POLICY: Policy = {
@@ -22,7 +22,7 @@ const EMPTY_POLICY: Policy = {
 // The same spdx-license-ids data spdx-expression-parse matches against — a typo
 // in a shipped deny pattern would never match a parsed leaf and would silently
 // ship a default that denies nothing.
-const spdxDataDir = join(import.meta.dir, "..", "node_modules", "spdx-license-ids");
+const spdxDataDir = join(import.meta.dir, "..", "..", "..", "node_modules", "spdx-license-ids");
 const spdxIds = new Set<string>([
   ...(JSON.parse(readFileSync(join(spdxDataDir, "index.json"), "utf8")) as string[]),
   ...(JSON.parse(readFileSync(join(spdxDataDir, "deprecated.json"), "utf8")) as string[]),

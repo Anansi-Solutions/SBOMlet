@@ -5,14 +5,14 @@
 
 import { describe, expect, test } from "bun:test";
 
-import { npmIntroductions } from "../src/collectors/npmProvenance";
-import { mergeSboms, type CollectedSbom } from "../src/merge/merge";
-import { purlDisplayName } from "../src/model/dependencies";
+import { npmIntroductions } from "../../collectors/npmProvenance";
+import { mergeSboms, type CollectedSbom } from "../../merge/merge";
+import { purlDisplayName } from "../../model/dependencies";
 import {
   dependencyGraphsByTarget,
   firstUncoveredIntroduction,
   type TargetDependencyGraph,
-} from "../src/policy/engine/chain";
+} from "./chain";
 
 const TARGET = "apps/web";
 const UI_PURL = "pkg:npm/%40acme/ui@0.0.0-use.local";

@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { OS_PACKAGE_ECOSYSTEMS } from "../src/policy/engine/osEcosystems";
+import { OS_PACKAGE_ECOSYSTEMS } from "./osEcosystems";
 
 describe("OS_PACKAGE_ECOSYSTEMS — literal allowlist", () => {
   test("contains the Linux distro package-manager purl types", () => {

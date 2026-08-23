@@ -6,11 +6,11 @@
 
 import { describe, expect, test } from "bun:test";
 
-import { npmIntroductions } from "../src/collectors/npmProvenance";
-import { mergeSboms, type CollectedSbom } from "../src/merge/merge";
-import { crossValidatePolicy } from "../src/policy/engine/crossValidate";
-import { parsePolicy } from "../src/policy/parse/parse";
-import type { CanonicalDependencies } from "../src/model/dependencies";
+import { npmIntroductions } from "../../collectors/npmProvenance";
+import { mergeSboms, type CollectedSbom } from "../../merge/merge";
+import { parsePolicy } from "../parse/parse";
+import { crossValidatePolicy } from "./crossValidate";
+import type { CanonicalDependencies } from "../../model/dependencies";
 
 const GRAPH_TARGET = "apps/web";
 const FLAT_TARGET = "docker:images/app/Dockerfile";

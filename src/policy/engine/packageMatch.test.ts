@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test";
 
-import { matchesPackage, type PackageMatchTarget } from "../src/policy/engine/match";
-import { JUSTIFICATION_VALUES } from "../src/policy/schema/clarify";
-import { RATIONALE_VALUES } from "../src/policy/schema/compatible";
+import { JUSTIFICATION_VALUES } from "../schema/clarify";
+import { RATIONALE_VALUES } from "../schema/compatible";
+import { matchesPackage, type PackageMatchTarget } from "./match";
 
 // One matcher decides, for every policy surface, whether an entry covers a
 // package: an exact `name` or a `pattern` over the display name, narrowed by an

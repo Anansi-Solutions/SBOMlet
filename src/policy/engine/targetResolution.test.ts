@@ -5,13 +5,13 @@
  */
 import { describe, expect, test } from "bun:test";
 
-import { parsePolicy } from "../src/policy/parse/parse";
+import { parsePolicy } from "../parse/parse";
 import {
   resolveTargetProfile,
   suppressionOverlapNotices,
   unusedWorkspaceTargetWarnings,
-} from "../src/policy/engine/target";
-import type { CanonicalDependencies, PackageEntry } from "../src/model/dependencies";
+} from "./target";
+import type { CanonicalDependencies, PackageEntry } from "../../model/dependencies";
 
 function pkg(purl: string, targets: readonly string[]): PackageEntry {
   return {
