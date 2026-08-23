@@ -1,15 +1,14 @@
+import { type } from "arktype";
+
 import { recordOf, stringOf } from "../../validate/record";
 import { statedLicense } from "../statedLicense";
 
-import {
-  checkKeys,
-  optionalText,
-  parseSpdxChecked,
-  requireText,
-  validateClosedSet,
-} from "./diagnostics";
-import { validateNameOrPattern, validateVersionPin } from "./package";
+import { collectArkProblems, formatProblems, type DomainProblem } from "./arkAdapter";
+import { checkKeys, unknownKeyProblems } from "./diagnostics";
+import { nameOrPatternProblems, versionPinProblems } from "./package";
+import { nonEmptyString } from "./scalars";
 import { validatePath } from "./scope";
+import { spdxExpression } from "./spdx";
 
 import type { DetectedSignal } from "../../normalize/normalize";
 
@@ -123,42 +122,40 @@ const DETECTED_SOURCES = ["registry", "intensive"] as const;
 /** One producing lane a `detected` table may record. */
 type DetectedSource = (typeof DETECTED_SOURCES)[number];
 
-/** The parsed `detected` table - see {@link validateDetected}. */
-interface DetectedFields {
-  detected?: DetectedSignal;
-  valid: boolean;
-}
-
 /**
  * The mandatory `detected` table: what each producing lane reported when the entry was written. At
  * least one lane must be recorded. A lane's value is the raw value that lane produces, which is
  * often not SPDX - a registry classifier like "BSD" or "Dual License" is exactly what an entry
- * exists to disambiguate - or `false`, which records that the lane reports nothing at all.
+ * exists to disambiguate - or `false`, which records that the lane reports nothing at all. Faults
+ * are entry-relative for the caller to place under the entry.
  */
-function validateDetected(
-  entry: Record<string, unknown>,
-  where: string,
-  problems: string[],
-): DetectedFields {
+function detectedProblems(entry: Record<string, unknown>): {
+  detected?: DetectedSignal;
+  problems: DomainProblem[];
+} {
   if (!("detected" in entry)) {
-    problems.push(
-      `${where}: missing required key "detected" (an inline table of ${DETECTED_SOURCES.join(" and ")} detections)`,
-    );
-    return { valid: false };
+    return {
+      problems: [
+        {
+          message: `missing required key "detected" (an inline table of ${DETECTED_SOURCES.join(" and ")} detections)`,
+        },
+      ],
+    };
   }
 
   const table = recordOf(entry["detected"]);
 
   if (table === undefined) {
-    problems.push(
-      `${where}: key "detected" must be an inline table { registry = ..., intensive = ... }`,
-    );
-    return { valid: false };
+    return {
+      problems: [
+        { message: `key "detected" must be an inline table { registry = ..., intensive = ... }` },
+      ],
+    };
   }
 
-  const before = problems.length;
-
-  checkKeys(table, DETECTED_SOURCES, `${where}: detected`, problems);
+  const problems: DomainProblem[] = unknownKeyProblems(table, DETECTED_SOURCES).map((problem) => ({
+    message: `detected: ${problem.message}`,
+  }));
 
   const detected: DetectedSignal = {};
 
@@ -177,65 +174,59 @@ function validateDetected(
     const text = stringOf(value);
 
     if (text === undefined || text.trim() === "") {
-      problems.push(
-        `${where}: detected.${source} must be that source's detected value as a non-empty string, or false when it detects nothing`,
-      );
+      problems.push({
+        message: `detected.${source} must be that source's detected value as a non-empty string, or false when it detects nothing`,
+      });
       continue;
     }
 
     detected[source] = text;
   }
 
-  if (problems.length === before && Object.keys(detected).length === 0) {
-    problems.push(
-      `${where}: key "detected" must record at least one of ${DETECTED_SOURCES.join(", ")}`,
-    );
+  if (problems.length === 0 && Object.keys(detected).length === 0) {
+    problems.push({
+      message: `key "detected" must record at least one of ${DETECTED_SOURCES.join(", ")}`,
+    });
   }
 
-  return problems.length === before ? { detected, valid: true } : { valid: false };
-}
-
-/** The parsed `evidence` list - see {@link validateEvidence}. */
-interface EvidenceFields {
-  evidence?: ReadonlyArray<string>;
-  valid: boolean;
+  return problems.length === 0 ? { detected, problems } : { problems };
 }
 
 /**
  * The optional `evidence` list: files or URLs a reader can check for themselves. Recorded verbatim
  * and never fetched or verified, so the only rules are that the list is non-empty and every element
- * carries text.
+ * carries text. Faults are entry-relative.
  */
-function validateEvidence(
-  entry: Record<string, unknown>,
-  where: string,
-  problems: string[],
-): EvidenceFields {
+function evidenceProblems(entry: Record<string, unknown>): {
+  evidence?: ReadonlyArray<string>;
+  problems: DomainProblem[];
+} {
   if (!("evidence" in entry)) {
-    return { valid: true };
+    return { problems: [] };
   }
 
   const raw = entry["evidence"];
 
   if (!Array.isArray(raw) || raw.length === 0) {
-    problems.push(`${where}: key "evidence" must be a non-empty array of file paths or URLs`);
-    return { valid: false };
+    return {
+      problems: [{ message: `key "evidence" must be a non-empty array of file paths or URLs` }],
+    };
   }
 
   const evidence: string[] = [];
-  const before = problems.length;
+  const problems: DomainProblem[] = [];
 
   raw.forEach((value, index) => {
     const text = stringOf(value);
 
     if (text === undefined || text.trim() === "") {
-      problems.push(`${where}: evidence[${index}] must be a non-empty string`);
+      problems.push({ message: `evidence[${index}] must be a non-empty string` });
       return;
     }
 
     evidence.push(text);
   });
-  return problems.length === before ? { evidence, valid: true } : { valid: false };
+  return problems.length === 0 ? { evidence, problems } : { problems };
 }
 
 /**
@@ -257,29 +248,30 @@ const JUSTIFICATION_LANES: Readonly<Record<Justification, ReadonlyArray<Detected
 };
 
 /**
- * The stated justification against the entry's own `detected`.
+ * The stated justification against the entry's own `detected` - the self-contained cross-field
+ * residue, reported as one accumulated set of entry-relative faults.
  *
  * An entry claiming the two sources disagree while recording one of them as silent contradicts
  * itself, and the invalidity lane can never say so: it runs only while `detected` still holds, and
  * a lane recorded as silent holds by staying silent. The check belongs here, where the entry is
- * read, and the error names the lane to record.
+ * read, and the fault names the lane to record.
  */
-function validateJustificationDetection(
+function justificationDetectionProblems(
   justification: Justification,
   detected: DetectedSignal,
-  where: string,
-  problems: string[],
-): void {
+): DomainProblem[] {
+  const problems: DomainProblem[] = [];
+
   for (const source of JUSTIFICATION_LANES[justification]) {
     if (detected[source] === false) {
-      problems.push(
-        `${where}: justification "${justification}" is a claim about what the ${source} source reported, but detected.${source} records that it reports nothing. Record what it reported, or choose the justification that fits.`,
-      );
+      problems.push({
+        message: `justification "${justification}" is a claim about what the ${source} source reported, but detected.${source} records that it reports nothing. Record what it reported, or choose the justification that fits.`,
+      });
     }
   }
 
   if (justification !== "license-not-found") {
-    return;
+    return problems;
   }
 
   for (const source of DETECTED_SOURCES) {
@@ -287,11 +279,13 @@ function validateJustificationDetection(
     const stated = typeof value === "string" ? statedLicense(value) : null;
 
     if (stated !== null) {
-      problems.push(
-        `${where}: justification "license-not-found" says no source states a licence, but detected.${source} records "${value}", which states ${stated}. Record the reason the stated licence is wrong instead, or choose the justification that fits.`,
-      );
+      problems.push({
+        message: `justification "license-not-found" says no source states a licence, but detected.${source} records "${value}", which states ${stated}. Record the reason the stated licence is wrong instead, or choose the justification that fits.`,
+      });
     }
   }
+
+  return problems;
 }
 
 const CLARIFY_KEYS = [
@@ -318,6 +312,13 @@ const CLARIFY_REPLACED_KEYS: ReadonlyMap<string, string> = new Map([
   ],
 ]);
 
+/** The closed `justification` and the SPDX `expression`, plus the optional prose `comment`. */
+const clarifyEnvelope = type({
+  justification: type.enumerated(...JUSTIFICATION_VALUES),
+  expression: spdxExpression,
+  "comment?": nonEmptyString,
+});
+
 /** One [[clarify]] entry -> rule, or undefined when any field is invalid. */
 function validateClarifyEntry(
   entry: Record<string, unknown>,
@@ -329,51 +330,54 @@ function validateClarifyEntry(
 
   checkKeys(entry, CLARIFY_KEYS, where, problems, CLARIFY_REPLACED_KEYS);
 
-  const selector = validateNameOrPattern(entry, where, problems);
-  const pin = validateVersionPin(entry, where, problems, {
-    required: true,
-    osScopeExemptible: false,
-  });
-  const detection = validateDetected(entry, where, problems);
-  const justification = validateClosedSet(
-    entry,
-    "justification",
-    JUSTIFICATION_VALUES,
-    where,
-    problems,
-  );
-  const expression = requireText(entry, "expression", where, problems);
+  const envelope = clarifyEnvelope(entry);
 
-  if (expression !== undefined) {
-    parseSpdxChecked(expression, `${where}: expression`, problems);
+  if (envelope instanceof type.errors) {
+    problems.push(...collectArkProblems(envelope, where));
   }
 
-  const evidence = validateEvidence(entry, where, problems);
-  const comment = optionalText(entry, "comment", where, problems);
+  const selector = nameOrPatternProblems(entry);
 
-  if (justification !== undefined && detection.detected !== undefined) {
-    validateJustificationDetection(justification, detection.detected, where, problems);
+  problems.push(...formatProblems(where, selector.problems));
+
+  const pin = versionPinProblems(entry, { required: true, osScopeExemptible: false });
+
+  problems.push(...formatProblems(where, pin.problems));
+
+  const detection = detectedProblems(entry);
+
+  problems.push(...formatProblems(where, detection.problems));
+
+  const evidence = evidenceProblems(entry);
+
+  problems.push(...formatProblems(where, evidence.problems));
+
+  if (!(envelope instanceof type.errors) && detection.detected !== undefined) {
+    problems.push(
+      ...formatProblems(
+        where,
+        justificationDetectionProblems(envelope.justification, detection.detected),
+      ),
+    );
   }
 
   if (
-    problems.length !== before ||
-    expression === undefined ||
-    justification === undefined ||
-    detection.detected === undefined
+    envelope instanceof type.errors ||
+    detection.detected === undefined ||
+    problems.length !== before
   ) {
     return undefined;
   }
 
   return {
     identity,
-    ...(selector.name !== undefined ? { name: selector.name } : {}),
-    ...(selector.pattern !== undefined ? { pattern: selector.pattern } : {}),
+    ...selector.selector,
     ...(pin.version !== undefined ? { version: pin.version } : {}),
     detected: detection.detected,
-    justification,
-    expression,
+    justification: envelope.justification,
+    expression: envelope.expression,
     ...(evidence.evidence !== undefined ? { evidence: evidence.evidence } : {}),
-    ...(comment !== undefined ? { comment } : {}),
+    ...(envelope.comment !== undefined ? { comment: envelope.comment } : {}),
   };
 }
 

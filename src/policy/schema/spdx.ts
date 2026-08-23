@@ -25,9 +25,9 @@ export function parseSpdxNode(value: string): ExpressionNode | undefined {
  * A string field that must be a parseable SPDX expression. The value flows through unchanged - the
  * parse validates, it does not rewrite - so the field stays the verbatim text the policy wrote.
  */
-export const spdxExpression = type("string").pipe((value, ctx) =>
+export const spdxExpression = type("string").pipe((value, ctx): string =>
   parseSpdxNode(value) === undefined
-    ? ctx.reject({ message: `"${value}" is not a valid SPDX expression` })
+    ? (ctx.reject({ message: `"${value}" is not a valid SPDX expression` }) as never)
     : value,
 );
 
