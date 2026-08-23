@@ -14,7 +14,7 @@ import {
   pythonThirdPartyEntryCount,
   thirdPartyEntryCount,
   yarnWorkspaceMembers,
-} from "../src/targets/firstParty";
+} from "./firstParty";
 
 describe("firstPartyNames — workspace/portal member set from lockfile text", () => {
   test("verified real-world portal and workspace entry headers yield their names", () => {
@@ -820,7 +820,7 @@ describe("yarnWorkspaceMembers — @workspace: resolution body lines", () => {
 describe("yarnWorkspaceMembers — a workspaces-monorepo fixture (workspace-berry.lock)", () => {
   test("the full fixture lock parses to exactly the three workspace members, in lockfile order, all with dependencies", () => {
     const lockfile = readFileSync(
-      join(import.meta.dir, "fixtures", "workspace-berry.lock"),
+      join(import.meta.dir, "..", "..", "test", "fixtures", "workspace-berry.lock"),
       "utf8",
     );
 

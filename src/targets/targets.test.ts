@@ -24,13 +24,13 @@ import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import { afterAll, beforeAll, describe, expect, mock, test } from "bun:test";
 
-import * as cdxgenModule from "../src/collectors/cdxgen";
-import * as yarnPluginModule from "../src/collectors/yarnPlugin";
-import { mergeSboms } from "../src/merge/merge";
-import { collectTargets } from "../src/pipeline/targets";
-import { runGenerate } from "../src/pipeline/pipeline";
-import type { GenerateOptions } from "../src/pipeline/options";
-import type { Target } from "../src/targets/target";
+import * as cdxgenModule from "../collectors/cdxgen";
+import * as yarnPluginModule from "../collectors/yarnPlugin";
+import { mergeSboms } from "../merge/merge";
+import { collectTargets } from "../pipeline/targets";
+import { runGenerate } from "../pipeline/pipeline";
+import type { GenerateOptions } from "../pipeline/options";
+import type { Target } from "./target";
 
 /** Original exports captured BEFORE any mock.module call (restore target). */
 const REAL_YARN_PLUGIN = { ...yarnPluginModule };
@@ -38,7 +38,14 @@ const REAL_YARN_PLUGIN = { ...yarnPluginModule };
 /** Original cdxgen exports captured before any mock.module call. */
 const REAL_CDXGEN = { ...cdxgenModule };
 
-const WORKSPACE_LOCK = join(import.meta.dir, "fixtures", "workspace-berry.lock");
+const WORKSPACE_LOCK = join(
+  import.meta.dir,
+  "..",
+  "..",
+  "test",
+  "fixtures",
+  "workspace-berry.lock",
+);
 
 /** basename(target.dir) -> fixture pair name ("root" default for the root unit). */
 const FIXTURE_PAIRS: Record<string, string> = {
@@ -62,8 +69,14 @@ async function fakeCollectWithYarnPlugin(
   const sbomPath = join(tempDir, "full.json");
   const prodSbomPath = join(tempDir, "prod.json");
 
-  copyFileSync(join(import.meta.dir, "fixtures", `${pairName}-full.json`), sbomPath);
-  copyFileSync(join(import.meta.dir, "fixtures", `${pairName}-prod.json`), prodSbomPath);
+  copyFileSync(
+    join(import.meta.dir, "..", "..", "test", "fixtures", `${pairName}-full.json`),
+    sbomPath,
+  );
+  copyFileSync(
+    join(import.meta.dir, "..", "..", "test", "fixtures", `${pairName}-prod.json`),
+    prodSbomPath,
+  );
   return {
     sbomPath,
     prodSbomPath,
@@ -123,14 +136,14 @@ function baseOpts(root: string): GenerateOptions {
 
 describe("collectTargets — yarn workspace expansion (mechanism test)", () => {
   beforeAll(() => {
-    mock.module("../src/collectors/yarnPlugin", () => ({
+    mock.module("../collectors/yarnPlugin", () => ({
       ...REAL_YARN_PLUGIN,
       collectWithYarnPlugin: fakeCollectWithYarnPlugin,
     }));
   });
 
   afterAll(() => {
-    mock.module("../src/collectors/yarnPlugin", () => REAL_YARN_PLUGIN);
+    mock.module("../collectors/yarnPlugin", () => REAL_YARN_PLUGIN);
   });
 
   test("workspace member NAMES never affect behavior — a scoped package name at a deep path, and a member name that differs entirely from its own directory, expand and attribute identically to a plain single-segment name", async () => {
@@ -231,7 +244,7 @@ describe("collectTargets — yarn workspace expansion (mechanism test)", () => {
         })),
       });
 
-    mock.module("../src/collectors/yarnPlugin", () => ({
+    mock.module("../collectors/yarnPlugin", () => ({
       ...REAL_YARN_PLUGIN,
       collectWithYarnPlugin: async (
         target: Target,
@@ -290,7 +303,7 @@ describe("collectTargets — yarn workspace expansion (mechanism test)", () => {
         { target: "services/backend-api", isDevDependency: false },
       ]);
     } finally {
-      mock.module("../src/collectors/yarnPlugin", () => ({
+      mock.module("../collectors/yarnPlugin", () => ({
         ...REAL_YARN_PLUGIN,
         collectWithYarnPlugin: fakeCollectWithYarnPlugin,
       }));
@@ -635,14 +648,14 @@ function evilPathLockLines(evilPath: string): string[] {
 
 describe("collectTargets — yarn workspace expansion edge behavior", () => {
   beforeAll(() => {
-    mock.module("../src/collectors/yarnPlugin", () => ({
+    mock.module("../collectors/yarnPlugin", () => ({
       ...REAL_YARN_PLUGIN,
       collectWithYarnPlugin: fakeCollectWithYarnPlugin,
     }));
   });
 
   afterAll(() => {
-    mock.module("../src/collectors/yarnPlugin", () => REAL_YARN_PLUGIN);
+    mock.module("../collectors/yarnPlugin", () => REAL_YARN_PLUGIN);
   });
 
   test("structural no-op: a single-workspace (@workspace:.-only) lock takes the exact current path — one input, identity '.' , no unit fields set", async () => {
@@ -892,7 +905,7 @@ describe("collectTargets — yarn workspace expansion edge behavior", () => {
 
     let spawnCount = 0;
 
-    mock.module("../src/collectors/yarnPlugin", () => ({
+    mock.module("../collectors/yarnPlugin", () => ({
       ...REAL_YARN_PLUGIN,
       collectWithYarnPlugin: async (
         target: Target,
@@ -914,7 +927,7 @@ describe("collectTargets — yarn workspace expansion edge behavior", () => {
       expect(spawnCount).toBe(0);
       expect(result.inputs).toEqual([]);
     } finally {
-      mock.module("../src/collectors/yarnPlugin", () => ({
+      mock.module("../collectors/yarnPlugin", () => ({
         ...REAL_YARN_PLUGIN,
         collectWithYarnPlugin: fakeCollectWithYarnPlugin,
       }));
@@ -964,7 +977,7 @@ describe("collectTargets — yarn workspace expansion edge behavior", () => {
 
     let spawnCount = 0;
 
-    mock.module("../src/collectors/yarnPlugin", () => ({
+    mock.module("../collectors/yarnPlugin", () => ({
       ...REAL_YARN_PLUGIN,
       collectWithYarnPlugin: async (
         target: Target,
@@ -977,7 +990,7 @@ describe("collectTargets — yarn workspace expansion edge behavior", () => {
     await expect(collectTargets(baseOpts(root), () => {})).rejects.toThrow(/outside/);
     expect(spawnCount).toBe(0);
 
-    mock.module("../src/collectors/yarnPlugin", () => ({
+    mock.module("../collectors/yarnPlugin", () => ({
       ...REAL_YARN_PLUGIN,
       collectWithYarnPlugin: fakeCollectWithYarnPlugin,
     }));
@@ -1048,7 +1061,7 @@ describe("collectTargets — yarn workspace expansion edge behavior", () => {
 
     let spawnCount = 0;
 
-    mock.module("../src/collectors/yarnPlugin", () => ({
+    mock.module("../collectors/yarnPlugin", () => ({
       ...REAL_YARN_PLUGIN,
       collectWithYarnPlugin: async (
         target: Target,
@@ -1064,7 +1077,7 @@ describe("collectTargets — yarn workspace expansion edge behavior", () => {
       await expect(collectTargets(baseOpts(root), () => {})).rejects.toThrow(/symlink/);
       expect(spawnCount).toBe(0);
     } finally {
-      mock.module("../src/collectors/yarnPlugin", () => ({
+      mock.module("../collectors/yarnPlugin", () => ({
         ...REAL_YARN_PLUGIN,
         collectWithYarnPlugin: fakeCollectWithYarnPlugin,
       }));
@@ -1123,7 +1136,7 @@ describe("collectTargets — yarn workspace expansion edge behavior", () => {
     // Stub the plugin to return an EMPTY SBOM for the backend unit only
     // (a scan that legitimately produced nothing, despite a real
     // dependencies: entry in the lock).
-    mock.module("../src/collectors/yarnPlugin", () => ({
+    mock.module("../collectors/yarnPlugin", () => ({
       ...REAL_YARN_PLUGIN,
       collectWithYarnPlugin: async (
         _target: Target,
@@ -1153,7 +1166,7 @@ describe("collectTargets — yarn workspace expansion edge behavior", () => {
         /coverage assertion failed/,
       );
     } finally {
-      mock.module("../src/collectors/yarnPlugin", () => ({
+      mock.module("../collectors/yarnPlugin", () => ({
         ...REAL_YARN_PLUGIN,
         collectWithYarnPlugin: fakeCollectWithYarnPlugin,
       }));
@@ -1168,7 +1181,7 @@ describe("collectTargets — yarn workspace expansion edge behavior", () => {
 
     let spawnCount = 0;
 
-    mock.module("../src/collectors/yarnPlugin", () => ({
+    mock.module("../collectors/yarnPlugin", () => ({
       ...REAL_YARN_PLUGIN,
       collectWithYarnPlugin: async (
         target: Target,
@@ -1181,7 +1194,7 @@ describe("collectTargets — yarn workspace expansion edge behavior", () => {
     await expect(collectTargets(baseOpts(root), () => {})).rejects.toThrow(/evil/);
     expect(spawnCount).toBe(0);
 
-    mock.module("../src/collectors/yarnPlugin", () => ({
+    mock.module("../collectors/yarnPlugin", () => ({
       ...REAL_YARN_PLUGIN,
       collectWithYarnPlugin: fakeCollectWithYarnPlugin,
     }));
@@ -1209,7 +1222,7 @@ describe("collectTargets — yarn workspace expansion edge behavior", () => {
 
       let spawnCount = 0;
 
-      mock.module("../src/collectors/yarnPlugin", () => ({
+      mock.module("../collectors/yarnPlugin", () => ({
         ...REAL_YARN_PLUGIN,
         collectWithYarnPlugin: async (
           target: Target,
@@ -1225,7 +1238,7 @@ describe("collectTargets — yarn workspace expansion edge behavior", () => {
         );
         expect(spawnCount).toBe(0);
       } finally {
-        mock.module("../src/collectors/yarnPlugin", () => ({
+        mock.module("../collectors/yarnPlugin", () => ({
           ...REAL_YARN_PLUGIN,
           collectWithYarnPlugin: fakeCollectWithYarnPlugin,
         }));
@@ -1250,7 +1263,7 @@ describe("collectTargets — yarn workspace expansion edge behavior", () => {
 
       let spawnCount = 0;
 
-      mock.module("../src/collectors/yarnPlugin", () => ({
+      mock.module("../collectors/yarnPlugin", () => ({
         ...REAL_YARN_PLUGIN,
         collectWithYarnPlugin: async (
           target: Target,
@@ -1266,7 +1279,7 @@ describe("collectTargets — yarn workspace expansion edge behavior", () => {
         );
         expect(spawnCount).toBe(0);
       } finally {
-        mock.module("../src/collectors/yarnPlugin", () => ({
+        mock.module("../collectors/yarnPlugin", () => ({
           ...REAL_YARN_PLUGIN,
           collectWithYarnPlugin: fakeCollectWithYarnPlugin,
         }));
@@ -1325,7 +1338,7 @@ describe("collectTargets — yarn workspace expansion edge behavior", () => {
     let cdxgenCalls = 0;
     let pluginCalls = 0;
 
-    mock.module("../src/collectors/cdxgen", () => ({
+    mock.module("../collectors/cdxgen", () => ({
       ...REAL_CDXGEN,
       collectWithCdxgen: async (): Promise<cdxgenModule.CollectorSbomFile> => {
         cdxgenCalls += 1;
@@ -1350,7 +1363,7 @@ describe("collectTargets — yarn workspace expansion edge behavior", () => {
         return { sbomPath, cacheKey: "fake", tool: REAL_CDXGEN.CDXGEN_TOOL };
       },
     }));
-    mock.module("../src/collectors/yarnPlugin", () => ({
+    mock.module("../collectors/yarnPlugin", () => ({
       ...REAL_YARN_PLUGIN,
       collectWithYarnPlugin: async (
         target: Target,
@@ -1380,8 +1393,8 @@ describe("collectTargets — yarn workspace expansion edge behavior", () => {
         `collecting . via ${tool.name}@${tool.version}`,
       ]);
     } finally {
-      mock.module("../src/collectors/cdxgen", () => REAL_CDXGEN);
-      mock.module("../src/collectors/yarnPlugin", () => ({
+      mock.module("../collectors/cdxgen", () => REAL_CDXGEN);
+      mock.module("../collectors/yarnPlugin", () => ({
         ...REAL_YARN_PLUGIN,
         collectWithYarnPlugin: fakeCollectWithYarnPlugin,
       }));
@@ -1428,14 +1441,14 @@ describe("collectTargets — yarn workspace expansion (fixture-mirror document)"
   // left-pad dev dependency — every fixture component carries a license, so
   // the enrichment lane stays fetch-free without needing a fetch stub.
   beforeAll(() => {
-    mock.module("../src/collectors/yarnPlugin", () => ({
+    mock.module("../collectors/yarnPlugin", () => ({
       ...REAL_YARN_PLUGIN,
       collectWithYarnPlugin: fakeCollectWithYarnPlugin,
     }));
   });
 
   afterAll(() => {
-    mock.module("../src/collectors/yarnPlugin", () => REAL_YARN_PLUGIN);
+    mock.module("../collectors/yarnPlugin", () => REAL_YARN_PLUGIN);
   });
 
   function generateOpts(root: string, policyPath?: string): GenerateOptions {

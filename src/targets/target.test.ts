@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import { afterEach, describe, expect, test } from "bun:test";
 
-import { resolveTarget } from "../src/targets/target";
+import { resolveTarget } from "./target";
 
 // Self-contained temp trees only — no reference to any host-project path.
 const tempRoots: string[] = [];
