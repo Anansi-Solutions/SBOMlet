@@ -11,10 +11,10 @@ import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import ts from "typescript";
 
-/** Ceiling for comment lines as a share of non-blank lines in src/. */
-export const MAX_COMMENT_LINE_RATIO = 0.43;
-/** Ceiling for comment words as a share of word tokens in src/. */
-export const MAX_COMMENT_WORD_RATIO = 0.7;
+/** Ceiling for comment lines as a share of non-blank lines across src/ (tests included). */
+export const MAX_COMMENT_LINE_RATIO = 0.28;
+/** Ceiling for comment words as a share of word tokens across src/ (tests included). */
+export const MAX_COMMENT_WORD_RATIO = 0.55;
 
 export interface CommentMetrics {
   /** Non-blank lines in the measured files. */
@@ -104,13 +104,7 @@ function listSourceFiles(dir: string): string[] {
 
     if (entry.isDirectory()) {
       files.push(...listSourceFiles(path));
-    } else if (
-      entry.name.endsWith(".ts") &&
-      !entry.name.endsWith(".test.ts") &&
-      !entry.name.endsWith(".spec.ts")
-    ) {
-      // Colocated unit tests carry their own comment norms; the src density
-      // budget measures shipped source only.
+    } else if (entry.name.endsWith(".ts")) {
       files.push(path);
     }
   }
