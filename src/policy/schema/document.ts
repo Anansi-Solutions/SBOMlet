@@ -1,6 +1,9 @@
+import { type } from "arktype";
+
 import { recordOf } from "../../validate/record";
 
-import { checkKeys, optionalText } from "./diagnostics";
+import { collectArkProblems, nonBlankString } from "./arkAdapter";
+import { checkKeys } from "./diagnostics";
 
 /**
  * The optional [document] table: author-supplied presentation prose for the LICENSES document only
@@ -15,11 +18,14 @@ export interface DocumentConfig {
   preamble?: string;
 }
 
+/** Both keys optional; each, when present, a non-empty string. */
+const documentShape = type({ "title?": nonBlankString, "preamble?": nonBlankString });
+
 /**
- * Parse the optional [document] table: an absent table yields undefined;
- * a non-table value rejects; an empty table yields {}; title/preamble are each OPTIONAL but, when
- * present, must be a non-empty string (optionalText). Unknown keys reject via checkKeys. Only
- * present-and-valid keys are materialized so the "absent key" state stays observable.
+ * Parse the optional [document] table: an absent table yields undefined; a non-table value rejects;
+ * an empty table yields {}; title/preamble are each OPTIONAL but, when present, must be a non-empty
+ * string. Unknown keys reject via checkKeys. Only present-and-valid keys are materialized so the
+ * "absent key" state stays observable.
  */
 export function validateDocument(
   root: Record<string, unknown>,
@@ -37,11 +43,16 @@ export function validateDocument(
   }
 
   checkKeys(table, ["title", "preamble"], "document", problems);
-  const title = optionalText(table, "title", "document", problems);
-  const preamble = optionalText(table, "preamble", "document", problems);
+
+  const result = documentShape(table);
+
+  if (result instanceof type.errors) {
+    problems.push(...collectArkProblems(result, "document"));
+    return {};
+  }
 
   return {
-    ...(title !== undefined ? { title } : {}),
-    ...(preamble !== undefined ? { preamble } : {}),
+    ...(result.title !== undefined ? { title: result.title } : {}),
+    ...(result.preamble !== undefined ? { preamble: result.preamble } : {}),
   };
 }

@@ -1,8 +1,12 @@
+import { type } from "arktype";
+
 import { recordOf } from "../../validate/record";
 
+import { collectArkProblems, nonBlankString } from "./arkAdapter";
 import { SOURCE_AVAILABLE_LICENSE_IDS } from "./deny";
-import { checkKeys, parseSpdxChecked, requireText } from "./diagnostics";
-import { validatePath } from "./scope";
+import { checkKeys } from "./diagnostics";
+import { repoRelativePathRejectingDocker } from "./scope";
+import { parseSpdxNode } from "./spdx";
 
 export interface SuppressedWorkspace {
   /** Repo-relative target-identity prefix, e.g. "apps/studio". */
@@ -16,6 +20,43 @@ export interface SuppressedWorkspace {
   /** Mandatory documentation: why suppression is justified. */
   description: string;
 }
+
+/**
+ * A single SPDX license id (a leaf, optionally WITH/+), never a compound expression - a compound
+ * has no single family/identity to verify the suppression against. The verbatim text flows through.
+ */
+const singleWorkspaceLicense = type("string").pipe((value, ctx): string => {
+  const node = parseSpdxNode(value);
+
+  if (node === undefined) {
+    return ctx.reject({ message: `license "${value}" is not a valid SPDX expression` }) as never;
+  }
+
+  if (!("license" in node)) {
+    return ctx.reject({
+      message: `license "${value}" must be a single SPDX license ID (the workspace's own distribution license), not a compound expression`,
+    }) as never;
+  }
+
+  return value;
+});
+
+/**
+ * The three required fields of a `[[workspace.copyleft_suppressed]]` entry, fully declarative: the
+ * repo-relative `path` (forbidding a "docker:" prefix - a container image is not a workspace;
+ * accept a container's copyleft package with a scoped [[compatible]] rule instead), the single-id
+ * `license`, and the mandatory `description`.
+ */
+const suppressionEnvelope = type({
+  path: nonBlankString.to(
+    repoRelativePathRejectingDocker(
+      (path) =>
+        `path "${path}" must not start with "docker:" (a container image is not a workspace; accept a container's copyleft package with a scoped [[compatible]] rule instead)`,
+    ),
+  ),
+  license: nonBlankString.to(singleWorkspaceLicense),
+  description: nonBlankString,
+});
 
 export function validateSuppressions(
   root: Record<string, unknown>,
@@ -59,40 +100,20 @@ export function validateSuppressions(
       return;
     }
 
+    const before = problems.length;
+
     checkKeys(entry, ["path", "license", "description"], where, problems);
-    const path = requireText(entry, "path", where, problems);
-    const license = requireText(entry, "license", where, problems);
-    const description = requireText(entry, "description", where, problems);
 
-    if (path !== undefined) {
-      validatePath(path, where, problems);
-      if (path.startsWith("docker:")) {
-        problems.push(
-          `${where}: path "${path}" must not start with "docker:" (a container image is not a workspace; accept a container's copyleft package with a scoped [[compatible]] rule instead)`,
-        );
-      }
-    }
+    const envelope = suppressionEnvelope(entry);
 
-    let licenseValid = false;
-
-    if (license !== undefined) {
-      const node = parseSpdxChecked(license, `${where}: license`, problems);
-
-      if (node !== undefined) {
-        if ("license" in node) {
-          licenseValid = true;
-        } else {
-          // Verdict-affecting - a compound expression has no single family/identity to verify
-          // suppression against.
-          problems.push(
-            `${where}: license "${license}" must be a single SPDX license ID (the workspace's own distribution license), not a compound expression`,
-          );
-        }
-      }
-    }
-
-    if (path !== undefined && license !== undefined && licenseValid && description !== undefined) {
-      suppressed.push({ path, license, description });
+    if (envelope instanceof type.errors) {
+      problems.push(...collectArkProblems(envelope, where));
+    } else if (problems.length === before) {
+      suppressed.push({
+        path: envelope.path,
+        license: envelope.license,
+        description: envelope.description,
+      });
     }
   });
   return suppressed;
@@ -110,14 +131,19 @@ export interface AllowSourceAvailable {
   reason: string;
 }
 
-/** The shipped source-available licence ids - the only ones an exemption may name. */
-const BUILTIN_DENY_PATTERNS: ReadonlyArray<string> = SOURCE_AVAILABLE_LICENSE_IDS;
+/**
+ * The two required fields of an `[[allow_source_available]]` entry: `license` is one of the shipped
+ * source-available ids (a consumer's own [[deny]] is absolute and not exempted here), enforced as a
+ * closed enum; `reason` is mandatory documentation.
+ */
+const exemptionEnvelope = type({
+  license: nonBlankString.to(type.enumerated(...SOURCE_AVAILABLE_LICENSE_IDS)),
+  reason: nonBlankString,
+});
 
 /**
  * Parse [[allow_source_available]] (ADR-0013 opt-out): each entry exempts ONE built-in
- * source-available licence from the shipped deny default. `license` must be one of the shipped
- * patterns (a consumer's own [[deny]] is absolute and not exempted here); `reason` is mandatory
- * documentation. An absent table yields [].
+ * source-available licence from the shipped deny default. An absent table yields [].
  */
 export function validateAllowSourceAvailable(
   root: Record<string, unknown>,
@@ -147,19 +173,15 @@ export function validateAllowSourceAvailable(
     }
 
     checkKeys(entry, ["license", "reason"], where, problems);
-    const license = requireText(entry, "license", where, problems);
-    const reason = requireText(entry, "reason", where, problems);
 
-    if (license !== undefined && !BUILTIN_DENY_PATTERNS.includes(license)) {
-      problems.push(
-        `${where}: license "${license}" is not a built-in source-available default — only ${BUILTIN_DENY_PATTERNS.join(", ")} can be exempted (a consumer's own [[deny]] is absolute and not exempted here)`,
-      );
+    const envelope = exemptionEnvelope(entry);
+
+    if (envelope instanceof type.errors) {
+      problems.push(...collectArkProblems(envelope, where));
       return;
     }
 
-    if (license !== undefined && reason !== undefined) {
-      exemptions.push({ license, reason });
-    }
+    exemptions.push({ license: envelope.license, reason: envelope.reason });
   });
   return exemptions;
 }

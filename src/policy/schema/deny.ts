@@ -1,7 +1,10 @@
-import { orLeaves } from "../../normalize/expression";
+import { type } from "arktype";
+
 import { recordOf, stringOf } from "../../validate/record";
 
-import { checkKeys, parseSpdxChecked, requireText } from "./diagnostics";
+import { collectArkProblems, nonBlankString } from "./arkAdapter";
+import { checkKeys } from "./diagnostics";
+import { licenseAllowlist } from "./spdx";
 
 /**
  * A validated deny entry. License mode carries the pre-decomposed allowlist (orLeaves), name mode
@@ -24,65 +27,66 @@ export type DenyRule =
  */
 export const SOURCE_AVAILABLE_LICENSE_IDS = ["BUSL-1.1", "SSPL-1.0", "Elastic-2.0"] as const;
 
+const DENY_KEYS = ["match", "pattern", "reason"] as const;
+
 /**
- * One [[deny]] entry → a DenyRule, mirroring validateCompatible EXACTLY. A license-mode entry
- * pre-decomposes its pattern via orLeaves into a satisfies allowlist (AND patterns rejected up
- * front, same as compatible - satisfies cannot hold AND allowlist entries); a name-mode entry
- * stores the verbatim pattern. Every malformed field pushes the aggregated PolicyError message
- * naming `deny[i]`.
+ * The license form: the SPDX `pattern` decomposed into a satisfies allowlist (an AND pattern is
+ * rejected up front, same as [[compatible]]) plus the mandatory `reason`.
+ */
+const denyLicense = type({
+  match: "'license'",
+  pattern: nonBlankString,
+  reason: nonBlankString,
+}).pipe((entry, ctx): DenyRule => {
+  const { allowlist, problem } = licenseAllowlist(entry.pattern);
+
+  if (problem !== undefined) {
+    return ctx.reject({ relativePath: ["pattern"], message: problem }) as never;
+  }
+
+  return {
+    match: "license",
+    pattern: entry.pattern,
+    allowlist: allowlist ?? [],
+    reason: entry.reason,
+  };
+});
+
+/** The name form: a verbatim package name and the mandatory `reason`. */
+const denyName = type({
+  match: "'name'",
+  pattern: nonBlankString,
+  reason: nonBlankString,
+}).pipe((entry): DenyRule => ({ match: "name", pattern: entry.pattern, reason: entry.reason }));
+
+/**
+ * One [[deny]] entry → a DenyRule, discriminated on `match`. A license-mode entry pre-decomposes
+ * its pattern into a satisfies allowlist; a name-mode entry stores the verbatim pattern. Every
+ * malformed field pushes the aggregated PolicyError message naming `deny[i]`.
  */
 function validateDenyEntry(
   entry: Record<string, unknown>,
   where: string,
   problems: string[],
 ): DenyRule | undefined {
+  const before = problems.length;
   const match = stringOf(entry["match"]);
 
-  if (match === "license") {
-    checkKeys(entry, ["match", "pattern", "reason"], where, problems);
-    const pattern = requireText(entry, "pattern", where, problems);
-    const reason = requireText(entry, "reason", where, problems);
-
-    if (pattern === undefined) {
-      return undefined;
-    }
-
-    const node = parseSpdxChecked(pattern, `${where}: pattern`, problems);
-
-    if (node === undefined) {
-      return undefined;
-    }
-
-    const allowlist = orLeaves(node);
-
-    if (allowlist === null) {
-      problems.push(
-        `${where}: pattern "${pattern}" must be a license ID or an OR of license IDs (AND is not allowed — satisfies allowlists cannot hold AND expressions)`,
-      );
-      return undefined;
-    }
-
-    if (reason === undefined) {
-      return undefined;
-    }
-
-    return { match: "license", pattern, allowlist, reason };
+  if (match !== "license" && match !== "name") {
+    problems.push(`${where}: key "match" must be "license" or "name"`);
+    return undefined;
   }
 
-  if (match === "name") {
-    checkKeys(entry, ["match", "pattern", "reason"], where, problems);
-    const pattern = requireText(entry, "pattern", where, problems);
-    const reason = requireText(entry, "reason", where, problems);
+  checkKeys(entry, DENY_KEYS, where, problems);
 
-    if (pattern === undefined || reason === undefined) {
-      return undefined;
-    }
+  const result = match === "license" ? denyLicense(entry) : denyName(entry);
 
-    return { match: "name", pattern, reason };
+  if (result instanceof type.errors) {
+    problems.push(...collectArkProblems(result, where));
+    return undefined;
   }
 
-  problems.push(`${where}: key "match" must be "license" or "name"`);
-  return undefined;
+  return problems.length === before ? result : undefined;
 }
 
 export function validateDeny(root: Record<string, unknown>, problems: string[]): DenyRule[] {

@@ -1,14 +1,16 @@
 import { win32 } from "node:path";
 
-import { stringOf } from "../../validate/record";
+import { type } from "arktype";
+
+import { DISAMBIGUATOR } from "./arkAdapter";
 
 /** A leading Windows drive specifier: `C:/x`, `C:\\x`, and the drive-relative `C:x` alike. */
 const DRIVE_SPECIFIER = /^[A-Za-z]:/;
 
 /**
- * Suppression path rules: forward-slash repo-relative identity prefix. Empty paths are rejected by
- * requireText (an empty prefix would suppress everything); ".." segments, backslashes, and
- * leading/trailing slashes can never appear in target identities, so a path carrying them is a
+ * Suppression path rules: forward-slash repo-relative identity prefix. Empty paths are rejected
+ * here as an empty segment (an empty prefix would suppress everything); ".." segments, backslashes,
+ * and leading/trailing slashes can never appear in target identities, so a path carrying them is a
  * policy bug, not a match candidate. The same goes for empty ("a//b"), "." ("a/./b"), and
  * whitespace-padded ("a /b") segments: target identities are normalized segment text, so such a
  * path can never match - and because suppression entries are excluded from unused-rule reporting, a
@@ -26,34 +28,76 @@ const DRIVE_SPECIFIER = /^[A-Za-z]:/;
  * "docker:" fence lives in validateSuppressions instead, since only a workspace suppression must
  * never absorb a container.
  */
-export function validatePath(path: string, where: string, problems: string[]): void {
+export function pathProblems(path: string): string[] {
+  const problems: string[] = [];
+
   if (DRIVE_SPECIFIER.test(path) || win32.isAbsolute(path)) {
     problems.push(
-      `${where}: path "${path}" must be repository-relative (an absolute or drive-lettered path names a file outside the repository)`,
+      `path "${path}" must be repository-relative (an absolute or drive-lettered path names a file outside the repository)`,
     );
   }
 
   if (path.includes("\\")) {
     problems.push(
-      `${where}: path "${path}" must use forward slashes only (target identities are forward-slash)`,
+      `path "${path}" must use forward slashes only (target identities are forward-slash)`,
     );
   }
 
   if (path.startsWith("/") || path.endsWith("/")) {
-    problems.push(`${where}: path "${path}" must not have a leading or trailing slash`);
+    problems.push(`path "${path}" must not have a leading or trailing slash`);
   }
 
   const segments = path.split("/");
 
   if (segments.includes("..")) {
-    problems.push(`${where}: path "${path}" must not contain ".." segments`);
+    problems.push(`path "${path}" must not contain ".." segments`);
   }
 
   if (segments.some((s) => s === "" || s === "." || s !== s.trim())) {
     problems.push(
-      `${where}: path "${path}" contains an empty, ".", or whitespace-padded segment (it could never match a target identity)`,
+      `path "${path}" contains an empty, ".", or whitespace-padded segment (it could never match a target identity)`,
     );
   }
+
+  return problems;
+}
+
+/**
+ * A repo-relative-path field, declaratively. The verbatim text flows through unchanged; each fault
+ * {@link pathProblems} finds is rejected on its own disambiguated sub-path so several diagnostics
+ * accumulate for the one scalar, exactly as arktype cannot express through chained scalar
+ * refinements (which short-circuit at the first failure). Reused by every single-field path/glob
+ * the schema carries - the committed-artifact `cache.dir`, a `[docker].ignore` glob, a
+ * `[[docker.development]]` source, the `clarifications` file - so the shared segment rules live in
+ * ONE construct the field types reference.
+ */
+export const repoRelativePath = type("string").pipe((value, ctx): string => {
+  pathProblems(value).forEach((message, index) =>
+    ctx.reject({ relativePath: [`${DISAMBIGUATOR}${index}`], message }),
+  );
+  return value;
+});
+
+/**
+ * {@link repoRelativePath} that additionally forbids a leading `docker:` occurrence prefix - the
+ * path fields a container occurrence must never name (a workspace suppression, a
+ * `[[target.workspace]]` override, a `[[docker.development]]` source). The `docker:` rejection
+ * reads in the caller's own terms, so `dockerRejection` supplies the message for the offending
+ * value.
+ */
+export function repoRelativePathRejectingDocker(
+  dockerRejection: (path: string) => string,
+): typeof repoRelativePath {
+  return type("string").pipe((value, ctx): string => {
+    pathProblems(value).forEach((message, index) =>
+      ctx.reject({ relativePath: [`${DISAMBIGUATOR}${index}`], message }),
+    );
+    if (value.startsWith("docker:")) {
+      ctx.reject({ relativePath: [`${DISAMBIGUATOR}docker`], message: dockerRejection(value) });
+    }
+
+    return value;
+  });
 }
 
 /**
@@ -65,59 +109,29 @@ export function validatePath(path: string, where: string, problems: string[]): v
 export const EVERYWHERE_SCOPE = "/";
 
 /**
- * The required `where` scope on a [[compatible]] entry: a non-empty array of occurrence-identity
- * prefixes, each validated exactly like a suppression path (the evaluator applies the same
- * segment-aware prefix comparison to both). An EMPTY array is rejected - a rule that could never
- * match anywhere is a dead rule by construction, the same posture as validatePath's
- * could-never-match segments. An element may be the everywhere token {@link EVERYWHERE_SCOPE} in
- * place of a path, so a deliberately repository-wide acceptance stays expressible while stating a
- * scope stays a conscious choice. `context` is the error-context string (conventionally named
- * `where` elsewhere in this file - renamed here because `where` is the TOML key under validation).
+ * One `where` scope element: the everywhere token {@link EVERYWHERE_SCOPE}, which stands for a
+ * deliberately repository-wide acceptance in place of a path, or an occurrence-identity prefix
+ * validated exactly like a suppression path (the evaluator applies the same segment-aware prefix
+ * comparison to both). A "docker:"-prefixed prefix is legal here - a [[compatible]] `where` scope
+ * deliberately targets a container occurrence.
  */
-export function validateWhere(
-  entry: Record<string, unknown>,
-  context: string,
-  problems: string[],
-): { where?: ReadonlyArray<string>; valid: boolean } {
-  if (!("where" in entry)) {
-    problems.push(
-      `${context}: missing required key "where" (the occurrence-identity prefixes this acceptance covers, or ["${EVERYWHERE_SCOPE}"] for every occurrence)`,
-    );
-    return { valid: false };
+const whereElement = type("string").pipe((value, ctx): string => {
+  if (value === EVERYWHERE_SCOPE) {
+    return value;
   }
 
-  const raw = entry["where"];
+  pathProblems(value).forEach((message, index) =>
+    ctx.reject({ relativePath: [`${DISAMBIGUATOR}${index}`], message }),
+  );
+  return value;
+});
 
-  if (!Array.isArray(raw) || raw.length === 0) {
-    problems.push(
-      `${context}: key "where" must be a non-empty array of occurrence-identity prefixes`,
-    );
-    return { valid: false };
-  }
-
-  const before = problems.length;
-  const scope: string[] = [];
-
-  raw.forEach((value, index) => {
-    const text = stringOf(value);
-
-    if (text === undefined) {
-      problems.push(`${context}: where[${index}] must be a string`);
-      return;
-    }
-
-    if (text !== EVERYWHERE_SCOPE) {
-      validatePath(text, `${context}.where[${index}]`, problems);
-    }
-
-    scope.push(text);
-  });
-  if (problems.length !== before) {
-    return { valid: false };
-  }
-
-  return { where: scope, valid: true };
-}
+/**
+ * A `[[compatible]]` entry's `where` scope: a non-empty array of {@link whereElement} prefixes. The
+ * emptiness rule is declarative - a rule that could never match anywhere is a dead rule by
+ * construction, the same posture as {@link pathProblems}'s could-never-match segments.
+ */
+export const whereScope = whereElement.array().atLeastLength(1);
 
 /**
  * True when every `where` element targets a container os-scope. That is the one shape a

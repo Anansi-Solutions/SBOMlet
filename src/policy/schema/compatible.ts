@@ -1,16 +1,13 @@
-import { orLeaves } from "../../normalize/expression";
+import { type } from "arktype";
+
 import { recordOf, stringOf } from "../../validate/record";
 
-import { validateAsDependencyOf } from "./dependencyChain";
-import {
-  checkKeys,
-  optionalText,
-  parseSpdxChecked,
-  requireText,
-  validateClosedSet,
-} from "./diagnostics";
-import { validateCompatiblePackageSelector, type CompatiblePackageElement } from "./package";
-import { validateWhere } from "./scope";
+import { collectArkProblems, formatProblems, nonBlankString } from "./arkAdapter";
+import { asDependencyOfProblems } from "./dependencyChain";
+import { checkKeys } from "./diagnostics";
+import { compatibleSelectorProblems, type CompatiblePackageElement } from "./package";
+import { whereScope } from "./scope";
+import { licenseAllowlist } from "./spdx";
 
 /**
  * Why an otherwise-incompatible package is accepted.
@@ -92,6 +89,9 @@ export interface CompatiblePackageRule {
 
 export type CompatibleRule = CompatibleLicenseRule | CompatiblePackageRule;
 
+/** The closed vocabulary of `rationale`, as an arktype enum. */
+const rationaleValue = type.enumerated(...RATIONALE_VALUES);
+
 /** Keys an earlier [[compatible]] schema used, each naming what replaced it. */
 const COMPATIBLE_REPLACED_KEYS: ReadonlyMap<string, string> = new Map([
   ["reason", 'key "reason" was replaced by "rationale" (a closed set) plus an optional "comment"'],
@@ -105,6 +105,62 @@ const COMPATIBLE_LICENSE_REPLACED_KEYS: ReadonlyMap<string, string> = new Map([
     'key "as-dependency-of" is not applicable at license level - a licence is accepted wherever "where" covers it, not through one package\'s use of another',
   ],
 ]);
+
+const COMPATIBLE_LICENSE_KEYS = ["match", "pattern", "rationale", "where", "comment"] as const;
+const COMPATIBLE_PACKAGE_KEYS = [
+  "match",
+  "name",
+  "pattern",
+  "packages",
+  "version",
+  "as-dependency-of",
+  "rationale",
+  "where",
+  "comment",
+] as const;
+
+/**
+ * The license form's declarative shape: the SPDX `pattern`, the closed `rationale`, and the `where`
+ * scope (its element paths checked by the bound narrow). The trailing pipe decomposes `pattern`
+ * into the satisfies allowlist the evaluator reads via {@link licenseAllowlist}. Here `pattern` is
+ * the SPDX expression the acceptance covers; the package form reads the same key as a name glob
+ * instead.
+ */
+const compatibleLicense = type({
+  match: "'license'",
+  pattern: nonBlankString,
+  rationale: rationaleValue,
+  where: whereScope,
+  "comment?": nonBlankString,
+}).pipe((entry, ctx): CompatibleLicenseRule => {
+  const { allowlist, problem } = licenseAllowlist(entry.pattern);
+
+  if (problem !== undefined) {
+    return ctx.reject({ relativePath: ["pattern"], message: problem }) as never;
+  }
+
+  return {
+    match: "license",
+    pattern: entry.pattern,
+    allowlist: allowlist ?? [],
+    rationale: entry.rationale,
+    where: entry.where,
+    ...(entry.comment !== undefined ? { comment: entry.comment } : {}),
+  };
+});
+
+/**
+ * The package form's declarative envelope: the closed `rationale`, the `where` scope, and an
+ * optional `comment`. The selector (`name`/`pattern`/`packages`), the version pin, and
+ * `as-dependency-of` are cross-field and imperative, validated by the pure checks the orchestrator
+ * runs alongside.
+ */
+const compatiblePackageEnvelope = type({
+  match: "'package'",
+  rationale: rationaleValue,
+  where: whereScope,
+  "comment?": nonBlankString,
+});
 
 export function validateCompatible(
   root: Record<string, unknown>,
@@ -152,11 +208,7 @@ export function validateCompatible(
   return compatible;
 }
 
-/**
- * License-form [[compatible]] entry -> rule, or undefined when invalid. Here `pattern` is the SPDX
- * expression the acceptance covers; the package form reads the same key as a name glob instead, the
- * split the deny lane already makes on its own `match` discriminator.
- */
+/** License-form [[compatible]] entry -> rule, or undefined when invalid. */
 function validateCompatibleLicense(
   entry: Record<string, unknown>,
   where: string,
@@ -164,49 +216,25 @@ function validateCompatibleLicense(
 ): CompatibleLicenseRule | undefined {
   const before = problems.length;
 
-  checkKeys(
-    entry,
-    ["match", "pattern", "rationale", "where", "comment"],
-    where,
-    problems,
-    COMPATIBLE_LICENSE_REPLACED_KEYS,
-  );
-  const pattern = requireText(entry, "pattern", where, problems);
-  const rationale = validateClosedSet(entry, "rationale", RATIONALE_VALUES, where, problems);
-  const scope = validateWhere(entry, where, problems);
-  const comment = optionalText(entry, "comment", where, problems);
+  checkKeys(entry, COMPATIBLE_LICENSE_KEYS, where, problems, COMPATIBLE_LICENSE_REPLACED_KEYS);
 
-  if (pattern === undefined) {
+  const result = compatibleLicense(entry);
+
+  if (result instanceof type.errors) {
+    problems.push(...collectArkProblems(result, where));
     return undefined;
   }
 
-  const node = parseSpdxChecked(pattern, `${where}: pattern`, problems);
+  return problems.length === before ? result : undefined;
+}
 
-  if (node === undefined) {
-    return undefined;
-  }
-
-  const allowlist = orLeaves(node);
-
-  if (allowlist === null) {
-    problems.push(
-      `${where}: pattern "${pattern}" must be a license ID or an OR of license IDs (AND is not allowed — satisfies allowlists cannot hold AND expressions)`,
-    );
-    return undefined;
-  }
-
-  if (problems.length !== before || rationale === undefined || scope.where === undefined) {
-    return undefined;
-  }
-
-  return {
-    match: "license",
-    pattern,
-    allowlist,
-    rationale,
-    where: scope.where,
-    ...(comment !== undefined ? { comment } : {}),
-  };
+/**
+ * The `where` value as a string array, or undefined when it is not one (arktype reports the shape).
+ */
+function whereArrayOf(raw: unknown): ReadonlyArray<string> | undefined {
+  return Array.isArray(raw) && raw.every((element) => typeof element === "string")
+    ? (raw as string[])
+    : undefined;
 }
 
 /** Package-form [[compatible]] entry -> rule, or undefined when invalid. */
@@ -217,48 +245,38 @@ function validateCompatiblePackage(
 ): CompatiblePackageRule | undefined {
   const before = problems.length;
 
-  checkKeys(
-    entry,
-    [
-      "match",
-      "name",
-      "pattern",
-      "packages",
-      "version",
-      "as-dependency-of",
-      "rationale",
-      "where",
-      "comment",
-    ],
-    where,
-    problems,
-    COMPATIBLE_REPLACED_KEYS,
-  );
-  const scope = validateWhere(entry, where, problems);
-  const selector = validateCompatiblePackageSelector(entry, scope.where, where, problems);
-  const parents = validateAsDependencyOf(entry, where, problems);
-  const rationale = validateClosedSet(entry, "rationale", RATIONALE_VALUES, where, problems);
-  const comment = optionalText(entry, "comment", where, problems);
+  checkKeys(entry, COMPATIBLE_PACKAGE_KEYS, where, problems, COMPATIBLE_REPLACED_KEYS);
+
+  const envelope = compatiblePackageEnvelope(entry);
+
+  if (envelope instanceof type.errors) {
+    problems.push(...collectArkProblems(envelope, where));
+  }
+
+  const scope = whereArrayOf(entry["where"]);
+
+  const selector = compatibleSelectorProblems(entry, scope ?? []);
+
+  problems.push(...formatProblems(where, selector.problems));
+
+  const parents = asDependencyOfProblems(entry);
+
+  problems.push(...formatProblems(where, parents.problems));
 
   if (
-    problems.length !== before ||
-    !selector.valid ||
+    envelope instanceof type.errors ||
     parents.asDependencyOf === undefined ||
-    rationale === undefined ||
-    scope.where === undefined
+    problems.length !== before
   ) {
     return undefined;
   }
 
   return {
     match: "package",
-    ...(selector.name !== undefined ? { name: selector.name } : {}),
-    ...(selector.pattern !== undefined ? { pattern: selector.pattern } : {}),
-    ...(selector.packages !== undefined ? { packages: selector.packages } : {}),
-    ...(selector.version !== undefined ? { version: selector.version } : {}),
+    ...selector.selector,
     asDependencyOf: parents.asDependencyOf,
-    rationale,
-    where: scope.where,
-    ...(comment !== undefined ? { comment } : {}),
+    rationale: envelope.rationale,
+    where: envelope.where,
+    ...(envelope.comment !== undefined ? { comment: envelope.comment } : {}),
   };
 }

@@ -1,4 +1,6 @@
-import { stringOf } from "../../validate/record";
+import { type } from "arktype";
+
+import { nonBlankString, toDomainProblems, type DomainProblem } from "./arkAdapter";
 
 /**
  * The reserved `as-dependency-of` element naming the project itself. On a target with a dependency
@@ -7,47 +9,39 @@ import { stringOf } from "../../validate/record";
  */
 export const SELF_PARENT = "self";
 
+/** The `as-dependency-of` TOML key. */
+const KEY = "as-dependency-of";
+
+/**
+ * A non-empty list of non-blank parent names (trimmed), the shape a valid `as-dependency-of` holds.
+ */
+const parentList = nonBlankString.array().atLeastLength(1);
+
 /**
  * The required `as-dependency-of` list on a package-form entry: the packages whose use of this one
  * the acceptance was judged against, by display name, or {@link SELF_PARENT}. Parsed as text here
  * and nothing more - which introduction paths a listed parent covers is decided against the model,
- * not against the file.
+ * not against the file. Faults are entry-relative for the arktype adapter to place under the entry.
  */
-export function validateAsDependencyOf(
-  entry: Record<string, unknown>,
-  context: string,
-  problems: string[],
-): { asDependencyOf?: ReadonlyArray<string>; valid: boolean } {
-  const key = "as-dependency-of";
-
-  if (!(key in entry)) {
-    problems.push(
-      `${context}: missing required key "${key}" (the package names this acceptance was judged under, or ["${SELF_PARENT}"] for the project itself)`,
-    );
-    return { valid: false };
+export function asDependencyOfProblems(entry: Record<string, unknown>): {
+  asDependencyOf?: ReadonlyArray<string>;
+  problems: DomainProblem[];
+} {
+  if (!(KEY in entry)) {
+    return {
+      problems: [
+        {
+          message: `missing required key "${KEY}" (the package names this acceptance was judged under, or ["${SELF_PARENT}"] for the project itself)`,
+        },
+      ],
+    };
   }
 
-  const raw = entry[key];
+  const result = parentList(entry[KEY]);
 
-  if (!Array.isArray(raw) || raw.length === 0) {
-    problems.push(
-      `${context}: key "${key}" must be a non-empty array of package names, or ["${SELF_PARENT}"]`,
-    );
-    return { valid: false };
+  if (result instanceof type.errors) {
+    return { problems: toDomainProblems(result, [KEY]) };
   }
 
-  const parents: string[] = [];
-  const before = problems.length;
-
-  raw.forEach((value, index) => {
-    const text = stringOf(value);
-
-    if (text === undefined || text.trim() === "") {
-      problems.push(`${context}: ${key}[${index}] must be a non-empty package name`);
-      return;
-    }
-
-    parents.push(text);
-  });
-  return problems.length === before ? { asDependencyOf: parents, valid: true } : { valid: false };
+  return { asDependencyOf: result, problems: [] };
 }

@@ -1,5 +1,8 @@
-import { recordOf, stringOf } from "../../validate/record";
+import { type } from "arktype";
 
+import { recordOf } from "../../validate/record";
+
+import { collectArkProblems } from "./arkAdapter";
 import { checkKeys } from "./diagnostics";
 
 /**
@@ -27,113 +30,60 @@ export type DevDependencyHandling = "warn" | "fail" | "ignore";
  */
 export type OsDependencyHandling = "warn" | "fail" | "ignore";
 
+/**
+ * Parse a `[<table>]` knob whose sole key is `handling`, one of `values`. An absent table defaults
+ * to "warn"; a non-table, an unknown key, a missing `handling`, or a value outside `values` each
+ * push the aggregated PolicyError message naming the table path. Shared by [unknown] (warn|fail)
+ * and the [dev_dependencies]/[os_dependencies] knobs (warn|fail|ignore).
+ */
+function handling<T extends string>(
+  root: Record<string, unknown>,
+  key: string,
+  values: ReadonlyArray<T>,
+  problems: string[],
+): "warn" | T {
+  const raw = root[key];
+
+  if (raw === undefined) {
+    return "warn";
+  }
+
+  const table = recordOf(raw);
+
+  if (table === undefined) {
+    problems.push(`${key}: must be a table ([${key}])`);
+    return "warn";
+  }
+
+  checkKeys(table, ["handling"], key, problems);
+
+  const result = type({ handling: type.enumerated(...values) })(table);
+
+  if (result instanceof type.errors) {
+    problems.push(...collectArkProblems(result, key));
+    return "warn";
+  }
+
+  return (result as { handling: T }).handling;
+}
+
 export function validateUnknown(
   root: Record<string, unknown>,
   problems: string[],
 ): "warn" | "fail" {
-  const raw = root["unknown"];
-
-  if (raw === undefined) {
-    return "warn";
-  } // absent table defaults to warn
-
-  const table = recordOf(raw);
-
-  if (table === undefined) {
-    problems.push("unknown: must be a table ([unknown])");
-    return "warn";
-  }
-
-  checkKeys(table, ["handling"], "unknown", problems);
-  if (!("handling" in table)) {
-    problems.push('unknown: missing required key "handling"');
-    return "warn";
-  }
-
-  const handling = stringOf(table["handling"]);
-
-  if (handling === "warn" || handling === "fail") {
-    return handling;
-  }
-
-  problems.push('unknown.handling: must be "warn" or "fail"');
-  return "warn";
+  return handling(root, "unknown", ["warn", "fail"] as const, problems);
 }
 
-/**
- * Parse the [dev_dependencies] knob, mirroring validateUnknown EXACTLY: an absent table defaults to
- * "warn"; a non-table, missing handling, unknown key, or invalid handling value each push the
- * existing aggregated PolicyError message naming the table path. The three valid values are
- * warn|fail|ignore.
- */
 export function validateDevDependencies(
   root: Record<string, unknown>,
   problems: string[],
 ): DevDependencyHandling {
-  const raw = root["dev_dependencies"];
-
-  if (raw === undefined) {
-    return "warn";
-  } // absent table defaults to warn
-
-  const table = recordOf(raw);
-
-  if (table === undefined) {
-    problems.push("dev_dependencies: must be a table ([dev_dependencies])");
-    return "warn";
-  }
-
-  checkKeys(table, ["handling"], "dev_dependencies", problems);
-  if (!("handling" in table)) {
-    problems.push('dev_dependencies: missing required key "handling"');
-    return "warn";
-  }
-
-  const handling = stringOf(table["handling"]);
-
-  if (handling === "warn" || handling === "fail" || handling === "ignore") {
-    return handling;
-  }
-
-  problems.push('dev_dependencies.handling: must be "warn", "fail", or "ignore"');
-  return "warn";
+  return handling(root, "dev_dependencies", ["warn", "fail", "ignore"] as const, problems);
 }
 
-/**
- * Parse the [os_dependencies] knob, an EXACT mirror of validateDevDependencies: an absent table
- * defaults to "warn"; a non-table, missing handling, unknown key, or invalid handling value each
- * push the aggregated PolicyError message naming the os_dependencies table path. The three valid
- * values are warn|fail|ignore.
- */
 export function validateOsDependencies(
   root: Record<string, unknown>,
   problems: string[],
 ): OsDependencyHandling {
-  const raw = root["os_dependencies"];
-
-  if (raw === undefined) {
-    return "warn";
-  } // absent table defaults to warn
-
-  const table = recordOf(raw);
-
-  if (table === undefined) {
-    problems.push("os_dependencies: must be a table ([os_dependencies])");
-    return "warn";
-  }
-
-  checkKeys(table, ["handling"], "os_dependencies", problems);
-  if (!("handling" in table)) {
-    problems.push('os_dependencies: missing required key "handling"');
-    return "warn";
-  }
-
-  const handling = stringOf(table["handling"]);
-
-  if (handling === "warn" || handling === "fail" || handling === "ignore") {
-    return handling;
-  }
-
-  problems.push('os_dependencies.handling: must be "warn", "fail", or "ignore"');
-  return "warn";
+  return handling(root, "os_dependencies", ["warn", "fail", "ignore"] as const, problems);
 }

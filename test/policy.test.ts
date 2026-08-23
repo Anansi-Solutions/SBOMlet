@@ -337,7 +337,7 @@ describe("parsePolicy — compatible `where` scope", () => {
       const error = expectPolicyError(fixture('"docker:img"'));
 
       expect(error.message).toContain("compatible[0]");
-      expect(error.message).toContain('"where"');
+      expect(error.message).toContain("where");
     }
   });
 
@@ -353,7 +353,7 @@ describe("parsePolicy — compatible `where` scope", () => {
       const error = expectPolicyError(fixture("[]"));
 
       expect(error.message).toContain("compatible[0]");
-      expect(error.message).toContain('"where"');
+      expect(error.message).toContain("where");
     }
   });
 
@@ -473,8 +473,8 @@ describe("parsePolicy — the [[compatible]] package selector", () => {
       compatiblePackageFixture([...compatibleWithout("version"), "version = []"]),
     );
 
-    expect(error.message).toContain("compatible[0]");
-    expect(error.message).toContain('"version"');
+    expect(error.message).toContain("compatible[0].version");
+    expect(error.message).toContain("must be a non-empty array of version strings");
   });
 
   test("a name/pattern entry outside container scope must pin a version", () => {
@@ -863,14 +863,14 @@ describe("parsePolicy — the [[clarify]] package selector", () => {
     const error = expectPolicyError(clarifyFixture(['pattern = "demo-*"', ...DEMO_CLARIFY]));
 
     expect(error.message).toContain("clarify[0]");
-    expect(error.message).toContain('exactly one of "name" and "pattern"');
+    expect(error.message).toContain("must be removed");
   });
 
   test("neither name nor pattern is rejected", () => {
     const error = expectPolicyError(clarifyFixture(clarifyWithout("name")));
 
     expect(error.message).toContain("clarify[0]");
-    expect(error.message).toContain('exactly one of "name" and "pattern"');
+    expect(error.message).toContain("was missing");
   });
 
   test("a glob-free pattern is rejected, naming the key to use instead", () => {
@@ -898,8 +898,8 @@ describe("parsePolicy — the [[clarify]] package selector", () => {
 
     const error = expectPolicyError(clarifyFixture([...clarifyWithout("version"), "version = []"]));
 
-    expect(error.message).toContain("clarify[0]");
-    expect(error.message).toContain('"version"');
+    expect(error.message).toContain("clarify[0].version");
+    expect(error.message).toContain("must be a non-empty array of version strings");
   });
 
   test("a clarify entry omitting version is rejected — there is no os-scope exemption here", () => {
@@ -1005,7 +1005,7 @@ describe("parsePolicy — [[clarify]] evidence and comment", () => {
     const error = expectPolicyError(clarifyFixture([...DEMO_CLARIFY, "evidence = []"]));
 
     expect(error.message).toContain("clarify[0]");
-    expect(error.message).toContain('"evidence"');
+    expect(error.message).toContain("evidence");
   });
 });
 
@@ -1318,7 +1318,7 @@ describe("parsePolicy — mandatory documentation text", () => {
     const error = expectPolicyError(fixture);
 
     expect(error.message).toContain("compatible[0]");
-    expect(error.message).toContain('"rationale"');
+    expect(error.message).toContain("rationale");
   });
 });
 
@@ -1371,21 +1371,21 @@ describe("parsePolicy — [document] title + preamble", () => {
     const error = expectPolicyError(["[document]", 'title = ""'].join("\n"));
 
     expect(error.message).toContain("document");
-    expect(error.message).toContain('"title"');
+    expect(error.message).toContain("title");
   });
 
   test("non-string title is rejected", () => {
     const error = expectPolicyError(["[document]", "title = 42"].join("\n"));
 
     expect(error.message).toContain("document");
-    expect(error.message).toContain('"title"');
+    expect(error.message).toContain("title");
   });
 
   test("empty-string preamble is rejected", () => {
     const error = expectPolicyError(["[document]", 'preamble = "   "'].join("\n"));
 
     expect(error.message).toContain("document");
-    expect(error.message).toContain('"preamble"');
+    expect(error.message).toContain("preamble");
   });
 
   test("unknown key under [document] is rejected", () => {
@@ -3473,9 +3473,13 @@ describe("dev_dependencies knob — parsing (mirrors unknown.handling)", () => {
   test("an invalid handling value rejects naming dev_dependencies.handling", () => {
     const error = expectPolicyError('[dev_dependencies]\nhandling = "skip"');
 
-    expect(error.problems).toContain(
-      'dev_dependencies.handling: must be "warn", "fail", or "ignore"',
-    );
+    expect(
+      error.problems.some(
+        (p) =>
+          p.includes("dev_dependencies.handling") &&
+          ["warn", "fail", "ignore"].every((value) => p.includes(value)),
+      ),
+    ).toBe(true);
   });
 
   test("a non-table [dev_dependencies] value rejects", () => {
@@ -3799,7 +3803,7 @@ describe("parsePolicy — [[deny]] parsing (mirrors compatible two-mode)", () =>
     );
 
     expect(error.message).toContain("deny[0]");
-    expect(error.message).toContain('"pattern"');
+    expect(error.message).toContain("pattern");
   });
 
   test("an unknown key inside a deny entry is rejected naming deny[i]", () => {
@@ -4353,9 +4357,13 @@ describe("os_dependencies knob — parsing (mirrors dev_dependencies EXACTLY)", 
   test("an invalid handling value rejects naming os_dependencies.handling", () => {
     const error = expectPolicyError('[os_dependencies]\nhandling = "skip"');
 
-    expect(error.problems).toContain(
-      'os_dependencies.handling: must be "warn", "fail", or "ignore"',
-    );
+    expect(
+      error.problems.some(
+        (p) =>
+          p.includes("os_dependencies.handling") &&
+          ["warn", "fail", "ignore"].every((value) => p.includes(value)),
+      ),
+    ).toBe(true);
   });
 
   test("a non-table [os_dependencies] value rejects", () => {
@@ -5306,7 +5314,7 @@ describe("policy — [[allow_source_available]] validation", () => {
       ["[[allow_source_available]]", 'license = "MIT"', 'reason = "x"'].join("\n"),
     );
 
-    expect(error.message).toContain("not a built-in source-available default");
+    expect(error.message).toContain('"BUSL-1.1"');
   });
 
   test("rejects a missing reason", () => {
@@ -5588,7 +5596,8 @@ reason = "diverging outbound license for this workspace"
       ),
     );
 
-    expect(error.message).toContain('key "network" must be a boolean');
+    expect(error.message).toContain("network");
+    expect(error.message).toContain("must be boolean");
   });
 
   test("rejects a distribution outside external|internal", () => {
@@ -5613,7 +5622,7 @@ reason = "diverging outbound license for this workspace"
       ].join("\n"),
     );
 
-    expect(error.message).toContain('unknown_pair" must be "warn" or "fail"');
+    expect(error.message).toContain('must be "fail" or "warn"');
   });
 
   test("rejects an unknown key on the [target] table", () => {
