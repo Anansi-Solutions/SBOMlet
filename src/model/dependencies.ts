@@ -5,6 +5,50 @@
  * reserves fields so later work is purely additive: provenance layers, scope taxonomy for Docker,
  * and the dev/prod marker.
  */
+import { type } from "arktype";
+
+/**
+ * The three license-string brands. Each is a compile-time-only `string` refinement (arktype
+ * `.brand`): a plain `string` is NOT assignable to a brand, but a brand widens to `string` for
+ * free, so they erase at runtime and every serializer/renderer treats them as ordinary strings. The
+ * brand consts are validators used only through `typeof x.infer`; nothing mints a brand by running
+ * them.
+ *
+ * The lifecycle they separate: untrusted {@link RawLicense} text enters as a {@link LicenseClaim},
+ * `normalizeRaw` resolves it to a {@link NormalizedLicense} (valid SPDX, source spelling), and
+ * `canonicalizeExpression` further reduces that to a {@link CanonicalExpression}
+ * (sorted/flattened, so `===` is set-equality). Policy-authored SPDX validated by the schema morph
+ * is minted as a {@link NormalizedLicense} too - it carries the same guarantee. Keeping them
+ * distinct is what stops a raw claim reaching a site that assumes a resolved expression.
+ */
+const _rawLicense = type("string").brand("rawLicense");
+const _normalizedLicense = type("string").brand("normalizedLicense");
+const _canonicalExpression = type("string").brand("canonicalExpression");
+
+/**
+ * Untrusted, unresolved license text as it entered the tool - the type of {@link LicenseClaim.raw}.
+ */
+export type RawLicense = typeof _rawLicense.infer;
+
+/**
+ * Valid, resolved SPDX in source spelling (NOT necessarily sorted/flattened): the output of
+ * `normalizeRaw` and the type every tool-derived finding expression carries.
+ */
+export type NormalizedLicense = typeof _normalizedLicense.infer;
+
+/**
+ * A {@link NormalizedLicense} additionally flattened, deduped, absorbed, and sorted, so `===` is
+ * set-equality: the output of `canonicalizeExpression`, consumed on both sides of every license
+ * `===`.
+ */
+export type CanonicalExpression = typeof _canonicalExpression.infer;
+
+/**
+ * Any resolved/validated SPDX expression that may legitimately reach spdx-satisfies / spdx-parse:
+ * either brand EXCEPT {@link RawLicense} (raw text must be normalized first). Used where a single
+ * parameter genuinely receives more than one of these brands.
+ */
+export type SatisfiableExpression = NormalizedLicense | CanonicalExpression;
 
 /**
  * Provenance of a license claim. "generator" is the source produced by the collectors; "registry"
@@ -26,7 +70,10 @@ export type LicenseClaimSource =
 export type LicenseClaimKind = "spdx-id" | "name" | "expression";
 
 export interface LicenseClaim {
-  raw: string;
+  /**
+   * Untrusted claim text - re-resolved by normalizeRaw, never assumed to be a resolved expression.
+   */
+  raw: RawLicense;
   kind: LicenseClaimKind;
   source: LicenseClaimSource;
 }
@@ -56,10 +103,12 @@ export interface LicenseFinding {
   /**
    * Full normalized SPDX expression; null = unknown OR imprecise (an imprecise family is not a
    * valid SPDX expression and must never be emitted as one - see {@link FindingConfidence}).
+   * NormalizedLicense, NOT CanonicalExpression: a single-claim finding is preserved verbatim, so
+   * equality sites must canonicalize both operands at the comparison.
    */
-  expression: string | null;
+  expression: NormalizedLicense | null;
   /** Elected branch as rendered canonical string; null = unknown or imprecise. */
-  elected: string | null;
+  elected: NormalizedLicense | null;
   /**
    * "generator" (exact parse or unknown), "corrected", "registry" (enrichment-appended), "override"
    * (clarify); "curated" reserved.
@@ -103,7 +152,7 @@ export interface LicenseFinding {
    * over overrides). Absent when no override ran (the un-overridden finding's `expression` already
    * IS the observed value) or when the base finding had no parseable expression.
    */
-  observedExpression?: string;
+  observedExpression?: NormalizedLicense;
   /**
    * The SET of EVERY observed per-claim normalized PRECISE expression (deny must see every observed
    * claim, not only the lossy COMBINED expression). Produced by annotateFindings by running
@@ -122,7 +171,7 @@ export interface LicenseFinding {
    *
    * Absent when no claim normalized to a precise expression (nothing to carry).
    */
-  observedExpressions?: readonly string[];
+  observedExpressions?: readonly NormalizedLicense[];
   /**
    * Surfaced non-normalizable raw claim tokens for a NON-GATING `os`-scope PARTIAL finding. Set
    * ONLY when an os-scope package's claim set mixes ≥1 normalizable SPDX member with ≥1

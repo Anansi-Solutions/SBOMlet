@@ -29,6 +29,7 @@ import {
   type LicenseClaim,
   type LicenseClaimSource,
   type PackageEntry,
+  type RawLicense,
 } from "../model/dependencies";
 import { normalizeRaw } from "../normalize/normalize";
 import { writeArtifact } from "../pipeline/paths";
@@ -190,8 +191,12 @@ export function withCacheClaim(
   source: LicenseClaimSource,
 ): PackageEntry {
   const raws = Array.isArray(raw) ? raw : [raw];
+  // The sole RawLicense mint for registry and scancode claims. A scancode value arrives already
+  // canonicalized (election canonicalizes before caching), but it re-enters the raw-claim lane like
+  // any other claim and is re-resolved by normalizeRaw - so it is branded RawLicense, nothing
+  // stronger.
   const claims: LicenseClaim[] = raws.map((r) => ({
-    raw: r,
+    raw: r as RawLicense,
     kind: "expression",
     source,
   }));

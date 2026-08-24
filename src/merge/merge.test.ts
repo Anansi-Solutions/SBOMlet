@@ -10,6 +10,7 @@ import {
   type CanonicalDependencies,
   type DependencyIntroduction,
   type PackageEntry,
+  type RawLicense,
 } from "../model/dependencies";
 import { assertDependencyGraphCoverage, targetsWithDependencyGraph } from "./dependencyGraphs";
 import { mergeSboms, purlSetOf } from "./merge";
@@ -64,19 +65,19 @@ describe("mergeSboms — volatile field immunity", () => {
 
 describe("mergeSboms — license claim shapes", () => {
   test("license.id becomes a spdx-id claim", () => {
-    expect(shapesByPurl().get("pkg:npm/mit-pkg@1.0.0")?.licenseClaims).toEqual([
+    expect(shapesByPurl().get("pkg:npm/mit-pkg@1.0.0")?.licenseClaims as unknown).toEqual([
       { raw: "MIT", kind: "spdx-id", source: "generator" },
     ]);
   });
 
   test("license.name becomes a name claim", () => {
-    expect(shapesByPurl().get("pkg:npm/apache-name-pkg@2.0.0")?.licenseClaims).toEqual([
+    expect(shapesByPurl().get("pkg:npm/apache-name-pkg@2.0.0")?.licenseClaims as unknown).toEqual([
       { raw: "Apache License 2.0", kind: "name", source: "generator" },
     ]);
   });
 
   test("expression becomes an expression claim", () => {
-    expect(shapesByPurl().get("pkg:npm/expr-pkg@3.0.0")?.licenseClaims).toEqual([
+    expect(shapesByPurl().get("pkg:npm/expr-pkg@3.0.0")?.licenseClaims as unknown).toEqual([
       { raw: "MIT OR Apache-2.0", kind: "expression", source: "generator" },
     ]);
   });
@@ -98,7 +99,9 @@ describe("mergeSboms — purl-keyed dedup and root exclusion", () => {
     // to dev.
     expect(dups[0]?.occurrences).toEqual([{ target: SYNTHETIC_TARGET, isDevDependency: false }]);
     // claims concatenated across the duplicate entries
-    expect(dups[0]?.licenseClaims).toEqual([{ raw: "MIT", kind: "spdx-id", source: "generator" }]);
+    expect(dups[0]?.licenseClaims as unknown).toEqual([
+      { raw: "MIT", kind: "spdx-id", source: "generator" },
+    ]);
   });
 
   test("duplicate purl entries BOTH carrying the same license claim yield exactly one claim", () => {
@@ -126,7 +129,7 @@ describe("mergeSboms — purl-keyed dedup and root exclusion", () => {
 
     expect(model.packages.length).toBe(1);
     expect(model.packages[0]?.licenseClaims).toEqual([
-      { raw: "MIT", kind: "spdx-id", source: "generator" },
+      { raw: "MIT" as RawLicense, kind: "spdx-id", source: "generator" },
     ]);
   });
 
@@ -149,7 +152,7 @@ describe("mergeSboms — purl-keyed dedup and root exclusion", () => {
     };
     const model = mergeSboms([{ sbom: doc, targetIdentity: SYNTHETIC_TARGET }]);
 
-    expect(model.packages[0]?.licenseClaims).toEqual([
+    expect(model.packages[0]?.licenseClaims as unknown).toEqual([
       { raw: "MIT", kind: "spdx-id", source: "generator" },
       { raw: "MIT", kind: "name", source: "generator" },
       { raw: "ISC", kind: "spdx-id", source: "generator" },
@@ -169,7 +172,9 @@ describe("mergeSboms — purl-keyed dedup and root exclusion", () => {
       { target: "apps/a", isDevDependency: false },
       { target: "apps/b", isDevDependency: false },
     ]);
-    expect(mitPkg?.licenseClaims).toEqual([{ raw: "MIT", kind: "spdx-id", source: "generator" }]);
+    expect(mitPkg?.licenseClaims as unknown).toEqual([
+      { raw: "MIT", kind: "spdx-id", source: "generator" },
+    ]);
   });
 
   test("a components[] entry whose purl equals metadata.component.purl is excluded", () => {
@@ -869,10 +874,10 @@ describe("mergeSboms — plugin dual-run prod diff", () => {
   test("the CycloneDX-1.6 acknowledgement field parses through unchanged as a normal spdx-id claim", () => {
     const byPurl = pluginModel(purlSetOf(pluginProdDoc));
 
-    expect(byPurl.get("pkg:npm/%40eslint/eslintrc@3.3.3")?.licenseClaims).toEqual([
+    expect(byPurl.get("pkg:npm/%40eslint/eslintrc@3.3.3")?.licenseClaims as unknown).toEqual([
       { raw: "MIT", kind: "spdx-id", source: "generator" },
     ]);
-    expect(byPurl.get("pkg:npm/semver@7.7.1")?.licenseClaims).toEqual([
+    expect(byPurl.get("pkg:npm/semver@7.7.1")?.licenseClaims as unknown).toEqual([
       { raw: "ISC", kind: "spdx-id", source: "generator" },
     ]);
   });
@@ -892,7 +897,7 @@ describe("mergeSboms — plugin dual-run prod diff", () => {
     expect(dups.length).toBe(1);
     expect(dups[0]?.occurrences).toEqual([{ target: TARGET, isDevDependency: true }]);
     expect(dups[0]?.licenseClaims).toEqual([
-      { raw: "(MIT OR CC0-1.0)", kind: "expression", source: "generator" },
+      { raw: "(MIT OR CC0-1.0)" as RawLicense, kind: "expression", source: "generator" },
     ]);
   });
 });
@@ -999,7 +1004,7 @@ describe("mergeSboms — per-workspace inputs (yarn workspace units)", () => {
     // First-seen license claim, never duplicated by the second input's
     // identical MIT claim.
     expect(shared[0]?.licenseClaims).toEqual([
-      { raw: "MIT", kind: "spdx-id", source: "generator" },
+      { raw: "MIT" as RawLicense, kind: "spdx-id", source: "generator" },
     ]);
   });
 
@@ -1464,7 +1469,7 @@ describe("mergeSboms — evidence parsing into attribution", () => {
     // entirely (the Apache-2.0 §4(d) silent-omission failure mode).
     const noticeTxt = evidenceByPurl().get("pkg:npm/notice-txt-pkg@9.0.0");
 
-    expect(noticeTxt?.licenseClaims).toEqual([
+    expect(noticeTxt?.licenseClaims as unknown).toEqual([
       { raw: "MIT", kind: "spdx-id", source: "generator" },
     ]);
     expect(noticeTxt?.attribution?.noticeTexts).toEqual([

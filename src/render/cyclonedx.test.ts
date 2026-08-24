@@ -14,8 +14,14 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, test } from "bun:test";
 
+import {
+  type CanonicalDependencies,
+  type PackageEntry,
+  type Verdict,
+  type NormalizedLicense,
+  type RawLicense,
+} from "../model/dependencies";
 import { renderCyclonedx } from "./cyclonedx";
-import type { CanonicalDependencies, PackageEntry, Verdict } from "../model/dependencies";
 
 function golden(name: string): string {
   return readFileSync(join(import.meta.dir, "..", "..", "test", "golden", name), "utf-8");
@@ -37,10 +43,12 @@ const exprEntry = entry({
   purl: "pkg:npm/expr-pkg@3.0.0",
   name: "expr-pkg",
   version: "3.0.0",
-  licenseClaims: [{ raw: "MIT OR Apache-2.0", kind: "expression", source: "generator" }],
+  licenseClaims: [
+    { raw: "MIT OR Apache-2.0" as RawLicense, kind: "expression", source: "generator" },
+  ],
   finding: {
-    expression: "MIT OR Apache-2.0",
-    elected: "Apache-2.0",
+    expression: "MIT OR Apache-2.0" as NormalizedLicense,
+    elected: "Apache-2.0" as NormalizedLicense,
     source: "generator",
     confidence: "exact",
   },
@@ -51,10 +59,10 @@ const namedEntry = entry({
   name: "jsonify",
   version: "0.0.1",
   licenseClaims: [
-    { raw: "Public Domain", kind: "name", source: "generator" },
+    { raw: "Public Domain" as RawLicense, kind: "name", source: "generator" },
     // Duplicate raw under a different kind: the emitted named list must
     // dedup by raw, first-seen order.
-    { raw: "Public Domain", kind: "spdx-id", source: "generator" },
+    { raw: "Public Domain" as RawLicense, kind: "spdx-id", source: "generator" },
   ],
 });
 
@@ -165,7 +173,7 @@ describe("renderCyclonedx — license dispatch", () => {
       purl: "pkg:npm/mystery@1.0.0",
       name: "mystery",
       version: "1.0.0",
-      licenseClaims: [{ raw: "Custom License", kind: "name", source: "generator" }],
+      licenseClaims: [{ raw: "Custom License" as RawLicense, kind: "name", source: "generator" }],
       finding: {
         expression: null,
         elected: null,
@@ -189,8 +197,8 @@ describe("renderCyclonedx — license dispatch", () => {
       version: "1.0",
       scope: "os",
       finding: {
-        expression: "GPL-2.0-only AND BSD-3-Clause",
-        elected: "GPL-2.0-only AND BSD-3-Clause",
+        expression: "GPL-2.0-only AND BSD-3-Clause" as NormalizedLicense,
+        elected: "GPL-2.0-only AND BSD-3-Clause" as NormalizedLicense,
         source: "generator",
         confidence: "exact",
         unrecognizedTokens: ["Artistic", "public-domain"],

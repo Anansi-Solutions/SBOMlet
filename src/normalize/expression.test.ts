@@ -8,7 +8,7 @@ import satisfies from "spdx-satisfies";
 import { COPYLEFT_IDS } from "../policy/engine/copyleft";
 import { denyRuleFor } from "../policy/engine/deny";
 import {
-  canonicalizeExpression,
+  canonicalizeExpression as canonicalize,
   elect,
   isCopyleft,
   orLeaves,
@@ -16,6 +16,12 @@ import {
   type ExpressionNode,
 } from "./expression";
 import type { Policy } from "../policy/schema";
+
+/**
+ * {@link canonicalize} widened to a plain string, so value assertions compare against string
+ * literals without minting a brand in every expectation.
+ */
+const canonicalizeExpression = (text: string): string => canonicalize(text);
 
 // parse() output is structurally compatible with ExpressionNode (inline-union
 // purity pattern: we never import the lib's internal types).

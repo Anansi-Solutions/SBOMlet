@@ -46,6 +46,7 @@ import {
   toSortedDependenciesJson,
   type LicenseClaim,
   type PackageEntry,
+  type RawLicense,
 } from "../src/model/dependencies";
 import {
   isRootLevelOrDistInfoLicensesPath,
@@ -1452,7 +1453,7 @@ describe("assessPackages — ScanCode peer assessment stage", () => {
   }
 
   function generatorClaim(raw: string): LicenseClaim {
-    return { raw, kind: "expression", source: "generator" };
+    return { raw: raw as RawLicense, kind: "expression", source: "generator" };
   }
 
   function scancodeClaim(entry: PackageEntry | undefined): LicenseClaim | undefined {
@@ -1518,7 +1519,7 @@ describe("assessPackages — ScanCode peer assessment stage", () => {
       verbose: false,
     });
 
-    expect(scancodeClaim(assessed.packages[0])).toEqual({
+    expect(scancodeClaim(assessed.packages[0]) as unknown).toEqual({
       raw: "MIT",
       kind: "expression",
       source: "scancode",
@@ -1647,7 +1648,7 @@ describe("assessPackages — ScanCode peer assessment stage", () => {
     const model: CanonicalDependenciesLike = {
       packages: [
         npmPackage("no-evidence", "1.0.0", [
-          { raw: "MIT", kind: "expression", source: "registry" },
+          { raw: "MIT" as RawLicense, kind: "expression", source: "registry" },
         ]),
       ],
     };
@@ -1760,7 +1761,7 @@ describe("assessPackages — ScanCode peer assessment stage", () => {
     expect(invocations.length).toBe(0);
 
     // The claim replayed into THIS run's finding is canonical.
-    expect(scancodeClaim(assessed.packages[0])?.raw).toBe(canonical);
+    expect(scancodeClaim(assessed.packages[0])?.raw as unknown).toBe(canonical);
     const finding = findingOf(assessed.packages);
 
     expect(finding.expression).toBe(canonical);
@@ -1819,7 +1820,7 @@ describe("assessPackages — ScanCode peer assessment stage", () => {
     expect(entry?.copyrights?.length).toBeGreaterThan(0);
     expect(entry?.scannedAt).toBe("2026-01-01T00:00:00.000Z");
 
-    expect(scancodeClaim(assessed.packages[0])).toEqual({
+    expect(scancodeClaim(assessed.packages[0]) as unknown).toEqual({
       raw: "MIT",
       kind: "expression",
       source: "scancode",
@@ -1991,7 +1992,7 @@ describe("assessPackages — ScanCode peer assessment stage", () => {
 
     expect(invocations.length).toBe(0);
     expect(readFileSync(path, "utf8")).toBe(firstBytes);
-    expect(scancodeClaim(second.packages[0])).toEqual({
+    expect(scancodeClaim(second.packages[0]) as unknown).toEqual({
       raw: "MIT",
       kind: "expression",
       source: "scancode",

@@ -22,6 +22,7 @@ import { renderMarkdown, type PolicyView } from "../src/render/markdown";
 import { PolicyError } from "../src/policy/schema/diagnostics";
 import { parsePolicy } from "../src/policy/parse/parse";
 import { claim, modelOf, pkg } from "./normalizeTestSupport";
+import type { NormalizedLicense } from "../src/model/dependencies";
 
 /** One `[[clarify]]` table naming `name`, recording the registry lane, electing `expression`. */
 const clarifyTable = (name: string, expression: string, version = "0.0.1"): string =>
@@ -228,7 +229,7 @@ describe("parseClarificationsAt", () => {
       parseClarificationsAt("c.toml", clarifyTable("jsonify", "Unlicense")).map(
         (rule) => rule.expression,
       ),
-    ).toEqual(["Unlicense"]);
+    ).toEqual(["Unlicense" as NormalizedLicense]);
   });
 });
 
@@ -263,7 +264,7 @@ describe("combining the two files", () => {
       combined.clarify,
     );
 
-    expect(model.packages[0]!.finding!.expression).toBe("Unlicense");
+    expect(model.packages[0]!.finding!.expression).toBe("Unlicense" as NormalizedLicense);
     expect([...usedClarifyIndices]).toEqual([0]);
   });
 
@@ -277,7 +278,7 @@ describe("combining the two files", () => {
       combined.clarify,
     );
 
-    expect(model.packages[0]!.finding!.expression).toBe("0BSD");
+    expect(model.packages[0]!.finding!.expression).toBe("0BSD" as NormalizedLicense);
   });
 });
 

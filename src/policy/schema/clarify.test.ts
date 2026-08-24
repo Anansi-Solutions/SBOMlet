@@ -7,6 +7,7 @@ import {
   clarifyWithout,
 } from "../../../test/policyTestSupport";
 import { JUSTIFICATION_VALUES } from "./clarify";
+import type { NormalizedLicense } from "../../model/dependencies";
 
 describe("parsePolicy — the [[clarify]] package selector", () => {
   test("an exact name parses, and no absent optional key materializes", () => {
@@ -19,7 +20,7 @@ describe("parsePolicy — the [[clarify]] package selector", () => {
         version: "1.0.0",
         detected: { registry: "BSD" },
         justification: "scan-more-precise",
-        expression: "BSD-3-Clause",
+        expression: "BSD-3-Clause" as NormalizedLicense,
       },
     ]);
   });

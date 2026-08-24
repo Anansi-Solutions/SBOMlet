@@ -206,7 +206,7 @@ describe("per-package scan failure containment (assess.ts analyzeOne)", () => {
     const entry = getMemoEntry(readScancodeMemo(path), "pkg:npm/left-pad@1.3.0");
 
     expect(entry?.license).toBe("MIT");
-    expect(scancodeClaim(assessed.packages[1])).toEqual({
+    expect(scancodeClaim(assessed.packages[1]) as unknown).toEqual({
       raw: "MIT",
       kind: "expression",
       source: "scancode",

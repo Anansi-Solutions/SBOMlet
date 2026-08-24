@@ -8,7 +8,12 @@ import {
 import { parsePolicy } from "../src/policy/parse/parse";
 import { PolicyError } from "../src/policy/schema/diagnostics";
 import type { Policy } from "../src/policy/schema";
-import type { CanonicalDependencies, LicenseClaimKind, Verdict } from "../src/model/dependencies";
+import type {
+  CanonicalDependencies,
+  LicenseClaimKind,
+  RawLicense,
+  Verdict,
+} from "../src/model/dependencies";
 
 /** No scanned target in these scenarios is collected by a lane that derives a dependency graph. */
 export const WITHOUT_DEPENDENCY_GRAPHS: ReadonlySet<string> = new Set();
@@ -228,12 +233,12 @@ export function makeModel(specs: ReadonlyArray<PackageSpec>): CanonicalDependenc
           const kind: LicenseClaimKind =
             raw.includes(" ") || raw.includes("(") ? "expression" : "spdx-id";
 
-          return { raw, kind, source: "generator" as const };
+          return { raw: raw as RawLicense, kind, source: "generator" as const };
         }),
         ...(spec.scancode !== undefined
           ? [
               {
-                raw: spec.scancode,
+                raw: spec.scancode as RawLicense,
                 kind: "expression" as const,
                 source: "scancode" as const,
               },
