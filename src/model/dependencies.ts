@@ -82,11 +82,11 @@ export interface LicenseFinding {
    */
   overrideRule?: string;
   /**
-   * A STALE override: an override (project clarify or tool-level builtin) carried an `expects`
-   * precondition that NO LONGER matches the package's pre-override observed signal. The asserted
-   * expression is NOT applied (this finding keeps its un-overridden value); instead the engine
-   * emits a loud fail verdict naming the package, the expected value, and the now-observed value
-   * - a stale override must never silently mask a relicense.
+   * A STALE override: an override (project clarify or tool-level builtin) recorded a detection that
+   * its source NO LONGER reports. The asserted expression is NOT applied (this finding keeps its
+   * un-overridden value); instead the engine emits a loud fail verdict naming the package, the
+   * source, the recorded value, and what that source reports now - a stale override must never
+   * silently mask a relicense.
    */
   staleOverride?: StaleOverride;
   /**
@@ -143,10 +143,16 @@ export interface LicenseFinding {
 export interface StaleOverride {
   /** "clarify" (project) or "builtin" (shipped tool-level) - for the message. */
   level: "clarify" | "builtin";
-  /** The value the override expected to still observe. */
-  expected: string;
-  /** The package's now-observed signal members (the relicensed values). */
+  /** Where the divergence was found: one producing lane, or the observed signal as a whole. */
+  source: "registry" | "intensive" | "observed";
+  /** What the override recorded for that lane; `false` recorded that the lane detects nothing. */
+  expected?: string | false;
+  /** What that lane reports now - the relicensed values; empty when it reports nothing. */
   observed: ReadonlyArray<string>;
+  /**
+   * A reported license the override's expression does not account for; set instead of `expected`.
+   */
+  unaccounted?: string;
 }
 
 /** A ScanCode-vs-quick-check disagreement surfaced to the policy engine. */
@@ -212,6 +218,19 @@ export type ScopeTaxonomy = "app" | "os";
  * render layer needs it too (Containers section identities), not only merge/pipeline.
  */
 export const DOCKER_IDENTITY_PREFIX = "docker:";
+
+/**
+ * Segment-aware identity-prefix match: `target` matches `path` only when it IS `path` or sits under
+ * it as a whole path segment - "apps/studio-helper" never matches "apps/studio". The one prefix
+ * comparison every policy-surface matcher shares (copyleft suppression paths, `[[compatible]]`
+ * `where` scopes, target-profile resolution) so a crafted narrower/wider path can never
+ * accidentally match the wrong side. Both directions matter: the scope "docker:a" covers every
+ * target under it ("docker:a/Dockerfile"), while the scope "docker:a/Dockerfile" never covers the
+ * shorter target "docker:a" (the fail-safe direction).
+ */
+export function matchesIdentityPrefix(target: string, path: string): boolean {
+  return target === path || target.startsWith(path + "/");
+}
 
 /**
  * Dependency provenance - "why is this dependency here?" - derived per-target at collect time from
@@ -368,6 +387,41 @@ export function purlEcosystem(purl: string): string {
   const slash = rest.indexOf("/");
 
   return slash === -1 ? rest : rest.slice(0, slash);
+}
+
+/**
+ * The display name a purl carries: its namespace and name, percent-decoded and joined with a slash
+ * ("pkg:npm/%40acme/ui@0.0.0-use.local" -> "@acme/ui"). Qualifiers and subpaths are dropped.
+ *
+ * @returns undefined for anything that is not a `pkg:<type>/<name>@<version>` purl.
+ *
+ * @privateRemarks
+ * The composition matches the display name the merge builds from a component's group and name, so
+ * the two agree for the ecosystems whose collectors reconstruct a dependency graph. It is a
+ * fallback for graph nodes the merged model carries no package for - a first-party workspace member
+ * that the merge excluded - where there is no recorded name to prefer.
+ */
+export function purlDisplayName(purl: string): string | undefined {
+  const rest = purl.startsWith("pkg:") ? purl.slice(4) : undefined;
+  const slash = rest?.indexOf("/") ?? -1;
+
+  if (rest === undefined || slash === -1) {
+    return undefined;
+  }
+
+  const nameAtVersion = rest.slice(slash + 1).split(/[?#]/, 1)[0] as string;
+  const at = nameAtVersion.lastIndexOf("@");
+  const name = at > 0 ? nameAtVersion.slice(0, at) : nameAtVersion;
+
+  if (name === "") {
+    return undefined;
+  }
+
+  try {
+    return name.split("/").map(decodeURIComponent).join("/");
+  } catch {
+    return name; // a malformed percent escape is kept verbatim rather than dropped
+  }
 }
 
 /**
