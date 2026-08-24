@@ -22,7 +22,7 @@
  * name-mode opt-ins in the consumer's policy: a name-mode default would have to guess encumbered
  * package names, which the deny matcher must never do.
  */
-import type { DenyRule } from "./denylist";
+import { SOURCE_AVAILABLE_LICENSE_IDS, type DenyRule } from "../schema/deny";
 
 /** One shipped source-available deny default, license-mode (allowlist = the id). */
 function sourceAvailable(pattern: string, reason: string): DenyRule {
@@ -32,17 +32,16 @@ function sourceAvailable(pattern: string, reason: string): DenyRule {
 /** The rule id every builtin source-available deny is cited under. */
 export const BUILTIN_DENY_RULE_ID = "default:source-available";
 
-export const BUILTIN_DENY_RULES: ReadonlyArray<DenyRule> = [
-  sourceAvailable(
-    "BUSL-1.1",
+/** The redistribution rationale cited for each shipped source-available default. */
+const SOURCE_AVAILABLE_REASONS: Record<(typeof SOURCE_AVAILABLE_LICENSE_IDS)[number], string> = {
+  "BUSL-1.1":
     "Business Source License 1.1 is source-available, not open source — it forbids production and competing use until the change date, so it cannot ship in a distributed inventory.",
-  ),
-  sourceAvailable(
-    "SSPL-1.0",
+  "SSPL-1.0":
     "Server Side Public License 1.0 is source-available (OSI-rejected); its service-source copyleft makes it unredistributable in client-shipped artifacts.",
-  ),
-  sourceAvailable(
-    "Elastic-2.0",
+  "Elastic-2.0":
     "Elastic License 2.0 is source-available with use restrictions (no managed-service resale, no circumvention); it cannot ship in a distributed inventory.",
-  ),
-];
+};
+
+export const BUILTIN_DENY_RULES: ReadonlyArray<DenyRule> = SOURCE_AVAILABLE_LICENSE_IDS.map((id) =>
+  sourceAvailable(id, SOURCE_AVAILABLE_REASONS[id]),
+);

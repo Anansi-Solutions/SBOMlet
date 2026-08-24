@@ -25,23 +25,41 @@
  *      compatible[i] - excluded from copyleft flagging everywhere.
  *   2. compatible match="license": satisfies(finding.expression, rule.allowlist) against the
  *      pre-decomposed allowlist from schema validation → ok, compatible[i].
- *   3. copyleft-flagged (isCopyleft on the elected branch - an OR with a permissive branch elects
+ *   3. The target-compatibility lane (targetLaneVerdict / targetVerdict, wiring policy/target.ts's
+ *      resolveTargetProfile into compat/classify.ts's classifyExpression) - active only when BOTH a
+ *      governing target profile resolves for this occurrence AND the finding has a parseable
+ *      (non-imprecise, non-null) expression; os-scope packages never enter this lane. Five
+ *      outcomes: compatible → overrideCitation ?? target:ok; held-internal (a
+ *      copyleft/AGPL obligation the usage profile takes out of scope) → ok target:internal-use;
+ *      boundary → warn target:boundary; incompatible → fail target:incompatible (dev-downgraded via
+ *      applyDevScope); a matrix-uncovered pair → the unknown_pair knob (warn/fail, fail also
+ *      dev-downgraded). A ref-carrying elected branch (under the target-aware election) instead
+ *      falls through to the unchanged unknown lane below, never target:ok. Absent a governing
+ *      profile, or on an imprecise/null finding, this lane is a no-op and today's walk is
+ *      byte-identical.
+ *   4. copyleft-flagged (isCopyleft on the elected branch - an OR with a permissive branch elects
  *      the permissive branch and is not copyleft) and the occurrence target is or is under a
  *      suppressed path and the suppression is family-justified (the elected expression satisfies
  *      the workspace's declared license, or every copyleft leaf in it is in a finding-family the
  *      workspace license family absorbs per the literal WORKSPACE_ABSORBS relation - an AGPL-3.0
  *      workspace absorbs GNU-family GPL/LGPL deps and MPL deps it bundles, but never SSPL or
  *      CC-BY-SA) → suppressed, workspace.copyleft_suppressed[i]. A path match without family
- *      justification falls through to the normal default chain.
- *   4. Defaults: copyleft → fail (default:copyleft, reason names the elected expression and the
- *      occurrence target); unknown finding → policy.unknownHandling as warn or fail
- *      (default:unknown); elected content that still carries a LicenseRef-/DocumentRef- leaf after
- *      election (a bare ref, or an AND that keeps one alongside a known conjunct) → same
- *      default:unknown handling, never default:ok - its content is unknowable to the tool;
- *      otherwise ok (default:ok).
+ *      justification falls through to the normal default chain. A target-governed occurrence never
+ *      reaches this tier at all (tier 3 above decides it first), so a suppression entry a target
+ *      governs is effectively dead there - see policy/target.ts's suppressionOverlapNotices.
+ *   5. Defaults: copyleft → fail (default:copyleft, reason names the elected expression and the
+ *      occurrence target; an os-scope AGPL leaf escalates to default:agpl-container unless a
+ *      complete project target profile declares network = false, which demotes it to the routine
+ *      would-be default:copyleft fail instead, the reason naming the declared basis); unknown
+ *      finding → policy.unknownHandling as warn or fail (default:unknown); elected content that
+ *      still carries a LicenseRef-/DocumentRef- leaf after election (a bare ref, or an AND that
+ *      keeps one alongside a known conjunct) → same default:unknown handling, never default:ok
+ *      - its content is unknowable to the tool; otherwise ok (default:ok).
  *   Clarify sits above all of these by having already replaced the finding in annotateFindings; a
  *   clarified package whose verdict falls through to
- *   default:ok cites clarify[i] instead, so usage stays visible.
+ *   default:ok cites clarify[i] instead, so usage stays visible. An entry whose recorded detections
+ *   still hold but whose stated justification the current signal disproves fails as
+ *   clarify:invalid[i], directly below the stale lane and above everything numbered here.
  *
  * Every verdict-affecting match is exact-ID or satisfies-based - package rules compare name/version
  * by string equality, license rules go through spdx-satisfies on validated allowlists (never
@@ -57,12 +75,15 @@ import satisfies from "spdx-satisfies";
 
 import {
   compareCodeUnits,
+  matchesIdentityPrefix,
   type AssessmentConflict,
   type CanonicalDependencies,
+  type DependencyIntroduction,
   type Occurrence,
   type PackageEntry,
+  type StaleOverride,
   type Verdict,
-} from "../model/dependencies";
+} from "../../model/dependencies";
 import {
   copyleftLeafIds,
   elect,
@@ -70,18 +91,41 @@ import {
   isCopyleft,
   renderNode,
   type ExpressionNode,
-} from "../normalize/expression";
+} from "../../normalize/expression";
+import { observedSignalBySource } from "../../normalize/normalize";
+import {
+  classifyExpression,
+  formatProfileLabel,
+  targetBoundaryReason,
+  targetIncompatibleReason,
+  targetInternalUseReason,
+  targetOkReason,
+  targetUnknownPairReason,
+  TARGET_RULE_BOUNDARY,
+  TARGET_RULE_INCOMPATIBLE,
+  TARGET_RULE_INTERNAL_USE,
+  TARGET_RULE_OK,
+  TARGET_RULE_UNKNOWN_PAIR,
+  type ReasonContext,
+  type TargetProfile,
+} from "../compat";
+import { clarifyCitation, clarifyInvalidRuleId, type ClarifyRule } from "../schema/clarify";
+import { ruleReason } from "../schema/diagnostics";
 import { BUILTIN_DENY_RULE_ID } from "./builtinDenylist";
 import { AGPL_IDS, COPYLEFT_FAMILY } from "./copyleft";
+import { denyRuleFor, type IndexedDenyRule } from "./deny";
+import { voidedCompatibleEntries, voidedEntryKey, type VoidedEntry } from "./chain";
 import { COULD_BE_COPYLEFT_FAMILIES, WORKSPACE_ABSORBS } from "./copyleftFamily";
-import { denyRuleFor, type IndexedDenyRule } from "./denylist";
+import { justificationValidity, type JustificationValidity } from "./justificationValidity";
+import { matchesPackage, scopeCoversTarget } from "./match";
+import { resolveTargetProfile } from "./target";
 import type {
   CompatibleLicenseRule,
   CompatiblePackageRule,
   CompatibleRule,
-  Policy,
-  SuppressedWorkspace,
-} from "./schema";
+} from "../schema/compatible";
+import type { SuppressedWorkspace } from "../schema/exemptions";
+import type { Policy } from "../schema";
 
 /** Per-package facts computed once before the per-occurrence walk. */
 interface Assessment {
@@ -94,6 +138,15 @@ interface Assessment {
    * surviving LicenseRef-/DocumentRef- leaf).
    */
   electedNode: ExpressionNode | null;
+  /**
+   * The PRE-election parsed node - null exactly when `electedNode` is null. The target lane's
+   * classifyExpression needs the raw tree, never the already-elected branch: elect()'s own
+   * non-target-aware preference can discard the branch a target-aware election would have picked
+   * (the Apache-2.0-vs-GPL-2.0-only counterexample - see compat/classify.ts's module doc), so
+   * feeding it the post-election node would silently pre-discard what the lane exists to recover.
+   * Inert when no target is declared - nothing else reads it.
+   */
+  rawNode: ExpressionNode | null;
   /** isCopyleft on the elected node - the elected branch decides. */
   copyleft: boolean;
   /**
@@ -108,6 +161,7 @@ const UNKNOWN_ASSESSMENT: Assessment = {
   expression: null,
   elected: null,
   electedNode: null,
+  rawNode: null,
   copyleft: false,
 };
 
@@ -143,6 +197,7 @@ function assessPackage(entry: PackageEntry): Assessment {
       expression,
       elected: renderNode(electedNode),
       electedNode,
+      rawNode: node,
       copyleft: isCopyleft(electedNode),
     };
   } catch {
@@ -155,29 +210,23 @@ interface IndexedRule<T> {
   rule: T;
 }
 
-/**
- * Segment-aware identity-prefix match: a target matches a path only when it is the path or sits
- * under it as a whole segment - "apps/scratch-helper" never matches "apps/scratch". This is the
- * only prefix comparison in the engine - suppression paths and compatible `where` scopes both
- * delegate here; license values are never substring-matched anywhere. Both directions matter: the
- * scope "docker:a" covers every target under it ("docker:a/Dockerfile"), while the scope
- * "docker:a/Dockerfile" never covers the shorter target "docker:a" (the fail-safe direction).
- */
-function matchesIdentityPrefix(target: string, path: string): boolean {
-  return target === path || target.startsWith(path + "/");
+/** The package-form entry deciding an occurrence, plus what the chains at that target say of it. */
+interface JudgedPackageRule extends IndexedRule<CompatiblePackageRule> {
+  /** Present when a package the entry accepts here arrives around every parent it names. */
+  voidedBy?: VoidedEntry;
 }
 
 /**
- * A compatible rule applies at a target iff it is unscoped or some `where` entry covers the target
- * as an identity prefix.
+ * A compatible rule applies at a target iff some `where` entry is the everywhere token, or some
+ * `where` entry covers the target as an identity prefix.
  */
 function appliesAt(rule: CompatibleRule, target: string): boolean {
-  return rule.where === undefined || rule.where.some((path) => matchesIdentityPrefix(target, path));
+  return scopeCoversTarget(rule.where, target);
 }
 
 /**
- * First compatible package rule matching exact name (+ version when pinned) whose `where` scope,
- * when present, covers the occurrence target.
+ * First compatible package rule whose selector covers the package and whose `where` scope covers
+ * the occurrence target.
  */
 function packageRuleFor(
   entry: PackageEntry,
@@ -185,12 +234,7 @@ function packageRuleFor(
   policy: Policy,
 ): IndexedRule<CompatiblePackageRule> | undefined {
   for (const [index, rule] of policy.compatible.entries()) {
-    if (
-      rule.match === "package" &&
-      rule.name === entry.name &&
-      (rule.version === undefined || rule.version === entry.version) &&
-      appliesAt(rule, target)
-    ) {
+    if (rule.match === "package" && matchesPackage(rule, entry) && appliesAt(rule, target)) {
       return { index, rule };
     }
   }
@@ -199,10 +243,60 @@ function packageRuleFor(
 }
 
 /**
+ * Did the scan record how this occurrence arrives at its target?
+ *
+ * A direct dependency and a transitive one with at least one introducer both do. The two shapes
+ * that do not are an absent introduction and a transitive one nothing reachable introduces, and
+ * both are routine rather than exotic: BOM-graph provenance empties `introducedBy` for a component
+ * no chain from the project reaches, and the poetry lane produces the same for a name resolved at
+ * several versions.
+ */
+function recordsHowItArrives(introduction: DependencyIntroduction | undefined): boolean {
+  return (
+    introduction !== undefined && (introduction.direct || introduction.introducedBy.length > 0)
+  );
+}
+
+/**
+ * The package-form entry deciding this occurrence, carrying what the chains at its target say.
+ *
+ * Undefined when no entry matches - and also when the target has a dependency graph while the scan
+ * did not record how this occurrence arrives ({@link recordsHowItArrives}): an entry says whose use
+ * of the package was judged, which decides nothing where how it arrives went unrecorded. The
+ * occurrence falls through to the lanes below rather than being accepted on a path nobody saw.
+ *
+ * @privateRemarks
+ * The voiding side deliberately does NOT mirror this. An arrival nobody recorded is not evidence of
+ * a bypass, so it never contradicts an entry - it only fails to support one.
+ */
+function judgedPackageRule(
+  entry: PackageEntry,
+  occurrence: Occurrence,
+  policy: Policy,
+  voided: ReadonlyMap<string, VoidedEntry>,
+  targetsWithDependencyGraph: ReadonlySet<string>,
+): JudgedPackageRule | undefined {
+  const target = occurrence.target;
+  const matched = packageRuleFor(entry, target, policy);
+
+  if (matched === undefined) {
+    return undefined;
+  }
+
+  if (targetsWithDependencyGraph.has(target) && !recordsHowItArrives(occurrence.introduction)) {
+    return undefined;
+  }
+
+  const voidedBy = voided.get(voidedEntryKey(matched.index, target));
+
+  return voidedBy === undefined ? matched : { ...matched, voidedBy };
+}
+
+/**
  * First compatible license rule whose pre-decomposed allowlist satisfies the finding's expression
- * and whose `where` scope, when present, covers the occurrence target. The allowlist was validated
- * and decomposed by the schema - the pattern is never re-parsed here; the catch is purely defensive
- * (never-throws posture).
+ * and whose `where` scope covers the occurrence target. The allowlist was validated and decomposed
+ * by the schema - the pattern is never re-parsed here; the catch is purely defensive (never-throws
+ * posture).
  */
 function licenseRuleFor(
   expression: string,
@@ -336,10 +430,7 @@ function suppressionJustification(
 
 /** Same matching as annotateFindings: first clarify rule for this package. */
 function clarifyIndexFor(entry: PackageEntry, policy: Policy): number {
-  return policy.clarify.findIndex(
-    (rule) =>
-      rule.name === entry.name && (rule.version === undefined || rule.version === entry.version),
-  );
+  return policy.clarify.findIndex((rule) => matchesPackage(rule, entry));
 }
 
 /**
@@ -361,13 +452,59 @@ function clarifyIndexFor(entry: PackageEntry, policy: Policy): number {
  *     fail purely for being imprecise.
  * The latter two are status "warn": visible in the summary, non-gating by default.
  */
+/**
+ * The declared-network basis clause appended to a demoted AGPL-container reason: a complete project
+ * target profile's `network` flag now OWNS the "containers are network-deployed" applicability fact
+ * the AGPL-container heuristic used to guess (the container-design reconciliation) - `network =
+ * false` takes the AGPL section-13 obligation out of scope, and the routine os-scope copyleft
+ * treatment decides from there.
+ */
+function declaredNetworkFalseBasis(): string {
+  return (
+    "the declared target profile's network = false takes the AGPL section-13 obligation out of " +
+    "scope (not network-deployed per the declaration) — treated as routine base-image copyleft"
+  );
+}
+
+/**
+ * The imprecise mirror of {@link demotedAgplContainerVerdict}: a bare-`AGPL` os-scope package under
+ * a complete project profile with `network = false` demotes to the routine would-be
+ * default:copyleft fail (through {@link applyScopeDowngrades}, i.e. `[os_dependencies]`) instead
+ * of the escalation, the reason naming the declared basis.
+ */
+function demotedImpreciseAgplVerdict(
+  base: { purl: string; occurrenceTarget: string },
+  entry: PackageEntry,
+  occurrence: Occurrence,
+  target: string,
+  policy: Policy,
+): Verdict {
+  const failVerdict: Verdict = {
+    ...base,
+    status: "fail",
+    rule: "default:copyleft",
+    reason: `imprecise license family "AGPL" in container system package "${target}" would normally escalate to the network-copyleft obligation, but ${declaredNetworkFalseBasis()}`,
+  };
+
+  return applyScopeDowngrades(failVerdict, entry, occurrence, policy);
+}
+
 function impreciseVerdict(
   base: { purl: string; occurrenceTarget: string },
-  target: string,
+  entry: PackageEntry,
+  occurrence: Occurrence,
   family: string,
-  scope: PackageEntry["scope"],
+  policy: Policy,
 ): Verdict {
-  if (scope === "os" && family === "AGPL") {
+  const target = occurrence.target;
+
+  if (entry.scope === "os" && family === "AGPL") {
+    const profile = policy.target?.profile;
+
+    if (profile !== undefined && !profile.network) {
+      return demotedImpreciseAgplVerdict(base, entry, occurrence, target, policy);
+    }
+
     return {
       ...base,
       status: "fail",
@@ -393,31 +530,116 @@ function impreciseVerdict(
   };
 }
 
+/** What the override recorded and what is seen instead - the fact half of {@link staleVerdict}. */
+export function staleDivergence(stale: StaleOverride): string {
+  const observed = stale.observed.length > 0 ? stale.observed.join(", ") : "(nothing)";
+
+  if (stale.unaccounted !== undefined) {
+    return `the ${stale.source} signal reports "${stale.unaccounted}", which the recorded expression does not account for`;
+  }
+
+  if (stale.expected === false) {
+    return `it recorded no ${stale.source} detection, but ${stale.source} now reports "${observed}"`;
+  }
+
+  return stale.observed.length === 0
+    ? `it recorded the ${stale.source} detection "${stale.expected}", but there is no current ${stale.source} detection`
+    : `it recorded the ${stale.source} detection "${stale.expected}", but ${stale.source} now reports "${observed}"`;
+}
+
 /**
- * A stale override fails the gate loudly before any other lane: the override's `expects`
- * precondition no longer matches the package's observed signal, so an old assertion could be
- * masking a relicense. The reason names the package, the expected value, and the now-observed
- * value; the rule id is distinct and actionable ("override:stale[clarify|builtin]") telling the
- * maintainer to update or remove the override. Mapped to exit 1 (a compliance-relevant gate
- * failure) via the violations → exitCodeFor mapping - the stale assertion is never applied.
+ * A stale override fails the gate loudly before any other lane: what the override recorded is no
+ * longer what the package shows, so an old assertion could be masking a relicense. The reason names
+ * the package and the divergence; the rule id is distinct and actionable
+ * ("override:stale[clarify|builtin]"), and the remedy names the project entry to open - in the id
+ * space of the file holding it - or the shipped set when no project entry governs the package.
+ * Mapped to exit 1 (a compliance-relevant gate failure) via the violations → exitCodeFor mapping
+ * - the stale assertion is never applied.
  */
 function staleVerdict(
   base: { purl: string; occurrenceTarget: string },
   entry: PackageEntry,
   stale: NonNullable<PackageEntry["finding"]>["staleOverride"],
+  decided: ClarifyDecision | undefined,
 ): Verdict {
   const s = stale as NonNullable<typeof stale>;
-  const observed = s.observed.length > 0 ? s.observed.join(", ") : "(unknown)";
+  const remedy =
+    s.level === "clarify" && decided !== undefined
+      ? clarifyCitation(decided.rule)
+      : `the ${s.level} override`;
 
   return {
     ...base,
     status: "fail",
     rule: `override:stale[${s.level}]`,
     reason:
-      `STALE override on "${entry.name}@${entry.version}": expected to ` +
-      `observe "${s.expected}" but now observes "${observed}" — the ` +
+      `STALE override on "${entry.name}@${entry.version}": ${staleDivergence(s)} — the ` +
       `disambiguation was NOT applied (a stale override could mask a ` +
-      `relicense). Update or remove the ${s.level} override.`,
+      `relicense). Update or remove ${remedy}.`,
+  };
+}
+
+/** The [[clarify]] entry governing a package, and whether its stated reason still holds. */
+interface ClarifyDecision {
+  /** Position in the combined entry list - what unused accounting counts. */
+  readonly index: number;
+  /** The entry itself, which every id naming it is spelled from. */
+  readonly rule: ClarifyRule;
+  readonly validity: JustificationValidity;
+}
+
+/**
+ * What the entry governing this package says of itself against the signal seen now, or undefined
+ * when no [[clarify]] entry governs it. The signal is re-partitioned from the package's own claims,
+ * so it is the same view the recorded detections were weighed against.
+ */
+function clarifyDecision(entry: PackageEntry, policy: Policy): ClarifyDecision | undefined {
+  const finding = entry.finding;
+
+  if (finding === undefined) {
+    return undefined;
+  }
+
+  const index = clarifyIndexFor(entry, policy);
+  const rule = policy.clarify[index];
+
+  if (rule === undefined) {
+    return undefined;
+  }
+
+  return {
+    index,
+    rule,
+    validity: justificationValidity(rule, observedSignalBySource(entry.licenseClaims, finding)),
+  };
+}
+
+/**
+ * An entry whose recorded detections all still hold, but whose stated reason the current signal
+ * disproves, fails directly below the stale lane. The expression WAS applied - the detection record
+ * is right and only the reason for preferring the expression is not - so the remedy is to re-file
+ * the entry, and the reason names the values it can move to.
+ */
+function invalidJustificationVerdict(
+  base: { purl: string; occurrenceTarget: string },
+  entry: PackageEntry,
+  decided: ClarifyDecision | undefined,
+): Verdict | undefined {
+  if (decided === undefined) {
+    return undefined;
+  }
+
+  const validity = decided.validity;
+
+  if (validity.outcome !== "invalid") {
+    return undefined;
+  }
+
+  return {
+    ...base,
+    status: "fail",
+    rule: clarifyInvalidRuleId(decided.rule),
+    reason: `INVALID justification on "${entry.name}@${entry.version}": ${validity.reason}`,
   };
 }
 
@@ -488,8 +710,8 @@ function conflictVerdict(
 
 /**
  * Citation for an override that fell through to the default:ok lane. A project clarify
- * (clarifyIndexFor !== -1) keeps its "clarify[i]" citation; a tool-level builtin (no clarify entry)
- * cites the distinct "override:builtin[i]" rule id it carries - never plain default:ok, so a
+ * (clarifyIndexFor !== -1) is cited in its own file's id space; a tool-level builtin (no clarify
+ * entry) cites the distinct "override:builtin[i]" rule id it carries - never plain default:ok, so a
  * shipped disambiguation stays auditable. Returns undefined when this is not an override-decided
  * verdict (the caller then falls through to default:ok).
  */
@@ -513,8 +735,8 @@ function overrideCitation(
       return {
         ...base,
         status: "ok",
-        rule: `clarify[${clarifyIndex}]`,
-        reason: `clarified to "${expression}": ${rule.reason}`,
+        rule: clarifyCitation(rule),
+        reason: `clarified to "${expression}": ${ruleReason(rule.justification, rule.comment)}`,
       };
     }
   }
@@ -844,6 +1066,30 @@ function agplContainerVerdict(
 }
 
 /**
+ * A complete project target profile's `network = false` demotes the precise AGPL-container
+ * escalation to the routine would-be default:copyleft fail (through {@link applyScopeDowngrades},
+ * i.e. `[os_dependencies]`), the reason naming the declared basis - the explicit flag now owns the
+ * applicability fact the escalation used to guess (the container-design reconciliation).
+ */
+function demotedAgplContainerVerdict(
+  base: { purl: string; occurrenceTarget: string },
+  entry: PackageEntry,
+  occurrence: Occurrence,
+  target: string,
+  elected: string,
+  policy: Policy,
+): Verdict {
+  const failVerdict: Verdict = {
+    ...base,
+    status: "fail",
+    rule: "default:copyleft",
+    reason: `copyleft license "${elected}" in container system package "${target}" carries an AGPL leaf that would normally escalate to the network-copyleft obligation, but ${declaredNetworkFalseBasis()}`,
+  };
+
+  return applyScopeDowngrades(failVerdict, entry, occurrence, policy);
+}
+
+/**
  * Copyleft lane: a copyleft elected branch is suppressed when its occurrence sits in a
  * family-justified suppressed workspace; otherwise an os-scope package whose elected expression
  * carries an AGPL leaf escalates to a real fail (agplContainerVerdict, checked before the scope
@@ -887,6 +1133,19 @@ function copyleftVerdict(
     assessment.elected !== null &&
     copyleftLeafIds(assessment.electedNode).some((id) => AGPL_IDS.has(id))
   ) {
+    const profile = policy.target?.profile;
+
+    if (profile !== undefined && !profile.network) {
+      return demotedAgplContainerVerdict(
+        base,
+        entry,
+        occurrence,
+        target,
+        assessment.elected,
+        policy,
+      );
+    }
+
     return agplContainerVerdict(base, target, assessment.elected);
   }
 
@@ -903,14 +1162,227 @@ function copyleftVerdict(
   );
 }
 
+/**
+ * The target-compatibility lane: decides a governed, parseable (non-imprecise, non-null) occurrence
+ * against its resolved {@link TargetProfile} via the pure compatibility engine (compat/classify.ts
+ * + compat/profile.ts), returning undefined when the lane should NOT decide - the caller then
+ * falls through to today's copyleft/imprecise/unknown walk unchanged. Two cases return undefined:
+ * the elected branch still carries a LicenseRef-/DocumentRef- leaf after the TARGET-AWARE election
+ * (an opaque reference's content is unknowable to the tool, so it routes to the existing [unknown]
+ * handling, never `target:ok`); and a defensive `unassessed-ref` fallthrough that can never
+ * actually be reached given the check above (the modulated class is only ever `unassessed-ref` when
+ * a ref leaf survives into `result.elected`).
+ *
+ * Maps classifyExpression's five ModulatedClass outcomes: `compatible` → `overrideCitation` first
+ * (a clarified package landing target:ok keeps citing `clarify[i]`), else `target:ok`;
+ * `held-internal` → ok `target:internal-use` (never overrideCitation - the distinct id must always
+ * stay visible, even for a clarified package, per the internal-use hold's own repudiation
+ * mitigation); `boundary` → warn `target:boundary`; `incompatible` → fail `target:incompatible`,
+ * composed with `applyDevScope` (a dev-only occurrence downgrades exactly like `default:copyleft`
+ * does); `residual` → the `unknown_pair` knob (warn by default), a `fail` position also composed
+ * with `applyDevScope`. `os` never reaches this lane at all (the caller gates on `entry.scope !==
+ * "os"` before calling) - the os reconciliation lives in copyleftVerdict/impreciseVerdict instead,
+ * so `applyDevScope` alone (never the os leg of `applyScopeDowngrades`) is the correct, and only,
+ * downgrade here.
+ */
+function targetVerdict(
+  base: { purl: string; occurrenceTarget: string },
+  entry: PackageEntry,
+  occurrence: Occurrence,
+  assessment: Assessment,
+  profile: TargetProfile,
+  policy: Policy,
+): Verdict | undefined {
+  if (assessment.rawNode === null) {
+    return undefined;
+  }
+
+  const result = classifyExpression(profile, assessment.rawNode);
+
+  if (hasRefLeaf(result.elected)) {
+    return undefined;
+  }
+
+  const ctx: ReasonContext = {
+    elected: renderNode(result.elected),
+    occurrenceTarget: occurrence.target,
+    profileLabel: formatProfileLabel(profile),
+    source: result.sources.join("; "),
+  };
+
+  switch (result.class) {
+    case "compatible": {
+      const citation = overrideCitation(
+        entry,
+        base,
+        occurrence.target,
+        assessment.expression,
+        policy,
+      );
+
+      return (
+        citation ?? { ...base, status: "ok", rule: TARGET_RULE_OK, reason: targetOkReason(ctx) }
+      );
+    }
+
+    case "held-internal":
+      return {
+        ...base,
+        status: "ok",
+        rule: TARGET_RULE_INTERNAL_USE,
+        reason: targetInternalUseReason(ctx),
+      };
+    case "boundary":
+      return {
+        ...base,
+        status: "warn",
+        rule: TARGET_RULE_BOUNDARY,
+        reason: targetBoundaryReason(ctx),
+      };
+    case "incompatible":
+      return applyDevScope(
+        {
+          ...base,
+          status: "fail",
+          rule: TARGET_RULE_INCOMPATIBLE,
+          reason: targetIncompatibleReason(ctx),
+        },
+        occurrence,
+        policy,
+      );
+    case "residual": {
+      const knob = policy.target?.unknownPair ?? "warn";
+      const verdict: Verdict = {
+        ...base,
+        status: knob,
+        rule: TARGET_RULE_UNKNOWN_PAIR,
+        reason: targetUnknownPairReason(ctx),
+      };
+
+      return knob === "fail" ? applyDevScope(verdict, occurrence, policy) : verdict;
+    }
+
+    case "unassessed-ref":
+      return undefined;
+  }
+}
+
+/** One version pin rendered for a verdict reason: a single string, or a list joined with commas. */
+function versionText(version: string | ReadonlyArray<string>): string {
+  return typeof version === "string" ? version : version.join(", ");
+}
+
+/** How a package-form rule names what it governs, quoted for the verdict reason. */
+function packageRuleSubject(rule: CompatiblePackageRule): string {
+  if (rule.packages !== undefined) {
+    return rule.packages
+      .map((member) => `"${member.name}@${versionText(member.version)}"`)
+      .join(", ");
+  }
+
+  const selector = rule.name ?? (rule.pattern as string);
+
+  if (rule.version === undefined) {
+    return `"${selector}"`;
+  }
+
+  return `"${selector}@${versionText(rule.version)}"`;
+}
+
+/**
+ * Why an entry decides nothing here: the chain that arrives past everything it was judged under,
+ * named first, because it is the cause and the failing row may only be collateral. One text for
+ * every occurrence the entry governs at this target - what went wrong is the entry's, not any one
+ * package's.
+ */
+function voidedReason(rule: CompatiblePackageRule, voided: VoidedEntry, target: string): string {
+  const judged = rule.asDependencyOf.map((parent) => `"${parent}"`).join(", ");
+
+  return `${voided.chain.join(" → ")} introduces "${voided.name}" in "${target}" past everything this acceptance was judged under (${judged}): "as-dependency-of" does not cover how it arrives, so the entry accepts nothing here. Name the introducer, or split the entry so each acceptance covers one way in.`;
+}
+
+/**
+ * Tier 1/2 compatible-rule verdict (package form pinned before license form, mirroring the caller's
+ * own selection order), split out of verdictFor to keep the precedence walk within the complexity
+ * budget. Returns undefined when neither rule matched, so the caller falls through to the lanes
+ * below.
+ */
+function compatibleRuleVerdict(
+  base: { purl: string; occurrenceTarget: string },
+  assessment: Assessment,
+  packageRule: JudgedPackageRule | undefined,
+  licenseRule: IndexedRule<CompatibleLicenseRule> | undefined,
+): Verdict | undefined {
+  if (packageRule !== undefined) {
+    const { index, rule, voidedBy } = packageRule;
+
+    if (voidedBy !== undefined) {
+      return {
+        ...base,
+        status: "fail",
+        rule: `compatible:voided[${index}]`,
+        reason: voidedReason(rule, voidedBy, base.occurrenceTarget),
+      };
+    }
+
+    return {
+      ...base,
+      status: "ok",
+      rule: `compatible[${index}]`,
+      reason: `package ${packageRuleSubject(rule)} accepted by compatible package rule: ${ruleReason(rule.rationale, rule.comment)}`,
+    };
+  }
+
+  if (licenseRule !== undefined) {
+    const { index, rule } = licenseRule;
+
+    return {
+      ...base,
+      status: "ok",
+      rule: `compatible[${index}]`,
+      reason: `"${assessment.expression}" satisfies compatible license pattern "${rule.pattern}": ${ruleReason(rule.rationale, rule.comment)}`,
+    };
+  }
+
+  return undefined;
+}
+
+/**
+ * Activation gate for {@link targetVerdict}, split out of verdictFor to keep the precedence walk
+ * within the complexity budget: os-scope never activates the lane (the AGPL-container/network
+ * reconciliation lives in copyleftVerdict/impreciseVerdict instead, gated on entry.scope === "os"
+ * there); an imprecise/null finding (no rawNode) never activates it either; otherwise a governing
+ * profile is resolved once per occurrence and, when present, targetVerdict decides.
+ */
+function targetLaneVerdict(
+  base: { purl: string; occurrenceTarget: string },
+  entry: PackageEntry,
+  occurrence: Occurrence,
+  assessment: Assessment,
+  policy: Policy,
+): Verdict | undefined {
+  if (entry.scope === "os" || assessment.rawNode === null) {
+    return undefined;
+  }
+
+  const profile = resolveTargetProfile(occurrence.target, policy);
+
+  if (profile === undefined) {
+    return undefined;
+  }
+
+  return targetVerdict(base, entry, occurrence, assessment, profile, policy);
+}
+
 /** Walk the precedence chain for one (package × occurrence). */
 function verdictFor(
   entry: PackageEntry,
   occurrence: Occurrence,
   assessment: Assessment,
-  packageRule: IndexedRule<CompatiblePackageRule> | undefined,
+  packageRule: JudgedPackageRule | undefined,
   licenseRule: IndexedRule<CompatibleLicenseRule> | undefined,
   denyRule: IndexedDenyRule | undefined,
+  clarifyDecided: ClarifyDecision | undefined,
   policy: Policy,
 ): Verdict {
   const target = occurrence.target;
@@ -926,7 +1398,15 @@ function verdictFor(
   const stale = entry.finding?.staleOverride;
 
   if (stale !== undefined) {
-    return staleVerdict(base, entry, stale);
+    return staleVerdict(base, entry, stale, clarifyDecided);
+  }
+
+  // Directly below stale, and never reached by an entry that failed it: the recorded detections
+  // hold, and what the entry concluded from them no longer does.
+  const disproved = invalidJustificationVerdict(base, entry, clarifyDecided);
+
+  if (disproved !== undefined) {
+    return disproved;
   }
 
   // conflict:scancode sits directly below stale and above compatible - a fail, not a warn, because
@@ -939,27 +1419,20 @@ function verdictFor(
     return conflictVerdict(base, entry, conflict);
   }
 
-  if (packageRule !== undefined) {
-    const { index, rule } = packageRule;
-    const pin = rule.version === undefined ? "" : `@${rule.version}`;
+  const compatibleDecided = compatibleRuleVerdict(base, assessment, packageRule, licenseRule);
 
-    return {
-      ...base,
-      status: "ok",
-      rule: `compatible[${index}]`,
-      reason: `package "${rule.name}${pin}" accepted by compatible package rule: ${rule.reason}`,
-    };
+  if (compatibleDecided !== undefined) {
+    return compatibleDecided;
   }
 
-  if (licenseRule !== undefined) {
-    const { index, rule } = licenseRule;
+  // The target-compatibility lane: below deny/stale/conflict/compatible, above copyleft/imprecise/
+  // unknown. targetLaneVerdict returns undefined when the lane should not decide (no governing
+  // profile, an imprecise/null finding, os-scope, or a ref-carrying elected branch), so the walk
+  // falls through to the unchanged copyleft/imprecise/unknown lanes below.
+  const targetDecided = targetLaneVerdict(base, entry, occurrence, assessment, policy);
 
-    return {
-      ...base,
-      status: "ok",
-      rule: `compatible[${index}]`,
-      reason: `"${assessment.expression}" satisfies compatible license pattern "${rule.pattern}": ${rule.reason}`,
-    };
+  if (targetDecided !== undefined) {
+    return targetDecided;
   }
 
   if (assessment.copyleft) {
@@ -967,7 +1440,7 @@ function verdictFor(
   }
 
   if (assessment.impreciseFamily !== undefined) {
-    return impreciseVerdict(base, target, assessment.impreciseFamily, entry.scope);
+    return impreciseVerdict(base, entry, occurrence, assessment.impreciseFamily, policy);
   }
 
   if (assessment.expression === null) {
@@ -1003,8 +1476,15 @@ function verdictFor(
  * treated as unknown - defensive, documented. Returns one verdict per (package × occurrence),
  * sorted compareCodeUnits on (purl, occurrenceTarget).
  */
-export function evaluate(model: CanonicalDependencies, policy: Policy): Verdict[] {
+export function evaluate(
+  model: CanonicalDependencies,
+  policy: Policy,
+  targetsWithDependencyGraph: ReadonlySet<string>,
+): Verdict[] {
   const verdicts: Verdict[] = [];
+  // Which package entries the recorded introduction chains contradict, decided once per entry and
+  // target before the walk below reads the answer per occurrence.
+  const voided = voidedCompatibleEntries(model, policy, targetsWithDependencyGraph);
 
   for (const entry of model.packages) {
     const assessment = assessPackage(entry);
@@ -1030,19 +1510,36 @@ export function evaluate(model: CanonicalDependencies, policy: Policy): Verdict[
     // (passed null here) is inert per observed expression - it already matched via entry.name
     // above.
     const denyRule = firstDeny(policy, entry, assessment.expression);
+    // Decided once per package: the clarify entry governing it is the same at every occurrence.
+    const clarifyDecided = clarifyDecision(entry, policy);
 
     for (const occurrence of entry.occurrences) {
       // Compatible matches are per occurrence: an unscoped rule accepts the package at every
       // occurrence; a `where`-scoped rule only at the occurrences its identity prefixes cover.
       // First match in TOML order wins per occurrence, package form before license form.
-      const packageRule = packageRuleFor(entry, occurrence.target, policy);
+      const packageRule = judgedPackageRule(
+        entry,
+        occurrence,
+        policy,
+        voided,
+        targetsWithDependencyGraph,
+      );
       const licenseRule =
         packageRule === undefined && assessment.expression !== null
           ? licenseRuleFor(assessment.expression, occurrence.target, policy)
           : undefined;
 
       verdicts.push(
-        verdictFor(entry, occurrence, assessment, packageRule, licenseRule, denyRule, policy),
+        verdictFor(
+          entry,
+          occurrence,
+          assessment,
+          packageRule,
+          licenseRule,
+          denyRule,
+          clarifyDecided,
+          policy,
+        ),
       );
     }
   }
@@ -1094,13 +1591,24 @@ function carriesAgplObligation(assessment: Assessment): boolean {
 }
 
 /**
+ * True for a verdict rule that ACCEPTS an AGPL obligation without a real fail: a `[[compatible]]`
+ * rule (the only lever above the AGPL-container escalation in the precedence walk), or the
+ * network=false-demoted `default:copyleft` outcome landing "ok" via `os_dependencies = "ignore"`
+ * - a demoted-ok row must never go silent, so it gets the same notice-style visibility (the "AGPL
+ * obligation never silently absent" invariant holds regardless of the profile feature). Both
+ * require status "ok" at the call site; this only narrows which rule ids qualify.
+ */
+function acceptsAgplObligation(rule: string): boolean {
+  return rule.startsWith("compatible[") || rule === "default:copyleft";
+}
+
+/**
  * Accepted-AGPL container notices: one entry per os-scope package carrying the AGPL obligation with
- * at least one occurrence whose verdict is an acceptance (status "ok", rule cites a `compatible[i]`
- * entry - the only lever above the AGPL-container escalation in the precedence walk). A package
- * with no accepted occurrence contributes nothing; a package also carrying a fail elsewhere is
- * still returned here - the render layer applies the Problematic dedup, matching how the
- * flagged-copyleft rows dedup today. Sorted by purl (compareCodeUnits) for determinism; each
- * notice's targets are deduped and sorted the same way.
+ * at least one occurrence whose verdict is an acceptance - status "ok" via {@link
+ * acceptsAgplObligation}. A package with no accepted occurrence contributes nothing; a package also
+ * carrying a fail elsewhere is still returned here - the render layer applies the Problematic
+ * dedup, matching how the flagged-copyleft rows dedup today. Sorted by purl (compareCodeUnits) for
+ * determinism; each notice's targets are deduped and sorted the same way.
  */
 export function acceptedContainerNotices(
   model: CanonicalDependencies,
@@ -1135,7 +1643,7 @@ export function acceptedContainerNotices(
       if (
         verdict === undefined ||
         verdict.status !== "ok" ||
-        !verdict.rule.startsWith("compatible[")
+        !acceptsAgplObligation(verdict.rule)
       ) {
         continue;
       }
@@ -1184,14 +1692,122 @@ export function unusedRuleIds(
   policy.compatible.forEach((_, index) => {
     const id = `compatible[${index}]`;
 
-    if (!cited.has(id)) {
+    // An entry whose judgment the chains contradicted decided every occurrence it governs - as a
+    // failure. Reporting it "unused" beside those failures would contradict them.
+    if (!cited.has(id) && !cited.has(`compatible:voided[${index}]`)) {
       unused.push(id);
     }
   });
-  policy.clarify.forEach((_, index) => {
-    if (!usedClarifyIndices.has(index)) {
-      unused.push(`clarify[${index}]`);
+  policy.clarify.forEach((rule, index) => {
+    // An entry the signal disproved decided every occurrence it governs - as a failure. Reporting
+    // it "unused" beside those failures would contradict them.
+    if (!usedClarifyIndices.has(index) && !cited.has(clarifyInvalidRuleId(rule))) {
+      unused.push(clarifyCitation(rule));
     }
   });
   return unused;
+}
+
+/** A [[clarify]] entry the current signal has left with nothing to correct. */
+export interface UnnecessaryClarifyEntry {
+  /** The entry's citation id, as every other surface spells it. */
+  readonly rule: string;
+  /** Which of the entry's own assertions has become moot, in the words the maintainer reads. */
+  readonly reason: string;
+}
+
+/**
+ * Why the entry governing this package has nothing left to do here, or undefined while it still has
+ * something. An entry finishes two ways: the sources caught up with it, so its expression was never
+ * applied because the observed finding already satisfied it, or its stated reason became moot. A
+ * stale entry is doing something - failing - and is neither.
+ */
+function mootReason(
+  finding: PackageEntry["finding"],
+  decided: ClarifyDecision,
+): string | undefined {
+  if (finding === undefined || finding.staleOverride !== undefined) {
+    return undefined;
+  }
+
+  if (finding.source !== "override") {
+    return finding.expression === null
+      ? undefined
+      : `the sources now report "${finding.expression}", which already satisfies the recorded expression`;
+  }
+
+  return decided.validity.outcome === "unnecessary" ? decided.validity.reason : undefined;
+}
+
+/**
+ * The concrete versions a clarify entry pins. Empty when it pins none - such an entry covers every
+ * version, so there is no absent version to guard.
+ */
+function pinnedVersions(rule: ClarifyRule): string[] {
+  const { version } = rule;
+
+  if (version === undefined) {
+    return [];
+  }
+
+  return typeof version === "string" ? [version] : [...version];
+}
+
+/**
+ * The entries a maintainer can drop: those the sources have caught up with, and those whose
+ * justification was true and whose subject has since gone away - a scan that stopped
+ * over-reporting, two sources that came to agree.
+ *
+ * Never a verdict and never printed. An entry is reported only when EVERY package it governs says
+ * the same thing, so one package still needing it - or one where the recorded detection itself
+ * diverged - keeps it. Sorted by entry position for a stable answer.
+ */
+export function unnecessaryClarifyEntries(
+  model: CanonicalDependencies,
+  policy: Policy,
+): UnnecessaryClarifyEntry[] {
+  const moot = new Map<number, string>();
+  const needed = new Set<number>();
+  const seenVersions = new Map<number, Set<string>>();
+
+  for (const entry of model.packages) {
+    const decided = clarifyDecision(entry, policy);
+
+    if (decided === undefined) {
+      continue;
+    }
+
+    // Record that this pinned version was actually present this run. An entry is finished only when
+    // every version it pins was seen AND found moot: a pinned version absent from the scan may be a
+    // temporarily-absent package the entry must keep guarding, so it blocks removal below
+    // - dropping the whole entry would discard that pin and leave the gate without a clarification
+    // when the version reappears.
+    let seen = seenVersions.get(decided.index);
+
+    if (seen === undefined) {
+      seen = new Set();
+      seenVersions.set(decided.index, seen);
+    }
+
+    seen.add(entry.version);
+
+    const reason = mootReason(entry.finding, decided);
+
+    if (reason === undefined) {
+      needed.add(decided.index);
+    } else if (!moot.has(decided.index)) {
+      moot.set(decided.index, reason);
+    }
+  }
+
+  const allPinnedVersionsSeen = (index: number): boolean => {
+    const seen = seenVersions.get(index) ?? new Set<string>();
+
+    return pinnedVersions(policy.clarify[index]!).every((version) => seen.has(version));
+  };
+
+  return [...moot]
+    .filter(([index]) => !needed.has(index) && allPinnedVersionsSeen(index))
+    .sort(([a], [b]) => a - b)
+    .map(([index, reason]) => ({ rule: clarifyCitation(policy.clarify[index]!), reason }));
 }
