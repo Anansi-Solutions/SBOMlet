@@ -78,7 +78,10 @@ export type LicenseClaimSource =
 export type LicenseClaimKind = "spdx-id" | "name" | "expression";
 
 export interface LicenseClaim {
-  raw: string;
+  /**
+   * Untrusted claim text - re-resolved by normalizeRaw, never assumed to be a resolved expression.
+   */
+  raw: RawLicense;
   kind: LicenseClaimKind;
   source: LicenseClaimSource;
 }
@@ -108,10 +111,12 @@ export interface LicenseFinding {
   /**
    * Full normalized SPDX expression; null = unknown OR imprecise (an imprecise family is not a
    * valid SPDX expression and must never be emitted as one - see {@link FindingConfidence}).
+   * NormalizedLicense, NOT CanonicalExpression: a single-claim finding is preserved verbatim, so
+   * equality sites must canonicalize both operands at the comparison.
    */
-  expression: string | null;
+  expression: NormalizedLicense | null;
   /** Elected branch as rendered canonical string; null = unknown or imprecise. */
-  elected: string | null;
+  elected: NormalizedLicense | null;
   /**
    * "generator" (exact parse or unknown), "corrected", "registry" (enrichment-appended), "override"
    * (clarify); "curated" reserved.
@@ -155,7 +160,7 @@ export interface LicenseFinding {
    * over overrides). Absent when no override ran (the un-overridden finding's `expression` already
    * IS the observed value) or when the base finding had no parseable expression.
    */
-  observedExpression?: string;
+  observedExpression?: NormalizedLicense;
   /**
    * The SET of EVERY observed per-claim normalized PRECISE expression (deny must see every observed
    * claim, not only the lossy COMBINED expression). Produced by annotateFindings by running
@@ -174,7 +179,7 @@ export interface LicenseFinding {
    *
    * Absent when no claim normalized to a precise expression (nothing to carry).
    */
-  observedExpressions?: readonly string[];
+  observedExpressions?: readonly NormalizedLicense[];
   /**
    * Surfaced non-normalizable raw claim tokens for a NON-GATING `os`-scope PARTIAL finding. Set
    * ONLY when an os-scope package's claim set mixes ≥1 normalizable SPDX member with ≥1

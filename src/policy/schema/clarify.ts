@@ -15,6 +15,7 @@ import { nameOrPatternProblems, versionPinProblems } from "./package";
 import { repoRelativePath } from "./scope";
 import { spdxExpression } from "./spdx";
 
+import type { SpdxExpression } from "../../model/dependencies";
 import type { DetectedSignal } from "../../normalize/normalize";
 
 /**
@@ -87,7 +88,7 @@ export interface ClarifyRule {
   /** Why the recorded expression is preferred over what detection reports. */
   justification: Justification;
   /** A valid SPDX expression - parsed eagerly here. */
-  expression: string;
+  expression: SpdxExpression;
   /** Files or URLs a reader can check; recorded verbatim, never fetched or verified. */
   evidence?: ReadonlyArray<string>;
   /** Free prose, for what the justification alone cannot carry. */

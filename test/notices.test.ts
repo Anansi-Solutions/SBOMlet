@@ -9,6 +9,7 @@ import {
   type LicenseFinding,
   type PackageAttribution,
   type PackageEntry,
+  type NormalizedLicense,
 } from "../src/model/dependencies";
 import { leafIds, type ExpressionNode } from "../src/normalize/expression";
 import { annotateFindings } from "../src/normalize/normalize";
@@ -36,8 +37,8 @@ function entry(
 
 function exactFinding(expression: string): LicenseFinding {
   return {
-    expression,
-    elected: expression,
+    expression: expression as NormalizedLicense,
+    elected: expression as NormalizedLicense,
     source: "generator",
     confidence: "exact",
   };

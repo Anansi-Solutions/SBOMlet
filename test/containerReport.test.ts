@@ -6,6 +6,7 @@ import {
   DOCKER_IDENTITY_PREFIX,
   type CanonicalDependencies,
   type PackageEntry,
+  type RawLicense,
 } from "../src/model/dependencies";
 import { mergeSboms } from "../src/merge/merge";
 import { annotateFindings } from "../src/normalize/normalize";
@@ -88,7 +89,7 @@ const bash = entry({
   version: "5.2-6",
   scope: "os",
   occurrences: [{ target: API_CONTAINER, isDevDependency: false }],
-  licenseClaims: [{ raw: "GPL-3.0-or-later", kind: "spdx-id", source: "generator" }],
+  licenseClaims: [{ raw: "GPL-3.0-or-later" as RawLicense, kind: "spdx-id", source: "generator" }],
 });
 
 const libc6 = entry({
@@ -97,7 +98,7 @@ const libc6 = entry({
   version: "2.36-9",
   scope: "os",
   occurrences: [{ target: API_CONTAINER, isDevDependency: false }],
-  licenseClaims: [{ raw: "LGPL-2.1-or-later", kind: "spdx-id", source: "generator" }],
+  licenseClaims: [{ raw: "LGPL-2.1-or-later" as RawLicense, kind: "spdx-id", source: "generator" }],
 });
 
 const coreutils = entry({
@@ -106,7 +107,7 @@ const coreutils = entry({
   version: "9.1-1",
   scope: "os",
   occurrences: [{ target: API_CONTAINER, isDevDependency: false }],
-  licenseClaims: [{ raw: "GPL-3.0-or-later", kind: "spdx-id", source: "generator" }],
+  licenseClaims: [{ raw: "GPL-3.0-or-later" as RawLicense, kind: "spdx-id", source: "generator" }],
 });
 
 /** Shared across BOTH containers — must row in each container's subsection. */
@@ -119,7 +120,7 @@ const zlib = entry({
     { target: API_CONTAINER, isDevDependency: false },
     { target: BUILD_CONTAINER, isDevDependency: false },
   ],
-  licenseClaims: [{ raw: "Zlib", kind: "spdx-id", source: "generator" }],
+  licenseClaims: [{ raw: "Zlib" as RawLicense, kind: "spdx-id", source: "generator" }],
 });
 
 /**
@@ -135,7 +136,7 @@ const metricsDaemon = entry({
   version: "1.2.0",
   scope: "os",
   occurrences: [{ target: API_CONTAINER, isDevDependency: false }],
-  licenseClaims: [{ raw: "AGPL-3.0-only", kind: "spdx-id", source: "generator" }],
+  licenseClaims: [{ raw: "AGPL-3.0-only" as RawLicense, kind: "spdx-id", source: "generator" }],
 });
 
 /**
@@ -152,7 +153,7 @@ const diagTools = entry({
   version: "3.0.1",
   scope: "os",
   occurrences: [{ target: API_CONTAINER, isDevDependency: false }],
-  licenseClaims: [{ raw: "AGPL-3.0-only", kind: "spdx-id", source: "generator" }],
+  licenseClaims: [{ raw: "AGPL-3.0-only" as RawLicense, kind: "spdx-id", source: "generator" }],
 });
 
 /**
@@ -168,7 +169,7 @@ const licensedDaemon = entry({
   version: "2.1.0",
   scope: "os",
   occurrences: [{ target: API_CONTAINER, isDevDependency: false }],
-  licenseClaims: [{ raw: "AGPL-3.0-only", kind: "spdx-id", source: "generator" }],
+  licenseClaims: [{ raw: "AGPL-3.0-only" as RawLicense, kind: "spdx-id", source: "generator" }],
 });
 
 /**
@@ -185,7 +186,7 @@ const licensedRelay = entry({
   occurrences: [{ target: API_CONTAINER, isDevDependency: false }],
   licenseClaims: [
     {
-      raw: "GNU Affero General Public License",
+      raw: "GNU Affero General Public License" as RawLicense,
       kind: "name",
       source: "generator",
     },
@@ -205,7 +206,7 @@ const relayAgent = entry({
   occurrences: [{ target: BUILD_CONTAINER, isDevDependency: false }],
   licenseClaims: [
     {
-      raw: "GNU Affero General Public License",
+      raw: "GNU Affero General Public License" as RawLicense,
       kind: "name",
       source: "generator",
     },
@@ -226,7 +227,7 @@ const cacheRelay = entry({
   version: "0.9.0",
   scope: "os",
   occurrences: [{ target: BUILD_CONTAINER, isDevDependency: false }],
-  licenseClaims: [{ raw: "AGPL-3.0-only", kind: "spdx-id", source: "generator" }],
+  licenseClaims: [{ raw: "AGPL-3.0-only" as RawLicense, kind: "spdx-id", source: "generator" }],
 });
 
 /**
@@ -252,7 +253,7 @@ const chartRender = entry({
       },
     },
   ],
-  licenseClaims: [{ raw: "LGPL-3.0-or-later", kind: "spdx-id", source: "generator" }],
+  licenseClaims: [{ raw: "LGPL-3.0-or-later" as RawLicense, kind: "spdx-id", source: "generator" }],
 });
 
 /** App-level dev-only copyleft warn — the obligation that must stay in Copyleft. */
@@ -261,7 +262,7 @@ const docGen = entry({
   name: "doc-gen",
   version: "1.0.0",
   occurrences: [{ target: APP_TARGET, isDevDependency: true }],
-  licenseClaims: [{ raw: "LGPL-2.1-or-later", kind: "spdx-id", source: "generator" }],
+  licenseClaims: [{ raw: "LGPL-2.1-or-later" as RawLicense, kind: "spdx-id", source: "generator" }],
 });
 
 const rawModel: CanonicalDependencies = {

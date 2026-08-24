@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import { BUILTIN_OVERRIDES } from "../policy/engine/builtinOverrides";
 import { claim, pkg, modelOf } from "../../test/normalizeTestSupport";
 import { annotateFindings, type ClarifyInput, type BuiltinOverrideInput } from "./normalize";
+import type { NormalizedLicense, SpdxExpression } from "../model/dependencies";
 
 describe("annotateFindings — clarify overrides", () => {
   test("matching name+version replaces the finding with source override", () => {
@@ -14,7 +15,7 @@ describe("annotateFindings — clarify overrides", () => {
         name: "@img/sharp-win32-x64",
         version: "0.34.5",
         detected: { registry: "Apache-2.0 AND LGPL-3.0-or-later" },
-        expression: "Apache-2.0",
+        expression: "Apache-2.0" as SpdxExpression,
       },
     ];
     const { model, usedClarifyIndices } = annotateFindings(modelOf(entry), clarify);
@@ -22,8 +23,8 @@ describe("annotateFindings — clarify overrides", () => {
 
     expect(finding.source).toBe("override");
     expect(finding.confidence).toBe("exact");
-    expect(finding.expression).toBe("Apache-2.0");
-    expect(finding.elected).toBe("Apache-2.0");
+    expect(finding.expression).toBe("Apache-2.0" as NormalizedLicense);
+    expect(finding.elected).toBe("Apache-2.0" as NormalizedLicense);
     expect(usedClarifyIndices.has(0)).toBe(true);
   });
 
@@ -36,25 +37,29 @@ describe("annotateFindings — clarify overrides", () => {
         name: "@img/sharp-win32-x64",
         version: "9.9.9",
         detected: { registry: "Apache-2.0 AND LGPL-3.0-or-later" },
-        expression: "MIT",
+        expression: "MIT" as SpdxExpression,
       },
     ];
     const { model, usedClarifyIndices } = annotateFindings(modelOf(entry), clarify);
     const finding = model.packages[0]!.finding!;
 
     expect(finding.source).toBe("generator");
-    expect(finding.expression).toBe("Apache-2.0 AND LGPL-3.0-or-later");
+    expect(finding.expression).toBe("Apache-2.0 AND LGPL-3.0-or-later" as NormalizedLicense);
     expect(usedClarifyIndices.size).toBe(0);
   });
 
   test("version-less clarify matches any version of the named package", () => {
     const entry = pkg("jsonify", "0.0.1", [claim("Public Domain", "name")]);
     const clarify: ClarifyInput[] = [
-      { name: "jsonify", detected: { registry: "Public Domain" }, expression: "Unlicense" },
+      {
+        name: "jsonify",
+        detected: { registry: "Public Domain" },
+        expression: "Unlicense" as SpdxExpression,
+      },
     ];
     const { model, usedClarifyIndices } = annotateFindings(modelOf(entry), clarify);
 
-    expect(model.packages[0]!.finding!.expression).toBe("Unlicense");
+    expect(model.packages[0]!.finding!.expression).toBe("Unlicense" as NormalizedLicense);
     expect(model.packages[0]!.finding!.source).toBe("override");
     expect(usedClarifyIndices.has(0)).toBe(true);
   });
@@ -68,13 +73,17 @@ describe("annotateFindings — staleness-guarded clarify", () => {
   test("a recorded registry detection matching the imprecise-BSD signal APPLIES the disambiguation", () => {
     const entry = pkg("jupyter-thing", "1.0.0", [claim("BSD", "name")]);
     const clarify: ClarifyInput[] = [
-      { name: "jupyter-thing", detected: { registry: "BSD" }, expression: "BSD-3-Clause" },
+      {
+        name: "jupyter-thing",
+        detected: { registry: "BSD" },
+        expression: "BSD-3-Clause" as SpdxExpression,
+      },
     ];
     const { model, usedClarifyIndices } = annotateFindings(modelOf(entry), clarify);
     const finding = model.packages[0]!.finding!;
 
     expect(finding.source).toBe("override");
-    expect(finding.expression).toBe("BSD-3-Clause");
+    expect(finding.expression).toBe("BSD-3-Clause" as NormalizedLicense);
     expect(finding.staleOverride).toBeUndefined();
     expect(usedClarifyIndices.has(0)).toBe(true);
   });
@@ -85,28 +94,32 @@ describe("annotateFindings — staleness-guarded clarify", () => {
       {
         name: "dateutil-ish",
         detected: { registry: "Dual License" },
-        expression: "Apache-2.0 OR BSD-3-Clause",
+        expression: "Apache-2.0 OR BSD-3-Clause" as SpdxExpression,
       },
     ];
     const { model } = annotateFindings(modelOf(entry), clarify);
     const finding = model.packages[0]!.finding!;
 
     expect(finding.source).toBe("override");
-    expect(finding.expression).toBe("Apache-2.0 OR BSD-3-Clause");
+    expect(finding.expression).toBe("Apache-2.0 OR BSD-3-Clause" as NormalizedLicense);
     expect(finding.staleOverride).toBeUndefined();
   });
 
   test("STALE: registry recorded BSD but the package now reports GPL-3.0 → not applied, staleOverride recorded", () => {
     const entry = pkg("relicensed", "2.0.0", [claim("GPL-3.0-only")]);
     const clarify: ClarifyInput[] = [
-      { name: "relicensed", detected: { registry: "BSD" }, expression: "BSD-3-Clause" },
+      {
+        name: "relicensed",
+        detected: { registry: "BSD" },
+        expression: "BSD-3-Clause" as SpdxExpression,
+      },
     ];
     const { model } = annotateFindings(modelOf(entry), clarify);
     const finding = model.packages[0]!.finding!;
 
     // The stale BSD-3-Clause assertion is NOT applied — the real finding stands.
     expect(finding.source).not.toBe("override");
-    expect(finding.expression).toBe("GPL-3.0-only");
+    expect(finding.expression).toBe("GPL-3.0-only" as NormalizedLicense);
     expect(finding.staleOverride).toBeDefined();
     expect(finding.staleOverride!.level).toBe("clarify");
     expect(finding.staleOverride!.source).toBe("registry");
@@ -117,30 +130,42 @@ describe("annotateFindings — staleness-guarded clarify", () => {
   test("a recorded detection is matched case-insensitively and trimmed", () => {
     const entry = pkg("ci-pkg", "1.0.0", [claim("BSD", "name")]);
     const clarify: ClarifyInput[] = [
-      { name: "ci-pkg", detected: { registry: "  bsd  " }, expression: "BSD-3-Clause" },
+      {
+        name: "ci-pkg",
+        detected: { registry: "  bsd  " },
+        expression: "BSD-3-Clause" as SpdxExpression,
+      },
     ];
     const { model } = annotateFindings(modelOf(entry), clarify);
 
-    expect(model.packages[0]!.finding!.expression).toBe("BSD-3-Clause");
+    expect(model.packages[0]!.finding!.expression).toBe("BSD-3-Clause" as NormalizedLicense);
   });
 
   test("a non-SPDX registry value recorded verbatim still satisfies the precondition", () => {
     const entry = pkg("jsonify", "0.0.1", [claim("Public Domain", "name")]);
     const clarify: ClarifyInput[] = [
-      { name: "jsonify", detected: { registry: "Public Domain" }, expression: "Unlicense" },
+      {
+        name: "jsonify",
+        detected: { registry: "Public Domain" },
+        expression: "Unlicense" as SpdxExpression,
+      },
     ];
     const { model } = annotateFindings(modelOf(entry), clarify);
     const finding = model.packages[0]!.finding!;
 
     expect(finding.source).toBe("override");
-    expect(finding.expression).toBe("Unlicense");
+    expect(finding.expression).toBe("Unlicense" as NormalizedLicense);
     expect(finding.staleOverride).toBeUndefined();
   });
 });
 
 describe("annotateFindings — tool-level BUILTIN overrides", () => {
   const jupyterBuiltin: BuiltinOverrideInput[] = [
-    { name: "ipython", detected: { registry: "BSD" }, expression: "BSD-3-Clause" },
+    {
+      name: "ipython",
+      detected: { registry: "BSD" },
+      expression: "BSD-3-Clause" as SpdxExpression,
+    },
   ];
 
   test("a tool-level override applies when no project clarify matches and is cited override:builtin[i]", () => {
@@ -149,7 +174,7 @@ describe("annotateFindings — tool-level BUILTIN overrides", () => {
     const finding = model.packages[0]!.finding!;
 
     expect(finding.source).toBe("override");
-    expect(finding.expression).toBe("BSD-3-Clause");
+    expect(finding.expression).toBe("BSD-3-Clause" as NormalizedLicense);
     expect(finding.overrideRule).toBe("override:builtin[0]");
   });
 
@@ -158,19 +183,19 @@ describe("annotateFindings — tool-level BUILTIN overrides", () => {
     const v2 = pkg("ipython", "8.31.0", [claim("BSD", "name")]);
     const { model } = annotateFindings(modelOf(v1, v2), [], jupyterBuiltin);
 
-    expect(model.packages[0]!.finding!.expression).toBe("BSD-3-Clause");
-    expect(model.packages[1]!.finding!.expression).toBe("BSD-3-Clause");
+    expect(model.packages[0]!.finding!.expression).toBe("BSD-3-Clause" as NormalizedLicense);
+    expect(model.packages[1]!.finding!.expression).toBe("BSD-3-Clause" as NormalizedLicense);
   });
 
   test("project clarify WINS over a tool-level override on conflict (project-wins)", () => {
     const entry = pkg("ipython", "8.0.0", [claim("BSD", "name")]);
     const clarify: ClarifyInput[] = [
-      { name: "ipython", detected: { registry: "BSD" }, expression: "MIT" },
+      { name: "ipython", detected: { registry: "BSD" }, expression: "MIT" as SpdxExpression },
     ];
     const { model, usedClarifyIndices } = annotateFindings(modelOf(entry), clarify, jupyterBuiltin);
     const finding = model.packages[0]!.finding!;
 
-    expect(finding.expression).toBe("MIT");
+    expect(finding.expression).toBe("MIT" as NormalizedLicense);
     expect(finding.overrideRule).toBeUndefined(); // project clarify, not builtin
     expect(usedClarifyIndices.has(0)).toBe(true);
   });
@@ -181,7 +206,7 @@ describe("annotateFindings — tool-level BUILTIN overrides", () => {
     const finding = model.packages[0]!.finding!;
 
     expect(finding.source).not.toBe("override");
-    expect(finding.expression).toBe("GPL-3.0-only");
+    expect(finding.expression).toBe("GPL-3.0-only" as NormalizedLicense);
     expect(finding.staleOverride!.level).toBe("builtin");
     expect(finding.staleOverride!.expected).toBe("BSD");
   });
@@ -222,7 +247,7 @@ describe("annotateFindings — staleness fails CLOSED on a contradicting co-clai
     const finding = model.packages[0]!.finding!;
 
     expect(finding.source).toBe("override");
-    expect(finding.expression).toBe("BSD-3-Clause");
+    expect(finding.expression).toBe("BSD-3-Clause" as NormalizedLicense);
     expect(finding.staleOverride).toBeUndefined();
   });
 
@@ -246,7 +271,7 @@ describe("annotateFindings — staleness fails CLOSED on a contradicting co-clai
     const finding = model.packages[0]!.finding!;
 
     expect(finding.source).toBe("override");
-    expect(finding.expression).toBe("BSD-3-Clause");
+    expect(finding.expression).toBe("BSD-3-Clause" as NormalizedLicense);
   });
 });
 
@@ -270,7 +295,7 @@ describe("annotateFindings — redundant override when metadata catches up (gap 
     const { model } = annotateFindings(modelOf(entry), [], [...BUILTIN_OVERRIDES]);
     const finding = model.packages[0]!.finding!;
 
-    expect(finding.expression).toBe("BSD-3-Clause");
+    expect(finding.expression).toBe("BSD-3-Clause" as NormalizedLicense);
     expect(finding.source).not.toBe("override"); // observed finding stands
     expect(finding.staleOverride).toBeUndefined(); // NOT a false-positive stale
   });
@@ -281,7 +306,7 @@ describe("annotateFindings — redundant override when metadata catches up (gap 
     const { model } = annotateFindings(modelOf(ipykernel, jupyterCore), [], [...BUILTIN_OVERRIDES]);
 
     for (const p of model.packages) {
-      expect(p.finding!.expression).toBe("BSD-3-Clause");
+      expect(p.finding!.expression).toBe("BSD-3-Clause" as NormalizedLicense);
       expect(p.finding!.staleOverride).toBeUndefined();
     }
   });
@@ -292,14 +317,14 @@ describe("annotateFindings — redundant override when metadata catches up (gap 
       {
         name: "relicensed-permissive",
         detected: { registry: "BSD" },
-        expression: "BSD-3-Clause",
+        expression: "BSD-3-Clause" as SpdxExpression,
       },
     ];
     const { model } = annotateFindings(modelOf(entry), clarify);
     const finding = model.packages[0]!.finding!;
 
     expect(finding.source).not.toBe("override");
-    expect(finding.expression).toBe("MIT"); // observed finding stands
+    expect(finding.expression).toBe("MIT" as NormalizedLicense); // observed finding stands
     expect(finding.staleOverride).toBeDefined();
     expect(finding.staleOverride!.expected).toBe("BSD");
     expect(finding.staleOverride!.observed).toContain("MIT");
@@ -311,14 +336,14 @@ describe("annotateFindings — redundant override when metadata catches up (gap 
       {
         name: "relicensed-copyleft",
         detected: { registry: "BSD" },
-        expression: "BSD-3-Clause",
+        expression: "BSD-3-Clause" as SpdxExpression,
       },
     ];
     const { model } = annotateFindings(modelOf(entry), clarify);
     const finding = model.packages[0]!.finding!;
 
     expect(finding.source).not.toBe("override");
-    expect(finding.expression).toBe("GPL-3.0-only");
+    expect(finding.expression).toBe("GPL-3.0-only" as NormalizedLicense);
     expect(finding.staleOverride).toBeDefined();
     expect(finding.staleOverride!.level).toBe("clarify");
   });
@@ -343,7 +368,7 @@ describe("annotateFindings — redundant override when metadata catches up (gap 
     const finding = model.packages[0]!.finding!;
 
     expect(finding.source).toBe("override");
-    expect(finding.expression).toBe("BSD-3-Clause");
+    expect(finding.expression).toBe("BSD-3-Clause" as NormalizedLicense);
     expect(finding.staleOverride).toBeUndefined();
   });
 });
@@ -358,7 +383,7 @@ describe("annotateFindings — redundant override when metadata catches up (gap 
 
 describe("annotateFindings — an imprecise member the assertion cannot account for", () => {
   const OLD_SIGNAL_ONLY: ClarifyInput[] = [
-    { name: "family-appended", detected: { registry: "MIT" }, expression: "MIT" },
+    { name: "family-appended", detected: { registry: "MIT" }, expression: "MIT" as SpdxExpression },
   ];
 
   test("control: with no entry at all, the appended AGPL label reaches the finding", () => {
@@ -392,13 +417,17 @@ describe("annotateFindings — an imprecise member the assertion cannot account 
   test("the disambiguation case is untouched: a recorded BSD label still upgrades to BSD-3-Clause", () => {
     const entry = pkg("disambiguated", "1.0.0", [claim("BSD License", "name")]);
     const clarify: ClarifyInput[] = [
-      { name: "disambiguated", detected: { registry: "BSD" }, expression: "BSD-3-Clause" },
+      {
+        name: "disambiguated",
+        detected: { registry: "BSD" },
+        expression: "BSD-3-Clause" as SpdxExpression,
+      },
     ];
     const { model } = annotateFindings(modelOf(entry), clarify);
     const finding = model.packages[0]!.finding!;
 
     expect(finding.source).toBe("override");
-    expect(finding.expression).toBe("BSD-3-Clause");
+    expect(finding.expression).toBe("BSD-3-Clause" as NormalizedLicense);
     expect(finding.staleOverride).toBeUndefined();
   });
 
@@ -408,7 +437,11 @@ describe("annotateFindings — an imprecise member the assertion cannot account 
       claim("Some Proprietary Thing", "name"),
     ]);
     const clarify: ClarifyInput[] = [
-      { name: "unreadable-label", detected: { registry: "MIT" }, expression: "MIT" },
+      {
+        name: "unreadable-label",
+        detected: { registry: "MIT" },
+        expression: "MIT" as SpdxExpression,
+      },
     ];
     const { model } = annotateFindings(modelOf(entry), clarify);
     const finding = model.packages[0]!.finding!;
@@ -432,7 +465,11 @@ describe("annotateFindings — a null-expression member naming no family (H1)", 
   test("a newly-appeared UNLICENSED claim beside MIT goes STALE, not licensed out as MIT", () => {
     const entry = pkg("proprietary-slipped-in", "1.0.0", [claim("MIT"), claim("UNLICENSED")]);
     const clarify: ClarifyInput[] = [
-      { name: "proprietary-slipped-in", detected: { registry: "MIT" }, expression: "MIT" },
+      {
+        name: "proprietary-slipped-in",
+        detected: { registry: "MIT" },
+        expression: "MIT" as SpdxExpression,
+      },
     ];
     const { model } = annotateFindings(modelOf(entry), clarify);
     const finding = model.packages[0]!.finding!;
@@ -446,7 +483,11 @@ describe("annotateFindings — a null-expression member naming no family (H1)", 
   test("a bare Proprietary marker beside MIT goes STALE the same way", () => {
     const entry = pkg("proprietary-marker", "1.0.0", [claim("MIT"), claim("Proprietary", "name")]);
     const clarify: ClarifyInput[] = [
-      { name: "proprietary-marker", detected: { registry: "MIT" }, expression: "MIT" },
+      {
+        name: "proprietary-marker",
+        detected: { registry: "MIT" },
+        expression: "MIT" as SpdxExpression,
+      },
     ];
     const { model } = annotateFindings(modelOf(entry), clarify);
     const finding = model.packages[0]!.finding!;
@@ -458,7 +499,11 @@ describe("annotateFindings — a null-expression member naming no family (H1)", 
   test("a null-expression member the entry RECORDED is still accounted (no regression)", () => {
     const entry = pkg("recorded-unlicensed", "1.0.0", [claim("MIT"), claim("UNLICENSED")]);
     const clarify: ClarifyInput[] = [
-      { name: "recorded-unlicensed", detected: { registry: "UNLICENSED" }, expression: "MIT" },
+      {
+        name: "recorded-unlicensed",
+        detected: { registry: "UNLICENSED" },
+        expression: "MIT" as SpdxExpression,
+      },
     ];
     const { model } = annotateFindings(modelOf(entry), clarify);
     const finding = model.packages[0]!.finding!;
@@ -466,7 +511,7 @@ describe("annotateFindings — a null-expression member naming no family (H1)", 
     // A recorded UNLICENSED is not a NEW claim - the guard skips it, and the MIT the assertion
     // covers is accounted, so the override applies cleanly.
     expect(finding.source).toBe("override");
-    expect(finding.expression).toBe("MIT");
+    expect(finding.expression).toBe("MIT" as NormalizedLicense);
     expect(finding.staleOverride).toBeUndefined();
   });
 });

@@ -8,6 +8,8 @@ import {
   type CanonicalDependencies,
   type PackageEntry,
   type Verdict,
+  type NormalizedLicense,
+  type RawLicense,
 } from "../src/model/dependencies";
 import { annotateFindings } from "../src/normalize/normalize";
 import { renderMarkdown, type PolicyView, type TargetProfileSummary } from "../src/render/markdown";
@@ -158,8 +160,8 @@ function conflictModel(): CanonicalDependencies {
           version: "1.0.0",
           occurrences: [{ target: SYNTHETIC_TARGET, isDevDependency: false }],
           licenseClaims: [
-            { raw: "Apache-2.0", kind: "expression", source: "generator" },
-            { raw: "MIT", kind: "expression", source: "scancode" },
+            { raw: "Apache-2.0" as RawLicense, kind: "expression", source: "generator" },
+            { raw: "MIT" as RawLicense, kind: "expression", source: "scancode" },
           ],
           scope: "app",
         },
@@ -219,8 +221,8 @@ describe("renderMarkdown — assessment conflicts section", () => {
           licenseClaims: [],
           scope: "app",
           finding: {
-            expression: "MIT",
-            elected: "MIT",
+            expression: "MIT" as NormalizedLicense,
+            elected: "MIT" as NormalizedLicense,
             source: "generator",
             confidence: "exact",
             conflict: {
@@ -259,8 +261,8 @@ describe("renderMarkdown — assessment conflicts section", () => {
           licenseClaims: [],
           scope: "os",
           finding: {
-            expression: "MIT AND Apache-2.0",
-            elected: "MIT AND Apache-2.0",
+            expression: "MIT AND Apache-2.0" as NormalizedLicense,
+            elected: "MIT AND Apache-2.0" as NormalizedLicense,
             source: "generator",
             confidence: "exact",
             conflict: {
@@ -292,8 +294,8 @@ describe("renderMarkdown — assessment conflicts section", () => {
           licenseClaims: [],
           scope: "os",
           finding: {
-            expression: "MIT AND Apache-2.0",
-            elected: "MIT AND Apache-2.0",
+            expression: "MIT AND Apache-2.0" as NormalizedLicense,
+            elected: "MIT AND Apache-2.0" as NormalizedLicense,
             source: "generator",
             confidence: "exact",
             conflict: {
@@ -442,8 +444,8 @@ describe("renderMarkdown — table content", () => {
           version: "1.0.0",
           occurrences: [{ target: "apps/a", isDevDependency: false }],
           licenseClaims: [
-            { raw: "MIT", kind: "spdx-id", source: "generator" },
-            { raw: "MIT", kind: "name", source: "generator" },
+            { raw: "MIT" as RawLicense, kind: "spdx-id", source: "generator" },
+            { raw: "MIT" as RawLicense, kind: "name", source: "generator" },
           ],
           scope: "app",
         },
@@ -467,9 +469,9 @@ describe("renderMarkdown — table content", () => {
           version: "1.0.0",
           occurrences: [{ target: "apps/a", isDevDependency: false }],
           licenseClaims: [
-            { raw: "Apache-2.0", kind: "spdx-id", source: "generator" },
-            { raw: "MIT", kind: "spdx-id", source: "generator" },
-            { raw: "Apache-2.0", kind: "spdx-id", source: "generator" },
+            { raw: "Apache-2.0" as RawLicense, kind: "spdx-id", source: "generator" },
+            { raw: "MIT" as RawLicense, kind: "spdx-id", source: "generator" },
+            { raw: "Apache-2.0" as RawLicense, kind: "spdx-id", source: "generator" },
           ],
           scope: "app",
         },
@@ -514,10 +516,10 @@ const sharpEntry = entry({
     { target: "docs", isDevDependency: false },
     { target: "frontend", isDevDependency: false },
   ],
-  licenseClaims: [{ raw: "LGPL-3.0-or-later", kind: "spdx-id", source: "generator" }],
+  licenseClaims: [{ raw: "LGPL-3.0-or-later" as RawLicense, kind: "spdx-id", source: "generator" }],
   finding: {
-    expression: "LGPL-3.0-or-later",
-    elected: "LGPL-3.0-or-later",
+    expression: "LGPL-3.0-or-later" as NormalizedLicense,
+    elected: "LGPL-3.0-or-later" as NormalizedLicense,
     source: "generator",
     confidence: "exact",
   },
@@ -605,8 +607,8 @@ describe("renderMarkdown — the full document", () => {
           name: "a-pkg",
           version: "1.0.0",
           finding: {
-            expression: "MIT",
-            elected: "MIT",
+            expression: "MIT" as NormalizedLicense,
+            elected: "MIT" as NormalizedLicense,
             source: "generator",
             confidence: "exact",
           },
@@ -627,8 +629,8 @@ describe("renderMarkdown — the full document", () => {
           name: "c-pkg",
           version: "2.0.0",
           finding: {
-            expression: "Apache-2.0",
-            elected: "Apache-2.0",
+            expression: "Apache-2.0" as NormalizedLicense,
+            elected: "Apache-2.0" as NormalizedLicense,
             source: "generator",
             confidence: "exact",
           },
@@ -654,14 +656,14 @@ describe("renderMarkdown — the full document", () => {
           version: "1.0.0",
           licenseClaims: [
             {
-              raw: "MIT OR Apache-2.0",
+              raw: "MIT OR Apache-2.0" as RawLicense,
               kind: "expression",
               source: "generator",
             },
           ],
           finding: {
-            expression: "MIT OR Apache-2.0",
-            elected: "Apache-2.0",
+            expression: "MIT OR Apache-2.0" as NormalizedLicense,
+            elected: "Apache-2.0" as NormalizedLicense,
             source: "generator",
             confidence: "exact",
           },
@@ -671,15 +673,17 @@ describe("renderMarkdown — the full document", () => {
           name: "legacy",
           version: "1.0.0",
           licenseClaims: [
-            { raw: "ISC", kind: "spdx-id", source: "generator" },
-            { raw: "ISC", kind: "name", source: "generator" },
+            { raw: "ISC" as RawLicense, kind: "spdx-id", source: "generator" },
+            { raw: "ISC" as RawLicense, kind: "name", source: "generator" },
           ],
         }),
         entry({
           purl: "pkg:npm/mystery@1.0.0",
           name: "mystery",
           version: "1.0.0",
-          licenseClaims: [{ raw: "Custom License", kind: "name", source: "generator" }],
+          licenseClaims: [
+            { raw: "Custom License" as RawLicense, kind: "name", source: "generator" },
+          ],
           finding: {
             expression: null,
             elected: null,
@@ -710,10 +714,12 @@ describe("renderMarkdown — the full document", () => {
         { target: "backend", isDevDependency: false },
         { target: "frontend", isDevDependency: false },
       ],
-      licenseClaims: [{ raw: "LGPL-3.0-or-later", kind: "spdx-id", source: "generator" }],
+      licenseClaims: [
+        { raw: "LGPL-3.0-or-later" as RawLicense, kind: "spdx-id", source: "generator" },
+      ],
       finding: {
-        expression: "LGPL-3.0-or-later",
-        elected: "LGPL-3.0-or-later",
+        expression: "LGPL-3.0-or-later" as NormalizedLicense,
+        elected: "LGPL-3.0-or-later" as NormalizedLicense,
         source: "generator",
         confidence: "exact",
       },
@@ -727,10 +733,12 @@ describe("renderMarkdown — the full document", () => {
           name: "suppressed-only",
           version: "1.0.0",
           occurrences: [{ target: "apps/scratch", isDevDependency: false }],
-          licenseClaims: [{ raw: "GPL-3.0-only", kind: "spdx-id", source: "generator" }],
+          licenseClaims: [
+            { raw: "GPL-3.0-only" as RawLicense, kind: "spdx-id", source: "generator" },
+          ],
           finding: {
-            expression: "GPL-3.0-only",
-            elected: "GPL-3.0-only",
+            expression: "GPL-3.0-only" as NormalizedLicense,
+            elected: "GPL-3.0-only" as NormalizedLicense,
             source: "generator",
             confidence: "exact",
           },
@@ -844,10 +852,10 @@ describe("renderMarkdown — the full document", () => {
       name: "libssl",
       version: "3.0",
       occurrences: [{ target: "docker:img/Dockerfile", isDevDependency: false }],
-      licenseClaims: [{ raw: "GPL-3.0-only", kind: "spdx-id", source: "generator" }],
+      licenseClaims: [{ raw: "GPL-3.0-only" as RawLicense, kind: "spdx-id", source: "generator" }],
       finding: {
-        expression: "GPL-3.0-only",
-        elected: "GPL-3.0-only",
+        expression: "GPL-3.0-only" as NormalizedLicense,
+        elected: "GPL-3.0-only" as NormalizedLicense,
         source: "generator",
         confidence: "exact",
       },
@@ -858,10 +866,10 @@ describe("renderMarkdown — the full document", () => {
       name: "app-copyleft",
       version: "1.0.0",
       occurrences: [{ target: "backend", isDevDependency: false }],
-      licenseClaims: [{ raw: "GPL-3.0-only", kind: "spdx-id", source: "generator" }],
+      licenseClaims: [{ raw: "GPL-3.0-only" as RawLicense, kind: "spdx-id", source: "generator" }],
       finding: {
-        expression: "GPL-3.0-only",
-        elected: "GPL-3.0-only",
+        expression: "GPL-3.0-only" as NormalizedLicense,
+        elected: "GPL-3.0-only" as NormalizedLicense,
         source: "generator",
         confidence: "exact",
       },
@@ -1048,8 +1056,8 @@ describe("renderMarkdown — the full document", () => {
           name: "a-mit",
           version: "1.0.0",
           finding: {
-            expression: "MIT",
-            elected: "MIT",
+            expression: "MIT" as NormalizedLicense,
+            elected: "MIT" as NormalizedLicense,
             source: "generator",
             confidence: "exact",
           },
@@ -1143,7 +1151,7 @@ describe("renderMarkdown — prod/dev document split", () => {
       target: o.target,
       isDevDependency: o.dev,
     })),
-    licenseClaims: [{ raw: "MIT", kind: "spdx-id", source: "generator" }],
+    licenseClaims: [{ raw: "MIT" as RawLicense, kind: "spdx-id", source: "generator" }],
     scope: "app",
   });
 
@@ -1203,21 +1211,23 @@ describe("renderMarkdown — per-container Production/Development grouping", () 
     purl: "pkg:npm/app-prod@1.0.0",
     name: "app-prod",
     version: "1.0.0",
-    licenseClaims: [{ raw: "MIT", kind: "spdx-id", source: "generator" }],
+    licenseClaims: [{ raw: "MIT" as RawLicense, kind: "spdx-id", source: "generator" }],
   });
   const appDev = entry({
     purl: "pkg:npm/app-dev@1.0.0",
     name: "app-dev",
     version: "1.0.0",
     occurrences: [{ target: "apps/a", isDevDependency: true }],
-    licenseClaims: [{ raw: "MIT", kind: "spdx-id", source: "generator" }],
+    licenseClaims: [{ raw: "MIT" as RawLicense, kind: "spdx-id", source: "generator" }],
   });
   const osDeb = entry({
     purl: "pkg:deb/debian/libc6@2.36-9",
     name: "libc6",
     version: "2.36-9",
     occurrences: [{ target: "docker:img/Dockerfile", isDevDependency: false }],
-    licenseClaims: [{ raw: "LGPL-2.1-or-later", kind: "spdx-id", source: "generator" }],
+    licenseClaims: [
+      { raw: "LGPL-2.1-or-later" as RawLicense, kind: "spdx-id", source: "generator" },
+    ],
     scope: "os",
   });
   const osApk = entry({
@@ -1225,7 +1235,7 @@ describe("renderMarkdown — per-container Production/Development grouping", () 
     name: "musl",
     version: "1.2.4-r2",
     occurrences: [{ target: "docker:img/Dockerfile", isDevDependency: false }],
-    licenseClaims: [{ raw: "MIT", kind: "spdx-id", source: "generator" }],
+    licenseClaims: [{ raw: "MIT" as RawLicense, kind: "spdx-id", source: "generator" }],
     scope: "os",
   });
 
@@ -1311,7 +1321,7 @@ describe("renderMarkdown — per-container Production/Development grouping", () 
       name: "evil-pkg",
       version: "1.0.0",
       occurrences: [{ target: "docker:evil|pkg`x/Dockerfile", isDevDependency: false }],
-      licenseClaims: [{ raw: "MIT", kind: "spdx-id", source: "generator" }],
+      licenseClaims: [{ raw: "MIT" as RawLicense, kind: "spdx-id", source: "generator" }],
       scope: "os",
     });
     const output = renderMarkdown({ packages: [evilOs] });
@@ -1326,7 +1336,7 @@ describe("renderMarkdown — per-container Production/Development grouping", () 
       name: "evil|pkg`x",
       version: "1.0.0",
       occurrences: [{ target: "docker:img/Dockerfile", isDevDependency: false }],
-      licenseClaims: [{ raw: "MIT", kind: "spdx-id", source: "generator" }],
+      licenseClaims: [{ raw: "MIT" as RawLicense, kind: "spdx-id", source: "generator" }],
       scope: "os",
     });
     const output = renderMarkdown({ packages: [evilOs] });
@@ -1355,7 +1365,7 @@ describe("renderMarkdown — per-container Production/Development grouping", () 
         { target: "docker:a/Dockerfile", isDevDependency: false },
         { target: "docker:b/Dockerfile", isDevDependency: false },
       ],
-      licenseClaims: [{ raw: "GPL-2.0-only", kind: "spdx-id", source: "generator" }],
+      licenseClaims: [{ raw: "GPL-2.0-only" as RawLicense, kind: "spdx-id", source: "generator" }],
       scope: "os",
     });
     const output = renderMarkdown({ packages: [osShared] });
@@ -1403,7 +1413,7 @@ describe("renderMarkdown — per-container Production/Development grouping", () 
         { target: "docker:a/Dockerfile", isDevDependency: false },
         { target: "docker:b/Dockerfile", isDevDependency: false },
       ],
-      licenseClaims: [{ raw: "MIT", kind: "spdx-id", source: "generator" }],
+      licenseClaims: [{ raw: "MIT" as RawLicense, kind: "spdx-id", source: "generator" }],
       scope: "os",
     });
     const view: PolicyView = {
@@ -1437,7 +1447,7 @@ describe("renderMarkdown — per-container Production/Development grouping", () 
       name: "app-at-docker-target",
       version: "1.0.0",
       occurrences: [{ target: "docker:img/Dockerfile", isDevDependency: false }],
-      licenseClaims: [{ raw: "MIT", kind: "spdx-id", source: "generator" }],
+      licenseClaims: [{ raw: "MIT" as RawLicense, kind: "spdx-id", source: "generator" }],
     });
     const output = renderMarkdown({ packages: [appAtDockerTarget, osDeb] });
     const containerSection = output.slice(output.indexOf(HEADING));
@@ -1464,7 +1474,7 @@ describe("renderMarkdown — per-container Production/Development grouping", () 
         { target: "apps/a", isDevDependency: false },
         { target: "docker:img/Dockerfile", isDevDependency: false },
       ],
-      licenseClaims: [{ raw: "MIT", kind: "spdx-id", source: "generator" }],
+      licenseClaims: [{ raw: "MIT" as RawLicense, kind: "spdx-id", source: "generator" }],
     });
     const output = renderMarkdown({ packages: [shared, osDeb] });
     const prodTable = output.slice(
@@ -1487,7 +1497,7 @@ describe("renderMarkdown — per-container Production/Development grouping", () 
       purl: "pkg:npm/workspace-only@1.0.0",
       name: "workspace-only",
       version: "1.0.0",
-      licenseClaims: [{ raw: "MIT", kind: "spdx-id", source: "generator" }],
+      licenseClaims: [{ raw: "MIT" as RawLicense, kind: "spdx-id", source: "generator" }],
     });
     const output = renderMarkdown({ packages: [workspaceOnly, osDeb] });
     const containerSection = output.slice(output.indexOf(HEADING));
@@ -1502,7 +1512,7 @@ describe("renderMarkdown — per-container Production/Development grouping", () 
       name: "container-only",
       version: "1.0.0",
       occurrences: [{ target: "docker:img/Dockerfile", isDevDependency: false }],
-      licenseClaims: [{ raw: "MIT", kind: "spdx-id", source: "generator" }],
+      licenseClaims: [{ raw: "MIT" as RawLicense, kind: "spdx-id", source: "generator" }],
     });
     const model: CanonicalDependencies = {
       packages: [appProd, appDev, containerOnly, osDeb, osApk],
@@ -1533,7 +1543,7 @@ describe("renderMarkdown — per-container Production/Development grouping", () 
       name: "prod-container-app",
       version: "1.0.0",
       occurrences: [{ target: PROD_CONTAINER, isDevDependency: false }],
-      licenseClaims: [{ raw: "AGPL-3.0-only", kind: "spdx-id", source: "generator" }],
+      licenseClaims: [{ raw: "AGPL-3.0-only" as RawLicense, kind: "spdx-id", source: "generator" }],
     });
 
     const devContainerPkg = entry({
@@ -1541,7 +1551,7 @@ describe("renderMarkdown — per-container Production/Development grouping", () 
       name: "dev-container-only",
       version: "1.0.0",
       occurrences: [{ target: DEV_CONTAINER, isDevDependency: false }],
-      licenseClaims: [{ raw: "MIT", kind: "spdx-id", source: "generator" }],
+      licenseClaims: [{ raw: "MIT" as RawLicense, kind: "spdx-id", source: "generator" }],
     });
 
     test("an application-ecosystem package baked into a PRODUCTION container counts as Production, not siloed under Container", () => {
@@ -1585,14 +1595,14 @@ describe("renderMarkdown — per-container Production/Development grouping", () 
         purl: "pkg:npm/prod-app@1.0.0",
         name: "prod-app",
         version: "1.0.0",
-        licenseClaims: [{ raw: "MIT", kind: "spdx-id", source: "generator" }],
+        licenseClaims: [{ raw: "MIT" as RawLicense, kind: "spdx-id", source: "generator" }],
       });
       const devApp = entry({
         purl: "pkg:npm/dev-app@1.0.0",
         name: "dev-app",
         version: "1.0.0",
         occurrences: [{ target: "apps/a", isDevDependency: true }],
-        licenseClaims: [{ raw: "MIT", kind: "spdx-id", source: "generator" }],
+        licenseClaims: [{ raw: "MIT" as RawLicense, kind: "spdx-id", source: "generator" }],
       });
       // No package straddles both containers here, so every package renders
       // under exactly one of Production/Development-only — the count and the
@@ -1641,7 +1651,9 @@ describe("renderMarkdown — per-container System/Application split", () => {
     name: "libc6",
     version: "2.36-9",
     occurrences: [{ target: "docker:img/Dockerfile", isDevDependency: false }],
-    licenseClaims: [{ raw: "LGPL-2.1-or-later", kind: "spdx-id", source: "generator" }],
+    licenseClaims: [
+      { raw: "LGPL-2.1-or-later" as RawLicense, kind: "spdx-id", source: "generator" },
+    ],
     scope: "os",
   });
   const applicationPkg = entry({
@@ -1649,7 +1661,7 @@ describe("renderMarkdown — per-container System/Application split", () => {
     name: "app-in-container",
     version: "1.0.0",
     occurrences: [{ target: "docker:img/Dockerfile", isDevDependency: false }],
-    licenseClaims: [{ raw: "MIT", kind: "spdx-id", source: "generator" }],
+    licenseClaims: [{ raw: "MIT" as RawLicense, kind: "spdx-id", source: "generator" }],
   });
 
   test("a container with both system and application rows emits System THEN Application, each labeled and 4-column", () => {
@@ -1698,7 +1710,7 @@ describe("renderMarkdown — per-container System/Application split", () => {
       name: "glibc",
       version: "2.38",
       occurrences: [{ target: "docker:img/Dockerfile", isDevDependency: false }],
-      licenseClaims: [{ raw: "LGPL-2.1-only", kind: "spdx-id", source: "generator" }],
+      licenseClaims: [{ raw: "LGPL-2.1-only" as RawLicense, kind: "spdx-id", source: "generator" }],
       scope: "os",
     });
     const alpmPkg = entry({
@@ -1706,7 +1718,7 @@ describe("renderMarkdown — per-container System/Application split", () => {
       name: "pacman",
       version: "6.1.0",
       occurrences: [{ target: "docker:img/Dockerfile", isDevDependency: false }],
-      licenseClaims: [{ raw: "GPL-2.0-only", kind: "spdx-id", source: "generator" }],
+      licenseClaims: [{ raw: "GPL-2.0-only" as RawLicense, kind: "spdx-id", source: "generator" }],
       scope: "os",
     });
     const pypiPkg = entry({
@@ -1714,7 +1726,7 @@ describe("renderMarkdown — per-container System/Application split", () => {
       name: "app-py",
       version: "1.0.0",
       occurrences: [{ target: "docker:img/Dockerfile", isDevDependency: false }],
-      licenseClaims: [{ raw: "Apache-2.0", kind: "spdx-id", source: "generator" }],
+      licenseClaims: [{ raw: "Apache-2.0" as RawLicense, kind: "spdx-id", source: "generator" }],
     });
     const output = renderMarkdown({
       packages: [systemPkg, rpmPkg, alpmPkg, applicationPkg, pypiPkg],
@@ -1744,7 +1756,7 @@ describe("renderMarkdown — per-container System/Application split", () => {
       purl: "pkg:npm/app-only@1.0.0",
       name: "app-only",
       version: "1.0.0",
-      licenseClaims: [{ raw: "MIT", kind: "spdx-id", source: "generator" }],
+      licenseClaims: [{ raw: "MIT" as RawLicense, kind: "spdx-id", source: "generator" }],
     });
     const output = renderMarkdown({ packages: [appOnly, systemPkg] });
     const section = output.slice(output.indexOf(HEADING));
@@ -1775,7 +1787,7 @@ describe("renderMarkdown — Containers index", () => {
         target,
         isDevDependency: false,
       })),
-      licenseClaims: [{ raw: "MIT", kind: "spdx-id", source: "generator" }],
+      licenseClaims: [{ raw: "MIT" as RawLicense, kind: "spdx-id", source: "generator" }],
       scope: "os",
     });
 
@@ -1850,7 +1862,7 @@ describe("renderMarkdown — Containers index", () => {
           purl: "pkg:npm/app-only@1.0.0",
           name: "app-only",
           version: "1.0.0",
-          licenseClaims: [{ raw: "MIT", kind: "spdx-id", source: "generator" }],
+          licenseClaims: [{ raw: "MIT" as RawLicense, kind: "spdx-id", source: "generator" }],
         }),
       ],
     };
@@ -1887,14 +1899,14 @@ describe("renderMarkdown — os-scope partial-license cell", () => {
     version: "1.0",
     occurrences: [{ target: "docker:img/Dockerfile", isDevDependency: false }],
     licenseClaims: [
-      { raw: "GPL-2.0-only", kind: "spdx-id", source: "generator" },
-      { raw: "BSD-3-Clause", kind: "spdx-id", source: "generator" },
-      { raw: "public-domain", kind: "name", source: "generator" },
+      { raw: "GPL-2.0-only" as RawLicense, kind: "spdx-id", source: "generator" },
+      { raw: "BSD-3-Clause" as RawLicense, kind: "spdx-id", source: "generator" },
+      { raw: "public-domain" as RawLicense, kind: "name", source: "generator" },
     ],
     scope: "os",
     finding: {
-      expression: "GPL-2.0-only AND BSD-3-Clause",
-      elected: "GPL-2.0-only AND BSD-3-Clause",
+      expression: "GPL-2.0-only AND BSD-3-Clause" as NormalizedLicense,
+      elected: "GPL-2.0-only AND BSD-3-Clause" as NormalizedLicense,
       source: "generator",
       confidence: "exact",
       unrecognizedTokens: ["public-domain"],
@@ -1923,8 +1935,8 @@ describe("renderMarkdown — os-scope partial-license cell", () => {
       licenseClaims: [],
       scope: "os",
       finding: {
-        expression: "MIT",
-        elected: "MIT",
+        expression: "MIT" as NormalizedLicense,
+        elected: "MIT" as NormalizedLicense,
         source: "generator",
         confidence: "exact",
         unrecognizedTokens: ["Artistic", "public-domain"],
@@ -1944,8 +1956,8 @@ describe("renderMarkdown — os-scope partial-license cell", () => {
       licenseClaims: [],
       scope: "os",
       finding: {
-        expression: "MIT",
-        elected: "MIT",
+        expression: "MIT" as NormalizedLicense,
+        elected: "MIT" as NormalizedLicense,
         source: "generator",
         confidence: "exact",
         unrecognizedTokens: ["evil|tok`x"],
@@ -2009,8 +2021,8 @@ describe("renderMarkdown — os-scope partial-license cell", () => {
       version: "1.0",
       licenseClaims: [],
       finding: {
-        expression: "MIT AND Apache-2.0",
-        elected: "MIT AND Apache-2.0",
+        expression: "MIT AND Apache-2.0" as NormalizedLicense,
+        elected: "MIT AND Apache-2.0" as NormalizedLicense,
         source: "generator",
         confidence: "exact",
       },
@@ -2036,8 +2048,8 @@ describe("renderMarkdown — Ecosystem column", () => {
         name: "npm-pkg",
         version: "1.0.0",
         finding: {
-          expression: "MIT",
-          elected: "MIT",
+          expression: "MIT" as NormalizedLicense,
+          elected: "MIT" as NormalizedLicense,
           source: "generator",
           confidence: "exact",
         },
@@ -2047,8 +2059,8 @@ describe("renderMarkdown — Ecosystem column", () => {
         name: "pypi-pkg",
         version: "2.0.0",
         finding: {
-          expression: "Apache-2.0",
-          elected: "Apache-2.0",
+          expression: "Apache-2.0" as NormalizedLicense,
+          elected: "Apache-2.0" as NormalizedLicense,
           source: "generator",
           confidence: "exact",
         },
@@ -2058,8 +2070,8 @@ describe("renderMarkdown — Ecosystem column", () => {
         name: "tf-pkg",
         version: "3.0.0",
         finding: {
-          expression: "MPL-2.0",
-          elected: "MPL-2.0",
+          expression: "MPL-2.0" as NormalizedLicense,
+          elected: "MPL-2.0" as NormalizedLicense,
           source: "generator",
           confidence: "exact",
         },
@@ -2069,11 +2081,13 @@ describe("renderMarkdown — Ecosystem column", () => {
         name: "deb-pkg",
         version: "4.0",
         occurrences: [{ target: "docker:img/Dockerfile", isDevDependency: false }],
-        licenseClaims: [{ raw: "GPL-2.0-only", kind: "spdx-id", source: "generator" }],
+        licenseClaims: [
+          { raw: "GPL-2.0-only" as RawLicense, kind: "spdx-id", source: "generator" },
+        ],
         scope: "os",
         finding: {
-          expression: "GPL-2.0-only",
-          elected: "GPL-2.0-only",
+          expression: "GPL-2.0-only" as NormalizedLicense,
+          elected: "GPL-2.0-only" as NormalizedLicense,
           source: "generator",
           confidence: "exact",
         },
@@ -2083,11 +2097,11 @@ describe("renderMarkdown — Ecosystem column", () => {
         name: "apk-pkg",
         version: "5.0",
         occurrences: [{ target: "docker:img/Dockerfile", isDevDependency: false }],
-        licenseClaims: [{ raw: "MIT", kind: "spdx-id", source: "generator" }],
+        licenseClaims: [{ raw: "MIT" as RawLicense, kind: "spdx-id", source: "generator" }],
         scope: "os",
         finding: {
-          expression: "MIT",
-          elected: "MIT",
+          expression: "MIT" as NormalizedLicense,
+          elected: "MIT" as NormalizedLicense,
           source: "generator",
           confidence: "exact",
         },
@@ -2136,8 +2150,8 @@ describe("renderMarkdown — Ecosystem column", () => {
       name: "evil-eco",
       version: "1.0.0",
       finding: {
-        expression: "MIT",
-        elected: "MIT",
+        expression: "MIT" as NormalizedLicense,
+        elected: "MIT" as NormalizedLicense,
         source: "generator",
         confidence: "exact",
       },
@@ -2163,8 +2177,8 @@ describe("renderMarkdown — [document] title + preamble", () => {
         name: "a",
         version: "1.0.0",
         finding: {
-          expression: "MIT",
-          elected: "MIT",
+          expression: "MIT" as NormalizedLicense,
+          elected: "MIT" as NormalizedLicense,
           source: "generator",
           confidence: "exact",
         },
@@ -2268,7 +2282,12 @@ describe("renderMarkdown - target-profile header lines (scope-of-assertion + att
         purl: "pkg:npm/a@1.0.0",
         name: "a",
         version: "1.0.0",
-        finding: { expression: "MIT", elected: "MIT", source: "generator", confidence: "exact" },
+        finding: {
+          expression: "MIT" as NormalizedLicense,
+          elected: "MIT" as NormalizedLicense,
+          source: "generator",
+          confidence: "exact",
+        },
       }),
     ],
   };
@@ -2426,8 +2445,8 @@ describe("renderMarkdown — Problematic licenses summary", () => {
     version: "1.0.0",
     occurrences: [{ target: "backend", isDevDependency: false }],
     finding: {
-      expression: "BUSL-1.1",
-      elected: "BUSL-1.1",
+      expression: "BUSL-1.1" as NormalizedLicense,
+      elected: "BUSL-1.1" as NormalizedLicense,
       source: "generator",
       confidence: "exact",
     },
@@ -2441,8 +2460,8 @@ describe("renderMarkdown — Problematic licenses summary", () => {
       { target: "frontend", isDevDependency: false },
     ],
     finding: {
-      expression: "GPL-3.0-only",
-      elected: "GPL-3.0-only",
+      expression: "GPL-3.0-only" as NormalizedLicense,
+      elected: "GPL-3.0-only" as NormalizedLicense,
       source: "generator",
       confidence: "exact",
     },
@@ -2464,8 +2483,8 @@ describe("renderMarkdown — Problematic licenses summary", () => {
     name: "warn-pkg",
     version: "4.0.0",
     finding: {
-      expression: "LGPL-3.0-or-later",
-      elected: "LGPL-3.0-or-later",
+      expression: "LGPL-3.0-or-later" as NormalizedLicense,
+      elected: "LGPL-3.0-or-later" as NormalizedLicense,
       source: "generator",
       confidence: "exact",
     },
@@ -2842,8 +2861,8 @@ describe("renderMarkdown — provenance Why column", () => {
             },
           ],
           finding: {
-            expression: "GPL-3.0-only",
-            elected: "GPL-3.0-only",
+            expression: "GPL-3.0-only" as NormalizedLicense,
+            elected: "GPL-3.0-only" as NormalizedLicense,
             source: "generator",
             confidence: "exact",
           },
@@ -2882,8 +2901,8 @@ describe("renderMarkdown — provenance Why column", () => {
             },
           ],
           finding: {
-            expression: "GPL-3.0-only",
-            elected: "GPL-3.0-only",
+            expression: "GPL-3.0-only" as NormalizedLicense,
+            elected: "GPL-3.0-only" as NormalizedLicense,
             source: "generator",
             confidence: "exact",
           },
@@ -2924,8 +2943,8 @@ describe("renderMarkdown — provenance Why column", () => {
             },
           ],
           finding: {
-            expression: "GPL-3.0-only",
-            elected: "GPL-3.0-only",
+            expression: "GPL-3.0-only" as NormalizedLicense,
+            elected: "GPL-3.0-only" as NormalizedLicense,
             source: "generator",
             confidence: "exact",
           },
@@ -2960,8 +2979,8 @@ describe("renderMarkdown — provenance Why column", () => {
           version: "3.0",
           occurrences: [{ target: "apps/py", isDevDependency: false }],
           finding: {
-            expression: "GPL-3.0-only",
-            elected: "GPL-3.0-only",
+            expression: "GPL-3.0-only" as NormalizedLicense,
+            elected: "GPL-3.0-only" as NormalizedLicense,
             source: "generator",
             confidence: "exact",
           },
@@ -3002,8 +3021,8 @@ describe("renderMarkdown — provenance Why column", () => {
             },
           ],
           finding: {
-            expression: "GPL-3.0-only",
-            elected: "GPL-3.0-only",
+            expression: "GPL-3.0-only" as NormalizedLicense,
+            elected: "GPL-3.0-only" as NormalizedLicense,
             source: "generator",
             confidence: "exact",
           },
@@ -3053,8 +3072,8 @@ describe("renderMarkdown — provenance Why column", () => {
             },
           ],
           finding: {
-            expression: "GPL-3.0-only",
-            elected: "GPL-3.0-only",
+            expression: "GPL-3.0-only" as NormalizedLicense,
+            elected: "GPL-3.0-only" as NormalizedLicense,
             source: "generator",
             confidence: "exact",
           },
@@ -3105,8 +3124,8 @@ describe("renderMarkdown — provenance Why column", () => {
             },
           ],
           finding: {
-            expression: "GPL-3.0-only",
-            elected: "GPL-3.0-only",
+            expression: "GPL-3.0-only" as NormalizedLicense,
+            elected: "GPL-3.0-only" as NormalizedLicense,
             source: "generator",
             confidence: "exact",
           },
@@ -3146,8 +3165,8 @@ describe("renderMarkdown — provenance Why column", () => {
             },
           ],
           finding: {
-            expression: "BUSL-1.1",
-            elected: "BUSL-1.1",
+            expression: "BUSL-1.1" as NormalizedLicense,
+            elected: "BUSL-1.1" as NormalizedLicense,
             source: "generator",
             confidence: "exact",
           },
@@ -3188,8 +3207,8 @@ describe("renderMarkdown — provenance Why column", () => {
           version: "1.0.0",
           occurrences: [{ target: "apps/a", isDevDependency: false }],
           finding: {
-            expression: "GPL-3.0-only",
-            elected: "GPL-3.0-only",
+            expression: "GPL-3.0-only" as NormalizedLicense,
+            elected: "GPL-3.0-only" as NormalizedLicense,
             source: "generator",
             confidence: "exact",
           },
@@ -3234,8 +3253,8 @@ describe("renderMarkdown — provenance Why column", () => {
             },
           ],
           finding: {
-            expression: "GPL-3.0-only",
-            elected: "GPL-3.0-only",
+            expression: "GPL-3.0-only" as NormalizedLicense,
+            elected: "GPL-3.0-only" as NormalizedLicense,
             source: "generator",
             confidence: "exact",
           },
@@ -3282,8 +3301,8 @@ describe("renderMarkdown — provenance Why column", () => {
             },
           ],
           finding: {
-            expression: "GPL-3.0-only",
-            elected: "GPL-3.0-only",
+            expression: "GPL-3.0-only" as NormalizedLicense,
+            elected: "GPL-3.0-only" as NormalizedLicense,
             source: "generator",
             confidence: "exact",
           },
@@ -3333,8 +3352,8 @@ describe("renderMarkdown — provenance Why column", () => {
             },
           ],
           finding: {
-            expression: "GPL-3.0-only",
-            elected: "GPL-3.0-only",
+            expression: "GPL-3.0-only" as NormalizedLicense,
+            elected: "GPL-3.0-only" as NormalizedLicense,
             source: "generator",
             confidence: "exact",
           },
@@ -3373,8 +3392,8 @@ describe("renderMarkdown — provenance Why column", () => {
             },
           ],
           finding: {
-            expression: "GPL-3.0-only",
-            elected: "GPL-3.0-only",
+            expression: "GPL-3.0-only" as NormalizedLicense,
+            elected: "GPL-3.0-only" as NormalizedLicense,
             source: "generator",
             confidence: "exact",
           },
@@ -3415,8 +3434,8 @@ describe("renderMarkdown — provenance Why column", () => {
             },
           ],
           finding: {
-            expression: "GPL-3.0-only",
-            elected: "GPL-3.0-only",
+            expression: "GPL-3.0-only" as NormalizedLicense,
+            elected: "GPL-3.0-only" as NormalizedLicense,
             source: "generator",
             confidence: "exact",
           },
@@ -3457,8 +3476,8 @@ describe("renderMarkdown — provenance Why column", () => {
             },
           ],
           finding: {
-            expression: "GPL-3.0-only",
-            elected: "GPL-3.0-only",
+            expression: "GPL-3.0-only" as NormalizedLicense,
+            elected: "GPL-3.0-only" as NormalizedLicense,
             source: "generator",
             confidence: "exact",
           },
@@ -3537,8 +3556,8 @@ describe("renderMarkdown — Why-cell target scoping", () => {
             },
           ],
           finding: {
-            expression: "AGPL-3.0-only",
-            elected: "AGPL-3.0-only",
+            expression: "AGPL-3.0-only" as NormalizedLicense,
+            elected: "AGPL-3.0-only" as NormalizedLicense,
             source: "generator",
             confidence: "exact",
           },
@@ -3592,8 +3611,8 @@ describe("renderMarkdown — Why-cell target scoping", () => {
             },
           ],
           finding: {
-            expression: "GPL-3.0-only",
-            elected: "GPL-3.0-only",
+            expression: "GPL-3.0-only" as NormalizedLicense,
+            elected: "GPL-3.0-only" as NormalizedLicense,
             source: "generator",
             confidence: "exact",
           },
@@ -3654,8 +3673,8 @@ describe("renderMarkdown — Why-cell target scoping", () => {
             },
           ],
           finding: {
-            expression: "GPL-3.0-only",
-            elected: "GPL-3.0-only",
+            expression: "GPL-3.0-only" as NormalizedLicense,
+            elected: "GPL-3.0-only" as NormalizedLicense,
             source: "generator",
             confidence: "exact",
           },
@@ -3708,8 +3727,13 @@ describe("renderMarkdown — Target compatibility section", () => {
       purl: "pkg:npm/target-ok-only@1.0.0",
       name: "target-ok-only",
       version: "1.0.0",
-      licenseClaims: [{ raw: "MIT", kind: "spdx-id", source: "generator" }],
-      finding: { expression: "MIT", elected: "MIT", source: "generator", confidence: "exact" },
+      licenseClaims: [{ raw: "MIT" as RawLicense, kind: "spdx-id", source: "generator" }],
+      finding: {
+        expression: "MIT" as NormalizedLicense,
+        elected: "MIT" as NormalizedLicense,
+        source: "generator",
+        confidence: "exact",
+      },
     });
     const view: PolicyView = {
       policyPath: "policy.toml",
@@ -3734,10 +3758,10 @@ describe("renderMarkdown — Target compatibility section", () => {
       purl: "pkg:npm/boundary-pkg@1.0.0",
       name: "boundary-pkg",
       version: "1.0.0",
-      licenseClaims: [{ raw: "LGPL-2.1-only", kind: "spdx-id", source: "generator" }],
+      licenseClaims: [{ raw: "LGPL-2.1-only" as RawLicense, kind: "spdx-id", source: "generator" }],
       finding: {
-        expression: "LGPL-2.1-only",
-        elected: "LGPL-2.1-only",
+        expression: "LGPL-2.1-only" as NormalizedLicense,
+        elected: "LGPL-2.1-only" as NormalizedLicense,
         source: "generator",
         confidence: "exact",
       },
@@ -3768,10 +3792,10 @@ describe("renderMarkdown — Target compatibility section", () => {
       purl: "pkg:npm/boundary-pkg@1.0.0",
       name: "boundary-pkg",
       version: "1.0.0",
-      licenseClaims: [{ raw: "LGPL-2.1-only", kind: "spdx-id", source: "generator" }],
+      licenseClaims: [{ raw: "LGPL-2.1-only" as RawLicense, kind: "spdx-id", source: "generator" }],
       finding: {
-        expression: "LGPL-2.1-only",
-        elected: "LGPL-2.1-only",
+        expression: "LGPL-2.1-only" as NormalizedLicense,
+        elected: "LGPL-2.1-only" as NormalizedLicense,
         source: "generator",
         confidence: "exact",
       },
@@ -3780,10 +3804,10 @@ describe("renderMarkdown — Target compatibility section", () => {
       purl: "pkg:npm/residual-pkg@1.0.0",
       name: "residual-pkg",
       version: "1.0.0",
-      licenseClaims: [{ raw: "QPL-1.0", kind: "spdx-id", source: "generator" }],
+      licenseClaims: [{ raw: "QPL-1.0" as RawLicense, kind: "spdx-id", source: "generator" }],
       finding: {
-        expression: "QPL-1.0",
-        elected: "QPL-1.0",
+        expression: "QPL-1.0" as NormalizedLicense,
+        elected: "QPL-1.0" as NormalizedLicense,
         source: "generator",
         confidence: "exact",
       },
@@ -3793,10 +3817,10 @@ describe("renderMarkdown — Target compatibility section", () => {
       name: "dev-downgraded-pkg",
       version: "1.0.0",
       occurrences: [{ target: "apps/a", isDevDependency: true }],
-      licenseClaims: [{ raw: "GPL-3.0-only", kind: "spdx-id", source: "generator" }],
+      licenseClaims: [{ raw: "GPL-3.0-only" as RawLicense, kind: "spdx-id", source: "generator" }],
       finding: {
-        expression: "GPL-3.0-only",
-        elected: "GPL-3.0-only",
+        expression: "GPL-3.0-only" as NormalizedLicense,
+        elected: "GPL-3.0-only" as NormalizedLicense,
         source: "generator",
         confidence: "exact",
       },
@@ -3843,10 +3867,10 @@ describe("renderMarkdown — Target compatibility section", () => {
       purl: "pkg:npm/held-pkg@1.0.0",
       name: "held-pkg",
       version: "1.0.0",
-      licenseClaims: [{ raw: "GPL-3.0-only", kind: "spdx-id", source: "generator" }],
+      licenseClaims: [{ raw: "GPL-3.0-only" as RawLicense, kind: "spdx-id", source: "generator" }],
       finding: {
-        expression: "GPL-3.0-only",
-        elected: "GPL-3.0-only",
+        expression: "GPL-3.0-only" as NormalizedLicense,
+        elected: "GPL-3.0-only" as NormalizedLicense,
         source: "generator",
         confidence: "exact",
       },
@@ -3880,10 +3904,10 @@ describe("renderMarkdown — Target compatibility section", () => {
         { target: "apps/a", isDevDependency: false },
         { target: "apps/b", isDevDependency: false },
       ],
-      licenseClaims: [{ raw: "GPL-3.0-only", kind: "spdx-id", source: "generator" }],
+      licenseClaims: [{ raw: "GPL-3.0-only" as RawLicense, kind: "spdx-id", source: "generator" }],
       finding: {
-        expression: "GPL-3.0-only",
-        elected: "GPL-3.0-only",
+        expression: "GPL-3.0-only" as NormalizedLicense,
+        elected: "GPL-3.0-only" as NormalizedLicense,
         source: "generator",
         confidence: "exact",
       },

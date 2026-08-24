@@ -25,7 +25,9 @@ import {
   type LicenseFinding,
   type NormalizedLicense,
   type PackageEntry,
+  type SatisfiableExpression,
   type ScopeTaxonomy,
+  type SpdxExpression,
   type StaleOverride,
 } from "../model/dependencies";
 import { COULD_BE_COPYLEFT_FAMILIES } from "../policy/engine/copyleftFamily";
@@ -446,11 +448,11 @@ function electImpreciseFamily(results: ReadonlyArray<NormalizeResult>): string |
 function combinePrecise(preciseResults: ReadonlyArray<NormalizeResult>): LicenseFinding {
   // Dedupe expression strings: an spdx-id claim and a name claim may normalize to the same
   // expression.
-  const expressions: string[] = [];
+  const expressions: NormalizedLicense[] = [];
   const seenExpressions = new Set<string>();
 
   for (const r of preciseResults) {
-    const expression = r.expression as string;
+    const expression = r.expression as NormalizedLicense;
 
     if (!seenExpressions.has(expression)) {
       seenExpressions.add(expression);
@@ -459,7 +461,7 @@ function combinePrecise(preciseResults: ReadonlyArray<NormalizeResult>): License
   }
 
   let node = parse(expressions[0] as string) as ExpressionNode;
-  let expression = expressions[0] as string; // single claim: raw preserved verbatim
+  let expression = expressions[0] as NormalizedLicense; // single claim: raw preserved verbatim
 
   if (expressions.length > 1) {
     for (const next of expressions.slice(1)) {
@@ -470,14 +472,16 @@ function combinePrecise(preciseResults: ReadonlyArray<NormalizeResult>): License
       };
     }
 
-    expression = renderNode(node); // compound operands parenthesized
+    // The AND of normalized expressions is itself normalized (valid resolved SPDX, source spelling)
+    // - NOT canonical: operands are only parenthesized, never sorted.
+    expression = renderNode(node) as NormalizedLicense;
   }
 
   const anyCorrected = preciseResults.some((r) => r.source === "corrected");
 
   return {
     expression,
-    elected: renderNode(elect(node)),
+    elected: renderNode(elect(node)) as NormalizedLicense,
     source: anyCorrected ? "corrected" : "generator",
     confidence: anyCorrected ? "corrected" : "exact",
   };
@@ -508,7 +512,7 @@ export interface ClarifyInput {
   pattern?: string;
   version?: string | readonly string[];
   detected: DetectedSignal;
-  expression: string;
+  expression: SpdxExpression;
 }
 
 /**
@@ -601,8 +605,8 @@ export function observedSignalBySource(
  * consults this set so a denied member is seen even when combineKnown elects an imprecise family /
  * collapses to unknown and drops it from the combined expression. Empty → caller omits the field.
  */
-function observedExpressions(claims: ReadonlyArray<LicenseClaim>): readonly string[] {
-  const seen = new Set<string>();
+function observedExpressions(claims: ReadonlyArray<LicenseClaim>): readonly NormalizedLicense[] {
+  const seen = new Set<NormalizedLicense>();
 
   for (const c of claims) {
     const precise = normalizeRaw(c.raw).expression;
@@ -666,7 +670,7 @@ function signalMatchesCanonical(signal: ReadonlyArray<string>, recorded: string)
 function unaccountedMember(
   signal: ReadonlyArray<string>,
   recorded: ReadonlyArray<string>,
-  expression: string,
+  expression: SpdxExpression,
 ): string | undefined {
   const fold = (value: string): string => canonicalizeExpression(value).trim().toLowerCase();
   const wanted = new Set(recorded.map(fold));
@@ -712,7 +716,10 @@ function unaccountedMember(
  * CC-BY-3.0` accounts for an observed `MIT` while a `GPL-3.0-only` that appeared beside it is still
  * unaccounted for. Any throw leaves the license unaccounted for - fail closed.
  */
-export function accountsFor(expression: string, precise: string): boolean {
+export function accountsFor(
+  expression: SatisfiableExpression,
+  precise: SatisfiableExpression,
+): boolean {
   try {
     return satisfies(precise, [expression]);
   } catch {
@@ -739,7 +746,7 @@ export function accountsFor(expression: string, precise: string): boolean {
  * redundant and falls through to the stale-fail path. spdx-satisfies is defensive - any throw is
  * treated as NOT satisfying (fail closed).
  */
-function baseSatisfiesAssertion(base: LicenseFinding, expression: string): boolean {
+function baseSatisfiesAssertion(base: LicenseFinding, expression: SpdxExpression): boolean {
   if (base.expression === null) {
     return false;
   } // imprecise/unknown: not redundant
@@ -752,12 +759,20 @@ function baseSatisfiesAssertion(base: LicenseFinding, expression: string): boole
 }
 
 /** Build the override finding from a validated SPDX expression. */
-function overrideFinding(expression: string, overrideRule: string | undefined): LicenseFinding {
+function overrideFinding(
+  expression: SpdxExpression,
+  overrideRule: string | undefined,
+): LicenseFinding {
   const node = parse(expression) as ExpressionNode;
 
   return {
-    expression,
-    elected: renderNode(elect(node)),
+    /**
+     * The policy-authored expression was schema-validated as parseable SPDX, so adopting it as the
+     * finding's normalized expression is sound - the one place a NormalizedLicense is minted
+     * outside normalizeRaw.
+     */
+    expression: expression as string as NormalizedLicense,
+    elected: renderNode(elect(node)) as NormalizedLicense,
     source: "override",
     confidence: "exact",
     ...(overrideRule !== undefined ? { overrideRule } : {}),
@@ -849,7 +864,7 @@ function laneOf(member: string, signal: ObservedSignal): StaleOverride["source"]
  */
 function applyOverride(
   detected: DetectedSignal,
-  expression: string,
+  expression: SpdxExpression,
   overrideRule: string | undefined,
   level: StaleOverride["level"],
   base: LicenseFinding,
@@ -955,7 +970,7 @@ function everyLeafInFamily(node: ExpressionNode, family: string): boolean {
  * (baseSatisfiesAssertion, signalContradicts): ANY throw is treated as inconsistent, never as a
  * crash, never a silent pass.
  */
-function expressionInFamily(expression: string, family: string): boolean {
+function expressionInFamily(expression: SatisfiableExpression, family: string): boolean {
   try {
     return everyLeafInFamily(parse(expression) as ExpressionNode, family);
   } catch {
@@ -1007,7 +1022,7 @@ function quickCheckClaims(claims: ReadonlyArray<LicenseClaim>): LicenseClaim[] {
  * non-empty raw DISAGREES: a garbage/proprietary declaration contradicted by a precise assessment
  * must become a visible conflict, never be silently decided in either direction.
  */
-function claimAgreesWithAssessment(claim: LicenseClaim, assessed: string): boolean {
+function claimAgreesWithAssessment(claim: LicenseClaim, assessed: NormalizedLicense): boolean {
   const result = normalizeRaw(claim.raw);
 
   if (result.expression !== null) {
@@ -1055,7 +1070,7 @@ function disagreeingLabel(claim: LicenseClaim): string {
  * with the conflict marker attached, its members deduped and sorted for determinism.
  */
 function assessPrecise(
-  assessed: string,
+  assessed: NormalizedLicense,
   claims: ReadonlyArray<LicenseClaim>,
   base: LicenseFinding,
 ): LicenseFinding {
@@ -1076,7 +1091,7 @@ function assessPrecise(
 
   return {
     expression: assessed,
-    elected: renderNode(elect(node)),
+    elected: renderNode(elect(node)) as NormalizedLicense,
     source: "scancode",
     confidence: "exact",
   };
@@ -1237,7 +1252,7 @@ export function annotateFindings(
       ...entry,
       finding: {
         ...finding,
-        ...(rewroteExpression ? { observedExpression: base.expression as string } : {}),
+        ...(rewroteExpression ? { observedExpression: base.expression as NormalizedLicense } : {}),
         ...(observed.length > 0 ? { observedExpressions: observed } : {}),
       },
     };

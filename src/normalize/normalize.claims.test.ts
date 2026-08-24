@@ -11,7 +11,12 @@ import {
   type ClarifyInput,
   type NormalizeResult,
 } from "./normalize";
-import type { LicenseClaim, LicenseClaimKind } from "../model/dependencies";
+import type {
+  LicenseClaim,
+  LicenseClaimKind,
+  NormalizedLicense,
+  SpdxExpression,
+} from "../model/dependencies";
 
 /**
  * {@link resolveRaw} with its branded expression widened to a plain string, so value assertions
@@ -108,7 +113,7 @@ describe("normalizeRaw — live 33-value corpus", () => {
       const finding = model.packages[i]!.finding;
 
       expect(finding).toBeDefined();
-      expect(finding!.expression).toBe(expected);
+      expect(finding!.expression as unknown).toBe(expected);
       expect(finding!.confidence).toBe(klass);
       if (expected === null) {
         expect(finding!.elected).toBeNull();
@@ -236,7 +241,7 @@ describe("normalizeRaw — real-world Maven free-text raws (locked)", () => {
     // LOCKED: two of three sub-licenses resolve, but the third's genuine
     // unknown forces the combined app-scope finding to unknown — partial
     // knowledge never hides a potential obligation (findingFromClaims).
-    expect(finding).toEqual({
+    expect(finding as unknown).toEqual({
       expression: null,
       elected: null,
       source: "generator",
@@ -423,13 +428,17 @@ describe("annotateFindings — imprecise findings", () => {
   test("a clarify override on an imprecise package wins (precise expression, source override)", () => {
     const entry = pkg("jupyter-thing", "1.0.0", [claim("BSD", "name")]);
     const clarify: ClarifyInput[] = [
-      { name: "jupyter-thing", detected: { registry: "BSD" }, expression: "BSD-3-Clause" },
+      {
+        name: "jupyter-thing",
+        detected: { registry: "BSD" },
+        expression: "BSD-3-Clause" as SpdxExpression,
+      },
     ];
     const { model } = annotateFindings(modelOf(entry), clarify);
     const finding = model.packages[0]!.finding!;
 
     expect(finding.source).toBe("override");
-    expect(finding.expression).toBe("BSD-3-Clause");
+    expect(finding.expression).toBe("BSD-3-Clause" as NormalizedLicense);
     expect(finding.confidence).toBe("exact");
     expect(finding.impreciseFamily).toBeUndefined();
   });
@@ -441,7 +450,7 @@ describe("annotateFindings — claim combination (Pitfalls 7-8)", () => {
     const entry = pkg("buffer-crc32", "0.2.13", [claim("MIT"), claim("MIT")]);
     const { model } = annotateFindings(modelOf(entry), []);
 
-    expect(model.packages[0]!.finding!.expression).toBe("MIT");
+    expect(model.packages[0]!.finding!.expression).toBe("MIT" as NormalizedLicense);
   });
 
   test("distinct claims AND-combine conservatively and re-parse", () => {
@@ -449,7 +458,7 @@ describe("annotateFindings — claim combination (Pitfalls 7-8)", () => {
     const { model } = annotateFindings(modelOf(entry), []);
     const expression = model.packages[0]!.finding!.expression;
 
-    expect(expression).toBe("MIT AND Apache-2.0");
+    expect(expression).toBe("MIT AND Apache-2.0" as NormalizedLicense);
     expect(() => parse(expression!)).not.toThrow();
   });
 
@@ -484,7 +493,7 @@ describe("findingFromClaims — copyleft dominates a permissive sibling (C2/W2)"
 
     // The precise copyleft must survive — not be discarded by the imprecise
     // short-circuit and downgraded to a non-gating warn.
-    expect(finding.expression).toBe("AGPL-3.0-only");
+    expect(finding.expression).toBe("AGPL-3.0-only" as NormalizedLicense);
     expect(finding.confidence).not.toBe("imprecise");
   });
 
@@ -493,7 +502,7 @@ describe("findingFromClaims — copyleft dominates a permissive sibling (C2/W2)"
     const { model } = annotateFindings(modelOf(entry), []);
     const finding = model.packages[0]!.finding!;
 
-    expect(finding.expression).toBe("GPL-3.0-only");
+    expect(finding.expression).toBe("GPL-3.0-only" as NormalizedLicense);
     expect(finding.confidence).not.toBe("imprecise");
   });
 
@@ -558,8 +567,8 @@ describe("annotateFindings — coverage, immutability, election", () => {
     const { model } = annotateFindings(modelOf(entry), []);
     const finding = model.packages[0]!.finding!;
 
-    expect(finding.expression).toBe("(MPL-2.0 OR Apache-2.0)");
-    expect(finding.elected).toBe("Apache-2.0");
+    expect(finding.expression).toBe("(MPL-2.0 OR Apache-2.0)" as NormalizedLicense);
+    expect(finding.elected).toBe("Apache-2.0" as NormalizedLicense);
   });
 });
 
@@ -700,8 +709,8 @@ describe("annotateFindings — OS packages render real licenses for mapped short
     const { model } = annotateFindings(modelOf(entry), []);
     const finding = model.packages[0]!.finding!;
 
-    expect(finding.expression).toBe("MIT");
-    expect(finding.elected).toBe("MIT");
+    expect(finding.expression).toBe("MIT" as NormalizedLicense);
+    expect(finding.elected).toBe("MIT" as NormalizedLicense);
     expect(finding.confidence).toBe("corrected");
   });
 
@@ -709,7 +718,7 @@ describe("annotateFindings — OS packages render real licenses for mapped short
     const entry = pkg("libtinfo6", "6.4-4", [claim("MIT/X11", "name")]);
     const { model } = annotateFindings(modelOf(entry), []);
 
-    expect(model.packages[0]!.finding!.expression).toBe("MIT");
+    expect(model.packages[0]!.finding!.expression).toBe("MIT" as NormalizedLicense);
   });
 
   test("a real coreutils-style GPL OS package renders a real copyleft license", () => {
@@ -717,14 +726,14 @@ describe("annotateFindings — OS packages render real licenses for mapped short
     const entry = pkg("coreutils", "9.1-1", [claim("GPL-3+", "name")]);
     const finding = annotateFindings(modelOf(entry), []).model.packages[0]!.finding!;
 
-    expect(finding.expression).toBe("GPL-3.0-or-later");
+    expect(finding.expression).toBe("GPL-3.0-or-later" as NormalizedLicense);
   });
 
   test("a BSD OS package renders a real permissive license", () => {
     const entry = pkg("libbsd0", "0.11", [claim("BSD-3-clause", "name")]);
 
     expect(annotateFindings(modelOf(entry), []).model.packages[0]!.finding!.expression).toBe(
-      "BSD-3-Clause",
+      "BSD-3-Clause" as NormalizedLicense,
     );
   });
 
@@ -749,7 +758,7 @@ describe("annotateFindings — OS packages render real licenses for mapped short
     const entry = pkg("font-pkg", "1.0", [claim("FTL OR GPL-2.0-or-later", "expression")]);
     const finding = annotateFindings(modelOf(entry), []).model.packages[0]!.finding!;
 
-    expect(finding.expression).toBe("FTL OR GPL-2.0-or-later");
+    expect(finding.expression).toBe("FTL OR GPL-2.0-or-later" as NormalizedLicense);
     expect(finding.elected).not.toBeNull();
   });
 });
@@ -779,7 +788,7 @@ describe("findingFromClaims — os-scope partial finding", () => {
     ]);
     const finding = annotateFindings(modelOf(entry), []).model.packages[0]!.finding!;
 
-    expect(finding.expression).toBe("GPL-2.0-only AND BSD-3-Clause");
+    expect(finding.expression).toBe("GPL-2.0-only AND BSD-3-Clause" as NormalizedLicense);
     expect(finding.elected).not.toBeNull();
     expect(finding.unrecognizedTokens).toEqual(["public-domain"]);
     // The known copyleft member survives — the finding is NOT unknown.
@@ -798,7 +807,7 @@ describe("findingFromClaims — os-scope partial finding", () => {
     ]);
     const finding = annotateFindings(modelOf(entry), []).model.packages[0]!.finding!;
 
-    expect(finding.expression).toBe("MIT");
+    expect(finding.expression).toBe("MIT" as NormalizedLicense);
     expect(finding.unrecognizedTokens).toEqual(["custom", "public-domain"]);
   });
 
@@ -841,7 +850,7 @@ describe("findingFromClaims — os-scope partial finding", () => {
     ]);
     const finding = annotateFindings(modelOf(entry), []).model.packages[0]!.finding!;
 
-    expect(finding.expression).toBe("MIT AND BSD-3-Clause");
+    expect(finding.expression).toBe("MIT AND BSD-3-Clause" as NormalizedLicense);
     expect(finding.unrecognizedTokens).toBeUndefined();
   });
 
@@ -866,7 +875,7 @@ describe("findingFromClaims — os-scope partial finding", () => {
     ]);
     const finding = annotateFindings(modelOf(entry), []).model.packages[0]!.finding!;
 
-    expect(finding.expression).toBe("MIT");
+    expect(finding.expression).toBe("MIT" as NormalizedLicense);
     // trimmed but otherwise verbatim.
     expect(finding.unrecognizedTokens).toEqual(["Weird Custom Name"]);
   });
@@ -885,7 +894,7 @@ describe("findingFromClaims — os-scope partial finding", () => {
 
     // The two real licenses combine; "AND" is NOT surfaced as an unknown token.
     expect(finding.unrecognizedTokens ?? []).not.toContain("AND");
-    expect(finding.expression).toBe("GPL-2.0-only AND MIT");
+    expect(finding.expression).toBe("GPL-2.0-only AND MIT" as NormalizedLicense);
   });
 
   test("#3/#10: bare OR/WITH/and (any case) are all filtered, a real custom token survives", () => {
@@ -913,7 +922,7 @@ describe("findingFromClaims — os-scope partial finding", () => {
     const entry = osPkg("os-mit-and", "1.0", [claim("MIT", "spdx-id"), claim("AND", "name")]);
     const finding = annotateFindings(modelOf(entry), []).model.packages[0]!.finding!;
 
-    expect(finding.expression).toBe("MIT");
+    expect(finding.expression).toBe("MIT" as NormalizedLicense);
     expect(finding.unrecognizedTokens).toBeUndefined();
   });
 
@@ -921,7 +930,7 @@ describe("findingFromClaims — os-scope partial finding", () => {
     const entry = pkg("app-mit-and", "1.0", [claim("MIT", "spdx-id"), claim("AND", "name")]);
     const finding = annotateFindings(modelOf(entry), []).model.packages[0]!.finding!;
 
-    expect(finding.expression).toBe("MIT");
+    expect(finding.expression).toBe("MIT" as NormalizedLicense);
     expect(finding.confidence).not.toBe("none");
   });
 

@@ -25,6 +25,7 @@ import {
   type Occurrence,
   type PackageAttribution,
   type PackageEntry,
+  type RawLicense,
   type ScopeTaxonomy,
 } from "../model/dependencies";
 import {
@@ -114,19 +115,21 @@ function licenseClaimsOf(component: SbomComponentShape): LicenseClaim[] {
     const expression = SbomExpressionClaim(raw);
 
     if (!(expression instanceof type.errors)) {
-      return [{ raw: expression.expression, kind: "expression", source: "generator" }];
+      return [
+        { raw: expression.expression as RawLicense, kind: "expression", source: "generator" },
+      ];
     }
 
     const id = SbomIdClaim(raw);
 
     if (!(id instanceof type.errors)) {
-      return [{ raw: id.license.id, kind: "spdx-id", source: "generator" }];
+      return [{ raw: id.license.id as RawLicense, kind: "spdx-id", source: "generator" }];
     }
 
     const name = SbomNameClaim(raw);
 
     if (!(name instanceof type.errors)) {
-      return [{ raw: name.license.name, kind: "name", source: "generator" }];
+      return [{ raw: name.license.name as RawLicense, kind: "name", source: "generator" }];
     }
 
     return [];

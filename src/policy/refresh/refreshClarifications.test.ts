@@ -12,6 +12,7 @@ import { parseClarifications, withImportedClarifications } from "../parse/clarif
 import { type ClarifyRule } from "../schema/clarify";
 import { parsePolicy } from "../parse/parse";
 import { claim, modelOf, pkg } from "../../../test/normalizeTestSupport";
+import { type LicenseClaim, type PackageEntry, type RawLicense } from "../../model/dependencies";
 import {
   anySuggestion,
   refreshFindings,
@@ -19,11 +20,13 @@ import {
   type RefreshFindings,
 } from "./refreshClarifications";
 
-import type { LicenseClaim, PackageEntry } from "../../model/dependencies";
-
 const WITHOUT_DEPENDENCY_GRAPHS: ReadonlySet<string> = new Set();
 
-const scanClaim = (raw: string): LicenseClaim => ({ raw, kind: "expression", source: "scancode" });
+const scanClaim = (raw: string): LicenseClaim => ({
+  raw: raw as RawLicense,
+  kind: "expression",
+  source: "scancode",
+});
 
 /** A `[[clarify]]` table over `name`, recording the registry lane and electing BSD-3-Clause. */
 function bsdEntry(name: string, version?: string): string {

@@ -10,6 +10,12 @@ import {
   narrowPypiResponse,
 } from "../validate/registry";
 import { annotateFindings } from "../normalize/normalize";
+import {
+  type CanonicalDependencies,
+  type LicenseClaim,
+  type PackageEntry,
+  type RawLicense,
+} from "../model/dependencies";
 import { TROVE_TO_SPDX, isAmbiguousTroveClassifier, troveToSpdx } from "./trove";
 import { fetchJson, fetchJsonOr404, mapLimit } from "./fetch";
 import { catalogEntryUrlOf, nugetRegistrationLeafUrl, resolveNugetCatalogLicense } from "./nuget";
@@ -23,7 +29,6 @@ import { resolvePypiLicense } from "./pypi";
 import { resolveNpmLicense } from "./npm";
 import { getEntry, putEntry, readCache, serializeCache, type CacheEntry } from "./cache";
 import { enrichUnknowns } from "./enrich";
-import type { CanonicalDependencies, LicenseClaim, PackageEntry } from "../model/dependencies";
 
 /** Load a captured registry fixture as parsed JSON (the live response shape). */
 function registryFixture(name: string): unknown {
@@ -729,7 +734,7 @@ describe("enrichUnknowns orchestrator (cache-first, generate-fetch, check-stale)
       name: "mit-lib",
       version: "3.0.0",
       occurrences: [{ target: "proj", isDevDependency: false }],
-      licenseClaims: [{ raw: "MIT", kind: "spdx-id", source: "generator" }],
+      licenseClaims: [{ raw: "MIT" as RawLicense, kind: "spdx-id", source: "generator" }],
       scope: "app",
     };
   }
@@ -856,7 +861,7 @@ describe("enrichUnknowns orchestrator (cache-first, generate-fetch, check-stale)
         expect(result.staleUnknowns).toEqual([]);
         const claim = registryClaim(result.model.packages[0]);
 
-        expect(claim).toEqual({
+        expect(claim as unknown).toEqual({
           raw: "MIT",
           kind: "expression",
           source: "registry",
@@ -917,7 +922,7 @@ describe("enrichUnknowns orchestrator (cache-first, generate-fetch, check-stale)
       );
 
       expect(calls).toHaveLength(1);
-      expect(registryClaim(result.model.packages[0])).toEqual({
+      expect(registryClaim(result.model.packages[0]) as unknown).toEqual({
         raw: "MIT",
         kind: "expression",
         source: "registry",
@@ -950,7 +955,7 @@ describe("enrichUnknowns orchestrator (cache-first, generate-fetch, check-stale)
       );
 
       expect(calls).toEqual(["https://pypi.org/pypi/anyio/4.12.1/json"]);
-      expect(registryClaim(result.model.packages[0])?.raw).toBe("MIT");
+      expect(registryClaim(result.model.packages[0])?.raw).toBe("MIT" as RawLicense);
       const recorded = getEntry(readCache(path), "pkg:pypi/anyio@4.12.1");
 
       expect(recorded?.fetchedFrom).toBe("pypi");
@@ -1206,7 +1211,7 @@ describe("enrichUnknowns orchestrator (cache-first, generate-fetch, check-stale)
       expect(calls).toEqual(["https://registry.npmjs.org/dup"]);
       const claims = result.model.packages.map((p) => registryClaim(p)?.raw);
 
-      expect(claims).toEqual(["MIT", "ISC"]);
+      expect(claims as unknown).toEqual(["MIT", "ISC"]);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
@@ -1250,7 +1255,7 @@ describe("enrichUnknowns orchestrator (cache-first, generate-fetch, check-stale)
 
       // Cache hit — zero fetch — appended the raw "BSD License" claim.
       expect(calls).toEqual([]);
-      expect(registryClaim(result.model.packages[0])?.raw).toBe("BSD License");
+      expect(registryClaim(result.model.packages[0])?.raw).toBe("BSD License" as RawLicense);
 
       // The finding INTERPRETS that raw as imprecise-BSD.
       const { model: annotated } = annotateFindings(result.model, []);
@@ -1399,7 +1404,7 @@ describe("enrichUnknowns terraform/github (version-tag, transient-vs-definitive,
       );
 
       expect(calls).toEqual([expectedUrl]); // first ref won, no fallback
-      expect(registryClaim(result.model.packages[0])?.raw).toBe("MPL-2.0");
+      expect(registryClaim(result.model.packages[0])?.raw).toBe("MPL-2.0" as RawLicense);
 
       const recorded = getEntry(
         readCache(path),
@@ -1436,7 +1441,7 @@ describe("enrichUnknowns terraform/github (version-tag, transient-vs-definitive,
         }),
       );
 
-      expect(registryClaim(result.model.packages[0])?.raw).toBe("Apache-2.0");
+      expect(registryClaim(result.model.packages[0])?.raw).toBe("Apache-2.0" as RawLicense);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
@@ -1689,7 +1694,7 @@ describe("enrichUnknowns terraform/github (version-tag, transient-vs-definitive,
       const secondBytes = readFileSync(path, "utf8");
 
       expect(secondBytes).toBe(firstBytes); // byte-identical, fetchedAt unchanged
-      expect(registryClaim(result.model.packages[0])?.raw).toBe("MPL-2.0");
+      expect(registryClaim(result.model.packages[0])?.raw).toBe("MPL-2.0" as RawLicense);
       expect(firstBytes).toContain('"fetchedAt": "2026-06-14T00:00:00.000Z"');
     } finally {
       rmSync(dir, { recursive: true, force: true });
@@ -2215,7 +2220,7 @@ describe("enrichUnknowns nuget (two-step fetch, negative discipline, offline che
 
       // Both fetches hit the LOWERCASED api.nuget.org URLs, in two-step order.
       expect(calls).toEqual([LEAF_URL, CATALOG_URL]);
-      expect(registryClaim(result.model.packages[0])).toEqual({
+      expect(registryClaim(result.model.packages[0]) as unknown).toEqual({
         raw: "MIT",
         kind: "expression",
         source: "registry",
@@ -2463,7 +2468,7 @@ describe("enrichUnknowns nuget (two-step fetch, negative discipline, offline che
       );
 
       expect(calls).toEqual([]);
-      expect(registryClaim(result.model.packages[0])?.raw).toBe("MIT");
+      expect(registryClaim(result.model.packages[0])?.raw).toBe("MIT" as RawLicense);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
@@ -2574,7 +2579,7 @@ describe("enrichUnknowns nuget (two-step fetch, negative discipline, offline che
       expect(calls).toHaveLength(4);
       const claims = result.model.packages.map((p) => registryClaim(p)?.raw);
 
-      expect(claims).toEqual(["MIT", "ISC", "Apache-2.0"]);
+      expect(claims as unknown).toEqual(["MIT", "ISC", "Apache-2.0"]);
       const loaded = readCache(path);
 
       expect(getEntry(loaded, "pkg:nuget/Newtonsoft.Json@13.0.4")?.via).toBe("license-expression");
@@ -2781,7 +2786,7 @@ describe("enrichUnknowns maven (deps.dev single fetch, honest sentinel, 404-defi
 
       expect(calls).toEqual([VERSION_URL]);
       expect(registryClaims(result.model.packages[0])).toEqual([
-        { raw: "Apache-2.0", kind: "expression", source: "registry" },
+        { raw: "Apache-2.0" as RawLicense, kind: "expression", source: "registry" },
       ]);
       const recorded = getEntry(readCache(path), "pkg:maven/com.example/lib@2.0.0?type=jar");
 
@@ -2842,7 +2847,7 @@ describe("enrichUnknowns maven (deps.dev single fetch, honest sentinel, 404-defi
         }),
       );
 
-      expect(registryClaims(result.model.packages[0])).toEqual([
+      expect(registryClaims(result.model.packages[0]) as unknown).toEqual([
         { raw: "GPL-3.0-only", kind: "expression", source: "registry" },
         { raw: "LGPL-3.0-only", kind: "expression", source: "registry" },
         { raw: "MPL-1.1", kind: "expression", source: "registry" },
@@ -2955,7 +2960,7 @@ describe("enrichUnknowns maven (deps.dev single fetch, honest sentinel, 404-defi
 
       expect(calls).toEqual([]);
       expect(registryClaims(result.model.packages[0])).toEqual([
-        { raw: "Apache-2.0", kind: "expression", source: "registry" },
+        { raw: "Apache-2.0" as RawLicense, kind: "expression", source: "registry" },
       ]);
     } finally {
       rmSync(dir, { recursive: true, force: true });
@@ -2986,7 +2991,7 @@ describe("enrichUnknowns maven (deps.dev single fetch, honest sentinel, 404-defi
       );
 
       expect(calls).toEqual([]);
-      expect(registryClaims(result.model.packages[0]).map((c) => c.raw)).toEqual([
+      expect(registryClaims(result.model.packages[0]).map((c) => c.raw) as unknown).toEqual([
         "GPL-3.0-only",
         "LGPL-3.0-only",
         "MPL-1.1",
@@ -3077,7 +3082,7 @@ describe("enrichUnknowns maven (deps.dev single fetch, honest sentinel, 404-defi
 
       expect(result.staleUnknowns).toEqual([]);
       expect(registryClaims(result.model.packages[0])).toEqual([
-        { raw: "Apache-2.0", kind: "expression", source: "registry" },
+        { raw: "Apache-2.0" as RawLicense, kind: "expression", source: "registry" },
       ]);
     } finally {
       rmSync(dir, { recursive: true, force: true });
@@ -3122,7 +3127,7 @@ describe("enrichUnknowns maven (deps.dev single fetch, honest sentinel, 404-defi
 
       expect(recorded?.license).toBe("Apache-2.0");
       expect(registryClaims(result.model.packages[0])).toEqual([
-        { raw: "Apache-2.0", kind: "expression", source: "registry" },
+        { raw: "Apache-2.0" as RawLicense, kind: "expression", source: "registry" },
       ]);
     } finally {
       rmSync(dir, { recursive: true, force: true });
@@ -3164,7 +3169,7 @@ describe("enrichUnknowns maven (deps.dev single fetch, honest sentinel, 404-defi
       expect(calls).toHaveLength(2);
       const claims = result.model.packages.map((p) => registryClaims(p)[0]?.raw);
 
-      expect(claims).toEqual(["MIT", "Apache-2.0"]);
+      expect(claims as unknown).toEqual(["MIT", "Apache-2.0"]);
       const loaded = readCache(path);
 
       expect(loaded.size).toBe(2);

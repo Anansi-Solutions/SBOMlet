@@ -3,10 +3,11 @@ import type {
   LicenseClaim,
   LicenseClaimKind,
   PackageEntry,
+  RawLicense,
 } from "../src/model/dependencies";
 
 export const claim = (raw: string, kind: LicenseClaimKind = "spdx-id"): LicenseClaim => ({
-  raw,
+  raw: raw as RawLicense,
   kind,
   source: "generator",
 });

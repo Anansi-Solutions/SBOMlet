@@ -13,7 +13,12 @@ import { parsePolicy } from "../parse/parse";
 import { renderMarkdown } from "../../render/markdown";
 import { evaluate } from "./evaluate";
 import type { Policy } from "../schema";
-import type { CanonicalDependencies, Verdict } from "../../model/dependencies";
+import type {
+  CanonicalDependencies,
+  NormalizedLicense,
+  RawLicense,
+  Verdict,
+} from "../../model/dependencies";
 
 /** No scanned target in these scenarios is collected by a lane that derives a dependency graph. */
 const WITHOUT_DEPENDENCY_GRAPHS: ReadonlySet<string> = new Set();
@@ -47,9 +52,15 @@ function makeModel(specs: ReadonlyArray<PackageSpec>): CanonicalDependencies {
       })),
       licenseClaims:
         spec.impreciseLabel !== undefined
-          ? [{ raw: spec.impreciseLabel, kind: "name" as const, source: "generator" as const }]
+          ? [
+              {
+                raw: spec.impreciseLabel as RawLicense,
+                kind: "name" as const,
+                source: "generator" as const,
+              },
+            ]
           : spec.claims.map((raw) => ({
-              raw,
+              raw: raw as RawLicense,
               kind: (raw.includes(" ") ? "expression" : "spdx-id") as "expression" | "spdx-id",
               source: "generator" as const,
             })),
@@ -340,7 +351,7 @@ describe("target lane — election flip locks (both directions)", () => {
     const noTargetVerdict = findVerdict(noTargetVerdicts, purl, TARGET)!;
 
     // Today's non-target-aware elect() prefers the non-copyleft branch.
-    expect(noTargetModel.packages[0]!.finding!.elected).toBe("Apache-2.0");
+    expect(noTargetModel.packages[0]!.finding!.elected).toBe("Apache-2.0" as NormalizedLicense);
     expect(noTargetVerdict.rule).toBe("default:ok");
     expect(noTargetVerdict.reason).toContain("Apache-2.0");
 

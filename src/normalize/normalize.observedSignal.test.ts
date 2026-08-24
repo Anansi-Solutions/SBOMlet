@@ -1,7 +1,13 @@
 import { describe, expect, test } from "bun:test";
 
+import {
+  type LicenseClaim,
+  type LicenseClaimSource,
+  type LicenseFinding,
+  type NormalizedLicense,
+  type RawLicense,
+} from "../model/dependencies";
 import { observedSignalBySource } from "./normalize";
-import type { LicenseClaim, LicenseClaimSource, LicenseFinding } from "../model/dependencies";
 
 // The pre-override observed signal, split by the lane that produced it. The
 // union is what the override machinery has always consumed and stays
@@ -9,14 +15,14 @@ import type { LicenseClaim, LicenseClaimSource, LicenseFinding } from "../model/
 // can be compared against the lane that would produce it.
 
 const sourced = (raw: string, source: LicenseClaimSource): LicenseClaim => ({
-  raw,
+  raw: raw as RawLicense,
   kind: "name",
   source,
 });
 
 const precise = (expression: string): LicenseFinding => ({
-  expression,
-  elected: expression,
+  expression: expression as NormalizedLicense,
+  elected: expression as NormalizedLicense,
   source: "generator",
   confidence: "exact",
 });

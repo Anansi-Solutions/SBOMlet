@@ -14,7 +14,7 @@
 
 import parseSpdx from "spdx-expression-parse";
 
-import { type NormalizedLicense } from "../../model/dependencies";
+import { type NormalizedLicense, type SpdxExpression } from "../../model/dependencies";
 import { leafIds, orLeaves, type ExpressionNode } from "../../normalize/expression";
 import { accountsFor, type ObservedSignal } from "../../normalize/normalize";
 import { statedLicense } from "../statedLicense";
@@ -23,7 +23,7 @@ import { type Justification } from "../schema/clarify";
 /** What a validity check reads off an entry: its stated reason and the expression it records. */
 export interface JustifiedExpression {
   readonly justification: Justification;
-  readonly expression: string;
+  readonly expression: SpdxExpression;
 }
 
 /**
