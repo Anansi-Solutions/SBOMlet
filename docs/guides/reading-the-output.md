@@ -29,6 +29,8 @@ red gate in this order instead:
    pin down.
 4. **Copyleft and special notices** — the obligations you might owe, failing
    or not.
+5. **Target compatibility** — only when you declare a `[target]` profile:
+   what that profile decided short of a failure.
 
 Package counts and the Production/Development-only inventory are context for
 the rows above, not findings of their own — see
@@ -46,6 +48,22 @@ in. What to do depends on the rule:
   See
   [Deny a source-available licence or a named package](./writing-policy.md#deny-a-source-available-licence-or-a-named-package)
   to see why, or to find and remove the entry if it's yours to remove.
+- `override:stale[clarify]` or `override:stale[builtin]` — a clarification
+  recorded what a source reported, and that source now reports something
+  else, so the recorded expression is not applied. Read the new value and
+  update or retire the entry:
+  [Correct a wrongly-detected or imprecise licence](./writing-policy.md#correct-a-wrongly-detected-or-imprecise-licence).
+- `clarify:invalid[N]`, or `clarifications:invalid[N]` for an entry in the
+  separate clarifications file — every detection the entry recorded still
+  holds, but the reason it gives for preferring its expression is one the
+  current signal disproves. The failure names where the entry can go
+  instead; re-file it under that justification.
+- `compatible:voided[N]` — a `[[compatible]]` package entry names whose use
+  of a package it judged, and something it accepts arrives through a chain
+  passing none of them. The entry then accepts nothing at that target, so
+  every package it governs there fails, not only the one that arrives
+  around it:
+  [Split an acceptance the chains contradict](./writing-policy.md#split-an-acceptance-the-chains-contradict).
 - `default:copyleft` — an unaccepted copyleft dependency. Accept it with
   [Allow a licence pattern or an exact package](./writing-policy.md#allow-a-licence-pattern-or-an-exact-package),
   scope that acceptance to where you actually reviewed it with
@@ -57,6 +75,20 @@ in. What to do depends on the rule:
   network-copyleft obligation reaches server-side use. Accept it the same way,
   ideally scoped to the one image you reviewed:
   [Accept a package only where you reviewed it](./writing-policy.md#accept-a-package-only-where-you-reviewed-it).
+- `target:incompatible` — a declared `[target]` profile governs this
+  occurrence, and combining this dependency's license into a work distributed
+  under the target license does not discharge the dependency's obligations.
+  Drop or replace the dependency, change the profile if it no longer describes
+  your software, or — for a pairing you have examined more closely than the
+  matrix can — accept it with
+  [Accept a package only where you reviewed it](./writing-policy.md#accept-a-package-only-where-you-reviewed-it).
+  See [Adopting a target](./writing-policy.md#adopting-a-target).
+- `target:unknown-pair` — no vetted data covers this license pair and you set
+  `[target]` `unknown_pair = "fail"`. It is a residual, not a judgment: pin the
+  dependency's license down with
+  [Correct a wrongly-detected or imprecise licence](./writing-policy.md#correct-a-wrongly-detected-or-imprecise-licence)
+  if it is imprecise, or accept the package explicitly. On the default `warn`
+  it lands in Target compatibility below instead.
 - `conflict:scancode` — this row also appears in Assessment conflicts below;
   resolve it there.
 - `default:unknown` — only shows here once you've set `[unknown]` to `fail`.
@@ -77,7 +109,7 @@ record it:
 A row here means the source only named a license family — `BSD`, `Apache` —
 with no clause, so the tool won't guess which precise SPDX id you mean. It's
 not a failure by itself, but it stays open until you resolve it. State the
-precise id with a `[[clarify]]` `expects` override, the same lane as Assessment
+precise id with a `[[clarify]]` entry, the same lane as Assessment
 conflicts:
 [Correct a wrongly-detected or imprecise licence](./writing-policy.md#correct-a-wrongly-detected-or-imprecise-licence).
 
@@ -89,6 +121,27 @@ the same way as a `default:copyleft` failure above. An **accepted-AGPL
 container notice**, by contrast, is the record of a past decision, not a new
 finding: someone already accepted that obligation with `[[compatible]]`.
 There's nothing to do with it.
+
+### 5. Target compatibility: what the declared profile decided
+
+This section exists only on a run whose `[target]` profile governs at least
+one occurrence, and only for the outcomes that are not already failing above.
+It has two parts:
+
+- A flagged table, for `target:boundary`, a warning `target:unknown-pair`, and
+  a `target:incompatible` that a development-only occurrence downgraded to a
+  warning. A `target:boundary` row is weak copyleft under a proprietary
+  target: it is usable behind a compliant linking boundary and nowhere else,
+  so confirm the boundary and record that you did with
+  [Accept a package only where you reviewed it](./writing-policy.md#accept-a-package-only-where-you-reviewed-it).
+  The other two are the same fixes as their failing forms above, at a lower
+  volume.
+- A "held for internal use" list, for `target:internal-use`: a copyleft or
+  AGPL obligation your profile's `distribution = "internal"` (or
+  `network = false`) takes out of scope. These pass, and there is nothing to
+  do while the profile holds. Read the list the day you flip either flag —
+  every entry on it becomes a live obligation again. See
+  [The declared profile must be true](./writing-policy.md#the-declared-profile-must-be-true).
 
 ## Counts and inventories
 

@@ -4,7 +4,7 @@ For the operator. Every subcommand, every flag, and what the tool returns when i
 exits. For a guided first run, start with [getting started](../getting-started.md).
 Terms in bold link to the [glossary](../glossary.md) the first time they appear.
 
-The tool has four subcommands:
+The tool has five subcommands:
 
 - `generate` — scan the repository and write the committed documents.
 - `check` — regenerate in memory and compare against the committed documents; the
@@ -12,6 +12,9 @@ The tool has four subcommands:
 - `verify-cache` — online; re-resolve every committed
   [enrichment cache](../glossary.md#enrichment-and-the-enrichment-cache) entry
   against its registry and report any divergence from the stored licence.
+- `refresh-clarifications` — maintainer-only, offline; audit the policy's
+  `[[clarify]]` entries against the current scan and, on request, apply what it
+  ascertained to the clarifications file.
 - `generate-docker-sbom` — maintainer-only; produce the committed
   `.sbomlet.cache/docker.sbom.json` that `generate` and `check` read as an
   [OS-scope](../glossary.md#scope-app-and-os) input.
@@ -78,17 +81,20 @@ registry calls `MIT` while ScanCode reads
 
 ```toml
 [[clarify]]
-package = { name = "example-pkg", version = "1.2.3" }
-expects = "MIT"             # the quick-check answer you are overriding away from
+name = "example-pkg"
+version = "1.2.3"
+detected = { registry = "MIT", intensive = "BSD-3-Clause" }
+justification = "scan-more-precise"
 expression = "BSD-3-Clause" # the reading you trust
-reason = "ScanCode read BSD-3-Clause from the vendored LICENSE file."
+comment = "The vendored LICENSE file carries the three-clause text."
 ```
 
-The `expects` guard keeps the decision honest: if the registry later relicenses
-off `MIT`, the override no longer matches and the gate fails as
+The `detected` record keeps the decision honest: if the registry later
+relicenses off `MIT`, the entry no longer matches and the gate fails as
 [stale](../glossary.md#staleness), so a resolved conflict cannot silently mask a
-real relicence. See the [policy reference](policy.md#clarify) for the full
-`[[clarify]]` semantics.
+real relicence. Recording the `intensive` source is what settles the
+disagreement — an entry that records the registry alone leaves it open. See the
+[policy reference](policy.md#clarify) for the full `[[clarify]]` semantics.
 
 ScanCode's answers live in their own committed memo, `scancode.cache.json`, keyed
 by package version — override its path with `--scancode-cache`. The memo also
@@ -198,9 +204,12 @@ the bare artifact:
 
 ```toml
 [[clarify]]
-package = { name = "com.example.vendor/reporting-engine-pro", version = "9.0.0" }
+name = "com.example.vendor/reporting-engine-pro"
+version = "9.0.0"
+detected = { registry = false, intensive = false }
+justification = "license-not-found"
 expression = "LicenseRef-reporting-engine-pro-commercial"
-reason = "Commercial reporting-engine licence, vendored under lib/; no public SPDX id exists."
+comment = "Commercial reporting-engine licence, vendored under lib/; no public SPDX id exists."
 ```
 
 ## check
@@ -276,6 +285,88 @@ Terraform entries; the audit works without it, just slower.
 The report always closes with one more line naming the committed ScanCode memo's
 entry count and why it is excluded from the audit: local scan results have no
 upstream registry to re-verify against.
+
+## refresh-clarifications
+
+The maintainer audit of the [`[[clarify]]`](policy.md#clarify) entries. It answers
+three questions about the entries a repository already has, and it answers them
+offline: everything it reads is what the committed
+[enrichment cache](../glossary.md#enrichment-and-the-enrichment-cache) and the
+committed ScanCode memo already recorded, so the answers are the same on every
+machine and in CI.
+
+**Which versions could an entry cover?** For an entry pinned to specific versions,
+every scanned version it says nothing about is tried: a copy of the entry scoped to
+that one version runs through the engine, and what the engine decides is what gets
+reported. `EXTEND` means every detection the entry recorded still holds there, so
+the version can join its list. `REVIEW` means a detection reads differently now,
+or the entry's stated reason no longer holds — both name what changed. `UNKNOWN`
+means nothing has been recorded for that version yet; run `generate` (or
+`generate --intensive` for the in-depth lane) and try again. `SETTLED` means the
+version needs no entry at all. An entry that names no version already covers every
+one, so it is never offered more.
+
+**Which entries are finished?** `UNUSED` names an entry that decided nothing in
+this scan. `FINISHED` names one that every package it governs has caught up with —
+the sources came to agree, the scan stopped over-reporting, or the observed licence
+now satisfies the recorded expression on its own.
+
+**Which entries are shadowed?** `SHADOWED` names an imported entry that a
+policy-file entry decides ahead of, so it is left with nothing to do.
+
+| Flag | Meaning | Default |
+| --- | --- | --- |
+| `--repo-root <path>` | The repository to scan. | working directory |
+| `--target <path>` | Single-target mode: audit the entries against one lockfile or Terraform directory rather than the whole repository. For debugging one ecosystem; it takes precedence over `--repo-root`. | — |
+| `--policy <path>` | The policy whose entries are audited. | `.sbomlet.policy.toml` at the repo root |
+| `--write` | Apply what was ascertained to the clarifications file. | off |
+| `--exclude <glob>` | Repeatable; skip matching targets. | none |
+| `--base-dir <path>` | Anchor every path to this directory instead of the working directory. | working directory |
+| `--enrichment-cache <path>` | The committed cache to read. | `.sbomlet.cache/licenses.cache.json` |
+| `--scancode-cache <path>` | The committed ScanCode memo to read. | `.sbomlet.cache/scancode.cache.json` |
+| `--verbose` | Print per-stage progress to stderr. | off |
+
+A policy is required: without one there are no entries to audit, and the run is a
+config error rather than a clean pass.
+
+This is the one subcommand with no Taskfile entry point — it is maintenance, not
+part of a build. Run it from the directory the tool is vendored into, pointing
+it back at the repository:
+
+```sh
+cd tools/sbomlet
+mise x -- bun src/cli.ts refresh-clarifications --repo-root ../.. --policy ../../.sbomlet.policy.toml
+```
+
+The report prints to stderr, one block per finding: the label, then what it is
+about — the entry's citation, plus the package and version where the finding is
+about one — with the detail on the line under it. The closing line says what was
+written, or what is left for a person to apply and where. The
+[writing-policy guide](../guides/writing-policy.md#refresh-your-clarifications-after-an-upgrade)
+covers when to reach for it.
+
+### What `--write` may touch
+
+`--write` rewrites the file named by the policy's
+[`clarifications`](policy.md#a-separate-clarifications-file) key, and nothing else. The policy
+proper is only ever suggested against — an entry written there comes back as a
+report line for you to act on, whatever the audit found.
+
+Two edits are applied without asking, because neither takes judgement: dropping a
+`FINISHED` entry, and adding an `EXTEND` version to an entry's list. Everything
+else stays a suggestion. In particular a version already pinned never leaves the
+list, and an `UNUSED` entry is never removed for you — an entry can be unused
+because the package it governs is temporarily absent, and only you can tell which.
+
+The rewrite is guarded twice. A clarifications file carrying `#` comments is left
+untouched and the run exits 3: the parser discards comments before the entries are
+ever seen, so the rewrite could not put that prose back. Move it into the entry's
+`comment` or `evidence` field first. The new text is also parsed back and compared
+against the entries it was built from, and a mismatch aborts before anything reaches
+the disk.
+
+Running `--write` twice produces the same bytes: the second run has nothing left to
+apply.
 
 ## generate-docker-sbom
 
@@ -393,15 +484,15 @@ directory.
 ## Exit codes
 
 Codes 1 and 2 come only from a structured result — `check` produces both,
-`verify-cache` produces 1 — never from an exception. Every error, in any
-subcommand, exits 3 or higher.
+`verify-cache` and `refresh-clarifications` produce 1 — never from an exception.
+Every error, in any subcommand, exits 3 or higher.
 
 | Code | Meaning |
 | --- | --- |
-| `0` | Success. `generate` wrote its outputs, `check` found everything current and clean, or `verify-cache` found every entry matching upstream. |
-| `1` | A structured failure: a `check` policy fail verdict (priority over staleness), or a `verify-cache` entry that diverges from upstream. |
+| `0` | Success. `generate` wrote its outputs, `check` found everything current and clean, `verify-cache` found every entry matching upstream, or `refresh-clarifications` had nothing to suggest. |
+| `1` | A structured failure: a `check` policy fail verdict (priority over staleness), or a `verify-cache` entry that diverges from upstream. `refresh-clarifications` uses it for "there is something to act on", applied or not. |
 | `2` | `check` only: a committed document is stale or missing, or a licence gap needs enrichment the committed cache can't answer. |
-| `3` | Tool or config error: unknown subcommand, mutually-exclusive flags, an invalid policy file, a scan or pipeline failure, a registry unreachable during `verify-cache`, or `--dump-model` on `check`. |
+| `3` | Tool or config error: unknown subcommand, mutually-exclusive flags, an invalid policy file, a scan or pipeline failure, a registry unreachable during `verify-cache`, `--dump-model` on `check`, or a `refresh-clarifications --write` the tool refused to make. |
 
 Warn verdicts and unused-policy-entry warnings print to stderr but never gate; only
 a fail verdict reaches exit 1.

@@ -46,7 +46,7 @@ flowchart TD
         S4["4. ENRICH unknowns<br/>src/enrich/enrich.ts (cache; fetch only in generate)"]
         S4a["5. ASSESS with ScanCode<br/>src/enrich/assess.ts (replay memo; scan only on generate --intensive)"]
         S5["6. NORMALIZE + annotate<br/>src/normalize/normalize.ts → finding per package"]
-        S6["7. EVALUATE policy<br/>src/policy/evaluate.ts → Verdict[]"]
+        S6["7. EVALUATE policy<br/>src/policy/engine/evaluate.ts → Verdict[]"]
         S7["8. RENDER in memory<br/>markdown.ts + notices.ts + cyclonedx.ts"]
         S1 --> S2 --> S2b --> S3 --> S4 --> S4a --> S5 --> S6 --> S7
     end
@@ -77,7 +77,7 @@ lists the stages; the sections after it walk each row.
 | Enrich | model + committed cache | model with registry claims appended | `enrich/enrich.ts` |
 | Assess | model + committed ScanCode memo | model with ScanCode claims appended | `enrich/assess.ts` |
 | Normalize | claims per package | a `LicenseFinding` per package | `normalize/normalize.ts` |
-| Evaluate | annotated model + policy | `Verdict[]` (per package × occurrence) | `policy/evaluate.ts` |
+| Evaluate | annotated model + policy | `Verdict[]` (per package × occurrence) | `policy/engine/evaluate.ts` |
 | Render | annotated model + verdicts | Markdown / notices / CycloneDX bytes | `render/` |
 
 ### Discover
@@ -302,7 +302,7 @@ Each `PackageEntry` now carries a finding of confidence `exact`, `corrected`,
 `imprecise`, or `none`.
 
 Source: `normalize/normalize.ts` (`annotateFindings`, `findingFromClaims`,
-`normalizeRaw`), `policy/builtinOverrides.ts`.
+`normalizeRaw`), `policy/engine/builtinOverrides.ts`.
 
 ### Evaluate
 
@@ -349,9 +349,9 @@ before these downgrades run, a denied package fails regardless of scope.
 Verdicts are sorted by `(purl, occurrence target)`, another determinism
 contributor.
 
-Source: `policy/evaluate.ts` (`evaluate`, `assessPackage`, `verdictFor`,
+Source: `policy/engine/evaluate.ts` (`evaluate`, `assessPackage`, `verdictFor`,
 `firstDeny`, `applyScopeDowngrades`, `applyOsScope`, `applyDevScope`),
-`policy/denylist.ts`.
+`policy/engine/deny.ts`.
 
 ### Render
 

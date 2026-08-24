@@ -78,5 +78,5 @@ losing the copyleft review flag.
 - Related: [ADR-0015](0015-abstain-over-fragile-parsing.md) (the same principle
   applied to parsers), [ADR-0014](0014-dependency-provenance.md) (the provenance
   residual)
-- Code: `normalize/normalize.ts` (`AMBIGUOUS_FAMILY`), `policy/copyleftFamily.ts`,
+- Code: `normalize/normalize.ts` (`AMBIGUOUS_FAMILY`), `policy/engine/copyleftFamily.ts`,
   `collectors/dockerfile.ts` (`deriveBaseImage`), `collectors/npmProvenance.ts`

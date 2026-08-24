@@ -79,4 +79,4 @@ acceptances reviewed for an image.
 - [ADR-0005](0005-per-occurrence-model.md) — the per-occurrence model whose
   where-dimension this makes expressible for images
 - Code: `src/collectors/dockerOs.ts`, `src/pipeline/pipeline.ts`,
-  `src/policy/evaluate.ts`, `src/merge/merge.ts`
+  `src/policy/engine/evaluate.ts`, `src/merge/merge.ts`

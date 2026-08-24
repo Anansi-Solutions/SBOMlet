@@ -234,7 +234,7 @@ builds the path has no traversal to defend; a fenced join carries residual risk
 that every future edit near the guard can weaken.
 
 Source: `normalize/normalize.ts` (`AMBIGUOUS_FAMILY`, `findingFromClaims`),
-`policy/copyleftFamily.ts`, `collectors/terraform.ts`
+`policy/engine/copyleftFamily.ts`, `collectors/terraform.ts`
 (`absentModulesJsonShouldFail`), `collectors/dockerfile.ts` (`discoverDockerfiles`),
 `collectors/provenanceGraph.ts` (`reachableFromRoots`),
 `collectors/npmProvenance.ts`, `render/markdown.ts` (`whyCellOf`,
@@ -290,8 +290,8 @@ way for a license to be observed must flow into the per-claim expression set so
 deny can see it. The review history of this engine exists largely to protect this
 property.
 
-Source: `policy/evaluate.ts` (`verdictFor`, `firstDeny`, `applyDevScope`,
-`applyOsScope`), `policy/denylist.ts`, `normalize/normalize.ts`
+Source: `policy/engine/evaluate.ts` (`verdictFor`, `firstDeny`, `applyDevScope`,
+`applyOsScope`), `policy/engine/deny.ts`, `normalize/normalize.ts`
 (`observedExpressions`).
 See [ADR-0013](adr/) (deny terminal at precedence 0),
 [ADR-0009](adr/) (a production occurrence always gates).
@@ -327,7 +327,7 @@ catches it, which is the point.
 Resist matching licenses by substring or regex; route through the SPDX libraries.
 New SBOM output stays CycloneDX 1.6.
 
-Source: `normalize/normalize.ts`, `policy/evaluate.ts`, `policy/schema.ts`,
+Source: `normalize/normalize.ts`, `policy/engine/evaluate.ts`, `policy/schema/`,
 `collectors/dockerOs.ts` (`parseSyftOutput`), `render/cyclonedx.ts`,
 `render/markdown.ts` (`ecosystemOf`).
 See [ADR-0003](adr/) (CycloneDX interchange, purl as merge key).
@@ -367,7 +367,7 @@ annotations when you refactor; each one marks a property that was hard-won and i
 easy to regress silently.
 
 Source: `collectors/terraform.ts`, `model/dependencies.ts`,
-`collectors/poetryProvenance.ts`, `policy/evaluate.ts`, `policy/denylist.ts`,
+`collectors/poetryProvenance.ts`, `policy/engine/evaluate.ts`, `policy/engine/deny.ts`,
 `render/markdown.ts`, `collectors/dockerfile.ts`.
 
 ---
