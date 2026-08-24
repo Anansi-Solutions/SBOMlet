@@ -119,6 +119,9 @@ export default tseslint.config(
     // Shipped-source comments carry the strictest vocabulary bar; tests and
     // config narrate their own mechanics and are not checked.
     files: ["src/**/*.ts"],
+    // Colocated unit tests (src/**/*.test.ts) narrate their own mechanics, like
+    // the tests under test/; keep them out of the shipped-source comment bar.
+    ignores: ["**/*.test.ts", "**/*.spec.ts"],
     plugins: {
       sbomlet: { rules: { "no-comment-jargon": noCommentJargon } },
       tsdoc,
@@ -212,6 +215,15 @@ export default tseslint.config(
   // forcing it back on flags this codebase's field-level JSDoc idiom and comments
   // that sit directly above the one object property or spread they explain, and
   // neither has a matching allowlist option in the rule.
+  {
+    // The root dependency-cruiser config is CommonJS by extension and is
+    // run by dependency-cruiser (task arch:check / arch:graph), not bundled
+    // into the tool. Give it the CommonJS globals its module.exports needs.
+    files: [".dependency-cruiser.cjs"],
+    languageOptions: {
+      globals: { module: "writable", require: "readonly" },
+    },
+  },
   eslintPluginPrettierRecommended,
   {
     // eslint-config-prettier (above) blanket-disables `curly` as a

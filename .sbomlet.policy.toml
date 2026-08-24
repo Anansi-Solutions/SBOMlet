@@ -4,6 +4,13 @@
 # that: unknown licences fail (the tool must always resolve its own), and a
 # build-time-only copyleft downgrades to a warning since it is never redistributed.
 
+# Package-level licence corrections live in their own file — entries recording
+# what both sources reported when each was written, so an upstream relicense
+# reopens the judgment instead of silently continuing to apply. That file is
+# machine-owned: it holds [[clarify]] tables and nothing else, and prose about
+# an entry belongs in its own comment/evidence keys.
+clarifications = ".sbomlet.clarifications.toml"
+
 [document]
 title = "SBOMlet — Third-Party Licenses"
 
@@ -15,6 +22,16 @@ handling = "warn"
 
 [os_dependencies]
 handling = "warn"
+
+# SBOMlet's own usage profile: AGPL-3.0-only-licensed, available online (so its
+# own section-13 network-use obligation applies), and externally distributed as
+# a published tool. Declaring this activates the compatibility lane below,
+# classifying every dependency against AGPL-3.0-only instead of relying solely
+# on the hand-authored rules above.
+[target]
+license = "AGPL-3.0-only"
+network = true
+distribution = "external"
 
 [docker]
 # The Dockerfile-name-pattern walk is intentionally name-only (no content
@@ -35,99 +52,88 @@ reason = "Demo image for the docker-scan example; built only to exercise the sca
 # itself (source via Alpine aports; the image aggregates, never derives).
 # Reviewed and accepted per package -- version-independent judgments, so the
 # rules are unpinned and survive base-image bumps. Each acceptance is scoped
-# via `where` to the occurrence it was judged in: this image's OS layer.
+# via `where` to the occurrence it was judged in: this image's OS layer. The
+# image root is the introducer for every one of them: an image's OS layer has
+# no dependency graph, so `self` is the honest parent there.
 
 [[compatible]]
 match = "package"
 name = "busybox"
+as-dependency-of = ["self"]
+rationale = "os-package-unmodified"
 where = ["docker:examples/docker-scan/Dockerfile"]
-reason = "GPL-2.0-only Alpine base package, shipped unmodified in the image's OS layer; aggregation, source available from Alpine aports."
 
 [[compatible]]
 match = "package"
 name = "busybox-binsh"
+as-dependency-of = ["self"]
+rationale = "os-package-unmodified"
 where = ["docker:examples/docker-scan/Dockerfile"]
-reason = "GPL-2.0-only busybox /bin/sh applet package, same unmodified-Alpine-base reasoning as busybox."
 
 [[compatible]]
 match = "package"
 name = "ssl_client"
+as-dependency-of = ["self"]
+rationale = "os-package-unmodified"
 where = ["docker:examples/docker-scan/Dockerfile"]
-reason = "GPL-2.0-only busybox TLS applet package, same unmodified-Alpine-base reasoning as busybox."
 
 [[compatible]]
 match = "package"
 name = "apk-tools"
+as-dependency-of = ["self"]
+rationale = "os-package-unmodified"
 where = ["docker:examples/docker-scan/Dockerfile"]
-reason = "GPL-2.0-only Alpine package manager, shipped unmodified in the image's OS layer; aggregation, source available from Alpine aports."
 
 [[compatible]]
 match = "package"
 name = "libapk2"
+as-dependency-of = ["self"]
+rationale = "os-package-unmodified"
 where = ["docker:examples/docker-scan/Dockerfile"]
-reason = "GPL-2.0-only apk-tools library package, same unmodified-Alpine-base reasoning as apk-tools."
 
 [[compatible]]
 match = "package"
 name = "alpine-baselayout"
+as-dependency-of = ["self"]
+rationale = "os-package-unmodified"
 where = ["docker:examples/docker-scan/Dockerfile"]
-reason = "GPL-2.0-only Alpine filesystem baselayout, shipped unmodified in the image's OS layer; aggregation, source available from Alpine aports."
 
 [[compatible]]
 match = "package"
 name = "alpine-baselayout-data"
+as-dependency-of = ["self"]
+rationale = "os-package-unmodified"
 where = ["docker:examples/docker-scan/Dockerfile"]
-reason = "GPL-2.0-only baselayout data files, same unmodified-Alpine-base reasoning as alpine-baselayout."
 
 [[compatible]]
 match = "package"
 name = "scanelf"
+as-dependency-of = ["self"]
+rationale = "os-package-unmodified"
 where = ["docker:examples/docker-scan/Dockerfile"]
-reason = "GPL-2.0-only pax-utils ELF scanner, shipped unmodified in the image's OS layer; aggregation, source available from Alpine aports."
-
-[[compatible]]
-match = "package"
-name = "ca-certificates"
-where = ["docker:examples/docker-scan/Dockerfile"]
-reason = "MPL-2.0 AND MIT; MPL-2.0 is file-level copyleft satisfied by shipping the files unmodified in the OS layer."
-
-[[compatible]]
-match = "package"
-name = "ca-certificates-bundle"
-where = ["docker:examples/docker-scan/Dockerfile"]
-reason = "MPL-2.0 AND MIT certificate bundle, same file-level-copyleft reasoning as ca-certificates."
 
 [[compatible]]
 match = "package"
 name = "musl-utils"
+as-dependency-of = ["self"]
+rationale = "os-package-unmodified"
 where = ["docker:examples/docker-scan/Dockerfile"]
-reason = "MIT AND BSD-2-Clause AND GPL-2.0-or-later; the GPL part covers unmodified musl utility binaries in the OS layer, aggregation with source available from Alpine aports."
 
-# Source-vs-registry assessment conflicts, resolved by hand.
+# The two certificate packages are not the unmodified-distro formula: their
+# MPL-2.0 half is file-level copyleft, read and accepted on its own terms.
 
-[[clarify]]
-package = { name = "spdx-ranges", version = "2.1.1" }
-expects = "(MIT AND CC-BY-3.0)"
-expression = "(MIT AND CC-BY-3.0)"
-reason = "The npm registry declares (MIT AND CC-BY-3.0); the in-depth scan read only the root LICENSE and saw MIT, missing the CC-BY-3.0 that covers the bundled SPDX range data this package ships. I record the broader registry reading so that data obligation stays on the inventory. expects locks this to the exact compound claim, so a future upstream relicense reopens it for review instead of silently continuing to apply."
+[[compatible]]
+match = "package"
+name = "ca-certificates"
+as-dependency-of = ["self"]
+rationale = "license-reviewed"
+where = ["docker:examples/docker-scan/Dockerfile"]
+comment = "MPL-2.0 file-level copyleft, satisfied by shipping the files unmodified in the OS layer."
 
-[[clarify]]
-package = { name = "uri-js", version = "4.4.1" }
-expects = "BSD-2-Clause"
-expression = "BSD-2-Clause-Views"
-reason = "The scan read the actual LICENSE file and found the BSD-2-Clause-Views variant: plain BSD-2-Clause plus the views-and-conclusions advertising sentence. The registry flattened it to plain BSD-2-Clause. I adopt the precise variant the file carries."
-
-[[clarify]]
-package = { name = "type-fest", version = "5.8.0" }
-expression = "(MIT OR CC0-1.0)"
-reason = "The registry declares the author's dual-license (MIT OR CC0-1.0), a choice of either. The in-depth scan found both bundled license texts and mechanically joined them with AND. I adopt the declared choice-of-license."
-
-[[clarify]]
-package = { name = "@cspell/dict-en-common-misspellings", version = "2.1.13" }
-expression = "CC-BY-SA-4.0 AND MIT"
-reason = "The in-depth scan read both the CC-BY-SA-4.0 misspellings data (Wikipedia-derived) and the MIT packaging; the quick check saw only CC-BY-SA-4.0. I record the complete reading so both obligations stay on the inventory."
-
-[[clarify]]
-package = { name = "@cspell/dict-django", version = "4.1.6" }
-expression = "MIT AND WTFPL"
-reason = "The in-depth scan matched a WTFPL license file covering the bundled Django word-list data; the quick check declared only the MIT packaging. I record both: MIT for the package, WTFPL for the data it ships."
+[[compatible]]
+match = "package"
+name = "ca-certificates-bundle"
+as-dependency-of = ["self"]
+rationale = "license-reviewed"
+where = ["docker:examples/docker-scan/Dockerfile"]
+comment = "MPL-2.0 file-level copyleft, satisfied by shipping the files unmodified in the OS layer."
