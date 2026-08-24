@@ -31,7 +31,7 @@ import { collectDockerOsSbom, type ScanImage } from "../collectors/dockerOs";
 import { discoverDockerfiles } from "../collectors/dockerfile";
 import { execTool } from "../collectors/exec";
 import { compareCodeUnits } from "../model/dependencies";
-import { parsePolicy } from "../policy/schema";
+import { parsePolicy } from "../policy/parse/parse";
 import { resolveFrom, writeArtifact } from "./paths";
 import { DOCKER_SBOM_FILE, resolveCacheDir } from "./pipeline";
 import { sanitizeForLog } from "./summary";

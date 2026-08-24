@@ -5,27 +5,34 @@
  * with "\n" literals only (never the platform EOL constant) so the same model produces identical
  * bytes on Windows and Linux. The header carries the regenerate command, never a date.
  *
- * Document order (locked): title, dateless auto-generated header, policy pointer line (policy runs
+ * Document order (locked): title, dateless auto-generated header, the target-profile
+ * scope-of-assertion line PLUS the compatibility-data attribution/disclaimer line (both generated,
+ * both present ONLY when the policy declares an active target lane - PolicyView.targetProfile),
+ * author preamble (policy [document].preamble, when configured), policy pointer line (policy runs
  * only), package-counts block, problematic licenses roll-up (policy runs only), copyleft and
  * special notices (policy runs only - container system-package copyleft is excluded as routine, and
- * a package already flagged Problematic never duplicates into this section), imprecise licenses,
- * assessment conflicts, the Containers index (occurrence-derived, rendered with or without a policy
- * view), then Production and Development-only dependencies. Each of those two sections is the app
- * table followed by one "### Container: docker:<source>" subsection per container classified into
- * that half - a container's complete package inventory lists there, grouped by the docker:<source>
- * occurrence identity INDEPENDENT of scope (a package shared with an app workspace lists in both
- * places), with no separate Docker section. Each subsection further splits into a "**System
- * packages**" table (the OS-ecosystem allowlist) and an "**Application packages**" table
- * (everything else), omitting an empty half. The License column shows the full normalized
- * expression when a finding exists, canonicalized (boolean-algebra reordering/dedup/absorption, per
- * {@link canonicalizeExpression}) - never only the elected branch; election surfaces through
- * copyleft section membership instead. The Assessment-conflicts evidence columns are the deliberate
- * exception: they quote disagreeing sources and render each claim's as-observed spelling, never
- * canonicalized. Without a policy view there is no policy pointer and no problematic roll-up or
- * copyleft section, and every container classifies production (the conservative default).
+ * a package already flagged Problematic never duplicates into this section), target compatibility
+ * (policy runs only, and only when the target lane produced a warn or held-internal row - no
+ * heading otherwise), imprecise licenses, assessment conflicts, the Containers index
+ * (occurrence-derived, rendered with or without a policy view), then Production and
+ * Development-only dependencies. Each of those two sections is the app table followed by one "###
+ * Container: docker:<source>" subsection per container classified into that half - a container's
+ * complete package inventory lists there, grouped by the docker:<source> occurrence identity
+ * INDEPENDENT of scope (a package shared with an app workspace lists in both places), with no
+ * separate Docker section. Each subsection further splits into a "**System packages**" table (the
+ * OS-ecosystem allowlist) and an "**Application packages**" table (everything else), omitting an
+ * empty half. The License column shows the full normalized expression when a finding exists,
+ * canonicalized (boolean-algebra reordering/dedup/absorption, per {@link canonicalizeExpression}) -
+ * never only the elected branch; election surfaces through copyleft section membership instead. The
+ * Assessment-conflicts evidence columns are the deliberate exception: they quote disagreeing sources
+ * and render each claim's as-observed spelling, never canonicalized. Without a policy view there is
+ * no policy pointer and no problematic roll-up or copyleft section, and every container classifies
+ * production (the conservative default).
  *
  * This module deliberately does not render the notices companion, emit CycloneDX, or evaluate
- * policy - verdicts and suppressed workspaces arrive pre-computed in the PolicyView projection.
+ * policy - verdicts and suppressed workspaces arrive pre-computed in the PolicyView projection. The
+ * two generated target-lane lines are THIS document's alone - renderNotices (notices.ts) takes no
+ * PolicyView and can never carry them, by construction.
  *
  * The normative placement spec is docs/reference/report-placement.md - update both together.
  */
@@ -42,12 +49,47 @@ import {
   type Verdict,
 } from "../model/dependencies";
 import { canonicalizeExpression } from "../normalize/expression";
-import { OS_PACKAGE_ECOSYSTEMS } from "../policy/osEcosystems";
+import {
+  formatProfileLabel,
+  OSADL_SNAPSHOT_TIMESTAMP,
+  SCANCODE_SNAPSHOT_TIMESTAMP,
+  TARGET_RULE_BOUNDARY,
+  TARGET_RULE_INCOMPATIBLE,
+  TARGET_RULE_INTERNAL_USE,
+  TARGET_RULE_UNKNOWN_PAIR,
+  type TargetProfile,
+} from "../policy/compat";
+import { OS_PACKAGE_ECOSYSTEMS } from "../policy/engine/osEcosystems";
 import { isUnknownLicense } from "./unknownLicense";
-import type { AcceptedContainerNotice } from "../policy/evaluate";
-import type { SuppressedWorkspace } from "../policy/schema";
+import type { AcceptedContainerNotice } from "../policy/engine/evaluate";
+import type { SuppressedWorkspace } from "../policy/schema/exemptions";
 
 const HEADER_LINE = "<!-- AUTO-GENERATED - do not edit. Regenerate with: task generate -->";
+
+/**
+ * One resolved [[target.workspace]] override for the header line: its declared path, plus its
+ * complete resolved profile (per-field inheritance from the project profile already applied).
+ */
+export interface TargetProfileHeaderOverride {
+  /** Repo-relative target-identity prefix this override governs, e.g. "apps/studio". */
+  path: string;
+  /** The complete, already-inherited profile - never a partial. */
+  profile: TargetProfile;
+}
+
+/**
+ * The resolved target usage profile(s) driving the header's scope-of-assertion line - present ONLY
+ * when the policy declares an active [target] lane (pipeline.ts's projectPolicyView threads it from
+ * policy.target; absent [target] leaves PolicyView.targetProfile undefined entirely, so a no-target
+ * policy renders neither generated line). `project` is absent for a workspaces-only [target] table
+ * (no complete project-level profile declared); `workspaces` is every declared [[target.workspace]]
+ * entry resolved to its own complete profile, sorted by path for determinism.
+ */
+export interface TargetProfileSummary {
+  /** The complete project-level profile, when the policy declares one. */
+  project?: TargetProfile;
+  workspaces: ReadonlyArray<TargetProfileHeaderOverride>;
+}
 
 /**
  * Policy projection for the document renderer. Verdicts drive copyleft-section membership;
@@ -82,6 +124,11 @@ export interface PolicyView {
    * heading, not a table cell; a preamble is intentional author markdown).
    */
   document?: { title?: string; preamble?: string };
+  /**
+   * The resolved target profile(s) driving the generated scope-of-assertion + attribution lines
+   * - absent renders neither line, so a no-target policy leaves the document unchanged.
+   */
+  targetProfile?: TargetProfileSummary;
 }
 
 /**
@@ -743,12 +790,23 @@ interface BlockingGroup {
 
 /**
  * Coarse warn category derived from a verdict rule (non-blocking roll-up): copyleft
- * (default:copyleft / default:imprecise-copyleft), unknown (default:unknown / default:imprecise),
- * deny (rule starts with "deny"), else other. Deterministic and total over the rule string.
+ * (default:copyleft / default:imprecise-copyleft), target (the target-compatibility lane's own warn
+ * rules - a reviewer must see these are license-compatibility findings, not vague "other" noise,
+ * especially since they land right after a Copyleft section a governed tree usually renders empty),
+ * unknown (default:unknown / default:imprecise), deny (rule starts with "deny"), else other.
+ * Deterministic and total over the rule string.
  */
-function warnCategory(rule: string): "copyleft" | "unknown" | "deny" | "other" {
+function warnCategory(rule: string): "copyleft" | "target" | "unknown" | "deny" | "other" {
   if (rule === "default:copyleft" || rule === "default:imprecise-copyleft") {
     return "copyleft";
+  }
+
+  if (
+    rule === TARGET_RULE_BOUNDARY ||
+    rule === TARGET_RULE_UNKNOWN_PAIR ||
+    rule === TARGET_RULE_INCOMPATIBLE
+  ) {
+    return "target";
   }
 
   if (rule === "default:unknown" || rule === "default:imprecise") {
@@ -760,6 +818,55 @@ function warnCategory(rule: string): "copyleft" | "unknown" | "deny" | "other" {
   }
 
   return "other";
+}
+
+/**
+ * The sections a warn's package can be pointed to, in the order they appear in the document - the
+ * fixed order the roll-up lists them in.
+ */
+const WARN_DESTINATION_ORDER: readonly string[] = [
+  "Problematic licenses",
+  "Copyleft and special notices",
+  "Target compatibility",
+  "Imprecise licenses",
+  "the package tables",
+];
+
+/**
+ * Where a warn verdict's package is actually shown, so the non-blocking roll-up can point the
+ * reader at it instead of at a section that turns out empty. Mirrors those sections' own membership
+ * rules: a purl that also fails rows in the Problematic table; an os-scope copyleft warn and every
+ * warn with no dedicated flagged list (unknown, source-available exemption, deny) appear only in
+ * the package tables; the rest land in their named section.
+ *
+ * @returns one entry of {@link WARN_DESTINATION_ORDER}.
+ */
+function warnDestinationSection(
+  verdict: Verdict,
+  pkg: PackageEntry | undefined,
+  isProblematic: boolean,
+): string {
+  if (isProblematic) {
+    return "Problematic licenses";
+  }
+
+  if (verdict.rule === "default:copyleft") {
+    return pkg?.scope === "os" ? "the package tables" : "Copyleft and special notices";
+  }
+
+  if (verdict.rule === "default:imprecise-copyleft" || verdict.rule === "default:imprecise") {
+    return "Imprecise licenses";
+  }
+
+  if (
+    verdict.rule === TARGET_RULE_BOUNDARY ||
+    verdict.rule === TARGET_RULE_UNKNOWN_PAIR ||
+    verdict.rule === TARGET_RULE_INCOMPATIBLE
+  ) {
+    return "Target compatibility";
+  }
+
+  return "the package tables";
 }
 
 /**
@@ -858,9 +965,14 @@ function problematicSectionLines(
     lines.push("");
   }
 
-  // Non-blocking roll-up: count warn verdicts by coarse category; render ONE line naming every
-  // non-zero category in a fixed order. Omitted entirely when zero warns exist.
+  // Non-blocking roll-up: count warn verdicts by coarse category AND record the section that shows
+  // each one, so the closing pointer names where the warnings actually are - never "see below" at a
+  // section that renders empty. Omitted entirely when zero warns exist.
+  const problematicPurls = new Set(
+    verdicts.filter((verdict) => verdict.status === "fail").map((verdict) => verdict.purl),
+  );
   const warnCounts = new Map<string, number>();
+  const destinations = new Set<string>();
   let warnTotal = 0;
 
   for (const verdict of verdicts) {
@@ -872,11 +984,15 @@ function problematicSectionLines(
     const category = warnCategory(verdict.rule);
 
     warnCounts.set(category, (warnCounts.get(category) ?? 0) + 1);
+    destinations.add(
+      warnDestinationSection(verdict, byPurl.get(verdict.purl), problematicPurls.has(verdict.purl)),
+    );
   }
 
   if (warnTotal > 0) {
-    const order: ReadonlyArray<"copyleft" | "unknown" | "deny" | "other"> = [
+    const order: ReadonlyArray<"copyleft" | "target" | "unknown" | "deny" | "other"> = [
       "copyleft",
+      "target",
       "unknown",
       "deny",
       "other",
@@ -884,9 +1000,11 @@ function problematicSectionLines(
     const parts = order
       .filter((category) => (warnCounts.get(category) ?? 0) > 0)
       .map((category) => `${warnCounts.get(category)} ${category} warning(s)`);
+    const shownIn = WARN_DESTINATION_ORDER.filter((section) => destinations.has(section));
 
     lines.push(
-      `_Non-blocking: ${parts.join(", ")} (dev/os-downgraded or suppressed). See the sections below._`,
+      `_Non-blocking: ${parts.join(", ")} (dev/os-downgraded or suppressed). Detailed under ` +
+        `${shownIn.join(", ")}._`,
       "",
     );
   }
@@ -1021,11 +1139,208 @@ function copyleftSectionLines(sorted: readonly PackageEntry[], policyView: Polic
   return lines;
 }
 
+/** The target-lane warn rule ids that row in the flagged table (never a bare `target:ok`). */
+const TARGET_WARN_RULES: ReadonlySet<string> = new Set([
+  TARGET_RULE_BOUNDARY,
+  TARGET_RULE_UNKNOWN_PAIR,
+  TARGET_RULE_INCOMPATIBLE,
+]);
+
+/**
+ * The "## Target compatibility" section - policy runs only, rendered after Copyleft and special
+ * notices, and ONLY when at least one target:* warn or held-internal row exists (unlike the
+ * Copyleft section, an absent lane renders no heading at all - no blank-line drift on a no-target
+ * document). Two parts, in order:
+ *   - a flagged table (the copyleft-section row shape) for every target:boundary,
+ *     target:unknown-pair, or dev-downgraded target:incompatible (status "warn") verdict;
+ *   - a "Held for internal use" bullet list for every target:internal-use (status "ok") verdict
+ *     - the usage profile takes the obligation out of scope, but the row stays enumerable for the
+ *     day the profile flips (the internal-use hold's own repudiation mitigation).
+ * The Problematic dedup applies ONLY to the flagged table (a purl carrying a fail verdict anywhere
+ * never rows there, matching the Copyleft section's own dedup) - the held list is exempt by design.
+ * A held-internal verdict names one SPECIFIC occurrence's out-of-scope obligation; a fail elsewhere
+ * on the same purl describes an unrelated occurrence entirely, and the hold's whole purpose (an
+ * exposure staying visible for the day the profile flips) breaks if a sibling occurrence's fail can
+ * make it vanish with no trace anywhere in the document. Deterministic sort: comparePackages order,
+ * already the caller's `sorted` order.
+ */
+function targetSectionLines(sorted: readonly PackageEntry[], policyView: PolicyView): string[] {
+  const verdictsByPurl = new Map<string, Verdict[]>();
+
+  for (const verdict of policyView.verdicts) {
+    const list = verdictsByPurl.get(verdict.purl);
+
+    if (list === undefined) {
+      verdictsByPurl.set(verdict.purl, [verdict]);
+    } else {
+      list.push(verdict);
+    }
+  }
+
+  const problematicPurls = new Set(
+    policyView.verdicts
+      .filter((verdict) => verdict.status === "fail")
+      .map((verdict) => verdict.purl),
+  );
+
+  const warnRows: string[] = [];
+  const heldLines: string[] = [];
+
+  for (const pkg of sorted) {
+    const relevant = verdictsByPurl.get(pkg.purl) ?? [];
+
+    if (!problematicPurls.has(pkg.purl)) {
+      const warns = relevant.filter(
+        (verdict) => verdict.status === "warn" && TARGET_WARN_RULES.has(verdict.rule),
+      );
+
+      if (warns.length > 0) {
+        const targets = [...new Set(warns.map((verdict) => verdict.occurrenceTarget))].sort(
+          compareCodeUnits,
+        );
+
+        warnRows.push(copyleftRow(pkg, targets));
+      }
+    }
+
+    const held = relevant
+      .filter((verdict) => verdict.status === "ok" && verdict.rule === TARGET_RULE_INTERNAL_USE)
+      .sort((a, b) => compareCodeUnits(a.occurrenceTarget, b.occurrenceTarget));
+
+    for (const verdict of held) {
+      heldLines.push(
+        `- ${escapeCell(pkg.name)}@${escapeCell(pkg.version)} in ${escapeCell(verdict.occurrenceTarget)} — ${escapeCell(verdict.reason)}`,
+      );
+    }
+  }
+
+  if (warnRows.length === 0 && heldLines.length === 0) {
+    return [];
+  }
+
+  const lines: string[] = ["## Target compatibility", ""];
+
+  if (warnRows.length > 0) {
+    lines.push(
+      "The packages listed below need review against the declared target profile.",
+      "",
+      ...COPYLEFT_HEAD,
+      ...warnRows,
+      "",
+    );
+  }
+
+  if (heldLines.length > 0) {
+    lines.push(
+      "Held out of scope for internal use - visible for the day the distribution profile flips:",
+      "",
+      ...heldLines,
+      "",
+    );
+  }
+
+  return lines;
+}
+
+/**
+ * One profile rendered in reader's words for the header lines - {@link formatProfileLabel} escaped
+ * for markdown, optionally prefixed by its governing workspace path (also escaped; a project-level
+ * profile has none).
+ */
+function profileDescriptor(profile: TargetProfile, path?: string): string {
+  const label = escapeCell(formatProfileLabel(profile));
+
+  return path === undefined ? label : `${escapeCell(path)} (${label})`;
+}
+
+/**
+ * The scope-of-assertion statement: the header line is NOT decorative metadata - it is the primary
+ * honesty mechanism for the whole target-license feature, stating plainly that the document was
+ * audited against the declared profile and that its verdicts assert validity ONLY against that
+ * profile and configuration. A project-level profile names itself, plus every declared
+ * [[target.workspace]] override (already sorted by path); a workspaces-only [target] table (no
+ * complete project profile) names its per-workspace profiles as the audited-against subject
+ * directly, since there is no single project-wide target to lead with.
+ */
+function scopeOfAssertionLine(summary: TargetProfileSummary): string {
+  // Defensive re-sort: mirrors renderMarkdown's own package sort and copyleftSectionLines'
+  // suppressed-workspace sort - the renderer must not trust caller order for determinism.
+  const overrides = [...summary.workspaces]
+    .sort((a, b) => compareCodeUnits(a.path, b.path))
+    .map((entry) => profileDescriptor(entry.profile, entry.path));
+
+  if (summary.project !== undefined) {
+    const overridesClause =
+      overrides.length > 0 ? ` Per-workspace overrides: ${overrides.join(", ")}.` : "";
+
+    return (
+      `This report was audited against the declared target: ${profileDescriptor(summary.project)}.` +
+      `${overridesClause} Its findings assert license validity against that target and the ` +
+      `declared configuration only.`
+    );
+  }
+
+  if (overrides.length === 0) {
+    // schema.ts's validateTarget already rejects a [target] table that resolves to neither a
+    // project profile nor any [[target.workspace]] entry (a dead activation switch), so a real
+    // policy can never reach this branch - guarded anyway so a future caller can never render the
+    // dangling "targets: ." sentence this shape would otherwise produce.
+    throw new Error(
+      "scopeOfAssertionLine: a workspaces-only TargetProfileSummary must carry at least one " +
+        "workspace override",
+    );
+  }
+
+  return (
+    `This report was audited against the declared per-workspace targets: ${overrides.join(", ")}. ` +
+    `Its findings assert license validity against those targets and the declared configuration only.`
+  );
+}
+
+/**
+ * The attribution/disclaimer line: names the two vetted compatibility data sources with their
+ * snapshot timestamps - the one place this document carries that retrieval metadata at all; every
+ * per-package verdict reason cites only the source value (e.g. "OSADL: No"), never a timestamp or
+ * URL. Timestamps read exclusively from data.ts's vendored-data constants, never the clock - no
+ * per-run drift.
+ */
+function attributionLine(): string {
+  return (
+    `Compatibility verdicts draw on the OSADL compatibility matrix and copyleft class table ` +
+    `(snapshot ${OSADL_SNAPSHOT_TIMESTAMP}, osadl.org) and the ScanCode LicenseDB category index ` +
+    `(snapshot ${SCANCODE_SNAPSHOT_TIMESTAMP}, scancode-licensedb.aboutcode.org) - this is ` +
+    `automated, data-driven output, not legal advice.`
+  );
+}
+
+/**
+ * The two generated lines directly after HEADER_LINE when the target lane is active: the
+ * scope-of-assertion statement, then the attribution/disclaimer line - fixed at exactly two lines
+ * (the ADR records the decision). This licenses document is the only place either line renders:
+ * callers gate this on PolicyView.targetProfile, and renderNotices never receives a PolicyView at
+ * all.
+ */
+function targetHeaderLines(summary: TargetProfileSummary): string[] {
+  return [scopeOfAssertionLine(summary), attributionLine()];
+}
+
 export function renderMarkdown(model: CanonicalDependencies, policyView?: PolicyView): string {
   // Defensive re-sort: the renderer must not trust input order.
   const sorted = [...model.packages].sort(comparePackages);
 
-  const lines: string[] = [`# ${documentTitle(policyView)}`, "", HEADER_LINE, ""];
+  const lines: string[] = [`# ${documentTitle(policyView)}`, "", HEADER_LINE];
+
+  // The scope-of-assertion + attribution lines land directly after the auto-generated header
+  // comment, BEFORE the author preamble - generated content groups with the generated header.
+  // Absent PolicyView.targetProfile, nothing is pushed here and the output stays byte-identical to
+  // a document rendered with no [target] table declared.
+  const targetProfile = policyView?.targetProfile;
+
+  if (targetProfile !== undefined) {
+    lines.push(...targetHeaderLines(targetProfile));
+  }
+
+  lines.push("");
 
   // Author preamble: verbatim markdown block after the auto-generated header comment and BEFORE the
   // policy pointer / counts. CRLF/CR normalized to "\n" (determinism); rendered as-is - NOT
@@ -1060,6 +1375,12 @@ export function renderMarkdown(model: CanonicalDependencies, policyView?: Policy
   // Copyleft and special notices - policy runs only.
   if (policyView !== undefined) {
     lines.push(...copyleftSectionLines(sorted, policyView));
+  }
+
+  // Target compatibility - policy runs only, and only when the lane produced a warn/held-internal
+  // row (targetSectionLines returns [] otherwise - no heading, no blank-line drift).
+  if (policyView !== undefined) {
+    lines.push(...targetSectionLines(sorted, policyView));
   }
 
   // Imprecise-licenses review section - finding-level (rendered with or without a policy view).
