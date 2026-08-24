@@ -38,11 +38,6 @@ import {
   SCANCODE_TOOL,
   type ScanCandidate,
 } from "../src/enrich/scancode";
-import {
-  isRootLevelOrDistInfoLicensesPath,
-  isRootLevelPath,
-  sitePackagesDir,
-} from "../src/enrich/scancode/sources";
 import { serializeCache } from "../src/enrich/cache";
 import { annotateFindings } from "../src/normalize/normalize";
 import { runGenerate } from "../src/pipeline/pipeline";
@@ -52,6 +47,11 @@ import {
   type LicenseClaim,
   type PackageEntry,
 } from "../src/model/dependencies";
+import {
+  isRootLevelOrDistInfoLicensesPath,
+  isRootLevelPath,
+  sitePackagesDir,
+} from "../src/enrich/scancode/sources";
 
 /** Original exec export captured BEFORE any mock.module call (restore target). */
 const REAL_EXEC = { ...execModule };

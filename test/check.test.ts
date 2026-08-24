@@ -165,12 +165,15 @@ const WARN_ONLY_POLICY = [
   "[[compatible]]",
   'match = "license"',
   'pattern = "AGPL-3.0-only"',
-  'reason = "copyleft accepted for the warn-only fixture"',
+  'rationale = "license-reviewed"',
+  'where = ["/"]',
   "",
   "[[compatible]]",
   'match = "license"',
   'pattern = "0BSD"',
-  'reason = "unused-entry-marker"',
+  'rationale = "license-reviewed"',
+  'where = ["/"]',
+  'comment = "unused-entry-marker"',
   "",
 ].join("\n");
 
@@ -355,7 +358,9 @@ describe("runCheck + exitCodeFor — the CI gate", () => {
     expect(exitCodeFor(result!)).toBe(0);
     // The warnings still PRINT (gate-theater prevention)...
     expect(stderr).toContain("policy warn:");
-    expect(stderr).toContain("policy warning: unused entry compatible[1] — unused-entry-marker");
+    expect(stderr).toContain(
+      "policy warning: unused entry compatible[1] — license-reviewed — unused-entry-marker",
+    );
     // ...and zero fail lines exist to gate on.
     expect(stderr).not.toContain("policy fail:");
   });
@@ -950,13 +955,15 @@ const SCOPED_DOCKER_POLICY = [
   "[[compatible]]",
   'match = "package"',
   'name = "musl"',
-  'reason = "scoped to the postgres image occurrence"',
+  'as-dependency-of = ["self"]',
+  'rationale = "os-package-unmodified"',
   'where = ["docker:postgres:18"]',
   "",
   "[[compatible]]",
   'match = "license"',
   'pattern = "AGPL-3.0-only"',
-  'reason = "app fixture acceptance"',
+  'rationale = "license-reviewed"',
+  'where = ["/"]',
   "",
 ].join("\n");
 
@@ -994,6 +1001,45 @@ describe("sidecar fan-out and the malformed-sidecar failure", () => {
   });
   afterAll(() => {
     mock.module("../src/collectors/cdxgen", () => REAL_CDXGEN);
+  });
+
+  test("an os-package-unmodified entry over a container package the scope transform re-keys to app is refused", async () => {
+    const { root } = makeScannableTree();
+
+    // The docker collector stamps every component it finds "os", base-image plumbing and baked-in
+    // application wheels alike; the scope transform is what tells them apart, and it runs after
+    // the merge. A pypi wheel therefore reaches every verdict as scope "app".
+    writeSidecar(
+      root,
+      sidecarDoc(
+        [
+          {
+            type: "library",
+            name: "app-wheel",
+            version: "1.0.0",
+            purl: "pkg:pypi/app-wheel@1.0.0",
+            licenses: [{ license: { id: "MIT" } }],
+            images: ["img-a"],
+          },
+        ],
+        [IMG_A],
+      ),
+    );
+
+    const policyPath = writePolicy(
+      root,
+      [
+        "[[compatible]]",
+        'match = "package"',
+        'name = "app-wheel"',
+        'as-dependency-of = ["self"]',
+        'rationale = "os-package-unmodified"',
+        'where = ["docker:a/Dockerfile"]',
+        "",
+      ].join("\n"),
+    );
+
+    expect(buildAgainst(root, policyPath)).rejects.toThrow("os-package-unmodified");
   });
 
   test("the sidecar fans out per image: a shared purl rows in EACH container's own subsection, unique purls one each", async () => {
@@ -1189,13 +1235,16 @@ function scenarioPolicy(osHandling: string, scoped: boolean): string {
     "[[compatible]]",
     'match = "package"',
     'name = "busybox"',
-    'reason = "reviewed in the image-A OS layer"',
-    ...(scoped ? ['where = ["docker:a/Dockerfile"]'] : []),
+    'version = "1.37.0-r19"',
+    'as-dependency-of = ["self"]',
+    'rationale = "os-package-unmodified"',
+    `where = ${scoped ? '["docker:a/Dockerfile"]' : '["/"]'}`,
     "",
     "[[compatible]]",
     'match = "license"',
     'pattern = "AGPL-3.0-only"',
-    'reason = "app fixture acceptance"',
+    'rationale = "license-reviewed"',
+    'where = ["/"]',
     "",
   ].join("\n");
 }
@@ -1928,5 +1977,88 @@ describe("a dead [[docker.development]] pattern warns; the marking never touches
     expect(marked.verdicts).toEqual(baseline.verdicts);
     // Sanity: the marking DID take effect in the render (placement-only).
     expect(marked.licensesMd.includes("### Container: docker:a/Dockerfile")).toBe(true);
+  });
+});
+
+// ===========================================================================
+// Does a target:* rule id surface in the CycloneDX export? renderCyclonedx
+// emits one "licenses-tool:rule:<target>" property per verdict matching a
+// component's purl, with no rule-id filtering - the target lane's verdicts
+// flow through the SAME stream as every other rule id, unmodified. Locked
+// end to end (a real [target] policy through buildOutputs) so the answer can
+// never silently regress; see docs/reference/output-format.md and cli.md for
+// the documented shape.
+// ===========================================================================
+
+interface CdxProperty {
+  name: string;
+  value: string;
+}
+
+interface CdxComponent {
+  purl: string;
+  properties?: CdxProperty[];
+}
+
+/** buildOutputs over root with the CycloneDX export enabled, offline registry, captured stderr. */
+async function buildWithCyclonedx(
+  root: string,
+  policyPath: string,
+): Promise<Awaited<ReturnType<typeof buildOutputs>>> {
+  const paths = pathsFor(root, true);
+  let outputs: Awaited<ReturnType<typeof buildOutputs>> | undefined;
+
+  await withFetch(EMPTY_FETCH, () =>
+    withCapturedStderr(async () => {
+      outputs = await buildOutputs({
+        repoRoot: root,
+        baseDir: root,
+        ...paths,
+        policyPath,
+        verbose: false,
+      });
+    }),
+  );
+
+  return outputs!;
+}
+
+describe("buildOutputs — the target lane's verdicts in the CycloneDX export", () => {
+  beforeAll(() => {
+    mock.module("../src/collectors/cdxgen", () => ({
+      ...REAL_CDXGEN,
+      collectWithCdxgen: fakeScanWithCdxgen,
+    }));
+  });
+  afterAll(() => {
+    mock.module("../src/collectors/cdxgen", () => REAL_CDXGEN);
+  });
+
+  test("a target:incompatible fail and a target:ok pass both round-trip into licenses-tool:rule properties, matching the verdict stream exactly", async () => {
+    const { root } = makeScannableTree();
+    const policyPath = writePolicy(
+      root,
+      ["[target]", 'license = "MIT"', "network = false", 'distribution = "external"', ""].join(
+        "\n",
+      ),
+    );
+
+    const outputs = await buildWithCyclonedx(root, policyPath);
+    const doc = JSON.parse(outputs.cyclonedxJson!) as { components: CdxComponent[] };
+    const ruleFor = (purl: string): string | undefined =>
+      doc.components
+        .find((component) => component.purl === purl)
+        ?.properties?.find((property) => property.name.startsWith("licenses-tool:rule:"))?.value;
+
+    expect(ruleFor("pkg:npm/copyleft-lib@1.0.0")).toBe("target:incompatible");
+    expect(ruleFor("pkg:npm/mit-lib@3.0.0")).toBe("target:ok");
+
+    // Cross-check against the verdict stream itself — the export must never diverge from what
+    // evaluate() actually decided.
+    const copyleftVerdict = outputs.verdicts!.find((v) => v.purl === "pkg:npm/copyleft-lib@1.0.0");
+    const mitVerdict = outputs.verdicts!.find((v) => v.purl === "pkg:npm/mit-lib@3.0.0");
+
+    expect(copyleftVerdict).toMatchObject({ status: "fail", rule: "target:incompatible" });
+    expect(mitVerdict).toMatchObject({ status: "ok", rule: "target:ok" });
   });
 });

@@ -25,14 +25,14 @@ Copyleft notice rules are configured in policy.toml.
 | fail     | default:copyleft       | chart-render   | npm       | 2.3.1   | LGPL-3.0-or-later | apps/web                       | pkg:npm/web-root@1.0.0 → pkg:npm/dashboard-kit@1.0.0 → pkg:npm/chart-render@2.3.1 | copyleft license "LGPL-3.0-or-later" (from "LGPL-3.0-or-later") is not allowed in "apps/web" and no compatible rule or workspace suppression applies                                                                                                                               |
 | fail     | default:copyleft       | metrics-daemon | golang    | 1.2.0   | AGPL-3.0-only     | docker:services/api/Dockerfile | —                                                                                 | copyleft license "AGPL-3.0-only" (from "AGPL-3.0-only") is not allowed in "docker:services/api/Dockerfile" and no compatible rule or workspace suppression applies                                                                                                                 |
 
-_Non-blocking: 5 copyleft warning(s) (dev/os-downgraded or suppressed). See the sections below._
+_Non-blocking: 5 copyleft warning(s) (dev/os-downgraded or suppressed). Detailed under Copyleft and special notices, Imprecise licenses, the package tables._
 
 ## Copyleft and special notices
 
 A container system package's AGPL network-copyleft obligation was accepted by policy configuration — recorded here as a non-blocking notice, not counted toward the copyleft warning total:
 
-- licensed-relay@1.0.0 (AGPL) in docker:services/api/Dockerfile — accepted via compatible\[2\]: package "licensed-relay" accepted by compatible package rule: imprecise AGPL family reviewed and accepted for the api image
-- licensed-daemon@2.1.0 (AGPL-3.0-only) in docker:services/api/Dockerfile — accepted via compatible\[1\]: package "licensed-daemon" accepted by compatible package rule: AGPL network-copyleft obligation reviewed and accepted for the api image
+- licensed-relay@1.0.0 (AGPL) in docker:services/api/Dockerfile — accepted via compatible\[2\]: package "licensed-relay" accepted by compatible package rule: license-reviewed — imprecise AGPL family accepted for the api image
+- licensed-daemon@2.1.0 (AGPL-3.0-only) in docker:services/api/Dockerfile — accepted via compatible\[1\]: package "licensed-daemon" accepted by compatible package rule: license-reviewed — AGPL network-copyleft obligation accepted for the api image
 
 The packages listed below carry copyleft or special license obligations in at least one non-suppressed workspace.
 

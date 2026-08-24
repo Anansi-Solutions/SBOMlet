@@ -10,12 +10,16 @@ import {
 import { mergeSboms } from "../src/merge/merge";
 import { annotateFindings } from "../src/normalize/normalize";
 import { applyContainerScopes } from "../src/pipeline/containerScope";
-import { BUILTIN_OVERRIDES } from "../src/policy/builtinOverrides";
-import { acceptedContainerNotices, evaluate } from "../src/policy/evaluate";
-import { parsePolicy, type Policy } from "../src/policy/schema";
+import { BUILTIN_OVERRIDES } from "../src/policy/engine/builtinOverrides";
+import { acceptedContainerNotices, evaluate } from "../src/policy/engine/evaluate";
+import { parsePolicy } from "../src/policy/parse/parse";
 import { alignTables } from "../src/render/alignTables";
 import { renderMarkdown, type PolicyView } from "../src/render/markdown";
 import { globToRegExp } from "../src/targets/discover";
+import type { Policy } from "../src/policy/schema";
+
+/** No scanned target in these scenarios is collected by a lane that derives a dependency graph. */
+const WITHOUT_DEPENDENCY_GRAPHS: ReadonlySet<string> = new Set();
 
 /**
  * A synthetic scenario shaped like the real-world report that motivated the
@@ -44,20 +48,25 @@ const POLICY_TOML = [
   "[[compatible]]",
   'match = "package"',
   'name = "coreutils"',
+  'as-dependency-of = ["self"]',
+  'rationale = "os-package-unmodified"',
   `where = ["${API_CONTAINER}"]`,
-  'reason = "reviewed base-image utility, accepted in the api image"',
   "",
   "[[compatible]]",
   'match = "package"',
   'name = "licensed-daemon"',
+  'as-dependency-of = ["self"]',
+  'rationale = "license-reviewed"',
   `where = ["${API_CONTAINER}"]`,
-  'reason = "AGPL network-copyleft obligation reviewed and accepted for the api image"',
+  'comment = "AGPL network-copyleft obligation accepted for the api image"',
   "",
   "[[compatible]]",
   'match = "package"',
   'name = "licensed-relay"',
+  'as-dependency-of = ["self"]',
+  'rationale = "license-reviewed"',
   `where = ["${API_CONTAINER}"]`,
-  'reason = "imprecise AGPL family reviewed and accepted for the api image"',
+  'comment = "imprecise AGPL family accepted for the api image"',
   "",
 ].join("\n");
 
@@ -322,7 +331,7 @@ function renderScenario(): string {
   const { model: annotated } = annotateFindings(rawModel, policy.clarify, BUILTIN_OVERRIDES);
   const developmentContainers = resolveDevelopmentContainersForTest(annotated, policy);
   const scoped = applyContainerScopes(annotated, developmentContainers);
-  const verdicts = evaluate(scoped, policy);
+  const verdicts = evaluate(scoped, policy, WITHOUT_DEPENDENCY_GRAPHS);
   const policyView: PolicyView = {
     policyPath: "policy.toml",
     suppressedWorkspaces: policy.suppressedWorkspaces,
@@ -383,7 +392,7 @@ describe("containerReport — multi-container golden scenario", () => {
         annotated,
         resolveDevelopmentContainersForTest(annotated, policy),
       );
-      const relayAgentVerdict = evaluate(scoped, policy).find(
+      const relayAgentVerdict = evaluate(scoped, policy, WITHOUT_DEPENDENCY_GRAPHS).find(
         (v) => v.purl === "pkg:golang/relay-agent@0.4.0",
       );
 
@@ -476,7 +485,7 @@ describe("containerReport — multi-container golden scenario", () => {
         annotated,
         resolveDevelopmentContainersForTest(annotated, policy),
       );
-      const verdicts = evaluate(scoped, policy);
+      const verdicts = evaluate(scoped, policy, WITHOUT_DEPENDENCY_GRAPHS);
       const notices = acceptedContainerNotices(scoped, verdicts);
 
       // Sorted by purl: "pkg:apk/..." < "pkg:deb/..." (apk before deb).
@@ -523,7 +532,7 @@ describe("containerReport — multi-container golden scenario", () => {
     test("the [[compatible]] where-scoped acceptance decides coreutils via compatible[0], not a fail", () => {
       const policy = parsePolicy(POLICY_TOML);
       const { model: annotated } = annotateFindings(rawModel, policy.clarify, BUILTIN_OVERRIDES);
-      const coreutilsVerdict = evaluate(annotated, policy).find(
+      const coreutilsVerdict = evaluate(annotated, policy, WITHOUT_DEPENDENCY_GRAPHS).find(
         (v) => v.purl === "pkg:deb/coreutils@9.1-1",
       );
 
@@ -570,7 +579,7 @@ describe("containerReport — multi-container golden scenario", () => {
         annotated,
         resolveDevelopmentContainersForTest(annotated, policy),
       );
-      const verdicts = evaluate(scoped, policy);
+      const verdicts = evaluate(scoped, policy, WITHOUT_DEPENDENCY_GRAPHS);
       const diagToolsVerdict = verdicts.find((v) => v.purl === "pkg:apk/diag-tools@3.0.1");
       const metricsDaemonVerdict = verdicts.find(
         (v) => v.purl === "pkg:golang/metrics-daemon@1.2.0",
@@ -705,7 +714,7 @@ describe("a shared workspace+docker package through the real merge/scope/evaluat
     const { model: annotated } = annotateFindings(merged, policy.clarify, BUILTIN_OVERRIDES);
     const developmentContainers = resolveDevelopmentContainersForTest(annotated, policy);
     const scoped = applyContainerScopes(annotated, developmentContainers);
-    const verdicts = evaluate(scoped, policy);
+    const verdicts = evaluate(scoped, policy, WITHOUT_DEPENDENCY_GRAPHS);
     const policyView: PolicyView = {
       policyPath: "policy.toml",
       suppressedWorkspaces: policy.suppressedWorkspaces,
