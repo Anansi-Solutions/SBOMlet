@@ -16,7 +16,7 @@ import {
   developmentFixture,
 } from "../../../test/policyTestSupport";
 import { parsePolicy } from "./parse";
-import type { SpdxExpression } from "../../model/dependencies";
+import type { NormalizedLicense } from "../../model/dependencies";
 
 describe("parsePolicy — happy path", () => {
   test("full fixture parses into the exact Policy shape", () => {
@@ -56,7 +56,7 @@ describe("parsePolicy — happy path", () => {
         version: "0.0.1",
         detected: { registry: "Public Domain", intensive: false },
         justification: "license-not-found",
-        expression: "Unlicense" as SpdxExpression,
+        expression: "Unlicense" as NormalizedLicense,
         comment: CLARIFY_COMMENT,
       },
     ]);

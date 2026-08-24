@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { describe, expect, test } from "bun:test";
 import parseSpdxId from "spdx-expression-parse";
 import { BUILTIN_OVERRIDES } from "./builtinOverrides";
-import type { SpdxExpression } from "../../model/dependencies";
+import type { NormalizedLicense } from "../../model/dependencies";
 
 describe("BUILTIN_OVERRIDES — the shipped tool-level set", () => {
   test("is a non-empty literal array; every entry has name, detected, expression, reason", () => {
@@ -59,7 +59,7 @@ describe("BUILTIN_OVERRIDES — the shipped tool-level set", () => {
 
     expect(entry).toBeDefined();
     expect(entry?.detected).toEqual({ registry: "Dual License" });
-    expect(entry?.expression).toBe("Apache-2.0 OR BSD-3-Clause" as SpdxExpression);
+    expect(entry?.expression).toBe("Apache-2.0 OR BSD-3-Clause" as NormalizedLicense);
     // The exact value from CONTEXT.md parses as a valid OR expression.
     const node = parseSpdxId(entry?.expression ?? "") as {
       conjunction?: string;
@@ -84,7 +84,7 @@ describe("BUILTIN_OVERRIDES — the shipped tool-level set", () => {
       expect(entry).toBeDefined();
       // Records the imprecise BSD value the registry lane produces.
       expect(entry?.detected).toEqual({ registry: "BSD" });
-      expect(entry?.expression).toBe("BSD-3-Clause" as SpdxExpression);
+      expect(entry?.expression).toBe("BSD-3-Clause" as NormalizedLicense);
     }
   });
 

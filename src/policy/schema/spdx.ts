@@ -10,7 +10,7 @@
 import { type } from "arktype";
 
 import parseSpdx from "spdx-expression-parse";
-import { type SpdxExpression } from "../../model/dependencies";
+import { type NormalizedLicense } from "../../model/dependencies";
 import { orLeaves, type ExpressionNode } from "../../normalize/expression";
 
 /** Parse an SPDX expression, or undefined when it does not parse. */
@@ -27,10 +27,10 @@ export function parseSpdxNode(value: string): ExpressionNode | undefined {
  * parse validates, it does not rewrite - so the field stays the verbatim text the policy wrote.
  */
 export const spdxExpression = type("string").pipe(
-  (value, ctx): SpdxExpression =>
+  (value, ctx): NormalizedLicense =>
     parseSpdxNode(value) === undefined
       ? (ctx.reject({ message: `"${value}" is not a valid SPDX expression` }) as never)
-      : (value as SpdxExpression),
+      : (value as NormalizedLicense),
 );
 
 /**

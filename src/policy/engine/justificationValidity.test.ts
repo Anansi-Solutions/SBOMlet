@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import { justificationValidity, type JustificationValidity } from "./justificationValidity";
 import type { ObservedSignal } from "../../normalize/normalize";
-import type { SpdxExpression } from "../../model/dependencies";
+import type { NormalizedLicense } from "../../model/dependencies";
 
 // Per-value predicates over a partitioned signal. A stale entry - one whose
 // recorded detection its lane no longer reports - is a different lane's
@@ -20,7 +20,7 @@ const NO_SIGNAL = signal([], []);
 describe("justificationValidity — dual-license-choice", () => {
   const dual = (expression: string, s: ObservedSignal): JustificationValidity =>
     justificationValidity(
-      { justification: "dual-license-choice", expression: expression as SpdxExpression },
+      { justification: "dual-license-choice", expression: expression as NormalizedLicense },
       s,
     );
 
@@ -64,7 +64,7 @@ describe("justificationValidity — dual-license-choice", () => {
 describe("justificationValidity — scan-overdetection", () => {
   const overdetected = (expression: string, s: ObservedSignal): JustificationValidity =>
     justificationValidity(
-      { justification: "scan-overdetection", expression: expression as SpdxExpression },
+      { justification: "scan-overdetection", expression: expression as NormalizedLicense },
       s,
     );
 
@@ -87,7 +87,10 @@ describe("justificationValidity — scan-overdetection", () => {
 describe("justificationValidity — scan-found-additional-content", () => {
   const additional = (expression: string, s: ObservedSignal): JustificationValidity =>
     justificationValidity(
-      { justification: "scan-found-additional-content", expression: expression as SpdxExpression },
+      {
+        justification: "scan-found-additional-content",
+        expression: expression as NormalizedLicense,
+      },
       s,
     );
 
@@ -110,7 +113,7 @@ describe("justificationValidity — scan-found-additional-content", () => {
 describe("justificationValidity — scan-more-precise", () => {
   const precise = (expression: string, s: ObservedSignal): JustificationValidity =>
     justificationValidity(
-      { justification: "scan-more-precise", expression: expression as SpdxExpression },
+      { justification: "scan-more-precise", expression: expression as NormalizedLicense },
       s,
     );
 
@@ -130,7 +133,7 @@ describe("justificationValidity — scan-more-precise", () => {
 describe("justificationValidity — declared-more-complete", () => {
   const declared = (expression: string, s: ObservedSignal): JustificationValidity =>
     justificationValidity(
-      { justification: "declared-more-complete", expression: expression as SpdxExpression },
+      { justification: "declared-more-complete", expression: expression as NormalizedLicense },
       s,
     );
 
@@ -155,7 +158,10 @@ describe("justificationValidity — declared-more-complete", () => {
 describe("justificationValidity — contradictory-claims-recorded", () => {
   const contradictory = (expression: string, s: ObservedSignal): JustificationValidity =>
     justificationValidity(
-      { justification: "contradictory-claims-recorded", expression: expression as SpdxExpression },
+      {
+        justification: "contradictory-claims-recorded",
+        expression: expression as NormalizedLicense,
+      },
       s,
     );
 
@@ -188,7 +194,7 @@ describe("justificationValidity — contradictory-claims-recorded", () => {
 describe("justificationValidity — license-not-found", () => {
   const notFound = (expression: string, s: ObservedSignal): JustificationValidity =>
     justificationValidity(
-      { justification: "license-not-found", expression: expression as SpdxExpression },
+      { justification: "license-not-found", expression: expression as NormalizedLicense },
       s,
     );
 
@@ -215,7 +221,7 @@ describe("justificationValidity — license-not-found", () => {
 describe("justificationValidity — the reason an invalid entry carries", () => {
   test("it names both sanctioned fallbacks, so the legal refile is in the message", () => {
     const result = justificationValidity(
-      { justification: "license-not-found", expression: "MIT" as SpdxExpression },
+      { justification: "license-not-found", expression: "MIT" as NormalizedLicense },
       signal(["Apache-2.0"], []),
     );
 

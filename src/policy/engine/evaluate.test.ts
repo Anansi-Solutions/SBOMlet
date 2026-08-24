@@ -51,7 +51,7 @@ import type {
   CanonicalDependencies,
   DependencyIntroduction,
   LicenseFinding,
-  SpdxExpression,
+  NormalizedLicense,
   Verdict,
 } from "../../model/dependencies";
 
@@ -760,7 +760,7 @@ describe("evaluate — LicenseRef acceptance for commercial clarifies (A4/P-05)"
     const { verdicts, usedClarifyIndices, policy } = runEngine([spec], policyText);
 
     expect(policy.clarify[0]?.expression).toBe(
-      "LicenseRef-commercial-vendor-agreement" as SpdxExpression,
+      "LicenseRef-commercial-vendor-agreement" as NormalizedLicense,
     );
     expect(usedClarifyIndices.has(0)).toBe(true);
     expect(verdicts[0].status).toBe("ok");
@@ -860,7 +860,7 @@ describe("evaluate — staleness-guarded overrides", () => {
       {
         name: "ipython",
         detected: { registry: "BSD" },
-        expression: "BSD-3-Clause" as SpdxExpression,
+        expression: "BSD-3-Clause" as NormalizedLicense,
       },
     ];
     const { verdicts } = runEngine([pkgSpec("ipython", "BSD", ["backend"])], "", builtins);
@@ -876,7 +876,7 @@ describe("evaluate — staleness-guarded overrides", () => {
       {
         name: "relicensed",
         detected: { registry: "BSD" },
-        expression: "BSD-3-Clause" as SpdxExpression,
+        expression: "BSD-3-Clause" as NormalizedLicense,
       },
     ];
     const { verdicts } = runEngine(
@@ -946,7 +946,7 @@ describe("evaluate — staleness-guarded overrides", () => {
       {
         name: "ipython",
         detected: { registry: "BSD" },
-        expression: "BSD-3-Clause" as SpdxExpression,
+        expression: "BSD-3-Clause" as NormalizedLicense,
       },
     ];
     const { verdicts } = runEngine([pkgSpec("ipython", "BSD", ["backend"])], policyText, builtins);
@@ -971,7 +971,7 @@ describe("evaluate — staleness-guarded overrides", () => {
       {
         name: "ipython",
         detected: { registry: "BSD" },
-        expression: "BSD-3-Clause" as SpdxExpression,
+        expression: "BSD-3-Clause" as NormalizedLicense,
       },
     ];
     const { verdicts } = runEngine([pkgSpec("ipython", "BSD-3-Clause", ["backend"])], "", builtins);
@@ -987,7 +987,7 @@ describe("evaluate — staleness-guarded overrides", () => {
       {
         name: "relicensed",
         detected: { registry: "BSD" },
-        expression: "BSD-3-Clause" as SpdxExpression,
+        expression: "BSD-3-Clause" as NormalizedLicense,
       },
     ];
     const { verdicts } = runEngine([pkgSpec("relicensed", "MIT", ["backend"])], "", builtins);
@@ -1001,7 +1001,7 @@ describe("evaluate — staleness-guarded overrides", () => {
       {
         name: "or-expression-pkg",
         detected: { registry: "MIT" },
-        expression: "MIT OR Apache-2.0" as SpdxExpression,
+        expression: "MIT OR Apache-2.0" as NormalizedLicense,
       },
     ];
     const { verdicts } = runEngine(
@@ -2133,7 +2133,7 @@ describe("evaluate — precedence is preserved (downgrade is last)", () => {
       {
         name: "relicensed",
         detected: { registry: "BSD" },
-        expression: "BSD-3-Clause" as SpdxExpression,
+        expression: "BSD-3-Clause" as NormalizedLicense,
       },
     ];
     const { verdicts } = runEngine(
@@ -2252,7 +2252,7 @@ describe("evaluate — deny is terminal-0 (beats every accept lever)", () => {
       {
         name: "relicensed",
         detected: { registry: "BSD" },
-        expression: "BSD-3-Clause" as SpdxExpression,
+        expression: "BSD-3-Clause" as NormalizedLicense,
       },
     ];
     const { verdicts } = runEngine(
@@ -2337,7 +2337,7 @@ describe("evaluate — deny is terminal OVER OVERRIDES (C#1: deny reads the pre-
       {
         name: "relicensed-evil",
         detected: { registry: "BUSL-1.1" },
-        expression: "Apache-2.0" as SpdxExpression,
+        expression: "Apache-2.0" as NormalizedLicense,
       },
     ];
     const { verdicts } = runEngine(
@@ -3445,7 +3445,7 @@ describe("evaluate — a clarify entry the current signal disproves", () => {
         {
           name: "choice-lib",
           detected: { registry: "MIT OR Apache-2.0", intensive: "MIT" },
-          expression: "MIT OR Apache-2.0" as SpdxExpression,
+          expression: "MIT OR Apache-2.0" as NormalizedLicense,
         },
       ],
     );

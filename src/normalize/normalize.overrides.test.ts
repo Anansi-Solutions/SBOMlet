@@ -3,7 +3,7 @@ import { describe, expect, test } from "bun:test";
 import { BUILTIN_OVERRIDES } from "../policy/engine/builtinOverrides";
 import { claim, pkg, modelOf } from "../../test/normalizeTestSupport";
 import { annotateFindings, type ClarifyInput, type BuiltinOverrideInput } from "./normalize";
-import type { NormalizedLicense, SpdxExpression } from "../model/dependencies";
+import type { NormalizedLicense } from "../model/dependencies";
 
 describe("annotateFindings — clarify overrides", () => {
   test("matching name+version replaces the finding with source override", () => {
@@ -15,7 +15,7 @@ describe("annotateFindings — clarify overrides", () => {
         name: "@img/sharp-win32-x64",
         version: "0.34.5",
         detected: { registry: "Apache-2.0 AND LGPL-3.0-or-later" },
-        expression: "Apache-2.0" as SpdxExpression,
+        expression: "Apache-2.0" as NormalizedLicense,
       },
     ];
     const { model, usedClarifyIndices } = annotateFindings(modelOf(entry), clarify);
@@ -37,7 +37,7 @@ describe("annotateFindings — clarify overrides", () => {
         name: "@img/sharp-win32-x64",
         version: "9.9.9",
         detected: { registry: "Apache-2.0 AND LGPL-3.0-or-later" },
-        expression: "MIT" as SpdxExpression,
+        expression: "MIT" as NormalizedLicense,
       },
     ];
     const { model, usedClarifyIndices } = annotateFindings(modelOf(entry), clarify);
@@ -54,7 +54,7 @@ describe("annotateFindings — clarify overrides", () => {
       {
         name: "jsonify",
         detected: { registry: "Public Domain" },
-        expression: "Unlicense" as SpdxExpression,
+        expression: "Unlicense" as NormalizedLicense,
       },
     ];
     const { model, usedClarifyIndices } = annotateFindings(modelOf(entry), clarify);
@@ -76,7 +76,7 @@ describe("annotateFindings — staleness-guarded clarify", () => {
       {
         name: "jupyter-thing",
         detected: { registry: "BSD" },
-        expression: "BSD-3-Clause" as SpdxExpression,
+        expression: "BSD-3-Clause" as NormalizedLicense,
       },
     ];
     const { model, usedClarifyIndices } = annotateFindings(modelOf(entry), clarify);
@@ -94,7 +94,7 @@ describe("annotateFindings — staleness-guarded clarify", () => {
       {
         name: "dateutil-ish",
         detected: { registry: "Dual License" },
-        expression: "Apache-2.0 OR BSD-3-Clause" as SpdxExpression,
+        expression: "Apache-2.0 OR BSD-3-Clause" as NormalizedLicense,
       },
     ];
     const { model } = annotateFindings(modelOf(entry), clarify);
@@ -111,7 +111,7 @@ describe("annotateFindings — staleness-guarded clarify", () => {
       {
         name: "relicensed",
         detected: { registry: "BSD" },
-        expression: "BSD-3-Clause" as SpdxExpression,
+        expression: "BSD-3-Clause" as NormalizedLicense,
       },
     ];
     const { model } = annotateFindings(modelOf(entry), clarify);
@@ -133,7 +133,7 @@ describe("annotateFindings — staleness-guarded clarify", () => {
       {
         name: "ci-pkg",
         detected: { registry: "  bsd  " },
-        expression: "BSD-3-Clause" as SpdxExpression,
+        expression: "BSD-3-Clause" as NormalizedLicense,
       },
     ];
     const { model } = annotateFindings(modelOf(entry), clarify);
@@ -147,7 +147,7 @@ describe("annotateFindings — staleness-guarded clarify", () => {
       {
         name: "jsonify",
         detected: { registry: "Public Domain" },
-        expression: "Unlicense" as SpdxExpression,
+        expression: "Unlicense" as NormalizedLicense,
       },
     ];
     const { model } = annotateFindings(modelOf(entry), clarify);
@@ -164,7 +164,7 @@ describe("annotateFindings — tool-level BUILTIN overrides", () => {
     {
       name: "ipython",
       detected: { registry: "BSD" },
-      expression: "BSD-3-Clause" as SpdxExpression,
+      expression: "BSD-3-Clause" as NormalizedLicense,
     },
   ];
 
@@ -190,7 +190,7 @@ describe("annotateFindings — tool-level BUILTIN overrides", () => {
   test("project clarify WINS over a tool-level override on conflict (project-wins)", () => {
     const entry = pkg("ipython", "8.0.0", [claim("BSD", "name")]);
     const clarify: ClarifyInput[] = [
-      { name: "ipython", detected: { registry: "BSD" }, expression: "MIT" as SpdxExpression },
+      { name: "ipython", detected: { registry: "BSD" }, expression: "MIT" as NormalizedLicense },
     ];
     const { model, usedClarifyIndices } = annotateFindings(modelOf(entry), clarify, jupyterBuiltin);
     const finding = model.packages[0]!.finding!;
@@ -317,7 +317,7 @@ describe("annotateFindings — redundant override when metadata catches up (gap 
       {
         name: "relicensed-permissive",
         detected: { registry: "BSD" },
-        expression: "BSD-3-Clause" as SpdxExpression,
+        expression: "BSD-3-Clause" as NormalizedLicense,
       },
     ];
     const { model } = annotateFindings(modelOf(entry), clarify);
@@ -336,7 +336,7 @@ describe("annotateFindings — redundant override when metadata catches up (gap 
       {
         name: "relicensed-copyleft",
         detected: { registry: "BSD" },
-        expression: "BSD-3-Clause" as SpdxExpression,
+        expression: "BSD-3-Clause" as NormalizedLicense,
       },
     ];
     const { model } = annotateFindings(modelOf(entry), clarify);
@@ -383,7 +383,11 @@ describe("annotateFindings — redundant override when metadata catches up (gap 
 
 describe("annotateFindings — an imprecise member the assertion cannot account for", () => {
   const OLD_SIGNAL_ONLY: ClarifyInput[] = [
-    { name: "family-appended", detected: { registry: "MIT" }, expression: "MIT" as SpdxExpression },
+    {
+      name: "family-appended",
+      detected: { registry: "MIT" },
+      expression: "MIT" as NormalizedLicense,
+    },
   ];
 
   test("control: with no entry at all, the appended AGPL label reaches the finding", () => {
@@ -420,7 +424,7 @@ describe("annotateFindings — an imprecise member the assertion cannot account 
       {
         name: "disambiguated",
         detected: { registry: "BSD" },
-        expression: "BSD-3-Clause" as SpdxExpression,
+        expression: "BSD-3-Clause" as NormalizedLicense,
       },
     ];
     const { model } = annotateFindings(modelOf(entry), clarify);
@@ -440,7 +444,7 @@ describe("annotateFindings — an imprecise member the assertion cannot account 
       {
         name: "unreadable-label",
         detected: { registry: "MIT" },
-        expression: "MIT" as SpdxExpression,
+        expression: "MIT" as NormalizedLicense,
       },
     ];
     const { model } = annotateFindings(modelOf(entry), clarify);
@@ -468,7 +472,7 @@ describe("annotateFindings — a null-expression member naming no family (H1)", 
       {
         name: "proprietary-slipped-in",
         detected: { registry: "MIT" },
-        expression: "MIT" as SpdxExpression,
+        expression: "MIT" as NormalizedLicense,
       },
     ];
     const { model } = annotateFindings(modelOf(entry), clarify);
@@ -486,7 +490,7 @@ describe("annotateFindings — a null-expression member naming no family (H1)", 
       {
         name: "proprietary-marker",
         detected: { registry: "MIT" },
-        expression: "MIT" as SpdxExpression,
+        expression: "MIT" as NormalizedLicense,
       },
     ];
     const { model } = annotateFindings(modelOf(entry), clarify);
@@ -502,7 +506,7 @@ describe("annotateFindings — a null-expression member naming no family (H1)", 
       {
         name: "recorded-unlicensed",
         detected: { registry: "UNLICENSED" },
-        expression: "MIT" as SpdxExpression,
+        expression: "MIT" as NormalizedLicense,
       },
     ];
     const { model } = annotateFindings(modelOf(entry), clarify);

@@ -9,7 +9,6 @@ import type {
   NormalizedLicense,
   PackageEntry,
   RawLicense,
-  SpdxExpression,
 } from "../model/dependencies";
 
 // ---------------------------------------------------------------------------
@@ -191,7 +190,7 @@ describe("annotateFindings — scancode senior assessment (the re-pinned fill ma
       {
         name: "imprecise-clarified-pkg",
         detected: { registry: "BSD", intensive: "BSD-3-Clause" },
-        expression: "MIT" as SpdxExpression,
+        expression: "MIT" as NormalizedLicense,
       },
     ];
     const { model } = annotateFindings(modelOf(entry), clarify);
@@ -369,7 +368,7 @@ describe("annotateFindings — scancode senior assessment (the re-pinned fill ma
       {
         name: "conflicted-clarified-pkg",
         detected: { registry: "Apache-2.0", intensive: "MIT" },
-        expression: "MIT" as SpdxExpression,
+        expression: "MIT" as NormalizedLicense,
       },
     ];
     const { model } = annotateFindings(modelOf(entry), clarify);
@@ -387,7 +386,7 @@ describe("annotateFindings — scancode senior assessment (the re-pinned fill ma
       {
         name: "stale-conflicted-pkg",
         detected: { registry: "BSD" },
-        expression: "MIT" as SpdxExpression,
+        expression: "MIT" as NormalizedLicense,
       },
     ];
     const { model } = annotateFindings(modelOf(entry), clarify);
@@ -410,7 +409,7 @@ describe("annotateFindings — scancode senior assessment (the re-pinned fill ma
       {
         name: "guarded-clarified-pkg",
         detected: { registry: "MIT", intensive: "BSD-3-Clause" },
-        expression: "BSD-3-Clause" as SpdxExpression,
+        expression: "BSD-3-Clause" as NormalizedLicense,
       },
     ];
     const { model } = annotateFindings(modelOf(entry), clarify);
@@ -434,7 +433,7 @@ describe("annotateFindings — scancode senior assessment (the re-pinned fill ma
       {
         name: "registry-only-clarified-pkg",
         detected: { registry: "MIT" },
-        expression: "MIT AND BSD-3-Clause" as SpdxExpression,
+        expression: "MIT AND BSD-3-Clause" as NormalizedLicense,
       },
     ];
     const { model } = annotateFindings(modelOf(entry), clarify);
@@ -526,7 +525,7 @@ describe("annotateFindings — cross-image claim divergence overlay", () => {
       {
         name: "clarified-divergent-pkg",
         detected: { registry: false, intensive: false },
-        expression: "MIT" as SpdxExpression,
+        expression: "MIT" as NormalizedLicense,
       },
     ];
     const { model } = annotateFindings(modelOf(entry), clarify);

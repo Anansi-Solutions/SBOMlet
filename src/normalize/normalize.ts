@@ -27,7 +27,6 @@ import {
   type PackageEntry,
   type SatisfiableExpression,
   type ScopeTaxonomy,
-  type SpdxExpression,
   type StaleOverride,
 } from "../model/dependencies";
 import { COULD_BE_COPYLEFT_FAMILIES } from "../policy/engine/copyleftFamily";
@@ -512,7 +511,7 @@ export interface ClarifyInput {
   pattern?: string;
   version?: string | readonly string[];
   detected: DetectedSignal;
-  expression: SpdxExpression;
+  expression: NormalizedLicense;
 }
 
 /**
@@ -670,7 +669,7 @@ function signalMatchesCanonical(signal: ReadonlyArray<string>, recorded: string)
 function unaccountedMember(
   signal: ReadonlyArray<string>,
   recorded: ReadonlyArray<string>,
-  expression: SpdxExpression,
+  expression: NormalizedLicense,
 ): string | undefined {
   const fold = (value: string): string => canonicalizeExpression(value).trim().toLowerCase();
   const wanted = new Set(recorded.map(fold));
@@ -746,7 +745,7 @@ export function accountsFor(
  * redundant and falls through to the stale-fail path. spdx-satisfies is defensive - any throw is
  * treated as NOT satisfying (fail closed).
  */
-function baseSatisfiesAssertion(base: LicenseFinding, expression: SpdxExpression): boolean {
+function baseSatisfiesAssertion(base: LicenseFinding, expression: NormalizedLicense): boolean {
   if (base.expression === null) {
     return false;
   } // imprecise/unknown: not redundant
@@ -760,18 +759,13 @@ function baseSatisfiesAssertion(base: LicenseFinding, expression: SpdxExpression
 
 /** Build the override finding from a validated SPDX expression. */
 function overrideFinding(
-  expression: SpdxExpression,
+  expression: NormalizedLicense,
   overrideRule: string | undefined,
 ): LicenseFinding {
   const node = parse(expression) as ExpressionNode;
 
   return {
-    /**
-     * The policy-authored expression was schema-validated as parseable SPDX, so adopting it as the
-     * finding's normalized expression is sound - the one place a NormalizedLicense is minted
-     * outside normalizeRaw.
-     */
-    expression: expression as string as NormalizedLicense,
+    expression,
     elected: renderNode(elect(node)) as NormalizedLicense,
     source: "override",
     confidence: "exact",
@@ -864,7 +858,7 @@ function laneOf(member: string, signal: ObservedSignal): StaleOverride["source"]
  */
 function applyOverride(
   detected: DetectedSignal,
-  expression: SpdxExpression,
+  expression: NormalizedLicense,
   overrideRule: string | undefined,
   level: StaleOverride["level"],
   base: LicenseFinding,

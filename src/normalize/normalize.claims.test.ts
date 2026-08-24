@@ -11,12 +11,7 @@ import {
   type ClarifyInput,
   type NormalizeResult,
 } from "./normalize";
-import type {
-  LicenseClaim,
-  LicenseClaimKind,
-  NormalizedLicense,
-  SpdxExpression,
-} from "../model/dependencies";
+import type { LicenseClaim, LicenseClaimKind, NormalizedLicense } from "../model/dependencies";
 
 /**
  * {@link resolveRaw} with its branded expression widened to a plain string, so value assertions
@@ -431,7 +426,7 @@ describe("annotateFindings — imprecise findings", () => {
       {
         name: "jupyter-thing",
         detected: { registry: "BSD" },
-        expression: "BSD-3-Clause" as SpdxExpression,
+        expression: "BSD-3-Clause" as NormalizedLicense,
       },
     ];
     const { model } = annotateFindings(modelOf(entry), clarify);
