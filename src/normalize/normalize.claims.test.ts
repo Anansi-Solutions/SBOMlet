@@ -6,6 +6,7 @@ import parse from "spdx-expression-parse";
 
 import { claim, pkg, osPkg, modelOf } from "../../test/normalizeTestSupport";
 import { annotateFindings, normalizeRaw, type ClarifyInput } from "./normalize";
+import { canonicalizeExpression } from "./expression";
 import type { LicenseClaim, LicenseClaimKind } from "../model/dependencies";
 
 // ---------------------------------------------------------------------------
@@ -93,7 +94,10 @@ describe("normalizeRaw — live 33-value corpus", () => {
       const finding = model.packages[i]!.finding;
 
       expect(finding).toBeDefined();
-      expect(finding!.expression).toBe(expected);
+      // annotateFindings canonicalizes the finding's expression at formation, so a compound claim
+      // may reorder/absorb relative to CORPUS's as-written column - compare against the canonical
+      // reading of the expected value, not the literal corpus text.
+      expect(finding!.expression).toBe(expected === null ? null : canonicalizeExpression(expected));
       expect(finding!.confidence).toBe(klass);
       if (expected === null) {
         expect(finding!.elected).toBeNull();
@@ -429,12 +433,14 @@ describe("annotateFindings — claim combination (Pitfalls 7-8)", () => {
     expect(model.packages[0]!.finding!.expression).toBe("MIT");
   });
 
-  test("distinct claims AND-combine conservatively and re-parse", () => {
+  test("distinct claims AND-combine conservatively, re-parse, and canonicalize", () => {
     const entry = pkg("two-claims", "1.0.0", [claim("MIT"), claim("Apache-2.0")]);
     const { model } = annotateFindings(modelOf(entry), []);
     const expression = model.packages[0]!.finding!.expression;
 
-    expect(expression).toBe("MIT AND Apache-2.0");
+    // Canonical (compareCodeUnits-sorted) reading of the AND-combine, not claim insertion order -
+    // the model invariant every finding.expression carries at formation.
+    expect(expression).toBe("Apache-2.0 AND MIT");
     expect(() => parse(expression!)).not.toThrow();
   });
 
@@ -538,12 +544,13 @@ describe("annotateFindings — coverage, immutability, election", () => {
     expect(model.packages[0]!.finding).toBeDefined();
   });
 
-  test("elected branch is recorded — raw expression preserved", () => {
+  test("elected branch is recorded — expression is canonicalized", () => {
     const entry = pkg("dompurify", "3.1.6", [claim("(MPL-2.0 OR Apache-2.0)", "expression")]);
     const { model } = annotateFindings(modelOf(entry), []);
     const finding = model.packages[0]!.finding!;
 
-    expect(finding.expression).toBe("(MPL-2.0 OR Apache-2.0)");
+    // Canonical: compareCodeUnits-sorted, outer redundant parens dropped.
+    expect(finding.expression).toBe("Apache-2.0 OR MPL-2.0");
     expect(finding.elected).toBe("Apache-2.0");
   });
 });
@@ -764,7 +771,8 @@ describe("findingFromClaims — os-scope partial finding", () => {
     ]);
     const finding = annotateFindings(modelOf(entry), []).model.packages[0]!.finding!;
 
-    expect(finding.expression).toBe("GPL-2.0-only AND BSD-3-Clause");
+    // Canonical (compareCodeUnits-sorted) AND-combine, not claim insertion order.
+    expect(finding.expression).toBe("BSD-3-Clause AND GPL-2.0-only");
     expect(finding.elected).not.toBeNull();
     expect(finding.unrecognizedTokens).toEqual(["public-domain"]);
     // The known copyleft member survives — the finding is NOT unknown.
@@ -826,7 +834,8 @@ describe("findingFromClaims — os-scope partial finding", () => {
     ]);
     const finding = annotateFindings(modelOf(entry), []).model.packages[0]!.finding!;
 
-    expect(finding.expression).toBe("MIT AND BSD-3-Clause");
+    // Canonical (compareCodeUnits-sorted) AND-combine, not claim insertion order.
+    expect(finding.expression).toBe("BSD-3-Clause AND MIT");
     expect(finding.unrecognizedTokens).toBeUndefined();
   });
 

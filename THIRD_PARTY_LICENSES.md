@@ -41,7 +41,7 @@ The packages listed below need review against the declared target profile.
 | spdx-exceptions                     | npm       | 2.5.0   | CC-BY-3.0            | .       | —   |
 | spdx-license-ids                    | npm       | 3.0.23  | CC0-1.0              | .       | —   |
 | spdx-license-list                   | npm       | 6.11.0  | CC0-1.0              | .       | —   |
-| spdx-ranges                         | npm       | 2.1.1   | (MIT AND CC-BY-3.0)  | .       | —   |
+| spdx-ranges                         | npm       | 2.1.1   | CC-BY-3.0 AND MIT    | .       | —   |
 | uri-js                              | npm       | 4.4.1   | BSD-2-Clause-Views   | .       | —   |
 
 ## Containers

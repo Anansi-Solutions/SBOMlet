@@ -250,7 +250,8 @@ describe("annotateFindings — scancode senior assessment (the re-pinned fill ma
     ]);
     const equalFinding = annotateFindings(modelOf(equal), []).model.packages[0]!.finding!;
 
-    expect(equalFinding.expression).toBe("MIT AND Apache-2.0");
+    // Canonical (compareCodeUnits-sorted) reading, not claim-as-written order.
+    expect(equalFinding.expression).toBe("Apache-2.0 AND MIT");
     expect(equalFinding.source).toBe("scancode");
     expect(equalFinding.conflict).toBeUndefined();
 

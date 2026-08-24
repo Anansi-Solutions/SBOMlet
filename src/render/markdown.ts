@@ -22,12 +22,12 @@
  * separate Docker section. Each subsection further splits into a "**System packages**" table (the
  * OS-ecosystem allowlist) and an "**Application packages**" table (everything else), omitting an
  * empty half. The License column shows the full normalized expression when a finding exists,
- * canonicalized (boolean-algebra reordering/dedup/absorption, per {@link canonicalizeExpression}) -
- * never only the elected branch; election surfaces through copyleft section membership instead. The
- * Assessment-conflicts evidence columns are the deliberate exception: they quote disagreeing sources
- * and render each claim's as-observed spelling, never canonicalized. Without a policy view there is
- * no policy pointer and no problematic roll-up or copyleft section, and every container classifies
- * production (the conservative default).
+ * canonicalized (boolean-algebra reordering/dedup/absorption, per {@link canonicalizeExpression})
+ * - never only the elected branch; election surfaces through copyleft section membership instead.
+ * The Assessment-conflicts evidence columns are the deliberate exception: they quote disagreeing
+ * sources and render each claim's as-observed spelling, never canonicalized. Without a policy view
+ * there is no policy pointer and no problematic roll-up or copyleft section, and every container
+ * classifies production (the conservative default).
  *
  * This module deliberately does not render the notices companion, emit CycloneDX, or evaluate
  * policy - verdicts and suppressed workspaces arrive pre-computed in the PolicyView projection. The
