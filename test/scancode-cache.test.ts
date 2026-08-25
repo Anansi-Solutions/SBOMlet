@@ -24,6 +24,7 @@ import {
   scancodeCachePath,
 } from "../src/pipeline/pipeline";
 import { optionsFrom } from "../src/cli";
+import { asPurl, type Purl } from "./brandTestSupport";
 import type { GenerateOptions } from "../src/pipeline/options";
 
 /** The committed memo filename (kept as a literal so the block above stays module-only). */
@@ -61,27 +62,27 @@ describe("scancode memo — envelope, entry shape, deterministic read/write", ()
 
     try {
       const path = join(dir, MEMO_FILE);
-      const memo = new Map<string, ScancodeMemoEntry>();
+      const memo = new Map<Purl, ScancodeMemoEntry>();
 
-      memo.set("pkg:pypi/anyio@4.12.1", positive);
-      memo.set("pkg:npm/no-license-pkg@2.0.0", noResult);
+      memo.set(asPurl("pkg:pypi/anyio@4.12.1"), positive);
+      memo.set(asPurl("pkg:npm/no-license-pkg@2.0.0"), noResult);
       writeFileSync(path, serializeScancodeMemo(memo));
 
       const loaded = readScancodeMemo(path);
 
-      expect(getMemoEntry(loaded, "pkg:pypi/anyio@4.12.1")).toEqual(positive);
-      expect(getMemoEntry(loaded, "pkg:npm/no-license-pkg@2.0.0")).toEqual(noResult);
+      expect(getMemoEntry(loaded, asPurl("pkg:pypi/anyio@4.12.1"))).toEqual(positive);
+      expect(getMemoEntry(loaded, asPurl("pkg:npm/no-license-pkg@2.0.0"))).toEqual(noResult);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
   });
 
   test("serialization is deterministic: sorted keys (insertion-order independent), indent 2, LF, trailing newline, no timestamp key; double-serialize byte-identical", () => {
-    const memo = new Map<string, ScancodeMemoEntry>();
+    const memo = new Map<Purl, ScancodeMemoEntry>();
 
     // Insert out of sorted order to prove the serializer sorts.
-    memo.set("pkg:pypi/anyio@4.12.1", positive);
-    memo.set("pkg:npm/no-license-pkg@2.0.0", noResult);
+    memo.set(asPurl("pkg:pypi/anyio@4.12.1"), positive);
+    memo.set(asPurl("pkg:npm/no-license-pkg@2.0.0"), noResult);
 
     const bytes = serializeScancodeMemo(memo);
 
@@ -93,10 +94,10 @@ describe("scancode memo — envelope, entry shape, deterministic read/write", ()
       bytes.indexOf("pkg:pypi/anyio@4.12.1"),
     );
     // Insertion order must not change the bytes.
-    const reordered = new Map<string, ScancodeMemoEntry>();
+    const reordered = new Map<Purl, ScancodeMemoEntry>();
 
-    reordered.set("pkg:npm/no-license-pkg@2.0.0", noResult);
-    reordered.set("pkg:pypi/anyio@4.12.1", positive);
+    reordered.set(asPurl("pkg:npm/no-license-pkg@2.0.0"), noResult);
+    reordered.set(asPurl("pkg:pypi/anyio@4.12.1"), positive);
     expect(serializeScancodeMemo(reordered)).toBe(bytes);
     // Double-serialize is byte-identical.
     expect(serializeScancodeMemo(memo)).toBe(bytes);
@@ -156,9 +157,9 @@ describe("scancode memo — envelope, entry shape, deterministic read/write", ()
 
     try {
       const path = join(dir, MEMO_FILE);
-      const memo = new Map<string, ScancodeMemoEntry>();
+      const memo = new Map<Purl, ScancodeMemoEntry>();
 
-      memo.set("pkg:pypi/anyio@4.12.1", positive);
+      memo.set(asPurl("pkg:pypi/anyio@4.12.1"), positive);
       const before = serializeScancodeMemo(memo);
 
       writeFileSync(path, before);
@@ -172,12 +173,12 @@ describe("scancode memo — envelope, entry shape, deterministic read/write", ()
 
       putMemoEntry(
         loaded,
-        "pkg:npm/added@1.0.0",
+        asPurl("pkg:npm/added@1.0.0"),
         { license: "Apache-2.0", via: "scancode-toolkit@32.5.0/license-file" },
         () => new Date("2030-01-01T00:00:00.000Z"),
       );
-      expect(getMemoEntry(loaded, "pkg:pypi/anyio@4.12.1")).toEqual(positive);
-      expect(getMemoEntry(loaded, "pkg:npm/added@1.0.0")).toEqual({
+      expect(getMemoEntry(loaded, asPurl("pkg:pypi/anyio@4.12.1"))).toEqual(positive);
+      expect(getMemoEntry(loaded, asPurl("pkg:npm/added@1.0.0"))).toEqual({
         license: "Apache-2.0",
         via: "scancode-toolkit@32.5.0/license-file",
         scannedAt: "2030-01-01T00:00:00.000Z",
@@ -188,31 +189,31 @@ describe("scancode memo — envelope, entry shape, deterministic read/write", ()
   });
 
   test("putMemoEntry never rewrites an existing entry — a second put for the same purl is a no-op (byte stability)", () => {
-    const memo = new Map<string, ScancodeMemoEntry>();
+    const memo = new Map<Purl, ScancodeMemoEntry>();
 
-    memo.set("pkg:pypi/anyio@4.12.1", positive);
+    memo.set(asPurl("pkg:pypi/anyio@4.12.1"), positive);
     const bytes = serializeScancodeMemo(memo);
 
     putMemoEntry(
       memo,
-      "pkg:pypi/anyio@4.12.1",
+      asPurl("pkg:pypi/anyio@4.12.1"),
       { license: "GPL-3.0-only", via: "scancode-toolkit@32.5.0/license-file" },
       () => new Date("2030-01-01T00:00:00.000Z"),
     );
-    expect(getMemoEntry(memo, "pkg:pypi/anyio@4.12.1")).toEqual(positive);
+    expect(getMemoEntry(memo, asPurl("pkg:pypi/anyio@4.12.1"))).toEqual(positive);
     expect(serializeScancodeMemo(memo)).toBe(bytes);
   });
 
   test("a no-result entry (license null) is stamped like any new entry and carries no resolvable/source/fetchedFrom twin — license:null alone encodes analyzed-no-evidence", () => {
-    const memo = new Map<string, ScancodeMemoEntry>();
+    const memo = new Map<Purl, ScancodeMemoEntry>();
 
     putMemoEntry(
       memo,
-      "pkg:npm/no-license-pkg@2.0.0",
+      asPurl("pkg:npm/no-license-pkg@2.0.0"),
       { license: null, via: "scancode-toolkit@32.5.0/no-answer" },
       () => new Date("2026-08-01T04:19:41.000Z"),
     );
-    const entry = getMemoEntry(memo, "pkg:npm/no-license-pkg@2.0.0");
+    const entry = getMemoEntry(memo, asPurl("pkg:npm/no-license-pkg@2.0.0"));
 
     expect(entry?.license).toBeNull();
     expect(entry).toEqual(noResult);
@@ -229,8 +230,8 @@ describe("scancode memo — envelope, entry shape, deterministic read/write", ()
 
     try {
       const path = join(dir, MEMO_FILE);
-      const key = "pkg:npm/%40scope/pkg@1.2.3";
-      const memo = new Map<string, ScancodeMemoEntry>();
+      const key = asPurl("pkg:npm/%40scope/pkg@1.2.3");
+      const memo = new Map<Purl, ScancodeMemoEntry>();
 
       memo.set(key, positive);
       writeFileSync(path, serializeScancodeMemo(memo));
@@ -239,18 +240,18 @@ describe("scancode memo — envelope, entry shape, deterministic read/write", ()
 
       expect(getMemoEntry(loaded, key)).toEqual(positive);
       // The DECODED form is NOT a key — the encoding is preserved verbatim.
-      expect(getMemoEntry(loaded, "pkg:npm/@scope/pkg@1.2.3")).toBeUndefined();
+      expect(getMemoEntry(loaded, asPurl("pkg:npm/@scope/pkg@1.2.3"))).toBeUndefined();
       // The raw bytes carry the encoded key, never a decoded/split one.
-      expect(readFileSync(path, "utf8")).toContain("pkg:npm/%40scope/pkg@1.2.3");
+      expect(readFileSync(path, "utf8")).toContain(asPurl("pkg:npm/%40scope/pkg@1.2.3"));
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
   });
 
   test("an entry serialized WITHOUT copyrights contains no 'copyrights' key (optional-field zero-churn)", () => {
-    const memo = new Map<string, ScancodeMemoEntry>();
+    const memo = new Map<Purl, ScancodeMemoEntry>();
 
-    memo.set("pkg:npm/no-license-pkg@2.0.0", noResult);
+    memo.set(asPurl("pkg:npm/no-license-pkg@2.0.0"), noResult);
     expect(serializeScancodeMemo(memo)).not.toContain("copyrights");
   });
 });

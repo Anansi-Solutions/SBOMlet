@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { asPurl } from "../../test/brandTestSupport";
 
 import { applyContainerScopes } from "./containerScope";
 import type { CanonicalDependencies, PackageEntry } from "../model/dependencies";
@@ -26,7 +27,7 @@ describe("applyContainerScopes — system ecosystems stay routine", () => {
       "pkg:rpm/fedora/glibc@2.38",
       "pkg:alpm/arch/pacman@6.1.0",
     ]) {
-      const pkg = entry({ purl, name: "sys-pkg", version: "1.0.0" });
+      const pkg = entry({ purl: asPurl(purl), name: "sys-pkg", version: "1.0.0" });
       const model: CanonicalDependencies = { packages: [pkg] };
       const result = applyContainerScopes(model, new Set());
 
@@ -46,7 +47,7 @@ describe("applyContainerScopes — application ecosystems re-key to app", () => 
       "pkg:nuget/nuget-app@1.0.0",
       "pkg:maven/group/maven-app@1.0.0",
     ]) {
-      const pkg = entry({ purl, name: "app-pkg", version: "1.0.0" });
+      const pkg = entry({ purl: asPurl(purl), name: "app-pkg", version: "1.0.0" });
       const model: CanonicalDependencies = { packages: [pkg] };
       const result = applyContainerScopes(model, new Set());
 
@@ -56,7 +57,7 @@ describe("applyContainerScopes — application ecosystems re-key to app", () => 
 
   test("a PRODUCTION container occurrence keeps isDevDependency=false (it gates)", () => {
     const pkg = entry({
-      purl: "pkg:pypi/pip-app@1.0.0",
+      purl: asPurl("pkg:pypi/pip-app@1.0.0"),
       name: "pip-app",
       version: "1.0.0",
     });
@@ -68,7 +69,7 @@ describe("applyContainerScopes — application ecosystems re-key to app", () => 
 
   test("a DEV-marked container occurrence is set isDevDependency=true", () => {
     const pkg = entry({
-      purl: "pkg:pypi/pip-app@1.0.0",
+      purl: asPurl("pkg:pypi/pip-app@1.0.0"),
       name: "pip-app",
       version: "1.0.0",
     });
@@ -80,7 +81,7 @@ describe("applyContainerScopes — application ecosystems re-key to app", () => 
 
   test("a package occurring in BOTH a production and a dev-marked container: production occurrence stays false, dev occurrence becomes true", () => {
     const pkg = entry({
-      purl: "pkg:pypi/pip-app@1.0.0",
+      purl: asPurl("pkg:pypi/pip-app@1.0.0"),
       name: "pip-app",
       version: "1.0.0",
       occurrences: [
@@ -99,7 +100,7 @@ describe("applyContainerScopes — application ecosystems re-key to app", () => 
 
   test("empty developmentContainers: app-ecosystem container packages still re-key to app but every docker occurrence stays isDevDependency=false", () => {
     const pkg = entry({
-      purl: "pkg:npm/npm-app@1.0.0",
+      purl: asPurl("pkg:npm/npm-app@1.0.0"),
       name: "npm-app",
       version: "1.0.0",
       occurrences: [
@@ -119,7 +120,7 @@ describe("applyContainerScopes — application ecosystems re-key to app", () => 
 describe("applyContainerScopes — an already-app package still dev-marks its docker occurrences", () => {
   test("regression: a package merged to scope app via the shared-purl promotion (merge.ts) still dev-marks its docker occurrence when the container is development-marked — the scope-level fact is not a substitute for the per-occurrence one", () => {
     const pkg: PackageEntry = {
-      purl: "pkg:npm/shared@1.0.0",
+      purl: asPurl("pkg:npm/shared@1.0.0"),
       name: "shared",
       version: "1.0.0",
       occurrences: [
@@ -142,7 +143,7 @@ describe("applyContainerScopes — an already-app package still dev-marks its do
 
   test("an already-dev occurrence and a non-development container are both left untouched, by reference", () => {
     const pkg: PackageEntry = {
-      purl: "pkg:npm/shared@1.0.0",
+      purl: asPurl("pkg:npm/shared@1.0.0"),
       name: "shared",
       version: "1.0.0",
       occurrences: [{ target: BUILD_CONTAINER, isDevDependency: false }],
@@ -158,7 +159,7 @@ describe("applyContainerScopes — an already-app package still dev-marks its do
 describe("applyContainerScopes — determinism", () => {
   test("is a pure function of its inputs: double-run produces identical output", () => {
     const pkg = entry({
-      purl: "pkg:golang/go-app@1.0.0",
+      purl: asPurl("pkg:golang/go-app@1.0.0"),
       name: "go-app",
       version: "1.0.0",
       occurrences: [
@@ -178,7 +179,7 @@ describe("applyContainerScopes — determinism", () => {
 describe("applyContainerScopes — os-scope-implies-docker-only invariant", () => {
   test("a hand-built os-scope package with a non-docker occurrence THROWS, naming the purl and the offending target", () => {
     const pkg = entry({
-      purl: "pkg:apk/alpine/musl@1.2.4-r2",
+      purl: asPurl("pkg:apk/alpine/musl@1.2.4-r2"),
       name: "musl",
       version: "1.2.4-r2",
       occurrences: [{ target: "apps/web", isDevDependency: false }],
@@ -193,7 +194,7 @@ describe("applyContainerScopes — os-scope-implies-docker-only invariant", () =
 
   test("a mix of one valid docker occurrence and one offending workspace occurrence on the SAME os-scope package still throws, naming the offending target specifically", () => {
     const pkg = entry({
-      purl: "pkg:deb/debian/bash@5.2-6",
+      purl: asPurl("pkg:deb/debian/bash@5.2-6"),
       name: "bash",
       version: "5.2-6",
       occurrences: [
@@ -212,7 +213,7 @@ describe("applyContainerScopes — os-scope-implies-docker-only invariant", () =
     // OTHER test in this file passing. This test documents that guarantee
     // explicitly rather than leaving it implicit in "the suite is green".
     const pkg = entry({
-      purl: "pkg:apk/alpine/musl@1.2.4-r2",
+      purl: asPurl("pkg:apk/alpine/musl@1.2.4-r2"),
       name: "musl",
       version: "1.2.4-r2",
     });

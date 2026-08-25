@@ -8,6 +8,7 @@ import { join } from "node:path";
 import { describe, expect, test } from "bun:test";
 
 import {
+  asRawLicense,
   DOCKER_IDENTITY_PREFIX,
   type CanonicalDependencies,
   type Verdict,
@@ -27,6 +28,7 @@ import { alignTables } from "../src/render/alignTables";
 import { renderMarkdown, type PolicyView } from "../src/render/markdown";
 import { renderNotices } from "../src/render/notices";
 import { globToRegExp } from "../src/targets/discover";
+import { canon, asPurl } from "./brandTestSupport";
 import type { Policy } from "../src/policy/schema";
 
 const DEPENDENCY_CLASSIFICATION_DOC = join(
@@ -343,7 +345,7 @@ function withIntensiveClaims(
     packages: model.packages.map((entry) => {
       const raw = byPurl.get(entry.purl);
 
-      return raw === undefined ? entry : withCacheClaim(entry, raw, "scancode");
+      return raw === undefined ? entry : withCacheClaim(entry, asRawLicense(raw), "scancode");
     }),
   };
 }
@@ -2746,18 +2748,18 @@ describe("cross-document invariants — LICENSES and NOTICES agree on one shared
           components: [
             {
               name: "known-mit",
-              purl: "pkg:npm/known-mit@1.0.0",
+              purl: asPurl("pkg:npm/known-mit@1.0.0"),
               license: "MIT",
             },
-            { name: "unknown-null", purl: "pkg:npm/unknown-null@1.0.0" },
+            { name: "unknown-null", purl: asPurl("pkg:npm/unknown-null@1.0.0") },
             {
               name: "unknown-ref",
-              purl: "pkg:npm/unknown-ref@1.0.0",
+              purl: asPurl("pkg:npm/unknown-ref@1.0.0"),
               license: "LicenseRef-proprietary-eula",
             },
             {
               name: "imprecise-bsd",
-              purl: "pkg:npm/imprecise-bsd@1.0.0",
+              purl: asPurl("pkg:npm/imprecise-bsd@1.0.0"),
               licenseName: "BSD",
             },
           ],
@@ -2831,20 +2833,25 @@ describe("cross-document invariants — LICENSES and NOTICES agree on one shared
 
   test("canonical-display: a noisy declared expression renders identically canonical in both LICENSES' inventory cell and NOTICES' per-package License line", () => {
     const noisy = "(MIT OR Apache-2.0) AND (Apache-2.0 AND MIT)";
-    const canonical = canonicalizeExpression(noisy);
+    const canonical = canonicalizeExpression(asRawLicense(noisy));
     // Hand-built shared model - both renderers consume the same package
     // entry, one attribution line so the package qualifies for a NOTICES
     // section.
     const model: CanonicalDependencies = {
       packages: [
         {
-          purl: "pkg:npm/noisy-lib@1.0.0",
+          purl: asPurl("pkg:npm/noisy-lib@1.0.0"),
           name: "noisy-lib",
           version: "1.0.0",
           occurrences: [{ target: WORKSPACE, isDevDependency: false }],
-          licenseClaims: [{ raw: noisy, kind: "expression", source: "generator" }],
+          licenseClaims: [{ raw: asRawLicense(noisy), kind: "expression", source: "generator" }],
           scope: "app",
-          finding: { expression: noisy, elected: "MIT", source: "generator", confidence: "exact" },
+          finding: {
+            expression: canon(noisy),
+            elected: canon("MIT"),
+            source: "generator",
+            confidence: "exact",
+          },
           attribution: {
             copyrightLines: ["Copyright (c) 2020 Noisy Lib Authors"],
             noticeTexts: [],

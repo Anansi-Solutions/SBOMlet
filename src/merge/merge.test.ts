@@ -11,6 +11,7 @@ import {
   type DependencyIntroduction,
   type PackageEntry,
 } from "../model/dependencies";
+import { asRawLicense, asPurl, widen } from "../../test/brandTestSupport";
 import { assertDependencyGraphCoverage, targetsWithDependencyGraph } from "./dependencyGraphs";
 import { mergeSboms, purlSetOf } from "./merge";
 
@@ -64,25 +65,25 @@ describe("mergeSboms — volatile field immunity", () => {
 
 describe("mergeSboms — license claim shapes", () => {
   test("license.id becomes a spdx-id claim", () => {
-    expect(shapesByPurl().get("pkg:npm/mit-pkg@1.0.0")?.licenseClaims).toEqual([
-      { raw: "MIT", kind: "spdx-id", source: "generator" },
+    expect(shapesByPurl().get(asPurl("pkg:npm/mit-pkg@1.0.0"))?.licenseClaims).toEqual([
+      { raw: asRawLicense("MIT"), kind: "spdx-id", source: "generator" },
     ]);
   });
 
   test("license.name becomes a name claim", () => {
-    expect(shapesByPurl().get("pkg:npm/apache-name-pkg@2.0.0")?.licenseClaims).toEqual([
-      { raw: "Apache License 2.0", kind: "name", source: "generator" },
+    expect(shapesByPurl().get(asPurl("pkg:npm/apache-name-pkg@2.0.0"))?.licenseClaims).toEqual([
+      { raw: asRawLicense("Apache License 2.0"), kind: "name", source: "generator" },
     ]);
   });
 
   test("expression becomes an expression claim", () => {
-    expect(shapesByPurl().get("pkg:npm/expr-pkg@3.0.0")?.licenseClaims).toEqual([
-      { raw: "MIT OR Apache-2.0", kind: "expression", source: "generator" },
+    expect(shapesByPurl().get(asPurl("pkg:npm/expr-pkg@3.0.0"))?.licenseClaims).toEqual([
+      { raw: asRawLicense("MIT OR Apache-2.0"), kind: "expression", source: "generator" },
     ]);
   });
 
   test("a component without a licenses key yields an empty claims array", () => {
-    expect(shapesByPurl().get("pkg:npm/no-license-pkg@0.1.0")?.licenseClaims).toEqual([]);
+    expect(shapesByPurl().get(asPurl("pkg:npm/no-license-pkg@0.1.0"))?.licenseClaims).toEqual([]);
   });
 });
 
@@ -98,7 +99,9 @@ describe("mergeSboms — purl-keyed dedup and root exclusion", () => {
     // to dev.
     expect(dups[0]?.occurrences).toEqual([{ target: SYNTHETIC_TARGET, isDevDependency: false }]);
     // claims concatenated across the duplicate entries
-    expect(dups[0]?.licenseClaims).toEqual([{ raw: "MIT", kind: "spdx-id", source: "generator" }]);
+    expect(dups[0]?.licenseClaims).toEqual([
+      { raw: asRawLicense("MIT"), kind: "spdx-id", source: "generator" },
+    ]);
   });
 
   test("duplicate purl entries BOTH carrying the same license claim yield exactly one claim", () => {
@@ -109,14 +112,14 @@ describe("mergeSboms — purl-keyed dedup and root exclusion", () => {
         {
           name: "twice-pkg",
           version: "1.0.0",
-          purl: "pkg:npm/twice-pkg@1.0.0",
+          purl: asPurl("pkg:npm/twice-pkg@1.0.0"),
           licenses: [{ license: { id: "MIT" } }],
           properties: [{ name: "SrcFile", value: "yarn.lock" }],
         },
         {
           name: "twice-pkg",
           version: "1.0.0",
-          purl: "pkg:npm/twice-pkg@1.0.0",
+          purl: asPurl("pkg:npm/twice-pkg@1.0.0"),
           licenses: [{ license: { id: "MIT" } }],
           properties: [{ name: "SrcFile", value: "package.json" }],
         },
@@ -126,7 +129,7 @@ describe("mergeSboms — purl-keyed dedup and root exclusion", () => {
 
     expect(model.packages.length).toBe(1);
     expect(model.packages[0]?.licenseClaims).toEqual([
-      { raw: "MIT", kind: "spdx-id", source: "generator" },
+      { raw: asRawLicense("MIT"), kind: "spdx-id", source: "generator" },
     ]);
   });
 
@@ -136,13 +139,13 @@ describe("mergeSboms — purl-keyed dedup and root exclusion", () => {
         {
           name: "multi-pkg",
           version: "1.0.0",
-          purl: "pkg:npm/multi-pkg@1.0.0",
+          purl: asPurl("pkg:npm/multi-pkg@1.0.0"),
           licenses: [{ license: { id: "MIT" } }],
         },
         {
           name: "multi-pkg",
           version: "1.0.0",
-          purl: "pkg:npm/multi-pkg@1.0.0",
+          purl: asPurl("pkg:npm/multi-pkg@1.0.0"),
           licenses: [{ license: { name: "MIT" } }, { license: { id: "ISC" } }],
         },
       ],
@@ -150,9 +153,9 @@ describe("mergeSboms — purl-keyed dedup and root exclusion", () => {
     const model = mergeSboms([{ sbom: doc, targetIdentity: SYNTHETIC_TARGET }]);
 
     expect(model.packages[0]?.licenseClaims).toEqual([
-      { raw: "MIT", kind: "spdx-id", source: "generator" },
-      { raw: "MIT", kind: "name", source: "generator" },
-      { raw: "ISC", kind: "spdx-id", source: "generator" },
+      { raw: asRawLicense("MIT"), kind: "spdx-id", source: "generator" },
+      { raw: asRawLicense("MIT"), kind: "name", source: "generator" },
+      { raw: asRawLicense("ISC"), kind: "spdx-id", source: "generator" },
     ]);
   });
 
@@ -169,7 +172,9 @@ describe("mergeSboms — purl-keyed dedup and root exclusion", () => {
       { target: "apps/a", isDevDependency: false },
       { target: "apps/b", isDevDependency: false },
     ]);
-    expect(mitPkg?.licenseClaims).toEqual([{ raw: "MIT", kind: "spdx-id", source: "generator" }]);
+    expect(mitPkg?.licenseClaims).toEqual([
+      { raw: asRawLicense("MIT"), kind: "spdx-id", source: "generator" },
+    ]);
   });
 
   test("a components[] entry whose purl equals metadata.component.purl is excluded", () => {
@@ -229,19 +234,19 @@ describe("mergeSboms — dev marker, scope, and display name", () => {
       {
         name: "abab",
         version: "2.0.6",
-        purl: "pkg:npm/abab@2.0.6",
+        purl: asPurl("pkg:npm/abab@2.0.6"),
         group: "",
       },
       {
         name: "pkg-a",
         version: "1.0.0",
-        purl: "pkg:npm/%40scope/pkg-a@1.0.0",
+        purl: asPurl("pkg:npm/%40scope/pkg-a@1.0.0"),
         group: "@scope",
       },
       {
         name: "bare-pkg",
         version: "1.0.0",
-        purl: "pkg:npm/bare-pkg@1.0.0",
+        purl: asPurl("pkg:npm/bare-pkg@1.0.0"),
       },
     ],
   };
@@ -255,7 +260,7 @@ describe("mergeSboms — dev marker, scope, and display name", () => {
   });
 
   test("fixture component with group '' yields a slash-free display name", () => {
-    const entry = shapesByPurl().get("pkg:npm/empty-group-pkg@1.0.0");
+    const entry = shapesByPurl().get(asPurl("pkg:npm/empty-group-pkg@1.0.0"));
 
     expect(entry?.name).toBe("empty-group-pkg");
     expect(entry?.name.startsWith("/")).toBe(false);
@@ -265,8 +270,8 @@ describe("mergeSboms — dev marker, scope, and display name", () => {
     const model = mergeSboms([{ sbom: groupShapesDoc, targetIdentity: SYNTHETIC_TARGET }]);
     const byPurl = new Map(model.packages.map((p) => [p.purl, p]));
 
-    expect(byPurl.get("pkg:npm/%40scope/pkg-a@1.0.0")?.name).toBe("@scope/pkg-a");
-    expect(byPurl.get("pkg:npm/bare-pkg@1.0.0")?.name).toBe("bare-pkg");
+    expect(byPurl.get(asPurl("pkg:npm/%40scope/pkg-a@1.0.0"))?.name).toBe("@scope/pkg-a");
+    expect(byPurl.get(asPurl("pkg:npm/bare-pkg@1.0.0"))?.name).toBe("bare-pkg");
   });
 });
 
@@ -343,7 +348,7 @@ describe("mergeSboms — field-level tolerance at the boundary (C1, W1, I1)", ()
           {
             name: "kept-pkg",
             version: "1.0.0",
-            purl: "pkg:npm/kept-pkg@1.0.0",
+            purl: asPurl("pkg:npm/kept-pkg@1.0.0"),
             ...extra,
           },
         ],
@@ -370,7 +375,7 @@ describe("mergeSboms — field-level tolerance at the boundary (C1, W1, I1)", ()
         {
           name: "pkg-a",
           version: "1.0.0",
-          purl: "pkg:npm/%40scope/pkg-a@1.0.0",
+          purl: asPurl("pkg:npm/%40scope/pkg-a@1.0.0"),
           group: "@scope",
           scope: "required",
         },
@@ -387,13 +392,13 @@ describe("mergeSboms — field-level tolerance at the boundary (C1, W1, I1)", ()
     const doc = {
       metadata: null,
       components: [
-        { name: "a", version: "1.0.0", purl: "pkg:npm/a@1.0.0" },
-        { name: "b", version: "2.0.0", purl: "pkg:npm/b@2.0.0" },
+        { name: "a", version: "1.0.0", purl: asPurl("pkg:npm/a@1.0.0") },
+        { name: "b", version: "2.0.0", purl: asPurl("pkg:npm/b@2.0.0") },
       ],
     };
     const model = mergeSboms([{ sbom: doc, targetIdentity: SYNTHETIC_TARGET }]);
 
-    expect(model.packages.map((p) => p.purl).sort()).toEqual([
+    expect(widen(model.packages.map((p) => p.purl).sort())).toEqual([
       "pkg:npm/a@1.0.0",
       "pkg:npm/b@2.0.0",
     ]);
@@ -403,8 +408,8 @@ describe("mergeSboms — field-level tolerance at the boundary (C1, W1, I1)", ()
     const doc = {
       metadata: { component: { purl: 12345 } },
       components: [
-        { name: "a", version: "1.0.0", purl: "pkg:npm/a@1.0.0" },
-        { name: "b", version: "2.0.0", purl: "pkg:npm/b@2.0.0" },
+        { name: "a", version: "1.0.0", purl: asPurl("pkg:npm/a@1.0.0") },
+        { name: "b", version: "2.0.0", purl: asPurl("pkg:npm/b@2.0.0") },
       ],
     };
     const model = mergeSboms([{ sbom: doc, targetIdentity: SYNTHETIC_TARGET }]);
@@ -414,15 +419,15 @@ describe("mergeSboms — field-level tolerance at the boundary (C1, W1, I1)", ()
 
   test("a valid string root purl is still excluded from the inventory (no regression)", () => {
     const doc = {
-      metadata: { component: { purl: "pkg:npm/root@0.0.0" } },
+      metadata: { component: { purl: asPurl("pkg:npm/root@0.0.0") } },
       components: [
-        { name: "root", version: "0.0.0", purl: "pkg:npm/root@0.0.0" },
-        { name: "a", version: "1.0.0", purl: "pkg:npm/a@1.0.0" },
+        { name: "root", version: "0.0.0", purl: asPurl("pkg:npm/root@0.0.0") },
+        { name: "a", version: "1.0.0", purl: asPurl("pkg:npm/a@1.0.0") },
       ],
     };
     const model = mergeSboms([{ sbom: doc, targetIdentity: SYNTHETIC_TARGET }]);
 
-    expect(model.packages.map((p) => p.purl)).toEqual(["pkg:npm/a@1.0.0"]);
+    expect(widen(model.packages.map((p) => p.purl))).toEqual(["pkg:npm/a@1.0.0"]);
   });
 
   // I1: purlSetOf must read purl through an independent tolerant narrow —
@@ -431,8 +436,8 @@ describe("mergeSboms — field-level tolerance at the boundary (C1, W1, I1)", ()
     const doc = {
       metadata: null,
       components: [
-        { name: "a", version: "1.0.0", purl: "pkg:npm/a@1.0.0" },
-        { name: "b", version: "2.0.0", purl: "pkg:npm/b@2.0.0" },
+        { name: "a", version: "1.0.0", purl: asPurl("pkg:npm/a@1.0.0") },
+        { name: "b", version: "2.0.0", purl: asPurl("pkg:npm/b@2.0.0") },
       ],
     };
 
@@ -445,7 +450,7 @@ describe("mergeSboms — field-level tolerance at the boundary (C1, W1, I1)", ()
         {
           name: "p",
           version: "1.0.0",
-          purl: "pkg:npm/p@1.0.0",
+          purl: asPurl("pkg:npm/p@1.0.0"),
           group: 5,
         },
       ],
@@ -465,7 +470,7 @@ describe("mergeSboms — occurrence-level dev/prod scope", () => {
       {
         name: "shared-pkg",
         version: "1.0.0",
-        purl: "pkg:npm/shared-pkg@1.0.0",
+        purl: asPurl("pkg:npm/shared-pkg@1.0.0"),
         properties: [devProperty],
       },
     ],
@@ -475,7 +480,7 @@ describe("mergeSboms — occurrence-level dev/prod scope", () => {
       {
         name: "shared-pkg",
         version: "1.0.0",
-        purl: "pkg:npm/shared-pkg@1.0.0",
+        purl: asPurl("pkg:npm/shared-pkg@1.0.0"),
       },
     ],
   };
@@ -507,13 +512,13 @@ describe("mergeSboms — occurrence-level dev/prod scope", () => {
         {
           name: "dup-scope-pkg",
           version: "1.0.0",
-          purl: "pkg:npm/dup-scope-pkg@1.0.0",
+          purl: asPurl("pkg:npm/dup-scope-pkg@1.0.0"),
           properties: [devProperty],
         },
         {
           name: "dup-scope-pkg",
           version: "1.0.0",
-          purl: "pkg:npm/dup-scope-pkg@1.0.0",
+          purl: asPurl("pkg:npm/dup-scope-pkg@1.0.0"),
         },
       ],
     };
@@ -549,13 +554,13 @@ describe("mergeSboms — CollectedSbom.scope threading", () => {
         type: "library",
         name: "libc6",
         version: "2.36-9",
-        purl: "pkg:deb/debian/libc6@2.36-9",
+        purl: asPurl("pkg:deb/debian/libc6@2.36-9"),
       },
       {
         type: "library",
         name: "musl",
         version: "1.2.4-r2",
-        purl: "pkg:apk/alpine/musl@1.2.4-r2",
+        purl: asPurl("pkg:apk/alpine/musl@1.2.4-r2"),
       },
     ],
   };
@@ -584,7 +589,7 @@ describe("mergeSboms — CollectedSbom.scope threading", () => {
     const os = model.packages.filter((p) => p.scope === "os");
     const app = model.packages.filter((p) => p.scope === "app");
 
-    expect(os.map((p) => p.purl).sort()).toEqual([
+    expect(widen(os.map((p) => p.purl).sort())).toEqual([
       "pkg:apk/alpine/musl@1.2.4-r2",
       "pkg:deb/debian/libc6@2.36-9",
     ]);
@@ -753,7 +758,7 @@ describe("mergeSboms — full-image scope collision (app wins, image occurrence 
           type: "library",
           name: "libc6",
           version: "2.36-9",
-          purl: "pkg:deb/debian/libc6@2.36-9",
+          purl: asPurl("pkg:deb/debian/libc6@2.36-9"),
         },
       ],
     };
@@ -781,7 +786,7 @@ describe("mergeSboms — full-image scope collision (app wins, image occurrence 
           type: "library",
           name: "sbomlet",
           version: "1.0.0",
-          purl: "pkg:npm/sbomlet@1.0.0",
+          purl: asPurl("pkg:npm/sbomlet@1.0.0"),
         },
       ],
     };
@@ -813,17 +818,17 @@ describe("mergeSboms — plugin dual-run prod diff", () => {
     const byPurl = pluginModel(purlSetOf(pluginProdDoc));
 
     // full-only → dev
-    expect(byPurl.get("pkg:npm/%40eslint/eslintrc@3.3.3")?.occurrences).toEqual([
+    expect(byPurl.get(asPurl("pkg:npm/%40eslint/eslintrc@3.3.3"))?.occurrences).toEqual([
       { target: TARGET, isDevDependency: true },
     ]);
-    expect(byPurl.get("pkg:npm/type-fest@4.26.1")?.occurrences).toEqual([
+    expect(byPurl.get(asPurl("pkg:npm/type-fest@4.26.1"))?.occurrences).toEqual([
       { target: TARGET, isDevDependency: true },
     ]);
     // present in prod → prod
-    expect(byPurl.get("pkg:npm/semver@7.7.1")?.occurrences).toEqual([
+    expect(byPurl.get(asPurl("pkg:npm/semver@7.7.1"))?.occurrences).toEqual([
       { target: TARGET, isDevDependency: false },
     ]);
-    expect(byPurl.get("pkg:npm/argparse@2.0.1")?.occurrences).toEqual([
+    expect(byPurl.get(asPurl("pkg:npm/argparse@2.0.1"))?.occurrences).toEqual([
       { target: TARGET, isDevDependency: false },
     ]);
   });
@@ -848,7 +853,7 @@ describe("mergeSboms — plugin dual-run prod diff", () => {
         {
           name: "marked-dev-pkg",
           version: "1.0.0",
-          purl: "pkg:npm/marked-dev-pkg@1.0.0",
+          purl: asPurl("pkg:npm/marked-dev-pkg@1.0.0"),
           properties: [{ name: "cdx:npm:package:development", value: "true" }],
         },
       ],
@@ -869,11 +874,11 @@ describe("mergeSboms — plugin dual-run prod diff", () => {
   test("the CycloneDX-1.6 acknowledgement field parses through unchanged as a normal spdx-id claim", () => {
     const byPurl = pluginModel(purlSetOf(pluginProdDoc));
 
-    expect(byPurl.get("pkg:npm/%40eslint/eslintrc@3.3.3")?.licenseClaims).toEqual([
-      { raw: "MIT", kind: "spdx-id", source: "generator" },
+    expect(byPurl.get(asPurl("pkg:npm/%40eslint/eslintrc@3.3.3"))?.licenseClaims).toEqual([
+      { raw: asRawLicense("MIT"), kind: "spdx-id", source: "generator" },
     ]);
-    expect(byPurl.get("pkg:npm/semver@7.7.1")?.licenseClaims).toEqual([
-      { raw: "ISC", kind: "spdx-id", source: "generator" },
+    expect(byPurl.get(asPurl("pkg:npm/semver@7.7.1"))?.licenseClaims).toEqual([
+      { raw: asRawLicense("ISC"), kind: "spdx-id", source: "generator" },
     ]);
   });
 
@@ -892,7 +897,7 @@ describe("mergeSboms — plugin dual-run prod diff", () => {
     expect(dups.length).toBe(1);
     expect(dups[0]?.occurrences).toEqual([{ target: TARGET, isDevDependency: true }]);
     expect(dups[0]?.licenseClaims).toEqual([
-      { raw: "(MIT OR CC0-1.0)", kind: "expression", source: "generator" },
+      { raw: asRawLicense("(MIT OR CC0-1.0)"), kind: "expression", source: "generator" },
     ]);
   });
 });
@@ -910,12 +915,12 @@ describe("mergeSboms — per-workspace inputs (yarn workspace units)", () => {
         {
           name: "ms",
           version: "2.1.3",
-          purl: "pkg:npm/ms@2.1.3",
+          purl: asPurl("pkg:npm/ms@2.1.3"),
         },
         {
           name: "isarray",
           version: "2.0.5",
-          purl: "pkg:npm/isarray@2.0.5",
+          purl: asPurl("pkg:npm/isarray@2.0.5"),
         },
       ],
     };
@@ -924,7 +929,7 @@ describe("mergeSboms — per-workspace inputs (yarn workspace units)", () => {
         {
           name: "sax",
           version: "1.4.1",
-          purl: "pkg:npm/sax@1.4.1",
+          purl: asPurl("pkg:npm/sax@1.4.1"),
         },
       ],
     };
@@ -942,13 +947,13 @@ describe("mergeSboms — per-workspace inputs (yarn workspace units)", () => {
     ]);
     const byPurl = new Map(model.packages.map((p) => [p.purl, p]));
 
-    expect(byPurl.get("pkg:npm/ms@2.1.3")?.occurrences).toEqual([
+    expect(byPurl.get(asPurl("pkg:npm/ms@2.1.3"))?.occurrences).toEqual([
       { target: "backend", isDevDependency: false },
     ]);
-    expect(byPurl.get("pkg:npm/isarray@2.0.5")?.occurrences).toEqual([
+    expect(byPurl.get(asPurl("pkg:npm/isarray@2.0.5"))?.occurrences).toEqual([
       { target: "backend", isDevDependency: true },
     ]);
-    expect(byPurl.get("pkg:npm/sax@1.4.1")?.occurrences).toEqual([
+    expect(byPurl.get(asPurl("pkg:npm/sax@1.4.1"))?.occurrences).toEqual([
       { target: "frontend", isDevDependency: false },
     ]);
   });
@@ -999,7 +1004,7 @@ describe("mergeSboms — per-workspace inputs (yarn workspace units)", () => {
     // First-seen license claim, never duplicated by the second input's
     // identical MIT claim.
     expect(shared[0]?.licenseClaims).toEqual([
-      { raw: "MIT", kind: "spdx-id", source: "generator" },
+      { raw: asRawLicense("MIT"), kind: "spdx-id", source: "generator" },
     ]);
   });
 
@@ -1051,12 +1056,12 @@ describe("mergeSboms — per-workspace inputs (yarn workspace units)", () => {
         {
           name: "backend",
           version: "0.0.0-use.local",
-          purl: "pkg:npm/backend@0.0.0-use.local",
+          purl: asPurl("pkg:npm/backend@0.0.0-use.local"),
         },
         {
           name: "sax",
           version: "1.4.1",
-          purl: "pkg:npm/sax@1.4.1",
+          purl: asPurl("pkg:npm/sax@1.4.1"),
         },
       ],
     };
@@ -1082,7 +1087,7 @@ describe("mergeSboms — per-workspace inputs (yarn workspace units)", () => {
           // the second signal is absent, so the two-signal rule keeps it.
           name: "backend",
           version: "3.2.1",
-          purl: "pkg:npm/backend@3.2.1",
+          purl: asPurl("pkg:npm/backend@3.2.1"),
         },
       ],
     };
@@ -1105,15 +1110,15 @@ describe("mergeSboms — python dev-group marker", () => {
     const model = mergeSboms([{ sbom: poetryGroupsDoc, targetIdentity: PY_TARGET }]);
     const byPurl = new Map(model.packages.map((p) => [p.purl, p]));
 
-    expect(byPurl.get("pkg:pypi/pytest@8.3.4")?.occurrences).toEqual([
+    expect(byPurl.get(asPurl("pkg:pypi/pytest@8.3.4"))?.occurrences).toEqual([
       { target: PY_TARGET, isDevDependency: true },
     ]);
     // custom group "docs" stays prod (conservative semantics)
-    expect(byPurl.get("pkg:pypi/sphinx@8.1.3")?.occurrences).toEqual([
+    expect(byPurl.get(asPurl("pkg:pypi/sphinx@8.1.3"))?.occurrences).toEqual([
       { target: PY_TARGET, isDevDependency: false },
     ]);
     // no group property at all stays prod
-    expect(byPurl.get("pkg:pypi/anyio@4.8.0")?.occurrences).toEqual([
+    expect(byPurl.get(asPurl("pkg:pypi/anyio@4.8.0"))?.occurrences).toEqual([
       { target: PY_TARGET, isDevDependency: false },
     ]);
     expect(model.packages.every((p) => p.purl.startsWith("pkg:pypi/"))).toBe(true);
@@ -1137,13 +1142,13 @@ describe("mergeSboms — npm optional guard on the dev property", () => {
   }
 
   test("development=true alone still maps to a dev occurrence", () => {
-    expect(scopeByPurl().get("pkg:npm/dev-only-pkg@1.0.0")?.occurrences).toEqual([
+    expect(scopeByPurl().get(asPurl("pkg:npm/dev-only-pkg@1.0.0"))?.occurrences).toEqual([
       { target: NPM_TARGET, isDevDependency: true },
     ]);
   });
 
   test("development=true AND optional=true merges as PROD (the @next/swc-* platform-binary class)", () => {
-    const swc = scopeByPurl().get("pkg:npm/%40next/swc-win32-x64-msvc@16.0.10");
+    const swc = scopeByPurl().get(asPurl("pkg:npm/%40next/swc-win32-x64-msvc@16.0.10"));
 
     expect(swc?.occurrences).toEqual([{ target: NPM_TARGET, isDevDependency: false }]);
     // The fixture's scope: "excluded" field is recorded raw but NEVER drives
@@ -1152,19 +1157,19 @@ describe("mergeSboms — npm optional guard on the dev property", () => {
   });
 
   test("optional=true alone is prod (cdxgen never emits this, but the guard is independent of the dev property)", () => {
-    expect(scopeByPurl().get("pkg:npm/optional-only-pkg@2.0.0")?.occurrences).toEqual([
+    expect(scopeByPurl().get(asPurl("pkg:npm/optional-only-pkg@2.0.0"))?.occurrences).toEqual([
       { target: NPM_TARGET, isDevDependency: false },
     ]);
   });
 
   test("the guard is order-independent: optional listed BEFORE development still merges prod", () => {
-    expect(scopeByPurl().get("pkg:npm/optional-first-pkg@3.0.0")?.occurrences).toEqual([
+    expect(scopeByPurl().get(asPurl("pkg:npm/optional-first-pkg@3.0.0"))?.occurrences).toEqual([
       { target: NPM_TARGET, isDevDependency: false },
     ]);
   });
 
   test("cdx:pyproject:group=dev stays dev — the python branch is independent of the guard", () => {
-    expect(scopeByPurl().get("pkg:pypi/pydev-pkg@1.0.0")?.occurrences).toEqual([
+    expect(scopeByPurl().get(asPurl("pkg:pypi/pydev-pkg@1.0.0"))?.occurrences).toEqual([
       { target: NPM_TARGET, isDevDependency: true },
     ]);
   });
@@ -1182,10 +1187,10 @@ describe("mergeSboms — npm optional guard on the dev property", () => {
     ]);
     const byPurl = new Map(model.packages.map((p) => [p.purl, p]));
 
-    expect(byPurl.get("pkg:npm/%40next/swc-win32-x64-msvc@16.0.10")?.occurrences).toEqual([
+    expect(byPurl.get(asPurl("pkg:npm/%40next/swc-win32-x64-msvc@16.0.10"))?.occurrences).toEqual([
       { target: NPM_TARGET, isDevDependency: true },
     ]);
-    expect(byPurl.get("pkg:npm/dev-only-pkg@1.0.0")?.occurrences).toEqual([
+    expect(byPurl.get(asPurl("pkg:npm/dev-only-pkg@1.0.0"))?.occurrences).toEqual([
       { target: NPM_TARGET, isDevDependency: false },
     ]);
   });
@@ -1217,7 +1222,7 @@ describe("mergeSboms — first-party exclusion (belt-and-braces)", () => {
           // name matches, version does not → KEPT.
           name: "iframe-rpc-react",
           version: "9.9.9",
-          purl: "pkg:npm/iframe-rpc-react@9.9.9",
+          purl: asPurl("pkg:npm/iframe-rpc-react@9.9.9"),
           licenses: [{ license: { id: "MIT" } }],
         },
         {
@@ -1225,7 +1230,7 @@ describe("mergeSboms — first-party exclusion (belt-and-braces)", () => {
           // lockfile member set → KEPT.
           name: "not-a-member",
           version: "0.0.0-use.local",
-          purl: "pkg:npm/not-a-member@0.0.0-use.local",
+          purl: asPurl("pkg:npm/not-a-member@0.0.0-use.local"),
           licenses: [],
         },
       ],
@@ -1239,8 +1244,8 @@ describe("mergeSboms — first-party exclusion (belt-and-braces)", () => {
     ]);
     const purls = model.packages.map((p) => p.purl);
 
-    expect(purls).toContain("pkg:npm/iframe-rpc-react@9.9.9");
-    expect(purls).toContain("pkg:npm/not-a-member@0.0.0-use.local");
+    expect(purls).toContain(asPurl("pkg:npm/iframe-rpc-react@9.9.9"));
+    expect(purls).toContain(asPurl("pkg:npm/not-a-member@0.0.0-use.local"));
   });
 
   test("python inputs without firstPartyNames behave identically to before", () => {
@@ -1280,15 +1285,17 @@ describe("mergeSboms — npm first-party double signal", () => {
     const model = wsModel(new Set(["liba"]));
     const purls = model.packages.map((p) => p.purl);
 
-    expect(purls).not.toContain("pkg:npm/liba@0.1.0");
+    expect(purls).not.toContain(asPurl("pkg:npm/liba@0.1.0"));
     // The rest of the document is untouched by the skip.
-    expect(purls).toContain("pkg:npm/ordinary-pkg@2.0.0");
+    expect(purls).toContain(asPurl("pkg:npm/ordinary-pkg@2.0.0"));
   });
 
   test("isWorkspace=true alone (name NOT in the set) keeps the package — a generator marker never drops", () => {
     const model = wsModel(new Set(["liba"]));
 
-    expect(model.packages.map((p) => p.purl)).toContain("pkg:npm/generator-marker-pkg@1.0.0");
+    expect(model.packages.map((p) => p.purl)).toContain(
+      asPurl("pkg:npm/generator-marker-pkg@1.0.0"),
+    );
   });
 
   test("a name collision WITHOUT any marker keeps the package", () => {
@@ -1296,13 +1303,13 @@ describe("mergeSboms — npm first-party double signal", () => {
     // NOT the yarn local-version marker → KEPT.
     const model = wsModel(new Set(["liba"]));
 
-    expect(model.packages.map((p) => p.purl)).toContain("pkg:npm/liba@9.9.9");
+    expect(model.packages.map((p) => p.purl)).toContain(asPurl("pkg:npm/liba@9.9.9"));
   });
 
   test("without firstPartyNames every component including the member is kept", () => {
     const model = wsModel(undefined);
 
-    expect(model.packages.map((p) => p.purl)).toContain("pkg:npm/liba@0.1.0");
+    expect(model.packages.map((p) => p.purl)).toContain(asPurl("pkg:npm/liba@0.1.0"));
     expect(model.packages.length).toBe(4);
   });
 
@@ -1316,12 +1323,12 @@ describe("mergeSboms — npm first-party double signal", () => {
         {
           name: "yarn-member",
           version: "0.0.0-use.local",
-          purl: "pkg:npm/yarn-member@0.0.0-use.local",
+          purl: asPurl("pkg:npm/yarn-member@0.0.0-use.local"),
         },
         {
           name: "kept-pkg",
           version: "1.0.0",
-          purl: "pkg:npm/kept-pkg@1.0.0",
+          purl: asPurl("pkg:npm/kept-pkg@1.0.0"),
         },
       ],
     };
@@ -1334,8 +1341,8 @@ describe("mergeSboms — npm first-party double signal", () => {
     ]);
     const purls = model.packages.map((p) => p.purl);
 
-    expect(purls).not.toContain("pkg:npm/yarn-member@0.0.0-use.local");
-    expect(purls).toContain("pkg:npm/kept-pkg@1.0.0");
+    expect(purls).not.toContain(asPurl("pkg:npm/yarn-member@0.0.0-use.local"));
+    expect(purls).toContain(asPurl("pkg:npm/kept-pkg@1.0.0"));
   });
 });
 
@@ -1359,7 +1366,7 @@ describe("mergeSboms — multi-PM shared-purl merge proof", () => {
       { sbom: npmDoc, targetIdentity: "fixture/npm-app" },
     ]);
     const byPurl = new Map(model.packages.map((p) => [p.purl, p]));
-    const shared = byPurl.get("pkg:npm/shared-lib@1.0.0");
+    const shared = byPurl.get(asPurl("pkg:npm/shared-lib@1.0.0"));
 
     // Exactly one PackageEntry for the shared purl (purl-keyed merge) with
     // deterministic compareCodeUnits occurrence order.
@@ -1369,10 +1376,10 @@ describe("mergeSboms — multi-PM shared-purl merge proof", () => {
       { target: "fixture/yarn-app", isDevDependency: false },
     ]);
     // Each input's unique packages are present exactly once, single-target.
-    expect(byPurl.get("pkg:npm/yarn-only-pkg@1.1.0")?.occurrences).toEqual([
+    expect(byPurl.get(asPurl("pkg:npm/yarn-only-pkg@1.1.0"))?.occurrences).toEqual([
       { target: "fixture/yarn-app", isDevDependency: false },
     ]);
-    expect(byPurl.get("pkg:npm/npm-only-pkg@2.2.0")?.occurrences).toEqual([
+    expect(byPurl.get(asPurl("pkg:npm/npm-only-pkg@2.2.0"))?.occurrences).toEqual([
       { target: "fixture/npm-app", isDevDependency: false },
     ]);
     expect(model.packages.length).toBe(3);
@@ -1421,8 +1428,8 @@ describe("mergeSboms — evidence parsing into attribution", () => {
 
   test("Test 2: decode + extraction — concrete line extracted; template case honestly empty", () => {
     const byPurl = evidenceByPurl();
-    const alpha = byPurl.get("pkg:npm/alpha-license-pkg@1.0.0");
-    const template = byPurl.get("pkg:npm/template-pkg@3.0.0");
+    const alpha = byPurl.get(asPurl("pkg:npm/alpha-license-pkg@1.0.0"));
+    const template = byPurl.get(asPurl("pkg:npm/template-pkg@3.0.0"));
 
     expect(alpha?.attribution?.hasVerbatimText).toBe(true);
     expect(alpha?.attribution?.copyrightLines).toEqual(["Copyright (c) 2015 Jane Doe"]);
@@ -1434,7 +1441,7 @@ describe("mergeSboms — evidence parsing into attribution", () => {
     expect(template?.attribution?.copyrightLines).toEqual([]);
 
     // (d) two evidence files: copyright lines union across files.
-    const dual = byPurl.get("pkg:npm/dual-file-pkg@4.0.0");
+    const dual = byPurl.get(asPurl("pkg:npm/dual-file-pkg@4.0.0"));
 
     expect(dual?.attribution?.copyrightLines).toEqual([
       "Copyright (c) 2018 Dual Author",
@@ -1442,13 +1449,13 @@ describe("mergeSboms — evidence parsing into attribution", () => {
     ]);
 
     // (e) author but no evidence → attribution key entirely absent.
-    const authorOnly = byPurl.get("pkg:npm/author-only-pkg@5.0.0");
+    const authorOnly = byPurl.get(asPurl("pkg:npm/author-only-pkg@5.0.0"));
 
     expect(authorOnly?.attribution).toBeUndefined();
   });
 
   test("Test 3: NOTICE detection by stem match on the stripped basename", () => {
-    const notice = evidenceByPurl().get("pkg:npm/notice-pkg@2.0.0");
+    const notice = evidenceByPurl().get(asPurl("pkg:npm/notice-pkg@2.0.0"));
 
     expect(notice?.attribution?.noticeTexts).toEqual([
       "Notice Product\nCopyright 2014-2024 Notice Foundation\n\nThis product includes software developed at\nThe Notice Foundation (http://example.org/).\n",
@@ -1462,10 +1469,10 @@ describe("mergeSboms — evidence parsing into attribution", () => {
     // the license-text branch, where the parseable claim gated it out of
     // verbatimTexts — the NOTICE body was dropped from the legal document
     // entirely (the Apache-2.0 §4(d) silent-omission failure mode).
-    const noticeTxt = evidenceByPurl().get("pkg:npm/notice-txt-pkg@9.0.0");
+    const noticeTxt = evidenceByPurl().get(asPurl("pkg:npm/notice-txt-pkg@9.0.0"));
 
     expect(noticeTxt?.licenseClaims).toEqual([
-      { raw: "MIT", kind: "spdx-id", source: "generator" },
+      { raw: asRawLicense("MIT"), kind: "spdx-id", source: "generator" },
     ]);
     expect(noticeTxt?.attribution?.noticeTexts).toEqual([
       "Notice Txt Product\nCopyright 2020-2025 Notice Txt Foundation\n\nThis product includes software developed at\nThe Notice Txt Foundation (http://example.org/).\n",
@@ -1481,7 +1488,7 @@ describe("mergeSboms — evidence parsing into attribution", () => {
 
   test("Test 4a: an oversize entry is skipped entirely — nothing stored from it", () => {
     const byPurl = evidenceByPurl();
-    const oversize = byPurl.get("pkg:npm/oversize-pkg@7.0.0");
+    const oversize = byPurl.get(asPurl("pkg:npm/oversize-pkg@7.0.0"));
 
     // Its ONLY evidence entry exceeds the 1 MB decoded cap → no attribution.
     expect(oversize?.attribution).toBeUndefined();
@@ -1494,7 +1501,7 @@ describe("mergeSboms — evidence parsing into attribution", () => {
   });
 
   test("Test 4b: C0 control chars (minus \\n/\\t), DEL, and C1 are replaced with spaces at intake", () => {
-    const ctrl = evidenceByPurl().get("pkg:npm/control-char-pkg@8.0.0");
+    const ctrl = evidenceByPurl().get(asPurl("pkg:npm/control-char-pkg@8.0.0"));
 
     // ESC, NUL, DEL, NEL (U+0085), BEL all become spaces; \n and \t survive.
     expect(ctrl?.attribution?.verbatimTexts).toEqual([
@@ -1536,7 +1543,7 @@ describe("mergeSboms — evidence parsing into attribution", () => {
         {
           name: "many-files-pkg",
           version: "1.0.0",
-          purl: "pkg:npm/many-files-pkg@1.0.0",
+          purl: asPurl("pkg:npm/many-files-pkg@1.0.0"),
           licenses: [{ license: { id: "MIT" } }],
           evidence: { licenses: entries },
         },
@@ -1562,7 +1569,7 @@ describe("mergeSboms — evidence parsing into attribution", () => {
         {
           name: "crlf-pkg",
           version: "1.0.0",
-          purl: "pkg:npm/crlf-pkg@1.0.0",
+          purl: asPurl("pkg:npm/crlf-pkg@1.0.0"),
           // name-kind claim only → the verbatim text is retained, so the
           // stored bytes are directly observable.
           licenses: [{ license: { name: "custom crlf license" } }],
@@ -1595,8 +1602,8 @@ describe("mergeSboms — evidence parsing into attribution", () => {
 
   test("Test 5: verbatim texts retained ONLY for packages with no spdx-id/expression claim", () => {
     const byPurl = evidenceByPurl();
-    const named = byPurl.get("pkg:npm/named-claim-pkg@6.0.0");
-    const alpha = byPurl.get("pkg:npm/alpha-license-pkg@1.0.0");
+    const named = byPurl.get(asPurl("pkg:npm/named-claim-pkg@6.0.0"));
+    const alpha = byPurl.get(asPurl("pkg:npm/alpha-license-pkg@1.0.0"));
 
     // (f) only a "name"-kind claim → full text retained.
     expect(named?.attribution?.verbatimTexts?.length).toBe(1);
@@ -1612,8 +1619,8 @@ describe("mergeSboms — evidence parsing into attribution", () => {
       { sbom: loadFixture("plugin-evidence.json"), targetIdentity: "apps/b" },
     ]);
     const byPurl = new Map(model.packages.map((p) => [p.purl, p]));
-    const alpha = byPurl.get("pkg:npm/alpha-license-pkg@1.0.0");
-    const notice = byPurl.get("pkg:npm/notice-pkg@2.0.0");
+    const alpha = byPurl.get(asPurl("pkg:npm/alpha-license-pkg@1.0.0"));
+    const notice = byPurl.get(asPurl("pkg:npm/notice-pkg@2.0.0"));
 
     // Two targets, ONE attribution — no duplicated lines or NOTICE texts.
     expect(alpha?.occurrences.map((o) => o.target)).toEqual(["apps/a", "apps/b"]);
@@ -1652,7 +1659,13 @@ describe("purlSetOf — tolerant purl extraction", () => {
     expect(purlSetOf({ components: "nope" })).toEqual(new Set());
     expect(
       purlSetOf({
-        components: [null, 42, { name: "no-purl" }, { purl: 7 }, { purl: "pkg:npm/ok@1.0.0" }],
+        components: [
+          null,
+          42,
+          { name: "no-purl" },
+          { purl: 7 },
+          { purl: asPurl("pkg:npm/ok@1.0.0") },
+        ],
       }),
     ).toEqual(new Set(["pkg:npm/ok@1.0.0"]));
   });
@@ -1661,8 +1674,8 @@ describe("purlSetOf — tolerant purl extraction", () => {
 describe("mergeSboms — dependency provenance threading", () => {
   const PROV_DOC = {
     components: [
-      { name: "a", version: "1.0.0", purl: "pkg:npm/a@1.0.0" },
-      { name: "b", version: "2.0.0", purl: "pkg:npm/b@2.0.0" },
+      { name: "a", version: "1.0.0", purl: asPurl("pkg:npm/a@1.0.0") },
+      { name: "b", version: "2.0.0", purl: asPurl("pkg:npm/b@2.0.0") },
     ],
   };
 
@@ -1876,7 +1889,7 @@ describe("mergeSboms — reserved docker: occurrence namespace", () => {
         type: "library",
         name: "busybox",
         version: "9.9.9",
-        purl: "pkg:npm/busybox@9.9.9",
+        purl: asPurl("pkg:npm/busybox@9.9.9"),
         licenses: [{ license: { id: "GPL-2.0-only" } }],
       },
     ],
@@ -2225,20 +2238,20 @@ function graphBom(dependencies?: unknown): unknown {
   return {
     bomFormat: "CycloneDX",
     specVersion: "1.6",
-    metadata: { component: { "bom-ref": "root", purl: "pkg:npm/root@1.0.0" } },
+    metadata: { component: { "bom-ref": "root", purl: asPurl("pkg:npm/root@1.0.0") } },
     components: [
       {
         type: "library",
         name: "direct",
         version: "1.0.0",
-        purl: "pkg:npm/direct@1.0.0",
+        purl: asPurl("pkg:npm/direct@1.0.0"),
         "bom-ref": "direct",
       },
       {
         type: "library",
         name: "deep",
         version: "2.0.0",
-        purl: "pkg:npm/deep@2.0.0",
+        purl: asPurl("pkg:npm/deep@2.0.0"),
         "bom-ref": "deep",
       },
     ],
@@ -2260,8 +2273,8 @@ function pypiBom(): unknown {
     bomFormat: "CycloneDX",
     specVersion: "1.6",
     components: [
-      { type: "library", name: "a", version: "1.0.0", purl: "pkg:pypi/a@1.0.0" },
-      { type: "library", name: "b", version: "2.0.0", purl: "pkg:pypi/b@2.0.0" },
+      { type: "library", name: "a", version: "1.0.0", purl: asPurl("pkg:pypi/a@1.0.0") },
+      { type: "library", name: "b", version: "2.0.0", purl: asPurl("pkg:pypi/b@2.0.0") },
     ],
   };
 }

@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import { annotateFindings } from "../src/normalize/normalize";
 import { renderCyclonedx } from "../src/render/cyclonedx";
 import { renderNotices } from "../src/render/notices";
+import { asRawLicense } from "./brandTestSupport";
 import { claim, modelOf, pkg } from "./normalizeTestSupport";
 import type { LicenseClaim } from "../src/model/dependencies";
 
@@ -25,7 +26,11 @@ const declaredClaims: LicenseClaim[] = [
   claim("MIT OR Apache-2.0", "expression"),
 ];
 
-const scancodeClaim: LicenseClaim = { raw: "MIT", kind: "expression", source: "scancode" };
+const scancodeClaim: LicenseClaim = {
+  raw: asRawLicense("MIT"),
+  kind: "expression",
+  source: "scancode",
+};
 
 describe("scan-mode canonicalization invariant", () => {
   test("the same declared claims produce the same finding.expression with or without a ScanCode assessment", () => {

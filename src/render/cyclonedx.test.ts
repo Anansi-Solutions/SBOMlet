@@ -14,8 +14,14 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, test } from "bun:test";
 
+import {
+  asRawLicense,
+  type CanonicalDependencies,
+  type PackageEntry,
+  type Verdict,
+} from "../model/dependencies";
+import { canon, asPurl } from "../../test/brandTestSupport";
 import { renderCyclonedx } from "./cyclonedx";
-import type { CanonicalDependencies, PackageEntry, Verdict } from "../model/dependencies";
 
 function golden(name: string): string {
   return readFileSync(join(import.meta.dir, "..", "..", "test", "golden", name), "utf-8");
@@ -34,32 +40,34 @@ function entry(
 }
 
 const exprEntry = entry({
-  purl: "pkg:npm/expr-pkg@3.0.0",
+  purl: asPurl("pkg:npm/expr-pkg@3.0.0"),
   name: "expr-pkg",
   version: "3.0.0",
-  licenseClaims: [{ raw: "MIT OR Apache-2.0", kind: "expression", source: "generator" }],
+  licenseClaims: [
+    { raw: asRawLicense("MIT OR Apache-2.0"), kind: "expression", source: "generator" },
+  ],
   finding: {
-    expression: "MIT OR Apache-2.0",
-    elected: "Apache-2.0",
+    expression: canon("MIT OR Apache-2.0"),
+    elected: canon("Apache-2.0"),
     source: "generator",
     confidence: "exact",
   },
 });
 
 const namedEntry = entry({
-  purl: "pkg:npm/jsonify@0.0.1",
+  purl: asPurl("pkg:npm/jsonify@0.0.1"),
   name: "jsonify",
   version: "0.0.1",
   licenseClaims: [
-    { raw: "Public Domain", kind: "name", source: "generator" },
+    { raw: asRawLicense("Public Domain"), kind: "name", source: "generator" },
     // Duplicate raw under a different kind: the emitted named list must
     // dedup by raw, first-seen order.
-    { raw: "Public Domain", kind: "spdx-id", source: "generator" },
+    { raw: asRawLicense("Public Domain"), kind: "spdx-id", source: "generator" },
   ],
 });
 
 const bareEntry = entry({
-  purl: "pkg:npm/no-license-pkg@1.0.0",
+  purl: asPurl("pkg:npm/no-license-pkg@1.0.0"),
   name: "no-license-pkg",
   version: "1.0.0",
 });
@@ -69,7 +77,7 @@ const baseModel: CanonicalDependencies = {
 };
 
 const sharpEntry = entry({
-  purl: "pkg:npm/sharp@0.33.0",
+  purl: asPurl("pkg:npm/sharp@0.33.0"),
   name: "sharp",
   version: "0.33.0",
   occurrences: [
@@ -80,14 +88,14 @@ const sharpEntry = entry({
 
 const sharpVerdicts: Verdict[] = [
   {
-    purl: "pkg:npm/sharp@0.33.0",
+    purl: asPurl("pkg:npm/sharp@0.33.0"),
     occurrenceTarget: "backend",
     status: "ok",
     rule: "default:ok",
     reason: "no copyleft obligations",
   },
   {
-    purl: "pkg:npm/sharp@0.33.0",
+    purl: asPurl("pkg:npm/sharp@0.33.0"),
     occurrenceTarget: "frontend",
     status: "fail",
     rule: "default:copyleft",
@@ -95,7 +103,7 @@ const sharpVerdicts: Verdict[] = [
   },
   // A verdict for a DIFFERENT purl must never leak into this component.
   {
-    purl: "pkg:npm/other@1.0.0",
+    purl: asPurl("pkg:npm/other@1.0.0"),
     occurrenceTarget: "frontend",
     status: "fail",
     rule: "default:copyleft",
@@ -138,10 +146,10 @@ describe("renderCyclonedx — license dispatch", () => {
   const byPurl = new Map(doc.components.map((c) => [c["purl"], c]));
 
   test("Test 2a: a normalized expression emits a single-item expression tuple with ONLY the expression key", () => {
-    const component = byPurl.get("pkg:npm/expr-pkg@3.0.0")!;
+    const component = byPurl.get(asPurl("pkg:npm/expr-pkg@3.0.0"))!;
     const licenses = component["licenses"] as Array<Record<string, unknown>>;
 
-    expect(licenses).toEqual([{ expression: "MIT OR Apache-2.0" }]);
+    expect(licenses).toEqual([{ expression: "Apache-2.0 OR MIT" }]);
     // The schema's expression object is additionalProperties:false — a stray
     // id/name key would invalidate the document.
     expect(Object.keys(licenses[0]!)).toEqual(["expression"]);
@@ -149,23 +157,23 @@ describe("renderCyclonedx — license dispatch", () => {
   });
 
   test("Test 2b: a finding-less package with a named raw emits license.name entries deduped by raw", () => {
-    const component = byPurl.get("pkg:npm/jsonify@0.0.1")!;
+    const component = byPurl.get(asPurl("pkg:npm/jsonify@0.0.1"))!;
 
     expect(component["licenses"]).toEqual([{ license: { name: "Public Domain" } }]);
   });
 
   test("Test 2c: a package with neither finding expression nor claims has NO licenses key", () => {
-    const component = byPurl.get("pkg:npm/no-license-pkg@1.0.0")!;
+    const component = byPurl.get(asPurl("pkg:npm/no-license-pkg@1.0.0"))!;
 
     expect("licenses" in component).toBe(false);
   });
 
   test("Test 2d: a finding with null expression falls back to the named-raw dispatch", () => {
     const unknownFinding = entry({
-      purl: "pkg:npm/mystery@1.0.0",
+      purl: asPurl("pkg:npm/mystery@1.0.0"),
       name: "mystery",
       version: "1.0.0",
-      licenseClaims: [{ raw: "Custom License", kind: "name", source: "generator" }],
+      licenseClaims: [{ raw: asRawLicense("Custom License"), kind: "name", source: "generator" }],
       finding: {
         expression: null,
         elected: null,
@@ -184,13 +192,13 @@ describe("renderCyclonedx — license dispatch", () => {
   // {license:{name}} entry after the expression tuple.
   test("#9: an os-partial finding emits the expression tuple PLUS each unrecognized token as a named entry", () => {
     const osPartial = entry({
-      purl: "pkg:deb/debian/os-partial@1.0",
+      purl: asPurl("pkg:deb/debian/os-partial@1.0"),
       name: "os-partial",
       version: "1.0",
       scope: "os",
       finding: {
-        expression: "GPL-2.0-only AND BSD-3-Clause",
-        elected: "GPL-2.0-only AND BSD-3-Clause",
+        expression: canon("GPL-2.0-only AND BSD-3-Clause"),
+        elected: canon("GPL-2.0-only AND BSD-3-Clause"),
         source: "generator",
         confidence: "exact",
         unrecognizedTokens: ["Artistic", "public-domain"],
@@ -199,7 +207,7 @@ describe("renderCyclonedx — license dispatch", () => {
     const doc2 = parse(renderCyclonedx({ packages: [osPartial] }));
 
     expect(doc2.components[0]!["licenses"]).toEqual([
-      { expression: "GPL-2.0-only AND BSD-3-Clause" },
+      { expression: "BSD-3-Clause AND GPL-2.0-only" },
       { license: { name: "Artistic" } },
       { license: { name: "public-domain" } },
     ]);
@@ -207,7 +215,7 @@ describe("renderCyclonedx — license dispatch", () => {
 
   test("#9: an IMPRECISE os-partial (null expression) still emits its unrecognized tokens as named entries", () => {
     const imprecisePartial = entry({
-      purl: "pkg:deb/debian/os-imprecise@1.0",
+      purl: asPurl("pkg:deb/debian/os-imprecise@1.0"),
       name: "os-imprecise",
       version: "1.0",
       scope: "os",
@@ -226,9 +234,9 @@ describe("renderCyclonedx — license dispatch", () => {
   });
 
   test("#9: a finding WITHOUT unrecognizedTokens emits exactly the expression tuple (no regression)", () => {
-    const component = byPurl.get("pkg:npm/expr-pkg@3.0.0")!;
+    const component = byPurl.get(asPurl("pkg:npm/expr-pkg@3.0.0"))!;
 
-    expect(component["licenses"]).toEqual([{ expression: "MIT OR Apache-2.0" }]);
+    expect(component["licenses"]).toEqual([{ expression: "Apache-2.0 OR MIT" }]);
   });
 });
 
@@ -294,7 +302,7 @@ describe("renderCyclonedx — licenses-tool: properties", () => {
 
   test("Test 4c: an empty properties array is omitted, not emitted", () => {
     const orphan = entry({
-      purl: "pkg:npm/orphan@1.0.0",
+      purl: asPurl("pkg:npm/orphan@1.0.0"),
       name: "orphan",
       version: "1.0.0",
       occurrences: [],
@@ -311,7 +319,7 @@ describe("renderCyclonedx — injection inertness", () => {
     const model: CanonicalDependencies = {
       packages: [
         entry({
-          purl: "pkg:npm/hostile@1.0.0",
+          purl: asPurl("pkg:npm/hostile@1.0.0"),
           name: hostile,
           version: "1.0.0",
         }),

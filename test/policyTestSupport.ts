@@ -7,8 +7,14 @@ import {
 } from "../src/policy/parse/clarificationsFile";
 import { parsePolicy } from "../src/policy/parse/parse";
 import { PolicyError } from "../src/policy/schema/diagnostics";
+import {
+  asPurl,
+  asRawLicense,
+  type CanonicalDependencies,
+  type LicenseClaimKind,
+  type Verdict,
+} from "../src/model/dependencies";
 import type { Policy } from "../src/policy/schema";
-import type { CanonicalDependencies, LicenseClaimKind, Verdict } from "../src/model/dependencies";
 
 /** No scanned target in these scenarios is collected by a lane that derives a dependency graph. */
 export const WITHOUT_DEPENDENCY_GRAPHS: ReadonlySet<string> = new Set();
@@ -215,7 +221,7 @@ export interface PackageSpec {
 export function makeModel(specs: ReadonlyArray<PackageSpec>): CanonicalDependencies {
   return {
     packages: specs.map((spec) => ({
-      purl: spec.purl,
+      purl: asPurl(spec.purl),
       name: spec.name,
       version: spec.version,
       occurrences: spec.occurrences.map((o) =>
@@ -228,12 +234,12 @@ export function makeModel(specs: ReadonlyArray<PackageSpec>): CanonicalDependenc
           const kind: LicenseClaimKind =
             raw.includes(" ") || raw.includes("(") ? "expression" : "spdx-id";
 
-          return { raw, kind, source: "generator" as const };
+          return { raw: asRawLicense(raw), kind, source: "generator" as const };
         }),
         ...(spec.scancode !== undefined
           ? [
               {
-                raw: spec.scancode,
+                raw: asRawLicense(spec.scancode),
                 kind: "expression" as const,
                 source: "scancode" as const,
               },
@@ -279,7 +285,7 @@ export function pkgSpec(
   version = "1.0.0",
 ): PackageSpec {
   return {
-    purl: `pkg:npm/${name}@${version}`,
+    purl: asPurl(`pkg:npm/${name}@${version}`),
     name,
     version,
     claims: claim === null ? [] : [claim],
@@ -300,7 +306,7 @@ export function scanPkgSpec(
   version = "1.0.0",
 ): PackageSpec {
   return {
-    purl: `pkg:npm/${name}@${version}`,
+    purl: asPurl(`pkg:npm/${name}@${version}`),
     name,
     version,
     claims: claim === null ? [] : [claim],
@@ -378,7 +384,7 @@ export function crossImagePkgSpec(
   version = "1.0.0",
 ): PackageSpec {
   return {
-    purl: `pkg:apk/alpine/${name}@${version}`,
+    purl: asPurl(`pkg:apk/alpine/${name}@${version}`),
     name,
     version,
     claims: [],
@@ -521,7 +527,7 @@ export function multiClaimSpec(
   version = "1.0.0",
 ): PackageSpec {
   return {
-    purl: `pkg:npm/${name}@${version}`,
+    purl: asPurl(`pkg:npm/${name}@${version}`),
     name,
     version,
     claims,
@@ -561,7 +567,7 @@ export const osMultiSpec = (
   claims: ReadonlyArray<string>,
   occurrences: ReadonlyArray<OccurrenceSpec> = ["docker:img/Dockerfile"],
 ): PackageSpec => ({
-  purl: `pkg:deb/debian/${name}@1.0.0`,
+  purl: asPurl(`pkg:deb/debian/${name}@1.0.0`),
   name,
   version: "1.0.0",
   claims,

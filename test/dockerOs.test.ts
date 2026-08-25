@@ -15,7 +15,6 @@ import { closeSync, ftruncateSync, mkdtempSync, openSync, writeFileSync } from "
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, test } from "bun:test";
-
 import {
   SYFT_TOOL,
   MAX_SYFT_SBOM_BYTES,
@@ -31,6 +30,7 @@ import {
   type AttributedOsComponent,
   type OsComponent,
 } from "../src/collectors/dockerOs";
+import { asPurl, widen } from "./brandTestSupport";
 
 import postgresFixture from "./fixtures/syft-postgres-trimmed.json";
 import nginxFixture from "./fixtures/syft-nginx-trimmed.json";
@@ -115,23 +115,23 @@ describe("filterOsComponents (image-contents purl filter, all ecosystems)", () =
           type: "library",
           name: "libc6",
           version: "2",
-          purl: "pkg:deb/libc6@2",
+          purl: asPurl("pkg:deb/libc6@2"),
         },
-        { type: "library", name: "musl", version: "1", purl: "pkg:apk/musl@1" },
+        { type: "library", name: "musl", version: "1", purl: asPurl("pkg:apk/musl@1") },
         {
           type: "library",
           name: "left-pad",
           version: "1.3.0",
-          purl: "pkg:npm/left-pad@1.3.0",
+          purl: asPurl("pkg:npm/left-pad@1.3.0"),
         },
         { type: "operating-system", name: "alpine", version: "3.23" },
-        { type: "library", name: "empty", version: "", purl: "pkg:deb/empty@" },
+        { type: "library", name: "empty", version: "", purl: asPurl("pkg:deb/empty@") },
       ],
     };
     const kept = filterOsComponents(mixed);
 
     // purl-sorted (apk < deb < npm); noise + empty-version entries dropped.
-    expect(kept.map((c) => c.purl)).toEqual([
+    expect(widen(kept.map((c) => c.purl))).toEqual([
       "pkg:apk/musl@1",
       "pkg:deb/libc6@2",
       "pkg:npm/left-pad@1.3.0",
@@ -195,7 +195,7 @@ describe("filterOsComponents (image-contents purl filter, all ecosystems)", () =
           type: "library",
           name: "x",
           version: "1",
-          purl: "pkg:deb/x@1",
+          purl: asPurl("pkg:deb/x@1"),
           licenses: [
             { license: { name: "Zlib" } },
             { expression: "MIT OR Apache-2.0" },
@@ -225,7 +225,7 @@ describe("filterOsComponents (image-contents purl filter, all ecosystems)", () =
           type: "library",
           name: "y",
           version: "1",
-          purl: "pkg:deb/y@1",
+          purl: asPurl("pkg:deb/y@1"),
           licenses: [
             { license: { id: "MIT" } },
             { license: {} }, // no id/name
@@ -252,16 +252,16 @@ describe("filterOsComponents (image-contents purl filter, all ecosystems)", () =
   test("duplicate purls are deduped first-wins, across ecosystems", () => {
     const dup = {
       components: [
-        { type: "library", name: "a", version: "1", purl: "pkg:deb/a@1" },
-        { type: "library", name: "a", version: "1", purl: "pkg:deb/a@1" },
-        { type: "library", name: "b", version: "2", purl: "pkg:deb/b@2" },
-        { type: "library", name: "lp", version: "1", purl: "pkg:npm/lp@1" },
-        { type: "library", name: "lp", version: "1", purl: "pkg:npm/lp@1" },
+        { type: "library", name: "a", version: "1", purl: asPurl("pkg:deb/a@1") },
+        { type: "library", name: "a", version: "1", purl: asPurl("pkg:deb/a@1") },
+        { type: "library", name: "b", version: "2", purl: asPurl("pkg:deb/b@2") },
+        { type: "library", name: "lp", version: "1", purl: asPurl("pkg:npm/lp@1") },
+        { type: "library", name: "lp", version: "1", purl: asPurl("pkg:npm/lp@1") },
       ],
     };
     const os = filterOsComponents(dup);
 
-    expect(os.map((c) => c.purl)).toEqual(["pkg:deb/a@1", "pkg:deb/b@2", "pkg:npm/lp@1"]);
+    expect(widen(os.map((c) => c.purl))).toEqual(["pkg:deb/a@1", "pkg:deb/b@2", "pkg:npm/lp@1"]);
   });
 });
 
@@ -275,26 +275,26 @@ describe("filterOsComponents (full image contents by default)", () => {
 
     const byName = new Map(full.map((c) => [c.name, c]));
 
-    expect(byName.get("musl")?.purl).toBe(
+    expect(widen(byName.get("musl")?.purl)).toBe(
       "pkg:apk/alpine/musl@1.2.5-r9?arch=x86_64&distro=alpine-3.23.4",
     );
-    expect(byName.get("busybox")?.purl).toBe(
+    expect(widen(byName.get("busybox")?.purl)).toBe(
       "pkg:apk/alpine/busybox@1.37.0-r19?arch=x86_64&distro=alpine-3.23.4",
     );
     // Scoped npm component, purl-encoded, licenses preserved through narrowLicense.
     const scoped = byName.get("@scope/pkg");
 
-    expect(scoped?.purl).toBe("pkg:npm/%40scope/pkg@1.0.0");
+    expect(widen(scoped?.purl)).toBe("pkg:npm/%40scope/pkg@1.0.0");
     expect(scoped?.licenses).toEqual([{ license: { id: "MIT" } }]);
     // Unscoped npm component.
     const leftPad = byName.get("left-pad");
 
-    expect(leftPad?.purl).toBe("pkg:npm/left-pad@1.3.0");
+    expect(widen(leftPad?.purl)).toBe("pkg:npm/left-pad@1.3.0");
     expect(leftPad?.licenses).toEqual([{ license: { id: "MIT" } }]);
     // pypi component (hyphenated PEP-503 form).
     const pypi = byName.get("typing-extensions");
 
-    expect(pypi?.purl).toBe("pkg:pypi/typing-extensions@4.12.2");
+    expect(widen(pypi?.purl)).toBe("pkg:pypi/typing-extensions@4.12.2");
     expect(pypi?.licenses).toEqual([{ license: { name: "PSF-2.0" } }]);
   });
 
@@ -358,14 +358,14 @@ describe("unionOsComponents (cross-image membership union, sidecar v2)", () => {
       type: "library",
       name: "busybox",
       version: "1.37.0-r19",
-      purl: "pkg:apk/alpine/busybox@1.37.0-r19",
+      purl: asPurl("pkg:apk/alpine/busybox@1.37.0-r19"),
       licenses: [{ license: { id: "GPL-2.0-only" } }],
     },
     {
       type: "library",
       name: "musl",
       version: "1.2.5-r9",
-      purl: "pkg:apk/alpine/musl@1.2.5-r9",
+      purl: asPurl("pkg:apk/alpine/musl@1.2.5-r9"),
       licenses: [{ expression: "MIT" }],
     },
   ];
@@ -374,7 +374,7 @@ describe("unionOsComponents (cross-image membership union, sidecar v2)", () => {
       type: "library",
       name: "busybox",
       version: "1.37.0-r19",
-      purl: "pkg:apk/alpine/busybox@1.37.0-r19",
+      purl: asPurl("pkg:apk/alpine/busybox@1.37.0-r19"),
       // A DIFFERENT claim set for the same purl: the first-seen set must win.
       licenses: [{ license: { name: "GPL" } }],
     },
@@ -382,7 +382,7 @@ describe("unionOsComponents (cross-image membership union, sidecar v2)", () => {
       type: "library",
       name: "zlib",
       version: "1.3.1-r2",
-      purl: "pkg:apk/alpine/zlib@1.3.1-r2",
+      purl: asPurl("pkg:apk/alpine/zlib@1.3.1-r2"),
       licenses: [{ license: { id: "Zlib" } }],
     },
   ];

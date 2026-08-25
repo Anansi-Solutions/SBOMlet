@@ -5,6 +5,7 @@ import parse from "spdx-expression-parse";
 
 import { mergeSboms } from "../src/merge/merge";
 import {
+  asRawLicense,
   type CanonicalDependencies,
   type LicenseFinding,
   type PackageAttribution,
@@ -14,6 +15,7 @@ import { canonicalizeExpression, leafIds, type ExpressionNode } from "../src/nor
 import { annotateFindings } from "../src/normalize/normalize";
 import { renderMarkdown } from "../src/render/markdown";
 import { renderNotices } from "../src/render/notices";
+import { canon, asPurl } from "./brandTestSupport";
 
 // ---------------------------------------------------------------------------
 // Notices renderer. Models are hand-built: the renderer is tested against the
@@ -35,9 +37,11 @@ function entry(
 }
 
 function exactFinding(expression: string): LicenseFinding {
+  const canonical = canon(expression);
+
   return {
-    expression,
-    elected: expression,
+    expression: canonical,
+    elected: canonical,
     source: "generator",
     confidence: "exact",
   };
@@ -92,19 +96,19 @@ describe("renderNotices — appendix dedup and expression decomposition", () => 
   const model: CanonicalDependencies = {
     packages: [
       entry({
-        purl: "pkg:npm/a-mit@1.0.0",
+        purl: asPurl("pkg:npm/a-mit@1.0.0"),
         name: "a-mit",
         version: "1.0.0",
         finding: exactFinding("MIT"),
       }),
       entry({
-        purl: "pkg:npm/b-mit@1.0.0",
+        purl: asPurl("pkg:npm/b-mit@1.0.0"),
         name: "b-mit",
         version: "1.0.0",
         finding: exactFinding("MIT"),
       }),
       entry({
-        purl: "pkg:npm/c-dual@1.0.0",
+        purl: asPurl("pkg:npm/c-dual@1.0.0"),
         name: "c-dual",
         version: "1.0.0",
         finding: exactFinding("MIT OR Apache-2.0"),
@@ -148,7 +152,7 @@ describe("renderNotices — canonical marker honesty", () => {
   const model: CanonicalDependencies = {
     packages: [
       entry({
-        purl: "pkg:npm/acme-pkg@1.0.0",
+        purl: asPurl("pkg:npm/acme-pkg@1.0.0"),
         name: "acme-pkg",
         version: "1.0.0",
         finding: exactFinding("MIT"),
@@ -158,7 +162,7 @@ describe("renderNotices — canonical marker honesty", () => {
         }),
       }),
       entry({
-        purl: "pkg:npm/bare-pkg@1.0.0",
+        purl: asPurl("pkg:npm/bare-pkg@1.0.0"),
         name: "bare-pkg",
         version: "1.0.0",
         finding: exactFinding("Apache-2.0"),
@@ -189,7 +193,7 @@ describe("renderNotices — per-package sections", () => {
   const model: CanonicalDependencies = {
     packages: [
       entry({
-        purl: "pkg:npm/copyright-pkg@1.0.0",
+        purl: asPurl("pkg:npm/copyright-pkg@1.0.0"),
         name: "copyright-pkg",
         version: "1.0.0",
         finding: exactFinding("MIT"),
@@ -199,14 +203,14 @@ describe("renderNotices — per-package sections", () => {
         }),
       }),
       entry({
-        purl: "pkg:npm/author-pkg@1.0.0",
+        purl: asPurl("pkg:npm/author-pkg@1.0.0"),
         name: "author-pkg",
         version: "1.0.0",
         finding: exactFinding("ISC"),
         attribution: attribution({ author: "Sam Solo" }),
       }),
       entry({
-        purl: "pkg:npm/notice-pkg@2.0.0",
+        purl: asPurl("pkg:npm/notice-pkg@2.0.0"),
         name: "notice-pkg",
         version: "2.0.0",
         finding: exactFinding("Apache-2.0"),
@@ -217,7 +221,7 @@ describe("renderNotices — per-package sections", () => {
       // Template-only attribution (hasVerbatimText, but nothing extracted):
       // honest empty — no section.
       entry({
-        purl: "pkg:npm/template-pkg@3.0.0",
+        purl: asPurl("pkg:npm/template-pkg@3.0.0"),
         name: "template-pkg",
         version: "3.0.0",
         finding: exactFinding("Apache-2.0"),
@@ -225,7 +229,7 @@ describe("renderNotices — per-package sections", () => {
       }),
       // No attribution at all — no section.
       entry({
-        purl: "pkg:npm/plain-pkg@4.0.0",
+        purl: asPurl("pkg:npm/plain-pkg@4.0.0"),
         name: "plain-pkg",
         version: "4.0.0",
         finding: exactFinding("MIT"),
@@ -289,7 +293,7 @@ describe("renderNotices — injection-proof fencing", () => {
   const model: CanonicalDependencies = {
     packages: [
       entry({
-        purl: "pkg:npm/fence-pkg@1.0.0",
+        purl: asPurl("pkg:npm/fence-pkg@1.0.0"),
         name: "fence-pkg",
         version: "1.0.0",
         finding: UNKNOWN_FINDING,
@@ -329,13 +333,13 @@ describe("renderNotices — unknown-license packages", () => {
     const model: CanonicalDependencies = {
       packages: [
         entry({
-          purl: "pkg:npm/mystery-pkg@1.0.0",
+          purl: asPurl("pkg:npm/mystery-pkg@1.0.0"),
           name: "mystery-pkg",
           version: "1.0.0",
           finding: UNKNOWN_FINDING,
         }),
         entry({
-          purl: "pkg:npm/known-pkg@1.0.0",
+          purl: asPurl("pkg:npm/known-pkg@1.0.0"),
           name: "known-pkg",
           version: "1.0.0",
           finding: exactFinding("MIT"),
@@ -353,7 +357,7 @@ describe("renderNotices — unknown-license packages", () => {
     const model: CanonicalDependencies = {
       packages: [
         entry({
-          purl: "pkg:npm/known-pkg@1.0.0",
+          purl: asPurl("pkg:npm/known-pkg@1.0.0"),
           name: "known-pkg",
           version: "1.0.0",
           finding: exactFinding("MIT"),
@@ -371,7 +375,7 @@ describe("renderNotices/renderMarkdown agreement — LicenseRef-only unknown lan
     const model: CanonicalDependencies = {
       packages: [
         entry({
-          purl: "pkg:npm/ref-only-pkg@1.0.0",
+          purl: asPurl("pkg:npm/ref-only-pkg@1.0.0"),
           name: "ref-only-pkg",
           version: "1.0.0",
           finding: exactFinding("LicenseRef-proprietary-eula"),
@@ -391,13 +395,13 @@ describe("renderNotices — WITH exceptions and unlisted ids (Test 6, A3)", () =
   const model: CanonicalDependencies = {
     packages: [
       entry({
-        purl: "pkg:npm/with-pkg@1.0.0",
+        purl: asPurl("pkg:npm/with-pkg@1.0.0"),
         name: "with-pkg",
         version: "1.0.0",
         finding: exactFinding("GPL-2.0-only WITH Classpath-exception-2.0"),
       }),
       entry({
-        purl: "pkg:npm/ref-pkg@1.0.0",
+        purl: asPurl("pkg:npm/ref-pkg@1.0.0"),
         name: "ref-pkg",
         version: "1.0.0",
         finding: exactFinding("LicenseRef-custom-thing"),
@@ -447,7 +451,7 @@ describe("renderNotices — imprecise label honesty", () => {
     const model: CanonicalDependencies = {
       packages: [
         entry({
-          purl: "pkg:pypi/jinja2@3.1.0",
+          purl: asPurl("pkg:pypi/jinja2@3.1.0"),
           name: "jinja2",
           version: "3.1.0",
           finding: impreciseFinding,
@@ -472,13 +476,13 @@ describe("renderNotices — imprecise label honesty", () => {
 
 describe("renderNotices — canonical license display", () => {
   const NOISY_EXPRESSION = "(MIT OR Apache-2.0) AND (Apache-2.0 AND MIT)";
-  const CANONICAL_EXPRESSION = canonicalizeExpression(NOISY_EXPRESSION);
+  const CANONICAL_EXPRESSION = canonicalizeExpression(asRawLicense(NOISY_EXPRESSION));
 
   test("a noisy declared claim's normalized expression renders canonical in the per-package License line", () => {
     const model: CanonicalDependencies = {
       packages: [
         entry({
-          purl: "pkg:npm/noisy-pkg@1.0.0",
+          purl: asPurl("pkg:npm/noisy-pkg@1.0.0"),
           name: "noisy-pkg",
           version: "1.0.0",
           finding: exactFinding(NOISY_EXPRESSION),
@@ -501,11 +505,11 @@ describe("renderNotices — canonical license display", () => {
     const model: CanonicalDependencies = {
       packages: [
         entry({
-          purl: "pkg:npm/unparseable-pkg@1.0.0",
+          purl: asPurl("pkg:npm/unparseable-pkg@1.0.0"),
           name: "unparseable-pkg",
           version: "1.0.0",
           finding: {
-            expression: UNPARSEABLE_EXPRESSION,
+            expression: canon(UNPARSEABLE_EXPRESSION),
             elected: null,
             source: "generator",
             confidence: "exact",
@@ -539,7 +543,7 @@ describe("renderNotices — determinism contract", () => {
   const model: CanonicalDependencies = {
     packages: [
       entry({
-        purl: "pkg:npm/zzz-pkg@1.0.0",
+        purl: asPurl("pkg:npm/zzz-pkg@1.0.0"),
         name: "zzz-pkg",
         version: "1.0.0",
         finding: exactFinding("MIT"),
@@ -549,7 +553,7 @@ describe("renderNotices — determinism contract", () => {
         }),
       }),
       entry({
-        purl: "pkg:npm/aaa-pkg@1.0.0",
+        purl: asPurl("pkg:npm/aaa-pkg@1.0.0"),
         name: "aaa-pkg",
         version: "1.0.0",
         finding: exactFinding("ISC"),

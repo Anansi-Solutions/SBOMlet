@@ -24,6 +24,7 @@ import {
 import { type LicenseClaim, type PackageEntry } from "../src/model/dependencies";
 import { optionsFrom } from "../src/cli";
 import { runGenerate } from "../src/pipeline/pipeline";
+import { asRawLicense, asPurl, type Purl } from "./brandTestSupport";
 
 /** Original exec export captured BEFORE any mock.module call (restore target). */
 const REAL_EXEC = { ...execModule };
@@ -38,7 +39,7 @@ const FIXTURE_PATH = join(__dirname, "fixtures", "scancode-license-file-trimmed.
 
 function npmPackage(name: string, version: string, claims: LicenseClaim[] = []): PackageEntry {
   return {
-    purl: `pkg:npm/${name}@${version}`,
+    purl: asPurl(`pkg:npm/${name}@${version}`),
     name,
     version,
     occurrences: [{ target: "proj", isDevDependency: false }],
@@ -176,7 +177,7 @@ describe("per-package scan failure containment (assess.ts analyzeOne)", () => {
     );
 
     // NOT memoized - retried next run, mirroring the absent-local-sources posture.
-    expect(getMemoEntry(readScancodeMemo(path), "pkg:npm/slow-pkg@1.0.0")).toBeUndefined();
+    expect(getMemoEntry(readScancodeMemo(path), asPurl("pkg:npm/slow-pkg@1.0.0"))).toBeUndefined();
   });
 
   test("a completed sibling scanned in the SAME run as a timed-out package IS memoized and gains its ScanCode claim", async () => {
@@ -203,11 +204,11 @@ describe("per-package scan failure containment (assess.ts analyzeOne)", () => {
       intensive: { targetDirs: [repo] },
     });
 
-    const entry = getMemoEntry(readScancodeMemo(path), "pkg:npm/left-pad@1.3.0");
+    const entry = getMemoEntry(readScancodeMemo(path), asPurl("pkg:npm/left-pad@1.3.0"));
 
     expect(entry?.license).toBe("MIT");
     expect(scancodeClaim(assessed.packages[1])).toEqual({
-      raw: "MIT",
+      raw: asRawLicense("MIT"),
       kind: "expression",
       source: "scancode",
     });
@@ -266,8 +267,8 @@ describe("per-package scan failure containment (assess.ts analyzeOne)", () => {
     // Neither package was memoized - a fatal error is never a per-package outcome.
     const memo = readScancodeMemo(path);
 
-    expect(getMemoEntry(memo, "pkg:npm/first-victim@1.0.0")).toBeUndefined();
-    expect(getMemoEntry(memo, "pkg:npm/never-reached@1.0.0")).toBeUndefined();
+    expect(getMemoEntry(memo, asPurl("pkg:npm/first-victim@1.0.0"))).toBeUndefined();
+    expect(getMemoEntry(memo, asPurl("pkg:npm/never-reached@1.0.0"))).toBeUndefined();
   });
 });
 
@@ -355,8 +356,8 @@ describe("memo persistence across a fatal abort (assessPackages's finally-block 
     // The finally-block write persisted the completed entry despite the abort.
     const memo = readScancodeMemo(path);
 
-    expect(getMemoEntry(memo, "pkg:npm/completed-first@1.0.0")?.license).toBe("MIT");
-    expect(getMemoEntry(memo, "pkg:npm/fatal-second@1.0.0")).toBeUndefined();
+    expect(getMemoEntry(memo, asPurl("pkg:npm/completed-first@1.0.0"))?.license).toBe("MIT");
+    expect(getMemoEntry(memo, asPurl("pkg:npm/fatal-second@1.0.0"))).toBeUndefined();
   });
 });
 
@@ -390,9 +391,9 @@ describe("merge-on-write: unrelated entries always survive; on a same-purl colli
   }
 
   function seedEntry(path: string, purl: string, entry: ScancodeMemoEntry): void {
-    const memo = new Map<string, ScancodeMemoEntry>();
+    const memo = new Map<Purl, ScancodeMemoEntry>();
 
-    putMemoEntry(memo, purl, entry, () => new Date("2020-01-01T00:00:00.000Z"));
+    putMemoEntry(memo, asPurl(purl), entry, () => new Date("2020-01-01T00:00:00.000Z"));
     writeFileSync(path, serializeScancodeMemo(memo));
   }
 
@@ -422,7 +423,7 @@ describe("merge-on-write: unrelated entries always survive; on a same-purl colli
 
       putMemoEntry(
         concurrent,
-        "pkg:npm/concurrent-c@9.0.0",
+        asPurl("pkg:npm/concurrent-c@9.0.0"),
         { license: "Apache-2.0", via: "scancode-toolkit@32.5.0/license-file" },
         () => new Date("2025-01-01T00:00:00.000Z"),
       );
@@ -452,9 +453,9 @@ describe("merge-on-write: unrelated entries always survive; on a same-purl colli
 
     const final = readScancodeMemo(path);
 
-    expect(getMemoEntry(final, "pkg:npm/existing-a@1.0.0")?.license).toBe("MIT"); // A survives
-    expect(getMemoEntry(final, "pkg:npm/left-pad@1.3.0")?.license).toBe("MIT"); // B, this run's own scan
-    expect(getMemoEntry(final, "pkg:npm/concurrent-c@9.0.0")?.license).toBe("Apache-2.0"); // C survives
+    expect(getMemoEntry(final, asPurl("pkg:npm/existing-a@1.0.0"))?.license).toBe("MIT"); // A survives
+    expect(getMemoEntry(final, asPurl("pkg:npm/left-pad@1.3.0"))?.license).toBe("MIT"); // B, this run's own scan
+    expect(getMemoEntry(final, asPurl("pkg:npm/concurrent-c@9.0.0"))?.license).toBe("Apache-2.0"); // C survives
   });
 
   test("collision precedence: when the SAME purl is scanned by THIS run and also present on disk (a stale/racing write) with a DIFFERENT value, this run's in-memory entry wins", async () => {
@@ -500,7 +501,9 @@ describe("merge-on-write: unrelated entries always survive; on a same-purl colli
 
     // This run actually analyzed the tree and elected MIT - that answer wins over the
     // racing writer's stale GPL-3.0-only value.
-    expect(getMemoEntry(readScancodeMemo(path), "pkg:npm/left-pad@1.3.0")?.license).toBe("MIT");
+    expect(getMemoEntry(readScancodeMemo(path), asPurl("pkg:npm/left-pad@1.3.0"))?.license).toBe(
+      "MIT",
+    );
   });
 
   test("a clean, uncontested run still leaves the committed memo byte-identical to a plain read-merge-write with no concurrent writer (the merge is a no-op when nothing else touched the file)", async () => {
@@ -546,7 +549,7 @@ describe("--package-timeout-mins end-to-end: CLI minutes -> GenerateOptions ms -
   const BAIT_SBOM = {
     bomFormat: "CycloneDX",
     specVersion: "1.6",
-    components: [{ purl: "pkg:npm/left-pad@1.3.0", name: "left-pad", version: "1.3.0" }],
+    components: [{ purl: asPurl("pkg:npm/left-pad@1.3.0"), name: "left-pad", version: "1.3.0" }],
   };
 
   const BAIT_LOCKFILE = [

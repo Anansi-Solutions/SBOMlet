@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
+import { asRawLicense, canon } from "../../test/brandTestSupport";
 import { observedSignalBySource } from "./normalize";
 import type { LicenseClaim, LicenseClaimSource, LicenseFinding } from "../model/dependencies";
 
@@ -9,14 +10,14 @@ import type { LicenseClaim, LicenseClaimSource, LicenseFinding } from "../model/
 // can be compared against the lane that would produce it.
 
 const sourced = (raw: string, source: LicenseClaimSource): LicenseClaim => ({
-  raw,
+  raw: asRawLicense(raw),
   kind: "name",
   source,
 });
 
 const precise = (expression: string): LicenseFinding => ({
-  expression,
-  elected: expression,
+  expression: canon(expression),
+  elected: canon(expression),
   source: "generator",
   confidence: "exact",
 });
