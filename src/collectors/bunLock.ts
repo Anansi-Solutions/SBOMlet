@@ -30,7 +30,14 @@ import { join } from "node:path";
 import { type } from "arktype";
 
 import { BunLockDocument } from "../validate/bunLock";
-import { asPurl, type Purl } from "../model/dependencies";
+import {
+  asDependencyName,
+  asDependencyVersion,
+  asPurl,
+  type DependencyName,
+  type DependencyVersion,
+  type Purl,
+} from "../model/dependencies";
 import { recordOf } from "../validate/record";
 import { computeCacheKey, type CollectorSbomFile } from "./cdxgen";
 import { manifestFilesFor } from "./dispatch";
@@ -129,7 +136,13 @@ function splitSpec(spec: string): { name: string; version: string } | undefined 
     return undefined;
   } // no separator, or a bare leading-@ scope
 
-  return { name: spec.slice(0, at), version: spec.slice(at + 1) };
+  const version = spec.slice(at + 1);
+
+  if (version === "") {
+    return undefined;
+  } // a version-less spec ("name@") is malformed - tolerant skip
+
+  return { name: spec.slice(0, at), version };
 }
 
 /**
@@ -337,8 +350,8 @@ function transitiveDevKeys(
 
 interface BunComponent {
   type: "library";
-  name: string;
-  version: string;
+  name: DependencyName;
+  version: DependencyVersion;
   purl: Purl;
   properties?: Array<{ name: string; value: string }>;
 }
@@ -391,8 +404,8 @@ function componentsOf(
 
     const component: BunComponent = {
       type: "library",
-      name: identity.name,
-      version: identity.version,
+      name: asDependencyName(identity.name),
+      version: asDependencyVersion(identity.version),
       purl: purlOf(identity.name, identity.version),
     };
 

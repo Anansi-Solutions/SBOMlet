@@ -38,7 +38,16 @@ import { existsSync, mkdtempSync, readFileSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { compareCodeUnits, toSortedJson, tryAsPurl, type Purl } from "../model/dependencies";
+import {
+  asDependencyName,
+  asDependencyVersion,
+  compareCodeUnits,
+  toSortedJson,
+  tryAsPurl,
+  type DependencyName,
+  type DependencyVersion,
+  type Purl,
+} from "../model/dependencies";
 import { execTool } from "./exec";
 
 /**
@@ -131,8 +140,8 @@ export type OsLicense =
  */
 export interface OsComponent {
   type: "library";
-  name: string;
-  version: string;
+  name: DependencyName;
+  version: DependencyVersion;
   purl: Purl;
   licenses?: OsLicense[];
 }
@@ -322,8 +331,8 @@ export function filterOsComponents(sbom: unknown): OsComponent[] {
 
     byPurl.set(raw.purl, {
       type: "library",
-      name: raw.name,
-      version: raw.version,
+      name: asDependencyName(raw.name),
+      version: asDependencyVersion(raw.version),
       purl,
       // Field-absent when syft resolved no license - keeps the emit byte-stable (toSortedJson omits
       // undefined) and the field meaningful.

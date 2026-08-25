@@ -8,6 +8,8 @@
  */
 import {
   asAbsolutePath,
+  asDependencyName,
+  asDependencyVersion,
   asPurl,
   asRawLicense,
   asRelativePath,
@@ -16,7 +18,14 @@ import {
 } from "../src/model/dependencies";
 import { canonicalizeExpression } from "../src/normalize/expression";
 
-export { asAbsolutePath, asPurl, asRawLicense, asRelativePath };
+export {
+  asAbsolutePath,
+  asDependencyName,
+  asDependencyVersion,
+  asPurl,
+  asRawLicense,
+  asRelativePath,
+};
 export type { Purl };
 
 /**

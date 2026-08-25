@@ -24,7 +24,13 @@ import {
 import { type LicenseClaim, type PackageEntry } from "../src/model/dependencies";
 import { optionsFrom } from "../src/cli";
 import { runGenerate } from "../src/pipeline/pipeline";
-import { asRawLicense, asPurl, type Purl } from "./brandTestSupport";
+import {
+  asRawLicense,
+  asPurl,
+  asDependencyName,
+  asDependencyVersion,
+  type Purl,
+} from "./brandTestSupport";
 
 /** Original exec export captured BEFORE any mock.module call (restore target). */
 const REAL_EXEC = { ...execModule };
@@ -40,8 +46,8 @@ const FIXTURE_PATH = join(__dirname, "fixtures", "scancode-license-file-trimmed.
 function npmPackage(name: string, version: string, claims: LicenseClaim[] = []): PackageEntry {
   return {
     purl: asPurl(`pkg:npm/${name}@${version}`),
-    name,
-    version,
+    name: asDependencyName(name),
+    version: asDependencyVersion(version),
     occurrences: [{ target: "proj", isDevDependency: false }],
     licenseClaims: claims,
     scope: "app",

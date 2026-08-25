@@ -11,7 +11,13 @@ import { annotateFindings } from "../../normalize/normalize";
 import { PolicyError } from "../schema/diagnostics";
 import { parsePolicy } from "../parse/parse";
 import { renderMarkdown } from "../../render/markdown";
-import { asRawLicense, widen, asPurl } from "../../../test/brandTestSupport";
+import {
+  asRawLicense,
+  widen,
+  asPurl,
+  asDependencyName,
+  asDependencyVersion,
+} from "../../../test/brandTestSupport";
 import { evaluate } from "./evaluate";
 import type { Policy } from "../schema";
 import type { CanonicalDependencies, Verdict } from "../../model/dependencies";
@@ -40,8 +46,8 @@ function makeModel(specs: ReadonlyArray<PackageSpec>): CanonicalDependencies {
   return {
     packages: specs.map((spec) => ({
       purl: asPurl(spec.purl),
-      name: spec.name,
-      version: spec.version ?? "1.0.0",
+      name: asDependencyName(spec.name),
+      version: asDependencyVersion(spec.version ?? "1.0.0"),
       occurrences: spec.occurrences.map((o) => ({
         target: o.target,
         isDevDependency: o.dev ?? false,

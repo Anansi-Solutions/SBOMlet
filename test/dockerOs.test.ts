@@ -30,7 +30,7 @@ import {
   type AttributedOsComponent,
   type OsComponent,
 } from "../src/collectors/dockerOs";
-import { asPurl, widen } from "./brandTestSupport";
+import { asPurl, widen, asDependencyName, asDependencyVersion } from "./brandTestSupport";
 
 import postgresFixture from "./fixtures/syft-postgres-trimmed.json";
 import nginxFixture from "./fixtures/syft-nginx-trimmed.json";
@@ -143,7 +143,7 @@ describe("filterOsComponents (image-contents purl filter, all ecosystems)", () =
     // survive the re-emit so the merge's licenseClaimsOf picks them up. Before
     // this fix the collector dropped them and the OS section rendered unknown.
     const os = filterOsComponents(postgresFixture);
-    const byName = new Map(os.map((c) => [c.name, c]));
+    const byName = new Map(os.map((c) => [widen(c.name), c] as const));
 
     // adduser carries TWO license.id entries (GPL-2.0-only / GPL-2.0-or-later).
     const adduser = byName.get("adduser");
@@ -171,7 +171,7 @@ describe("filterOsComponents (image-contents purl filter, all ecosystems)", () =
 
   test("PRESERVES syft's license shapes on apk components (id + expression)", () => {
     const os = filterOsComponents(nginxFixture);
-    const byName = new Map(os.map((c) => [c.name, c]));
+    const byName = new Map(os.map((c) => [widen(c.name), c] as const));
 
     // alpine-keys: single license.id.
     expect(byName.get("alpine-keys")?.licenses).toEqual([{ license: { id: "MIT" } }]);
@@ -273,7 +273,7 @@ describe("filterOsComponents (full image contents by default)", () => {
 
     expect(purls).toEqual(sorted);
 
-    const byName = new Map(full.map((c) => [c.name, c]));
+    const byName = new Map(full.map((c) => [widen(c.name), c] as const));
 
     expect(widen(byName.get("musl")?.purl)).toBe(
       "pkg:apk/alpine/musl@1.2.5-r9?arch=x86_64&distro=alpine-3.23.4",
@@ -356,15 +356,15 @@ describe("unionOsComponents (cross-image membership union, sidecar v2)", () => {
   const sharedInA: OsComponent[] = [
     {
       type: "library",
-      name: "busybox",
-      version: "1.37.0-r19",
+      name: asDependencyName("busybox"),
+      version: asDependencyVersion("1.37.0-r19"),
       purl: asPurl("pkg:apk/alpine/busybox@1.37.0-r19"),
       licenses: [{ license: { id: "GPL-2.0-only" } }],
     },
     {
       type: "library",
-      name: "musl",
-      version: "1.2.5-r9",
+      name: asDependencyName("musl"),
+      version: asDependencyVersion("1.2.5-r9"),
       purl: asPurl("pkg:apk/alpine/musl@1.2.5-r9"),
       licenses: [{ expression: "MIT" }],
     },
@@ -372,16 +372,16 @@ describe("unionOsComponents (cross-image membership union, sidecar v2)", () => {
   const sharedInB: OsComponent[] = [
     {
       type: "library",
-      name: "busybox",
-      version: "1.37.0-r19",
+      name: asDependencyName("busybox"),
+      version: asDependencyVersion("1.37.0-r19"),
       purl: asPurl("pkg:apk/alpine/busybox@1.37.0-r19"),
       // A DIFFERENT claim set for the same purl: the first-seen set must win.
       licenses: [{ license: { name: "GPL" } }],
     },
     {
       type: "library",
-      name: "zlib",
-      version: "1.3.1-r2",
+      name: asDependencyName("zlib"),
+      version: asDependencyVersion("1.3.1-r2"),
       purl: asPurl("pkg:apk/alpine/zlib@1.3.1-r2"),
       licenses: [{ license: { id: "Zlib" } }],
     },

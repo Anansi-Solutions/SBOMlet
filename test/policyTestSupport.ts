@@ -8,6 +8,8 @@ import {
 import { parsePolicy } from "../src/policy/parse/parse";
 import { PolicyError } from "../src/policy/schema/diagnostics";
 import {
+  asDependencyName,
+  asDependencyVersion,
   asPurl,
   asRawLicense,
   type CanonicalDependencies,
@@ -222,8 +224,8 @@ export function makeModel(specs: ReadonlyArray<PackageSpec>): CanonicalDependenc
   return {
     packages: specs.map((spec) => ({
       purl: asPurl(spec.purl),
-      name: spec.name,
-      version: spec.version,
+      name: asDependencyName(spec.name),
+      version: asDependencyVersion(spec.version),
       occurrences: spec.occurrences.map((o) =>
         typeof o === "string"
           ? { target: o, isDevDependency: false }

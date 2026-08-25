@@ -15,6 +15,8 @@ import { type } from "arktype";
 import { extractCopyrightLines } from "../extract/copyright";
 import { canonicalizeExpression } from "../normalize/expression";
 import {
+  asDependencyName,
+  asDependencyVersion,
   compareCodeUnits,
   comparePackages,
   DOCKER_IDENTITY_PREFIX,
@@ -764,19 +766,41 @@ function isFirstPartyMember(
   );
 }
 
+/**
+ * The required identity triple, or undefined when the component is missing any of purl/name/version
+ * OR carries a blank name/version. Malformed entries are skipped, never thrown on - this is the
+ * tolerant boundary that keeps the downstream DependencyName/DependencyVersion mints seeing only
+ * valid-by-construction values (a blank name/version drops the package rather than crashing).
+ */
+function requiredIdentityOf(
+  component: SbomComponentShape,
+): { purl: Purl; name: string; version: string } | undefined {
+  const { purl, name, version } = component;
+
+  if (purl === undefined || name === undefined || version === undefined) {
+    return undefined;
+  }
+
+  if (name.trim() === "" || version.trim() === "") {
+    return undefined;
+  }
+
+  return { purl, name, version };
+}
+
 /** One narrowed component → its PackageEntry, or undefined for every skip. */
 function packageEntryOf(
   input: CollectedSbom,
   component: SbomComponentShape,
   rootPurl: Purl | undefined,
 ): PackageEntry | undefined {
-  const { purl, name, version } = component;
+  const identity = requiredIdentityOf(component);
 
-  // Malformed entries are skipped, never thrown on - the required purl/name/version triple gate
-  // stays explicit.
-  if (purl === undefined || name === undefined || version === undefined) {
+  if (identity === undefined) {
     return undefined;
   }
+
+  const { purl, name, version } = identity;
 
   // The scanned root never appears in the inventory.
   if (rootPurl !== undefined && purl === rootPurl) {
@@ -813,8 +837,8 @@ function packageEntryOf(
 
   const entry: PackageEntry = {
     purl,
-    name: displayName,
-    version,
+    name: asDependencyName(displayName),
+    version: asDependencyVersion(version),
     occurrences: [occurrence],
     licenseClaims: licenseClaimsOf(component),
     scope: input.scope ?? "app", // per-input scope; the docker sidecar inputs set "os"
