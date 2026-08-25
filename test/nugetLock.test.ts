@@ -22,6 +22,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { computeCacheKey } from "../src/collectors/cdxgen";
 import { collectWithNugetLock, NUGET_COLLECTOR_TOOL } from "../src/collectors/nugetLock";
 import { collectors } from "../src/collectors/registry";
+import { asAbsolutePath } from "../src/model/dependencies";
 import type { Target } from "../src/targets/target";
 
 // ---------------------------------------------------------------------------
@@ -259,7 +260,7 @@ function makeTargetWithFiles(files: Record<string, string>): Target {
     writeFileSync(join(dir, name), content);
   }
 
-  return { dir, identity: "test/synthetic" };
+  return { dir: asAbsolutePath(dir), identity: "test/synthetic" };
 }
 
 function makeNugetTarget(lock: string): Target {

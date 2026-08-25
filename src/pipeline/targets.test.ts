@@ -27,6 +27,7 @@ import { afterAll, beforeAll, describe, expect, mock, test } from "bun:test";
 import * as cdxgenModule from "../collectors/cdxgen";
 import * as yarnPluginModule from "../collectors/yarnPlugin";
 import { mergeSboms } from "../merge/merge";
+import { asAbsolutePath } from "../model/dependencies";
 import { collectTargets } from "./targets";
 import { runGenerate } from "./pipeline";
 import type { GenerateOptions } from "./options";
@@ -1562,7 +1563,7 @@ describe("collectTargets — nuget packages.lock.json coverage integration", () 
 
     expect(log).toContain("collecting . via nuget-lock-collector@1");
     expect(result.inputs.map((input) => input.targetIdentity)).toEqual(["."]);
-    expect(result.targetDirs).toEqual([root]);
+    expect(result.targetDirs).toEqual([asAbsolutePath(root)]);
   });
 });
 

@@ -15,6 +15,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 
+import { asAbsolutePath } from "../model/dependencies";
 import { CDXGEN_TOOL, computeCacheKey } from "./cdxgen";
 import * as execModule from "./exec";
 import {
@@ -34,7 +35,7 @@ function makeTarget(yarnLock: string, packageJson: string): Target {
 
   writeFileSync(join(dir, "yarn.lock"), yarnLock);
   writeFileSync(join(dir, "package.json"), packageJson);
-  return { dir, identity: "test/synthetic" };
+  return { dir: asAbsolutePath(dir), identity: "test/synthetic" };
 }
 
 describe("yarnPluginArgs", () => {
@@ -195,7 +196,7 @@ describe("dual-run cache key", () => {
     writeFileSync(join(unitDir, "package.json"), PACKAGE_JSON);
 
     const unit: Target = {
-      dir: unitDir,
+      dir: asAbsolutePath(unitDir),
       identity: "backend",
       lockfileDir: rootDir,
       workspacePath: "backend",
@@ -240,13 +241,13 @@ describe("dual-run cache key", () => {
     writeFileSync(join(unitBDir, "package.json"), PACKAGE_JSON);
 
     const unitA: Target = {
-      dir: unitADir,
+      dir: asAbsolutePath(unitADir),
       identity: "backend",
       lockfileDir: rootDir,
       workspacePath: "backend",
     };
     const unitB: Target = {
-      dir: unitBDir,
+      dir: asAbsolutePath(unitBDir),
       identity: "frontend",
       lockfileDir: rootDir,
       workspacePath: "frontend",
@@ -331,7 +332,7 @@ describe("collectWithYarnPlugin — unit-aware cwd and cache key", () => {
     );
 
     const unit: Target = {
-      dir: unitDir,
+      dir: asAbsolutePath(unitDir),
       identity: "backend",
       lockfileDir: rootDir,
       workspacePath: "backend",
@@ -351,7 +352,7 @@ describe("collectWithYarnPlugin — unit-aware cwd and cache key", () => {
     // with workspacePath undefined — proving the discriminator segment
     // entered the hash.
     const noDiscriminatorKey = computeCacheKey(
-      { dir: unitDir, identity: "backend", lockfileDir: rootDir },
+      { dir: asAbsolutePath(unitDir), identity: "backend", lockfileDir: rootDir },
       YARN_PLUGIN_TOOL,
       yarnPluginCacheArgs(),
       [

@@ -9,9 +9,11 @@
 import { existsSync, statSync } from "node:fs";
 import { basename, dirname, join, relative, resolve, sep } from "node:path";
 
+import { asAbsolutePath, type AbsolutePath } from "../model/dependencies";
+
 export interface Target {
   /** Resolved absolute path of the target directory. */
-  dir: string;
+  dir: AbsolutePath;
   /**
    * Forward-slash path of the target relative to the enclosing repository root (e.g.
    * "libraries/iframe-rpc"); basename of the directory when no `.git` ancestor exists. NEVER
@@ -56,7 +58,7 @@ function findRepoRoot(startDir: string): string | undefined {
 }
 
 export function resolveTarget(targetArg: string, cwd?: string): Target {
-  const dir = resolve(cwd ?? process.cwd(), targetArg);
+  const dir = asAbsolutePath(resolve(cwd ?? process.cwd(), targetArg));
 
   if (!existsSync(dir) || !statSync(dir).isDirectory()) {
     throw new Error(`--target "${targetArg}" does not resolve to a directory: ${dir}`);

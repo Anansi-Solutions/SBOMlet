@@ -26,7 +26,7 @@
 import { readdirSync } from "node:fs";
 import { join, relative, sep } from "node:path";
 
-import { compareCodeUnits } from "../model/dependencies";
+import { asAbsolutePath, compareCodeUnits, type AbsolutePath } from "../model/dependencies";
 import {
   DOCKERFILE_DOT_DIR_ALLOWLIST,
   globToRegExp,
@@ -39,12 +39,12 @@ export interface DiscoveredDockerfile {
   /** Repo-relative forward-slash path, e.g. "backend/Dockerfile". */
   identity: string;
   /** Absolute filesystem path. */
-  path: string;
+  path: AbsolutePath;
 }
 
 export interface DiscoverDockerfilesOptions {
   /** Absolute path of this tool's own directory (excluded from the walk). */
-  toolDir?: string;
+  toolDir?: AbsolutePath;
   /** Repeatable --exclude globs, matched against the identity. */
   excludes?: readonly string[];
   /** `[docker] ignore` globs, matched against the identity. */
@@ -151,7 +151,7 @@ export function discoverDockerfiles(
         continue;
       }
 
-      found.push({ identity, path: sub });
+      found.push({ identity, path: asAbsolutePath(sub) });
     }
   };
 

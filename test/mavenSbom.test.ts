@@ -26,6 +26,7 @@ import {
 } from "../src/collectors/mavenSbom";
 import { collectors } from "../src/collectors/registry";
 import { mergeSboms } from "../src/merge/merge";
+import { asAbsolutePath } from "../src/model/dependencies";
 import type { Target } from "../src/targets/target";
 
 // ---------------------------------------------------------------------------
@@ -246,7 +247,7 @@ function makeTargetWithFiles(files: Record<string, string>): Target {
     writeFileSync(join(dir, name), content);
   }
 
-  return { dir, identity: "test/synthetic" };
+  return { dir: asAbsolutePath(dir), identity: "test/synthetic" };
 }
 
 function makeMavenTarget(sbom: string): Target {

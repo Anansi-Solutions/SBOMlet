@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, test } from "bun:test";
 
+import { asAbsolutePath } from "../model/dependencies";
 import { discoverDockerfiles, isDockerfileName } from "./dockerfile";
 
 // Self-contained temp trees only — no reference to any host-project path.
@@ -132,7 +133,7 @@ describe("discoverDockerfiles", () => {
     writeFile(root, "tool/src/collectors/dockerfile.test.ts", "test();\n");
 
     const toolDir = join(root, "tool");
-    const result = discoverDockerfiles(root, { toolDir });
+    const result = discoverDockerfiles(root, { toolDir: asAbsolutePath(toolDir) });
 
     // The tool dir subtree is pruned; only the consumer Dockerfile remains.
     expect(result.dockerfiles.map((d) => d.identity)).toEqual(["app/Dockerfile"]);
@@ -282,7 +283,7 @@ describe("discoverDockerfiles", () => {
     const entry = result.dockerfiles.find((d) => d.identity === "backend/Dockerfile");
 
     expect(entry).toBeDefined();
-    expect(entry?.path).toBe(join(root, "backend", "Dockerfile"));
+    expect(entry?.path).toBe(asAbsolutePath(join(root, "backend", "Dockerfile")));
     // The entry shape carries identity + path only — no derived base field.
     expect(Object.keys(entry ?? {}).sort()).toEqual(["identity", "path"]);
   });

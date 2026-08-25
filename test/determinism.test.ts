@@ -24,6 +24,7 @@ import {
   toSortedDependenciesJson,
   type EvaluatedDependencies,
   type Verdict,
+  asAbsolutePath,
 } from "../src/model/dependencies";
 import { annotateFindings } from "../src/normalize/normalize";
 import { evaluate } from "../src/policy/engine/evaluate";
@@ -294,7 +295,7 @@ function makeBunFixtureTarget(): Target {
   collectorTempDirs.push(dir);
   writeFileSync(join(dir, "bun.lock"), BUN_DET_LOCK);
   writeFileSync(join(dir, "package.json"), '{ "name": "det-root", "private": true }\n');
-  return { dir, identity: BUN_TARGET_IDENTITY };
+  return { dir: asAbsolutePath(dir), identity: BUN_TARGET_IDENTITY };
 }
 
 /** One collector run into its own fresh temp dir; returns the raw bom bytes. */
@@ -436,7 +437,7 @@ function makeNugetFixtureTarget(): Target {
 
   collectorTempDirs.push(dir);
   writeFileSync(join(dir, "packages.lock.json"), NUGET_DET_LOCK);
-  return { dir, identity: NUGET_TARGET_IDENTITY };
+  return { dir: asAbsolutePath(dir), identity: NUGET_TARGET_IDENTITY };
 }
 
 /** One collector run into its own fresh temp dir; returns the raw bom bytes. */
@@ -553,7 +554,7 @@ function makeMavenFixtureTarget(): Target {
 
   collectorTempDirs.push(dir);
   writeFileSync(join(dir, "maven.sbom.json"), MAVEN_DET_SBOM);
-  return { dir, identity: MAVEN_TARGET_IDENTITY };
+  return { dir: asAbsolutePath(dir), identity: MAVEN_TARGET_IDENTITY };
 }
 
 /** One collector run into its own fresh temp dir; returns the raw bom bytes. */
@@ -665,7 +666,7 @@ describe("determinism — maven collector double-run byte-identity", () => {
       collectorTempDirs.push(dir);
       writeFileSync(join(dir, "maven.sbom.json"), DUAL_DET_DEFAULT_SBOM);
       writeFileSync(join(dir, "maven.test.sbom.json"), DUAL_DET_TEST_SBOM);
-      return { dir, identity: DUAL_DET_TARGET_IDENTITY };
+      return { dir: asAbsolutePath(dir), identity: DUAL_DET_TARGET_IDENTITY };
     }
 
     test("two collector runs over the same dual-doc pair write byte-identical composed bom.json", async () => {

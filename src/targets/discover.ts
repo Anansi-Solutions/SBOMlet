@@ -36,7 +36,7 @@
 import { readdirSync, statSync } from "node:fs";
 import { join, relative, resolve, sep } from "node:path";
 
-import { compareCodeUnits } from "../model/dependencies";
+import { asAbsolutePath, compareCodeUnits, type AbsolutePath } from "../model/dependencies";
 import { sanitizeForLog } from "../pipeline/summary";
 import type { Target } from "./target";
 
@@ -58,7 +58,7 @@ export interface DiscoveredTarget extends Target {
 
 export interface DiscoverOptions {
   /** Absolute path of this tool's own directory (excluded from the walk). */
-  toolDir?: string;
+  toolDir?: AbsolutePath;
   /** Repeatable --exclude glob patterns, matched against the identity. */
   excludes?: readonly string[];
   /**
@@ -520,7 +520,7 @@ export function discoverTargetsWithWarnings(
     }
 
     found.push({
-      dir,
+      dir: asAbsolutePath(dir),
       identity,
       lockfile: LOCKFILES.get(fileName) as LockfileKind,
     });

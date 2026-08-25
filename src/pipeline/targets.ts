@@ -16,7 +16,7 @@ import {
 } from "../collectors/mavenSbom";
 import { assertNugetLockSize } from "../collectors/nugetLock";
 import { collectors } from "../collectors/registry";
-import { compareCodeUnits } from "../model/dependencies";
+import { asAbsolutePath, compareCodeUnits, type AbsolutePath } from "../model/dependencies";
 import { type CollectedSbom } from "../merge/merge";
 import {
   discoverTargets,
@@ -55,7 +55,7 @@ function resolveTargets(opts: GenerateOptions): DiscoveredTarget[] {
   const root = resolveFrom(opts.baseDir, opts.repoRoot ?? ".");
   // This module lives in src/pipeline/, so two levels up is the tool's own directory - excluded
   // from the walk with zero hardcoded paths.
-  const toolDir = join(import.meta.dir, "..", "..");
+  const toolDir = asAbsolutePath(join(import.meta.dir, "..", ".."));
   const { targets: discovered, warnings } = discoverTargetsWithWarnings(root, {
     toolDir,
     excludes: opts.excludes,
@@ -101,7 +101,7 @@ function resolveTargets(opts: GenerateOptions): DiscoveredTarget[] {
 export interface CollectResult {
   inputs: CollectedSbom[];
   /** compareCodeUnits-sorted, deduped absolute target directories. */
-  targetDirs: string[];
+  targetDirs: AbsolutePath[];
 }
 
 /**
@@ -178,7 +178,7 @@ function expandYarnWorkspaceUnits(
       continue;
     }
 
-    const memberDir = resolve(target.dir, member.relPath);
+    const memberDir = asAbsolutePath(resolve(target.dir, member.relPath));
     const relFromRoot = relative(targetRoot, memberDir);
 
     // Containment: neither absolute nor a traversal outside target.dir.
@@ -359,7 +359,7 @@ function absorbUnitInputs(
   unitInputs: readonly CollectedSbom[],
   expandedUnits: readonly ExpandedUnit[],
   inputs: CollectedSbom[],
-  dirs: Set<string>,
+  dirs: Set<AbsolutePath>,
 ): void {
   const dirByIdentity = new Map(expandedUnits.map(({ unit }) => [unit.identity, unit.dir]));
 
@@ -446,7 +446,7 @@ export async function collectTargets(
 ): Promise<CollectResult> {
   const targets = resolveTargets(opts);
   const inputs: CollectedSbom[] = [];
-  const dirs = new Set<string>();
+  const dirs = new Set<AbsolutePath>();
   const mavenFirstPartySet = mavenFirstPartyPurls(targets);
 
   // Sequential scan in sorted (identity, kind) order - discoverTargets already sorts; single-target
