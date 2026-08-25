@@ -18,7 +18,7 @@
  * entry stays MULTIPLE raw claims: each one normalizes on its own, never concatenated into a
  * synthesized compound expression that deps.dev never asserted.
  */
-import { compareCodeUnits } from "../model/dependencies";
+import { asRawLicense, compareCodeUnits, type RawLicense } from "../model/dependencies";
 import { narrowDepsDevVersion } from "../validate/registry";
 
 /** The deps.dev v3 API base - a FIXED host (the NUGET_API_HOST/SSRF idiom). */
@@ -62,7 +62,7 @@ export function depsDevVersionUrl(encodedName: string, version: string): string 
 
 /** A resolved deps.dev answer: one or more raw license claims, never synthesized. */
 export interface MavenResolution {
-  raws: readonly string[];
+  raws: readonly RawLicense[];
   via: "deps-dev-licenses";
   confidence: "high";
 }
@@ -82,13 +82,15 @@ export function resolveMavenLicenses(doc: unknown): MavenResolution | null {
     return null;
   }
 
-  const raws = [
+  const raws: readonly RawLicense[] = [
     ...new Set(
       parsed.licenses
         .map((license) => license.trim())
         .filter((license) => license !== "" && license.toLowerCase() !== NON_STANDARD_SENTINEL),
     ),
-  ].sort(compareCodeUnits);
+  ]
+    .sort(compareCodeUnits)
+    .map(asRawLicense);
 
   if (raws.length === 0) {
     return null;

@@ -63,6 +63,7 @@ import { join } from "node:path";
 
 import { type } from "arktype";
 
+import { asPurl, type Purl } from "../model/dependencies";
 import { recordOf, stringOf } from "../validate/record";
 import { computeCacheKey, type CollectorSbomFile } from "./cdxgen";
 import { manifestFilesFor } from "./dispatch";
@@ -452,7 +453,7 @@ interface TerraformComponent {
   type: "library";
   name: string;
   version: string;
-  purl: string;
+  purl: Purl;
 }
 
 /** Provider → component: `pkg:terraform/<host>/<ns>/<name>@<v>`, no group. */
@@ -463,7 +464,7 @@ function providerComponent(provider: TerraformProvider): TerraformComponent {
     type: "library",
     name,
     version: provider.version,
-    purl: `pkg:terraform/${provider.host}/${name}@${provider.version}`,
+    purl: asPurl(`pkg:terraform/${provider.host}/${name}@${provider.version}`),
   };
 }
 
@@ -481,7 +482,7 @@ function moduleComponent(module: TerraformModule): TerraformComponent {
     type: "library",
     name,
     version: module.version,
-    purl: `pkg:terraform/${module.host}/${name}@${module.version}`,
+    purl: asPurl(`pkg:terraform/${module.host}/${name}@${module.version}`),
   };
 }
 

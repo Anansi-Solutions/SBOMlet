@@ -17,13 +17,16 @@ import correct from "spdx-correct";
 import satisfies from "spdx-satisfies";
 
 import {
+  asRawLicense,
   compareCodeUnits,
   type CanonicalDependencies,
+  type CanonicalLicense,
   type CrossImageClaimDivergence,
   type LicenseClaim,
   type LicenseClaimSource,
   type LicenseFinding,
   type PackageEntry,
+  type RawLicense,
   type ScopeTaxonomy,
   type StaleOverride,
 } from "../model/dependencies";
@@ -209,7 +212,7 @@ function isCommaLicenseList(value: string): boolean {
  * never a guessed precise id and never silently unknown.
  */
 export interface NormalizeResult {
-  expression: string | null;
+  expression: CanonicalLicense | null;
   source: "generator" | "corrected";
   imprecise?: true;
   impreciseFamily?: string;
@@ -220,8 +223,13 @@ export interface NormalizeResult {
  * precise-label fixup for the cases correct() misses, then
  * a guarded spdx-correct fixup, else unknown. Comma lists are never correctable;
  * `[[clarify]]` is the escape hatch.
+ *
+ * Every non-null result is CANONICAL: the resolved text flows through {@link
+ * canonicalizeExpression} before it leaves, so there is no intermediate verbatim-normalized state
+ * - a compound claim exits flattened/deduped/absorbed/sorted, a single id verbatim. Callers
+ * therefore receive the single resolved-and-canonical license state directly.
  */
-export function normalizeRaw(raw: string): NormalizeResult {
+export function normalizeRaw(raw: RawLicense): NormalizeResult {
   const trimmed = raw.trim();
 
   if (trimmed === "" || NEVER_CORRECT.some((re) => re.test(trimmed))) {
@@ -230,7 +238,7 @@ export function normalizeRaw(raw: string): NormalizeResult {
 
   try {
     parse(trimmed);
-    return { expression: trimmed, source: "generator" }; // exact
+    return { expression: canonicalizeExpression(asRawLicense(trimmed)), source: "generator" }; // exact
   } catch {
     /* fall through */
   }
@@ -253,7 +261,7 @@ export function normalizeRaw(raw: string): NormalizeResult {
   const fixup = PRECISE_LABEL_FIXUP.get(folded);
 
   if (fixup !== undefined) {
-    return { expression: fixup, source: "corrected" };
+    return { expression: canonicalizeExpression(asRawLicense(fixup)), source: "corrected" };
   }
 
   // Debian/DEP-5 copyright shorthands → canonical SPDX. MUST run BEFORE correct(): correct() either
@@ -263,7 +271,7 @@ export function normalizeRaw(raw: string): NormalizeResult {
   const debian = DEBIAN_SHORTHAND.get(folded);
 
   if (debian !== undefined) {
-    return { expression: debian, source: "corrected" };
+    return { expression: canonicalizeExpression(asRawLicense(debian)), source: "corrected" };
   }
 
   if (isCommaLicenseList(trimmed)) {
@@ -275,7 +283,7 @@ export function normalizeRaw(raw: string): NormalizeResult {
   if (fixed !== null) {
     try {
       parse(fixed); // belt-and-braces: corrected output must parse
-      return { expression: fixed, source: "corrected" };
+      return { expression: canonicalizeExpression(asRawLicense(fixed)), source: "corrected" };
     } catch {
       /* corrected output unparseable - treat as unknown */
     }
@@ -383,13 +391,14 @@ function findingFromClaims(
  *   3. Else AND-combine the (all-permissive) precise claims.
  */
 function combineKnown(results: ReadonlyArray<NormalizeResult>): LicenseFinding {
-  const preciseResults = results.filter((r) => r.expression !== null);
-  const hasPreciseCopyleft = preciseResults.some((r) =>
-    expressionIsCopyleft(r.expression as string),
-  );
+  const preciseExpressions = results
+    .map((r) => r.expression)
+    .filter((expression): expression is CanonicalLicense => expression !== null);
+  const anyCorrected = results.some((r) => r.expression !== null && r.source === "corrected");
+  const hasPreciseCopyleft = preciseExpressions.some(expressionIsCopyleft);
 
   if (hasPreciseCopyleft) {
-    return combinePrecise(preciseResults);
+    return combinePrecise(preciseExpressions, anyCorrected);
   }
 
   const impreciseFamily = electImpreciseFamily(results);
@@ -404,11 +413,11 @@ function combineKnown(results: ReadonlyArray<NormalizeResult>): LicenseFinding {
     };
   }
 
-  return combinePrecise(preciseResults);
+  return combinePrecise(preciseExpressions, anyCorrected);
 }
 
 /** True if a parseable SPDX expression elects a copyleft branch (defensive). */
-function expressionIsCopyleft(expression: string): boolean {
+function expressionIsCopyleft(expression: CanonicalLicense): boolean {
   try {
     return isCopyleft(elect(parse(expression) as ExpressionNode));
   } catch {
@@ -440,24 +449,24 @@ function electImpreciseFamily(results: ReadonlyArray<NormalizeResult>): string |
   return permissive;
 }
 
-/** AND-combine the precise (non-null) normalize results into one finding. */
-function combinePrecise(preciseResults: ReadonlyArray<NormalizeResult>): LicenseFinding {
-  // Dedupe expression strings: an spdx-id claim and a name claim may normalize to the same
-  // expression.
-  const expressions: string[] = [];
-  const seenExpressions = new Set<string>();
+/**
+ * The elected branch of a canonical node, rendered and re-minted through {@link
+ * canonicalizeExpression} - the sole CanonicalLicense mint - so `elected` carries the same resolved
+ * canonical state as `expression`. Idempotent on an already-canonical rendering.
+ */
+function electedOf(node: ExpressionNode): CanonicalLicense {
+  return canonicalizeExpression(asRawLicense(renderNode(elect(node))));
+}
 
-  for (const r of preciseResults) {
-    const expression = r.expression as string;
+/** AND-combine the precise (already-canonical) claim expressions into one finding. */
+function combinePrecise(
+  preciseExpressions: ReadonlyArray<CanonicalLicense>,
+  anyCorrected: boolean,
+): LicenseFinding {
+  // Dedupe expressions: an spdx-id claim and a name claim may normalize to the same expression.
+  const expressions = [...new Set(preciseExpressions)];
 
-    if (!seenExpressions.has(expression)) {
-      seenExpressions.add(expression);
-      expressions.push(expression);
-    }
-  }
-
-  let node = parse(expressions[0] as string) as ExpressionNode;
-  let combined = expressions[0] as string; // single claim: raw, pre-canonicalization
+  let node = parse(expressions[0]!) as ExpressionNode;
 
   if (expressions.length > 1) {
     for (const next of expressions.slice(1)) {
@@ -467,26 +476,21 @@ function combinePrecise(preciseResults: ReadonlyArray<NormalizeResult>): License
         right: parse(next) as ExpressionNode,
       };
     }
-
-    combined = renderNode(node); // compound operands parenthesized
   }
 
   // Canonicalize the combined expression HERE, at formation, so finding.expression is a MODEL
   // invariant rather than a property of which claims happened to combine - never distribute, per
   // canonicalizeExpression's own contract: idempotent, round-trip safe, conservative
-  // (flatten/dedupe/absorb/sort only). A single claim is unaffected in practice: a lone leaf
-  // canonicalizes to itself verbatim, so the "raw preserved verbatim" reading survives unchanged.
-  // `elected` is re-derived from the CANONICAL node (reparsed - canonicalizeExpression guarantees
-  // its output always reparses) so it never names a branch an absorption already dissolved out of
+  // (flatten/dedupe/absorb/sort only). Each claim expression is already canonical; the AND-join of
+  // several is re-canonicalized so the combined form is flattened/sorted too. `elected` is
+  // re-derived from the CANONICAL node so it never names a branch an absorption dissolved out of
   // `expression`.
-  const expression = canonicalizeExpression(combined);
+  const expression = canonicalizeExpression(asRawLicense(renderNode(node)));
   const canonicalNode = parse(expression) as ExpressionNode;
-
-  const anyCorrected = preciseResults.some((r) => r.source === "corrected");
 
   return {
     expression,
-    elected: renderNode(elect(canonicalNode)),
+    elected: electedOf(canonicalNode),
     source: anyCorrected ? "corrected" : "generator",
     confidence: anyCorrected ? "corrected" : "exact",
   };
@@ -508,16 +512,16 @@ export interface DetectedSignal {
 
 /**
  * Inline structural type for project clarify rules - no import from policy/ (the validated policy
- * is structurally compatible). `expression` must be a valid SPDX expression: policy schema
- * validation parses it eagerly before evaluation. `detected` is the staleness precondition; the
- * selector is the same one {@link matchesPackage} reads everywhere else.
+ * is structurally compatible). `expression` is a canonical SPDX expression: the policy schema
+ * validates and canonicalizes it eagerly before evaluation. `detected` is the staleness
+ * precondition; the selector is the same one {@link matchesPackage} reads everywhere else.
  */
 export interface ClarifyInput {
   name?: string;
   pattern?: string;
   version?: string | readonly string[];
   detected: DetectedSignal;
-  expression: string;
+  expression: CanonicalLicense;
 }
 
 /**
@@ -610,8 +614,8 @@ export function observedSignalBySource(
  * consults this set so a denied member is seen even when combineKnown elects an imprecise family /
  * collapses to unknown and drops it from the combined expression. Empty → caller omits the field.
  */
-function observedExpressions(claims: ReadonlyArray<LicenseClaim>): readonly string[] {
-  const seen = new Set<string>();
+function observedExpressions(claims: ReadonlyArray<LicenseClaim>): readonly CanonicalLicense[] {
+  const seen = new Set<CanonicalLicense>();
 
   for (const c of claims) {
     const precise = normalizeRaw(c.raw).expression;
@@ -643,8 +647,8 @@ function signalMatches(signal: ReadonlyArray<string>, recorded: string): boolean
  */
 function signalMatchesCanonical(signal: ReadonlyArray<string>, recorded: string): boolean {
   return signalMatches(
-    signal.map((s) => canonicalizeExpression(s)),
-    canonicalizeExpression(recorded),
+    signal.map((s) => canonicalizeExpression(asRawLicense(s))),
+    canonicalizeExpression(asRawLicense(recorded)),
   );
 }
 
@@ -675,9 +679,10 @@ function signalMatchesCanonical(signal: ReadonlyArray<string>, recorded: string)
 function unaccountedMember(
   signal: ReadonlyArray<string>,
   recorded: ReadonlyArray<string>,
-  expression: string,
+  expression: CanonicalLicense,
 ): string | undefined {
-  const fold = (value: string): string => canonicalizeExpression(value).trim().toLowerCase();
+  const fold = (value: string): string =>
+    canonicalizeExpression(asRawLicense(value)).trim().toLowerCase();
   const wanted = new Set(recorded.map(fold));
 
   for (const member of signal) {
@@ -685,7 +690,7 @@ function unaccountedMember(
       continue;
     }
 
-    const read = normalizeRaw(member);
+    const read = normalizeRaw(asRawLicense(member));
 
     if (read.expression === null) {
       const family = read.impreciseFamily;
@@ -760,13 +765,16 @@ function baseSatisfiesAssertion(base: LicenseFinding, expression: string): boole
   }
 }
 
-/** Build the override finding from a validated SPDX expression. */
-function overrideFinding(expression: string, overrideRule: string | undefined): LicenseFinding {
+/** Build the override finding from a validated canonical SPDX expression. */
+function overrideFinding(
+  expression: CanonicalLicense,
+  overrideRule: string | undefined,
+): LicenseFinding {
   const node = parse(expression) as ExpressionNode;
 
   return {
     expression,
-    elected: renderNode(elect(node)),
+    elected: electedOf(node),
     source: "override",
     confidence: "exact",
     ...(overrideRule !== undefined ? { overrideRule } : {}),
@@ -858,7 +866,7 @@ function laneOf(member: string, signal: ObservedSignal): StaleOverride["source"]
  */
 function applyOverride(
   detected: DetectedSignal,
-  expression: string,
+  expression: CanonicalLicense,
   overrideRule: string | undefined,
   level: StaleOverride["level"],
   base: LicenseFinding,
@@ -1016,7 +1024,7 @@ function quickCheckClaims(claims: ReadonlyArray<LicenseClaim>): LicenseClaim[] {
  * non-empty raw DISAGREES: a garbage/proprietary declaration contradicted by a precise assessment
  * must become a visible conflict, never be silently decided in either direction.
  */
-function claimAgreesWithAssessment(claim: LicenseClaim, assessed: string): boolean {
+function claimAgreesWithAssessment(claim: LicenseClaim, assessed: CanonicalLicense): boolean {
   const result = normalizeRaw(claim.raw);
 
   if (result.expression !== null) {
@@ -1064,7 +1072,7 @@ function disagreeingLabel(claim: LicenseClaim): string {
  * with the conflict marker attached, its members deduped and sorted for determinism.
  */
 function assessPrecise(
-  assessed: string,
+  assessed: CanonicalLicense,
   claims: ReadonlyArray<LicenseClaim>,
   base: LicenseFinding,
 ): LicenseFinding {
@@ -1090,7 +1098,7 @@ function assessPrecise(
 
   return {
     expression,
-    elected: renderNode(elect(node)),
+    elected: electedOf(node),
     source: "scancode",
     confidence: "exact",
   };
@@ -1251,7 +1259,7 @@ export function annotateFindings(
       ...entry,
       finding: {
         ...finding,
-        ...(rewroteExpression ? { observedExpression: base.expression as string } : {}),
+        ...(rewroteExpression ? { observedExpression: base.expression! } : {}),
         ...(observed.length > 0 ? { observedExpressions: observed } : {}),
       },
     };

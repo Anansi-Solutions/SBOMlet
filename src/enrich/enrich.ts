@@ -24,11 +24,14 @@
  */
 import { sanitizeEvidenceText } from "../merge/merge";
 import {
+  asRawLicense,
   compareCodeUnits,
   type CanonicalDependencies,
   type LicenseClaim,
   type LicenseClaimSource,
   type PackageEntry,
+  type Purl,
+  type RawLicense,
 } from "../model/dependencies";
 import { normalizeRaw } from "../normalize/normalize";
 import { writeArtifact } from "../pipeline/paths";
@@ -83,7 +86,7 @@ export interface ParsedPurl {
  * is encoded as %40, so the last "@" is always the version separator). Returns undefined for a
  * non-`pkg:` or malformed purl.
  */
-export function parsePurl(purl: string): ParsedPurl | undefined {
+export function parsePurl(purl: Purl): ParsedPurl | undefined {
   if (!purl.startsWith("pkg:")) {
     return undefined;
   }
@@ -161,7 +164,7 @@ export function pypiJsonUrl(encodedName: string, version: string): string {
 export function resolveFromDocument(
   parsed: ParsedPurl,
   document: unknown,
-): { raw: string; via: string; fetchedFrom: "pypi" | "npm" } | null {
+): { raw: RawLicense; via: string; fetchedFrom: "pypi" | "npm" } | null {
   if (parsed.type === "pypi") {
     const resolution = resolvePypiLicense(document);
 
@@ -186,10 +189,10 @@ export function resolveFromDocument(
  */
 export function withCacheClaim(
   entry: PackageEntry,
-  raw: string | ReadonlyArray<string>,
+  raw: RawLicense | ReadonlyArray<RawLicense>,
   source: LicenseClaimSource,
 ): PackageEntry {
-  const raws = Array.isArray(raw) ? raw : [raw];
+  const raws: readonly RawLicense[] = typeof raw === "string" ? [raw] : raw;
   const claims: LicenseClaim[] = raws.map((r) => ({
     raw: r,
     kind: "expression",
@@ -197,6 +200,17 @@ export function withCacheClaim(
   }));
 
   return { ...entry, licenseClaims: [...entry.licenseClaims, ...claims] };
+}
+
+/**
+ * Mint a replayed cache license - one raw string, or the maven arm's several - as a {@link
+ * RawLicense} at the cache-replay boundary. The committed cache stores the verbatim registry
+ * string, so a value read back becomes a raw claim here, the one place asRawLicense admits it.
+ */
+function asRawLicenses(
+  license: string | ReadonlyArray<string>,
+): RawLicense | ReadonlyArray<RawLicense> {
+  return typeof license === "string" ? asRawLicense(license) : license.map(asRawLicense);
 }
 
 /**
@@ -299,7 +313,7 @@ export async function enrichUnknowns(
 
     if (hit !== undefined) {
       if (hit.resolvable && hit.license !== null) {
-        const withClaim = withCacheClaim(unknown.entry, hit.license, "registry");
+        const withClaim = withCacheClaim(unknown.entry, asRawLicenses(hit.license), "registry");
 
         packages[unknown.index] = withClaim;
       }
@@ -349,7 +363,7 @@ export function githubLicenseUrl(owner: string, repo: string, ref: string | unde
 async function fetchMisses(
   misses: Unknown[],
   packages: PackageEntry[],
-  cache: Map<string, CacheEntry>,
+  cache: Map<Purl, CacheEntry>,
   opts: EnrichOptions,
 ): Promise<void> {
   const fetchOpts = opts.backoffBaseMs === undefined ? {} : { backoffBaseMs: opts.backoffBaseMs };
@@ -377,7 +391,7 @@ async function fetchMisses(
 async function fetchRegistryMisses(
   misses: Unknown[],
   packages: PackageEntry[],
-  cache: Map<string, CacheEntry>,
+  cache: Map<Purl, CacheEntry>,
   fetchOpts: { backoffBaseMs?: number },
 ): Promise<void> {
   // One fetch per distinct registry URL: scoped/duplicate npm names and any repeated purl reuse the
@@ -430,7 +444,7 @@ async function fetchRegistryMisses(
 async function fetchTerraformMisses(
   misses: Unknown[],
   packages: PackageEntry[],
-  cache: Map<string, CacheEntry>,
+  cache: Map<Purl, CacheEntry>,
   fetchOpts: { backoffBaseMs?: number },
   opts: EnrichOptions,
 ): Promise<void> {
@@ -494,7 +508,7 @@ async function fetchTerraformMisses(
 async function fetchNugetMisses(
   misses: Unknown[],
   packages: PackageEntry[],
-  cache: Map<string, CacheEntry>,
+  cache: Map<Purl, CacheEntry>,
   fetchOpts: { backoffBaseMs?: number },
 ): Promise<void> {
   await mapLimit(misses, FETCH_CONCURRENCY, async (miss): Promise<void> => {
@@ -550,7 +564,7 @@ async function fetchNugetMisses(
 async function fetchMavenMisses(
   misses: Unknown[],
   packages: PackageEntry[],
-  cache: Map<string, CacheEntry>,
+  cache: Map<Purl, CacheEntry>,
   fetchOpts: { backoffBaseMs?: number },
 ): Promise<void> {
   await mapLimit(misses, FETCH_CONCURRENCY, async (miss): Promise<void> => {
@@ -591,7 +605,7 @@ function defaultNow(): Date {
 /** Record a definitive-no-license negative entry for a miss. */
 function recordNegative(
   miss: Unknown,
-  cache: Map<string, CacheEntry>,
+  cache: Map<Purl, CacheEntry>,
   fetchedFrom: CacheEntry["fetchedFrom"],
 ): void {
   putEntry(cache, miss.entry.purl, {
@@ -607,7 +621,7 @@ function applyResolution(
   miss: Unknown,
   document: unknown,
   packages: PackageEntry[],
-  cache: Map<string, CacheEntry>,
+  cache: Map<Purl, CacheEntry>,
 ): void {
   const resolved = resolveFromDocument(miss.parsed, document);
 

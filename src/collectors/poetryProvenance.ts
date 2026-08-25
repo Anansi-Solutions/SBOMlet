@@ -25,8 +25,8 @@
 import { parse as parseToml } from "smol-toml";
 
 import { recordOf, stringOf } from "../validate/record";
+import { asPurl, type DependencyIntroduction, type Purl } from "../model/dependencies";
 import { addToSetMap, deriveIntroductions, sortSetMap, type PurlGraph } from "./provenanceGraph";
-import type { DependencyIntroduction } from "../model/dependencies";
 
 /**
  * PEP 503 name normalization - the exact transform cdxgen applies before emitting a
@@ -146,7 +146,7 @@ function pep621Name(spec: string): string | undefined {
 
 /** One lockfile package, narrowed to the fields provenance needs. */
 interface LockPackage {
-  purl: string;
+  purl: Purl;
   /** PEP-503 normalized name → for dependency-edge resolution. */
   normalizedName: string;
   /** Raw `[package.dependencies]` table (name → spec / spec[] / object). */
@@ -193,7 +193,7 @@ function parseLockPackages(lockfileText: string): LockPackage[] {
     const normalizedName = normalizePep503(name);
 
     out.push({
-      purl: `pkg:pypi/${normalizedName}@${version}`,
+      purl: asPurl(`pkg:pypi/${normalizedName}@${version}`),
       normalizedName,
       dependencies: recordOf(pkg["dependencies"]) ?? {},
     });

@@ -16,7 +16,7 @@
  * inability to verify (it propagates and the CLI exits 3), NEVER silently treated as agreement
  * - exactly the reliability posture `generate` already takes.
  */
-import { compareCodeUnits } from "../model/dependencies";
+import { compareCodeUnits, type Purl } from "../model/dependencies";
 import {
   githubLicenseUrl,
   npmPackumentUrl,
@@ -236,7 +236,7 @@ function reasonFor(
  * this tool.
  */
 async function auditEntry(
-  purl: string,
+  purl: Purl,
   entry: CacheEntry,
   fetchDoc: FetchDoc,
   fetchOpts: { backoffBaseMs?: number },

@@ -5,6 +5,66 @@
  * reserves fields so later work is purely additive: provenance layers, scope taxonomy for Docker,
  * and the dev/prod marker.
  */
+import { type } from "arktype";
+
+/**
+ * Untrusted, unresolved license text exactly as it entered the tool - a collector-read license
+ * string, a registry answer, a ScanCode raw. It is what {@link canonicalizeExpression} consumes;
+ * nothing downstream may treat it as resolved. Minted at the raw-claim origins via {@link
+ * asRawLicense} - the one place a plain string becomes a RawLicense.
+ */
+const _rawLicenseBrand = type("string").brand("RawLicense");
+
+export type RawLicense = typeof _rawLicenseBrand.infer;
+
+/**
+ * The single resolved-and-canonical SPDX state: there is no intermediate "normalized but not yet
+ * canonical" license anywhere in the model. Everything resolved is canonical. Minted ONLY by
+ * canonicalizeExpression (normalize/expression.ts) - the sole boundary that turns raw text into a
+ * canonical expression.
+ */
+const _canonicalLicenseBrand = type("string").brand("CanonicalLicense");
+
+export type CanonicalLicense = typeof _canonicalLicenseBrand.infer;
+
+/**
+ * A package URL (`pkg:<type>/<name>@<version>`), the tool-wide dedup and cache key. Minted at purl
+ * construction and at the {@link parsePurl} boundary via {@link asPurl}; kept verbatim thereafter
+ * (URL-encoding intact).
+ */
+const _purlBrand = type("string").brand("Purl");
+
+export type Purl = typeof _purlBrand.infer;
+
+/**
+ * An absolute filesystem path (a `path.resolve` result, or a base/repo root the CLI resolved to
+ * absolute). Minted via {@link asAbsolutePath} at the resolution boundary.
+ */
+const _absolutePathBrand = type("string").brand("AbsolutePath");
+
+export type AbsolutePath = typeof _absolutePathBrand.infer;
+
+/**
+ * Mint a {@link RawLicense} from untrusted license text - the one cast that admits a plain string
+ * into the raw-license state, used at the claim origins (collector, enrichment, ScanCode) and by
+ * canonicalization's own input path.
+ */
+export function asRawLicense(text: string): RawLicense {
+  return text as RawLicense;
+}
+
+/**
+ * Mint a {@link Purl} from a constructed or parsed package-URL string - the one cast at every purl
+ * construction site and at the {@link parsePurl} boundary.
+ */
+export function asPurl(text: string): Purl {
+  return text as Purl;
+}
+
+/** Mint an {@link AbsolutePath} at the point a path is resolved to absolute - the one cast. */
+export function asAbsolutePath(path: string): AbsolutePath {
+  return path as AbsolutePath;
+}
 
 /**
  * Provenance of a license claim. "generator" is the source produced by the collectors; "registry"
@@ -26,7 +86,7 @@ export type LicenseClaimSource =
 export type LicenseClaimKind = "spdx-id" | "name" | "expression";
 
 export interface LicenseClaim {
-  raw: string;
+  raw: RawLicense;
   kind: LicenseClaimKind;
   source: LicenseClaimSource;
 }
@@ -54,12 +114,12 @@ export type FindingConfidence = "exact" | "corrected" | "none" | "imprecise";
  */
 export interface LicenseFinding {
   /**
-   * Full normalized SPDX expression; null = unknown OR imprecise (an imprecise family is not a
-   * valid SPDX expression and must never be emitted as one - see {@link FindingConfidence}).
+   * Full canonical SPDX expression; null = unknown OR imprecise (an imprecise family is not a valid
+   * SPDX expression and must never be emitted as one - see {@link FindingConfidence}).
    */
-  expression: string | null;
-  /** Elected branch as rendered canonical string; null = unknown or imprecise. */
-  elected: string | null;
+  expression: CanonicalLicense | null;
+  /** Elected branch as canonical expression; null = unknown or imprecise. */
+  elected: CanonicalLicense | null;
   /**
    * "generator" (exact parse or unknown), "corrected", "registry" (enrichment-appended), "override"
    * (clarify); "curated" reserved.
@@ -103,7 +163,7 @@ export interface LicenseFinding {
    * over overrides). Absent when no override ran (the un-overridden finding's `expression` already
    * IS the observed value) or when the base finding had no parseable expression.
    */
-  observedExpression?: string;
+  observedExpression?: CanonicalLicense;
   /**
    * The SET of EVERY observed per-claim normalized PRECISE expression (deny must see every observed
    * claim, not only the lossy COMBINED expression). Produced by annotateFindings by running
@@ -122,7 +182,7 @@ export interface LicenseFinding {
    *
    * Absent when no claim normalized to a precise expression (nothing to carry).
    */
-  observedExpressions?: readonly string[];
+  observedExpressions?: readonly CanonicalLicense[];
   /**
    * Surfaced non-normalizable raw claim tokens for a NON-GATING `os`-scope PARTIAL finding. Set
    * ONLY when an os-scope package's claim set mixes ≥1 normalizable SPDX member with ≥1
@@ -194,7 +254,7 @@ export type VerdictStatus = "ok" | "warn" | "fail" | "suppressed";
 
 /** One policy decision per (package x occurrence). */
 export interface Verdict {
-  purl: string;
+  purl: Purl;
   occurrenceTarget: string;
   status: VerdictStatus;
   /**
@@ -318,7 +378,7 @@ export interface PackageAttribution {
 
 export interface PackageEntry {
   /** Dedup key, kept verbatim from the SBOM (URL-encoding like %40 intact). */
-  purl: string;
+  purl: Purl;
   /** Display name including group, e.g. "@ampproject/remapping". */
   name: string;
   version: string;

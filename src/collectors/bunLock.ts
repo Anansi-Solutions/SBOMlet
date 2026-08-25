@@ -30,6 +30,7 @@ import { join } from "node:path";
 import { type } from "arktype";
 
 import { BunLockDocument } from "../validate/bunLock";
+import { asPurl, type Purl } from "../model/dependencies";
 import { recordOf } from "../validate/record";
 import { computeCacheKey, type CollectorSbomFile } from "./cdxgen";
 import { manifestFilesFor } from "./dispatch";
@@ -136,11 +137,11 @@ function splitSpec(spec: string): { name: string; version: string } | undefined 
  * percent-encoding) - byte-identical to cdxgen's npm purl output, so a build-metadata version
  * ("1.0.0+build") reached via both a bun target and an npm/yarn target folds into one row.
  */
-function purlOf(name: string, version: string): string {
+function purlOf(name: string, version: string): Purl {
   const encodedName = name.startsWith("@") ? `%40${name.slice(1)}` : name;
   const encodedVersion = version.replaceAll("+", "%2B");
 
-  return `pkg:npm/${encodedName}@${encodedVersion}`;
+  return asPurl(`pkg:npm/${encodedName}@${encodedVersion}`);
 }
 
 /**
@@ -338,7 +339,7 @@ interface BunComponent {
   type: "library";
   name: string;
   version: string;
-  purl: string;
+  purl: Purl;
   properties?: Array<{ name: string; value: string }>;
 }
 

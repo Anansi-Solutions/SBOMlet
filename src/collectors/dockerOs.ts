@@ -38,7 +38,7 @@ import { existsSync, mkdtempSync, readFileSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { compareCodeUnits, toSortedJson } from "../model/dependencies";
+import { asPurl, compareCodeUnits, toSortedJson, type Purl } from "../model/dependencies";
 import { execTool } from "./exec";
 
 /**
@@ -133,7 +133,7 @@ export interface OsComponent {
   type: "library";
   name: string;
   version: string;
-  purl: string;
+  purl: Purl;
   licenses?: OsLicense[];
 }
 
@@ -315,7 +315,7 @@ export function filterOsComponents(sbom: unknown): OsComponent[] {
       type: "library",
       name: raw.name,
       version: raw.version,
-      purl: raw.purl,
+      purl: asPurl(raw.purl),
       // Field-absent when syft resolved no license - keeps the emit byte-stable (toSortedJson omits
       // undefined) and the field meaningful.
       ...(licenses !== undefined ? { licenses } : {}),
