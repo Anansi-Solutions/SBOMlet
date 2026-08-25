@@ -22,7 +22,7 @@
 import { existsSync, readdirSync, readFileSync, type Dirent } from "node:fs";
 import { join, resolve, sep } from "node:path";
 
-import { asPurl, compareCodeUnits } from "../../model/dependencies";
+import { compareCodeUnits, tryAsPurl } from "../../model/dependencies";
 import { parsePurl } from "../enrich";
 
 /** A `pkg:npm`/`pkg:pypi` purl's ecosystem-relevant fields, from parsePurl. */
@@ -502,7 +502,8 @@ export function sourceDirsFor(
   targetDirs: string[],
   npmIndexCache?: NpmSourceIndexCache,
 ): ScanCandidate[] {
-  const parsed = parsePurl(asPurl(purl));
+  const branded = tryAsPurl(purl);
+  const parsed = branded === undefined ? undefined : parsePurl(branded);
 
   if (parsed === undefined) {
     return [];

@@ -84,11 +84,13 @@ export function resolveContained(
 }
 
 /**
- * --notices defaults to THIRD_PARTY_NOTICES.md in the same directory as the output path. Exported
- * for direct unit testing.
+ * --notices defaults to THIRD_PARTY_NOTICES.md in the same directory as the output path. The result
+ * is only as absolute as `outputPath`: a relative output (the common CLI default) yields a relative
+ * companion, resolved against the base dir downstream by {@link resolveFrom} - so this is a plain
+ * path string, not an {@link AbsolutePath}. Exported for direct unit testing.
  */
-export function defaultNoticesPath(outputPath: string): AbsolutePath {
-  return asAbsolutePath(join(dirname(outputPath), "THIRD_PARTY_NOTICES.md"));
+export function defaultNoticesPath(outputPath: string): string {
+  return join(dirname(outputPath), "THIRD_PARTY_NOTICES.md");
 }
 
 /**

@@ -5,6 +5,8 @@
  * reserves fields so later work is purely additive: provenance layers, scope taxonomy for Docker,
  * and the dev/prod marker.
  */
+import { isAbsolute } from "node:path";
+
 import { type } from "arktype";
 
 /**
@@ -28,19 +30,34 @@ const _canonicalLicenseBrand = type("string").brand("CanonicalLicense");
 export type CanonicalLicense = typeof _canonicalLicenseBrand.infer;
 
 /**
- * A package URL (`pkg:<type>/<name>@<version>`), the tool-wide dedup and cache key. Minted at purl
- * construction and at the {@link parsePurl} boundary via {@link asPurl}; kept verbatim thereafter
- * (URL-encoding intact).
+ * The minimal package-URL shape a {@link Purl} must satisfy: a `pkg:` scheme, a non-empty type, a
+ * slash, and a non-empty name. Deliberately permissive about qualifiers and subpaths - it gates the
+ * gross shape, not the full purl grammar, so a real `pkg:npm/...` / `pkg:deb/...` always passes.
  */
-const _purlBrand = type("string").brand("Purl");
+const PURL_SHAPE = /^pkg:[^/]+\/.+/;
+
+/**
+ * A package URL (`pkg:<type>/<name>@<version>`), the tool-wide dedup and cache key. The brand is
+ * VALIDATED: a value must match {@link PURL_SHAPE} (a `pkg:` scheme, a type, a slash, a name), so a
+ * plainly non-purl string can never enter the type. Minted at purl construction and at the {@link
+ * parsePurl} boundary via {@link asPurl}; kept verbatim thereafter (URL-encoding intact).
+ */
+const _purlBrand = type("string")
+  .narrow((value, ctx) => PURL_SHAPE.test(value) || ctx.reject("a pkg: package URL"))
+  .brand("Purl");
 
 export type Purl = typeof _purlBrand.infer;
 
 /**
- * An absolute filesystem path (a `path.resolve` result, or a base/repo root the CLI resolved to
- * absolute). Minted via {@link asAbsolutePath} at the resolution boundary.
+ * An absolute filesystem path (a `path.resolve`/`join` result, or a base/repo root the CLI resolved
+ * to absolute). The brand is VALIDATED: a value must satisfy node:path's {@link isAbsolute}, so a
+ * relative string can never enter the type. Minted via {@link asAbsolutePath} at the resolution
+ * boundary - every current call site passes a `resolve`/`join` result, so the check catches a real
+ * bug (a non-absolute leak) rather than ever firing in practice.
  */
-const _absolutePathBrand = type("string").brand("AbsolutePath");
+const _absolutePathBrand = type("string")
+  .narrow((value, ctx) => isAbsolute(value) || ctx.reject("an absolute path"))
+  .brand("AbsolutePath");
 
 export type AbsolutePath = typeof _absolutePathBrand.infer;
 
@@ -54,16 +71,39 @@ export function asRawLicense(text: string): RawLicense {
 }
 
 /**
- * Mint a {@link Purl} from a constructed or parsed package-URL string - the one cast at every purl
- * construction site and at the {@link parsePurl} boundary.
+ * Mint a {@link Purl} from a constructed or parsed package-URL string - used at every purl
+ * CONSTRUCTION site (a collector building `pkg:...`) and at trusted disk-key sites, where the value
+ * is a purl by construction.
+ *
+ * @throws if `text` is not a {@link PURL_SHAPE} package URL. Safe at those sites because the value
+ * is valid by construction; the EXTERNAL SBOM boundary uses {@link tryAsPurl} instead so a malformed
+ * component purl is tolerantly dropped rather than crashing the run.
  */
 export function asPurl(text: string): Purl {
-  return text as Purl;
+  return _purlBrand.assert(text) as Purl;
 }
 
-/** Mint an {@link AbsolutePath} at the point a path is resolved to absolute - the one cast. */
+/**
+ * Tolerantly mint a {@link Purl} at an EXTERNAL boundary (a parsed SBOM component / metadata purl).
+ *
+ * @returns the branded purl, or undefined when `text` is not a {@link PURL_SHAPE} package URL - the
+ * caller then treats the purl as absent (the component drops via the existing skip path), matching
+ * the skip-don't-throw posture the tool holds over untrusted SBOM data.
+ */
+export function tryAsPurl(text: string): Purl | undefined {
+  const result = _purlBrand(text);
+
+  return result instanceof type.errors ? undefined : result;
+}
+
+/**
+ * Mint an {@link AbsolutePath} at the point a path is resolved to absolute.
+ *
+ * @throws if `path` is not absolute per node:path's {@link isAbsolute}. Every call site passes a
+ * `resolve`/`join` result, so this never fires in practice but catches a non-absolute leak.
+ */
 export function asAbsolutePath(path: string): AbsolutePath {
-  return path as AbsolutePath;
+  return _absolutePathBrand.assert(path) as AbsolutePath;
 }
 
 /**

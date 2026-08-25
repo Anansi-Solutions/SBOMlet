@@ -5,15 +5,20 @@
  */
 import { type } from "arktype";
 
-import { asPurl, asRawLicense, type Purl } from "../model/dependencies";
+import { asRawLicense, tryAsPurl, type Purl } from "../model/dependencies";
 
 /**
  * The external SBOM is the parse boundary for its purls and license claims, so both are branded
- * here at first validation - {@link asPurl} / {@link asRawLicense} - rather than one step
+ * here at first validation - {@link tryAsPurl} / {@link asRawLicense} - rather than one step
  * downstream in merge. A component purl becomes a {@link Purl}; a CycloneDX license-claim string
  * becomes a RawLicense.
+ *
+ * TOLERANT purl: an SBOM is untrusted, so a component whose purl is not a `pkg:` package URL has
+ * the purl coerced to undefined (the field is then absent) rather than throwing - the component
+ * drops via merge's existing purl/name/version gate, matching the {@link StringOrAbsent} posture
+ * the rest of this file uses for wrong-typed fields.
  */
-const SbomPurl = type("string").pipe((value) => asPurl(value));
+const SbomPurl = type("string").pipe((value) => tryAsPurl(value));
 const SbomRawLicense = type("string").pipe((value) => asRawLicense(value));
 
 /**
@@ -44,7 +49,7 @@ const SbomRootPurl = type({
 }).pipe((doc) => {
   const purl = doc.metadata?.component?.purl;
 
-  return purl === undefined ? undefined : asPurl(purl);
+  return purl === undefined ? undefined : tryAsPurl(purl);
 });
 
 /** The root component purl, or undefined for any absent/malformed metadata. */
