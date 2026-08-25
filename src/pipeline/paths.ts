@@ -6,13 +6,15 @@
 import { mkdirSync, realpathSync, writeFileSync } from "node:fs";
 import { basename, dirname, join, resolve, sep } from "node:path";
 
+import { asAbsolutePath, type AbsolutePath } from "../model/dependencies";
+
 /**
  * Resolve one user-supplied path against the invocation base directory: an absolute path passes
  * through unchanged; a relative path anchors to baseDir (itself resolved against cwd when
  * relative); an absent baseDir degrades to plain cwd resolution. Exported for direct unit testing.
  */
-export function resolveFrom(baseDir: string | undefined, path: string): string {
-  return resolve(process.cwd(), baseDir ?? ".", path);
+export function resolveFrom(baseDir: string | undefined, path: string): AbsolutePath {
+  return asAbsolutePath(resolve(process.cwd(), baseDir ?? ".", path));
 }
 
 /**
@@ -60,7 +62,11 @@ function isUnder(anchor: string, path: string): boolean {
  * can say reaches this. It is the last stop before a read or a write leaves the repository, which
  * is worth a second check that does not depend on the first one staying correct.
  */
-export function resolveContained(anchor: string | undefined, path: string, what: string): string {
+export function resolveContained(
+  anchor: string | undefined,
+  path: string,
+  what: string,
+): AbsolutePath {
   const base = resolve(process.cwd(), anchor ?? ".");
   const resolved = resolveFrom(anchor, path);
   const target = linksLeadTo(resolved);
@@ -81,8 +87,8 @@ export function resolveContained(anchor: string | undefined, path: string, what:
  * --notices defaults to THIRD_PARTY_NOTICES.md in the same directory as the output path. Exported
  * for direct unit testing.
  */
-export function defaultNoticesPath(outputPath: string): string {
-  return join(dirname(outputPath), "THIRD_PARTY_NOTICES.md");
+export function defaultNoticesPath(outputPath: string): AbsolutePath {
+  return asAbsolutePath(join(dirname(outputPath), "THIRD_PARTY_NOTICES.md"));
 }
 
 /**

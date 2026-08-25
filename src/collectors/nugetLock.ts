@@ -49,6 +49,7 @@ import { type } from "arktype";
 
 import { NugetLockDocument } from "../validate/nugetLock";
 import { recordOf, stringOf } from "../validate/record";
+import { asPurl, type Purl } from "../model/dependencies";
 import { computeCacheKey, type CollectorSbomFile } from "./cdxgen";
 import { manifestFilesFor } from "./dispatch";
 import type { Target } from "../targets/target";
@@ -105,7 +106,7 @@ interface NugetComponent {
   type: "library";
   name: string;
   version: string;
-  purl: string;
+  purl: Purl;
 }
 
 /**
@@ -114,8 +115,8 @@ interface NugetComponent {
  * version percent-encoded as %2B (purl-spec). NuGet ids are URL-safe by the package-id grammar
  * (letters, digits, ".", "_", "-"), so no further encoding is needed.
  */
-function purlOf(id: string, resolved: string): string {
-  return `pkg:nuget/${id}@${resolved.replaceAll("+", "%2B")}`;
+function purlOf(id: string, resolved: string): Purl {
+  return asPurl(`pkg:nuget/${id}@${resolved.replaceAll("+", "%2B")}`);
 }
 
 /**

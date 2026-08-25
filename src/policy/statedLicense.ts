@@ -5,11 +5,12 @@
  * predicates, so neither has to import the other - the edge that would otherwise close a cycle.
  */
 import { normalizeRaw } from "../normalize/normalize";
+import type { CanonicalLicense, RawLicense } from "../model/dependencies";
 
 /**
  * The licence a recorded value states, or null when it only labels one - the normalizer reads "MIT
  * License" as MIT, and "Public Domain" as no licence at all.
  */
-export function statedLicense(value: string): string | null {
+export function statedLicense(value: RawLicense): CanonicalLicense | null {
   return normalizeRaw(value).expression;
 }

@@ -26,6 +26,7 @@ import { join } from "node:path";
 import { execTool } from "../../collectors/exec";
 import { electCopyrights, electExpression } from "./election";
 import { SCANCODE_TOOL } from "./tool";
+import type { RawLicense } from "../../model/dependencies";
 import type { ScanCandidate } from "./sources";
 
 /**
@@ -90,7 +91,7 @@ export interface ScancodeScanOptions {
 
 /** A resolved scancode result: the raw expression, its election lane, and copyrights. */
 export interface ScancodeResolution {
-  raw: string;
+  raw: RawLicense;
   via: string;
   copyrights: string[];
 }

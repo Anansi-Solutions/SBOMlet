@@ -15,7 +15,7 @@
  */
 import parseSpdx from "spdx-expression-parse";
 
-import { compareCodeUnits } from "../model/dependencies";
+import { compareCodeUnits, type CanonicalLicense, type RawLicense } from "../model/dependencies";
 import { COPYLEFT_IDS } from "../policy/engine/copyleft";
 
 export type ExpressionNode =
@@ -314,15 +314,20 @@ function canonicalizeNode(node: ExpressionNode): CanonicalNode {
  * this output is spelling-blind under reordering, duplication, and absorption noise, but never
  * under re-factoring - `(A OR B) AND (A OR C)` and `A OR (B AND C)` stay distinct - so that
  * direction fails safe as a visible conflict instead of a silently-accepted rewrite.
+ *
+ * This is the sole mint of {@link CanonicalLicense}: it accepts raw or already-canonical text and
+ * yields the canonical state when the input parses, passing unparseable input through verbatim (the
+ * honest-residual posture above), so no other boundary needs to fabricate one. Idempotent, so a
+ * CanonicalLicense passed back in is returned unchanged.
  */
-export function canonicalizeExpression(text: string): string {
+export function canonicalizeExpression(text: RawLicense | CanonicalLicense): CanonicalLicense {
   let parsed: ExpressionNode;
 
   try {
     parsed = parseSpdx(text) as ExpressionNode;
   } catch {
-    return text;
+    return text as CanonicalLicense;
   }
 
-  return serializeCanonical(canonicalizeNode(parsed));
+  return serializeCanonical(canonicalizeNode(parsed)) as CanonicalLicense;
 }

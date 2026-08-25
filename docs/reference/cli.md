@@ -358,6 +358,11 @@ else stays a suggestion. In particular a version already pinned never leaves the
 list, and an `UNUSED` entry is never removed for you — an entry can be unused
 because the package it governs is temporarily absent, and only you can tell which.
 
+A rewritten entry's `expression` is stored in canonical SPDX form — sorted, deduped,
+absorbed — so `(MIT AND CC-BY-3.0)` is written back as `CC-BY-3.0 AND MIT`. The
+license is unchanged and staleness matching is spelling-blind, so the canonical form
+is simply the stored form; your prose in `comment` and `evidence` is kept verbatim.
+
 The rewrite is guarded twice. A clarifications file carrying `#` comments is left
 untouched and the run exits 3: the parser discards comments before the entries are
 ever seen, so the rewrite could not put that prose back. Move it into the entry's

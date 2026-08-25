@@ -14,6 +14,7 @@
 
 import parseSpdx from "spdx-expression-parse";
 
+import { asRawLicense, type CanonicalLicense } from "../../model/dependencies";
 import { leafIds, orLeaves, type ExpressionNode } from "../../normalize/expression";
 import { accountsFor, type ObservedSignal } from "../../normalize/normalize";
 import { statedLicense } from "../statedLicense";
@@ -60,10 +61,10 @@ function unnecessary(detail: string, justification: Justification): Justificatio
 }
 
 /** Every lane member the normalizer reads as a precise expression, in lane order. */
-function preciseMembers(lane: ReadonlyArray<string>): string[] {
+function preciseMembers(lane: ReadonlyArray<string>): CanonicalLicense[] {
   return lane
-    .map((member) => statedLicense(member))
-    .filter((expression): expression is string => expression !== null);
+    .map((member) => statedLicense(asRawLicense(member)))
+    .filter((expression): expression is CanonicalLicense => expression !== null);
 }
 
 /** The SPDX leaf ids across some expressions; an unparseable one contributes none. */

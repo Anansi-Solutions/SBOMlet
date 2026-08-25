@@ -1,5 +1,6 @@
 import { type } from "arktype";
 
+import { asRawLicense, type CanonicalLicense } from "../../model/dependencies";
 import { recordOf } from "../../validate/record";
 import { statedLicense } from "../statedLicense";
 
@@ -86,8 +87,8 @@ export interface ClarifyRule {
   detected: DetectedSignal;
   /** Why the recorded expression is preferred over what detection reports. */
   justification: Justification;
-  /** A valid SPDX expression - parsed eagerly here. */
-  expression: string;
+  /** A valid SPDX expression, canonicalized at validation - see {@link spdxExpression}. */
+  expression: CanonicalLicense;
   /** Files or URLs a reader can check; recorded verbatim, never fetched or verified. */
   evidence?: ReadonlyArray<string>;
   /** Free prose, for what the justification alone cannot carry. */
@@ -268,7 +269,7 @@ function justificationDetectionProblems(
 
   for (const source of DETECTED_SOURCES) {
     const value = detected[source];
-    const stated = typeof value === "string" ? statedLicense(value) : null;
+    const stated = typeof value === "string" ? statedLicense(asRawLicense(value)) : null;
 
     if (stated !== null) {
       problems.push({

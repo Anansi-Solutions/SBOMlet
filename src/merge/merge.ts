@@ -15,7 +15,9 @@ import { type } from "arktype";
 import { extractCopyrightLines } from "../extract/copyright";
 import { canonicalizeExpression } from "../normalize/expression";
 import {
+  asRawLicense,
   compareCodeUnits,
+  asPurl,
   comparePackages,
   DOCKER_IDENTITY_PREFIX,
   type CanonicalDependencies,
@@ -114,19 +116,21 @@ function licenseClaimsOf(component: SbomComponentShape): LicenseClaim[] {
     const expression = SbomExpressionClaim(raw);
 
     if (!(expression instanceof type.errors)) {
-      return [{ raw: expression.expression, kind: "expression", source: "generator" }];
+      return [
+        { raw: asRawLicense(expression.expression), kind: "expression", source: "generator" },
+      ];
     }
 
     const id = SbomIdClaim(raw);
 
     if (!(id instanceof type.errors)) {
-      return [{ raw: id.license.id, kind: "spdx-id", source: "generator" }];
+      return [{ raw: asRawLicense(id.license.id), kind: "spdx-id", source: "generator" }];
     }
 
     const name = SbomNameClaim(raw);
 
     if (!(name instanceof type.errors)) {
-      return [{ raw: name.license.name, kind: "name", source: "generator" }];
+      return [{ raw: asRawLicense(name.license.name), kind: "name", source: "generator" }];
     }
 
     return [];
@@ -811,7 +815,7 @@ function packageEntryOf(
   }
 
   const entry: PackageEntry = {
-    purl,
+    purl: asPurl(purl),
     name: displayName,
     version,
     occurrences: [occurrence],

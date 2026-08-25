@@ -81,6 +81,7 @@ import {
   type DependencyIntroduction,
   type Occurrence,
   type PackageEntry,
+  type Purl,
   type StaleOverride,
   type Verdict,
 } from "../../model/dependencies";
@@ -473,7 +474,7 @@ function declaredNetworkFalseBasis(): string {
  * of the escalation, the reason naming the declared basis.
  */
 function demotedImpreciseAgplVerdict(
-  base: { purl: string; occurrenceTarget: string },
+  base: { purl: Purl; occurrenceTarget: string },
   entry: PackageEntry,
   occurrence: Occurrence,
   target: string,
@@ -490,7 +491,7 @@ function demotedImpreciseAgplVerdict(
 }
 
 function impreciseVerdict(
-  base: { purl: string; occurrenceTarget: string },
+  base: { purl: Purl; occurrenceTarget: string },
   entry: PackageEntry,
   occurrence: Occurrence,
   family: string,
@@ -557,7 +558,7 @@ export function staleDivergence(stale: StaleOverride): string {
  * - the stale assertion is never applied.
  */
 function staleVerdict(
-  base: { purl: string; occurrenceTarget: string },
+  base: { purl: Purl; occurrenceTarget: string },
   entry: PackageEntry,
   stale: NonNullable<PackageEntry["finding"]>["staleOverride"],
   decided: ClarifyDecision | undefined,
@@ -621,7 +622,7 @@ function clarifyDecision(entry: PackageEntry, policy: Policy): ClarifyDecision |
  * the entry, and the reason names the values it can move to.
  */
 function invalidJustificationVerdict(
-  base: { purl: string; occurrenceTarget: string },
+  base: { purl: Purl; occurrenceTarget: string },
   entry: PackageEntry,
   decided: ClarifyDecision | undefined,
 ): Verdict | undefined {
@@ -649,7 +650,7 @@ function invalidJustificationVerdict(
  * in-depth assessed expression, the disagreeing quick-check values, and the [[clarify]] remedy.
  */
 function scancodeConflictVerdict(
-  base: { purl: string; occurrenceTarget: string },
+  base: { purl: Purl; occurrenceTarget: string },
   entry: PackageEntry,
   conflict: Extract<AssessmentConflict, { kind: "scancode" }>,
 ): Verdict {
@@ -673,7 +674,7 @@ function scancodeConflictVerdict(
  * claim set (or "no declared license"), and the [[clarify]] remedy.
  */
 function crossImageConflictVerdict(
-  base: { purl: string; occurrenceTarget: string },
+  base: { purl: Purl; occurrenceTarget: string },
   entry: PackageEntry,
   conflict: Extract<AssessmentConflict, { kind: "cross-image-claims" }>,
 ): Verdict {
@@ -699,7 +700,7 @@ function crossImageConflictVerdict(
  * (see verdictFor) - a fail, not a warn, because either kind needs a human decision.
  */
 function conflictVerdict(
-  base: { purl: string; occurrenceTarget: string },
+  base: { purl: Purl; occurrenceTarget: string },
   entry: PackageEntry,
   conflict: AssessmentConflict,
 ): Verdict {
@@ -717,7 +718,7 @@ function conflictVerdict(
  */
 function overrideCitation(
   entry: PackageEntry,
-  base: { purl: string; occurrenceTarget: string },
+  base: { purl: Purl; occurrenceTarget: string },
   target: string,
   expression: string | null,
   policy: Policy,
@@ -907,7 +908,7 @@ function firstDeny(
  * - a dev-only occurrence of a denied license still fails.
  */
 function denyVerdict(
-  base: { purl: string; occurrenceTarget: string },
+  base: { purl: Purl; occurrenceTarget: string },
   denyRule: IndexedDenyRule,
 ): Verdict {
   const { ruleId, rule } = denyRule;
@@ -957,7 +958,7 @@ function sourceAvailableExemption(
 
 /** Warn verdict for an exempted source-available licence (ADR-0013). */
 function exemptionVerdict(
-  base: { purl: string; occurrenceTarget: string },
+  base: { purl: Purl; occurrenceTarget: string },
   exemption: { index: number; license: string; reason: string },
 ): Verdict {
   return {
@@ -978,7 +979,7 @@ function exemptionVerdict(
  * the consumer authored.
  */
 function denyOrExemptVerdict(
-  base: { purl: string; occurrenceTarget: string },
+  base: { purl: Purl; occurrenceTarget: string },
   policy: Policy,
   denyRule: IndexedDenyRule,
 ): Verdict {
@@ -1001,7 +1002,7 @@ function denyOrExemptVerdict(
  * that never happened. Same dev/os downgrade semantics as unknownVerdict.
  */
 function refUnknownVerdict(
-  base: { purl: string; occurrenceTarget: string },
+  base: { purl: Purl; occurrenceTarget: string },
   entry: PackageEntry,
   occurrence: Occurrence,
   assessment: Assessment,
@@ -1025,7 +1026,7 @@ function refUnknownVerdict(
  * never downgraded.
  */
 function unknownVerdict(
-  base: { purl: string; occurrenceTarget: string },
+  base: { purl: Purl; occurrenceTarget: string },
   entry: PackageEntry,
   occurrence: Occurrence,
   policy: Policy,
@@ -1053,7 +1054,7 @@ function unknownVerdict(
  * `[[compatible]]` remedy.
  */
 function agplContainerVerdict(
-  base: { purl: string; occurrenceTarget: string },
+  base: { purl: Purl; occurrenceTarget: string },
   target: string,
   elected: string,
 ): Verdict {
@@ -1072,7 +1073,7 @@ function agplContainerVerdict(
  * applicability fact the escalation used to guess (the container-design reconciliation).
  */
 function demotedAgplContainerVerdict(
-  base: { purl: string; occurrenceTarget: string },
+  base: { purl: Purl; occurrenceTarget: string },
   entry: PackageEntry,
   occurrence: Occurrence,
   target: string,
@@ -1100,7 +1101,7 @@ function demotedAgplContainerVerdict(
  * imprecise/unknown lanes.
  */
 function copyleftVerdict(
-  base: { purl: string; occurrenceTarget: string },
+  base: { purl: Purl; occurrenceTarget: string },
   entry: PackageEntry,
   occurrence: Occurrence,
   assessment: Assessment,
@@ -1186,7 +1187,7 @@ function copyleftVerdict(
  * downgrade here.
  */
 function targetVerdict(
-  base: { purl: string; occurrenceTarget: string },
+  base: { purl: Purl; occurrenceTarget: string },
   entry: PackageEntry,
   occurrence: Occurrence,
   assessment: Assessment,
@@ -1308,7 +1309,7 @@ function voidedReason(rule: CompatiblePackageRule, voided: VoidedEntry, target: 
  * below.
  */
 function compatibleRuleVerdict(
-  base: { purl: string; occurrenceTarget: string },
+  base: { purl: Purl; occurrenceTarget: string },
   assessment: Assessment,
   packageRule: JudgedPackageRule | undefined,
   licenseRule: IndexedRule<CompatibleLicenseRule> | undefined,
@@ -1355,7 +1356,7 @@ function compatibleRuleVerdict(
  * profile is resolved once per occurrence and, when present, targetVerdict decides.
  */
 function targetLaneVerdict(
-  base: { purl: string; occurrenceTarget: string },
+  base: { purl: Purl; occurrenceTarget: string },
   entry: PackageEntry,
   occurrence: Occurrence,
   assessment: Assessment,
@@ -1560,7 +1561,7 @@ export function evaluate(
  * (render/markdown.ts) instead of vanishing: the obligation is accepted, not absent.
  */
 export interface AcceptedContainerNotice {
-  readonly purl: string;
+  readonly purl: Purl;
   readonly name: string;
   readonly version: string;
   /** Elected SPDX id for a precise finding; the bare "AGPL" family token otherwise. */

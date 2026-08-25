@@ -37,7 +37,12 @@
  * expression election) live in the scancode/ module (sources.ts, invocation.ts, election.ts) and
  * are used verbatim; this stage only decides WHICH packages to analyze and how their results flow.
  */
-import { type CanonicalDependencies, type PackageEntry } from "../model/dependencies";
+import {
+  asRawLicense,
+  type CanonicalDependencies,
+  type PackageEntry,
+  type Purl,
+} from "../model/dependencies";
 import { writeArtifact } from "../pipeline/paths";
 import { sanitizeForLog } from "../pipeline/summary";
 import { parsePurl, withCacheClaim, withReplayAttribution } from "./enrich";
@@ -125,7 +130,7 @@ export async function assessPackages(
  * instant; it is not cross-process synchronization, so two writers racing on the same purl can
  * still each drop the other's addition. On a same-purl collision the in-memory entry wins.
  */
-function persistMemo(path: string, memo: Map<string, ScancodeMemoEntry>): void {
+function persistMemo(path: string, memo: Map<Purl, ScancodeMemoEntry>): void {
   const onDisk = readScancodeMemo(path);
   const merged = new Map(onDisk);
 
@@ -137,7 +142,7 @@ function persistMemo(path: string, memo: Map<string, ScancodeMemoEntry>): void {
 }
 
 /** Append the memo's positive answers as ScanCode claims across ALL packages. */
-function replayMemo(packages: PackageEntry[], memo: Map<string, ScancodeMemoEntry>): void {
+function replayMemo(packages: PackageEntry[], memo: Map<Purl, ScancodeMemoEntry>): void {
   packages.forEach((entry, index) => {
     const memoEntry = getMemoEntry(memo, entry.purl);
 
@@ -147,7 +152,7 @@ function replayMemo(packages: PackageEntry[], memo: Map<string, ScancodeMemoEntr
       return;
     }
 
-    const withClaim = withCacheClaim(entry, memoEntry.license, "scancode");
+    const withClaim = withCacheClaim(entry, asRawLicense(memoEntry.license), "scancode");
 
     packages[index] = withReplayAttribution(withClaim, memoEntry);
   });
@@ -170,7 +175,7 @@ interface ScanCounts {
 
 /** Everything analyzeOne needs, bundled so the per-package call stays readable. */
 interface ScanContext {
-  memo: Map<string, ScancodeMemoEntry>;
+  memo: Map<Purl, ScancodeMemoEntry>;
   intensive: IntensiveOptions;
   scanOpts: ScancodeScanOptions;
   now: () => Date;
@@ -191,7 +196,7 @@ interface ScanContext {
  */
 async function scanFullSet(
   packages: PackageEntry[],
-  memo: Map<string, ScancodeMemoEntry>,
+  memo: Map<Purl, ScancodeMemoEntry>,
   intensive: IntensiveOptions,
   opts: AssessOptions,
 ): Promise<void> {

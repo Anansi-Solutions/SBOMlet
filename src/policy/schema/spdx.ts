@@ -10,7 +10,8 @@
 import { type } from "arktype";
 
 import parseSpdx from "spdx-expression-parse";
-import { orLeaves, type ExpressionNode } from "../../normalize/expression";
+import { asRawLicense, type CanonicalLicense } from "../../model/dependencies";
+import { canonicalizeExpression, orLeaves, type ExpressionNode } from "../../normalize/expression";
 
 /** Parse an SPDX expression, or undefined when it does not parse. */
 export function parseSpdxNode(value: string): ExpressionNode | undefined {
@@ -22,13 +23,17 @@ export function parseSpdxNode(value: string): ExpressionNode | undefined {
 }
 
 /**
- * A string field that must be a parseable SPDX expression. The value flows through unchanged - the
- * parse validates, it does not rewrite - so the field stays the verbatim text the policy wrote.
+ * A field that must be a parseable SPDX expression, canonicalized to the tool-wide {@link
+ * CanonicalLicense} state on the way through. The parse validates; {@link canonicalizeExpression}
+ * then resolves the value into the single canonical form the rest of the model carries, so a policy
+ * expression is minted the same way every other resolved license is - there is no verbatim-policy
+ * intermediate.
  */
-export const spdxExpression = type("string").pipe((value, ctx): string =>
-  parseSpdxNode(value) === undefined
-    ? (ctx.reject({ message: `"${value}" is not a valid SPDX expression` }) as never)
-    : value,
+export const spdxExpression = type("string").pipe(
+  (value, ctx): CanonicalLicense =>
+    parseSpdxNode(value) === undefined
+      ? (ctx.reject({ message: `"${value}" is not a valid SPDX expression` }) as never)
+      : canonicalizeExpression(asRawLicense(value)),
 );
 
 /**

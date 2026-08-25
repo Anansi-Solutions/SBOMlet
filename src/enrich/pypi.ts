@@ -17,12 +17,13 @@
  * is the single SPDX resolution authority (locked decision). Returns null when no layer yields a
  * candidate.
  */
+import { asRawLicense, type RawLicense } from "../model/dependencies";
 import { narrowPypiResponse } from "../validate/registry";
 import { isAmbiguousTroveClassifier, troveToSpdx } from "./trove";
 
 /** A resolved raw license: the string, which layer won, and a confidence. */
 export interface PypiResolution {
-  raw: string;
+  raw: RawLicense;
   via: "license-expression" | "license-field" | "classifier";
   confidence: "high" | "low";
 }
@@ -38,7 +39,7 @@ function resolveFromClassifiers(classifiers: readonly string[]): PypiResolution 
     const spdx = troveToSpdx(classifier);
 
     if (spdx !== undefined) {
-      return { raw: spdx, via: "classifier", confidence: "high" };
+      return { raw: asRawLicense(spdx), via: "classifier", confidence: "high" };
     }
 
     if (isAmbiguousTroveClassifier(classifier)) {
@@ -46,7 +47,7 @@ function resolveFromClassifiers(classifiers: readonly string[]): PypiResolution 
       // → BSD-2-Clause), flagged LOW because the classifier alone cannot pin the precise variant.
       const label = classifier.split(" :: ").at(-1) ?? classifier;
 
-      return { raw: label, via: "classifier", confidence: "low" };
+      return { raw: asRawLicense(label), via: "classifier", confidence: "low" };
     }
   }
 
@@ -67,13 +68,13 @@ export function resolvePypiLicense(response: unknown): PypiResolution | null {
   const expression = info.licenseExpression?.trim();
 
   if (expression !== undefined && expression !== "") {
-    return { raw: expression, via: "license-expression", confidence: "high" };
+    return { raw: asRawLicense(expression), via: "license-expression", confidence: "high" };
   }
 
   const field = info.license?.trim();
 
   if (field !== undefined && field !== "" && isLicenseId(field)) {
-    return { raw: field, via: "license-field", confidence: "high" };
+    return { raw: asRawLicense(field), via: "license-field", confidence: "high" };
   }
 
   return resolveFromClassifiers(info.classifiers ?? []);
