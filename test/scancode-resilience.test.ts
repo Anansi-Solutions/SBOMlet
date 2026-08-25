@@ -21,7 +21,7 @@ import {
   serializeScancodeMemo,
   type ScancodeMemoEntry,
 } from "../src/enrich/scancode";
-import { type LicenseClaim, type PackageEntry } from "../src/model/dependencies";
+import { type LicenseClaim, type PackageEntry, asTargetIdentity } from "../src/model/dependencies";
 import { optionsFrom } from "../src/cli";
 import { runGenerate } from "../src/pipeline/pipeline";
 import {
@@ -48,7 +48,7 @@ function npmPackage(name: string, version: string, claims: LicenseClaim[] = []):
     purl: asPurl(`pkg:npm/${name}@${version}`),
     name: asDependencyName(name),
     version: asDependencyVersion(version),
-    occurrences: [{ target: "proj", isDevDependency: false }],
+    occurrences: [{ target: asTargetIdentity("proj"), isDevDependency: false }],
     licenseClaims: claims,
     scope: "app",
   };

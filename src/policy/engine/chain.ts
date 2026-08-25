@@ -17,6 +17,7 @@ import {
   compareCodeUnits,
   purlDisplayName,
   type CanonicalDependencies,
+  type TargetIdentity,
 } from "../../model/dependencies";
 import { SELF_PARENT } from "../schema/dependencyChain";
 import { matchesPackage, scopeCoversTarget } from "./match";
@@ -292,7 +293,7 @@ function namedChain(graph: TargetDependencyGraph, chain: readonly string[]): str
 export function voidedCompatibleEntries(
   model: CanonicalDependencies,
   policy: Policy,
-  targetsWithGraph: ReadonlySet<string>,
+  targetsWithGraph: ReadonlySet<TargetIdentity>,
 ): ReadonlyMap<string, VoidedEntry> {
   const voided = new Map<string, VoidedEntry>();
   const graphs = dependencyGraphsByTarget(model);

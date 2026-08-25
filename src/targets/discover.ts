@@ -36,7 +36,12 @@
 import { readdirSync, statSync } from "node:fs";
 import { join, relative, resolve, sep } from "node:path";
 
-import { asAbsolutePath, compareCodeUnits, type AbsolutePath } from "../model/dependencies";
+import {
+  asAbsolutePath,
+  asTargetIdentity,
+  compareCodeUnits,
+  type AbsolutePath,
+} from "../model/dependencies";
 import { sanitizeForLog } from "../pipeline/summary";
 import type { Target } from "./target";
 
@@ -521,7 +526,7 @@ export function discoverTargetsWithWarnings(
 
     found.push({
       dir: asAbsolutePath(dir),
-      identity,
+      identity: asTargetIdentity(identity),
       lockfile: LOCKFILES.get(fileName) as LockfileKind,
     });
   };

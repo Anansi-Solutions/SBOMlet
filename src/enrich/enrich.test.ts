@@ -18,6 +18,12 @@ import {
   asDependencyVersion,
   type Purl,
 } from "../../test/brandTestSupport";
+import {
+  asTargetIdentity,
+  type CanonicalDependencies,
+  type LicenseClaim,
+  type PackageEntry,
+} from "../model/dependencies";
 import { TROVE_TO_SPDX, isAmbiguousTroveClassifier, troveToSpdx } from "./trove";
 import { fetchJson, fetchJsonOr404, mapLimit } from "./fetch";
 import { catalogEntryUrlOf, nugetRegistrationLeafUrl, resolveNugetCatalogLicense } from "./nuget";
@@ -31,7 +37,6 @@ import { resolvePypiLicense } from "./pypi";
 import { resolveNpmLicense } from "./npm";
 import { getEntry, putEntry, readCache, serializeCache, type CacheEntry } from "./cache";
 import { enrichUnknowns } from "./enrich";
-import type { CanonicalDependencies, LicenseClaim, PackageEntry } from "../model/dependencies";
 
 /** Load a captured registry fixture as parsed JSON (the live response shape). */
 function registryFixture(name: string): unknown {
@@ -736,7 +741,7 @@ describe("enrichUnknowns orchestrator (cache-first, generate-fetch, check-stale)
       purl: asPurl("pkg:npm/mit-lib@3.0.0"),
       name: asDependencyName("mit-lib"),
       version: asDependencyVersion("3.0.0"),
-      occurrences: [{ target: "proj", isDevDependency: false }],
+      occurrences: [{ target: asTargetIdentity("proj"), isDevDependency: false }],
       licenseClaims: [{ raw: asRawLicense("MIT"), kind: "spdx-id", source: "generator" }],
       scope: "app",
     };
@@ -748,7 +753,7 @@ describe("enrichUnknowns orchestrator (cache-first, generate-fetch, check-stale)
       purl: asPurl("pkg:npm/no-claims@2.0.0"),
       name: asDependencyName("no-claims"),
       version: asDependencyVersion("2.0.0"),
-      occurrences: [{ target: "proj", isDevDependency: false }],
+      occurrences: [{ target: asTargetIdentity("proj"), isDevDependency: false }],
       licenseClaims: [],
       scope: "app",
     };
@@ -760,7 +765,7 @@ describe("enrichUnknowns orchestrator (cache-first, generate-fetch, check-stale)
       purl: asPurl("pkg:pypi/anyio@4.12.1"),
       name: asDependencyName("anyio"),
       version: asDependencyVersion("4.12.1"),
-      occurrences: [{ target: "apps/jupyter", isDevDependency: false }],
+      occurrences: [{ target: asTargetIdentity("apps/jupyter"), isDevDependency: false }],
       licenseClaims: [],
       scope: "app",
     };
@@ -976,7 +981,7 @@ describe("enrichUnknowns orchestrator (cache-first, generate-fetch, check-stale)
         purl: asPurl("pkg:npm/%40babel/core@7.27.7"),
         name: asDependencyName("@babel/core"),
         version: asDependencyVersion("7.27.7"),
-        occurrences: [{ target: "proj", isDevDependency: false }],
+        occurrences: [{ target: asTargetIdentity("proj"), isDevDependency: false }],
         licenseClaims: [],
         scope: "app",
       };
@@ -1248,7 +1253,7 @@ describe("enrichUnknowns orchestrator (cache-first, generate-fetch, check-stale)
             purl: asPurl("pkg:pypi/colorama@0.4.6"),
             name: asDependencyName("colorama"),
             version: asDependencyVersion("0.4.6"),
-            occurrences: [{ target: "apps/jupyter", isDevDependency: false }],
+            occurrences: [{ target: asTargetIdentity("apps/jupyter"), isDevDependency: false }],
             licenseClaims: [],
             scope: "app",
           }),
@@ -1296,7 +1301,7 @@ describe("enrichUnknowns terraform/github (version-tag, transient-vs-definitive,
       purl: asPurl("pkg:terraform/registry.opentofu.org/hashicorp/aws@6.42.0"),
       name: asDependencyName("hashicorp/aws"),
       version: asDependencyVersion("6.42.0"),
-      occurrences: [{ target: "infrastructure", isDevDependency: false }],
+      occurrences: [{ target: asTargetIdentity("infrastructure"), isDevDependency: false }],
       licenseClaims: [],
       scope: "app",
     };
@@ -1312,7 +1317,7 @@ describe("enrichUnknowns terraform/github (version-tag, transient-vs-definitive,
       purl: asPurl("pkg:terraform/registry.opentofu.org/terraform-aws-modules/vpc/aws@5.1.2"),
       name: asDependencyName("terraform-aws-modules/vpc/aws"),
       version: asDependencyVersion("5.1.2"),
-      occurrences: [{ target: "infrastructure", isDevDependency: false }],
+      occurrences: [{ target: asTargetIdentity("infrastructure"), isDevDependency: false }],
       licenseClaims: [],
       scope: "app",
     };
@@ -1774,7 +1779,7 @@ describe("enrichUnknowns terraform/github (version-tag, transient-vs-definitive,
         purl: malformedPurl,
         name: asDependencyName("onlyone"),
         version: asDependencyVersion("1.0.0"),
-        occurrences: [{ target: "infrastructure", isDevDependency: false }],
+        occurrences: [{ target: asTargetIdentity("infrastructure"), isDevDependency: false }],
         licenseClaims: [],
         scope: "app",
       };
@@ -2144,7 +2149,7 @@ describe("enrichUnknowns nuget (two-step fetch, negative discipline, offline che
       purl: asPurl("pkg:nuget/Newtonsoft.Json@13.0.4"),
       name: asDependencyName("Newtonsoft.Json"),
       version: asDependencyVersion("13.0.4"),
-      occurrences: [{ target: "Fixture.App", isDevDependency: false }],
+      occurrences: [{ target: asTargetIdentity("Fixture.App"), isDevDependency: false }],
       licenseClaims: [],
       scope: "app",
     };
@@ -2415,7 +2420,7 @@ describe("enrichUnknowns nuget (two-step fetch, negative discipline, offline che
       purl: asPurl("pkg:nuget/Good.Package@1.0.0"),
       name: asDependencyName("Good.Package"),
       version: asDependencyVersion("1.0.0"),
-      occurrences: [{ target: "t", isDevDependency: false }],
+      occurrences: [{ target: asTargetIdentity("t"), isDevDependency: false }],
       licenseClaims: [],
       scope: "app",
     };
@@ -2543,7 +2548,7 @@ describe("enrichUnknowns nuget (two-step fetch, negative discipline, offline che
         purl: asPurl("pkg:pypi/anyio@4.12.1"),
         name: asDependencyName("anyio"),
         version: asDependencyVersion("4.12.1"),
-        occurrences: [{ target: "apps/jupyter", isDevDependency: false }],
+        occurrences: [{ target: asTargetIdentity("apps/jupyter"), isDevDependency: false }],
         licenseClaims: [],
         scope: "app",
       };
@@ -2551,7 +2556,7 @@ describe("enrichUnknowns nuget (two-step fetch, negative discipline, offline che
         purl: asPurl("pkg:npm/no-claims@2.0.0"),
         name: asDependencyName("no-claims"),
         version: asDependencyVersion("2.0.0"),
-        occurrences: [{ target: "proj", isDevDependency: false }],
+        occurrences: [{ target: asTargetIdentity("proj"), isDevDependency: false }],
         licenseClaims: [],
         scope: "app",
       };
@@ -2727,7 +2732,7 @@ describe("enrichUnknowns maven (deps.dev single fetch, honest sentinel, 404-defi
       purl: asPurl("pkg:maven/com.example/lib@2.0.0?type=jar"),
       name: asDependencyName("lib"),
       version: asDependencyVersion("2.0.0"),
-      occurrences: [{ target: "Fixture.App", isDevDependency: false }],
+      occurrences: [{ target: asTargetIdentity("Fixture.App"), isDevDependency: false }],
       licenseClaims: [],
       scope: "app",
     };
@@ -3116,7 +3121,7 @@ describe("enrichUnknowns maven (deps.dev single fetch, honest sentinel, 404-defi
       purl: asPurl("pkg:maven/org.example/querydsl-apt@5.0.0?classifier=jakarta&type=jar"),
       name: asDependencyName("querydsl-apt"),
       version: asDependencyVersion("5.0.0"),
-      occurrences: [{ target: "t", isDevDependency: false }],
+      occurrences: [{ target: asTargetIdentity("t"), isDevDependency: false }],
       licenseClaims: [],
       scope: "app",
     };
@@ -3163,7 +3168,7 @@ describe("enrichUnknowns maven (deps.dev single fetch, honest sentinel, 404-defi
         purl: asPurl("pkg:pypi/anyio@4.12.1"),
         name: asDependencyName("anyio"),
         version: asDependencyVersion("4.12.1"),
-        occurrences: [{ target: "apps/jupyter", isDevDependency: false }],
+        occurrences: [{ target: asTargetIdentity("apps/jupyter"), isDevDependency: false }],
         licenseClaims: [],
         scope: "app",
       };

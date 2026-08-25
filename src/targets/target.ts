@@ -9,7 +9,12 @@
 import { existsSync, statSync } from "node:fs";
 import { basename, dirname, join, relative, resolve, sep } from "node:path";
 
-import { asAbsolutePath, type AbsolutePath } from "../model/dependencies";
+import {
+  asAbsolutePath,
+  asTargetIdentity,
+  type AbsolutePath,
+  type TargetIdentity,
+} from "../model/dependencies";
 
 export interface Target {
   /** Resolved absolute path of the target directory. */
@@ -19,7 +24,7 @@ export interface Target {
    * "libraries/iframe-rpc"); basename of the directory when no `.git` ancestor exists. NEVER
    * contains backslashes, even on Windows.
    */
-  identity: string;
+  identity: TargetIdentity;
   /**
    * Present ONLY on a yarn workspace scan unit (a collect-loop expansion): the absolute directory
    * holding the governing root yarn.lock and root package.json. Absent means the target itself
@@ -84,10 +89,11 @@ export function resolveTarget(targetArg: string, cwd?: string): Target {
   const repoRoot = findRepoRoot(dir);
   // Identity must be forward-slash on every platform - raw path.relative output contains
   // backslashes on Windows.
-  const identity =
+  const identity = asTargetIdentity(
     repoRoot === undefined || repoRoot === dir
       ? basename(dir)
-      : relative(repoRoot, dir).split(sep).join("/");
+      : relative(repoRoot, dir).split(sep).join("/"),
+  );
 
   return { dir, identity };
 }

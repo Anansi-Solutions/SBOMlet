@@ -29,6 +29,7 @@ import {
   type PackageEntry,
   type Purl,
   type ScopeTaxonomy,
+  type TargetIdentity,
 } from "../model/dependencies";
 import {
   rootPurlOf,
@@ -46,7 +47,7 @@ export interface CollectedSbom {
   /** Parsed CycloneDX JSON document, treated as an untrusted shape. */
   sbom: unknown;
   /** Forward-slash repo-relative target identity, e.g. "libraries/iframe-rpc". */
-  targetIdentity: string;
+  targetIdentity: TargetIdentity;
   /**
    * Purl set of the --production run. When present (plugin targets), the dual-run diff is
    * authoritative: occurrence dev = !prodPurlSet.has(purl). When absent, the property-based markers
@@ -411,7 +412,7 @@ function claimKey(claim: LicenseClaim): string {
  * alongside byPurl in mergeSboms, from each docker occurrence's OWN claims before they are folded
  * into the package-wide licenseClaims union. Never read outside this module.
  */
-type DockerClaimsByTarget = Map<string, Map<string, LicenseClaim[]>>;
+type DockerClaimsByTarget = Map<string, Map<TargetIdentity, LicenseClaim[]>>;
 
 /**
  * Union one docker occurrence's claims into the accumulator, deduped by claimKey - the same-target
@@ -421,7 +422,7 @@ type DockerClaimsByTarget = Map<string, Map<string, LicenseClaim[]>>;
 function recordDockerOccurrenceClaims(
   acc: DockerClaimsByTarget,
   purl: string,
-  target: string,
+  target: TargetIdentity,
   claims: ReadonlyArray<LicenseClaim>,
 ): void {
   let byTarget = acc.get(purl);
@@ -478,7 +479,7 @@ function claimSetKey(claims: ReadonlyArray<LicenseClaim>): string {
  */
 function crossImageClaimDivergence(
   entry: PackageEntry,
-  byTarget: ReadonlyMap<string, LicenseClaim[]> | undefined,
+  byTarget: ReadonlyMap<TargetIdentity, LicenseClaim[]> | undefined,
 ): CrossImageClaimDivergence | undefined {
   if (byTarget === undefined || byTarget.size < 2) {
     return undefined;

@@ -21,6 +21,7 @@ import {
 import { renderMarkdown, type PolicyView } from "../src/render/markdown";
 import { PolicyError } from "../src/policy/schema/diagnostics";
 import { parsePolicy } from "../src/policy/parse/parse";
+import { asTargetIdentity } from "../src/model/dependencies";
 import { claim, modelOf, pkg } from "./normalizeTestSupport";
 import { widen, asPurl, asRelativePath } from "./brandTestSupport";
 
@@ -347,7 +348,7 @@ describe("an imported entry on the reader-facing surfaces", () => {
       verdicts: [
         {
           purl: asPurl("pkg:npm/choice-lib@1.0.0"),
-          occurrenceTarget: "frontend",
+          occurrenceTarget: asTargetIdentity("frontend"),
           status: "fail",
           rule: "clarifications:invalid[0]",
           reason: 'INVALID justification on "choice-lib@1.0.0"',

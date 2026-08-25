@@ -13,8 +13,10 @@ import {
   asPurl,
   asRawLicense,
   asRelativePath,
+  asTargetIdentity,
   type CanonicalLicense,
   type Purl,
+  type TargetIdentity,
 } from "../src/model/dependencies";
 import { canonicalizeExpression } from "../src/normalize/expression";
 
@@ -25,8 +27,9 @@ export {
   asPurl,
   asRawLicense,
   asRelativePath,
+  asTargetIdentity,
 };
-export type { Purl };
+export type { Purl, TargetIdentity };
 
 /**
  * Mint a {@link CanonicalLicense} from a test literal by routing it through the production mint

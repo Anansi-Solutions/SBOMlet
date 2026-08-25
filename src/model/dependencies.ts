@@ -77,6 +77,26 @@ const _relativePathBrand = type("string")
 export type RelativePath = typeof _relativePathBrand.infer;
 
 /**
+ * A tool-minted target identity: a repo-relative forward-slash path ("libraries/iframe-rpc") OR a
+ * docker occurrence identity ("docker:" + source). The brand is VALIDATED: non-empty, no backslash,
+ * and NOT node:path {@link isAbsolute}, so an absolute machine path (an {@link AbsolutePath}) or a
+ * Windows-separated path can never enter the type - the abs/rel fence that keeps a target's machine
+ * `dir` and its `identity` from ever being confused. Minted via {@link asTargetIdentity} at the
+ * three identity origins (target resolution, discovery, the docker fan-out). The reserved
+ * "docker:"-namespace guard for non-os inputs (assertNotReservedIdentity) is enforced separately at
+ * the merge boundary; the brand admits the shape an app path and a docker identity share.
+ */
+const _targetIdentityBrand = type("string")
+  .narrow(
+    (value, ctx) =>
+      (value.length > 0 && !value.includes("\\") && !isAbsolute(value)) ||
+      ctx.reject("a repo-relative or docker: target identity"),
+  )
+  .brand("TargetIdentity");
+
+export type TargetIdentity = typeof _targetIdentityBrand.infer;
+
+/**
  * A dependency's display name (`@scope/pkg`, `busybox`, an `<ns>/<name>` terraform address). The
  * brand is VALIDATED non-blank, so a blank name can never identify a package. Minted via {@link
  * asDependencyName} where a package name is CONSTRUCTED (a collector building a component, the
@@ -153,6 +173,17 @@ export function asAbsolutePath(path: string): AbsolutePath {
  */
 export function asRelativePath(path: string): RelativePath {
   return _relativePathBrand.assert(path) as RelativePath;
+}
+
+/**
+ * Mint a {@link TargetIdentity} at an identity origin (target resolution, discovery, the docker
+ * fan-out).
+ *
+ * @throws if `value` is empty, contains a backslash, or is absolute per node:path {@link isAbsolute}
+ * - a machine path or a Windows-separated string can never become a target identity.
+ */
+export function asTargetIdentity(value: string): TargetIdentity {
+  return _targetIdentityBrand.assert(value) as TargetIdentity;
 }
 
 /**
@@ -349,7 +380,7 @@ export interface CrossImageClaimDivergence {
    * declared license strings (deduped, sorted); empty when the image declared no license claim for
    * this purl at all.
    */
-  byTarget: ReadonlyArray<{ target: string; claims: readonly string[] }>;
+  byTarget: ReadonlyArray<{ target: TargetIdentity; claims: readonly string[] }>;
 }
 
 /**
@@ -363,7 +394,7 @@ export type VerdictStatus = "ok" | "warn" | "fail" | "suppressed";
 /** One policy decision per (package x occurrence). */
 export interface Verdict {
   purl: Purl;
-  occurrenceTarget: string;
+  occurrenceTarget: TargetIdentity;
   status: VerdictStatus;
   /**
    * Machine-readable deciding rule: "compatible[1]", "clarify[0]",
@@ -392,12 +423,33 @@ export const DOCKER_IDENTITY_PREFIX = "docker:";
  * it as a whole path segment - "apps/studio-helper" never matches "apps/studio". The one prefix
  * comparison every policy-surface matcher shares (copyleft suppression paths, `[[compatible]]`
  * `where` scopes, target-profile resolution) so a crafted narrower/wider path can never
- * accidentally match the wrong side. Both directions matter: the scope "docker:a" covers every
- * target under it ("docker:a/Dockerfile"), while the scope "docker:a/Dockerfile" never covers the
- * shorter target "docker:a" (the fail-safe direction).
+ * accidentally match the wrong side. `target` is a branded {@link TargetIdentity}; `pattern` stays
+ * a plain string, so the two arguments can never be passed swapped - a pattern-vs-pattern overlap
+ * uses {@link identityPathsOverlap} instead. Both directions matter: the scope "docker:a" covers
+ * every target under it ("docker:a/Dockerfile"), while the scope "docker:a/Dockerfile" never covers
+ * the shorter target "docker:a" (the fail-safe direction).
  */
-export function matchesIdentityPrefix(target: string, path: string): boolean {
-  return target === path || target.startsWith(path + "/");
+export function matchesIdentityPrefix(target: TargetIdentity, pattern: string): boolean {
+  return isSegmentPrefix(target, pattern);
+}
+
+/**
+ * The shared segment-aware prefix rule behind {@link matchesIdentityPrefix} and {@link
+ * identityPathsOverlap} - `value` IS `prefix` or sits under it as a whole path segment. One prefix
+ * comparison, never two.
+ */
+function isSegmentPrefix(value: string, prefix: string): boolean {
+  return value === prefix || value.startsWith(prefix + "/");
+}
+
+/**
+ * Whether two identity PATTERNS overlap as a prefix chain: either one is the other or sits under
+ * it. Both sides are policy patterns (a `[[workspace.copyleft_suppressed]]` path, a
+ * `[[target.workspace]]` path), so neither is a branded identity - the symmetric peer of {@link
+ * matchesIdentityPrefix}, sharing its one {@link isSegmentPrefix} rule.
+ */
+export function identityPathsOverlap(a: string, b: string): boolean {
+  return isSegmentPrefix(a, b) || isSegmentPrefix(b, a);
 }
 
 /**
@@ -449,7 +501,7 @@ export interface DependencyIntroduction {
  */
 export interface Occurrence {
   /** Target identity, e.g. "apps/scratch". Forward-slash, never backslash. */
-  target: string;
+  target: TargetIdentity;
   /** Scope of this package in this target (dev in docs, prod in frontend is legal). */
   isDevDependency: boolean;
   /**

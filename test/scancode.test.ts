@@ -46,6 +46,7 @@ import {
   toSortedDependenciesJson,
   type LicenseClaim,
   type PackageEntry,
+  asTargetIdentity,
 } from "../src/model/dependencies";
 import {
   isRootLevelOrDistInfoLicensesPath,
@@ -1457,7 +1458,7 @@ describe("assessPackages — ScanCode peer assessment stage", () => {
       purl: asPurl(`pkg:npm/${name}@${version}`),
       name: asDependencyName(name),
       version: asDependencyVersion(version),
-      occurrences: [{ target: "proj", isDevDependency: false }],
+      occurrences: [{ target: asTargetIdentity("proj"), isDevDependency: false }],
       licenseClaims: claims,
       scope: "app",
     };
@@ -1919,7 +1920,7 @@ describe("assessPackages — ScanCode peer assessment stage", () => {
           purl: asPurl("pkg:apk/musl@1.2.3"),
           name: asDependencyName("musl"),
           version: asDependencyVersion("1.2.3"),
-          occurrences: [{ target: "proj", isDevDependency: false }],
+          occurrences: [{ target: asTargetIdentity("proj"), isDevDependency: false }],
           licenseClaims: [],
           scope: "os",
         }, // unsupported 1

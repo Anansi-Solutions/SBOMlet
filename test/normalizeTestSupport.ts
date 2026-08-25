@@ -3,6 +3,7 @@ import {
   asDependencyVersion,
   asPurl,
   asRawLicense,
+  asTargetIdentity,
   type CanonicalDependencies,
   type LicenseClaim,
   type LicenseClaimKind,
@@ -19,7 +20,7 @@ export const pkg = (name: string, version: string, claims: LicenseClaim[]): Pack
   purl: asPurl(`pkg:npm/${name}@${version}`),
   name: asDependencyName(name),
   version: asDependencyVersion(version),
-  occurrences: [{ target: "frontend", isDevDependency: false }],
+  occurrences: [{ target: asTargetIdentity("frontend"), isDevDependency: false }],
   licenseClaims: claims,
   scope: "app",
 });
@@ -29,7 +30,7 @@ export const osPkg = (name: string, version: string, claims: LicenseClaim[]): Pa
   purl: asPurl(`pkg:deb/debian/${name}@${version}`),
   name: asDependencyName(name),
   version: asDependencyVersion(version),
-  occurrences: [{ target: "docker:img/Dockerfile", isDevDependency: false }],
+  occurrences: [{ target: asTargetIdentity("docker:img/Dockerfile"), isDevDependency: false }],
   licenseClaims: claims,
   scope: "os",
 });

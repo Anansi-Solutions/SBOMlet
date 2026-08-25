@@ -19,6 +19,7 @@ import {
   type CanonicalDependencies,
   type PackageEntry,
   type Verdict,
+  asTargetIdentity,
 } from "../model/dependencies";
 import { canon, asPurl, asDependencyName, asDependencyVersion } from "../../test/brandTestSupport";
 import { renderCyclonedx } from "./cyclonedx";
@@ -32,7 +33,7 @@ function entry(
   partial: Partial<PackageEntry> & Pick<PackageEntry, "name" | "version" | "purl">,
 ): PackageEntry {
   return {
-    occurrences: [{ target: "apps/a", isDevDependency: false }],
+    occurrences: [{ target: asTargetIdentity("apps/a"), isDevDependency: false }],
     licenseClaims: [],
     scope: "app",
     ...partial,
@@ -81,22 +82,22 @@ const sharpEntry = entry({
   name: asDependencyName("sharp"),
   version: asDependencyVersion("0.33.0"),
   occurrences: [
-    { target: "backend", isDevDependency: false },
-    { target: "frontend", isDevDependency: true },
+    { target: asTargetIdentity("backend"), isDevDependency: false },
+    { target: asTargetIdentity("frontend"), isDevDependency: true },
   ],
 });
 
 const sharpVerdicts: Verdict[] = [
   {
     purl: asPurl("pkg:npm/sharp@0.33.0"),
-    occurrenceTarget: "backend",
+    occurrenceTarget: asTargetIdentity("backend"),
     status: "ok",
     rule: "default:ok",
     reason: "no copyleft obligations",
   },
   {
     purl: asPurl("pkg:npm/sharp@0.33.0"),
-    occurrenceTarget: "frontend",
+    occurrenceTarget: asTargetIdentity("frontend"),
     status: "fail",
     rule: "default:copyleft",
     reason: "copyleft license",
@@ -104,7 +105,7 @@ const sharpVerdicts: Verdict[] = [
   // A verdict for a DIFFERENT purl must never leak into this component.
   {
     purl: asPurl("pkg:npm/other@1.0.0"),
-    occurrenceTarget: "frontend",
+    occurrenceTarget: asTargetIdentity("frontend"),
     status: "fail",
     rule: "default:copyleft",
     reason: "belongs to another package",

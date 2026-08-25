@@ -49,9 +49,9 @@ import { sanitizeForLog, writePolicySummary } from "../src/pipeline/summary";
 import { parsePolicy } from "../src/policy/parse/parse";
 import { MAX_BUN_LOCK_BYTES } from "../src/collectors/bunLock";
 import * as cdxgenModule from "../src/collectors/cdxgen";
+import { asTargetIdentity, type Verdict } from "../src/model/dependencies";
 import { asPurl, widen } from "./brandTestSupport";
 import type { VerifyCacheResult } from "../src/pipeline/verifyCache";
-import type { Verdict } from "../src/model/dependencies";
 
 /**
  * A legitimate zero-dependency Yarn-4 lockfile: non-empty (always contains
@@ -408,7 +408,7 @@ describe("sanitizeForLog — stderr injection boundary", () => {
 describe("writePolicySummary — imprecise count line", () => {
   const impreciseVerdict = (rule: string): Verdict => ({
     purl: asPurl("pkg:pypi/imp@1.0.0"),
-    occurrenceTarget: "apps/jupyter",
+    occurrenceTarget: asTargetIdentity("apps/jupyter"),
     status: "warn",
     rule,
     reason: "imprecise family",
@@ -437,7 +437,7 @@ describe("writePolicySummary — imprecise count line", () => {
     const verdicts: Verdict[] = [
       {
         purl: asPurl("pkg:npm/x@1.0.0"),
-        occurrenceTarget: "proj",
+        occurrenceTarget: asTargetIdentity("proj"),
         status: "ok",
         rule: "default:ok",
         reason: "no copyleft",
@@ -455,7 +455,7 @@ describe("writePolicySummary — imprecise count line", () => {
 describe("writePolicySummary — assessment conflict count line", () => {
   const conflictVerdict = (purl: string): Verdict => ({
     purl: asPurl(purl),
-    occurrenceTarget: "apps/synthetic",
+    occurrenceTarget: asTargetIdentity("apps/synthetic"),
     status: "fail",
     rule: "conflict:scancode",
     reason: "assessment conflict — resolve via [[clarify]]",
@@ -483,7 +483,7 @@ describe("writePolicySummary — assessment conflict count line", () => {
     const verdicts: Verdict[] = [
       {
         purl: asPurl("pkg:npm/x@1.0.0"),
-        occurrenceTarget: "proj",
+        occurrenceTarget: asTargetIdentity("proj"),
         status: "ok",
         rule: "default:ok",
         reason: "no copyleft",
@@ -2074,9 +2074,13 @@ describe("dispatch wiring: bun branch + per-kind firstPartyNames", () => {
     // is prod-reachable (incl. both folded nested/top-level entries).
     const occurrences = occurrencesByName(dumpPath);
 
-    expect(occurrences.get("typescript")).toEqual([{ target: "bunproj", isDevDependency: true }]);
+    expect(occurrences.get("typescript")).toEqual([
+      { target: asTargetIdentity("bunproj"), isDevDependency: true },
+    ]);
     for (const name of ["smol-toml", "spdx-compare", "spdx-expression-parse"]) {
-      expect(occurrences.get(name)).toEqual([{ target: "bunproj", isDevDependency: false }]);
+      expect(occurrences.get(name)).toEqual([
+        { target: asTargetIdentity("bunproj"), isDevDependency: false },
+      ]);
     }
   });
 
@@ -2146,8 +2150,12 @@ describe("dispatch wiring: bun branch + per-kind firstPartyNames", () => {
     // Through the CLI: development+optional pair merges PROD.
     const occurrences = occurrencesByName(dumpPath);
 
-    expect(occurrences.get("fsevents")).toEqual([{ target: "npm-app", isDevDependency: false }]);
-    expect(occurrences.get("express")).toEqual([{ target: "npm-app", isDevDependency: false }]);
+    expect(occurrences.get("fsevents")).toEqual([
+      { target: asTargetIdentity("npm-app"), isDevDependency: false },
+    ]);
+    expect(occurrences.get("express")).toEqual([
+      { target: asTargetIdentity("npm-app"), isDevDependency: false },
+    ]);
   });
 
   test("a pnpm target merges development-marked dev scope; no first-party leakage", async () => {
@@ -2180,8 +2188,12 @@ describe("dispatch wiring: bun branch + per-kind firstPartyNames", () => {
 
     const occurrences = occurrencesByName(dumpPath);
 
-    expect(occurrences.get("typescript")).toEqual([{ target: "pnpm-app", isDevDependency: true }]);
-    expect(occurrences.get("smol-toml")).toEqual([{ target: "pnpm-app", isDevDependency: false }]);
+    expect(occurrences.get("typescript")).toEqual([
+      { target: asTargetIdentity("pnpm-app"), isDevDependency: true },
+    ]);
+    expect(occurrences.get("smol-toml")).toEqual([
+      { target: asTargetIdentity("pnpm-app"), isDevDependency: false },
+    ]);
   });
 
   test("an npm v1 target routes to scan and the zero-component result hard-fails naming the target", async () => {

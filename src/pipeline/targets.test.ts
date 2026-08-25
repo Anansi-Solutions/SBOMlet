@@ -27,7 +27,8 @@ import { afterAll, beforeAll, describe, expect, mock, test } from "bun:test";
 import * as cdxgenModule from "../collectors/cdxgen";
 import * as yarnPluginModule from "../collectors/yarnPlugin";
 import { mergeSboms } from "../merge/merge";
-import { asAbsolutePath } from "../model/dependencies";
+import { asAbsolutePath, asTargetIdentity } from "../model/dependencies";
+import { widen } from "../../test/brandTestSupport";
 import { collectTargets } from "./targets";
 import { runGenerate } from "./pipeline";
 import type { GenerateOptions } from "./options";
@@ -289,7 +290,7 @@ describe("collectTargets — yarn workspace expansion (mechanism test)", () => {
       const result = await collectTargets(baseOpts(root), () => {});
 
       // Identity is the lock-declared PATH, never the package name.
-      expect(result.inputs.map((input) => input.targetIdentity)).toEqual([
+      expect(result.inputs.map((input) => widen(input.targetIdentity))).toEqual([
         ".",
         "packages/web-app",
         "services/backend-api",
@@ -299,9 +300,11 @@ describe("collectTargets — yarn workspace expansion (mechanism test)", () => {
       const ms = model.packages.find((pkg) => pkg.purl === "pkg:npm/ms@2.1.3");
       const sax = model.packages.find((pkg) => pkg.purl === "pkg:npm/sax@1.4.1");
 
-      expect(ms?.occurrences).toEqual([{ target: "packages/web-app", isDevDependency: false }]);
+      expect(ms?.occurrences).toEqual([
+        { target: asTargetIdentity("packages/web-app"), isDevDependency: false },
+      ]);
       expect(sax?.occurrences).toEqual([
-        { target: "services/backend-api", isDevDependency: false },
+        { target: asTargetIdentity("services/backend-api"), isDevDependency: false },
       ]);
     } finally {
       mock.module("../collectors/yarnPlugin", () => ({
@@ -320,7 +323,7 @@ describe("collectTargets — yarn workspace expansion (mechanism test)", () => {
     });
 
     // (a) exactly three inputs, identities in sorted order.
-    expect(result.inputs.map((input) => input.targetIdentity)).toEqual([
+    expect(result.inputs.map((input) => widen(input.targetIdentity))).toEqual([
       ".",
       "backend",
       "frontend",
@@ -340,12 +343,16 @@ describe("collectTargets — yarn workspace expansion (mechanism test)", () => {
     const directOfItsWorkspace = { direct: true, introducedBy: [] };
 
     expect(ms?.occurrences).toEqual([
-      { target: "backend", isDevDependency: false, introduction: directOfItsWorkspace },
+      {
+        target: asTargetIdentity("backend"),
+        isDevDependency: false,
+        introduction: directOfItsWorkspace,
+      },
     ]);
     const leftPad = model.packages.find((pkg) => pkg.purl === "pkg:npm/left-pad@1.3.0");
 
     expect(leftPad?.occurrences).toEqual([
-      { target: ".", isDevDependency: true, introduction: directOfItsWorkspace },
+      { target: asTargetIdentity("."), isDevDependency: true, introduction: directOfItsWorkspace },
     ]);
 
     // (d) exactly three "collecting <identity> via ..." lines, sorted.
@@ -363,7 +370,7 @@ describe("collectTargets — yarn workspace expansion (mechanism test)", () => {
     const result = await collectTargets(baseOpts(root), () => {});
 
     for (const input of result.inputs) {
-      expect(input.targetIdentity).not.toContain("\\");
+      expect(widen(input.targetIdentity)).not.toContain("\\");
     }
   });
 
@@ -450,7 +457,7 @@ describe("collectTargets — yarn workspace expansion (mechanism test)", () => {
 
     const result = await collectTargets(baseOpts(root), () => {});
 
-    expect(result.inputs.map((input) => input.targetIdentity)).toEqual([
+    expect(result.inputs.map((input) => widen(input.targetIdentity))).toEqual([
       ".",
       "backend",
       "frontend",
@@ -695,7 +702,7 @@ describe("collectTargets — yarn workspace expansion edge behavior", () => {
 
     const result = await collectTargets(baseOpts(root), () => {});
 
-    expect(result.inputs.map((input) => input.targetIdentity)).toEqual(["."]);
+    expect(result.inputs.map((input) => widen(input.targetIdentity))).toEqual(["."]);
   });
 
   test("--target mode: expansion fires identically, unit identities are [base, base/backend, base/frontend]", async () => {
@@ -713,7 +720,7 @@ describe("collectTargets — yarn workspace expansion edge behavior", () => {
       () => {},
     );
 
-    expect(result.inputs.map((input) => input.targetIdentity)).toEqual([
+    expect(result.inputs.map((input) => widen(input.targetIdentity))).toEqual([
       base,
       `${base}/backend`,
       `${base}/frontend`,
@@ -967,7 +974,10 @@ describe("collectTargets — yarn workspace expansion edge behavior", () => {
 
     // The dep-less root unit skips loudly; backend and frontend still scan.
     expect(log).toContain("warning: skipping . — workspace declares no dependencies in yarn.lock");
-    expect(result.inputs.map((input) => input.targetIdentity)).toEqual(["backend", "frontend"]);
+    expect(result.inputs.map((input) => widen(input.targetIdentity))).toEqual([
+      "backend",
+      "frontend",
+    ]);
   });
 
   test("containment: a traversal @workspace: path throws before any spawn, naming the identity and offending path", async () => {
@@ -1382,7 +1392,7 @@ describe("collectTargets — yarn workspace expansion edge behavior", () => {
 
       // Exactly ONE input with the root identity — never a unit for the
       // on-disk packages/evil directory the lock's text points at.
-      expect(result.inputs.map((input) => input.targetIdentity)).toEqual(["."]);
+      expect(result.inputs.map((input) => widen(input.targetIdentity))).toEqual(["."]);
 
       // One cdxgen scan, zero yarn-plugin scans, one collecting line: the
       // whole-root single-scan path, identical to any other cdxgen target.
@@ -1562,7 +1572,7 @@ describe("collectTargets — nuget packages.lock.json coverage integration", () 
     });
 
     expect(log).toContain("collecting . via nuget-lock-collector@1");
-    expect(result.inputs.map((input) => input.targetIdentity)).toEqual(["."]);
+    expect(result.inputs.map((input) => widen(input.targetIdentity))).toEqual(["."]);
     expect(result.targetDirs).toEqual([asAbsolutePath(root)]);
   });
 });
@@ -1673,7 +1683,7 @@ describe("collectTargets — maven reactor attribution", () => {
       ),
     ).toBe(true);
 
-    expect(result.inputs.map((input) => input.targetIdentity).sort()).toEqual([
+    expect(result.inputs.map((input) => widen(input.targetIdentity)).sort()).toEqual([
       "allsiblings",
       "appb",
       "liba",
@@ -1758,7 +1768,7 @@ describe("collectTargets — maven reactor attribution with a test-inclusive sid
 
     // The target set is unchanged — one target per module, never a second
     // target for the test doc.
-    expect(result.inputs.map((input) => input.targetIdentity).sort()).toEqual([
+    expect(result.inputs.map((input) => widen(input.targetIdentity)).sort()).toEqual([
       "allsiblings",
       "appb",
       "liba",

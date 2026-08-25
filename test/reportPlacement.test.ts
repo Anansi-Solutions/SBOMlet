@@ -12,6 +12,7 @@ import {
   DOCKER_IDENTITY_PREFIX,
   type CanonicalDependencies,
   type Verdict,
+  asTargetIdentity,
 } from "../src/model/dependencies";
 import { npmIntroductions } from "../src/collectors/npmProvenance";
 import { withCacheClaim } from "../src/enrich/enrich";
@@ -363,7 +364,7 @@ function buildScenario(inputs: ReadonlyArray<ScenarioInput>, policyToml: string)
 
     return {
       sbom,
-      targetIdentity: input.targetIdentity,
+      targetIdentity: asTargetIdentity(input.targetIdentity),
       ...(input.scope !== undefined ? { scope: input.scope } : {}),
       ...(input.dependencies !== undefined
         ? { introductions: npmIntroductions(sbom), derivesDependencyGraph: true }
@@ -485,8 +486,8 @@ function containerPartition(block: string): {
 
 const UNKNOWN_WARN = ["[unknown]", 'handling = "warn"', ""].join("\n");
 
-const WORKSPACE = "apps/web";
-const WORKSPACE_B = "apps/api";
+const WORKSPACE = asTargetIdentity("apps/web");
+const WORKSPACE_B = asTargetIdentity("apps/api");
 const PROD_CONTAINER = `${DOCKER_IDENTITY_PREFIX}services/app/Dockerfile`;
 const DEV_CONTAINER = `${DOCKER_IDENTITY_PREFIX}tools/build/Dockerfile`;
 const OTHER_CONTAINER = `${DOCKER_IDENTITY_PREFIX}services/other/Dockerfile`;
@@ -2732,7 +2733,7 @@ describe("dependency classification and report placement — Path index E2E", ()
 // ===========================================================================
 
 describe("cross-document invariants — LICENSES and NOTICES agree on one shared model", () => {
-  const UNKNOWN_OR_IMPRECISE_WORKSPACE = "apps/mixed";
+  const UNKNOWN_OR_IMPRECISE_WORKSPACE = asTargetIdentity("apps/mixed");
 
   /**
    * One workspace with four packages spanning every unknown-adjacent lane:

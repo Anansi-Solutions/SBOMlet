@@ -45,6 +45,14 @@ import {
   asDependencyName,
   asDependencyVersion,
 } from "../../../test/brandTestSupport";
+import {
+  asTargetIdentity,
+  type TargetIdentity,
+  type CanonicalDependencies,
+  type DependencyIntroduction,
+  type LicenseFinding,
+  type Verdict,
+} from "../../model/dependencies";
 import { AGPL_IDS, COPYLEFT_IDS } from "./copyleft";
 import { denyRuleFor } from "./deny";
 import {
@@ -55,12 +63,6 @@ import {
 } from "./evaluate";
 import { COULD_BE_COPYLEFT_FAMILIES, WORKSPACE_ABSORBS } from "./copyleftFamily";
 import type { Policy } from "../schema";
-import type {
-  CanonicalDependencies,
-  DependencyIntroduction,
-  LicenseFinding,
-  Verdict,
-} from "../../model/dependencies";
 
 describe("evaluate — a [[compatible]] entry covering a family of packages", () => {
   test("HEADLINE: one pattern entry accepts every matching package, each citing the same entry", () => {
@@ -261,7 +263,7 @@ describe("evaluate — segment-aware suppression", () => {
     );
 
     // compareCodeUnits order on occurrenceTarget: "-" (0x2D) sorts before "/" (0x2F).
-    expect(verdicts.map((v) => [v.occurrenceTarget, v.status, v.rule])).toEqual([
+    expect(verdicts.map((v) => [widen(v.occurrenceTarget), v.status, v.rule])).toEqual([
       ["apps/scratch", "suppressed", "workspace.copyleft_suppressed[0]"],
       ["apps/scratch-helper", "fail", "default:copyleft"],
       ["apps/scratch/sub", "suppressed", "workspace.copyleft_suppressed[0]"],
@@ -457,7 +459,7 @@ describe("evaluate — absorb-all-copyleft suppression", () => {
     );
 
     expect(verdicts).toHaveLength(1);
-    expect(verdicts[0].occurrenceTarget).toBe("backend");
+    expect(widen(verdicts[0].occurrenceTarget)).toBe("backend");
     expect(verdicts[0].status).toBe("fail");
     expect(verdicts[0].rule).toBe("default:copyleft");
   });
@@ -653,7 +655,7 @@ describe("evaluate — imprecise findings route to a safe lane", () => {
           purl: asPurl("pkg:pypi/imp@1.0.0"),
           name: asDependencyName("imp"),
           version: asDependencyVersion("1.0.0"),
-          occurrences: [{ target: "backend", isDevDependency: false }],
+          occurrences: [{ target: asTargetIdentity("backend"), isDevDependency: false }],
           licenseClaims: [],
           scope: "app",
           finding: impreciseFinding,
@@ -710,7 +712,7 @@ describe("evaluate — per-occurrence verdicts", () => {
     );
 
     expect(verdicts).toHaveLength(2);
-    expect(verdicts.map((v) => v.occurrenceTarget)).toEqual(["apps/scratch", "backend"]);
+    expect(verdicts.map((v) => widen(v.occurrenceTarget))).toEqual(["apps/scratch", "backend"]);
     expect(verdicts[0].status).toBe("suppressed");
     expect(verdicts[1].status).toBe("fail");
     // Fail reasons MUST name the occurrence target AND the elected
@@ -1422,8 +1424,8 @@ describe("evaluate — conflict:cross-image-claims fail verdict", () => {
     const { verdicts } = runEngine(
       [
         crossImagePkgSpec("busybox", [
-          { target: "docker:image-a", claims: ["MIT"] },
-          { target: "docker:image-b", claims: ["Apache-2.0"] },
+          { target: asTargetIdentity("docker:image-a"), claims: ["MIT"] },
+          { target: asTargetIdentity("docker:image-b"), claims: ["Apache-2.0"] },
         ]),
       ],
       "",
@@ -1444,8 +1446,8 @@ describe("evaluate — conflict:cross-image-claims fail verdict", () => {
     const { verdicts } = runEngine(
       [
         crossImagePkgSpec("partial-claim-pkg", [
-          { target: "docker:image-a", claims: [] },
-          { target: "docker:image-b", claims: ["MIT"] },
+          { target: asTargetIdentity("docker:image-a"), claims: [] },
+          { target: asTargetIdentity("docker:image-b"), claims: ["MIT"] },
         ]),
       ],
       "",
@@ -1467,8 +1469,8 @@ describe("evaluate — conflict:cross-image-claims fail verdict", () => {
     const { verdicts } = runEngine(
       [
         crossImagePkgSpec("busybox", [
-          { target: "docker:image-a", claims: ["MIT"] },
-          { target: "docker:image-b", claims: ["Apache-2.0"] },
+          { target: asTargetIdentity("docker:image-a"), claims: ["MIT"] },
+          { target: asTargetIdentity("docker:image-b"), claims: ["Apache-2.0"] },
         ]),
       ],
       policyText,
@@ -1484,8 +1486,8 @@ describe("evaluate — conflict:cross-image-claims fail verdict", () => {
   test("without a clarify, the divergence stays a fail deterministically across repeated runs (no flapping)", () => {
     const spec = [
       crossImagePkgSpec("busybox", [
-        { target: "docker:image-a", claims: ["MIT"] },
-        { target: "docker:image-b", claims: ["Apache-2.0"] },
+        { target: asTargetIdentity("docker:image-a"), claims: ["MIT"] },
+        { target: asTargetIdentity("docker:image-b"), claims: ["Apache-2.0"] },
       ]),
     ];
     const a = runEngine(spec, "").verdicts;
@@ -1624,7 +1626,7 @@ describe("evaluate — where-scoped compatible matching", () => {
     // compareCodeUnits order: .../a/Dockerfile, .../a/Dockerfile-extra,
     // .../b/Dockerfile. Out-of-scope occurrences fall to default:copyleft,
     // os-downgraded to warn ([os_dependencies] defaults to "warn").
-    expect(verdicts.map((v) => [v.occurrenceTarget, v.status, v.rule])).toEqual([
+    expect(verdicts.map((v) => [widen(v.occurrenceTarget), v.status, v.rule])).toEqual([
       [TARGET_A, "ok", "compatible[0]"],
       [TARGET_A_EXTRA, "warn", "default:copyleft"],
       [TARGET_B, "warn", "default:copyleft"],
@@ -1637,7 +1639,7 @@ describe("evaluate — where-scoped compatible matching", () => {
       scopedGplPolicy([TARGET_A]),
     );
 
-    expect(verdicts.map((v) => [v.occurrenceTarget, v.status, v.rule])).toEqual([
+    expect(verdicts.map((v) => [widen(v.occurrenceTarget), v.status, v.rule])).toEqual([
       [TARGET_A, "ok", "compatible[0]"],
       [TARGET_A_EXTRA, "warn", "default:copyleft"],
       [TARGET_B, "warn", "default:copyleft"],
@@ -1692,7 +1694,7 @@ describe("evaluate — where-scoped compatible matching", () => {
     ].join("\n");
     const { verdicts } = runEngine([busyboxAt([TARGET_A, TARGET_B])], policyText);
 
-    expect(verdicts.map((v) => [v.occurrenceTarget, v.status, v.rule])).toEqual([
+    expect(verdicts.map((v) => [widen(v.occurrenceTarget), v.status, v.rule])).toEqual([
       [TARGET_A, "ok", "compatible[0]"],
       [TARGET_B, "ok", "compatible[1]"],
     ]);
@@ -1727,7 +1729,7 @@ describe("evaluate — where-scoped compatible matching", () => {
       policyText,
     );
 
-    expect(verdicts.map((v) => [v.occurrenceTarget, v.status, v.rule])).toEqual([
+    expect(verdicts.map((v) => [widen(v.occurrenceTarget), v.status, v.rule])).toEqual([
       ["apps/scratch", "ok", "compatible[0]"],
       ["backend", "ok", "compatible[0]"],
       ["proj", "ok", "compatible[0]"],
@@ -1757,7 +1759,7 @@ describe("evaluate — where-scoped compatible matching", () => {
       scopedBusyboxPolicy([TARGET_A, "/"]),
     );
 
-    expect(verdicts.map((v) => [v.occurrenceTarget, v.status, v.rule])).toEqual([
+    expect(verdicts.map((v) => [widen(v.occurrenceTarget), v.status, v.rule])).toEqual([
       [TARGET_A, "ok", "compatible[0]"],
       [TARGET_B, "ok", "compatible[0]"],
     ]);
@@ -1825,11 +1827,11 @@ describe("AGPL acceptance corpus", () => {
       ACCEPTANCE_POLICY,
     );
 
-    expect(verdicts.map((v) => [v.occurrenceTarget, v.status])).toEqual([
+    expect(verdicts.map((v) => [widen(v.occurrenceTarget), v.status])).toEqual([
       ["apps/scratch", "suppressed"],
       ["backend", "fail"],
     ]);
-    expect(verdicts[1].occurrenceTarget).toBe("backend");
+    expect(widen(verdicts[1].occurrenceTarget)).toBe("backend");
     expect(verdicts[1].reason).toContain("backend");
   });
 
@@ -1850,7 +1852,7 @@ describe("AGPL acceptance corpus", () => {
       ACCEPTANCE_POLICY,
     );
 
-    expect(verdicts.map((v) => [v.occurrenceTarget, v.status])).toEqual([
+    expect(verdicts.map((v) => [widen(v.occurrenceTarget), v.status])).toEqual([
       ["apps/scratch", "suppressed"],
       ["frontend", "fail"],
     ]);
@@ -1870,7 +1872,7 @@ describe("AGPL acceptance corpus", () => {
     };
     const without = runEngine([spec], ACCEPTANCE_POLICY).verdicts;
 
-    expect(without.map((v) => [v.occurrenceTarget, v.status])).toEqual([
+    expect(without.map((v) => [widen(v.occurrenceTarget), v.status])).toEqual([
       ["apps/scratch", "suppressed"],
       ["frontend", "fail"],
     ]);
@@ -1889,7 +1891,7 @@ describe("AGPL acceptance corpus", () => {
     ].join("\n");
     const accepted = runEngine([spec], withRule).verdicts;
 
-    expect(accepted.map((v) => [v.occurrenceTarget, v.status, v.rule])).toEqual([
+    expect(accepted.map((v) => [widen(v.occurrenceTarget), v.status, v.rule])).toEqual([
       ["apps/scratch", "ok", "compatible[0]"],
       ["frontend", "ok", "compatible[0]"],
     ]);
@@ -1929,7 +1931,7 @@ describe("AGPL acceptance corpus", () => {
       name: "jsonify",
       version: "0.0.1",
       claims: ["Public Domain"],
-      occurrences: [{ target: "frontend", dev: true }],
+      occurrences: [{ target: asTargetIdentity("frontend"), dev: true }],
     };
     const warned = runEngine([spec], ACCEPTANCE_POLICY).verdicts;
 
@@ -1961,10 +1963,10 @@ describe("evaluate — dev-scope downgrade (default warn)", () => {
     // sorted compareCodeUnits on (purl, target): apps/a before apps/b
     const [a, b] = verdicts;
 
-    expect(a.occurrenceTarget).toBe("apps/a");
+    expect(widen(a.occurrenceTarget)).toBe("apps/a");
     expect(a.status).toBe("warn");
     expect(a.rule).toBe("default:copyleft");
-    expect(b.occurrenceTarget).toBe("apps/b");
+    expect(widen(b.occurrenceTarget)).toBe("apps/b");
     expect(b.status).toBe("fail");
     expect(b.rule).toBe("default:copyleft");
   });
@@ -2015,51 +2017,59 @@ describe("evaluate — workspace-shape production occurrences", () => {
 
   test("HEADLINE: a production copyleft occurrence on {target:'frontend', isDevDependency:false} FAILS under dev_dependencies=warn — never downgraded", () => {
     const { verdicts } = runEngine(
-      [pkgSpec("imaging-native", "LGPL-3.0-or-later", [{ target: "frontend", dev: false }])],
+      [
+        pkgSpec("imaging-native", "LGPL-3.0-or-later", [
+          { target: asTargetIdentity("frontend"), dev: false },
+        ]),
+      ],
       "",
     );
 
     expect(verdicts).toHaveLength(1);
     expect(verdicts[0].status).toBe("fail");
     expect(verdicts[0].rule).toBe("default:copyleft");
-    expect(verdicts[0].occurrenceTarget).toBe("frontend");
+    expect(widen(verdicts[0].occurrenceTarget)).toBe("frontend");
   });
 
   test("contrast arm: the SAME package as a dev occurrence on the workspace shape WARNS — proving the terminal, not the shape, does the work", () => {
     const { verdicts } = runEngine(
-      [pkgSpec("imaging-native", "LGPL-3.0-or-later", [{ target: "frontend", dev: true }])],
+      [
+        pkgSpec("imaging-native", "LGPL-3.0-or-later", [
+          { target: asTargetIdentity("frontend"), dev: true },
+        ]),
+      ],
       "",
     );
 
     expect(verdicts).toHaveLength(1);
     expect(verdicts[0].status).toBe("warn");
     expect(verdicts[0].rule).toBe("default:copyleft");
-    expect(verdicts[0].occurrenceTarget).toBe("frontend");
+    expect(widen(verdicts[0].occurrenceTarget)).toBe("frontend");
     expect(verdicts[0].reason).toContain("dev-only occurrence");
   });
 
   test("deny, production: a [[deny]]-listed license on {target:'backend', isDevDependency:false} FAILS (terminal)", () => {
     const { verdicts } = runEngine(
-      [pkgSpec("busl-pkg", "BUSL-1.1", [{ target: "backend", dev: false }])],
+      [pkgSpec("busl-pkg", "BUSL-1.1", [{ target: asTargetIdentity("backend"), dev: false }])],
       denyLicenseFixture("BUSL-1.1"),
     );
 
     expect(verdicts).toHaveLength(1);
     expect(verdicts[0].status).toBe("fail");
     expect(verdicts[0].rule).toBe("denied[0]");
-    expect(verdicts[0].occurrenceTarget).toBe("backend");
+    expect(widen(verdicts[0].occurrenceTarget)).toBe("backend");
   });
 
   test("deny, dev: the SAME deny shape with isDevDependency:true STILL FAILS — deny sits above the dev downgrade on this scan shape too", () => {
     const { verdicts } = runEngine(
-      [pkgSpec("busl-pkg", "BUSL-1.1", [{ target: "backend", dev: true }])],
+      [pkgSpec("busl-pkg", "BUSL-1.1", [{ target: asTargetIdentity("backend"), dev: true }])],
       denyLicenseFixture("BUSL-1.1"),
     );
 
     expect(verdicts).toHaveLength(1);
     expect(verdicts[0].status).toBe("fail");
     expect(verdicts[0].rule).toBe("denied[0]");
-    expect(verdicts[0].occurrenceTarget).toBe("backend");
+    expect(widen(verdicts[0].occurrenceTarget)).toBe("backend");
     expect(verdicts[0].reason).not.toContain("dev-only occurrence");
   });
 });
@@ -2113,7 +2123,11 @@ describe("evaluate — precedence is preserved (downgrade is last)", () => {
     // apps/scratch is family-suppressed AND the occurrence is dev: suppression
     // wins, the dev-scope downgrade never touches it.
     const { verdicts } = runEngine(
-      [pkgSpec("agpl-pkg", "AGPL-3.0-only", [{ target: "apps/scratch", dev: true }])],
+      [
+        pkgSpec("agpl-pkg", "AGPL-3.0-only", [
+          { target: asTargetIdentity("apps/scratch"), dev: true },
+        ]),
+      ],
       SUPPRESS_SCRATCH,
     );
 
@@ -2123,7 +2137,7 @@ describe("evaluate — precedence is preserved (downgrade is last)", () => {
 
   test("a compatible-matched dev copyleft occurrence stays ok via compatible[i]", () => {
     const { verdicts } = runEngine(
-      [pkgSpec("mpl-pkg", "MPL-2.0", [{ target: "backend", dev: true }])],
+      [pkgSpec("mpl-pkg", "MPL-2.0", [{ target: asTargetIdentity("backend"), dev: true }])],
       licenseRuleFixture("MPL-2.0"),
     );
 
@@ -2142,7 +2156,7 @@ describe("evaluate — precedence is preserved (downgrade is last)", () => {
       },
     ];
     const { verdicts } = runEngine(
-      [pkgSpec("relicensed", "GPL-3.0-only", [{ target: "apps/a", dev: true }])],
+      [pkgSpec("relicensed", "GPL-3.0-only", [{ target: asTargetIdentity("apps/a"), dev: true }])],
       "",
       builtins,
     );
@@ -2241,7 +2255,7 @@ describe("evaluate — deny is terminal-0 (beats every accept lever)", () => {
       'handling = "warn"',
     ].join("\n");
     const { verdicts } = runEngine(
-      [pkgSpec("busl-pkg", "BUSL-1.1", [{ target: "apps/a", dev: true }])],
+      [pkgSpec("busl-pkg", "BUSL-1.1", [{ target: asTargetIdentity("apps/a"), dev: true }])],
       policyText,
     );
 
@@ -2650,7 +2664,7 @@ describe("evaluate — os-scope and dev-scope downgraders compose without intera
     const { verdicts } = runEngine(
       [
         osPkgSpec("pkg:deb/debian/libc6@2.36-9", "libc6", "LGPL-2.1-or-later", [
-          { target: "docker:img/Dockerfile", dev: true },
+          { target: asTargetIdentity("docker:img/Dockerfile"), dev: true },
         ]),
       ],
       policyText,
@@ -2671,7 +2685,7 @@ describe("evaluate — os-scope and dev-scope downgraders compose without intera
       'handling = "ignore"',
     ].join("\n");
     const { verdicts } = runEngine(
-      [pkgSpec("agpl-app", "AGPL-3.0-only", [{ target: "apps/a", dev: true }])],
+      [pkgSpec("agpl-app", "AGPL-3.0-only", [{ target: asTargetIdentity("apps/a"), dev: true }])],
       policyText,
     );
 
@@ -2790,7 +2804,7 @@ describe("AGPL_IDS — literal set (copyleft.ts)", () => {
 });
 
 describe("evaluate — os-scope AGPL container escalation", () => {
-  const AGPL_TARGET = "docker:img/Dockerfile";
+  const AGPL_TARGET = asTargetIdentity("docker:img/Dockerfile");
 
   test("HEADLINE: os-scope AGPL-3.0-only under os_dependencies=warn escalates to a REAL fail, not the routine warn", () => {
     const { verdicts } = runEngine(
@@ -2975,7 +2989,7 @@ describe("evaluate — imprecise AGPL container escalation (imprecise variant)",
 // ---------------------------------------------------------------------------
 
 describe("evaluate — accepted-AGPL container notices (acceptedContainerNotices)", () => {
-  const NOTICE_TARGET = "docker:img/Dockerfile";
+  const NOTICE_TARGET = asTargetIdentity("docker:img/Dockerfile");
 
   test("a precise AGPL system package accepted via a scoped [[compatible]] package rule surfaces as an accepted-container notice", () => {
     const policyText = [
@@ -3094,8 +3108,8 @@ describe("evaluate — accepted-AGPL container notices (acceptedContainerNotices
   });
 
   test("determinism: notices sort by purl (compareCodeUnits), target lists dedupe+sort, and repeated calls are byte-identical", () => {
-    const TARGET_A = "docker:a/Dockerfile";
-    const TARGET_B = "docker:b/Dockerfile";
+    const TARGET_A = asTargetIdentity("docker:a/Dockerfile");
+    const TARGET_B = asTargetIdentity("docker:b/Dockerfile");
     const policyText = [
       "[[compatible]]",
       'match = "package"',
@@ -3180,8 +3194,8 @@ describe("evaluate — [[allow_source_available]] exemption (ADR-0013 opt-out)",
 // ---------------------------------------------------------------------------
 
 describe("evaluate — an entry the introduction chains contradict", () => {
-  const GRAPH_TARGET = "apps/web";
-  const WITH_A_DEPENDENCY_GRAPH: ReadonlySet<string> = new Set([GRAPH_TARGET]);
+  const GRAPH_TARGET = asTargetIdentity("apps/web");
+  const WITH_A_DEPENDENCY_GRAPH: ReadonlySet<TargetIdentity> = new Set([GRAPH_TARGET]);
   const JUDGED = "pkg:npm/judged@1.0.0";
   const OTHER = "pkg:npm/other@1.0.0";
   const GPL_LIB = "pkg:npm/gpl-lib@1.0.0";
@@ -3345,7 +3359,7 @@ describe("evaluate — an entry the introduction chains contradict", () => {
 });
 
 describe("evaluate — a target without a dependency graph says so", () => {
-  const FLAT_TARGET = "docker:img/Dockerfile";
+  const FLAT_TARGET = asTargetIdentity("docker:img/Dockerfile");
 
   test("an entry judged under the project accepts, and no output implies a chain was checked", () => {
     const policyText = [
@@ -3608,7 +3622,7 @@ describe("evaluate — the clarifications file's own citation space", () => {
     ).model;
     const base = {
       purl,
-      occurrenceTarget: target,
+      occurrenceTarget: asTargetIdentity(target),
       status: "ok" as const,
       reason: 'clarified to "AGPL-3.0-only": license-reviewed',
     };
