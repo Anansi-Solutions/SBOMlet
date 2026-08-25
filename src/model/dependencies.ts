@@ -62,6 +62,21 @@ const _absolutePathBrand = type("string")
 export type AbsolutePath = typeof _absolutePathBrand.infer;
 
 /**
+ * A non-empty repo-relative path (forward-slash), as it lands in a committed artifact - never an
+ * absolute machine path. The brand is VALIDATED: a value must be non-empty AND not satisfy
+ * node:path {@link isAbsolute}, so an empty or absolute string can never enter the type. Minted via
+ * {@link asRelativePath} where such a path is established (the report's policy-pointer line).
+ */
+const _relativePathBrand = type("string")
+  .narrow(
+    (value, ctx) =>
+      (value.length > 0 && !isAbsolute(value)) || ctx.reject("a non-empty relative path"),
+  )
+  .brand("RelativePath");
+
+export type RelativePath = typeof _relativePathBrand.infer;
+
+/**
  * Mint a {@link RawLicense} from untrusted license text - the one cast that admits a plain string
  * into the raw-license state, used at the claim origins (collector, enrichment, ScanCode) and by
  * canonicalization's own input path.
@@ -104,6 +119,16 @@ export function tryAsPurl(text: string): Purl | undefined {
  */
 export function asAbsolutePath(path: string): AbsolutePath {
   return _absolutePathBrand.assert(path) as AbsolutePath;
+}
+
+/**
+ * Mint a {@link RelativePath} where a repo-relative path is established for a committed artifact.
+ *
+ * @throws if `path` is empty or absolute per node:path's {@link isAbsolute}. Fires on a bug that
+ * would otherwise leak an absolute machine path into committed bytes.
+ */
+export function asRelativePath(path: string): RelativePath {
+  return _relativePathBrand.assert(path) as RelativePath;
 }
 
 /**

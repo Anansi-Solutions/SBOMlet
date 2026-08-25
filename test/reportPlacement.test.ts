@@ -28,7 +28,7 @@ import { alignTables } from "../src/render/alignTables";
 import { renderMarkdown, type PolicyView } from "../src/render/markdown";
 import { renderNotices } from "../src/render/notices";
 import { globToRegExp } from "../src/targets/discover";
-import { canon, asPurl } from "./brandTestSupport";
+import { canon, asPurl, asRelativePath } from "./brandTestSupport";
 import type { Policy } from "../src/policy/schema";
 
 const DEPENDENCY_CLASSIFICATION_DOC = join(
@@ -372,7 +372,7 @@ function buildScenario(inputs: ReadonlyArray<ScenarioInput>, policyToml: string)
   const scoped = applyContainerScopes(annotated, developmentContainers);
   const verdicts = evaluate(scoped, policy, graphTargets);
   const policyView: PolicyView = {
-    policyPath: "policy.toml",
+    policyPath: asRelativePath("policy.toml"),
     suppressedWorkspaces: policy.suppressedWorkspaces,
     verdicts,
     developmentContainers,

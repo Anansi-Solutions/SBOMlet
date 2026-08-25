@@ -15,7 +15,7 @@ import { annotateFindings } from "../src/normalize/normalize";
 import { renderMarkdown, type PolicyView, type TargetProfileSummary } from "../src/render/markdown";
 import { renderNotices } from "../src/render/notices";
 import { TARGET_RULE_INCOMPATIBLE, type TargetProfile } from "../src/policy/compat";
-import { canon, asPurl } from "./brandTestSupport";
+import { canon, asPurl, asRelativePath } from "./brandTestSupport";
 
 const TARGET = "libraries/iframe-rpc";
 const SYNTHETIC_TARGET = "apps/synthetic";
@@ -53,7 +53,7 @@ const annotatedTrimmed = annotateFindings(trimmedModel, []).model;
  * escaping-relevant character class.
  */
 const goldenPolicyView: PolicyView = {
-  policyPath: "policy.toml",
+  policyPath: asRelativePath("policy.toml"),
   suppressedWorkspaces: [
     {
       path: "apps/scratch",
@@ -186,7 +186,7 @@ describe("renderMarkdown — assessment conflicts section", () => {
 
   test("the same conflict also surfaces as a row in the Problematic licenses table (free, via the fail-verdict grouping) — no separate wiring", () => {
     const view: PolicyView = {
-      policyPath: "policy.toml",
+      policyPath: asRelativePath("policy.toml"),
       suppressedWorkspaces: [],
       verdicts: [
         {
@@ -652,7 +652,7 @@ const sharpEntry = entry({
 const policyModel: CanonicalDependencies = { packages: [sharpEntry] };
 
 const basicView: PolicyView = {
-  policyPath: "policy.toml",
+  policyPath: asRelativePath("policy.toml"),
   suppressedWorkspaces: [
     {
       path: "apps/scratch",
@@ -881,7 +881,7 @@ describe("renderMarkdown — the full document", () => {
       ],
     };
     const view: PolicyView = {
-      policyPath: "policy.toml",
+      policyPath: asRelativePath("policy.toml"),
       suppressedWorkspaces: [],
       verdicts: [
         // sharp carries BOTH a fail (frontend) and a warn (backend) verdict for
@@ -1002,7 +1002,7 @@ describe("renderMarkdown — the full document", () => {
       packages: [osCopyleft, appCopyleft],
     };
     const view: PolicyView = {
-      policyPath: "policy.toml",
+      policyPath: asRelativePath("policy.toml"),
       suppressedWorkspaces: [],
       verdicts: [
         {
@@ -1037,7 +1037,7 @@ describe("renderMarkdown — the full document", () => {
   test("Test 5c: an accepted-AGPL container notice (PolicyView.acceptedContainerNotices) renders as a special-notice bullet, distinct from the flagged copyleft table, and is deduped when the same purl also carries a fail verdict elsewhere", () => {
     const model: CanonicalDependencies = { packages: [] };
     const view: PolicyView = {
-      policyPath: "policy.toml",
+      policyPath: asRelativePath("policy.toml"),
       suppressedWorkspaces: [],
       verdicts: [
         {
@@ -1088,7 +1088,7 @@ describe("renderMarkdown — the full document", () => {
   test("Test 5d: an accepted-AGPL notice alone (no flagged copyleft rows) makes the section non-empty — the ✅ empty-state line is suppressed", () => {
     const model: CanonicalDependencies = { packages: [] };
     const view: PolicyView = {
-      policyPath: "policy.toml",
+      policyPath: asRelativePath("policy.toml"),
       suppressedWorkspaces: [],
       verdicts: [],
       acceptedContainerNotices: [
@@ -1115,7 +1115,7 @@ describe("renderMarkdown — the full document", () => {
 
   test("Test 6: suppressed workspaces render path + license + description escaped", () => {
     const view: PolicyView = {
-      policyPath: "configs/policy|v2.toml",
+      policyPath: asRelativePath("configs/policy|v2.toml"),
       suppressedWorkspaces: [
         {
           path: "apps/scratch",
@@ -1374,7 +1374,7 @@ describe("renderMarkdown — per-container Production/Development grouping", () 
 
     expect(renderMarkdown(model).includes(OLD_HEADING)).toBe(false);
     const view: PolicyView = {
-      policyPath: "policy.toml",
+      policyPath: asRelativePath("policy.toml"),
       suppressedWorkspaces: [],
       verdicts: [],
     };
@@ -1514,7 +1514,7 @@ describe("renderMarkdown — per-container Production/Development grouping", () 
   test("a container classified development renders its subsection under Development-only", () => {
     const model: CanonicalDependencies = { packages: [appProd, osDeb] };
     const view: PolicyView = {
-      policyPath: "policy.toml",
+      policyPath: asRelativePath("policy.toml"),
       suppressedWorkspaces: [],
       verdicts: [],
       developmentContainers: new Set(["docker:img/Dockerfile"]),
@@ -1544,7 +1544,7 @@ describe("renderMarkdown — per-container Production/Development grouping", () 
       scope: "os",
     });
     const view: PolicyView = {
-      policyPath: "policy.toml",
+      policyPath: asRelativePath("policy.toml"),
       suppressedWorkspaces: [],
       verdicts: [],
       developmentContainers: new Set(["docker:b/Dockerfile"]),
@@ -1683,7 +1683,7 @@ describe("renderMarkdown — per-container Production/Development grouping", () 
 
     test("an application-ecosystem package baked into a PRODUCTION container counts as Production, not siloed under Container", () => {
       const view: PolicyView = {
-        policyPath: "policy.toml",
+        policyPath: asRelativePath("policy.toml"),
         suppressedWorkspaces: [],
         verdicts: [],
         developmentContainers: new Set(),
@@ -1702,7 +1702,7 @@ describe("renderMarkdown — per-container Production/Development grouping", () 
 
     test("a package whose ONLY occurrence targets a dev-marked container counts as Development-only", () => {
       const view: PolicyView = {
-        policyPath: "policy.toml",
+        policyPath: asRelativePath("policy.toml"),
         suppressedWorkspaces: [],
         verdicts: [],
         developmentContainers: new Set([DEV_CONTAINER]),
@@ -1738,7 +1738,7 @@ describe("renderMarkdown — per-container Production/Development grouping", () 
         packages: [prodApp, devApp, prodContainerAppPkg, devContainerPkg],
       };
       const view: PolicyView = {
-        policyPath: "policy.toml",
+        policyPath: asRelativePath("policy.toml"),
         suppressedWorkspaces: [],
         verdicts: [],
         developmentContainers: new Set([DEV_CONTAINER]),
@@ -1954,7 +1954,7 @@ describe("renderMarkdown — Containers index", () => {
       ],
     };
     const view: PolicyView = {
-      policyPath: "policy.toml",
+      policyPath: asRelativePath("policy.toml"),
       suppressedWorkspaces: [],
       verdicts: [],
       developmentContainers: new Set(["docker:a/Dockerfile"]),
@@ -2314,7 +2314,7 @@ describe("renderMarkdown — [document] title + preamble", () => {
   };
 
   const viewWith = (document?: { title?: string; preamble?: string }): PolicyView => ({
-    policyPath: "policy.toml",
+    policyPath: asRelativePath("policy.toml"),
     suppressedWorkspaces: [],
     verdicts: [],
     ...(document !== undefined ? { document } : {}),
@@ -2431,7 +2431,7 @@ describe("renderMarkdown - target-profile header lines (scope-of-assertion + att
   };
 
   const viewWith = (targetProfile?: TargetProfileSummary): PolicyView => ({
-    policyPath: "policy.toml",
+    policyPath: asRelativePath("policy.toml"),
     suppressedWorkspaces: [],
     verdicts: [],
     ...(targetProfile !== undefined ? { targetProfile } : {}),
@@ -2440,7 +2440,7 @@ describe("renderMarkdown - target-profile header lines (scope-of-assertion + att
   test("absent PolicyView.targetProfile renders neither line - byte-identical to a no-target render", () => {
     const withField = renderMarkdown(model, viewWith());
     const withoutField = renderMarkdown(model, {
-      policyPath: "policy.toml",
+      policyPath: asRelativePath("policy.toml"),
       suppressedWorkspaces: [],
       verdicts: [],
     });
@@ -2476,7 +2476,7 @@ describe("renderMarkdown - target-profile header lines (scope-of-assertion + att
 
   test("locked order: header comment, then the target line, then the attribution line, then the author preamble", () => {
     const output = renderMarkdown(model, {
-      policyPath: "policy.toml",
+      policyPath: asRelativePath("policy.toml"),
       suppressedWorkspaces: [],
       verdicts: [],
       targetProfile: { project: mitProfile, workspaces: [] },
@@ -2627,7 +2627,7 @@ describe("renderMarkdown — Problematic licenses summary", () => {
       packages: [denied, copyleftFail, unknownFail],
     };
     const view: PolicyView = {
-      policyPath: "policy.toml",
+      policyPath: asRelativePath("policy.toml"),
       suppressedWorkspaces: [],
       verdicts: [
         {
@@ -2703,7 +2703,7 @@ describe("renderMarkdown — Problematic licenses summary", () => {
   test("(b) zero-fail-with-warns → ✅ line + non-blocking roll-up", () => {
     const model: CanonicalDependencies = { packages: [warnOnly] };
     const view: PolicyView = {
-      policyPath: "policy.toml",
+      policyPath: asRelativePath("policy.toml"),
       suppressedWorkspaces: [],
       verdicts: [
         {
@@ -2727,7 +2727,7 @@ describe("renderMarkdown — Problematic licenses summary", () => {
   test("(c) zero-fail-zero-warn → ✅ line only, no roll-up line", () => {
     const model: CanonicalDependencies = { packages: [warnOnly] };
     const view: PolicyView = {
-      policyPath: "policy.toml",
+      policyPath: asRelativePath("policy.toml"),
       suppressedWorkspaces: [],
       verdicts: [
         {
@@ -2750,7 +2750,7 @@ describe("renderMarkdown — Problematic licenses summary", () => {
       packages: [warnOnly, unknownFail, denied],
     };
     const view: PolicyView = {
-      policyPath: "policy.toml",
+      policyPath: asRelativePath("policy.toml"),
       suppressedWorkspaces: [],
       verdicts: [
         {
@@ -2794,7 +2794,7 @@ describe("renderMarkdown — Problematic licenses summary", () => {
   test("non-blocking roll-up names a target:* warn under its own category, not the vague 'other' bucket (adversarial gate finding: the pre-registered warnCategory judgment)", () => {
     const model: CanonicalDependencies = { packages: [warnOnly] };
     const view: PolicyView = {
-      policyPath: "policy.toml",
+      policyPath: asRelativePath("policy.toml"),
       suppressedWorkspaces: [],
       verdicts: [
         {
@@ -2821,7 +2821,7 @@ describe("renderMarkdown — Problematic licenses summary", () => {
     const targetDoc = renderMarkdown(
       { packages: [warnOnly] },
       {
-        policyPath: "policy.toml",
+        policyPath: asRelativePath("policy.toml"),
         suppressedWorkspaces: [],
         verdicts: [
           {
@@ -2842,7 +2842,7 @@ describe("renderMarkdown — Problematic licenses summary", () => {
     const copyleftDoc = renderMarkdown(
       { packages: [warnOnly] },
       {
-        policyPath: "policy.toml",
+        policyPath: asRelativePath("policy.toml"),
         suppressedWorkspaces: [],
         verdicts: [
           {
@@ -2865,7 +2865,7 @@ describe("renderMarkdown — Problematic licenses summary", () => {
   test("(d) the summary sits ABOVE the detailed copyleft section; a fail-flagged package is excluded from it by the copyleft-only dedup", () => {
     const model: CanonicalDependencies = { packages: [copyleftFail] };
     const view: PolicyView = {
-      policyPath: "policy.toml",
+      policyPath: asRelativePath("policy.toml"),
       suppressedWorkspaces: [],
       verdicts: [
         {
@@ -2903,7 +2903,7 @@ describe("renderMarkdown — Problematic licenses summary", () => {
 
   test("a fail verdict whose purl has no package entry is defensively skipped", () => {
     const view: PolicyView = {
-      policyPath: "policy.toml",
+      policyPath: asRelativePath("policy.toml"),
       suppressedWorkspaces: [],
       verdicts: [
         {
@@ -2926,7 +2926,7 @@ describe("renderMarkdown — Problematic licenses summary", () => {
     const output = renderMarkdown(
       { packages: [warnOnly] },
       {
-        policyPath: "policy.toml",
+        policyPath: asRelativePath("policy.toml"),
         suppressedWorkspaces: [],
         verdicts: [],
       },
@@ -2997,7 +2997,7 @@ describe("renderMarkdown — provenance Why column", () => {
       ],
     };
     const view: PolicyView = {
-      policyPath: "policy.toml",
+      policyPath: asRelativePath("policy.toml"),
       suppressedWorkspaces: [],
       verdicts: [copyleftVerdict("pkg:npm/direct-pkg@1.0.0", "apps/a")],
     };
@@ -3037,7 +3037,7 @@ describe("renderMarkdown — provenance Why column", () => {
       ],
     };
     const view: PolicyView = {
-      policyPath: "policy.toml",
+      policyPath: asRelativePath("policy.toml"),
       suppressedWorkspaces: [],
       verdicts: [copyleftVerdict("pkg:npm/trans-pkg@1.0.0", "apps/a")],
     };
@@ -3079,7 +3079,7 @@ describe("renderMarkdown — provenance Why column", () => {
       ],
     };
     const view: PolicyView = {
-      policyPath: "policy.toml",
+      policyPath: asRelativePath("policy.toml"),
       suppressedWorkspaces: [],
       verdicts: [copyleftVerdict("pkg:pypi/opt-pkg@1.0.0", "apps/py")],
     };
@@ -3115,7 +3115,7 @@ describe("renderMarkdown — provenance Why column", () => {
       ],
     };
     const view: PolicyView = {
-      policyPath: "policy.toml",
+      policyPath: asRelativePath("policy.toml"),
       suppressedWorkspaces: [],
       verdicts: [copyleftVerdict("pkg:pypi/libssl-bindings@3.0", "apps/py")],
     };
@@ -3157,7 +3157,7 @@ describe("renderMarkdown — provenance Why column", () => {
       ],
     };
     const view: PolicyView = {
-      policyPath: "policy.toml",
+      policyPath: asRelativePath("policy.toml"),
       suppressedWorkspaces: [],
       verdicts: [
         copyleftVerdict("pkg:npm/all-direct@1.0.0", "apps/a"),
@@ -3208,7 +3208,7 @@ describe("renderMarkdown — provenance Why column", () => {
       ],
     };
     const view: PolicyView = {
-      policyPath: "policy.toml",
+      policyPath: asRelativePath("policy.toml"),
       suppressedWorkspaces: [],
       verdicts: [
         copyleftVerdict("pkg:npm/mixed-pkg@1.0.0", "apps/a"),
@@ -3260,7 +3260,7 @@ describe("renderMarkdown — provenance Why column", () => {
       ],
     };
     const view: PolicyView = {
-      policyPath: "policy.toml",
+      policyPath: asRelativePath("policy.toml"),
       suppressedWorkspaces: [],
       verdicts: [copyleftVerdict("pkg:npm/deep@1", "apps/a")],
     };
@@ -3301,7 +3301,7 @@ describe("renderMarkdown — provenance Why column", () => {
       ],
     };
     const view: PolicyView = {
-      policyPath: "policy.toml",
+      policyPath: asRelativePath("policy.toml"),
       suppressedWorkspaces: [],
       verdicts: [
         {
@@ -3343,7 +3343,7 @@ describe("renderMarkdown — provenance Why column", () => {
       ],
     };
     const view: PolicyView = {
-      policyPath: "policy.toml",
+      policyPath: asRelativePath("policy.toml"),
       suppressedWorkspaces: [],
       verdicts: [copyleftVerdict("pkg:npm/plain@1.0.0", "apps/a")],
     };
@@ -3389,7 +3389,7 @@ describe("renderMarkdown — provenance Why column", () => {
       ],
     };
     const view: PolicyView = {
-      policyPath: "policy.toml",
+      policyPath: asRelativePath("policy.toml"),
       suppressedWorkspaces: [],
       verdicts: [
         copyleftVerdict("pkg:pypi/realdirect@1.0.0", "ws-a"),
@@ -3437,7 +3437,7 @@ describe("renderMarkdown — provenance Why column", () => {
       ],
     };
     const view: PolicyView = {
-      policyPath: "policy.toml",
+      policyPath: asRelativePath("policy.toml"),
       suppressedWorkspaces: [],
       verdicts: [
         copyleftVerdict("pkg:pypi/allorphan@1.0.0", "ws-a"),
@@ -3488,7 +3488,7 @@ describe("renderMarkdown — provenance Why column", () => {
       ],
     };
     const view: PolicyView = {
-      policyPath: "policy.toml",
+      policyPath: asRelativePath("policy.toml"),
       suppressedWorkspaces: [],
       verdicts: [
         copyleftVerdict("pkg:pypi/transorphan@1.0.0", "ws-a"),
@@ -3528,7 +3528,7 @@ describe("renderMarkdown — provenance Why column", () => {
       ],
     };
     const view: PolicyView = {
-      policyPath: "policy.toml",
+      policyPath: asRelativePath("policy.toml"),
       suppressedWorkspaces: [],
       verdicts: [copyleftVerdict("pkg:npm/orphan@1.0.0", "apps/a")],
     };
@@ -3570,7 +3570,7 @@ describe("renderMarkdown — provenance Why column", () => {
       ],
     };
     const view: PolicyView = {
-      policyPath: "policy.toml",
+      policyPath: asRelativePath("policy.toml"),
       suppressedWorkspaces: [],
       verdicts: [copyleftVerdict("pkg:npm/emptypath@1.0.0", "apps/a")],
     };
@@ -3612,7 +3612,7 @@ describe("renderMarkdown — provenance Why column", () => {
       ],
     };
     const view: PolicyView = {
-      policyPath: "policy.toml",
+      policyPath: asRelativePath("policy.toml"),
       suppressedWorkspaces: [],
       verdicts: [copyleftVerdict("pkg:npm/emptypathintro@1.0.0", "apps/a")],
     };
@@ -3692,7 +3692,7 @@ describe("renderMarkdown — Why-cell target scoping", () => {
       ],
     };
     const view: PolicyView = {
-      policyPath: "policy.toml",
+      policyPath: asRelativePath("policy.toml"),
       suppressedWorkspaces: [],
       verdicts: [
         {
@@ -3747,7 +3747,7 @@ describe("renderMarkdown — Why-cell target scoping", () => {
       ],
     };
     const view: PolicyView = {
-      policyPath: "policy.toml",
+      policyPath: asRelativePath("policy.toml"),
       suppressedWorkspaces: [],
       verdicts: [
         {
@@ -3809,7 +3809,7 @@ describe("renderMarkdown — Why-cell target scoping", () => {
       ],
     };
     const view: PolicyView = {
-      policyPath: "policy.toml",
+      policyPath: asRelativePath("policy.toml"),
       suppressedWorkspaces: [],
       verdicts: [
         {
@@ -3863,7 +3863,7 @@ describe("renderMarkdown — Target compatibility section", () => {
       },
     });
     const view: PolicyView = {
-      policyPath: "policy.toml",
+      policyPath: asRelativePath("policy.toml"),
       suppressedWorkspaces: [],
       verdicts: [
         {
@@ -3894,7 +3894,7 @@ describe("renderMarkdown — Target compatibility section", () => {
       },
     });
     const view: PolicyView = {
-      policyPath: "policy.toml",
+      policyPath: asRelativePath("policy.toml"),
       suppressedWorkspaces: [],
       verdicts: [
         {
@@ -3953,7 +3953,7 @@ describe("renderMarkdown — Target compatibility section", () => {
       },
     });
     const view: PolicyView = {
-      policyPath: "policy.toml",
+      policyPath: asRelativePath("policy.toml"),
       suppressedWorkspaces: [],
       verdicts: [
         {
@@ -4003,7 +4003,7 @@ describe("renderMarkdown — Target compatibility section", () => {
       },
     });
     const view: PolicyView = {
-      policyPath: "policy.toml",
+      policyPath: asRelativePath("policy.toml"),
       suppressedWorkspaces: [],
       verdicts: [
         {
@@ -4040,7 +4040,7 @@ describe("renderMarkdown — Target compatibility section", () => {
       },
     });
     const view: PolicyView = {
-      policyPath: "policy.toml",
+      policyPath: asRelativePath("policy.toml"),
       suppressedWorkspaces: [],
       verdicts: [
         {

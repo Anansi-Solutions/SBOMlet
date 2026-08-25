@@ -46,6 +46,7 @@ import {
   type DependencyIntroduction,
   type Occurrence,
   type PackageEntry,
+  type RelativePath,
   type Verdict,
 } from "../model/dependencies";
 import { canonicalizeExpression } from "../normalize/expression";
@@ -96,8 +97,10 @@ export interface TargetProfileSummary {
  * suppressed workspaces are rendered as the policy-authored exemption list (every field escaped).
  */
 export interface PolicyView {
-  /** Path of the policy file, as configured - rendered in the pointer line. */
-  policyPath: string;
+  /**
+   * Repo-relative path of the policy file - rendered in the pointer line, never an absolute path.
+   */
+  policyPath: RelativePath;
   suppressedWorkspaces: ReadonlyArray<SuppressedWorkspace>;
   verdicts: ReadonlyArray<Verdict>;
   /**
