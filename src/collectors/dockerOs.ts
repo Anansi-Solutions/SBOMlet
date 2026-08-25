@@ -38,7 +38,7 @@ import { existsSync, mkdtempSync, readFileSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { asPurl, compareCodeUnits, toSortedJson, type Purl } from "../model/dependencies";
+import { compareCodeUnits, toSortedJson, tryAsPurl, type Purl } from "../model/dependencies";
 import { execTool } from "./exec";
 
 /**
@@ -304,6 +304,15 @@ export function filterOsComponents(sbom: unknown): OsComponent[] {
       continue;
     }
 
+    // syft output is external, so a component whose purl is not a `pkg:` package URL is dropped
+    // tolerantly (never thrown on) - real syft purls always pass, so the committed OS SBOM is
+    // unchanged.
+    const purl = tryAsPurl(raw.purl);
+
+    if (purl === undefined) {
+      continue;
+    }
+
     // First-wins keying by purl: a duplicate purl collapses to one row.
     if (byPurl.has(raw.purl)) {
       continue;
@@ -315,7 +324,7 @@ export function filterOsComponents(sbom: unknown): OsComponent[] {
       type: "library",
       name: raw.name,
       version: raw.version,
-      purl: asPurl(raw.purl),
+      purl,
       // Field-absent when syft resolved no license - keeps the emit byte-stable (toSortedJson omits
       // undefined) and the field meaningful.
       ...(licenses !== undefined ? { licenses } : {}),
