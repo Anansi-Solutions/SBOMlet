@@ -17,6 +17,7 @@ import parseSpdx from "spdx-expression-parse";
 
 import { compareCodeUnits, type CanonicalLicense, type RawLicense } from "../model/dependencies";
 import { COPYLEFT_IDS } from "../policy/engine/copyleft";
+import { CANONICAL_EXCEPTION_ID, CANONICAL_LICENSE_ID } from "./spdxCasing";
 
 export type ExpressionNode =
   | { license: string; plus?: true; exception?: string }
@@ -286,9 +287,22 @@ function buildSet(op: "and" | "or", rawItems: CanonicalNode[]): CanonicalNode {
  * - FLATTEN, IDEMPOTENCE, ABSORPTION, COMMUTATIVITY only, never distribution or any other
  * cross-operator rewrite.
  */
+/** One leaf with its license id and exception normalized to their registered SPDX casing. */
+function canonicalLeafId(leaf: Leaf): Leaf {
+  const license = CANONICAL_LICENSE_ID.get(leaf.license.toLowerCase()) ?? leaf.license;
+
+  if (leaf.exception === undefined) {
+    return license === leaf.license ? leaf : { ...leaf, license };
+  }
+
+  const exception = CANONICAL_EXCEPTION_ID.get(leaf.exception.toLowerCase()) ?? leaf.exception;
+
+  return { ...leaf, license, exception };
+}
+
 function canonicalizeNode(node: ExpressionNode): CanonicalNode {
   if ("license" in node) {
-    return node;
+    return canonicalLeafId(node);
   }
 
   const op = node.conjunction;
