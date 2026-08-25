@@ -11,6 +11,7 @@ import { annotateFindings } from "../../normalize/normalize";
 import { PolicyError } from "../schema/diagnostics";
 import { parsePolicy } from "../parse/parse";
 import { renderMarkdown } from "../../render/markdown";
+import { asRawLicense, widen, asPurl } from "../../../test/brandTestSupport";
 import { evaluate } from "./evaluate";
 import type { Policy } from "../schema";
 import type { CanonicalDependencies, Verdict } from "../../model/dependencies";
@@ -38,7 +39,7 @@ interface PackageSpec {
 function makeModel(specs: ReadonlyArray<PackageSpec>): CanonicalDependencies {
   return {
     packages: specs.map((spec) => ({
-      purl: spec.purl,
+      purl: asPurl(spec.purl),
       name: spec.name,
       version: spec.version ?? "1.0.0",
       occurrences: spec.occurrences.map((o) => ({
@@ -47,9 +48,15 @@ function makeModel(specs: ReadonlyArray<PackageSpec>): CanonicalDependencies {
       })),
       licenseClaims:
         spec.impreciseLabel !== undefined
-          ? [{ raw: spec.impreciseLabel, kind: "name" as const, source: "generator" as const }]
+          ? [
+              {
+                raw: asRawLicense(spec.impreciseLabel),
+                kind: "name" as const,
+                source: "generator" as const,
+              },
+            ]
           : spec.claims.map((raw) => ({
-              raw,
+              raw: asRawLicense(raw),
               kind: (raw.includes(" ") ? "expression" : "spdx-id") as "expression" | "spdx-id",
               source: "generator" as const,
             })),
@@ -298,15 +305,20 @@ describe("target lane — residual fail composes with applyDevScope, never apply
 describe("target lane — determinism", () => {
   test("evaluate twice over the same model + policy yields an identical Verdict[]", () => {
     const specs: PackageSpec[] = [
-      { purl: "pkg:npm/a@1.0.0", name: "a", claims: ["MIT"], occurrences: [{ target: TARGET }] },
       {
-        purl: "pkg:npm/b@1.0.0",
+        purl: asPurl("pkg:npm/a@1.0.0"),
+        name: "a",
+        claims: ["MIT"],
+        occurrences: [{ target: TARGET }],
+      },
+      {
+        purl: asPurl("pkg:npm/b@1.0.0"),
         name: "b",
         claims: ["GPL-3.0-only"],
         occurrences: [{ target: TARGET }],
       },
       {
-        purl: "pkg:npm/c@1.0.0",
+        purl: asPurl("pkg:npm/c@1.0.0"),
         name: "c",
         claims: ["LGPL-2.1-only"],
         occurrences: [{ target: TARGET, dev: true }],
@@ -340,7 +352,7 @@ describe("target lane — election flip locks (both directions)", () => {
     const noTargetVerdict = findVerdict(noTargetVerdicts, purl, TARGET)!;
 
     // Today's non-target-aware elect() prefers the non-copyleft branch.
-    expect(noTargetModel.packages[0]!.finding!.elected).toBe("Apache-2.0");
+    expect(widen(noTargetModel.packages[0]!.finding!.elected)).toBe("Apache-2.0");
     expect(noTargetVerdict.rule).toBe("default:ok");
     expect(noTargetVerdict.reason).toContain("Apache-2.0");
 

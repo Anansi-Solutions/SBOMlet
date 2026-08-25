@@ -4,6 +4,7 @@ import { describe, expect, test } from "bun:test";
 
 import { mergeSboms } from "../src/merge/merge";
 import {
+  asRawLicense,
   toSortedDependenciesJson,
   type CanonicalDependencies,
   type PackageEntry,
@@ -14,6 +15,7 @@ import { annotateFindings } from "../src/normalize/normalize";
 import { renderMarkdown, type PolicyView, type TargetProfileSummary } from "../src/render/markdown";
 import { renderNotices } from "../src/render/notices";
 import { TARGET_RULE_INCOMPATIBLE, type TargetProfile } from "../src/policy/compat";
+import { canon, asPurl } from "./brandTestSupport";
 
 const TARGET = "libraries/iframe-rpc";
 const SYNTHETIC_TARGET = "apps/synthetic";
@@ -62,21 +64,21 @@ const goldenPolicyView: PolicyView = {
   ],
   verdicts: [
     {
-      purl: "pkg:npm/pipe-tick-pkg@1.0.0",
+      purl: asPurl("pkg:npm/pipe-tick-pkg@1.0.0"),
       occurrenceTarget: SYNTHETIC_TARGET,
       status: "fail",
       rule: "default:copyleft",
       reason: "synthetic copyleft flag for the golden",
     },
     {
-      purl: "pkg:npm/mit-pkg@1.0.0",
+      purl: asPurl("pkg:npm/mit-pkg@1.0.0"),
       occurrenceTarget: SYNTHETIC_TARGET,
       status: "suppressed",
       rule: "workspace.copyleft_suppressed[0]",
       reason: "suppressed by workspace rule",
     },
     {
-      purl: "pkg:npm/expr-pkg@3.0.0",
+      purl: asPurl("pkg:npm/expr-pkg@3.0.0"),
       occurrenceTarget: SYNTHETIC_TARGET,
       status: "ok",
       rule: "default:ok",
@@ -154,13 +156,13 @@ function conflictModel(): CanonicalDependencies {
     {
       packages: [
         {
-          purl: "pkg:npm/disputed-pkg@1.0.0",
+          purl: asPurl("pkg:npm/disputed-pkg@1.0.0"),
           name: "disputed-pkg",
           version: "1.0.0",
           occurrences: [{ target: SYNTHETIC_TARGET, isDevDependency: false }],
           licenseClaims: [
-            { raw: "Apache-2.0", kind: "expression", source: "generator" },
-            { raw: "MIT", kind: "expression", source: "scancode" },
+            { raw: asRawLicense("Apache-2.0"), kind: "expression", source: "generator" },
+            { raw: asRawLicense("MIT"), kind: "expression", source: "scancode" },
           ],
           scope: "app",
         },
@@ -188,7 +190,7 @@ describe("renderMarkdown — assessment conflicts section", () => {
       suppressedWorkspaces: [],
       verdicts: [
         {
-          purl: "pkg:npm/disputed-pkg@1.0.0",
+          purl: asPurl("pkg:npm/disputed-pkg@1.0.0"),
           occurrenceTarget: SYNTHETIC_TARGET,
           status: "fail",
           rule: "conflict:scancode",
@@ -213,15 +215,15 @@ describe("renderMarkdown — assessment conflicts section", () => {
     const hostile: CanonicalDependencies = {
       packages: [
         {
-          purl: "pkg:npm/evil-pkg@1.0.0",
+          purl: asPurl("pkg:npm/evil-pkg@1.0.0"),
           name: "evil-pkg",
           version: "1.0.0",
           occurrences: [{ target: SYNTHETIC_TARGET, isDevDependency: false }],
           licenseClaims: [],
           scope: "app",
           finding: {
-            expression: "MIT",
-            elected: "MIT",
+            expression: canon("MIT"),
+            elected: canon("MIT"),
             source: "generator",
             confidence: "exact",
             conflict: {
@@ -250,7 +252,7 @@ describe("renderMarkdown — assessment conflicts section", () => {
     const model: CanonicalDependencies = {
       packages: [
         {
-          purl: "pkg:apk/alpine/busybox@1.37.0-r20",
+          purl: asPurl("pkg:apk/alpine/busybox@1.37.0-r20"),
           name: "busybox",
           version: "1.37.0-r20",
           occurrences: [
@@ -260,8 +262,8 @@ describe("renderMarkdown — assessment conflicts section", () => {
           licenseClaims: [],
           scope: "os",
           finding: {
-            expression: "MIT AND Apache-2.0",
-            elected: "MIT AND Apache-2.0",
+            expression: canon("MIT AND Apache-2.0"),
+            elected: canon("MIT AND Apache-2.0"),
             source: "generator",
             confidence: "exact",
             conflict: {
@@ -283,7 +285,7 @@ describe("renderMarkdown — assessment conflicts section", () => {
     const model: CanonicalDependencies = {
       packages: [
         {
-          purl: "pkg:apk/alpine/busybox@1.37.0-r20",
+          purl: asPurl("pkg:apk/alpine/busybox@1.37.0-r20"),
           name: "busybox",
           version: "1.37.0-r20",
           occurrences: [
@@ -293,8 +295,8 @@ describe("renderMarkdown — assessment conflicts section", () => {
           licenseClaims: [],
           scope: "os",
           finding: {
-            expression: "MIT AND Apache-2.0",
-            elected: "MIT AND Apache-2.0",
+            expression: canon("MIT AND Apache-2.0"),
+            elected: canon("MIT AND Apache-2.0"),
             source: "generator",
             confidence: "exact",
             conflict: {
@@ -323,7 +325,7 @@ describe("renderMarkdown — assessment conflicts section", () => {
     const model: CanonicalDependencies = {
       packages: [
         {
-          purl: "pkg:apk/alpine/busybox@1.37.0-r20",
+          purl: asPurl("pkg:apk/alpine/busybox@1.37.0-r20"),
           name: "busybox",
           version: "1.37.0-r20",
           occurrences: [
@@ -361,7 +363,7 @@ describe("renderMarkdown — assessment conflicts section", () => {
 // that canonicalizeExpression already simplifies for comparisons, now applied
 // to display too.
 const NOISY_EXPRESSION = "(MIT OR Apache-2.0) AND (Apache-2.0 AND MIT)";
-const CANONICAL_EXPRESSION = canonicalizeExpression(NOISY_EXPRESSION);
+const CANONICAL_EXPRESSION = canonicalizeExpression(asRawLicense(NOISY_EXPRESSION));
 const NOISY_DISAGREEING = "(Apache-2.0 AND MIT) OR (MIT AND Apache-2.0)";
 
 describe("renderMarkdown — canonical license display", () => {
@@ -369,15 +371,15 @@ describe("renderMarkdown — canonical license display", () => {
     const model: CanonicalDependencies = {
       packages: [
         {
-          purl: "pkg:npm/noisy-pkg@1.0.0",
+          purl: asPurl("pkg:npm/noisy-pkg@1.0.0"),
           name: "noisy-pkg",
           version: "1.0.0",
           occurrences: [{ target: SYNTHETIC_TARGET, isDevDependency: false }],
           licenseClaims: [],
           scope: "app",
           finding: {
-            expression: NOISY_EXPRESSION,
-            elected: "MIT",
+            expression: canon(NOISY_EXPRESSION),
+            elected: canon("MIT"),
             source: "generator",
             confidence: "exact",
           },
@@ -396,15 +398,15 @@ describe("renderMarkdown — canonical license display", () => {
     const model: CanonicalDependencies = {
       packages: [
         {
-          purl: "pkg:npm/conflicted-noisy@1.0.0",
+          purl: asPurl("pkg:npm/conflicted-noisy@1.0.0"),
           name: "conflicted-noisy",
           version: "1.0.0",
           occurrences: [{ target: SYNTHETIC_TARGET, isDevDependency: false }],
           licenseClaims: [],
           scope: "app",
           finding: {
-            expression: NOISY_EXPRESSION,
-            elected: "MIT",
+            expression: canon(NOISY_EXPRESSION),
+            elected: canon("MIT"),
             source: "generator",
             confidence: "exact",
             conflict: {
@@ -436,21 +438,21 @@ describe("renderMarkdown — canonical license display", () => {
     const model: CanonicalDependencies = {
       packages: [
         {
-          purl: "pkg:npm/unparseable-pkg@1.0.0",
+          purl: asPurl("pkg:npm/unparseable-pkg@1.0.0"),
           name: "unparseable-pkg",
           version: "1.0.0",
           occurrences: [{ target: SYNTHETIC_TARGET, isDevDependency: false }],
           licenseClaims: [],
           scope: "app",
           finding: {
-            expression: "not a real spdx expression !!",
+            expression: canon("not a real spdx expression !!"),
             elected: null,
             source: "generator",
             confidence: "exact",
           },
         },
         {
-          purl: "pkg:npm/imprecise-pkg@1.0.0",
+          purl: asPurl("pkg:npm/imprecise-pkg@1.0.0"),
           name: "imprecise-pkg",
           version: "1.0.0",
           occurrences: [{ target: SYNTHETIC_TARGET, isDevDependency: false }],
@@ -536,7 +538,7 @@ describe("renderMarkdown — table content", () => {
     const model: CanonicalDependencies = {
       packages: [
         {
-          purl: "pkg:npm/two-target-pkg@1.0.0",
+          purl: asPurl("pkg:npm/two-target-pkg@1.0.0"),
           name: "two-target-pkg",
           version: "1.0.0",
           occurrences: [
@@ -561,13 +563,13 @@ describe("renderMarkdown — table content", () => {
     const model: CanonicalDependencies = {
       packages: [
         {
-          purl: "pkg:npm/dual-kind-pkg@1.0.0",
+          purl: asPurl("pkg:npm/dual-kind-pkg@1.0.0"),
           name: "dual-kind-pkg",
           version: "1.0.0",
           occurrences: [{ target: "apps/a", isDevDependency: false }],
           licenseClaims: [
-            { raw: "MIT", kind: "spdx-id", source: "generator" },
-            { raw: "MIT", kind: "name", source: "generator" },
+            { raw: asRawLicense("MIT"), kind: "spdx-id", source: "generator" },
+            { raw: asRawLicense("MIT"), kind: "name", source: "generator" },
           ],
           scope: "app",
         },
@@ -586,14 +588,14 @@ describe("renderMarkdown — table content", () => {
     const model: CanonicalDependencies = {
       packages: [
         {
-          purl: "pkg:npm/dup-claims-pkg@1.0.0",
+          purl: asPurl("pkg:npm/dup-claims-pkg@1.0.0"),
           name: "dup-claims-pkg",
           version: "1.0.0",
           occurrences: [{ target: "apps/a", isDevDependency: false }],
           licenseClaims: [
-            { raw: "Apache-2.0", kind: "spdx-id", source: "generator" },
-            { raw: "MIT", kind: "spdx-id", source: "generator" },
-            { raw: "Apache-2.0", kind: "spdx-id", source: "generator" },
+            { raw: asRawLicense("Apache-2.0"), kind: "spdx-id", source: "generator" },
+            { raw: asRawLicense("MIT"), kind: "spdx-id", source: "generator" },
+            { raw: asRawLicense("Apache-2.0"), kind: "spdx-id", source: "generator" },
           ],
           scope: "app",
         },
@@ -631,17 +633,17 @@ function entry(
 }
 
 const sharpEntry = entry({
-  purl: "pkg:npm/sharp@0.33.0",
+  purl: asPurl("pkg:npm/sharp@0.33.0"),
   name: "sharp",
   version: "0.33.0",
   occurrences: [
     { target: "docs", isDevDependency: false },
     { target: "frontend", isDevDependency: false },
   ],
-  licenseClaims: [{ raw: "LGPL-3.0-or-later", kind: "spdx-id", source: "generator" }],
+  licenseClaims: [{ raw: asRawLicense("LGPL-3.0-or-later"), kind: "spdx-id", source: "generator" }],
   finding: {
-    expression: "LGPL-3.0-or-later",
-    elected: "LGPL-3.0-or-later",
+    expression: canon("LGPL-3.0-or-later"),
+    elected: canon("LGPL-3.0-or-later"),
     source: "generator",
     confidence: "exact",
   },
@@ -660,14 +662,14 @@ const basicView: PolicyView = {
   ],
   verdicts: [
     {
-      purl: "pkg:npm/sharp@0.33.0",
+      purl: asPurl("pkg:npm/sharp@0.33.0"),
       occurrenceTarget: "frontend",
       status: "fail",
       rule: "default:copyleft",
       reason: 'copyleft license "LGPL-3.0-or-later"',
     },
     {
-      purl: "pkg:npm/sharp@0.33.0",
+      purl: asPurl("pkg:npm/sharp@0.33.0"),
       occurrenceTarget: "docs",
       status: "suppressed",
       rule: "workspace.copyleft_suppressed[0]",
@@ -725,18 +727,18 @@ describe("renderMarkdown — the full document", () => {
     const model: CanonicalDependencies = {
       packages: [
         entry({
-          purl: "pkg:npm/a-pkg@1.0.0",
+          purl: asPurl("pkg:npm/a-pkg@1.0.0"),
           name: "a-pkg",
           version: "1.0.0",
           finding: {
-            expression: "MIT",
-            elected: "MIT",
+            expression: canon("MIT"),
+            elected: canon("MIT"),
             source: "generator",
             confidence: "exact",
           },
         }),
         entry({
-          purl: "pkg:npm/b-pkg@1.0.0",
+          purl: asPurl("pkg:npm/b-pkg@1.0.0"),
           name: "b-pkg",
           version: "1.0.0",
           finding: {
@@ -747,12 +749,12 @@ describe("renderMarkdown — the full document", () => {
           },
         }),
         entry({
-          purl: "pkg:pypi/c-pkg@2.0.0",
+          purl: asPurl("pkg:pypi/c-pkg@2.0.0"),
           name: "c-pkg",
           version: "2.0.0",
           finding: {
-            expression: "Apache-2.0",
-            elected: "Apache-2.0",
+            expression: canon("Apache-2.0"),
+            elected: canon("Apache-2.0"),
             source: "generator",
             confidence: "exact",
           },
@@ -773,37 +775,39 @@ describe("renderMarkdown — the full document", () => {
     const model: CanonicalDependencies = {
       packages: [
         entry({
-          purl: "pkg:npm/expr@1.0.0",
+          purl: asPurl("pkg:npm/expr@1.0.0"),
           name: "expr",
           version: "1.0.0",
           licenseClaims: [
             {
-              raw: "MIT OR Apache-2.0",
+              raw: asRawLicense("MIT OR Apache-2.0"),
               kind: "expression",
               source: "generator",
             },
           ],
           finding: {
-            expression: "MIT OR Apache-2.0",
-            elected: "Apache-2.0",
+            expression: canon("MIT OR Apache-2.0"),
+            elected: canon("Apache-2.0"),
             source: "generator",
             confidence: "exact",
           },
         }),
         entry({
-          purl: "pkg:npm/legacy@1.0.0",
+          purl: asPurl("pkg:npm/legacy@1.0.0"),
           name: "legacy",
           version: "1.0.0",
           licenseClaims: [
-            { raw: "ISC", kind: "spdx-id", source: "generator" },
-            { raw: "ISC", kind: "name", source: "generator" },
+            { raw: asRawLicense("ISC"), kind: "spdx-id", source: "generator" },
+            { raw: asRawLicense("ISC"), kind: "name", source: "generator" },
           ],
         }),
         entry({
-          purl: "pkg:npm/mystery@1.0.0",
+          purl: asPurl("pkg:npm/mystery@1.0.0"),
           name: "mystery",
           version: "1.0.0",
-          licenseClaims: [{ raw: "Custom License", kind: "name", source: "generator" }],
+          licenseClaims: [
+            { raw: asRawLicense("Custom License"), kind: "name", source: "generator" },
+          ],
           finding: {
             expression: null,
             elected: null,
@@ -827,17 +831,19 @@ describe("renderMarkdown — the full document", () => {
 
   test("Test 5: copyleft membership + copyleft-only dedup — a fail verdict of ANY rule excludes the purl from Copyleft entirely; a warn-only default:copyleft package stays a member; Used-in lists only flagged targets", () => {
     const warnOnlyCopyleft = entry({
-      purl: "pkg:npm/warn-only-copyleft@1.0.0",
+      purl: asPurl("pkg:npm/warn-only-copyleft@1.0.0"),
       name: "warn-only-copyleft",
       version: "1.0.0",
       occurrences: [
         { target: "backend", isDevDependency: false },
         { target: "frontend", isDevDependency: false },
       ],
-      licenseClaims: [{ raw: "LGPL-3.0-or-later", kind: "spdx-id", source: "generator" }],
+      licenseClaims: [
+        { raw: asRawLicense("LGPL-3.0-or-later"), kind: "spdx-id", source: "generator" },
+      ],
       finding: {
-        expression: "LGPL-3.0-or-later",
-        elected: "LGPL-3.0-or-later",
+        expression: canon("LGPL-3.0-or-later"),
+        elected: canon("LGPL-3.0-or-later"),
         source: "generator",
         confidence: "exact",
       },
@@ -847,20 +853,22 @@ describe("renderMarkdown — the full document", () => {
         sharpEntry,
         warnOnlyCopyleft,
         entry({
-          purl: "pkg:npm/suppressed-only@1.0.0",
+          purl: asPurl("pkg:npm/suppressed-only@1.0.0"),
           name: "suppressed-only",
           version: "1.0.0",
           occurrences: [{ target: "apps/scratch", isDevDependency: false }],
-          licenseClaims: [{ raw: "GPL-3.0-only", kind: "spdx-id", source: "generator" }],
+          licenseClaims: [
+            { raw: asRawLicense("GPL-3.0-only"), kind: "spdx-id", source: "generator" },
+          ],
           finding: {
-            expression: "GPL-3.0-only",
-            elected: "GPL-3.0-only",
+            expression: canon("GPL-3.0-only"),
+            elected: canon("GPL-3.0-only"),
             source: "generator",
             confidence: "exact",
           },
         }),
         entry({
-          purl: "pkg:npm/unknown-pkg@1.0.0",
+          purl: asPurl("pkg:npm/unknown-pkg@1.0.0"),
           name: "unknown-pkg",
           version: "1.0.0",
           finding: {
@@ -881,21 +889,21 @@ describe("renderMarkdown — the full document", () => {
         // the purl has a fail verdict, so it is excluded from Copyleft
         // entirely, even though a warn default:copyleft verdict also exists.
         {
-          purl: "pkg:npm/sharp@0.33.0",
+          purl: asPurl("pkg:npm/sharp@0.33.0"),
           occurrenceTarget: "frontend",
           status: "fail",
           rule: "default:copyleft",
           reason: 'copyleft license "LGPL-3.0-or-later"',
         },
         {
-          purl: "pkg:npm/sharp@0.33.0",
+          purl: asPurl("pkg:npm/sharp@0.33.0"),
           occurrenceTarget: "backend",
           status: "warn",
           rule: "default:copyleft",
           reason: 'copyleft license "LGPL-3.0-or-later"',
         },
         {
-          purl: "pkg:npm/sharp@0.33.0",
+          purl: asPurl("pkg:npm/sharp@0.33.0"),
           occurrenceTarget: "docs",
           status: "suppressed",
           rule: "workspace.copyleft_suppressed[0]",
@@ -904,28 +912,28 @@ describe("renderMarkdown — the full document", () => {
         // warn-only-copyleft carries ONLY warn default:copyleft verdicts, no
         // fail anywhere -- it stays a Copyleft member.
         {
-          purl: "pkg:npm/warn-only-copyleft@1.0.0",
+          purl: asPurl("pkg:npm/warn-only-copyleft@1.0.0"),
           occurrenceTarget: "backend",
           status: "warn",
           rule: "default:copyleft",
           reason: 'copyleft license "LGPL-3.0-or-later"',
         },
         {
-          purl: "pkg:npm/warn-only-copyleft@1.0.0",
+          purl: asPurl("pkg:npm/warn-only-copyleft@1.0.0"),
           occurrenceTarget: "frontend",
           status: "warn",
           rule: "default:copyleft",
           reason: 'copyleft license "LGPL-3.0-or-later"',
         },
         {
-          purl: "pkg:npm/unknown-pkg@1.0.0",
+          purl: asPurl("pkg:npm/unknown-pkg@1.0.0"),
           occurrenceTarget: "apps/a",
           status: "warn",
           rule: "default:unknown",
           reason: "no license could be determined",
         },
         {
-          purl: "pkg:npm/suppressed-only@1.0.0",
+          purl: asPurl("pkg:npm/suppressed-only@1.0.0"),
           occurrenceTarget: "apps/scratch",
           status: "suppressed",
           rule: "workspace.copyleft_suppressed[0]",
@@ -964,28 +972,28 @@ describe("renderMarkdown — the full document", () => {
 
   test("Test 5b: container system-package copyleft is routine and never surfaces in Copyleft, whatever its verdict status; the same warn on an APP package still surfaces", () => {
     const osCopyleft = entry({
-      purl: "pkg:deb/debian/libssl@3.0",
+      purl: asPurl("pkg:deb/debian/libssl@3.0"),
       name: "libssl",
       version: "3.0",
       occurrences: [{ target: "docker:img/Dockerfile", isDevDependency: false }],
-      licenseClaims: [{ raw: "GPL-3.0-only", kind: "spdx-id", source: "generator" }],
+      licenseClaims: [{ raw: asRawLicense("GPL-3.0-only"), kind: "spdx-id", source: "generator" }],
       finding: {
-        expression: "GPL-3.0-only",
-        elected: "GPL-3.0-only",
+        expression: canon("GPL-3.0-only"),
+        elected: canon("GPL-3.0-only"),
         source: "generator",
         confidence: "exact",
       },
       scope: "os",
     });
     const appCopyleft = entry({
-      purl: "pkg:npm/app-copyleft@1.0.0",
+      purl: asPurl("pkg:npm/app-copyleft@1.0.0"),
       name: "app-copyleft",
       version: "1.0.0",
       occurrences: [{ target: "backend", isDevDependency: false }],
-      licenseClaims: [{ raw: "GPL-3.0-only", kind: "spdx-id", source: "generator" }],
+      licenseClaims: [{ raw: asRawLicense("GPL-3.0-only"), kind: "spdx-id", source: "generator" }],
       finding: {
-        expression: "GPL-3.0-only",
-        elected: "GPL-3.0-only",
+        expression: canon("GPL-3.0-only"),
+        elected: canon("GPL-3.0-only"),
         source: "generator",
         confidence: "exact",
       },
@@ -998,14 +1006,14 @@ describe("renderMarkdown — the full document", () => {
       suppressedWorkspaces: [],
       verdicts: [
         {
-          purl: "pkg:deb/debian/libssl@3.0",
+          purl: asPurl("pkg:deb/debian/libssl@3.0"),
           occurrenceTarget: "docker:img/Dockerfile",
           status: "warn",
           rule: "default:copyleft",
           reason: "os-downgraded copyleft",
         },
         {
-          purl: "pkg:npm/app-copyleft@1.0.0",
+          purl: asPurl("pkg:npm/app-copyleft@1.0.0"),
           occurrenceTarget: "backend",
           status: "warn",
           rule: "default:copyleft",
@@ -1033,7 +1041,7 @@ describe("renderMarkdown — the full document", () => {
       suppressedWorkspaces: [],
       verdicts: [
         {
-          purl: "pkg:deb/debian/agpl-also-failing@2.0.0",
+          purl: asPurl("pkg:deb/debian/agpl-also-failing@2.0.0"),
           occurrenceTarget: "docker:img/Dockerfile",
           status: "fail",
           rule: "default:agpl-container",
@@ -1042,7 +1050,7 @@ describe("renderMarkdown — the full document", () => {
       ],
       acceptedContainerNotices: [
         {
-          purl: "pkg:deb/debian/agpl-daemon@1.0.0",
+          purl: asPurl("pkg:deb/debian/agpl-daemon@1.0.0"),
           name: "agpl-daemon",
           version: "1.0.0",
           license: "AGPL-3.0-only",
@@ -1054,7 +1062,7 @@ describe("renderMarkdown — the full document", () => {
         // from the notice list (the same Problematic dedup the flagged
         // copyleft rows already apply).
         {
-          purl: "pkg:deb/debian/agpl-also-failing@2.0.0",
+          purl: asPurl("pkg:deb/debian/agpl-also-failing@2.0.0"),
           name: "agpl-also-failing",
           version: "2.0.0",
           license: "AGPL-3.0-only",
@@ -1085,7 +1093,7 @@ describe("renderMarkdown — the full document", () => {
       verdicts: [],
       acceptedContainerNotices: [
         {
-          purl: "pkg:deb/debian/agpl-daemon@1.0.0",
+          purl: asPurl("pkg:deb/debian/agpl-daemon@1.0.0"),
           name: "agpl-daemon",
           version: "1.0.0",
           license: "AGPL-3.0-only",
@@ -1137,7 +1145,10 @@ describe("renderMarkdown — the full document", () => {
 
   test("Test 7: determinism — no CR, single trailing LF, defensive re-sort (policy render)", () => {
     const twoPkg: CanonicalDependencies = {
-      packages: [sharpEntry, entry({ purl: "pkg:npm/aaa@1.0.0", name: "aaa", version: "1.0.0" })],
+      packages: [
+        sharpEntry,
+        entry({ purl: asPurl("pkg:npm/aaa@1.0.0"), name: "aaa", version: "1.0.0" }),
+      ],
     };
     const reversed: CanonicalDependencies = {
       packages: [...twoPkg.packages].reverse(),
@@ -1156,7 +1167,7 @@ describe("renderMarkdown — the full document", () => {
     const model: CanonicalDependencies = {
       packages: [
         entry({
-          purl: "pkg:pypi/jinja2@3.1.0",
+          purl: asPurl("pkg:pypi/jinja2@3.1.0"),
           name: "jinja2",
           version: "3.1.0",
           finding: {
@@ -1168,18 +1179,18 @@ describe("renderMarkdown — the full document", () => {
           },
         }),
         entry({
-          purl: "pkg:npm/a-mit@1.0.0",
+          purl: asPurl("pkg:npm/a-mit@1.0.0"),
           name: "a-mit",
           version: "1.0.0",
           finding: {
-            expression: "MIT",
-            elected: "MIT",
+            expression: canon("MIT"),
+            elected: canon("MIT"),
             source: "generator",
             confidence: "exact",
           },
         }),
         entry({
-          purl: "pkg:npm/z-unknown@1.0.0",
+          purl: asPurl("pkg:npm/z-unknown@1.0.0"),
           name: "z-unknown",
           version: "1.0.0",
           finding: {
@@ -1222,7 +1233,7 @@ describe("renderMarkdown — the full document", () => {
   test("Test 10: imprecise review section is deterministically sorted and cell-escaped", () => {
     const imp = (name: string, family: string): PackageEntry =>
       entry({
-        purl: `pkg:pypi/${name}@1.0.0`,
+        purl: asPurl(`pkg:pypi/${name}@1.0.0`),
         name,
         version: "1.0.0",
         finding: {
@@ -1260,14 +1271,14 @@ describe("renderMarkdown — prod/dev document split", () => {
     name: string,
     occ: ReadonlyArray<{ target: string; dev: boolean }>,
   ): PackageEntry => ({
-    purl: `pkg:npm/${name}@1.0.0`,
+    purl: asPurl(`pkg:npm/${name}@1.0.0`),
     name,
     version: "1.0.0",
     occurrences: occ.map((o) => ({
       target: o.target,
       isDevDependency: o.dev,
     })),
-    licenseClaims: [{ raw: "MIT", kind: "spdx-id", source: "generator" }],
+    licenseClaims: [{ raw: asRawLicense("MIT"), kind: "spdx-id", source: "generator" }],
     scope: "app",
   });
 
@@ -1324,32 +1335,34 @@ describe("renderMarkdown — prod/dev document split", () => {
 
 describe("renderMarkdown — per-container Production/Development grouping", () => {
   const appProd = entry({
-    purl: "pkg:npm/app-prod@1.0.0",
+    purl: asPurl("pkg:npm/app-prod@1.0.0"),
     name: "app-prod",
     version: "1.0.0",
-    licenseClaims: [{ raw: "MIT", kind: "spdx-id", source: "generator" }],
+    licenseClaims: [{ raw: asRawLicense("MIT"), kind: "spdx-id", source: "generator" }],
   });
   const appDev = entry({
-    purl: "pkg:npm/app-dev@1.0.0",
+    purl: asPurl("pkg:npm/app-dev@1.0.0"),
     name: "app-dev",
     version: "1.0.0",
     occurrences: [{ target: "apps/a", isDevDependency: true }],
-    licenseClaims: [{ raw: "MIT", kind: "spdx-id", source: "generator" }],
+    licenseClaims: [{ raw: asRawLicense("MIT"), kind: "spdx-id", source: "generator" }],
   });
   const osDeb = entry({
-    purl: "pkg:deb/debian/libc6@2.36-9",
+    purl: asPurl("pkg:deb/debian/libc6@2.36-9"),
     name: "libc6",
     version: "2.36-9",
     occurrences: [{ target: "docker:img/Dockerfile", isDevDependency: false }],
-    licenseClaims: [{ raw: "LGPL-2.1-or-later", kind: "spdx-id", source: "generator" }],
+    licenseClaims: [
+      { raw: asRawLicense("LGPL-2.1-or-later"), kind: "spdx-id", source: "generator" },
+    ],
     scope: "os",
   });
   const osApk = entry({
-    purl: "pkg:apk/alpine/musl@1.2.4-r2",
+    purl: asPurl("pkg:apk/alpine/musl@1.2.4-r2"),
     name: "musl",
     version: "1.2.4-r2",
     occurrences: [{ target: "docker:img/Dockerfile", isDevDependency: false }],
-    licenseClaims: [{ raw: "MIT", kind: "spdx-id", source: "generator" }],
+    licenseClaims: [{ raw: asRawLicense("MIT"), kind: "spdx-id", source: "generator" }],
     scope: "os",
   });
 
@@ -1431,11 +1444,11 @@ describe("renderMarkdown — per-container Production/Development grouping", () 
 
   test("container heading text routes the identity through escapeCell", () => {
     const evilOs = entry({
-      purl: "pkg:deb/debian/evil@1.0.0",
+      purl: asPurl("pkg:deb/debian/evil@1.0.0"),
       name: "evil-pkg",
       version: "1.0.0",
       occurrences: [{ target: "docker:evil|pkg`x/Dockerfile", isDevDependency: false }],
-      licenseClaims: [{ raw: "MIT", kind: "spdx-id", source: "generator" }],
+      licenseClaims: [{ raw: asRawLicense("MIT"), kind: "spdx-id", source: "generator" }],
       scope: "os",
     });
     const output = renderMarkdown({ packages: [evilOs] });
@@ -1446,11 +1459,11 @@ describe("renderMarkdown — per-container Production/Development grouping", () 
 
   test("OS row cells route through escapeCell (markdown-injection-safe)", () => {
     const evilOs = entry({
-      purl: "pkg:deb/debian/evil@1.0.0",
+      purl: asPurl("pkg:deb/debian/evil@1.0.0"),
       name: "evil|pkg`x",
       version: "1.0.0",
       occurrences: [{ target: "docker:img/Dockerfile", isDevDependency: false }],
-      licenseClaims: [{ raw: "MIT", kind: "spdx-id", source: "generator" }],
+      licenseClaims: [{ raw: asRawLicense("MIT"), kind: "spdx-id", source: "generator" }],
       scope: "os",
     });
     const output = renderMarkdown({ packages: [evilOs] });
@@ -1472,14 +1485,14 @@ describe("renderMarkdown — per-container Production/Development grouping", () 
 
   test("a package shared by two production containers rows in EACH container's own subsection", () => {
     const osShared = entry({
-      purl: "pkg:apk/alpine/busybox@1.37.0-r19",
+      purl: asPurl("pkg:apk/alpine/busybox@1.37.0-r19"),
       name: "busybox",
       version: "1.37.0-r19",
       occurrences: [
         { target: "docker:a/Dockerfile", isDevDependency: false },
         { target: "docker:b/Dockerfile", isDevDependency: false },
       ],
-      licenseClaims: [{ raw: "GPL-2.0-only", kind: "spdx-id", source: "generator" }],
+      licenseClaims: [{ raw: asRawLicense("GPL-2.0-only"), kind: "spdx-id", source: "generator" }],
       scope: "os",
     });
     const output = renderMarkdown({ packages: [osShared] });
@@ -1520,14 +1533,14 @@ describe("renderMarkdown — per-container Production/Development grouping", () 
 
   test("leak target: a package shared by a production container and a development container stays visible under BOTH", () => {
     const shared = entry({
-      purl: "pkg:apk/alpine/shared-lib@1.0.0",
+      purl: asPurl("pkg:apk/alpine/shared-lib@1.0.0"),
       name: "shared-lib",
       version: "1.0.0",
       occurrences: [
         { target: "docker:a/Dockerfile", isDevDependency: false },
         { target: "docker:b/Dockerfile", isDevDependency: false },
       ],
-      licenseClaims: [{ raw: "MIT", kind: "spdx-id", source: "generator" }],
+      licenseClaims: [{ raw: asRawLicense("MIT"), kind: "spdx-id", source: "generator" }],
       scope: "os",
     });
     const view: PolicyView = {
@@ -1557,11 +1570,11 @@ describe("renderMarkdown — per-container Production/Development grouping", () 
     // defaults to "app", but its sole occurrence is a docker: target, so it
     // is a Container package by inventory, not by scope.
     const appAtDockerTarget = entry({
-      purl: "pkg:npm/app-at-docker-target@1.0.0",
+      purl: asPurl("pkg:npm/app-at-docker-target@1.0.0"),
       name: "app-at-docker-target",
       version: "1.0.0",
       occurrences: [{ target: "docker:img/Dockerfile", isDevDependency: false }],
-      licenseClaims: [{ raw: "MIT", kind: "spdx-id", source: "generator" }],
+      licenseClaims: [{ raw: asRawLicense("MIT"), kind: "spdx-id", source: "generator" }],
     });
     const output = renderMarkdown({ packages: [appAtDockerTarget, osDeb] });
     const containerSection = output.slice(output.indexOf(HEADING));
@@ -1581,14 +1594,14 @@ describe("renderMarkdown — per-container Production/Development grouping", () 
 
   test("a package with BOTH a workspace occurrence and a docker occurrence lists in BOTH its app table and the container subsection", () => {
     const shared = entry({
-      purl: "pkg:npm/shared-app-and-container@1.0.0",
+      purl: asPurl("pkg:npm/shared-app-and-container@1.0.0"),
       name: "shared-app-and-container",
       version: "1.0.0",
       occurrences: [
         { target: "apps/a", isDevDependency: false },
         { target: "docker:img/Dockerfile", isDevDependency: false },
       ],
-      licenseClaims: [{ raw: "MIT", kind: "spdx-id", source: "generator" }],
+      licenseClaims: [{ raw: asRawLicense("MIT"), kind: "spdx-id", source: "generator" }],
     });
     const output = renderMarkdown({ packages: [shared, osDeb] });
     const prodTable = output.slice(
@@ -1608,10 +1621,10 @@ describe("renderMarkdown — per-container Production/Development grouping", () 
 
   test("a package with ONLY workspace occurrences never appears in a container subsection and is never counted as Container", () => {
     const workspaceOnly = entry({
-      purl: "pkg:npm/workspace-only@1.0.0",
+      purl: asPurl("pkg:npm/workspace-only@1.0.0"),
       name: "workspace-only",
       version: "1.0.0",
-      licenseClaims: [{ raw: "MIT", kind: "spdx-id", source: "generator" }],
+      licenseClaims: [{ raw: asRawLicense("MIT"), kind: "spdx-id", source: "generator" }],
     });
     const output = renderMarkdown({ packages: [workspaceOnly, osDeb] });
     const containerSection = output.slice(output.indexOf(HEADING));
@@ -1622,11 +1635,11 @@ describe("renderMarkdown — per-container Production/Development grouping", () 
 
   test("counts partition invariant: Production + Development-only equals Total (Container is a cross-cutting subtotal, not summed in)", () => {
     const containerOnly = entry({
-      purl: "pkg:pypi/container-only@1.0.0",
+      purl: asPurl("pkg:pypi/container-only@1.0.0"),
       name: "container-only",
       version: "1.0.0",
       occurrences: [{ target: "docker:img/Dockerfile", isDevDependency: false }],
-      licenseClaims: [{ raw: "MIT", kind: "spdx-id", source: "generator" }],
+      licenseClaims: [{ raw: asRawLicense("MIT"), kind: "spdx-id", source: "generator" }],
     });
     const model: CanonicalDependencies = {
       packages: [appProd, appDev, containerOnly, osDeb, osApk],
@@ -1653,19 +1666,19 @@ describe("renderMarkdown — per-container Production/Development grouping", () 
 
     /** A pure-container, application-ecosystem package (golang is not on the OS allowlist). */
     const prodContainerAppPkg = entry({
-      purl: "pkg:golang/prod-container-app@1.0.0",
+      purl: asPurl("pkg:golang/prod-container-app@1.0.0"),
       name: "prod-container-app",
       version: "1.0.0",
       occurrences: [{ target: PROD_CONTAINER, isDevDependency: false }],
-      licenseClaims: [{ raw: "AGPL-3.0-only", kind: "spdx-id", source: "generator" }],
+      licenseClaims: [{ raw: asRawLicense("AGPL-3.0-only"), kind: "spdx-id", source: "generator" }],
     });
 
     const devContainerPkg = entry({
-      purl: "pkg:golang/dev-container-only@1.0.0",
+      purl: asPurl("pkg:golang/dev-container-only@1.0.0"),
       name: "dev-container-only",
       version: "1.0.0",
       occurrences: [{ target: DEV_CONTAINER, isDevDependency: false }],
-      licenseClaims: [{ raw: "MIT", kind: "spdx-id", source: "generator" }],
+      licenseClaims: [{ raw: asRawLicense("MIT"), kind: "spdx-id", source: "generator" }],
     });
 
     test("an application-ecosystem package baked into a PRODUCTION container counts as Production, not siloed under Container", () => {
@@ -1706,17 +1719,17 @@ describe("renderMarkdown — per-container Production/Development grouping", () 
 
     test("count/section alignment: Production equals the distinct packages under Production (app table + its production container subsections), and likewise Development-only", () => {
       const prodApp = entry({
-        purl: "pkg:npm/prod-app@1.0.0",
+        purl: asPurl("pkg:npm/prod-app@1.0.0"),
         name: "prod-app",
         version: "1.0.0",
-        licenseClaims: [{ raw: "MIT", kind: "spdx-id", source: "generator" }],
+        licenseClaims: [{ raw: asRawLicense("MIT"), kind: "spdx-id", source: "generator" }],
       });
       const devApp = entry({
-        purl: "pkg:npm/dev-app@1.0.0",
+        purl: asPurl("pkg:npm/dev-app@1.0.0"),
         name: "dev-app",
         version: "1.0.0",
         occurrences: [{ target: "apps/a", isDevDependency: true }],
-        licenseClaims: [{ raw: "MIT", kind: "spdx-id", source: "generator" }],
+        licenseClaims: [{ raw: asRawLicense("MIT"), kind: "spdx-id", source: "generator" }],
       });
       // No package straddles both containers here, so every package renders
       // under exactly one of Production/Development-only — the count and the
@@ -1761,19 +1774,21 @@ describe("renderMarkdown — per-container System/Application split", () => {
   const HEADING = "### Container: docker:img/Dockerfile";
 
   const systemPkg = entry({
-    purl: "pkg:deb/debian/libc6@2.36-9",
+    purl: asPurl("pkg:deb/debian/libc6@2.36-9"),
     name: "libc6",
     version: "2.36-9",
     occurrences: [{ target: "docker:img/Dockerfile", isDevDependency: false }],
-    licenseClaims: [{ raw: "LGPL-2.1-or-later", kind: "spdx-id", source: "generator" }],
+    licenseClaims: [
+      { raw: asRawLicense("LGPL-2.1-or-later"), kind: "spdx-id", source: "generator" },
+    ],
     scope: "os",
   });
   const applicationPkg = entry({
-    purl: "pkg:npm/app-in-container@1.0.0",
+    purl: asPurl("pkg:npm/app-in-container@1.0.0"),
     name: "app-in-container",
     version: "1.0.0",
     occurrences: [{ target: "docker:img/Dockerfile", isDevDependency: false }],
-    licenseClaims: [{ raw: "MIT", kind: "spdx-id", source: "generator" }],
+    licenseClaims: [{ raw: asRawLicense("MIT"), kind: "spdx-id", source: "generator" }],
   });
 
   test("a container with both system and application rows emits System THEN Application, each labeled and 4-column", () => {
@@ -1818,27 +1833,27 @@ describe("renderMarkdown — per-container System/Application split", () => {
 
   test("the partition is exhaustive: every row in the container's inventory appears in exactly one sub-table", () => {
     const rpmPkg = entry({
-      purl: "pkg:rpm/fedora/glibc@2.38",
+      purl: asPurl("pkg:rpm/fedora/glibc@2.38"),
       name: "glibc",
       version: "2.38",
       occurrences: [{ target: "docker:img/Dockerfile", isDevDependency: false }],
-      licenseClaims: [{ raw: "LGPL-2.1-only", kind: "spdx-id", source: "generator" }],
+      licenseClaims: [{ raw: asRawLicense("LGPL-2.1-only"), kind: "spdx-id", source: "generator" }],
       scope: "os",
     });
     const alpmPkg = entry({
-      purl: "pkg:alpm/arch/pacman@6.1.0",
+      purl: asPurl("pkg:alpm/arch/pacman@6.1.0"),
       name: "pacman",
       version: "6.1.0",
       occurrences: [{ target: "docker:img/Dockerfile", isDevDependency: false }],
-      licenseClaims: [{ raw: "GPL-2.0-only", kind: "spdx-id", source: "generator" }],
+      licenseClaims: [{ raw: asRawLicense("GPL-2.0-only"), kind: "spdx-id", source: "generator" }],
       scope: "os",
     });
     const pypiPkg = entry({
-      purl: "pkg:pypi/app-py@1.0.0",
+      purl: asPurl("pkg:pypi/app-py@1.0.0"),
       name: "app-py",
       version: "1.0.0",
       occurrences: [{ target: "docker:img/Dockerfile", isDevDependency: false }],
-      licenseClaims: [{ raw: "Apache-2.0", kind: "spdx-id", source: "generator" }],
+      licenseClaims: [{ raw: asRawLicense("Apache-2.0"), kind: "spdx-id", source: "generator" }],
     });
     const output = renderMarkdown({
       packages: [systemPkg, rpmPkg, alpmPkg, applicationPkg, pypiPkg],
@@ -1865,10 +1880,10 @@ describe("renderMarkdown — per-container System/Application split", () => {
     // pure-container with an OS-allowlist ecosystem — the pre-correction
     // reality this task must not disturb.
     const appOnly = entry({
-      purl: "pkg:npm/app-only@1.0.0",
+      purl: asPurl("pkg:npm/app-only@1.0.0"),
       name: "app-only",
       version: "1.0.0",
-      licenseClaims: [{ raw: "MIT", kind: "spdx-id", source: "generator" }],
+      licenseClaims: [{ raw: asRawLicense("MIT"), kind: "spdx-id", source: "generator" }],
     });
     const output = renderMarkdown({ packages: [appOnly, systemPkg] });
     const section = output.slice(output.indexOf(HEADING));
@@ -1892,14 +1907,14 @@ describe("renderMarkdown — Containers index", () => {
 
   const osPkg = (name: string, purl: string, targets: readonly string[]): PackageEntry =>
     entry({
-      purl,
+      purl: asPurl(purl),
       name,
       version: "1.0.0",
       occurrences: targets.map((target) => ({
         target,
         isDevDependency: false,
       })),
-      licenseClaims: [{ raw: "MIT", kind: "spdx-id", source: "generator" }],
+      licenseClaims: [{ raw: asRawLicense("MIT"), kind: "spdx-id", source: "generator" }],
       scope: "os",
     });
 
@@ -1971,10 +1986,10 @@ describe("renderMarkdown — Containers index", () => {
     const model: CanonicalDependencies = {
       packages: [
         entry({
-          purl: "pkg:npm/app-only@1.0.0",
+          purl: asPurl("pkg:npm/app-only@1.0.0"),
           name: "app-only",
           version: "1.0.0",
-          licenseClaims: [{ raw: "MIT", kind: "spdx-id", source: "generator" }],
+          licenseClaims: [{ raw: asRawLicense("MIT"), kind: "spdx-id", source: "generator" }],
         }),
       ],
     };
@@ -2006,19 +2021,19 @@ describe("renderMarkdown — Containers index", () => {
 // ===========================================================================
 describe("renderMarkdown — os-scope partial-license cell", () => {
   const osPartial = entry({
-    purl: "pkg:deb/debian/os-partial@1.0",
+    purl: asPurl("pkg:deb/debian/os-partial@1.0"),
     name: "os-partial",
     version: "1.0",
     occurrences: [{ target: "docker:img/Dockerfile", isDevDependency: false }],
     licenseClaims: [
-      { raw: "GPL-2.0-only", kind: "spdx-id", source: "generator" },
-      { raw: "BSD-3-Clause", kind: "spdx-id", source: "generator" },
-      { raw: "public-domain", kind: "name", source: "generator" },
+      { raw: asRawLicense("GPL-2.0-only"), kind: "spdx-id", source: "generator" },
+      { raw: asRawLicense("BSD-3-Clause"), kind: "spdx-id", source: "generator" },
+      { raw: asRawLicense("public-domain"), kind: "name", source: "generator" },
     ],
     scope: "os",
     finding: {
-      expression: "GPL-2.0-only AND BSD-3-Clause",
-      elected: "GPL-2.0-only AND BSD-3-Clause",
+      expression: canon("GPL-2.0-only AND BSD-3-Clause"),
+      elected: canon("GPL-2.0-only AND BSD-3-Clause"),
       source: "generator",
       confidence: "exact",
       unrecognizedTokens: ["public-domain"],
@@ -2040,15 +2055,15 @@ describe("renderMarkdown — os-scope partial-license cell", () => {
 
   test("multiple unrecognized tokens are comma-joined in order", () => {
     const multi = entry({
-      purl: "pkg:deb/debian/os-multi@1.0",
+      purl: asPurl("pkg:deb/debian/os-multi@1.0"),
       name: "os-multi",
       version: "1.0",
       occurrences: [{ target: "docker:img/Dockerfile", isDevDependency: false }],
       licenseClaims: [],
       scope: "os",
       finding: {
-        expression: "MIT",
-        elected: "MIT",
+        expression: canon("MIT"),
+        elected: canon("MIT"),
         source: "generator",
         confidence: "exact",
         unrecognizedTokens: ["Artistic", "public-domain"],
@@ -2061,15 +2076,15 @@ describe("renderMarkdown — os-scope partial-license cell", () => {
 
   test("unrecognized tokens route through escapeCell (injection-safe)", () => {
     const evil = entry({
-      purl: "pkg:deb/debian/os-evil@1.0",
+      purl: asPurl("pkg:deb/debian/os-evil@1.0"),
       name: "os-evil",
       version: "1.0",
       occurrences: [{ target: "docker:img/Dockerfile", isDevDependency: false }],
       licenseClaims: [],
       scope: "os",
       finding: {
-        expression: "MIT",
-        elected: "MIT",
+        expression: canon("MIT"),
+        elected: canon("MIT"),
         source: "generator",
         confidence: "exact",
         unrecognizedTokens: ["evil|tok`x"],
@@ -2086,7 +2101,7 @@ describe("renderMarkdown — os-scope partial-license cell", () => {
     // imprecise copyleft family + a genuinely-unknown token). The imprecise
     // branch of licenseCellOf must surface the remainder too — not drop it.
     const imprecisePartial = entry({
-      purl: "pkg:deb/debian/os-imprecise-partial@1.0",
+      purl: asPurl("pkg:deb/debian/os-imprecise-partial@1.0"),
       name: "os-imprecise-partial",
       version: "1.0",
       occurrences: [{ target: "docker:img/Dockerfile", isDevDependency: false }],
@@ -2108,7 +2123,7 @@ describe("renderMarkdown — os-scope partial-license cell", () => {
 
   test("#8: an imprecise finding WITHOUT unrecognizedTokens still renders the plain family marker", () => {
     const impreciseOnly = entry({
-      purl: "pkg:npm/imprecise-only@1.0",
+      purl: asPurl("pkg:npm/imprecise-only@1.0"),
       name: "imprecise-only",
       version: "1.0",
       licenseClaims: [],
@@ -2128,13 +2143,13 @@ describe("renderMarkdown — os-scope partial-license cell", () => {
 
   test("a finding WITHOUT unrecognizedTokens renders the plain expression (app-scope unchanged)", () => {
     const plain = entry({
-      purl: "pkg:npm/plain@1.0",
+      purl: asPurl("pkg:npm/plain@1.0"),
       name: "plain",
       version: "1.0",
       licenseClaims: [],
       finding: {
-        expression: "MIT AND Apache-2.0",
-        elected: "MIT AND Apache-2.0",
+        expression: canon("MIT AND Apache-2.0"),
+        elected: canon("MIT AND Apache-2.0"),
         source: "generator",
         confidence: "exact",
       },
@@ -2156,62 +2171,64 @@ describe("renderMarkdown — Ecosystem column", () => {
   const mixed: CanonicalDependencies = {
     packages: [
       entry({
-        purl: "pkg:npm/npm-pkg@1.0.0",
+        purl: asPurl("pkg:npm/npm-pkg@1.0.0"),
         name: "npm-pkg",
         version: "1.0.0",
         finding: {
-          expression: "MIT",
-          elected: "MIT",
+          expression: canon("MIT"),
+          elected: canon("MIT"),
           source: "generator",
           confidence: "exact",
         },
       }),
       entry({
-        purl: "pkg:pypi/pypi-pkg@2.0.0",
+        purl: asPurl("pkg:pypi/pypi-pkg@2.0.0"),
         name: "pypi-pkg",
         version: "2.0.0",
         finding: {
-          expression: "Apache-2.0",
-          elected: "Apache-2.0",
+          expression: canon("Apache-2.0"),
+          elected: canon("Apache-2.0"),
           source: "generator",
           confidence: "exact",
         },
       }),
       entry({
-        purl: "pkg:terraform/tf-pkg@3.0.0",
+        purl: asPurl("pkg:terraform/tf-pkg@3.0.0"),
         name: "tf-pkg",
         version: "3.0.0",
         finding: {
-          expression: "MPL-2.0",
-          elected: "MPL-2.0",
+          expression: canon("MPL-2.0"),
+          elected: canon("MPL-2.0"),
           source: "generator",
           confidence: "exact",
         },
       }),
       entry({
-        purl: "pkg:deb/debian/deb-pkg@4.0",
+        purl: asPurl("pkg:deb/debian/deb-pkg@4.0"),
         name: "deb-pkg",
         version: "4.0",
         occurrences: [{ target: "docker:img/Dockerfile", isDevDependency: false }],
-        licenseClaims: [{ raw: "GPL-2.0-only", kind: "spdx-id", source: "generator" }],
+        licenseClaims: [
+          { raw: asRawLicense("GPL-2.0-only"), kind: "spdx-id", source: "generator" },
+        ],
         scope: "os",
         finding: {
-          expression: "GPL-2.0-only",
-          elected: "GPL-2.0-only",
+          expression: canon("GPL-2.0-only"),
+          elected: canon("GPL-2.0-only"),
           source: "generator",
           confidence: "exact",
         },
       }),
       entry({
-        purl: "pkg:apk/alpine/apk-pkg@5.0",
+        purl: asPurl("pkg:apk/alpine/apk-pkg@5.0"),
         name: "apk-pkg",
         version: "5.0",
         occurrences: [{ target: "docker:img/Dockerfile", isDevDependency: false }],
-        licenseClaims: [{ raw: "MIT", kind: "spdx-id", source: "generator" }],
+        licenseClaims: [{ raw: asRawLicense("MIT"), kind: "spdx-id", source: "generator" }],
         scope: "os",
         finding: {
-          expression: "MIT",
-          elected: "MIT",
+          expression: canon("MIT"),
+          elected: canon("MIT"),
           source: "generator",
           confidence: "exact",
         },
@@ -2256,12 +2273,12 @@ describe("renderMarkdown — Ecosystem column", () => {
     // every other SBOM-sourced cell (defensive — real purl types are tame, but
     // the renderer must not trust the input).
     const evil = entry({
-      purl: "pkg:ev|il`type/x@1.0.0",
+      purl: asPurl("pkg:ev|il`type/x@1.0.0"),
       name: "evil-eco",
       version: "1.0.0",
       finding: {
-        expression: "MIT",
-        elected: "MIT",
+        expression: canon("MIT"),
+        elected: canon("MIT"),
         source: "generator",
         confidence: "exact",
       },
@@ -2283,12 +2300,12 @@ describe("renderMarkdown — [document] title + preamble", () => {
   const model: CanonicalDependencies = {
     packages: [
       entry({
-        purl: "pkg:npm/a@1.0.0",
+        purl: asPurl("pkg:npm/a@1.0.0"),
         name: "a",
         version: "1.0.0",
         finding: {
-          expression: "MIT",
-          elected: "MIT",
+          expression: canon("MIT"),
+          elected: canon("MIT"),
           source: "generator",
           confidence: "exact",
         },
@@ -2389,10 +2406,15 @@ describe("renderMarkdown - target-profile header lines (scope-of-assertion + att
   const model: CanonicalDependencies = {
     packages: [
       entry({
-        purl: "pkg:npm/a@1.0.0",
+        purl: asPurl("pkg:npm/a@1.0.0"),
         name: "a",
         version: "1.0.0",
-        finding: { expression: "MIT", elected: "MIT", source: "generator", confidence: "exact" },
+        finding: {
+          expression: canon("MIT"),
+          elected: canon("MIT"),
+          source: "generator",
+          confidence: "exact",
+        },
       }),
     ],
   };
@@ -2545,19 +2567,19 @@ describe("renderMarkdown - target-profile header lines (scope-of-assertion + att
 // ===========================================================================
 describe("renderMarkdown — Problematic licenses summary", () => {
   const denied = entry({
-    purl: "pkg:npm/denied-pkg@1.0.0",
+    purl: asPurl("pkg:npm/denied-pkg@1.0.0"),
     name: "denied-pkg",
     version: "1.0.0",
     occurrences: [{ target: "backend", isDevDependency: false }],
     finding: {
-      expression: "BUSL-1.1",
-      elected: "BUSL-1.1",
+      expression: canon("BUSL-1.1"),
+      elected: canon("BUSL-1.1"),
       source: "generator",
       confidence: "exact",
     },
   });
   const copyleftFail = entry({
-    purl: "pkg:pypi/gpl-pkg@2.0.0",
+    purl: asPurl("pkg:pypi/gpl-pkg@2.0.0"),
     name: "gpl-pkg",
     version: "2.0.0",
     occurrences: [
@@ -2565,14 +2587,14 @@ describe("renderMarkdown — Problematic licenses summary", () => {
       { target: "frontend", isDevDependency: false },
     ],
     finding: {
-      expression: "GPL-3.0-only",
-      elected: "GPL-3.0-only",
+      expression: canon("GPL-3.0-only"),
+      elected: canon("GPL-3.0-only"),
       source: "generator",
       confidence: "exact",
     },
   });
   const unknownFail = entry({
-    purl: "pkg:npm/unk-pkg@3.0.0",
+    purl: asPurl("pkg:npm/unk-pkg@3.0.0"),
     name: "unk-pkg",
     version: "3.0.0",
     occurrences: [{ target: "backend", isDevDependency: false }],
@@ -2584,12 +2606,12 @@ describe("renderMarkdown — Problematic licenses summary", () => {
     },
   });
   const warnOnly = entry({
-    purl: "pkg:npm/warn-pkg@4.0.0",
+    purl: asPurl("pkg:npm/warn-pkg@4.0.0"),
     name: "warn-pkg",
     version: "4.0.0",
     finding: {
-      expression: "LGPL-3.0-or-later",
-      elected: "LGPL-3.0-or-later",
+      expression: canon("LGPL-3.0-or-later"),
+      elected: canon("LGPL-3.0-or-later"),
       source: "generator",
       confidence: "exact",
     },
@@ -2609,7 +2631,7 @@ describe("renderMarkdown — Problematic licenses summary", () => {
       suppressedWorkspaces: [],
       verdicts: [
         {
-          purl: "pkg:npm/denied-pkg@1.0.0",
+          purl: asPurl("pkg:npm/denied-pkg@1.0.0"),
           occurrenceTarget: "backend",
           status: "fail",
           rule: "deny:license[0]",
@@ -2618,21 +2640,21 @@ describe("renderMarkdown — Problematic licenses summary", () => {
         // Two occurrences of the SAME (purl, rule, reason) group → ONE row with
         // deduped+sorted targets joined ", ".
         {
-          purl: "pkg:pypi/gpl-pkg@2.0.0",
+          purl: asPurl("pkg:pypi/gpl-pkg@2.0.0"),
           occurrenceTarget: "frontend",
           status: "fail",
           rule: "default:copyleft",
           reason: 'copyleft license "GPL-3.0-only"',
         },
         {
-          purl: "pkg:pypi/gpl-pkg@2.0.0",
+          purl: asPurl("pkg:pypi/gpl-pkg@2.0.0"),
           occurrenceTarget: "backend",
           status: "fail",
           rule: "default:copyleft",
           reason: 'copyleft license "GPL-3.0-only"',
         },
         {
-          purl: "pkg:npm/unk-pkg@3.0.0",
+          purl: asPurl("pkg:npm/unk-pkg@3.0.0"),
           occurrenceTarget: "backend",
           status: "fail",
           rule: "default:unknown",
@@ -2685,7 +2707,7 @@ describe("renderMarkdown — Problematic licenses summary", () => {
       suppressedWorkspaces: [],
       verdicts: [
         {
-          purl: "pkg:npm/warn-pkg@4.0.0",
+          purl: asPurl("pkg:npm/warn-pkg@4.0.0"),
           occurrenceTarget: "apps/a",
           status: "warn",
           rule: "default:copyleft",
@@ -2709,7 +2731,7 @@ describe("renderMarkdown — Problematic licenses summary", () => {
       suppressedWorkspaces: [],
       verdicts: [
         {
-          purl: "pkg:npm/warn-pkg@4.0.0",
+          purl: asPurl("pkg:npm/warn-pkg@4.0.0"),
           occurrenceTarget: "apps/a",
           status: "ok",
           rule: "default:ok",
@@ -2732,28 +2754,28 @@ describe("renderMarkdown — Problematic licenses summary", () => {
       suppressedWorkspaces: [],
       verdicts: [
         {
-          purl: "pkg:npm/warn-pkg@4.0.0",
+          purl: asPurl("pkg:npm/warn-pkg@4.0.0"),
           occurrenceTarget: "apps/a",
           status: "warn",
           rule: "default:copyleft",
           reason: "x",
         },
         {
-          purl: "pkg:npm/warn-pkg@4.0.0",
+          purl: asPurl("pkg:npm/warn-pkg@4.0.0"),
           occurrenceTarget: "apps/b",
           status: "warn",
           rule: "default:imprecise-copyleft",
           reason: "y",
         },
         {
-          purl: "pkg:npm/unk-pkg@3.0.0",
+          purl: asPurl("pkg:npm/unk-pkg@3.0.0"),
           occurrenceTarget: "apps/a",
           status: "warn",
           rule: "default:unknown",
           reason: "z",
         },
         {
-          purl: "pkg:npm/denied-pkg@1.0.0",
+          purl: asPurl("pkg:npm/denied-pkg@1.0.0"),
           occurrenceTarget: "apps/a",
           status: "warn",
           rule: "deny:license[0]",
@@ -2776,7 +2798,7 @@ describe("renderMarkdown — Problematic licenses summary", () => {
       suppressedWorkspaces: [],
       verdicts: [
         {
-          purl: "pkg:npm/warn-pkg@4.0.0",
+          purl: asPurl("pkg:npm/warn-pkg@4.0.0"),
           occurrenceTarget: "apps/a",
           status: "warn",
           rule: TARGET_RULE_INCOMPATIBLE,
@@ -2803,7 +2825,7 @@ describe("renderMarkdown — Problematic licenses summary", () => {
         suppressedWorkspaces: [],
         verdicts: [
           {
-            purl: "pkg:npm/warn-pkg@4.0.0",
+            purl: asPurl("pkg:npm/warn-pkg@4.0.0"),
             occurrenceTarget: "apps/a",
             status: "warn",
             rule: TARGET_RULE_INCOMPATIBLE,
@@ -2824,7 +2846,7 @@ describe("renderMarkdown — Problematic licenses summary", () => {
         suppressedWorkspaces: [],
         verdicts: [
           {
-            purl: "pkg:npm/warn-pkg@4.0.0",
+            purl: asPurl("pkg:npm/warn-pkg@4.0.0"),
             occurrenceTarget: "apps/a",
             status: "warn",
             rule: "default:copyleft",
@@ -2847,7 +2869,7 @@ describe("renderMarkdown — Problematic licenses summary", () => {
       suppressedWorkspaces: [],
       verdicts: [
         {
-          purl: "pkg:pypi/gpl-pkg@2.0.0",
+          purl: asPurl("pkg:pypi/gpl-pkg@2.0.0"),
           occurrenceTarget: "backend",
           status: "fail",
           rule: "default:copyleft",
@@ -2885,7 +2907,7 @@ describe("renderMarkdown — Problematic licenses summary", () => {
       suppressedWorkspaces: [],
       verdicts: [
         {
-          purl: "pkg:npm/ghost@9.9.9",
+          purl: asPurl("pkg:npm/ghost@9.9.9"),
           occurrenceTarget: "backend",
           status: "fail",
           rule: "deny:license[0]",
@@ -2935,7 +2957,7 @@ describe("renderMarkdown — provenance Why column", () => {
    * computation, not the dedup itself.
    */
   const copyleftVerdict = (purl: string, target: string): Verdict => ({
-    purl,
+    purl: asPurl(purl),
     occurrenceTarget: target,
     status: "warn",
     rule: "default:copyleft",
@@ -2955,7 +2977,7 @@ describe("renderMarkdown — provenance Why column", () => {
     const model: CanonicalDependencies = {
       packages: [
         entry({
-          purl: "pkg:npm/direct-pkg@1.0.0",
+          purl: asPurl("pkg:npm/direct-pkg@1.0.0"),
           name: "direct-pkg",
           version: "1.0.0",
           occurrences: [
@@ -2966,8 +2988,8 @@ describe("renderMarkdown — provenance Why column", () => {
             },
           ],
           finding: {
-            expression: "GPL-3.0-only",
-            elected: "GPL-3.0-only",
+            expression: canon("GPL-3.0-only"),
+            elected: canon("GPL-3.0-only"),
             source: "generator",
             confidence: "exact",
           },
@@ -2991,7 +3013,7 @@ describe("renderMarkdown — provenance Why column", () => {
     const model: CanonicalDependencies = {
       packages: [
         entry({
-          purl: "pkg:npm/trans-pkg@1.0.0",
+          purl: asPurl("pkg:npm/trans-pkg@1.0.0"),
           name: "trans-pkg",
           version: "1.0.0",
           occurrences: [
@@ -3006,8 +3028,8 @@ describe("renderMarkdown — provenance Why column", () => {
             },
           ],
           finding: {
-            expression: "GPL-3.0-only",
-            elected: "GPL-3.0-only",
+            expression: canon("GPL-3.0-only"),
+            elected: canon("GPL-3.0-only"),
             source: "generator",
             confidence: "exact",
           },
@@ -3033,7 +3055,7 @@ describe("renderMarkdown — provenance Why column", () => {
     const model: CanonicalDependencies = {
       packages: [
         entry({
-          purl: "pkg:pypi/opt-pkg@1.0.0",
+          purl: asPurl("pkg:pypi/opt-pkg@1.0.0"),
           name: "opt-pkg",
           version: "1.0.0",
           occurrences: [
@@ -3048,8 +3070,8 @@ describe("renderMarkdown — provenance Why column", () => {
             },
           ],
           finding: {
-            expression: "GPL-3.0-only",
-            elected: "GPL-3.0-only",
+            expression: canon("GPL-3.0-only"),
+            elected: canon("GPL-3.0-only"),
             source: "generator",
             confidence: "exact",
           },
@@ -3079,13 +3101,13 @@ describe("renderMarkdown — provenance Why column", () => {
     const model: CanonicalDependencies = {
       packages: [
         entry({
-          purl: "pkg:pypi/libssl-bindings@3.0",
+          purl: asPurl("pkg:pypi/libssl-bindings@3.0"),
           name: "libssl-bindings",
           version: "3.0",
           occurrences: [{ target: "apps/py", isDevDependency: false }],
           finding: {
-            expression: "GPL-3.0-only",
-            elected: "GPL-3.0-only",
+            expression: canon("GPL-3.0-only"),
+            elected: canon("GPL-3.0-only"),
             source: "generator",
             confidence: "exact",
           },
@@ -3110,7 +3132,7 @@ describe("renderMarkdown — provenance Why column", () => {
     const model: CanonicalDependencies = {
       packages: [
         entry({
-          purl: "pkg:npm/all-direct@1.0.0",
+          purl: asPurl("pkg:npm/all-direct@1.0.0"),
           name: "all-direct",
           version: "1.0.0",
           occurrences: [
@@ -3126,8 +3148,8 @@ describe("renderMarkdown — provenance Why column", () => {
             },
           ],
           finding: {
-            expression: "GPL-3.0-only",
-            elected: "GPL-3.0-only",
+            expression: canon("GPL-3.0-only"),
+            elected: canon("GPL-3.0-only"),
             source: "generator",
             confidence: "exact",
           },
@@ -3157,7 +3179,7 @@ describe("renderMarkdown — provenance Why column", () => {
     const model: CanonicalDependencies = {
       packages: [
         entry({
-          purl: "pkg:npm/mixed-pkg@1.0.0",
+          purl: asPurl("pkg:npm/mixed-pkg@1.0.0"),
           name: "mixed-pkg",
           version: "1.0.0",
           occurrences: [
@@ -3177,8 +3199,8 @@ describe("renderMarkdown — provenance Why column", () => {
             },
           ],
           finding: {
-            expression: "GPL-3.0-only",
-            elected: "GPL-3.0-only",
+            expression: canon("GPL-3.0-only"),
+            elected: canon("GPL-3.0-only"),
             source: "generator",
             confidence: "exact",
           },
@@ -3214,7 +3236,7 @@ describe("renderMarkdown — provenance Why column", () => {
     const model: CanonicalDependencies = {
       packages: [
         entry({
-          purl: "pkg:npm/deep@1",
+          purl: asPurl("pkg:npm/deep@1"),
           name: "deep",
           version: "1",
           occurrences: [
@@ -3229,8 +3251,8 @@ describe("renderMarkdown — provenance Why column", () => {
             },
           ],
           finding: {
-            expression: "GPL-3.0-only",
-            elected: "GPL-3.0-only",
+            expression: canon("GPL-3.0-only"),
+            elected: canon("GPL-3.0-only"),
             source: "generator",
             confidence: "exact",
           },
@@ -3255,7 +3277,7 @@ describe("renderMarkdown — provenance Why column", () => {
     const model: CanonicalDependencies = {
       packages: [
         entry({
-          purl: "pkg:npm/blocked@1.0.0",
+          purl: asPurl("pkg:npm/blocked@1.0.0"),
           name: "blocked",
           version: "1.0.0",
           occurrences: [
@@ -3270,8 +3292,8 @@ describe("renderMarkdown — provenance Why column", () => {
             },
           ],
           finding: {
-            expression: "BUSL-1.1",
-            elected: "BUSL-1.1",
+            expression: canon("BUSL-1.1"),
+            elected: canon("BUSL-1.1"),
             source: "generator",
             confidence: "exact",
           },
@@ -3283,7 +3305,7 @@ describe("renderMarkdown — provenance Why column", () => {
       suppressedWorkspaces: [],
       verdicts: [
         {
-          purl: "pkg:npm/blocked@1.0.0",
+          purl: asPurl("pkg:npm/blocked@1.0.0"),
           occurrenceTarget: "apps/a",
           status: "fail",
           rule: "deny:license[0]",
@@ -3307,13 +3329,13 @@ describe("renderMarkdown — provenance Why column", () => {
     const model: CanonicalDependencies = {
       packages: [
         entry({
-          purl: "pkg:npm/plain@1.0.0",
+          purl: asPurl("pkg:npm/plain@1.0.0"),
           name: "plain",
           version: "1.0.0",
           occurrences: [{ target: "apps/a", isDevDependency: false }],
           finding: {
-            expression: "GPL-3.0-only",
-            elected: "GPL-3.0-only",
+            expression: canon("GPL-3.0-only"),
+            elected: canon("GPL-3.0-only"),
             source: "generator",
             confidence: "exact",
           },
@@ -3342,7 +3364,7 @@ describe("renderMarkdown — provenance Why column", () => {
     const model: CanonicalDependencies = {
       packages: [
         entry({
-          purl: "pkg:pypi/realdirect@1.0.0",
+          purl: asPurl("pkg:pypi/realdirect@1.0.0"),
           name: "realdirect",
           version: "1.0.0",
           occurrences: [
@@ -3358,8 +3380,8 @@ describe("renderMarkdown — provenance Why column", () => {
             },
           ],
           finding: {
-            expression: "GPL-3.0-only",
-            elected: "GPL-3.0-only",
+            expression: canon("GPL-3.0-only"),
+            elected: canon("GPL-3.0-only"),
             source: "generator",
             confidence: "exact",
           },
@@ -3390,7 +3412,7 @@ describe("renderMarkdown — provenance Why column", () => {
     const model: CanonicalDependencies = {
       packages: [
         entry({
-          purl: "pkg:pypi/allorphan@1.0.0",
+          purl: asPurl("pkg:pypi/allorphan@1.0.0"),
           name: "allorphan",
           version: "1.0.0",
           occurrences: [
@@ -3406,8 +3428,8 @@ describe("renderMarkdown — provenance Why column", () => {
             },
           ],
           finding: {
-            expression: "GPL-3.0-only",
-            elected: "GPL-3.0-only",
+            expression: canon("GPL-3.0-only"),
+            elected: canon("GPL-3.0-only"),
             source: "generator",
             confidence: "exact",
           },
@@ -3437,7 +3459,7 @@ describe("renderMarkdown — provenance Why column", () => {
     const model: CanonicalDependencies = {
       packages: [
         entry({
-          purl: "pkg:pypi/transorphan@1.0.0",
+          purl: asPurl("pkg:pypi/transorphan@1.0.0"),
           name: "transorphan",
           version: "1.0.0",
           occurrences: [
@@ -3457,8 +3479,8 @@ describe("renderMarkdown — provenance Why column", () => {
             },
           ],
           finding: {
-            expression: "GPL-3.0-only",
-            elected: "GPL-3.0-only",
+            expression: canon("GPL-3.0-only"),
+            elected: canon("GPL-3.0-only"),
             source: "generator",
             confidence: "exact",
           },
@@ -3486,7 +3508,7 @@ describe("renderMarkdown — provenance Why column", () => {
     const model: CanonicalDependencies = {
       packages: [
         entry({
-          purl: "pkg:npm/orphan@1.0.0",
+          purl: asPurl("pkg:npm/orphan@1.0.0"),
           name: "orphan",
           version: "1.0.0",
           occurrences: [
@@ -3497,8 +3519,8 @@ describe("renderMarkdown — provenance Why column", () => {
             },
           ],
           finding: {
-            expression: "GPL-3.0-only",
-            elected: "GPL-3.0-only",
+            expression: canon("GPL-3.0-only"),
+            elected: canon("GPL-3.0-only"),
             source: "generator",
             confidence: "exact",
           },
@@ -3528,7 +3550,7 @@ describe("renderMarkdown — provenance Why column", () => {
     const model: CanonicalDependencies = {
       packages: [
         entry({
-          purl: "pkg:npm/emptypath@1.0.0",
+          purl: asPurl("pkg:npm/emptypath@1.0.0"),
           name: "emptypath",
           version: "1.0.0",
           occurrences: [
@@ -3539,8 +3561,8 @@ describe("renderMarkdown — provenance Why column", () => {
             },
           ],
           finding: {
-            expression: "GPL-3.0-only",
-            elected: "GPL-3.0-only",
+            expression: canon("GPL-3.0-only"),
+            elected: canon("GPL-3.0-only"),
             source: "generator",
             confidence: "exact",
           },
@@ -3566,7 +3588,7 @@ describe("renderMarkdown — provenance Why column", () => {
     const model: CanonicalDependencies = {
       packages: [
         entry({
-          purl: "pkg:npm/emptypathintro@1.0.0",
+          purl: asPurl("pkg:npm/emptypathintro@1.0.0"),
           name: "emptypathintro",
           version: "1.0.0",
           occurrences: [
@@ -3581,8 +3603,8 @@ describe("renderMarkdown — provenance Why column", () => {
             },
           ],
           finding: {
-            expression: "GPL-3.0-only",
-            elected: "GPL-3.0-only",
+            expression: canon("GPL-3.0-only"),
+            elected: canon("GPL-3.0-only"),
             source: "generator",
             confidence: "exact",
           },
@@ -3641,7 +3663,7 @@ describe("renderMarkdown — Why-cell target scoping", () => {
     const model: CanonicalDependencies = {
       packages: [
         entry({
-          purl: "pkg:npm/agpllib@1.0.0",
+          purl: asPurl("pkg:npm/agpllib@1.0.0"),
           name: "agpllib",
           version: "1.0.0",
           occurrences: [
@@ -3661,8 +3683,8 @@ describe("renderMarkdown — Why-cell target scoping", () => {
             },
           ],
           finding: {
-            expression: "AGPL-3.0-only",
-            elected: "AGPL-3.0-only",
+            expression: canon("AGPL-3.0-only"),
+            elected: canon("AGPL-3.0-only"),
             source: "generator",
             confidence: "exact",
           },
@@ -3674,7 +3696,7 @@ describe("renderMarkdown — Why-cell target scoping", () => {
       suppressedWorkspaces: [],
       verdicts: [
         {
-          purl: "pkg:npm/agpllib@1.0.0",
+          purl: asPurl("pkg:npm/agpllib@1.0.0"),
           occurrenceTarget: "apps/prod-shipped",
           status: "fail",
           rule: "deny:license[0]",
@@ -3700,7 +3722,7 @@ describe("renderMarkdown — Why-cell target scoping", () => {
     const model: CanonicalDependencies = {
       packages: [
         entry({
-          purl: "pkg:npm/shared@1.0.0",
+          purl: asPurl("pkg:npm/shared@1.0.0"),
           name: "shared",
           version: "1.0.0",
           occurrences: [
@@ -3716,8 +3738,8 @@ describe("renderMarkdown — Why-cell target scoping", () => {
             },
           ],
           finding: {
-            expression: "GPL-3.0-only",
-            elected: "GPL-3.0-only",
+            expression: canon("GPL-3.0-only"),
+            elected: canon("GPL-3.0-only"),
             source: "generator",
             confidence: "exact",
           },
@@ -3729,7 +3751,7 @@ describe("renderMarkdown — Why-cell target scoping", () => {
       suppressedWorkspaces: [],
       verdicts: [
         {
-          purl: "pkg:npm/shared@1.0.0",
+          purl: asPurl("pkg:npm/shared@1.0.0"),
           occurrenceTarget: "apps/flagged",
           status: "warn",
           rule: "default:copyleft",
@@ -3755,7 +3777,7 @@ describe("renderMarkdown — Why-cell target scoping", () => {
     const model: CanonicalDependencies = {
       packages: [
         entry({
-          purl: "pkg:pypi/hr-pkg@1.0.0",
+          purl: asPurl("pkg:pypi/hr-pkg@1.0.0"),
           name: "hr-pkg",
           version: "1.0.0",
           occurrences: [
@@ -3778,8 +3800,8 @@ describe("renderMarkdown — Why-cell target scoping", () => {
             },
           ],
           finding: {
-            expression: "GPL-3.0-only",
-            elected: "GPL-3.0-only",
+            expression: canon("GPL-3.0-only"),
+            elected: canon("GPL-3.0-only"),
             source: "generator",
             confidence: "exact",
           },
@@ -3791,14 +3813,14 @@ describe("renderMarkdown — Why-cell target scoping", () => {
       suppressedWorkspaces: [],
       verdicts: [
         {
-          purl: "pkg:pypi/hr-pkg@1.0.0",
+          purl: asPurl("pkg:pypi/hr-pkg@1.0.0"),
           occurrenceTarget: "a",
           status: "warn",
           rule: "default:copyleft",
           reason: "copyleft",
         },
         {
-          purl: "pkg:pypi/hr-pkg@1.0.0",
+          purl: asPurl("pkg:pypi/hr-pkg@1.0.0"),
           occurrenceTarget: "b",
           status: "warn",
           rule: "default:copyleft",
@@ -3829,18 +3851,23 @@ describe("renderMarkdown — Target compatibility section", () => {
 
   test("absent when the only target:* verdict is a clean target:ok", () => {
     const pkg = entry({
-      purl: "pkg:npm/target-ok-only@1.0.0",
+      purl: asPurl("pkg:npm/target-ok-only@1.0.0"),
       name: "target-ok-only",
       version: "1.0.0",
-      licenseClaims: [{ raw: "MIT", kind: "spdx-id", source: "generator" }],
-      finding: { expression: "MIT", elected: "MIT", source: "generator", confidence: "exact" },
+      licenseClaims: [{ raw: asRawLicense("MIT"), kind: "spdx-id", source: "generator" }],
+      finding: {
+        expression: canon("MIT"),
+        elected: canon("MIT"),
+        source: "generator",
+        confidence: "exact",
+      },
     });
     const view: PolicyView = {
       policyPath: "policy.toml",
       suppressedWorkspaces: [],
       verdicts: [
         {
-          purl: "pkg:npm/target-ok-only@1.0.0",
+          purl: asPurl("pkg:npm/target-ok-only@1.0.0"),
           occurrenceTarget: "apps/a",
           status: "ok",
           rule: "target:ok",
@@ -3855,13 +3882,13 @@ describe("renderMarkdown — Target compatibility section", () => {
 
   test("renders after Copyleft and special notices, before Imprecise licenses", () => {
     const boundaryPkg = entry({
-      purl: "pkg:npm/boundary-pkg@1.0.0",
+      purl: asPurl("pkg:npm/boundary-pkg@1.0.0"),
       name: "boundary-pkg",
       version: "1.0.0",
-      licenseClaims: [{ raw: "LGPL-2.1-only", kind: "spdx-id", source: "generator" }],
+      licenseClaims: [{ raw: asRawLicense("LGPL-2.1-only"), kind: "spdx-id", source: "generator" }],
       finding: {
-        expression: "LGPL-2.1-only",
-        elected: "LGPL-2.1-only",
+        expression: canon("LGPL-2.1-only"),
+        elected: canon("LGPL-2.1-only"),
         source: "generator",
         confidence: "exact",
       },
@@ -3871,7 +3898,7 @@ describe("renderMarkdown — Target compatibility section", () => {
       suppressedWorkspaces: [],
       verdicts: [
         {
-          purl: "pkg:npm/boundary-pkg@1.0.0",
+          purl: asPurl("pkg:npm/boundary-pkg@1.0.0"),
           occurrenceTarget: "apps/a",
           status: "warn",
           rule: "target:boundary",
@@ -3889,38 +3916,38 @@ describe("renderMarkdown — Target compatibility section", () => {
 
   test("flagged table rows target:boundary, target:unknown-pair, and dev-downgraded target:incompatible", () => {
     const boundaryPkg = entry({
-      purl: "pkg:npm/boundary-pkg@1.0.0",
+      purl: asPurl("pkg:npm/boundary-pkg@1.0.0"),
       name: "boundary-pkg",
       version: "1.0.0",
-      licenseClaims: [{ raw: "LGPL-2.1-only", kind: "spdx-id", source: "generator" }],
+      licenseClaims: [{ raw: asRawLicense("LGPL-2.1-only"), kind: "spdx-id", source: "generator" }],
       finding: {
-        expression: "LGPL-2.1-only",
-        elected: "LGPL-2.1-only",
+        expression: canon("LGPL-2.1-only"),
+        elected: canon("LGPL-2.1-only"),
         source: "generator",
         confidence: "exact",
       },
     });
     const residualPkg = entry({
-      purl: "pkg:npm/residual-pkg@1.0.0",
+      purl: asPurl("pkg:npm/residual-pkg@1.0.0"),
       name: "residual-pkg",
       version: "1.0.0",
-      licenseClaims: [{ raw: "QPL-1.0", kind: "spdx-id", source: "generator" }],
+      licenseClaims: [{ raw: asRawLicense("QPL-1.0"), kind: "spdx-id", source: "generator" }],
       finding: {
-        expression: "QPL-1.0",
-        elected: "QPL-1.0",
+        expression: canon("QPL-1.0"),
+        elected: canon("QPL-1.0"),
         source: "generator",
         confidence: "exact",
       },
     });
     const devDowngradedPkg = entry({
-      purl: "pkg:npm/dev-downgraded-pkg@1.0.0",
+      purl: asPurl("pkg:npm/dev-downgraded-pkg@1.0.0"),
       name: "dev-downgraded-pkg",
       version: "1.0.0",
       occurrences: [{ target: "apps/a", isDevDependency: true }],
-      licenseClaims: [{ raw: "GPL-3.0-only", kind: "spdx-id", source: "generator" }],
+      licenseClaims: [{ raw: asRawLicense("GPL-3.0-only"), kind: "spdx-id", source: "generator" }],
       finding: {
-        expression: "GPL-3.0-only",
-        elected: "GPL-3.0-only",
+        expression: canon("GPL-3.0-only"),
+        elected: canon("GPL-3.0-only"),
         source: "generator",
         confidence: "exact",
       },
@@ -3930,21 +3957,21 @@ describe("renderMarkdown — Target compatibility section", () => {
       suppressedWorkspaces: [],
       verdicts: [
         {
-          purl: "pkg:npm/boundary-pkg@1.0.0",
+          purl: asPurl("pkg:npm/boundary-pkg@1.0.0"),
           occurrenceTarget: "apps/a",
           status: "warn",
           rule: "target:boundary",
           reason: "weak copyleft under a proprietary target",
         },
         {
-          purl: "pkg:npm/residual-pkg@1.0.0",
+          purl: asPurl("pkg:npm/residual-pkg@1.0.0"),
           occurrenceTarget: "apps/a",
           status: "warn",
           rule: "target:unknown-pair",
           reason: "no vetted compatibility data",
         },
         {
-          purl: "pkg:npm/dev-downgraded-pkg@1.0.0",
+          purl: asPurl("pkg:npm/dev-downgraded-pkg@1.0.0"),
           occurrenceTarget: "apps/a",
           status: "warn",
           rule: "target:incompatible",
@@ -3964,13 +3991,13 @@ describe("renderMarkdown — Target compatibility section", () => {
 
   test("held-for-internal-use list rows every target:internal-use verdict", () => {
     const heldPkg = entry({
-      purl: "pkg:npm/held-pkg@1.0.0",
+      purl: asPurl("pkg:npm/held-pkg@1.0.0"),
       name: "held-pkg",
       version: "1.0.0",
-      licenseClaims: [{ raw: "GPL-3.0-only", kind: "spdx-id", source: "generator" }],
+      licenseClaims: [{ raw: asRawLicense("GPL-3.0-only"), kind: "spdx-id", source: "generator" }],
       finding: {
-        expression: "GPL-3.0-only",
-        elected: "GPL-3.0-only",
+        expression: canon("GPL-3.0-only"),
+        elected: canon("GPL-3.0-only"),
         source: "generator",
         confidence: "exact",
       },
@@ -3980,7 +4007,7 @@ describe("renderMarkdown — Target compatibility section", () => {
       suppressedWorkspaces: [],
       verdicts: [
         {
-          purl: "pkg:npm/held-pkg@1.0.0",
+          purl: asPurl("pkg:npm/held-pkg@1.0.0"),
           occurrenceTarget: "apps/a",
           status: "ok",
           rule: "target:internal-use",
@@ -3997,17 +4024,17 @@ describe("renderMarkdown — Target compatibility section", () => {
 
   test("Problematic dedup applies to the flagged table only - a fail at one occurrence never suppresses a held-internal row at a DIFFERENT occurrence of the same purl", () => {
     const dedupedPkg = entry({
-      purl: "pkg:npm/deduped-pkg@1.0.0",
+      purl: asPurl("pkg:npm/deduped-pkg@1.0.0"),
       name: "deduped-pkg",
       version: "1.0.0",
       occurrences: [
         { target: "apps/a", isDevDependency: false },
         { target: "apps/b", isDevDependency: false },
       ],
-      licenseClaims: [{ raw: "GPL-3.0-only", kind: "spdx-id", source: "generator" }],
+      licenseClaims: [{ raw: asRawLicense("GPL-3.0-only"), kind: "spdx-id", source: "generator" }],
       finding: {
-        expression: "GPL-3.0-only",
-        elected: "GPL-3.0-only",
+        expression: canon("GPL-3.0-only"),
+        elected: canon("GPL-3.0-only"),
         source: "generator",
         confidence: "exact",
       },
@@ -4017,14 +4044,14 @@ describe("renderMarkdown — Target compatibility section", () => {
       suppressedWorkspaces: [],
       verdicts: [
         {
-          purl: "pkg:npm/deduped-pkg@1.0.0",
+          purl: asPurl("pkg:npm/deduped-pkg@1.0.0"),
           occurrenceTarget: "apps/a",
           status: "fail",
           rule: "target:incompatible",
           reason: "incompatible",
         },
         {
-          purl: "pkg:npm/deduped-pkg@1.0.0",
+          purl: asPurl("pkg:npm/deduped-pkg@1.0.0"),
           occurrenceTarget: "apps/b",
           status: "ok",
           rule: "target:internal-use",

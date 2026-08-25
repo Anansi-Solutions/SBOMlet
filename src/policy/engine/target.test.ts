@@ -4,6 +4,7 @@
  * models are hand-built CanonicalDependencies since these builders never touch a real SBOM.
  */
 import { describe, expect, test } from "bun:test";
+import { asPurl } from "../../../test/brandTestSupport";
 
 import { parsePolicy } from "../parse/parse";
 import {
@@ -15,7 +16,7 @@ import type { CanonicalDependencies, PackageEntry } from "../../model/dependenci
 
 function pkg(purl: string, targets: readonly string[]): PackageEntry {
   return {
-    purl,
+    purl: asPurl(purl),
     name: purl,
     version: "1.0.0",
     scope: "app",

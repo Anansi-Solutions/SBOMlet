@@ -37,6 +37,7 @@ import {
   osMultiSpec,
   type PackageSpec,
 } from "../../../test/policyTestSupport";
+import { asRawLicense, canon, widen, asPurl } from "../../../test/brandTestSupport";
 import { AGPL_IDS, COPYLEFT_IDS } from "./copyleft";
 import { denyRuleFor } from "./deny";
 import {
@@ -505,7 +506,7 @@ describe("evaluate — CR-01 copyleft families reach default:copyleft", () => {
 
 describe("evaluate — copyleft dominates a permissive sibling end-to-end (C2/W2)", () => {
   const multi = (name: string, claims: ReadonlyArray<string>): PackageSpec => ({
-    purl: `pkg:npm/${name}@1.0.0`,
+    purl: asPurl(`pkg:npm/${name}@1.0.0`),
     name,
     version: "1.0.0",
     claims,
@@ -642,7 +643,7 @@ describe("evaluate — imprecise findings route to a safe lane", () => {
     const model: CanonicalDependencies = {
       packages: [
         {
-          purl: "pkg:pypi/imp@1.0.0",
+          purl: asPurl("pkg:pypi/imp@1.0.0"),
           name: "imp",
           version: "1.0.0",
           occurrences: [{ target: "backend", isDevDependency: false }],
@@ -750,7 +751,7 @@ describe("evaluate — LicenseRef acceptance for commercial clarifies (A4/P-05)"
       'comment = "system-scoped commercial jar; the vendor agreement governs, not a public license"',
     ].join("\n");
     const spec: PackageSpec = {
-      purl: "pkg:maven/com.example.vendor/proprietary-reporting-engine@9.0.0",
+      purl: asPurl("pkg:maven/com.example.vendor/proprietary-reporting-engine@9.0.0"),
       name: "proprietary-reporting-engine",
       version: "9.0.0",
       claims: [], // the honest unknown: no registry presence, no POM license
@@ -758,7 +759,7 @@ describe("evaluate — LicenseRef acceptance for commercial clarifies (A4/P-05)"
     };
     const { verdicts, usedClarifyIndices, policy } = runEngine([spec], policyText);
 
-    expect(policy.clarify[0]?.expression).toBe("LicenseRef-commercial-vendor-agreement");
+    expect(widen(policy.clarify[0]?.expression)).toBe("LicenseRef-commercial-vendor-agreement");
     expect(usedClarifyIndices.has(0)).toBe(true);
     expect(verdicts[0].status).toBe("ok");
     expect(verdicts[0].rule).toBe("clarify[0]");
@@ -776,7 +777,7 @@ describe("evaluate — LicenseRef acceptance for commercial clarifies (A4/P-05)"
       'comment = "dual: a proprietary ref or MIT, whichever the consumer prefers"',
     ].join("\n");
     const spec: PackageSpec = {
-      purl: "pkg:maven/com.example/dual-ref-pkg@1.0.0",
+      purl: asPurl("pkg:maven/com.example/dual-ref-pkg@1.0.0"),
       name: "dual-ref-pkg",
       version: "1.0.0",
       claims: [],
@@ -792,7 +793,7 @@ describe("evaluate — LicenseRef acceptance for commercial clarifies (A4/P-05)"
   });
 
   test("normalizeRaw NEVER mints a LicenseRef from free text — a commercial-sounding raw name stays an honest unknown, not a guessed LicenseRef", () => {
-    const result = normalizeRaw("Commercial License Agreement");
+    const result = normalizeRaw(asRawLicense("Commercial License Agreement"));
 
     expect(result.expression).toBeNull();
   });
@@ -854,7 +855,7 @@ describe("evaluate — an unassessed LicenseRef never reaches default:ok (silent
 describe("evaluate — staleness-guarded overrides", () => {
   test("a tool-level override that decides a verdict cites override:builtin[i], not default:ok", () => {
     const builtins: BuiltinOverrideInput[] = [
-      { name: "ipython", detected: { registry: "BSD" }, expression: "BSD-3-Clause" },
+      { name: "ipython", detected: { registry: "BSD" }, expression: canon("BSD-3-Clause") },
     ];
     const { verdicts } = runEngine([pkgSpec("ipython", "BSD", ["backend"])], "", builtins);
 
@@ -866,7 +867,7 @@ describe("evaluate — staleness-guarded overrides", () => {
 
   test("HEADLINE: a stale BSD→BSD-3-Clause override on a now-GPL-3.0 dep FAILS naming pkg/expected/observed", () => {
     const builtins: BuiltinOverrideInput[] = [
-      { name: "relicensed", detected: { registry: "BSD" }, expression: "BSD-3-Clause" },
+      { name: "relicensed", detected: { registry: "BSD" }, expression: canon("BSD-3-Clause") },
     ];
     const { verdicts } = runEngine(
       [pkgSpec("relicensed", "GPL-3.0-only", ["backend"])],
@@ -891,7 +892,7 @@ describe("evaluate — staleness-guarded overrides", () => {
       'expression = "MIT"',
     ].join("\n");
     const spec: PackageSpec = {
-      purl: "pkg:npm/proprietary-slipped-in@1.0.0",
+      purl: asPurl("pkg:npm/proprietary-slipped-in@1.0.0"),
       name: "proprietary-slipped-in",
       version: "1.0.0",
       claims: ["MIT", "UNLICENSED"],
@@ -932,7 +933,7 @@ describe("evaluate — staleness-guarded overrides", () => {
       'comment = "project says MIT"',
     ].join("\n");
     const builtins: BuiltinOverrideInput[] = [
-      { name: "ipython", detected: { registry: "BSD" }, expression: "BSD-3-Clause" },
+      { name: "ipython", detected: { registry: "BSD" }, expression: canon("BSD-3-Clause") },
     ];
     const { verdicts } = runEngine([pkgSpec("ipython", "BSD", ["backend"])], policyText, builtins);
 
@@ -953,7 +954,7 @@ describe("evaluate — staleness-guarded overrides", () => {
     // signal, but the observed precise license already satisfies the asserted
     // BSD-3-Clause — nothing is masked, so the gate must NOT fire override:stale.
     const builtins: BuiltinOverrideInput[] = [
-      { name: "ipython", detected: { registry: "BSD" }, expression: "BSD-3-Clause" },
+      { name: "ipython", detected: { registry: "BSD" }, expression: canon("BSD-3-Clause") },
     ];
     const { verdicts } = runEngine([pkgSpec("ipython", "BSD-3-Clause", ["backend"])], "", builtins);
 
@@ -965,7 +966,7 @@ describe("evaluate — staleness-guarded overrides", () => {
     // The recorded "BSD" is absent AND the observed precise license (MIT) does
     // not satisfy the asserted BSD-3-Clause → genuine drift → must fail closed.
     const builtins: BuiltinOverrideInput[] = [
-      { name: "relicensed", detected: { registry: "BSD" }, expression: "BSD-3-Clause" },
+      { name: "relicensed", detected: { registry: "BSD" }, expression: canon("BSD-3-Clause") },
     ];
     const { verdicts } = runEngine([pkgSpec("relicensed", "MIT", ["backend"])], "", builtins);
 
@@ -978,7 +979,7 @@ describe("evaluate — staleness-guarded overrides", () => {
       {
         name: "or-expression-pkg",
         detected: { registry: "MIT" },
-        expression: "MIT OR Apache-2.0",
+        expression: canon("MIT OR Apache-2.0"),
       },
     ];
     const { verdicts } = runEngine(
@@ -989,7 +990,7 @@ describe("evaluate — staleness-guarded overrides", () => {
 
     expect(verdicts[0].status).toBe("ok");
     expect(verdicts[0].rule).toBe("override:builtin[0]");
-    expect(verdicts[0].reason).toContain("MIT OR Apache-2.0");
+    expect(verdicts[0].reason).toContain(widen(canon("MIT OR Apache-2.0")));
   });
 });
 
@@ -1766,7 +1767,7 @@ describe("AGPL acceptance corpus", () => {
     const { verdicts } = runEngine(
       [
         {
-          purl: "pkg:npm/%40scratch/scratch-vm@11.6.0-react-18",
+          purl: asPurl("pkg:npm/%40scratch/scratch-vm@11.6.0-react-18"),
           name: "@scratch/scratch-vm",
           version: "11.6.0-react-18",
           claims: ["AGPL-3.0-only"],
@@ -1787,7 +1788,7 @@ describe("AGPL acceptance corpus", () => {
     const { verdicts } = runEngine(
       [
         {
-          purl: "pkg:npm/%40scratch/scratch-vm@11.6.0-react-18",
+          purl: asPurl("pkg:npm/%40scratch/scratch-vm@11.6.0-react-18"),
           name: "@scratch/scratch-vm",
           version: "11.6.0-react-18",
           claims: ["AGPL-3.0-only"],
@@ -1812,7 +1813,7 @@ describe("AGPL acceptance corpus", () => {
     const { verdicts } = runEngine(
       [
         {
-          purl: "pkg:npm/%40img/sharp-libvips-linux-x64@1.2.4",
+          purl: asPurl("pkg:npm/%40img/sharp-libvips-linux-x64@1.2.4"),
           name: "@img/sharp-libvips-linux-x64",
           version: "1.2.4",
           claims: ["LGPL-3.0-or-later"],
@@ -1834,7 +1835,7 @@ describe("AGPL acceptance corpus", () => {
   // compatible(package) rule flips ALL occurrences to ok.
   test("sharp-win32-x64 shape: AND cannot avoid copyleft; a package rule flips all occurrences ok", () => {
     const spec: PackageSpec = {
-      purl: "pkg:npm/%40img/sharp-win32-x64@0.34.5",
+      purl: asPurl("pkg:npm/%40img/sharp-win32-x64@0.34.5"),
       name: "@img/sharp-win32-x64",
       version: "0.34.5",
       claims: ["Apache-2.0 AND LGPL-3.0-or-later"],
@@ -1874,7 +1875,7 @@ describe("AGPL acceptance corpus", () => {
     const { verdicts } = runEngine(
       [
         {
-          purl: "pkg:npm/dompurify@3.1.6",
+          purl: asPurl("pkg:npm/dompurify@3.1.6"),
           name: "dompurify",
           version: "3.1.6",
           claims: ["(MPL-2.0 OR Apache-2.0)"],
@@ -1897,7 +1898,7 @@ describe("AGPL acceptance corpus", () => {
   // occurrence of the same would still fail — covered by the dev-scope suite above.
   test("jsonify shape: garbage claim is governed by the unknown knob (dev-downgraded under fail)", () => {
     const spec: PackageSpec = {
-      purl: "pkg:npm/jsonify@0.0.1",
+      purl: asPurl("pkg:npm/jsonify@0.0.1"),
       name: "jsonify",
       version: "0.0.1",
       claims: ["Public Domain"],
@@ -2107,7 +2108,7 @@ describe("evaluate — precedence is preserved (downgrade is last)", () => {
     // The load-bearing precedence guard: a stale override is a compliance gate
     // failure that must NEVER be dev-downgraded.
     const builtins: BuiltinOverrideInput[] = [
-      { name: "relicensed", detected: { registry: "BSD" }, expression: "BSD-3-Clause" },
+      { name: "relicensed", detected: { registry: "BSD" }, expression: canon("BSD-3-Clause") },
     ];
     const { verdicts } = runEngine(
       [pkgSpec("relicensed", "GPL-3.0-only", [{ target: "apps/a", dev: true }])],
@@ -2222,7 +2223,7 @@ describe("evaluate — deny is terminal-0 (beats every accept lever)", () => {
     // The package carries a stale builtin override (recorded BSD, observes
     // BUSL-1.1) AND the observed license is denied → deny wins over stale.
     const builtins: BuiltinOverrideInput[] = [
-      { name: "relicensed", detected: { registry: "BSD" }, expression: "BSD-3-Clause" },
+      { name: "relicensed", detected: { registry: "BSD" }, expression: canon("BSD-3-Clause") },
     ];
     const { verdicts } = runEngine(
       [pkgSpec("relicensed", "BUSL-1.1", ["backend"])],
@@ -2306,7 +2307,7 @@ describe("evaluate — deny is terminal OVER OVERRIDES (C#1: deny reads the pre-
       {
         name: "relicensed-evil",
         detected: { registry: "BUSL-1.1" },
-        expression: "Apache-2.0",
+        expression: canon("Apache-2.0"),
       },
     ];
     const { verdicts } = runEngine(
@@ -2704,7 +2705,7 @@ describe("evaluate — os-scope partial finding", () => {
     // FAILS as unknown — a partial finding never licenses an app row to a clean
     // expression.
     const appMixed: PackageSpec = {
-      purl: "pkg:npm/app-mixed@1.0.0",
+      purl: asPurl("pkg:npm/app-mixed@1.0.0"),
       name: "app-mixed",
       version: "1.0.0",
       claims: ["GPL-2.0-only", "custom"],
@@ -2966,7 +2967,7 @@ describe("evaluate — accepted-AGPL container notices (acceptedContainerNotices
 
     expect(notices).toHaveLength(1);
     expect(notices[0]).toMatchObject({
-      purl: "pkg:deb/debian/agpl-os-notice@1.0.0",
+      purl: asPurl("pkg:deb/debian/agpl-os-notice@1.0.0"),
       name: "agpl-os-notice",
       version: "1.0.0",
       license: "AGPL-3.0-only",
@@ -3000,7 +3001,7 @@ describe("evaluate — accepted-AGPL container notices (acceptedContainerNotices
 
     expect(notices).toHaveLength(1);
     expect(notices[0]).toMatchObject({
-      purl: "pkg:apk/alpine/agpl-ish-notice@1.0.0",
+      purl: asPurl("pkg:apk/alpine/agpl-ish-notice@1.0.0"),
       license: "AGPL",
       targets: [NOTICE_TARGET],
       rule: "compatible[0]",
@@ -3091,7 +3092,7 @@ describe("evaluate — accepted-AGPL container notices (acceptedContainerNotices
     const notices2 = acceptedContainerNotices(model, verdicts);
 
     expect(notices1).toEqual(notices2);
-    expect(notices1.map((n) => n.purl)).toEqual([
+    expect(widen(notices1.map((n) => n.purl))).toEqual([
       "pkg:deb/debian/alpha-agpl@1.0.0",
       "pkg:deb/debian/zeta-agpl@1.0.0",
     ]);
@@ -3414,7 +3415,7 @@ describe("evaluate — a clarify entry the current signal disproves", () => {
         {
           name: "choice-lib",
           detected: { registry: "MIT OR Apache-2.0", intensive: "MIT" },
-          expression: "MIT OR Apache-2.0",
+          expression: canon("MIT OR Apache-2.0"),
         },
       ],
     );
@@ -3564,7 +3565,7 @@ describe("evaluate — the clarifications file's own citation space", () => {
   });
 
   test("an imported citation is not read as a [[compatible]] acceptance of an AGPL obligation", () => {
-    const purl = "pkg:deb/debian/agpl-imported@1.0.0";
+    const purl = asPurl("pkg:deb/debian/agpl-imported@1.0.0");
     const target = "docker:img/Dockerfile";
     const model = annotateFindings(
       makeModel([osPkgSpec(purl, "agpl-imported", "AGPL-3.0-only", [target])]),

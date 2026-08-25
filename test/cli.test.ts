@@ -49,6 +49,7 @@ import { sanitizeForLog, writePolicySummary } from "../src/pipeline/summary";
 import { parsePolicy } from "../src/policy/parse/parse";
 import { MAX_BUN_LOCK_BYTES } from "../src/collectors/bunLock";
 import * as cdxgenModule from "../src/collectors/cdxgen";
+import { asPurl, widen } from "./brandTestSupport";
 import type { VerifyCacheResult } from "../src/pipeline/verifyCache";
 import type { Verdict } from "../src/model/dependencies";
 
@@ -406,7 +407,7 @@ describe("sanitizeForLog — stderr injection boundary", () => {
 
 describe("writePolicySummary — imprecise count line", () => {
   const impreciseVerdict = (rule: string): Verdict => ({
-    purl: "pkg:pypi/imp@1.0.0",
+    purl: asPurl("pkg:pypi/imp@1.0.0"),
     occurrenceTarget: "apps/jupyter",
     status: "warn",
     rule,
@@ -435,7 +436,7 @@ describe("writePolicySummary — imprecise count line", () => {
   test("no imprecise line is printed when there are no imprecise verdicts", async () => {
     const verdicts: Verdict[] = [
       {
-        purl: "pkg:npm/x@1.0.0",
+        purl: asPurl("pkg:npm/x@1.0.0"),
         occurrenceTarget: "proj",
         status: "ok",
         rule: "default:ok",
@@ -453,7 +454,7 @@ describe("writePolicySummary — imprecise count line", () => {
 
 describe("writePolicySummary — assessment conflict count line", () => {
   const conflictVerdict = (purl: string): Verdict => ({
-    purl,
+    purl: asPurl(purl),
     occurrenceTarget: "apps/synthetic",
     status: "fail",
     rule: "conflict:scancode",
@@ -481,7 +482,7 @@ describe("writePolicySummary — assessment conflict count line", () => {
   test("no conflict line is printed when there are no conflict verdicts", async () => {
     const verdicts: Verdict[] = [
       {
-        purl: "pkg:npm/x@1.0.0",
+        purl: asPurl("pkg:npm/x@1.0.0"),
         occurrenceTarget: "proj",
         status: "ok",
         rule: "default:ok",
@@ -500,11 +501,11 @@ describe("resolveFrom — base-dir path anchoring (CR-01)", () => {
   test("relative paths join the base; absolute paths pass through; absent base degrades to cwd", () => {
     const base = tmpdir();
 
-    expect(resolveFrom(base, "policy.toml")).toBe(join(base, "policy.toml"));
+    expect(widen(resolveFrom(base, "policy.toml"))).toBe(join(base, "policy.toml"));
     const absolute = join(base, "abs.md");
 
-    expect(resolveFrom(base, absolute)).toBe(absolute);
-    expect(resolveFrom(undefined, "x.md")).toBe(resolve(process.cwd(), "x.md"));
+    expect(widen(resolveFrom(base, absolute))).toBe(absolute);
+    expect(widen(resolveFrom(undefined, "x.md"))).toBe(resolve(process.cwd(), "x.md"));
   });
 });
 
@@ -515,7 +516,7 @@ describe("resolveContained — a policy path resolved outside its anchor is refu
     expect(resolveContained(base, "policy/clarifications.toml", "clarifications")).toBe(
       resolveFrom(base, "policy/clarifications.toml"),
     );
-    expect(resolveContained(base, ".", "clarifications")).toBe(resolve(base));
+    expect(widen(resolveContained(base, ".", "clarifications"))).toBe(resolve(base));
   });
 
   test("a path resolving above the anchor throws, naming the field and the resolved path", () => {
@@ -559,7 +560,7 @@ describe("resolveContained — a policy path resolved outside its anchor is refu
     mkdirSync(real);
     symlinkSync(real, linked, "junction");
 
-    expect(resolveContained(linked, "clarifications.toml", "clarifications")).toBe(
+    expect(widen(resolveContained(linked, "clarifications.toml", "clarifications"))).toBe(
       join(linked, "clarifications.toml"),
     );
   });
@@ -824,18 +825,18 @@ const FIXTURE_SBOM = {
   specVersion: "1.6",
   components: [
     {
-      purl: "pkg:npm/copyleft-lib@1.0.0",
+      purl: asPurl("pkg:npm/copyleft-lib@1.0.0"),
       name: "copyleft-lib",
       version: "1.0.0",
       licenses: [{ license: { id: "AGPL-3.0-only" } }],
     },
     {
-      purl: "pkg:npm/no-claims@2.0.0",
+      purl: asPurl("pkg:npm/no-claims@2.0.0"),
       name: "no-claims",
       version: "2.0.0",
     },
     {
-      purl: "pkg:npm/mit-lib@3.0.0",
+      purl: asPurl("pkg:npm/mit-lib@3.0.0"),
       name: "mit-lib",
       version: "3.0.0",
       licenses: [{ license: { id: "MIT" } }],
@@ -1041,7 +1042,7 @@ describe("runGenerate --policy", () => {
 
     // ...and the fail verdict is visible on stderr.
     expect(stderr).toContain("policy fail:");
-    expect(stderr).toContain("pkg:npm/copyleft-lib@1.0.0");
+    expect(stderr).toContain(asPurl("pkg:npm/copyleft-lib@1.0.0"));
   });
 
   test("Test 3: stderr summary — counts line, per-fail/warn lines, unused-entry warnings", async () => {
@@ -1325,7 +1326,7 @@ const EXTENDED_FIXTURE_SBOM = {
   components: [
     ...FIXTURE_SBOM.components,
     {
-      purl: "pkg:npm/apache-lib@4.0.0",
+      purl: asPurl("pkg:npm/apache-lib@4.0.0"),
       name: "apache-lib",
       version: "4.0.0",
       // Named raw, not an SPDX id: the normalizer maps it to "Apache-2.0".
@@ -1493,10 +1494,10 @@ describe("buildOutputs and the generate output set", () => {
   test("Test 5: --notices default path, explicit-path precedence, and absent --cyclonedx", async () => {
     // (a) Default --notices path: THIRD_PARTY_NOTICES.md in the same directory
     // as the output path — main()'s computation helper.
-    expect(defaultNoticesPath(join("some", "dir", "THIRD_PARTY_LICENSES.md"))).toBe(
+    expect(widen(defaultNoticesPath(join("some", "dir", "THIRD_PARTY_LICENSES.md")))).toBe(
       join("some", "dir", "THIRD_PARTY_NOTICES.md"),
     );
-    expect(defaultNoticesPath("THIRD_PARTY_LICENSES.md")).toBe("THIRD_PARTY_NOTICES.md");
+    expect(widen(defaultNoticesPath("THIRD_PARTY_LICENSES.md"))).toBe("THIRD_PARTY_NOTICES.md");
 
     // (b) An explicit notices path wins: the companion lands exactly there,
     // and with --cyclonedx absent no export file is created anywhere.
@@ -1728,14 +1729,14 @@ const DEV_ONLY_COPYLEFT_SBOM = {
   specVersion: "1.6",
   components: [
     {
-      purl: "pkg:npm/copyleft-lib@1.0.0",
+      purl: asPurl("pkg:npm/copyleft-lib@1.0.0"),
       name: "copyleft-lib",
       version: "1.0.0",
       licenses: [{ license: { id: "AGPL-3.0-only" } }],
       properties: [DEV_PROP],
     },
     {
-      purl: "pkg:npm/mit-lib@3.0.0",
+      purl: asPurl("pkg:npm/mit-lib@3.0.0"),
       name: "mit-lib",
       version: "3.0.0",
       licenses: [{ license: { id: "MIT" } }],
@@ -1749,13 +1750,13 @@ const PROD_COPYLEFT_SBOM = {
   specVersion: "1.6",
   components: [
     {
-      purl: "pkg:npm/copyleft-lib@1.0.0",
+      purl: asPurl("pkg:npm/copyleft-lib@1.0.0"),
       name: "copyleft-lib",
       version: "1.0.0",
       licenses: [{ license: { id: "AGPL-3.0-only" } }],
     },
     {
-      purl: "pkg:npm/mit-lib@3.0.0",
+      purl: asPurl("pkg:npm/mit-lib@3.0.0"),
       name: "mit-lib",
       version: "3.0.0",
       licenses: [{ license: { id: "MIT" } }],
@@ -2571,7 +2572,7 @@ describe("reportVerifyCache — the scancode memo line", () => {
         audited: 1,
         mismatches: [
           {
-            purl: "pkg:npm/foo@1.0.0",
+            purl: asPurl("pkg:npm/foo@1.0.0"),
             cached: "MIT",
             current: "GPL-3.0-only",
             reason: "license changed since the cache was written",
@@ -2599,13 +2600,13 @@ const TWO_VERSION_SBOM = {
   specVersion: "1.6",
   components: [
     {
-      purl: "pkg:npm/dual-lib@1.0.0",
+      purl: asPurl("pkg:npm/dual-lib@1.0.0"),
       name: "dual-lib",
       version: "1.0.0",
       licenses: [{ license: { id: "MIT" } }],
     },
     {
-      purl: "pkg:npm/dual-lib@2.0.0",
+      purl: asPurl("pkg:npm/dual-lib@2.0.0"),
       name: "dual-lib",
       version: "2.0.0",
       licenses: [{ license: { id: "MIT" } }],

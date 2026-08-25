@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
+import { asRawLicense, widen } from "../../test/brandTestSupport";
 import { narrowGithubLicense } from "../validate/registry";
 import { githubLicenseRefsFor, githubRepoFor, resolveGithubLicense } from "./github";
 
@@ -21,7 +22,7 @@ describe("githubRepoFor — repo-name derivation from the registry convention", 
 
     expect(target?.owner).toBe("hashicorp");
     expect(target?.repo).toBe("terraform-provider-aws");
-    expect(target?.raw).toBe("github.com/hashicorp/terraform-provider-aws");
+    expect(widen(target?.raw)).toBe("github.com/hashicorp/terraform-provider-aws");
   });
 
   test("provider integrations/github → integrations/terraform-provider-github", () => {
@@ -40,7 +41,7 @@ describe("githubRepoFor — repo-name derivation from the registry convention", 
 
     expect(target?.owner).toBe("terraform-aws-modules");
     expect(target?.repo).toBe("terraform-aws-alb");
-    expect(target?.raw).toBe("github.com/terraform-aws-modules/terraform-aws-alb");
+    expect(widen(target?.raw)).toBe("github.com/terraform-aws-modules/terraform-aws-alb");
   });
 
   test("module provider segment drives the repo prefix, not the namespace string", () => {
@@ -100,7 +101,7 @@ describe("resolveGithubLicense — raw-only contract over an already-fetched bod
     const result = resolveGithubLicense(body);
 
     expect(result).toEqual({
-      raw: "MPL-2.0",
+      raw: asRawLicense("MPL-2.0"),
       via: "github-license",
       downloadUrl:
         "https://raw.githubusercontent.com/hashicorp/terraform-provider-aws/v6.42.0/LICENSE",
@@ -113,7 +114,7 @@ describe("resolveGithubLicense — raw-only contract over an already-fetched bod
       download_url: "https://example/LICENSE",
     });
 
-    expect(result?.raw).toBe("MIT");
+    expect(widen(result?.raw)).toBe("MIT");
     expect(result?.via).toBe("github-license");
   });
 
@@ -122,7 +123,7 @@ describe("resolveGithubLicense — raw-only contract over an already-fetched bod
       license: { spdx_id: "Apache-2.0" },
     });
 
-    expect(result?.raw).toBe("Apache-2.0");
+    expect(widen(result?.raw)).toBe("Apache-2.0");
     expect(result?.downloadUrl).toBeUndefined();
   });
 

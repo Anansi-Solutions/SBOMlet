@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { describe, expect, test } from "bun:test";
 
 import {
+  asRawLicense,
   DOCKER_IDENTITY_PREFIX,
   type CanonicalDependencies,
   type PackageEntry,
@@ -16,6 +17,7 @@ import { parsePolicy } from "../src/policy/parse/parse";
 import { alignTables } from "../src/render/alignTables";
 import { renderMarkdown, type PolicyView } from "../src/render/markdown";
 import { globToRegExp } from "../src/targets/discover";
+import { asPurl } from "./brandTestSupport";
 import type { Policy } from "../src/policy/schema";
 
 /** No scanned target in these scenarios is collected by a lane that derives a dependency graph. */
@@ -83,35 +85,35 @@ function entry(
 }
 
 const bash = entry({
-  purl: "pkg:deb/bash@5.2-6",
+  purl: asPurl("pkg:deb/bash@5.2-6"),
   name: "bash",
   version: "5.2-6",
   scope: "os",
   occurrences: [{ target: API_CONTAINER, isDevDependency: false }],
-  licenseClaims: [{ raw: "GPL-3.0-or-later", kind: "spdx-id", source: "generator" }],
+  licenseClaims: [{ raw: asRawLicense("GPL-3.0-or-later"), kind: "spdx-id", source: "generator" }],
 });
 
 const libc6 = entry({
-  purl: "pkg:deb/libc6@2.36-9",
+  purl: asPurl("pkg:deb/libc6@2.36-9"),
   name: "libc6",
   version: "2.36-9",
   scope: "os",
   occurrences: [{ target: API_CONTAINER, isDevDependency: false }],
-  licenseClaims: [{ raw: "LGPL-2.1-or-later", kind: "spdx-id", source: "generator" }],
+  licenseClaims: [{ raw: asRawLicense("LGPL-2.1-or-later"), kind: "spdx-id", source: "generator" }],
 });
 
 const coreutils = entry({
-  purl: "pkg:deb/coreutils@9.1-1",
+  purl: asPurl("pkg:deb/coreutils@9.1-1"),
   name: "coreutils",
   version: "9.1-1",
   scope: "os",
   occurrences: [{ target: API_CONTAINER, isDevDependency: false }],
-  licenseClaims: [{ raw: "GPL-3.0-or-later", kind: "spdx-id", source: "generator" }],
+  licenseClaims: [{ raw: asRawLicense("GPL-3.0-or-later"), kind: "spdx-id", source: "generator" }],
 });
 
 /** Shared across BOTH containers — must row in each container's subsection. */
 const zlib = entry({
-  purl: "pkg:deb/zlib1g@1.2.13-1",
+  purl: asPurl("pkg:deb/zlib1g@1.2.13-1"),
   name: "zlib1g",
   version: "1.2.13-1",
   scope: "os",
@@ -119,7 +121,7 @@ const zlib = entry({
     { target: API_CONTAINER, isDevDependency: false },
     { target: BUILD_CONTAINER, isDevDependency: false },
   ],
-  licenseClaims: [{ raw: "Zlib", kind: "spdx-id", source: "generator" }],
+  licenseClaims: [{ raw: asRawLicense("Zlib"), kind: "spdx-id", source: "generator" }],
 });
 
 /**
@@ -130,12 +132,12 @@ const zlib = entry({
  * container, opposite ecosystem).
  */
 const metricsDaemon = entry({
-  purl: "pkg:golang/metrics-daemon@1.2.0",
+  purl: asPurl("pkg:golang/metrics-daemon@1.2.0"),
   name: "metrics-daemon",
   version: "1.2.0",
   scope: "os",
   occurrences: [{ target: API_CONTAINER, isDevDependency: false }],
-  licenseClaims: [{ raw: "AGPL-3.0-only", kind: "spdx-id", source: "generator" }],
+  licenseClaims: [{ raw: asRawLicense("AGPL-3.0-only"), kind: "spdx-id", source: "generator" }],
 });
 
 /**
@@ -147,12 +149,12 @@ const metricsDaemon = entry({
  * purely because of ecosystem, not because of anything else in the fixture.
  */
 const diagTools = entry({
-  purl: "pkg:apk/diag-tools@3.0.1",
+  purl: asPurl("pkg:apk/diag-tools@3.0.1"),
   name: "diag-tools",
   version: "3.0.1",
   scope: "os",
   occurrences: [{ target: API_CONTAINER, isDevDependency: false }],
-  licenseClaims: [{ raw: "AGPL-3.0-only", kind: "spdx-id", source: "generator" }],
+  licenseClaims: [{ raw: asRawLicense("AGPL-3.0-only"), kind: "spdx-id", source: "generator" }],
 });
 
 /**
@@ -163,12 +165,12 @@ const diagTools = entry({
  * never in Problematic and never counted toward the copyleft warning total.
  */
 const licensedDaemon = entry({
-  purl: "pkg:deb/licensed-daemon@2.1.0",
+  purl: asPurl("pkg:deb/licensed-daemon@2.1.0"),
   name: "licensed-daemon",
   version: "2.1.0",
   scope: "os",
   occurrences: [{ target: API_CONTAINER, isDevDependency: false }],
-  licenseClaims: [{ raw: "AGPL-3.0-only", kind: "spdx-id", source: "generator" }],
+  licenseClaims: [{ raw: asRawLicense("AGPL-3.0-only"), kind: "spdx-id", source: "generator" }],
 });
 
 /**
@@ -178,14 +180,14 @@ const licensedDaemon = entry({
  * the same kind of special notice as the precise case.
  */
 const licensedRelay = entry({
-  purl: "pkg:apk/licensed-relay@1.0.0",
+  purl: asPurl("pkg:apk/licensed-relay@1.0.0"),
   name: "licensed-relay",
   version: "1.0.0",
   scope: "os",
   occurrences: [{ target: API_CONTAINER, isDevDependency: false }],
   licenseClaims: [
     {
-      raw: "GNU Affero General Public License",
+      raw: asRawLicense("GNU Affero General Public License"),
       kind: "name",
       source: "generator",
     },
@@ -198,14 +200,14 @@ const licensedRelay = entry({
  * default:agpl-container rule as the precise case (impreciseVerdict).
  */
 const relayAgent = entry({
-  purl: "pkg:golang/relay-agent@0.4.0",
+  purl: asPurl("pkg:golang/relay-agent@0.4.0"),
   name: "relay-agent",
   version: "0.4.0",
   scope: "os",
   occurrences: [{ target: BUILD_CONTAINER, isDevDependency: false }],
   licenseClaims: [
     {
-      raw: "GNU Affero General Public License",
+      raw: asRawLicense("GNU Affero General Public License"),
       kind: "name",
       source: "generator",
     },
@@ -221,12 +223,12 @@ const relayAgent = entry({
  * Copyleft and special notices section, not the Imprecise review section.
  */
 const cacheRelay = entry({
-  purl: "pkg:pypi/cache-relay@0.9.0",
+  purl: asPurl("pkg:pypi/cache-relay@0.9.0"),
   name: "cache-relay",
   version: "0.9.0",
   scope: "os",
   occurrences: [{ target: BUILD_CONTAINER, isDevDependency: false }],
-  licenseClaims: [{ raw: "AGPL-3.0-only", kind: "spdx-id", source: "generator" }],
+  licenseClaims: [{ raw: asRawLicense("AGPL-3.0-only"), kind: "spdx-id", source: "generator" }],
 });
 
 /**
@@ -234,7 +236,7 @@ const cacheRelay = entry({
  * introduction path, so it exercises the Why-cell provenance rendering too.
  */
 const chartRender = entry({
-  purl: "pkg:npm/chart-render@2.3.1",
+  purl: asPurl("pkg:npm/chart-render@2.3.1"),
   name: "chart-render",
   version: "2.3.1",
   occurrences: [
@@ -252,16 +254,16 @@ const chartRender = entry({
       },
     },
   ],
-  licenseClaims: [{ raw: "LGPL-3.0-or-later", kind: "spdx-id", source: "generator" }],
+  licenseClaims: [{ raw: asRawLicense("LGPL-3.0-or-later"), kind: "spdx-id", source: "generator" }],
 });
 
 /** App-level dev-only copyleft warn — the obligation that must stay in Copyleft. */
 const docGen = entry({
-  purl: "pkg:npm/doc-gen@1.0.0",
+  purl: asPurl("pkg:npm/doc-gen@1.0.0"),
   name: "doc-gen",
   version: "1.0.0",
   occurrences: [{ target: APP_TARGET, isDevDependency: true }],
-  licenseClaims: [{ raw: "LGPL-2.1-or-later", kind: "spdx-id", source: "generator" }],
+  licenseClaims: [{ raw: asRawLicense("LGPL-2.1-or-later"), kind: "spdx-id", source: "generator" }],
 });
 
 const rawModel: CanonicalDependencies = {
@@ -488,7 +490,7 @@ describe("containerReport — multi-container golden scenario", () => {
       const verdicts = evaluate(scoped, policy, WITHOUT_DEPENDENCY_GRAPHS);
       const notices = acceptedContainerNotices(scoped, verdicts);
 
-      // Sorted by purl: "pkg:apk/..." < "pkg:deb/..." (apk before deb).
+      // Sorted by purl: asPurl("pkg:apk/...") < "pkg:deb/..." (apk before deb).
       expect(notices.map((n) => n.name)).toEqual(["licensed-relay", "licensed-daemon"]);
       expect(notices.every((n) => n.rule.startsWith("compatible["))).toBe(true);
     });

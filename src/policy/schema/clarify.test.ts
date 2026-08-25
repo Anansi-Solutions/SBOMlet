@@ -6,6 +6,7 @@ import {
   DEMO_CLARIFY,
   clarifyWithout,
 } from "../../../test/policyTestSupport";
+import { canon } from "../../../test/brandTestSupport";
 import { JUSTIFICATION_VALUES } from "./clarify";
 
 describe("parsePolicy — the [[clarify]] package selector", () => {
@@ -19,7 +20,7 @@ describe("parsePolicy — the [[clarify]] package selector", () => {
         version: "1.0.0",
         detected: { registry: "BSD" },
         justification: "scan-more-precise",
-        expression: "BSD-3-Clause",
+        expression: canon("BSD-3-Clause"),
       },
     ]);
   });

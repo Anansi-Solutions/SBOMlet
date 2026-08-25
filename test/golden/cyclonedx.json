@@ -21,7 +21,7 @@
       "bom-ref": "pkg:npm/expr-pkg@3.0.0",
       "licenses": [
         {
-          "expression": "MIT OR Apache-2.0"
+          "expression": "Apache-2.0 OR MIT"
         }
       ],
       "properties": [

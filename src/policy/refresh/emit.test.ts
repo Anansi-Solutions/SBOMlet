@@ -52,7 +52,7 @@ describe("emitClarifications", () => {
       'version = "2.1.1"',
       'detected = { registry = "(MIT AND CC-BY-3.0)", intensive = "MIT" }',
       'justification = "declared-more-complete"',
-      'expression = "(MIT AND CC-BY-3.0)"',
+      'expression = "CC-BY-3.0 AND MIT"',
       'evidence = [ "LICENSE", "https://example.invalid/notice" ]',
       'comment = "The scan read only the root LICENSE — café, naïve, 日本語."',
       "",

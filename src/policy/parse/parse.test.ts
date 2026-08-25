@@ -15,6 +15,7 @@ import {
   denyNameFixture,
   developmentFixture,
 } from "../../../test/policyTestSupport";
+import { canon } from "../../../test/brandTestSupport";
 import { parsePolicy } from "./parse";
 
 describe("parsePolicy — happy path", () => {
@@ -55,7 +56,7 @@ describe("parsePolicy — happy path", () => {
         version: "0.0.1",
         detected: { registry: "Public Domain", intensive: false },
         justification: "license-not-found",
-        expression: "Unlicense",
+        expression: canon("Unlicense"),
         comment: CLARIFY_COMMENT,
       },
     ]);

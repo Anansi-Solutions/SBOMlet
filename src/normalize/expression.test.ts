@@ -7,6 +7,7 @@ import satisfies from "spdx-satisfies";
 
 import { COPYLEFT_IDS } from "../policy/engine/copyleft";
 import { denyRuleFor } from "../policy/engine/deny";
+import { asRawLicense, widen } from "../../test/brandTestSupport";
 import {
   canonicalizeExpression,
   elect,
@@ -209,7 +210,7 @@ describe("spdx-satisfies allowlist-entry edge (agreement-test substrate)", () =>
 /** Reparses cleanly, and canonicalizing the output again changes nothing. */
 function assertRoundTripAndIdempotent(output: string): void {
   expect(() => parse(output)).not.toThrow();
-  expect(canonicalizeExpression(output)).toBe(output);
+  expect(widen(canonicalizeExpression(asRawLicense(output)))).toBe(output);
 }
 
 describe("canonicalizeExpression — conservative boolean-algebra simplification", () => {
@@ -217,80 +218,84 @@ describe("canonicalizeExpression — conservative boolean-algebra simplification
     const noisy =
       "(MIT AND OFL-1.1 AND CC-BY-4.0) AND (CC-BY-4.0 OR CC-BY-3.0) AND " +
       "(OFL-1.1 AND (CC-BY-4.0 AND OFL-1.1 AND MIT) AND MIT AND (MIT AND OFL-1.1 AND CC-BY-4.0))";
-    const canonical = canonicalizeExpression(noisy);
+    const canonical = canonicalizeExpression(asRawLicense(noisy));
 
-    expect(canonical).toBe("CC-BY-4.0 AND MIT AND OFL-1.1");
+    expect(widen(canonical)).toBe("CC-BY-4.0 AND MIT AND OFL-1.1");
     assertRoundTripAndIdempotent(canonical);
   });
 
   test("ABSORPTION (AND-set absorbs an OR-sibling): A AND (A OR B) -> A", () => {
-    const canonical = canonicalizeExpression("MIT AND (MIT OR Apache-2.0)");
+    const canonical = canonicalizeExpression(asRawLicense("MIT AND (MIT OR Apache-2.0)"));
 
-    expect(canonical).toBe("MIT");
+    expect(widen(canonical)).toBe("MIT");
     assertRoundTripAndIdempotent(canonical);
   });
 
   test("ABSORPTION (OR-set absorbs an AND-sibling): A OR (A AND B) -> A", () => {
-    const canonical = canonicalizeExpression("MIT OR (MIT AND Apache-2.0)");
+    const canonical = canonicalizeExpression(asRawLicense("MIT OR (MIT AND Apache-2.0)"));
 
-    expect(canonical).toBe("MIT");
+    expect(widen(canonical)).toBe("MIT");
     assertRoundTripAndIdempotent(canonical);
   });
 
   test("FLATTEN only: same-operator nesting collapses before sorting", () => {
-    const canonical = canonicalizeExpression("MIT AND (Apache-2.0 AND BSD-2-Clause)");
+    const canonical = canonicalizeExpression(asRawLicense("MIT AND (Apache-2.0 AND BSD-2-Clause)"));
 
-    expect(canonical).toBe("Apache-2.0 AND BSD-2-Clause AND MIT");
+    expect(widen(canonical)).toBe("Apache-2.0 AND BSD-2-Clause AND MIT");
     assertRoundTripAndIdempotent(canonical);
   });
 
   test("IDEMPOTENCE only: a duplicate AND conjunct dedupes", () => {
-    expect(canonicalizeExpression("MIT AND MIT")).toBe("MIT");
+    expect(widen(canonicalizeExpression(asRawLicense("MIT AND MIT")))).toBe("MIT");
   });
 
   test("(MIT OR MIT) dedupes to MIT", () => {
-    expect(canonicalizeExpression("(MIT OR MIT)")).toBe("MIT");
+    expect(widen(canonicalizeExpression(asRawLicense("(MIT OR MIT)")))).toBe("MIT");
   });
 
   test("A AND (B OR C) is UNCHANGED except child-sort — no distribution", () => {
-    const canonical = canonicalizeExpression("Apache-2.0 AND (MIT OR BSD-2-Clause)");
+    const canonical = canonicalizeExpression(asRawLicense("Apache-2.0 AND (MIT OR BSD-2-Clause)"));
 
     // No distribution into (Apache-2.0 AND MIT) OR (Apache-2.0 AND BSD-2-Clause) —
     // the OR branch stays intact; only its own two children get reordered.
-    expect(canonical).toBe("Apache-2.0 AND (BSD-2-Clause OR MIT)");
+    expect(widen(canonical)).toBe("Apache-2.0 AND (BSD-2-Clause OR MIT)");
     assertRoundTripAndIdempotent(canonical);
   });
 
   test("a WITH-exception leaf is never decomposed, even duplicated across a compound", () => {
     const canonical = canonicalizeExpression(
-      "(GPL-2.0-only WITH Classpath-exception-2.0) AND (GPL-2.0-only WITH Classpath-exception-2.0)",
+      asRawLicense(
+        "(GPL-2.0-only WITH Classpath-exception-2.0) AND (GPL-2.0-only WITH Classpath-exception-2.0)",
+      ),
     );
 
-    expect(canonical).toBe("GPL-2.0-only WITH Classpath-exception-2.0");
+    expect(widen(canonical)).toBe("GPL-2.0-only WITH Classpath-exception-2.0");
     assertRoundTripAndIdempotent(canonical);
   });
 
   test("deep mixed nesting: both absorption directions fire inside a shared AND", () => {
     const canonical = canonicalizeExpression(
-      "(MIT OR (MIT AND Apache-2.0)) AND (BSD-2-Clause OR BSD-2-Clause)",
+      asRawLicense("(MIT OR (MIT AND Apache-2.0)) AND (BSD-2-Clause OR BSD-2-Clause)"),
     );
 
-    expect(canonical).toBe("BSD-2-Clause AND MIT");
+    expect(widen(canonical)).toBe("BSD-2-Clause AND MIT");
     assertRoundTripAndIdempotent(canonical);
   });
 
   test("a single-leaf result serializes bare — no residual parens", () => {
-    const canonical = canonicalizeExpression("Apache-2.0 AND (Apache-2.0 OR GPL-2.0-only)");
+    const canonical = canonicalizeExpression(
+      asRawLicense("Apache-2.0 AND (Apache-2.0 OR GPL-2.0-only)"),
+    );
 
-    expect(canonical).toBe("Apache-2.0");
+    expect(widen(canonical)).toBe("Apache-2.0");
     assertRoundTripAndIdempotent(canonical);
   });
 
   test("unparseable input passes through UNCHANGED — never throws, never guesses", () => {
     const garbage = "Not a real (((expression";
 
-    expect(canonicalizeExpression(garbage)).toBe(garbage);
-    expect(canonicalizeExpression("MIT AND")).toBe("MIT AND");
+    expect(widen(canonicalizeExpression(asRawLicense(garbage)))).toBe(garbage);
+    expect(widen(canonicalizeExpression(asRawLicense("MIT AND")))).toBe("MIT AND");
   });
 });
 
@@ -478,13 +483,15 @@ const RANDOM_CASES: ReadonlyArray<string> = ((): ReadonlyArray<string> => {
 describe("canonicalizeExpression — adversarial property suite (truth-table oracle)", () => {
   test(`truth-table oracle: every hand fixture (${HAND_FIXTURES.length}) canonicalizes to a semantically identical formula`, () => {
     for (const fixture of HAND_FIXTURES) {
-      expect(semanticallyEqual(fixture, canonicalizeExpression(fixture))).toBe(true);
+      expect(semanticallyEqual(fixture, canonicalizeExpression(asRawLicense(fixture)))).toBe(true);
     }
   });
 
   test(`truth-table oracle: ${RANDOM_CASE_COUNT} seeded-random expressions canonicalize to a semantically identical formula`, () => {
     for (const original of RANDOM_CASES) {
-      expect(semanticallyEqual(original, canonicalizeExpression(original))).toBe(true);
+      expect(semanticallyEqual(original, canonicalizeExpression(asRawLicense(original)))).toBe(
+        true,
+      );
     }
   });
 
@@ -494,7 +501,7 @@ describe("canonicalizeExpression — adversarial property suite (truth-table ora
       const canonicalLeaves = new Set<string>();
 
       collectLeaves(p(original), originalLeaves);
-      collectLeaves(p(canonicalizeExpression(original)), canonicalLeaves);
+      collectLeaves(p(canonicalizeExpression(asRawLicense(original))), canonicalLeaves);
 
       for (const leaf of canonicalLeaves) {
         expect(originalLeaves.has(leaf)).toBe(true);
@@ -504,13 +511,13 @@ describe("canonicalizeExpression — adversarial property suite (truth-table ora
 
   test("idempotence + round-trip parse hold on every seeded-random case", () => {
     for (const original of RANDOM_CASES) {
-      assertRoundTripAndIdempotent(canonicalizeExpression(original));
+      assertRoundTripAndIdempotent(canonicalizeExpression(asRawLicense(original)));
     }
   });
 
   test("gate-predicate preservation: isCopyleft and the deny election agree on original vs. canonical", () => {
     for (const original of RANDOM_CASES) {
-      const canonical = canonicalizeExpression(original);
+      const canonical = canonicalizeExpression(asRawLicense(original));
 
       expect(isCopyleft(p(canonical))).toBe(isCopyleft(p(original)));
       expect(denyRuleFor(DENY_ONLY_DEFAULTS_POLICY, canonical, "property-suite-pkg")).toEqual(
@@ -531,7 +538,7 @@ describe("canonicalizeExpression — adversarial property suite (truth-table ora
       const a = RANDOM_CASES[rng.int(RANDOM_CASES.length)]!;
       const b = RANDOM_CASES[rng.int(RANDOM_CASES.length)]!;
 
-      if (canonicalizeExpression(a) === canonicalizeExpression(b)) {
+      if (canonicalizeExpression(asRawLicense(a)) === canonicalizeExpression(asRawLicense(b))) {
         agreementsChecked++;
         expect(semanticallyEqual(a, b)).toBe(true);
       }
