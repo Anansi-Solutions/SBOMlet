@@ -503,11 +503,15 @@ function combinePrecise(
  */
 export interface DetectedSignal {
   /**
-   * The collector metadata and registry enrichment lane; `false` records that it reports nothing.
+   * The collector metadata and registry enrichment lane, as a raw recorded source label; `false`
+   * records that it reports nothing.
    */
-  registry?: string | false;
-  /** The intensive source scan; `false` records that it reports nothing. */
-  intensive?: string | false;
+  registry?: RawLicense | false;
+  /**
+   * The intensive source scan, as a raw recorded source label; `false` records that it reports
+   * nothing.
+   */
+  intensive?: RawLicense | false;
 }
 
 /**
@@ -548,16 +552,22 @@ const INTENSIVE_CLAIM_SOURCES: ReadonlySet<LicenseClaimSource> = new Set(["scanc
 /** A package's PRE-OVERRIDE observed signal, per producing lane and as a whole. */
 export interface ObservedSignal {
   /** Members the collector metadata and registry enrichment produced. */
-  registry: readonly string[];
+  registry: readonly RawLicense[];
   /** Members the intensive source scan produced. */
-  intensive: readonly string[];
-  /** Every member, whichever lane produced it. */
-  union: readonly string[];
+  intensive: readonly RawLicense[];
+  /**
+   * Every member, whichever lane produced it. Mixes the raw claim values with the derived
+   * impreciseFamily label; both are raw-domain tokens, compared case-insensitively.
+   */
+  union: readonly RawLicense[];
 }
 
 /** Trimmed, non-empty raw claim values, in claim order. */
-function rawSignalValues(claims: ReadonlyArray<LicenseClaim>): string[] {
-  return claims.map((c) => c.raw.trim()).filter((raw) => raw !== "");
+function rawSignalValues(claims: ReadonlyArray<LicenseClaim>): RawLicense[] {
+  return claims
+    .map((c) => c.raw.trim())
+    .filter((raw) => raw !== "")
+    .map(asRawLicense);
 }
 
 /** True when this claim on its own normalizes to the family token the finding carries. */
@@ -572,12 +582,12 @@ function laneSignal(
   claims: ReadonlyArray<LicenseClaim>,
   sources: ReadonlySet<LicenseClaimSource>,
   family: string | undefined,
-): string[] {
+): RawLicense[] {
   const lane = claims.filter((c) => sources.has(c.source));
   const signal = new Set(rawSignalValues(lane));
 
   if (family !== undefined && lane.some((c) => yieldsFamily(c, family))) {
-    signal.add(family);
+    signal.add(asRawLicense(family));
   }
 
   return [...signal];
@@ -597,7 +607,7 @@ export function observedSignalBySource(
   const union = new Set(rawSignalValues(claims));
 
   if (family !== undefined) {
-    union.add(family);
+    union.add(asRawLicense(family));
   }
 
   return {
@@ -629,7 +639,7 @@ function observedExpressions(claims: ReadonlyArray<LicenseClaim>): readonly Cano
 }
 
 /** Case-insensitive, trimmed equality of a recorded value against any signal member. */
-function signalMatches(signal: ReadonlyArray<string>, recorded: string): boolean {
+function signalMatches(signal: ReadonlyArray<RawLicense>, recorded: RawLicense): boolean {
   const want = recorded.trim().toLowerCase();
 
   return signal.some((s) => s.trim().toLowerCase() === want);
@@ -637,19 +647,18 @@ function signalMatches(signal: ReadonlyArray<string>, recorded: string): boolean
 
 /**
  * {@link signalMatches}, canonicalized first: the recorded value and each signal member run through
- * {@link canonicalizeExpression} before the same case-insensitive, trimmed equality, so a
+ * {@link canonicalizeExpression}, then the same case-insensitive, trimmed equality, so a
  * boolean-algebra re-spelling of the same license set (`MIT AND CC0-1.0` read back as `CC0-1.0 AND
- * MIT`, a duplicated conjunct, an absorbable branch) never counts as a divergence. Canonicalization
- * runs FIRST because it is the coarser, structural normalization; layering it under trim/lowercase
- * keeps the text normalization doing its job unchanged - canonicalizeExpression's contract returns
- * unparseable input verbatim, so a non-expression claim reaches signalMatches's own comparison as
- * it would have anyway.
+ * MIT`, a duplicated conjunct, an absorbable branch) never counts as a divergence. The
+ * trim/lowercase stay load-bearing: canonicalizeExpression normalizes STRUCTURE but not case, and
+ * returns unparseable input verbatim, so a non-SPDX family label (" bsd " against "BSD") is
+ * reconciled only by the text normalization. The proper home for case/whitespace folding is
+ * canonicalizeExpression itself; until then it lives here.
  */
-function signalMatchesCanonical(signal: ReadonlyArray<string>, recorded: string): boolean {
-  return signalMatches(
-    signal.map((s) => canonicalizeExpression(asRawLicense(s))),
-    canonicalizeExpression(asRawLicense(recorded)),
-  );
+function signalMatchesCanonical(signal: ReadonlyArray<RawLicense>, recorded: RawLicense): boolean {
+  const want = canonicalizeExpression(recorded).trim().toLowerCase();
+
+  return signal.some((s) => canonicalizeExpression(s).trim().toLowerCase() === want);
 }
 
 /**
@@ -677,12 +686,14 @@ function signalMatchesCanonical(signal: ReadonlyArray<string>, recorded: string)
  * the kind of claim the base combiner poisons the whole finding to unknown on.
  */
 function unaccountedMember(
-  signal: ReadonlyArray<string>,
-  recorded: ReadonlyArray<string>,
+  signal: ReadonlyArray<RawLicense>,
+  recorded: ReadonlyArray<RawLicense>,
   expression: CanonicalLicense,
-): string | undefined {
-  const fold = (value: string): string =>
-    canonicalizeExpression(asRawLicense(value)).trim().toLowerCase();
+): RawLicense | undefined {
+  // Canonicalize STRUCTURE, then trim/lowercase: canonicalizeExpression passes a non-SPDX label
+  // through verbatim, so the text normalization is what reconciles a re-spelling of a recorded
+  // family label. Belongs in canonicalizeExpression eventually; here for now.
+  const fold = (value: RawLicense): string => canonicalizeExpression(value).trim().toLowerCase();
   const wanted = new Set(recorded.map(fold));
 
   for (const member of signal) {
@@ -690,7 +701,7 @@ function unaccountedMember(
       continue;
     }
 
-    const read = normalizeRaw(asRawLicense(member));
+    const read = normalizeRaw(member);
 
     if (read.expression === null) {
       const family = read.impreciseFamily;
@@ -703,7 +714,7 @@ function unaccountedMember(
 
       // A family label is accounted only when the entry recorded that family or the assertion falls
       // within it; otherwise the appended family obligation is unaccounted.
-      if (!wanted.has(fold(family)) && !expressionInFamily(expression, family)) {
+      if (!wanted.has(fold(asRawLicense(family))) && !expressionInFamily(expression, family)) {
         return member;
       }
 
@@ -790,9 +801,9 @@ function withStaleOverride(base: LicenseFinding, stale: StaleOverride): LicenseF
 export const DETECTED_LANES = ["registry", "intensive"] as const;
 
 /** The recorded detections, for the guard that sweeps everything the entry did NOT write down. */
-function recordedValues(detected: DetectedSignal): string[] {
+function recordedValues(detected: DetectedSignal): RawLicense[] {
   return DETECTED_LANES.map((lane) => detected[lane]).filter(
-    (value): value is string => typeof value === "string",
+    (value): value is RawLicense => typeof value === "string",
   );
 }
 
@@ -830,7 +841,7 @@ function firstUnmetDetection(
 }
 
 /** Where in the observed signal an unaccounted license was reported, for the stale message. */
-function laneOf(member: string, signal: ObservedSignal): StaleOverride["source"] {
+function laneOf(member: RawLicense, signal: ObservedSignal): StaleOverride["source"] {
   if (signalMatches(signal.registry, member)) {
     return "registry";
   }

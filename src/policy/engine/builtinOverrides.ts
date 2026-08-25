@@ -83,7 +83,7 @@ const JUPYTER_BSD_REASON =
 export const BUILTIN_OVERRIDES: ReadonlyArray<BuiltinOverride> = [
   {
     name: "python-dateutil",
-    detected: { registry: "Dual License" },
+    detected: { registry: asRawLicense("Dual License") },
     expression: canonicalizeExpression(asRawLicense("Apache-2.0 OR BSD-3-Clause")),
     reason:
       "python-dateutil is dual-licensed Apache-2.0 OR BSD-3-Clause; PyPI " +
@@ -92,7 +92,7 @@ export const BUILTIN_OVERRIDES: ReadonlyArray<BuiltinOverride> = [
   ...JUPYTER_BSD_PROJECTS.map(
     (name): BuiltinOverride => ({
       name,
-      detected: { registry: "BSD" },
+      detected: { registry: asRawLicense("BSD") },
       expression: canonicalizeExpression(asRawLicense("BSD-3-Clause")),
       reason: JUPYTER_BSD_REASON,
     }),

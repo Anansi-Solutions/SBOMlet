@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, test } from "bun:test";
 import parseSpdxId from "spdx-expression-parse";
-import { widen } from "../../../test/brandTestSupport";
+import { asRawLicense, widen } from "../../../test/brandTestSupport";
 import { BUILTIN_OVERRIDES } from "./builtinOverrides";
 
 describe("BUILTIN_OVERRIDES — the shipped tool-level set", () => {
@@ -58,7 +58,7 @@ describe("BUILTIN_OVERRIDES — the shipped tool-level set", () => {
     const entry = BUILTIN_OVERRIDES.find((o) => o.name === "python-dateutil");
 
     expect(entry).toBeDefined();
-    expect(entry?.detected).toEqual({ registry: "Dual License" });
+    expect(entry?.detected).toEqual({ registry: asRawLicense("Dual License") });
     expect(widen(entry?.expression)).toBe("Apache-2.0 OR BSD-3-Clause");
     // The exact value from CONTEXT.md parses as a valid OR expression.
     const node = parseSpdxId(entry?.expression ?? "") as {
@@ -83,7 +83,7 @@ describe("BUILTIN_OVERRIDES — the shipped tool-level set", () => {
 
       expect(entry).toBeDefined();
       // Records the imprecise BSD value the registry lane produces.
-      expect(entry?.detected).toEqual({ registry: "BSD" });
+      expect(entry?.detected).toEqual({ registry: asRawLicense("BSD") });
       expect(widen(entry?.expression)).toBe("BSD-3-Clause");
     }
   });

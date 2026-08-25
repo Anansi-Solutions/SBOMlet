@@ -6,7 +6,7 @@ import {
   DEMO_CLARIFY,
   clarifyWithout,
 } from "../../../test/policyTestSupport";
-import { canon } from "../../../test/brandTestSupport";
+import { asRawLicense, canon } from "../../../test/brandTestSupport";
 import { JUSTIFICATION_VALUES } from "./clarify";
 
 describe("parsePolicy — the [[clarify]] package selector", () => {
@@ -18,7 +18,7 @@ describe("parsePolicy — the [[clarify]] package selector", () => {
         identity: { space: "clarify", index: 0 },
         name: "demo-pkg",
         version: "1.0.0",
-        detected: { registry: "BSD" },
+        detected: { registry: asRawLicense("BSD") },
         justification: "scan-more-precise",
         expression: canon("BSD-3-Clause"),
       },
@@ -99,7 +99,7 @@ describe("parsePolicy — the [[clarify]] `detected` precondition", () => {
     );
 
     expect(policy.clarify[0]?.detected).toEqual({
-      registry: "BSD",
+      registry: asRawLicense("BSD"),
       intensive: false,
     });
   });
@@ -297,7 +297,10 @@ describe("a justification and the detections it speaks for", () => {
       clarifyWith('{ registry = "Public Domain", intensive = false }', "license-not-found"),
     );
 
-    expect(policy.clarify[0]?.detected).toEqual({ registry: "Public Domain", intensive: false });
+    expect(policy.clarify[0]?.detected).toEqual({
+      registry: asRawLicense("Public Domain"),
+      intensive: false,
+    });
   });
 
   test("dual-license-choice speaks for no lane, so a silent one is fine", () => {

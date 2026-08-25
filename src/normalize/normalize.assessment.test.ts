@@ -188,7 +188,7 @@ describe("annotateFindings — scancode senior assessment (the re-pinned fill ma
     const clarify: ClarifyInput[] = [
       {
         name: "imprecise-clarified-pkg",
-        detected: { registry: "BSD", intensive: "BSD-3-Clause" },
+        detected: { registry: asRawLicense("BSD"), intensive: asRawLicense("BSD-3-Clause") },
         expression: canon("MIT"),
       },
     ];
@@ -367,7 +367,7 @@ describe("annotateFindings — scancode senior assessment (the re-pinned fill ma
     const clarify: ClarifyInput[] = [
       {
         name: "conflicted-clarified-pkg",
-        detected: { registry: "Apache-2.0", intensive: "MIT" },
+        detected: { registry: asRawLicense("Apache-2.0"), intensive: asRawLicense("MIT") },
         expression: canon("MIT"),
       },
     ];
@@ -383,7 +383,11 @@ describe("annotateFindings — scancode senior assessment (the re-pinned fill ma
   test("a STALE clarify override keeps the base finding, which carries BOTH markers — stale + conflict coexist (chain ordering is the policy engine's concern)", () => {
     const entry = pkg("stale-conflicted-pkg", "1.0.0", [claim("Apache-2.0"), scancodeClaim("MIT")]);
     const clarify: ClarifyInput[] = [
-      { name: "stale-conflicted-pkg", detected: { registry: "BSD" }, expression: canon("MIT") },
+      {
+        name: "stale-conflicted-pkg",
+        detected: { registry: asRawLicense("BSD") },
+        expression: canon("MIT"),
+      },
     ];
     const { model } = annotateFindings(modelOf(entry), clarify);
     const finding = model.packages[0]!.finding!;
@@ -404,7 +408,7 @@ describe("annotateFindings — scancode senior assessment (the re-pinned fill ma
     const clarify: ClarifyInput[] = [
       {
         name: "guarded-clarified-pkg",
-        detected: { registry: "MIT", intensive: "BSD-3-Clause" },
+        detected: { registry: asRawLicense("MIT"), intensive: asRawLicense("BSD-3-Clause") },
         expression: canon("BSD-3-Clause"),
       },
     ];
@@ -428,7 +432,7 @@ describe("annotateFindings — scancode senior assessment (the re-pinned fill ma
     const clarify: ClarifyInput[] = [
       {
         name: "registry-only-clarified-pkg",
-        detected: { registry: "MIT" },
+        detected: { registry: asRawLicense("MIT") },
         expression: canon("MIT AND BSD-3-Clause"),
       },
     ];
