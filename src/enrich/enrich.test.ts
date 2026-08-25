@@ -10,7 +10,14 @@ import {
   narrowPypiResponse,
 } from "../validate/registry";
 import { annotateFindings } from "../normalize/normalize";
-import { asRawLicense, widen, asPurl, type Purl } from "../../test/brandTestSupport";
+import {
+  asRawLicense,
+  widen,
+  asPurl,
+  asDependencyName,
+  asDependencyVersion,
+  type Purl,
+} from "../../test/brandTestSupport";
 import { TROVE_TO_SPDX, isAmbiguousTroveClassifier, troveToSpdx } from "./trove";
 import { fetchJson, fetchJsonOr404, mapLimit } from "./fetch";
 import { catalogEntryUrlOf, nugetRegistrationLeafUrl, resolveNugetCatalogLicense } from "./nuget";
@@ -727,8 +734,8 @@ describe("enrichUnknowns orchestrator (cache-first, generate-fetch, check-stale)
   function knownPackage(): PackageEntry {
     return {
       purl: asPurl("pkg:npm/mit-lib@3.0.0"),
-      name: "mit-lib",
-      version: "3.0.0",
+      name: asDependencyName("mit-lib"),
+      version: asDependencyVersion("3.0.0"),
       occurrences: [{ target: "proj", isDevDependency: false }],
       licenseClaims: [{ raw: asRawLicense("MIT"), kind: "spdx-id", source: "generator" }],
       scope: "app",
@@ -739,8 +746,8 @@ describe("enrichUnknowns orchestrator (cache-first, generate-fetch, check-stale)
   function unknownNpm(): PackageEntry {
     return {
       purl: asPurl("pkg:npm/no-claims@2.0.0"),
-      name: "no-claims",
-      version: "2.0.0",
+      name: asDependencyName("no-claims"),
+      version: asDependencyVersion("2.0.0"),
       occurrences: [{ target: "proj", isDevDependency: false }],
       licenseClaims: [],
       scope: "app",
@@ -751,8 +758,8 @@ describe("enrichUnknowns orchestrator (cache-first, generate-fetch, check-stale)
   function unknownPypi(): PackageEntry {
     return {
       purl: asPurl("pkg:pypi/anyio@4.12.1"),
-      name: "anyio",
-      version: "4.12.1",
+      name: asDependencyName("anyio"),
+      version: asDependencyVersion("4.12.1"),
       occurrences: [{ target: "apps/jupyter", isDevDependency: false }],
       licenseClaims: [],
       scope: "app",
@@ -967,8 +974,8 @@ describe("enrichUnknowns orchestrator (cache-first, generate-fetch, check-stale)
     try {
       const scoped: PackageEntry = {
         purl: asPurl("pkg:npm/%40babel/core@7.27.7"),
-        name: "@babel/core",
-        version: "7.27.7",
+        name: asDependencyName("@babel/core"),
+        version: asDependencyVersion("7.27.7"),
         occurrences: [{ target: "proj", isDevDependency: false }],
         licenseClaims: [],
         scope: "app",
@@ -1179,16 +1186,16 @@ describe("enrichUnknowns orchestrator (cache-first, generate-fetch, check-stale)
       const v1: PackageEntry = {
         ...unknownNpm(),
         purl: asPurl("pkg:npm/dup@1.0.0"),
-        version: "1.0.0",
+        version: asDependencyVersion("1.0.0"),
       };
       const v2: PackageEntry = {
         ...unknownNpm(),
         purl: asPurl("pkg:npm/dup@2.0.0"),
-        version: "2.0.0",
+        version: asDependencyVersion("2.0.0"),
       };
 
-      v1.name = "dup";
-      v2.name = "dup";
+      v1.name = asDependencyName("dup");
+      v2.name = asDependencyName("dup");
       const { fetch, calls } = fetchReturning(() => ({
         versions: {
           "1.0.0": { license: "MIT" },
@@ -1239,8 +1246,8 @@ describe("enrichUnknowns orchestrator (cache-first, generate-fetch, check-stale)
         enrichUnknowns(
           model({
             purl: asPurl("pkg:pypi/colorama@0.4.6"),
-            name: "colorama",
-            version: "0.4.6",
+            name: asDependencyName("colorama"),
+            version: asDependencyVersion("0.4.6"),
             occurrences: [{ target: "apps/jupyter", isDevDependency: false }],
             licenseClaims: [],
             scope: "app",
@@ -1287,8 +1294,8 @@ describe("enrichUnknowns terraform/github (version-tag, transient-vs-definitive,
   function unknownProvider(): PackageEntry {
     return {
       purl: asPurl("pkg:terraform/registry.opentofu.org/hashicorp/aws@6.42.0"),
-      name: "hashicorp/aws",
-      version: "6.42.0",
+      name: asDependencyName("hashicorp/aws"),
+      version: asDependencyVersion("6.42.0"),
       occurrences: [{ target: "infrastructure", isDevDependency: false }],
       licenseClaims: [],
       scope: "app",
@@ -1303,8 +1310,8 @@ describe("enrichUnknowns terraform/github (version-tag, transient-vs-definitive,
   function unknownModule(): PackageEntry {
     return {
       purl: asPurl("pkg:terraform/registry.opentofu.org/terraform-aws-modules/vpc/aws@5.1.2"),
-      name: "terraform-aws-modules/vpc/aws",
-      version: "5.1.2",
+      name: asDependencyName("terraform-aws-modules/vpc/aws"),
+      version: asDependencyVersion("5.1.2"),
       occurrences: [{ target: "infrastructure", isDevDependency: false }],
       licenseClaims: [],
       scope: "app",
@@ -1765,8 +1772,8 @@ describe("enrichUnknowns terraform/github (version-tag, transient-vs-definitive,
       const malformedPurl = asPurl("pkg:terraform/registry.opentofu.org/onlyone@1.0.0");
       const weird: PackageEntry = {
         purl: malformedPurl,
-        name: "onlyone",
-        version: "1.0.0",
+        name: asDependencyName("onlyone"),
+        version: asDependencyVersion("1.0.0"),
         occurrences: [{ target: "infrastructure", isDevDependency: false }],
         licenseClaims: [],
         scope: "app",
@@ -2135,8 +2142,8 @@ describe("enrichUnknowns nuget (two-step fetch, negative discipline, offline che
   function unknownNuget(): PackageEntry {
     return {
       purl: asPurl("pkg:nuget/Newtonsoft.Json@13.0.4"),
-      name: "Newtonsoft.Json",
-      version: "13.0.4",
+      name: asDependencyName("Newtonsoft.Json"),
+      version: asDependencyVersion("13.0.4"),
       occurrences: [{ target: "Fixture.App", isDevDependency: false }],
       licenseClaims: [],
       scope: "app",
@@ -2406,8 +2413,8 @@ describe("enrichUnknowns nuget (two-step fetch, negative discipline, offline che
     const { dir, path } = tempCachePath();
     const good: PackageEntry = {
       purl: asPurl("pkg:nuget/Good.Package@1.0.0"),
-      name: "Good.Package",
-      version: "1.0.0",
+      name: asDependencyName("Good.Package"),
+      version: asDependencyVersion("1.0.0"),
       occurrences: [{ target: "t", isDevDependency: false }],
       licenseClaims: [],
       scope: "app",
@@ -2534,16 +2541,16 @@ describe("enrichUnknowns nuget (two-step fetch, negative discipline, offline che
     try {
       const pypiUnknown: PackageEntry = {
         purl: asPurl("pkg:pypi/anyio@4.12.1"),
-        name: "anyio",
-        version: "4.12.1",
+        name: asDependencyName("anyio"),
+        version: asDependencyVersion("4.12.1"),
         occurrences: [{ target: "apps/jupyter", isDevDependency: false }],
         licenseClaims: [],
         scope: "app",
       };
       const npmUnknown: PackageEntry = {
         purl: asPurl("pkg:npm/no-claims@2.0.0"),
-        name: "no-claims",
-        version: "2.0.0",
+        name: asDependencyName("no-claims"),
+        version: asDependencyVersion("2.0.0"),
         occurrences: [{ target: "proj", isDevDependency: false }],
         licenseClaims: [],
         scope: "app",
@@ -2718,8 +2725,8 @@ describe("enrichUnknowns maven (deps.dev single fetch, honest sentinel, 404-defi
   function unknownMaven(): PackageEntry {
     return {
       purl: asPurl("pkg:maven/com.example/lib@2.0.0?type=jar"),
-      name: "lib",
-      version: "2.0.0",
+      name: asDependencyName("lib"),
+      version: asDependencyVersion("2.0.0"),
       occurrences: [{ target: "Fixture.App", isDevDependency: false }],
       licenseClaims: [],
       scope: "app",
@@ -3107,8 +3114,8 @@ describe("enrichUnknowns maven (deps.dev single fetch, honest sentinel, 404-defi
     const { dir, path } = tempCachePath();
     const classified: PackageEntry = {
       purl: asPurl("pkg:maven/org.example/querydsl-apt@5.0.0?classifier=jakarta&type=jar"),
-      name: "querydsl-apt",
-      version: "5.0.0",
+      name: asDependencyName("querydsl-apt"),
+      version: asDependencyVersion("5.0.0"),
       occurrences: [{ target: "t", isDevDependency: false }],
       licenseClaims: [],
       scope: "app",
@@ -3154,8 +3161,8 @@ describe("enrichUnknowns maven (deps.dev single fetch, honest sentinel, 404-defi
     try {
       const pypiUnknown: PackageEntry = {
         purl: asPurl("pkg:pypi/anyio@4.12.1"),
-        name: "anyio",
-        version: "4.12.1",
+        name: asDependencyName("anyio"),
+        version: asDependencyVersion("4.12.1"),
         occurrences: [{ target: "apps/jupyter", isDevDependency: false }],
         licenseClaims: [],
         scope: "app",

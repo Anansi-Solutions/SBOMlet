@@ -20,7 +20,7 @@ import {
   type PackageEntry,
   type Verdict,
 } from "../model/dependencies";
-import { canon, asPurl } from "../../test/brandTestSupport";
+import { canon, asPurl, asDependencyName, asDependencyVersion } from "../../test/brandTestSupport";
 import { renderCyclonedx } from "./cyclonedx";
 
 function golden(name: string): string {
@@ -41,8 +41,8 @@ function entry(
 
 const exprEntry = entry({
   purl: asPurl("pkg:npm/expr-pkg@3.0.0"),
-  name: "expr-pkg",
-  version: "3.0.0",
+  name: asDependencyName("expr-pkg"),
+  version: asDependencyVersion("3.0.0"),
   licenseClaims: [
     { raw: asRawLicense("MIT OR Apache-2.0"), kind: "expression", source: "generator" },
   ],
@@ -56,8 +56,8 @@ const exprEntry = entry({
 
 const namedEntry = entry({
   purl: asPurl("pkg:npm/jsonify@0.0.1"),
-  name: "jsonify",
-  version: "0.0.1",
+  name: asDependencyName("jsonify"),
+  version: asDependencyVersion("0.0.1"),
   licenseClaims: [
     { raw: asRawLicense("Public Domain"), kind: "name", source: "generator" },
     // Duplicate raw under a different kind: the emitted named list must
@@ -68,8 +68,8 @@ const namedEntry = entry({
 
 const bareEntry = entry({
   purl: asPurl("pkg:npm/no-license-pkg@1.0.0"),
-  name: "no-license-pkg",
-  version: "1.0.0",
+  name: asDependencyName("no-license-pkg"),
+  version: asDependencyVersion("1.0.0"),
 });
 
 const baseModel: CanonicalDependencies = {
@@ -78,8 +78,8 @@ const baseModel: CanonicalDependencies = {
 
 const sharpEntry = entry({
   purl: asPurl("pkg:npm/sharp@0.33.0"),
-  name: "sharp",
-  version: "0.33.0",
+  name: asDependencyName("sharp"),
+  version: asDependencyVersion("0.33.0"),
   occurrences: [
     { target: "backend", isDevDependency: false },
     { target: "frontend", isDevDependency: true },
@@ -171,8 +171,8 @@ describe("renderCyclonedx — license dispatch", () => {
   test("Test 2d: a finding with null expression falls back to the named-raw dispatch", () => {
     const unknownFinding = entry({
       purl: asPurl("pkg:npm/mystery@1.0.0"),
-      name: "mystery",
-      version: "1.0.0",
+      name: asDependencyName("mystery"),
+      version: asDependencyVersion("1.0.0"),
       licenseClaims: [{ raw: asRawLicense("Custom License"), kind: "name", source: "generator" }],
       finding: {
         expression: null,
@@ -193,8 +193,8 @@ describe("renderCyclonedx — license dispatch", () => {
   test("#9: an os-partial finding emits the expression tuple PLUS each unrecognized token as a named entry", () => {
     const osPartial = entry({
       purl: asPurl("pkg:deb/debian/os-partial@1.0"),
-      name: "os-partial",
-      version: "1.0",
+      name: asDependencyName("os-partial"),
+      version: asDependencyVersion("1.0"),
       scope: "os",
       finding: {
         expression: canon("GPL-2.0-only AND BSD-3-Clause"),
@@ -216,8 +216,8 @@ describe("renderCyclonedx — license dispatch", () => {
   test("#9: an IMPRECISE os-partial (null expression) still emits its unrecognized tokens as named entries", () => {
     const imprecisePartial = entry({
       purl: asPurl("pkg:deb/debian/os-imprecise@1.0"),
-      name: "os-imprecise",
-      version: "1.0",
+      name: asDependencyName("os-imprecise"),
+      version: asDependencyVersion("1.0"),
       scope: "os",
       finding: {
         expression: null,
@@ -303,8 +303,8 @@ describe("renderCyclonedx — licenses-tool: properties", () => {
   test("Test 4c: an empty properties array is omitted, not emitted", () => {
     const orphan = entry({
       purl: asPurl("pkg:npm/orphan@1.0.0"),
-      name: "orphan",
-      version: "1.0.0",
+      name: asDependencyName("orphan"),
+      version: asDependencyVersion("1.0.0"),
       occurrences: [],
     });
     const doc = parse(renderCyclonedx({ packages: [orphan] }));
@@ -320,8 +320,8 @@ describe("renderCyclonedx — injection inertness", () => {
       packages: [
         entry({
           purl: asPurl("pkg:npm/hostile@1.0.0"),
-          name: hostile,
-          version: "1.0.0",
+          name: asDependencyName(hostile),
+          version: asDependencyVersion("1.0.0"),
         }),
       ],
     };

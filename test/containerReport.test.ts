@@ -17,7 +17,7 @@ import { parsePolicy } from "../src/policy/parse/parse";
 import { alignTables } from "../src/render/alignTables";
 import { renderMarkdown, type PolicyView } from "../src/render/markdown";
 import { globToRegExp } from "../src/targets/discover";
-import { asPurl, asRelativePath } from "./brandTestSupport";
+import { asPurl, asRelativePath, asDependencyName, asDependencyVersion } from "./brandTestSupport";
 import type { Policy } from "../src/policy/schema";
 
 /** No scanned target in these scenarios is collected by a lane that derives a dependency graph. */
@@ -86,8 +86,8 @@ function entry(
 
 const bash = entry({
   purl: asPurl("pkg:deb/bash@5.2-6"),
-  name: "bash",
-  version: "5.2-6",
+  name: asDependencyName("bash"),
+  version: asDependencyVersion("5.2-6"),
   scope: "os",
   occurrences: [{ target: API_CONTAINER, isDevDependency: false }],
   licenseClaims: [{ raw: asRawLicense("GPL-3.0-or-later"), kind: "spdx-id", source: "generator" }],
@@ -95,8 +95,8 @@ const bash = entry({
 
 const libc6 = entry({
   purl: asPurl("pkg:deb/libc6@2.36-9"),
-  name: "libc6",
-  version: "2.36-9",
+  name: asDependencyName("libc6"),
+  version: asDependencyVersion("2.36-9"),
   scope: "os",
   occurrences: [{ target: API_CONTAINER, isDevDependency: false }],
   licenseClaims: [{ raw: asRawLicense("LGPL-2.1-or-later"), kind: "spdx-id", source: "generator" }],
@@ -104,8 +104,8 @@ const libc6 = entry({
 
 const coreutils = entry({
   purl: asPurl("pkg:deb/coreutils@9.1-1"),
-  name: "coreutils",
-  version: "9.1-1",
+  name: asDependencyName("coreutils"),
+  version: asDependencyVersion("9.1-1"),
   scope: "os",
   occurrences: [{ target: API_CONTAINER, isDevDependency: false }],
   licenseClaims: [{ raw: asRawLicense("GPL-3.0-or-later"), kind: "spdx-id", source: "generator" }],
@@ -114,8 +114,8 @@ const coreutils = entry({
 /** Shared across BOTH containers — must row in each container's subsection. */
 const zlib = entry({
   purl: asPurl("pkg:deb/zlib1g@1.2.13-1"),
-  name: "zlib1g",
-  version: "1.2.13-1",
+  name: asDependencyName("zlib1g"),
+  version: asDependencyVersion("1.2.13-1"),
   scope: "os",
   occurrences: [
     { target: API_CONTAINER, isDevDependency: false },
@@ -133,8 +133,8 @@ const zlib = entry({
  */
 const metricsDaemon = entry({
   purl: asPurl("pkg:golang/metrics-daemon@1.2.0"),
-  name: "metrics-daemon",
-  version: "1.2.0",
+  name: asDependencyName("metrics-daemon"),
+  version: asDependencyVersion("1.2.0"),
   scope: "os",
   occurrences: [{ target: API_CONTAINER, isDevDependency: false }],
   licenseClaims: [{ raw: asRawLicense("AGPL-3.0-only"), kind: "spdx-id", source: "generator" }],
@@ -150,8 +150,8 @@ const metricsDaemon = entry({
  */
 const diagTools = entry({
   purl: asPurl("pkg:apk/diag-tools@3.0.1"),
-  name: "diag-tools",
-  version: "3.0.1",
+  name: asDependencyName("diag-tools"),
+  version: asDependencyVersion("3.0.1"),
   scope: "os",
   occurrences: [{ target: API_CONTAINER, isDevDependency: false }],
   licenseClaims: [{ raw: asRawLicense("AGPL-3.0-only"), kind: "spdx-id", source: "generator" }],
@@ -166,8 +166,8 @@ const diagTools = entry({
  */
 const licensedDaemon = entry({
   purl: asPurl("pkg:deb/licensed-daemon@2.1.0"),
-  name: "licensed-daemon",
-  version: "2.1.0",
+  name: asDependencyName("licensed-daemon"),
+  version: asDependencyVersion("2.1.0"),
   scope: "os",
   occurrences: [{ target: API_CONTAINER, isDevDependency: false }],
   licenseClaims: [{ raw: asRawLicense("AGPL-3.0-only"), kind: "spdx-id", source: "generator" }],
@@ -181,8 +181,8 @@ const licensedDaemon = entry({
  */
 const licensedRelay = entry({
   purl: asPurl("pkg:apk/licensed-relay@1.0.0"),
-  name: "licensed-relay",
-  version: "1.0.0",
+  name: asDependencyName("licensed-relay"),
+  version: asDependencyVersion("1.0.0"),
   scope: "os",
   occurrences: [{ target: API_CONTAINER, isDevDependency: false }],
   licenseClaims: [
@@ -201,8 +201,8 @@ const licensedRelay = entry({
  */
 const relayAgent = entry({
   purl: asPurl("pkg:golang/relay-agent@0.4.0"),
-  name: "relay-agent",
-  version: "0.4.0",
+  name: asDependencyName("relay-agent"),
+  version: asDependencyVersion("0.4.0"),
   scope: "os",
   occurrences: [{ target: BUILD_CONTAINER, isDevDependency: false }],
   licenseClaims: [
@@ -224,8 +224,8 @@ const relayAgent = entry({
  */
 const cacheRelay = entry({
   purl: asPurl("pkg:pypi/cache-relay@0.9.0"),
-  name: "cache-relay",
-  version: "0.9.0",
+  name: asDependencyName("cache-relay"),
+  version: asDependencyVersion("0.9.0"),
   scope: "os",
   occurrences: [{ target: BUILD_CONTAINER, isDevDependency: false }],
   licenseClaims: [{ raw: asRawLicense("AGPL-3.0-only"), kind: "spdx-id", source: "generator" }],
@@ -237,8 +237,8 @@ const cacheRelay = entry({
  */
 const chartRender = entry({
   purl: asPurl("pkg:npm/chart-render@2.3.1"),
-  name: "chart-render",
-  version: "2.3.1",
+  name: asDependencyName("chart-render"),
+  version: asDependencyVersion("2.3.1"),
   occurrences: [
     {
       target: APP_TARGET,
@@ -260,8 +260,8 @@ const chartRender = entry({
 /** App-level dev-only copyleft warn — the obligation that must stay in Copyleft. */
 const docGen = entry({
   purl: asPurl("pkg:npm/doc-gen@1.0.0"),
-  name: "doc-gen",
-  version: "1.0.0",
+  name: asDependencyName("doc-gen"),
+  version: asDependencyVersion("1.0.0"),
   occurrences: [{ target: APP_TARGET, isDevDependency: true }],
   licenseClaims: [{ raw: asRawLicense("LGPL-2.1-or-later"), kind: "spdx-id", source: "generator" }],
 });

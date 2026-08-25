@@ -15,7 +15,7 @@ import { canonicalizeExpression, leafIds, type ExpressionNode } from "../src/nor
 import { annotateFindings } from "../src/normalize/normalize";
 import { renderMarkdown } from "../src/render/markdown";
 import { renderNotices } from "../src/render/notices";
-import { canon, asPurl } from "./brandTestSupport";
+import { canon, asPurl, asDependencyName, asDependencyVersion } from "./brandTestSupport";
 
 // ---------------------------------------------------------------------------
 // Notices renderer. Models are hand-built: the renderer is tested against the
@@ -97,20 +97,20 @@ describe("renderNotices — appendix dedup and expression decomposition", () => 
     packages: [
       entry({
         purl: asPurl("pkg:npm/a-mit@1.0.0"),
-        name: "a-mit",
-        version: "1.0.0",
+        name: asDependencyName("a-mit"),
+        version: asDependencyVersion("1.0.0"),
         finding: exactFinding("MIT"),
       }),
       entry({
         purl: asPurl("pkg:npm/b-mit@1.0.0"),
-        name: "b-mit",
-        version: "1.0.0",
+        name: asDependencyName("b-mit"),
+        version: asDependencyVersion("1.0.0"),
         finding: exactFinding("MIT"),
       }),
       entry({
         purl: asPurl("pkg:npm/c-dual@1.0.0"),
-        name: "c-dual",
-        version: "1.0.0",
+        name: asDependencyName("c-dual"),
+        version: asDependencyVersion("1.0.0"),
         finding: exactFinding("MIT OR Apache-2.0"),
       }),
     ],
@@ -153,8 +153,8 @@ describe("renderNotices — canonical marker honesty", () => {
     packages: [
       entry({
         purl: asPurl("pkg:npm/acme-pkg@1.0.0"),
-        name: "acme-pkg",
-        version: "1.0.0",
+        name: asDependencyName("acme-pkg"),
+        version: asDependencyVersion("1.0.0"),
         finding: exactFinding("MIT"),
         attribution: attribution({
           copyrightLines: ["Copyright (c) 2020 Acme Corp"],
@@ -163,8 +163,8 @@ describe("renderNotices — canonical marker honesty", () => {
       }),
       entry({
         purl: asPurl("pkg:npm/bare-pkg@1.0.0"),
-        name: "bare-pkg",
-        version: "1.0.0",
+        name: asDependencyName("bare-pkg"),
+        version: asDependencyVersion("1.0.0"),
         finding: exactFinding("Apache-2.0"),
       }),
     ],
@@ -194,8 +194,8 @@ describe("renderNotices — per-package sections", () => {
     packages: [
       entry({
         purl: asPurl("pkg:npm/copyright-pkg@1.0.0"),
-        name: "copyright-pkg",
-        version: "1.0.0",
+        name: asDependencyName("copyright-pkg"),
+        version: asDependencyVersion("1.0.0"),
         finding: exactFinding("MIT"),
         attribution: attribution({
           copyrightLines: ["Copyright (c) 2020 Pipe|Corp"],
@@ -204,15 +204,15 @@ describe("renderNotices — per-package sections", () => {
       }),
       entry({
         purl: asPurl("pkg:npm/author-pkg@1.0.0"),
-        name: "author-pkg",
-        version: "1.0.0",
+        name: asDependencyName("author-pkg"),
+        version: asDependencyVersion("1.0.0"),
         finding: exactFinding("ISC"),
         attribution: attribution({ author: "Sam Solo" }),
       }),
       entry({
         purl: asPurl("pkg:npm/notice-pkg@2.0.0"),
-        name: "notice-pkg",
-        version: "2.0.0",
+        name: asDependencyName("notice-pkg"),
+        version: asDependencyVersion("2.0.0"),
         finding: exactFinding("Apache-2.0"),
         attribution: attribution({
           noticeTexts: ["Notice Product\nCopyright 2024 Notice Foundation"],
@@ -222,16 +222,16 @@ describe("renderNotices — per-package sections", () => {
       // honest empty — no section.
       entry({
         purl: asPurl("pkg:npm/template-pkg@3.0.0"),
-        name: "template-pkg",
-        version: "3.0.0",
+        name: asDependencyName("template-pkg"),
+        version: asDependencyVersion("3.0.0"),
         finding: exactFinding("Apache-2.0"),
         attribution: attribution({ hasVerbatimText: true }),
       }),
       // No attribution at all — no section.
       entry({
         purl: asPurl("pkg:npm/plain-pkg@4.0.0"),
-        name: "plain-pkg",
-        version: "4.0.0",
+        name: asDependencyName("plain-pkg"),
+        version: asDependencyVersion("4.0.0"),
         finding: exactFinding("MIT"),
       }),
     ],
@@ -294,8 +294,8 @@ describe("renderNotices — injection-proof fencing", () => {
     packages: [
       entry({
         purl: asPurl("pkg:npm/fence-pkg@1.0.0"),
-        name: "fence-pkg",
-        version: "1.0.0",
+        name: asDependencyName("fence-pkg"),
+        version: asDependencyVersion("1.0.0"),
         finding: UNKNOWN_FINDING,
         attribution: attribution({
           hasVerbatimText: true,
@@ -334,14 +334,14 @@ describe("renderNotices — unknown-license packages", () => {
       packages: [
         entry({
           purl: asPurl("pkg:npm/mystery-pkg@1.0.0"),
-          name: "mystery-pkg",
-          version: "1.0.0",
+          name: asDependencyName("mystery-pkg"),
+          version: asDependencyVersion("1.0.0"),
           finding: UNKNOWN_FINDING,
         }),
         entry({
           purl: asPurl("pkg:npm/known-pkg@1.0.0"),
-          name: "known-pkg",
-          version: "1.0.0",
+          name: asDependencyName("known-pkg"),
+          version: asDependencyVersion("1.0.0"),
           finding: exactFinding("MIT"),
         }),
       ],
@@ -358,8 +358,8 @@ describe("renderNotices — unknown-license packages", () => {
       packages: [
         entry({
           purl: asPurl("pkg:npm/known-pkg@1.0.0"),
-          name: "known-pkg",
-          version: "1.0.0",
+          name: asDependencyName("known-pkg"),
+          version: asDependencyVersion("1.0.0"),
           finding: exactFinding("MIT"),
         }),
       ],
@@ -376,8 +376,8 @@ describe("renderNotices/renderMarkdown agreement — LicenseRef-only unknown lan
       packages: [
         entry({
           purl: asPurl("pkg:npm/ref-only-pkg@1.0.0"),
-          name: "ref-only-pkg",
-          version: "1.0.0",
+          name: asDependencyName("ref-only-pkg"),
+          version: asDependencyVersion("1.0.0"),
           finding: exactFinding("LicenseRef-proprietary-eula"),
         }),
       ],
@@ -396,14 +396,14 @@ describe("renderNotices — WITH exceptions and unlisted ids (Test 6, A3)", () =
     packages: [
       entry({
         purl: asPurl("pkg:npm/with-pkg@1.0.0"),
-        name: "with-pkg",
-        version: "1.0.0",
+        name: asDependencyName("with-pkg"),
+        version: asDependencyVersion("1.0.0"),
         finding: exactFinding("GPL-2.0-only WITH Classpath-exception-2.0"),
       }),
       entry({
         purl: asPurl("pkg:npm/ref-pkg@1.0.0"),
-        name: "ref-pkg",
-        version: "1.0.0",
+        name: asDependencyName("ref-pkg"),
+        version: asDependencyVersion("1.0.0"),
         finding: exactFinding("LicenseRef-custom-thing"),
       }),
     ],
@@ -452,8 +452,8 @@ describe("renderNotices — imprecise label honesty", () => {
       packages: [
         entry({
           purl: asPurl("pkg:pypi/jinja2@3.1.0"),
-          name: "jinja2",
-          version: "3.1.0",
+          name: asDependencyName("jinja2"),
+          version: asDependencyVersion("3.1.0"),
           finding: impreciseFinding,
           attribution: attribution({
             copyrightLines: ["Copyright (c) 2007 Pallets"],
@@ -483,8 +483,8 @@ describe("renderNotices — canonical license display", () => {
       packages: [
         entry({
           purl: asPurl("pkg:npm/noisy-pkg@1.0.0"),
-          name: "noisy-pkg",
-          version: "1.0.0",
+          name: asDependencyName("noisy-pkg"),
+          version: asDependencyVersion("1.0.0"),
           finding: exactFinding(NOISY_EXPRESSION),
           attribution: attribution({
             copyrightLines: ["Copyright (c) 2020 Someone"],
@@ -506,8 +506,8 @@ describe("renderNotices — canonical license display", () => {
       packages: [
         entry({
           purl: asPurl("pkg:npm/unparseable-pkg@1.0.0"),
-          name: "unparseable-pkg",
-          version: "1.0.0",
+          name: asDependencyName("unparseable-pkg"),
+          version: asDependencyVersion("1.0.0"),
           finding: {
             expression: canon(UNPARSEABLE_EXPRESSION),
             elected: null,
@@ -544,8 +544,8 @@ describe("renderNotices — determinism contract", () => {
     packages: [
       entry({
         purl: asPurl("pkg:npm/zzz-pkg@1.0.0"),
-        name: "zzz-pkg",
-        version: "1.0.0",
+        name: asDependencyName("zzz-pkg"),
+        version: asDependencyVersion("1.0.0"),
         finding: exactFinding("MIT"),
         attribution: attribution({
           copyrightLines: ["Copyright (c) 2019 Zzz"],
@@ -554,8 +554,8 @@ describe("renderNotices — determinism contract", () => {
       }),
       entry({
         purl: asPurl("pkg:npm/aaa-pkg@1.0.0"),
-        name: "aaa-pkg",
-        version: "1.0.0",
+        name: asDependencyName("aaa-pkg"),
+        version: asDependencyVersion("1.0.0"),
         finding: exactFinding("ISC"),
       }),
     ],

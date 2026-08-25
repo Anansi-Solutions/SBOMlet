@@ -1,4 +1,6 @@
 import {
+  asDependencyName,
+  asDependencyVersion,
   asPurl,
   asRawLicense,
   type CanonicalDependencies,
@@ -15,8 +17,8 @@ export const claim = (raw: string, kind: LicenseClaimKind = "spdx-id"): LicenseC
 
 export const pkg = (name: string, version: string, claims: LicenseClaim[]): PackageEntry => ({
   purl: asPurl(`pkg:npm/${name}@${version}`),
-  name,
-  version,
+  name: asDependencyName(name),
+  version: asDependencyVersion(version),
   occurrences: [{ target: "frontend", isDevDependency: false }],
   licenseClaims: claims,
   scope: "app",
@@ -25,8 +27,8 @@ export const pkg = (name: string, version: string, claims: LicenseClaim[]): Pack
 /** OS-scope variant of {@link pkg} (a pkg:deb row): scope "os", os target. */
 export const osPkg = (name: string, version: string, claims: LicenseClaim[]): PackageEntry => ({
   purl: asPurl(`pkg:deb/debian/${name}@${version}`),
-  name,
-  version,
+  name: asDependencyName(name),
+  version: asDependencyVersion(version),
   occurrences: [{ target: "docker:img/Dockerfile", isDevDependency: false }],
   licenseClaims: claims,
   scope: "os",

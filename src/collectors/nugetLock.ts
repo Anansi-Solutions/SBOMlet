@@ -49,7 +49,14 @@ import { type } from "arktype";
 
 import { NugetLockDocument } from "../validate/nugetLock";
 import { recordOf, stringOf } from "../validate/record";
-import { asPurl, type Purl } from "../model/dependencies";
+import {
+  asDependencyName,
+  asDependencyVersion,
+  asPurl,
+  type DependencyName,
+  type DependencyVersion,
+  type Purl,
+} from "../model/dependencies";
 import { computeCacheKey, type CollectorSbomFile } from "./cdxgen";
 import { manifestFilesFor } from "./dispatch";
 import type { Target } from "../targets/target";
@@ -104,8 +111,8 @@ const NUGET_MANIFEST_FILES = manifestFilesFor("nuget");
 
 interface NugetComponent {
   type: "library";
-  name: string;
-  version: string;
+  name: DependencyName;
+  version: DependencyVersion;
   purl: Purl;
 }
 
@@ -150,6 +157,10 @@ function componentsOf(dependencies: Record<string, unknown>): NugetComponent[] {
         continue;
       } // first-party project reference
 
+      if (id === "") {
+        continue;
+      } // blank package id - malformed, tolerant skip
+
       const resolved = stringOf(entry["resolved"]);
 
       if (resolved === undefined || resolved === "") {
@@ -165,8 +176,8 @@ function componentsOf(dependencies: Record<string, unknown>): NugetComponent[] {
       seen.add(key);
       components.push({
         type: "library",
-        name: id,
-        version: resolved,
+        name: asDependencyName(id),
+        version: asDependencyVersion(resolved),
         purl: purlOf(id, resolved),
       });
     }

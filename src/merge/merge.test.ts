@@ -223,7 +223,7 @@ describe("mergeSboms — dev marker, scope, and display name", () => {
       (p) => p.purl === "pkg:npm/%40ampproject/remapping@2.3.0",
     );
 
-    expect(remapping?.name).toBe("@ampproject/remapping");
+    expect(widen(remapping?.name)).toBe("@ampproject/remapping");
   });
 
   // Inline doc modeling the real cdxgen shape from the live SBOM (gap 19):
@@ -255,14 +255,14 @@ describe("mergeSboms — dev marker, scope, and display name", () => {
     const model = mergeSboms([{ sbom: groupShapesDoc, targetIdentity: SYNTHETIC_TARGET }]);
     const abab = model.packages.find((p) => p.purl === "pkg:npm/abab@2.0.6");
 
-    expect(abab?.name).toBe("abab");
+    expect(widen(abab?.name)).toBe("abab");
     expect(abab?.name.startsWith("/")).toBe(false);
   });
 
   test("fixture component with group '' yields a slash-free display name", () => {
     const entry = shapesByPurl().get(asPurl("pkg:npm/empty-group-pkg@1.0.0"));
 
-    expect(entry?.name).toBe("empty-group-pkg");
+    expect(widen(entry?.name)).toBe("empty-group-pkg");
     expect(entry?.name.startsWith("/")).toBe(false);
   });
 
@@ -270,8 +270,8 @@ describe("mergeSboms — dev marker, scope, and display name", () => {
     const model = mergeSboms([{ sbom: groupShapesDoc, targetIdentity: SYNTHETIC_TARGET }]);
     const byPurl = new Map(model.packages.map((p) => [p.purl, p]));
 
-    expect(byPurl.get(asPurl("pkg:npm/%40scope/pkg-a@1.0.0"))?.name).toBe("@scope/pkg-a");
-    expect(byPurl.get(asPurl("pkg:npm/bare-pkg@1.0.0"))?.name).toBe("bare-pkg");
+    expect(widen(byPurl.get(asPurl("pkg:npm/%40scope/pkg-a@1.0.0"))?.name)).toBe("@scope/pkg-a");
+    expect(widen(byPurl.get(asPurl("pkg:npm/bare-pkg@1.0.0"))?.name)).toBe("bare-pkg");
   });
 });
 
@@ -359,7 +359,7 @@ describe("mergeSboms — field-level tolerance at the boundary (C1, W1, I1)", ()
       const pkg = model.packages[0];
 
       // Wrong-typed group → displayName falls back to the bare name.
-      expect(pkg?.name).toBe("kept-pkg");
+      expect(widen(pkg?.name)).toBe("kept-pkg");
       // Wrong-typed scope → no rawScope recorded.
       expect(pkg?.rawScope).toBeUndefined();
       // Wrong-typed licenses → empty claims (non-array coerces to absent).
@@ -383,7 +383,7 @@ describe("mergeSboms — field-level tolerance at the boundary (C1, W1, I1)", ()
     };
     const model = mergeSboms([{ sbom: doc, targetIdentity: SYNTHETIC_TARGET }]);
 
-    expect(model.packages[0]?.name).toBe("@scope/pkg-a");
+    expect(widen(model.packages[0]?.name)).toBe("@scope/pkg-a");
     expect(model.packages[0]?.rawScope).toBe("required");
   });
 
@@ -2328,7 +2328,7 @@ describe("dependency-graph coverage", () => {
       (pkg) => pkg.occurrences[0]?.introduction === undefined,
     );
 
-    expect(uncovered.map((pkg) => pkg.name)).toEqual(["b"]);
+    expect(widen(uncovered.map((pkg) => pkg.name))).toEqual(["b"]);
     expect(() => assertDependencyGraphCoverage(model, new Set([GRAPH_TARGET]))).not.toThrow();
   });
 

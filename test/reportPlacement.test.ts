@@ -28,7 +28,13 @@ import { alignTables } from "../src/render/alignTables";
 import { renderMarkdown, type PolicyView } from "../src/render/markdown";
 import { renderNotices } from "../src/render/notices";
 import { globToRegExp } from "../src/targets/discover";
-import { canon, asPurl, asRelativePath } from "./brandTestSupport";
+import {
+  canon,
+  asPurl,
+  asRelativePath,
+  asDependencyName,
+  asDependencyVersion,
+} from "./brandTestSupport";
 import type { Policy } from "../src/policy/schema";
 
 const DEPENDENCY_CLASSIFICATION_DOC = join(
@@ -2841,8 +2847,8 @@ describe("cross-document invariants — LICENSES and NOTICES agree on one shared
       packages: [
         {
           purl: asPurl("pkg:npm/noisy-lib@1.0.0"),
-          name: "noisy-lib",
-          version: "1.0.0",
+          name: asDependencyName("noisy-lib"),
+          version: asDependencyVersion("1.0.0"),
           occurrences: [{ target: WORKSPACE, isDevDependency: false }],
           licenseClaims: [{ raw: asRawLicense(noisy), kind: "expression", source: "generator" }],
           scope: "app",

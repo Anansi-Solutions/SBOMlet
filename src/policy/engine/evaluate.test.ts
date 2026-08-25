@@ -37,7 +37,14 @@ import {
   osMultiSpec,
   type PackageSpec,
 } from "../../../test/policyTestSupport";
-import { asRawLicense, canon, widen, asPurl } from "../../../test/brandTestSupport";
+import {
+  asRawLicense,
+  canon,
+  widen,
+  asPurl,
+  asDependencyName,
+  asDependencyVersion,
+} from "../../../test/brandTestSupport";
 import { AGPL_IDS, COPYLEFT_IDS } from "./copyleft";
 import { denyRuleFor } from "./deny";
 import {
@@ -644,8 +651,8 @@ describe("evaluate — imprecise findings route to a safe lane", () => {
       packages: [
         {
           purl: asPurl("pkg:pypi/imp@1.0.0"),
-          name: "imp",
-          version: "1.0.0",
+          name: asDependencyName("imp"),
+          version: asDependencyVersion("1.0.0"),
           occurrences: [{ target: "backend", isDevDependency: false }],
           licenseClaims: [],
           scope: "app",

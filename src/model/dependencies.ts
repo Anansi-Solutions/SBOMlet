@@ -77,6 +77,30 @@ const _relativePathBrand = type("string")
 export type RelativePath = typeof _relativePathBrand.infer;
 
 /**
+ * A dependency's display name (`@scope/pkg`, `busybox`, an `<ns>/<name>` terraform address). The
+ * brand is VALIDATED non-blank, so a blank name can never identify a package. Minted via {@link
+ * asDependencyName} where a package name is CONSTRUCTED (a collector building a component, the
+ * merge deriving a display name); a distinct value that is not specifically a dependency name (a
+ * policy pattern, a family token, a display label) stays a plain string.
+ */
+const _dependencyNameBrand = type("string")
+  .narrow((value, ctx) => value.trim().length > 0 || ctx.reject("a non-blank dependency name"))
+  .brand("DependencyName");
+
+export type DependencyName = typeof _dependencyNameBrand.infer;
+
+/**
+ * A dependency's resolved version string, kept verbatim from its source (never parsed). The brand
+ * is VALIDATED non-blank, so a blank version can never identify a package. Minted via {@link
+ * asDependencyVersion} at the same construction sites as {@link DependencyName}.
+ */
+const _dependencyVersionBrand = type("string")
+  .narrow((value, ctx) => value.trim().length > 0 || ctx.reject("a non-blank dependency version"))
+  .brand("DependencyVersion");
+
+export type DependencyVersion = typeof _dependencyVersionBrand.infer;
+
+/**
  * Mint a {@link RawLicense} from untrusted license text - the one cast that admits a plain string
  * into the raw-license state, used at the claim origins (collector, enrichment, ScanCode) and by
  * canonicalization's own input path.
@@ -129,6 +153,25 @@ export function asAbsolutePath(path: string): AbsolutePath {
  */
 export function asRelativePath(path: string): RelativePath {
   return _relativePathBrand.assert(path) as RelativePath;
+}
+
+/**
+ * Mint a {@link DependencyName} where a package name is constructed.
+ *
+ * @throws if `name` is blank. Fires on a bug (or malformed input not filtered upstream) that would
+ * otherwise let a blank string identify a package.
+ */
+export function asDependencyName(name: string): DependencyName {
+  return _dependencyNameBrand.assert(name) as DependencyName;
+}
+
+/**
+ * Mint a {@link DependencyVersion} where a package version is constructed.
+ *
+ * @throws if `version` is blank, for the same reason as {@link asDependencyName}.
+ */
+export function asDependencyVersion(version: string): DependencyVersion {
+  return _dependencyVersionBrand.assert(version) as DependencyVersion;
 }
 
 /**
@@ -445,8 +488,8 @@ export interface PackageEntry {
   /** Dedup key, kept verbatim from the SBOM (URL-encoding like %40 intact). */
   purl: Purl;
   /** Display name including group, e.g. "@ampproject/remapping". */
-  name: string;
-  version: string;
+  name: DependencyName;
+  version: DependencyVersion;
   /** Consuming targets with per-occurrence scope, sorted by target. */
   occurrences: Occurrence[];
   licenseClaims: LicenseClaim[];

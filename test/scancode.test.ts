@@ -52,7 +52,14 @@ import {
   isRootLevelPath,
   sitePackagesDir,
 } from "../src/enrich/scancode/sources";
-import { asRawLicense, widen, asPurl, type Purl } from "./brandTestSupport";
+import {
+  asRawLicense,
+  widen,
+  asPurl,
+  asDependencyName,
+  asDependencyVersion,
+  type Purl,
+} from "./brandTestSupport";
 
 /** Original exec export captured BEFORE any mock.module call (restore target). */
 const REAL_EXEC = { ...execModule };
@@ -1448,8 +1455,8 @@ describe("assessPackages — ScanCode peer assessment stage", () => {
   function npmPackage(name: string, version: string, claims: LicenseClaim[] = []): PackageEntry {
     return {
       purl: asPurl(`pkg:npm/${name}@${version}`),
-      name,
-      version,
+      name: asDependencyName(name),
+      version: asDependencyVersion(version),
       occurrences: [{ target: "proj", isDevDependency: false }],
       licenseClaims: claims,
       scope: "app",
@@ -1910,8 +1917,8 @@ describe("assessPackages — ScanCode peer assessment stage", () => {
         npmPackage("absent", "1.0.0"), // no local sources 1
         {
           purl: asPurl("pkg:apk/musl@1.2.3"),
-          name: "musl",
-          version: "1.2.3",
+          name: asDependencyName("musl"),
+          version: asDependencyVersion("1.2.3"),
           occurrences: [{ target: "proj", isDevDependency: false }],
           licenseClaims: [],
           scope: "os",
