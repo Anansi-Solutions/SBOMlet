@@ -15,7 +15,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 
-import { asAbsolutePath } from "../model/dependencies";
+import { asAbsolutePath, asTargetIdentity } from "../model/dependencies";
 import { CDXGEN_TOOL, computeCacheKey } from "./cdxgen";
 import * as execModule from "./exec";
 import {
@@ -35,7 +35,7 @@ function makeTarget(yarnLock: string, packageJson: string): Target {
 
   writeFileSync(join(dir, "yarn.lock"), yarnLock);
   writeFileSync(join(dir, "package.json"), packageJson);
-  return { dir: asAbsolutePath(dir), identity: "test/synthetic" };
+  return { dir: asAbsolutePath(dir), identity: asTargetIdentity("test/synthetic") };
 }
 
 describe("yarnPluginArgs", () => {
@@ -197,7 +197,7 @@ describe("dual-run cache key", () => {
 
     const unit: Target = {
       dir: asAbsolutePath(unitDir),
-      identity: "backend",
+      identity: asTargetIdentity("backend"),
       lockfileDir: rootDir,
       workspacePath: "backend",
     };
@@ -242,13 +242,13 @@ describe("dual-run cache key", () => {
 
     const unitA: Target = {
       dir: asAbsolutePath(unitADir),
-      identity: "backend",
+      identity: asTargetIdentity("backend"),
       lockfileDir: rootDir,
       workspacePath: "backend",
     };
     const unitB: Target = {
       dir: asAbsolutePath(unitBDir),
-      identity: "frontend",
+      identity: asTargetIdentity("frontend"),
       lockfileDir: rootDir,
       workspacePath: "frontend",
     };
@@ -333,7 +333,7 @@ describe("collectWithYarnPlugin — unit-aware cwd and cache key", () => {
 
     const unit: Target = {
       dir: asAbsolutePath(unitDir),
-      identity: "backend",
+      identity: asTargetIdentity("backend"),
       lockfileDir: rootDir,
       workspacePath: "backend",
     };
@@ -352,7 +352,7 @@ describe("collectWithYarnPlugin — unit-aware cwd and cache key", () => {
     // with workspacePath undefined — proving the discriminator segment
     // entered the hash.
     const noDiscriminatorKey = computeCacheKey(
-      { dir: asAbsolutePath(unitDir), identity: "backend", lockfileDir: rootDir },
+      { dir: asAbsolutePath(unitDir), identity: asTargetIdentity("backend"), lockfileDir: rootDir },
       YARN_PLUGIN_TOOL,
       yarnPluginCacheArgs(),
       [

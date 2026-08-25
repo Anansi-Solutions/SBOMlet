@@ -25,6 +25,8 @@ import {
   type EvaluatedDependencies,
   type Verdict,
   asAbsolutePath,
+  asTargetIdentity,
+  type TargetIdentity,
 } from "../src/model/dependencies";
 import { annotateFindings } from "../src/normalize/normalize";
 import { evaluate } from "../src/policy/engine/evaluate";
@@ -32,12 +34,13 @@ import { parsePolicy } from "../src/policy/parse/parse";
 import { renderCyclonedx } from "../src/render/cyclonedx";
 import { renderMarkdown, type PolicyView } from "../src/render/markdown";
 import { renderNotices } from "../src/render/notices";
+import { widen } from "./brandTestSupport";
 import type { Target } from "../src/targets/target";
 
 /** No scanned target in these scenarios is collected by a lane that derives a dependency graph. */
-const WITHOUT_DEPENDENCY_GRAPHS: ReadonlySet<string> = new Set();
+const WITHOUT_DEPENDENCY_GRAPHS: ReadonlySet<TargetIdentity> = new Set();
 
-const TARGET = "libraries/iframe-rpc";
+const TARGET = asTargetIdentity("libraries/iframe-rpc");
 
 const fixtureRaw = readFileSync(
   join(import.meta.dir, "fixtures", "volatile-retained.json"),
@@ -112,10 +115,10 @@ describe("determinism — multi-target merge", () => {
     const model = mergeSboms([
       {
         sbom: JSON.parse(fixtureRaw),
-        targetIdentity: "a",
+        targetIdentity: asTargetIdentity("a"),
         prodPurlSet: new Set<string>(),
       },
-      { sbom: JSON.parse(fixtureRaw), targetIdentity: "b" },
+      { sbom: JSON.parse(fixtureRaw), targetIdentity: asTargetIdentity("b") },
     ]);
 
     return { md: renderMarkdown(model), dump: toSortedDependenciesJson(model) };
@@ -143,7 +146,9 @@ describe("determinism — multi-target merge", () => {
     const sharedPackage = parsed.packages.find((pkg) => pkg.occurrences.length === 2);
 
     expect(sharedPackage).toBeDefined();
-    const byTarget = new Map(sharedPackage!.occurrences.map((o) => [o.target, o.isDevDependency]));
+    const byTarget = new Map(
+      sharedPackage!.occurrences.map((o) => [widen(o.target), o.isDevDependency]),
+    );
 
     expect(byTarget.get("a")).toBe(true);
   });
@@ -175,7 +180,7 @@ describe("determinism — policy-annotated dump", () => {
     const policy = parsePolicy(POLICY_TOML);
     const model = mergeSboms([
       { sbom: JSON.parse(fixtureRaw), targetIdentity: TARGET },
-      { sbom: JSON.parse(shapesRaw), targetIdentity: "apps/shapes" },
+      { sbom: JSON.parse(shapesRaw), targetIdentity: asTargetIdentity("apps/shapes") },
     ]);
     const { model: annotated } = annotateFindings(model, policy.clarify);
     const verdicts = evaluate(annotated, policy, WITHOUT_DEPENDENCY_GRAPHS);
@@ -278,7 +283,7 @@ const BUN_DET_LOCK = `{
 }
 `;
 
-const BUN_TARGET_IDENTITY = "fixtures/bun-det";
+const BUN_TARGET_IDENTITY = asTargetIdentity("fixtures/bun-det");
 
 const collectorTempDirs: string[] = [];
 
@@ -361,7 +366,7 @@ describe("determinism — bun collector double-run byte-identity", () => {
     const build = (): { md: string; dump: string } => {
       const model = mergeSboms([
         { sbom: JSON.parse(bomText), targetIdentity: BUN_TARGET_IDENTITY },
-        { sbom: JSON.parse(npmRaw), targetIdentity: "fixtures/npm-scope" },
+        { sbom: JSON.parse(npmRaw), targetIdentity: asTargetIdentity("fixtures/npm-scope") },
       ]);
 
       return {
@@ -429,7 +434,7 @@ const NUGET_DET_LOCK = `{
 }
 `;
 
-const NUGET_TARGET_IDENTITY = "fixtures/nuget-det";
+const NUGET_TARGET_IDENTITY = asTargetIdentity("fixtures/nuget-det");
 
 /** Writes the fixture lockfile into a fresh temp project dir. */
 function makeNugetFixtureTarget(): Target {
@@ -546,7 +551,7 @@ const MAVEN_DET_SBOM_LINES = [
 ];
 const MAVEN_DET_SBOM = MAVEN_DET_SBOM_LINES.join("\n");
 
-const MAVEN_TARGET_IDENTITY = "fixtures/maven-det";
+const MAVEN_TARGET_IDENTITY = asTargetIdentity("fixtures/maven-det");
 
 /** Writes the fixture sidecar into a fresh temp project dir. */
 function makeMavenFixtureTarget(): Target {
@@ -658,7 +663,7 @@ describe("determinism — maven collector double-run byte-identity", () => {
       ],
     });
 
-    const DUAL_DET_TARGET_IDENTITY = "fixtures/maven-det-dual";
+    const DUAL_DET_TARGET_IDENTITY = asTargetIdentity("fixtures/maven-det-dual");
 
     function makeDualMavenFixtureTarget(): Target {
       const dir = mkdtempSync(join(tmpdir(), "licenses-det-maven-dual-"));
@@ -726,7 +731,7 @@ describe("determinism — maven collector double-run byte-identity", () => {
     const build = (): { md: string; dump: string } => {
       const model = mergeSboms([
         { sbom: JSON.parse(bomText), targetIdentity: BUN_TARGET_IDENTITY },
-        { sbom: JSON.parse(npmRaw), targetIdentity: "fixtures/npm-scope" },
+        { sbom: JSON.parse(npmRaw), targetIdentity: asTargetIdentity("fixtures/npm-scope") },
       ]);
 
       return {
@@ -752,7 +757,7 @@ describe("determinism — maven collector double-run byte-identity", () => {
 // the run - the target-compatibility lane is purely additive.
 // ---------------------------------------------------------------------------
 
-const TARGET_CORPUS_TARGET = "apps/synthetic";
+const TARGET_CORPUS_TARGET = asTargetIdentity("apps/synthetic");
 
 describe("target lane — no-target corpus byte-identity", () => {
   test("a corpus spanning copyleft/AGPL/imprecise/unknown findings renders byte-identical verdicts + both documents whether [target] is absent or declared-but-inert", () => {

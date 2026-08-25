@@ -23,12 +23,14 @@ import {
 import { crossValidatePolicy } from "../policy/engine/crossValidate";
 import {
   asRelativePath,
+  asTargetIdentity,
   compareCodeUnits,
   DOCKER_IDENTITY_PREFIX,
   toSortedDependenciesJson,
   type CanonicalDependencies,
   type EvaluatedDependencies,
   type RelativePath,
+  type TargetIdentity,
   type Verdict,
 } from "../model/dependencies";
 import { annotateFindings } from "../normalize/normalize";
@@ -310,7 +312,7 @@ function readCommittedDockerSbom(opts: GenerateOptions, dir: string): CollectedS
       ...attributed.doc,
       components: attributed.components.filter((component) => component.images.includes(image)),
     },
-    targetIdentity: `${DOCKER_IDENTITY_PREFIX}${source}`,
+    targetIdentity: asTargetIdentity(`${DOCKER_IDENTITY_PREFIX}${source}`),
     scope: "os",
   }));
 }
@@ -584,7 +586,7 @@ function targetProfileSummaryOf(policy: Policy): TargetProfileSummary | undefine
 
   const workspaces = target.workspaces
     .map((entry) => {
-      const profile = resolveTargetProfile(entry.path, policy);
+      const profile = resolveTargetProfile(asTargetIdentity(entry.path), policy);
 
       return profile === undefined ? undefined : { path: entry.path, profile };
     })
@@ -643,7 +645,7 @@ function projectPolicyView(
 function checkedDependencyGraphTargets(
   model: CanonicalDependencies,
   inputs: ReadonlyArray<CollectedSbom>,
-): ReadonlySet<string> {
+): ReadonlySet<TargetIdentity> {
   const targets = targetsWithDependencyGraph(inputs);
 
   assertDependencyGraphCoverage(model, targets);

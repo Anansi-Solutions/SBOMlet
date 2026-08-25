@@ -7,6 +7,8 @@ import {
   DOCKER_IDENTITY_PREFIX,
   type CanonicalDependencies,
   type PackageEntry,
+  asTargetIdentity,
+  type TargetIdentity,
 } from "../src/model/dependencies";
 import { mergeSboms } from "../src/merge/merge";
 import { annotateFindings } from "../src/normalize/normalize";
@@ -21,7 +23,7 @@ import { asPurl, asRelativePath, asDependencyName, asDependencyVersion } from ".
 import type { Policy } from "../src/policy/schema";
 
 /** No scanned target in these scenarios is collected by a lane that derives a dependency graph. */
-const WITHOUT_DEPENDENCY_GRAPHS: ReadonlySet<string> = new Set();
+const WITHOUT_DEPENDENCY_GRAPHS: ReadonlySet<TargetIdentity> = new Set();
 
 /**
  * A synthetic scenario shaped like the real-world report that motivated the
@@ -32,9 +34,9 @@ const WITHOUT_DEPENDENCY_GRAPHS: ReadonlySet<string> = new Set();
  * consumer-identifying string appears anywhere in this file.
  */
 
-const API_CONTAINER = `${DOCKER_IDENTITY_PREFIX}services/api/Dockerfile`;
-const BUILD_CONTAINER = `${DOCKER_IDENTITY_PREFIX}tools/build/Dockerfile`;
-const APP_TARGET = "apps/web";
+const API_CONTAINER = asTargetIdentity(`${DOCKER_IDENTITY_PREFIX}services/api/Dockerfile`);
+const BUILD_CONTAINER = asTargetIdentity(`${DOCKER_IDENTITY_PREFIX}tools/build/Dockerfile`);
+const APP_TARGET = asTargetIdentity("apps/web");
 
 const POLICY_TOML = [
   "[unknown]",
@@ -676,7 +678,7 @@ describe("containerReport — multi-container golden scenario", () => {
 
 describe("a shared workspace+docker package through the real merge/scope/evaluate/render path", () => {
   const SHARED_PURL = "pkg:npm/shared-workspace-and-image@2.0.0";
-  const WORKSPACE_TARGET = "apps/dashboard";
+  const WORKSPACE_TARGET = asTargetIdentity("apps/dashboard");
 
   function sharedCopyleftDoc(): unknown {
     return {

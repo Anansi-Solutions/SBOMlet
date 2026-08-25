@@ -10,6 +10,7 @@ import {
   type LicenseFinding,
   type PackageAttribution,
   type PackageEntry,
+  asTargetIdentity,
 } from "../src/model/dependencies";
 import { canonicalizeExpression, leafIds, type ExpressionNode } from "../src/normalize/expression";
 import { annotateFindings } from "../src/normalize/normalize";
@@ -29,7 +30,7 @@ function entry(
   partial: Partial<PackageEntry> & Pick<PackageEntry, "name" | "version" | "purl">,
 ): PackageEntry {
   return {
-    occurrences: [{ target: "apps/a", isDevDependency: false }],
+    occurrences: [{ target: asTargetIdentity("apps/a"), isDevDependency: false }],
     licenseClaims: [],
     scope: "app",
     ...partial,
@@ -531,7 +532,9 @@ describe("renderNotices — golden byte equality", () => {
     const evidenceDoc = JSON.parse(
       readFileSync(join(import.meta.dir, "fixtures", "plugin-evidence.json"), "utf-8"),
     ) as unknown;
-    const model = mergeSboms([{ sbom: evidenceDoc, targetIdentity: "libraries/evidence-target" }]);
+    const model = mergeSboms([
+      { sbom: evidenceDoc, targetIdentity: asTargetIdentity("libraries/evidence-target") },
+    ]);
     const annotated = annotateFindings(model, []).model;
     const golden = readFileSync(join(import.meta.dir, "golden", "notices.md"), "utf-8");
 

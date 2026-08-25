@@ -4,6 +4,7 @@ import { basename, join } from "node:path";
 import { afterEach, describe, expect, test } from "bun:test";
 
 import { asAbsolutePath } from "../model/dependencies";
+import { widen } from "../../test/brandTestSupport";
 import { resolveTarget } from "./target";
 
 // Self-contained temp trees only — no reference to any host-project path.
@@ -39,7 +40,7 @@ describe("resolveTarget", () => {
 
     const target = resolveTarget(targetDir);
 
-    expect(target.identity).toBe("libraries/iframe-rpc");
+    expect(widen(target.identity)).toBe("libraries/iframe-rpc");
     expect(target.identity.includes("\\")).toBe(false);
     expect(target.dir).toBe(asAbsolutePath(targetDir));
   });
@@ -54,7 +55,7 @@ describe("resolveTarget", () => {
 
     const target = resolveTarget(targetDir);
 
-    expect(target.identity).toBe("libraries/iframe-rpc");
+    expect(widen(target.identity)).toBe("libraries/iframe-rpc");
   });
 
   test("resolves a relative target argument against the provided cwd", () => {
@@ -67,7 +68,7 @@ describe("resolveTarget", () => {
 
     const target = resolveTarget(join("libraries", "iframe-rpc"), root);
 
-    expect(target.identity).toBe("libraries/iframe-rpc");
+    expect(widen(target.identity)).toBe("libraries/iframe-rpc");
     expect(target.dir).toBe(asAbsolutePath(targetDir));
   });
 
@@ -118,7 +119,7 @@ describe("resolveTarget", () => {
 
     const target = resolveTarget(targetDir);
 
-    expect(target.identity).toBe(basename(targetDir));
+    expect(widen(target.identity)).toBe(basename(targetDir));
     expect(target.identity.includes("/")).toBe(false);
     expect(target.identity.includes("\\")).toBe(false);
   });

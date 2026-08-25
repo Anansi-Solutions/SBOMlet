@@ -9,11 +9,12 @@ import { describe, expect, test } from "bun:test";
 import { npmIntroductions } from "../../collectors/npmProvenance";
 import { mergeSboms, type CollectedSbom } from "../../merge/merge";
 import { parsePolicy } from "../parse/parse";
+import { asTargetIdentity } from "../../../test/brandTestSupport";
 import { crossValidatePolicy } from "./crossValidate";
 import type { CanonicalDependencies } from "../../model/dependencies";
 
-const GRAPH_TARGET = "apps/web";
-const FLAT_TARGET = "docker:images/app/Dockerfile";
+const GRAPH_TARGET = asTargetIdentity("apps/web");
+const FLAT_TARGET = asTargetIdentity("docker:images/app/Dockerfile");
 const UI_PURL = "pkg:npm/%40acme/ui@0.0.0-use.local";
 const LEFT_PAD_PURL = "pkg:npm/left-pad@1.3.0";
 const RIGHT_PAD_PURL = "pkg:npm/right-pad@1.0.0";

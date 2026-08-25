@@ -1,11 +1,15 @@
 import { describe, expect, test } from "bun:test";
-import { asPurl, asDependencyName, asDependencyVersion } from "../../test/brandTestSupport";
+import { asPurl, asDependencyName, asDependencyVersion, widen } from "../../test/brandTestSupport";
 
+import {
+  asTargetIdentity,
+  type CanonicalDependencies,
+  type PackageEntry,
+} from "../model/dependencies";
 import { applyContainerScopes } from "./containerScope";
-import type { CanonicalDependencies, PackageEntry } from "../model/dependencies";
 
-const API_CONTAINER = "docker:services/api/Dockerfile";
-const BUILD_CONTAINER = "docker:tools/build/Dockerfile";
+const API_CONTAINER = asTargetIdentity("docker:services/api/Dockerfile");
+const BUILD_CONTAINER = asTargetIdentity("docker:tools/build/Dockerfile");
 
 /** Hand-built PackageEntry with sensible defaults for the transform tests. */
 function entry(
@@ -100,9 +104,9 @@ describe("applyContainerScopes — application ecosystems re-key to app", () => 
     const result = applyContainerScopes({ packages: [pkg] }, new Set([BUILD_CONTAINER]));
     const [atApi, atBuild] = result.packages[0]!.occurrences;
 
-    expect(atApi!.target).toBe(API_CONTAINER);
+    expect(widen(atApi!.target)).toBe(API_CONTAINER);
     expect(atApi!.isDevDependency).toBe(false);
-    expect(atBuild!.target).toBe(BUILD_CONTAINER);
+    expect(widen(atBuild!.target)).toBe(BUILD_CONTAINER);
     expect(atBuild!.isDevDependency).toBe(true);
   });
 
@@ -132,7 +136,7 @@ describe("applyContainerScopes — an already-app package still dev-marks its do
       name: asDependencyName("shared"),
       version: asDependencyVersion("1.0.0"),
       occurrences: [
-        { target: "apps/web", isDevDependency: false },
+        { target: asTargetIdentity("apps/web"), isDevDependency: false },
         { target: BUILD_CONTAINER, isDevDependency: false },
       ],
       licenseClaims: [],
@@ -143,9 +147,9 @@ describe("applyContainerScopes — an already-app package still dev-marks its do
     expect(result.packages[0]!.scope).toBe("app");
     const [atApp, atBuild] = result.packages[0]!.occurrences;
 
-    expect(atApp!.target).toBe("apps/web");
+    expect(widen(atApp!.target)).toBe("apps/web");
     expect(atApp!.isDevDependency).toBe(false);
-    expect(atBuild!.target).toBe(BUILD_CONTAINER);
+    expect(widen(atBuild!.target)).toBe(BUILD_CONTAINER);
     expect(atBuild!.isDevDependency).toBe(true);
   });
 
@@ -190,7 +194,7 @@ describe("applyContainerScopes — os-scope-implies-docker-only invariant", () =
       purl: asPurl("pkg:apk/alpine/musl@1.2.4-r2"),
       name: asDependencyName("musl"),
       version: asDependencyVersion("1.2.4-r2"),
-      occurrences: [{ target: "apps/web", isDevDependency: false }],
+      occurrences: [{ target: asTargetIdentity("apps/web"), isDevDependency: false }],
     });
     const model: CanonicalDependencies = { packages: [pkg] };
 
@@ -207,7 +211,7 @@ describe("applyContainerScopes — os-scope-implies-docker-only invariant", () =
       version: asDependencyVersion("5.2-6"),
       occurrences: [
         { target: API_CONTAINER, isDevDependency: false },
-        { target: "apps/web", isDevDependency: false },
+        { target: asTargetIdentity("apps/web"), isDevDependency: false },
       ],
     });
     const model: CanonicalDependencies = { packages: [pkg] };

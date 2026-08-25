@@ -7,8 +7,10 @@
  */
 import {
   DOCKER_IDENTITY_PREFIX,
+  identityPathsOverlap,
   matchesIdentityPrefix,
   type CanonicalDependencies,
+  type TargetIdentity,
 } from "../../model/dependencies";
 import type { TargetProfile } from "../compat";
 import type { TargetWorkspaceEntry } from "../schema/targetProfile";
@@ -27,7 +29,7 @@ import type { Policy } from "../schema";
  * untouched).
  */
 export function resolveTargetProfile(
-  occurrenceTarget: string,
+  occurrenceTarget: TargetIdentity,
   policy: Policy,
 ): TargetProfile | undefined {
   const target = policy.target;
@@ -84,7 +86,7 @@ export function unusedWorkspaceTargetWarnings(
     return [];
   }
 
-  const occurrenceTargets = new Set<string>();
+  const occurrenceTargets = new Set<TargetIdentity>();
 
   for (const pkg of model.packages) {
     for (const occurrence of pkg.occurrences) {
@@ -136,10 +138,8 @@ export function suppressionOverlapNotices(policy: Policy): string[] {
       continue;
     }
 
-    const overlapping = target.workspaces.find(
-      (entry) =>
-        matchesIdentityPrefix(rule.path, entry.path) ||
-        matchesIdentityPrefix(entry.path, rule.path),
+    const overlapping = target.workspaces.find((entry) =>
+      identityPathsOverlap(rule.path, entry.path),
     );
 
     if (overlapping !== undefined) {

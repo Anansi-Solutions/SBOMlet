@@ -2,13 +2,14 @@ import { describe, expect, test } from "bun:test";
 
 import { claim, pkg, osPkg, modelOf } from "../../test/normalizeTestSupport";
 import { asRawLicense, canon, widen } from "../../test/brandTestSupport";
-import { annotateFindings, applyScancodeAssessment, type ClarifyInput } from "./normalize";
-import type {
-  LicenseClaim,
-  LicenseClaimKind,
-  LicenseFinding,
-  PackageEntry,
+import {
+  asTargetIdentity,
+  type LicenseClaim,
+  type LicenseClaimKind,
+  type LicenseFinding,
+  type PackageEntry,
 } from "../model/dependencies";
+import { annotateFindings, applyScancodeAssessment, type ClarifyInput } from "./normalize";
 
 // ---------------------------------------------------------------------------
 // ScanCode senior assessment. applyScancodeAssessment
@@ -470,17 +471,20 @@ const dockerPkgWithDivergence = (
 ): PackageEntry => ({
   ...osPkg(name, version, []),
   occurrences: byTarget.map((t) => ({
-    target: t.target,
+    target: asTargetIdentity(t.target),
     isDevDependency: false,
   })),
-  dockerClaimDivergence: { kind: "cross-image-claims", byTarget },
+  dockerClaimDivergence: {
+    kind: "cross-image-claims",
+    byTarget: byTarget.map((t) => ({ target: asTargetIdentity(t.target), claims: t.claims })),
+  },
 });
 
 describe("annotateFindings — cross-image claim divergence overlay", () => {
   test("a package carrying dockerClaimDivergence and no scancode conflict surfaces it as finding.conflict, and the merge-only field is stripped from the entry", () => {
     const entry = dockerPkgWithDivergence("busybox", "1.37.0-r20", [
-      { target: "docker:image-a", claims: ["MIT"] },
-      { target: "docker:image-b", claims: ["Apache-2.0"] },
+      { target: asTargetIdentity("docker:image-a"), claims: ["MIT"] },
+      { target: asTargetIdentity("docker:image-b"), claims: ["Apache-2.0"] },
     ]);
     const { model } = annotateFindings(modelOf(entry), []);
     const resultEntry = model.packages[0]!;
@@ -488,8 +492,8 @@ describe("annotateFindings — cross-image claim divergence overlay", () => {
     expect(resultEntry.finding!.conflict).toEqual({
       kind: "cross-image-claims",
       byTarget: [
-        { target: "docker:image-a", claims: ["MIT"] },
-        { target: "docker:image-b", claims: ["Apache-2.0"] },
+        { target: asTargetIdentity("docker:image-a"), claims: ["MIT"] },
+        { target: asTargetIdentity("docker:image-b"), claims: ["Apache-2.0"] },
       ],
     });
     expect(resultEntry).not.toHaveProperty("dockerClaimDivergence");
@@ -505,8 +509,8 @@ describe("annotateFindings — cross-image claim divergence overlay", () => {
   test("a ScanCode assessment conflict takes the conflict slot over a co-present cross-image divergence — the in-depth ScanCode assessment wins the shared slot", () => {
     const entry: PackageEntry = {
       ...dockerPkgWithDivergence("both-conflicts-pkg", "1.0.0", [
-        { target: "docker:image-a", claims: ["MIT"] },
-        { target: "docker:image-b", claims: ["Apache-2.0"] },
+        { target: asTargetIdentity("docker:image-a"), claims: ["MIT"] },
+        { target: asTargetIdentity("docker:image-b"), claims: ["Apache-2.0"] },
       ]),
       licenseClaims: [claim("Apache-2.0"), scancodeClaim("MIT")],
     };
@@ -518,8 +522,8 @@ describe("annotateFindings — cross-image claim divergence overlay", () => {
 
   test("resolution: a [[clarify]] override on a cross-image conflict decides the finding and clears the marker — same resolution path as a ScanCode conflict", () => {
     const entry = dockerPkgWithDivergence("clarified-divergent-pkg", "1.0.0", [
-      { target: "docker:image-a", claims: ["MIT"] },
-      { target: "docker:image-b", claims: ["Apache-2.0"] },
+      { target: asTargetIdentity("docker:image-a"), claims: ["MIT"] },
+      { target: asTargetIdentity("docker:image-b"), claims: ["Apache-2.0"] },
     ]);
     const clarify: ClarifyInput[] = [
       {
@@ -538,8 +542,8 @@ describe("annotateFindings — cross-image claim divergence overlay", () => {
 
   test("an image with no declared claim is carried losslessly in the marker as an empty claims array, never dropped", () => {
     const entry = dockerPkgWithDivergence("partial-claim-pkg", "1.0.0", [
-      { target: "docker:image-a", claims: [] },
-      { target: "docker:image-b", claims: ["MIT"] },
+      { target: asTargetIdentity("docker:image-a"), claims: [] },
+      { target: asTargetIdentity("docker:image-b"), claims: ["MIT"] },
     ]);
     const { model } = annotateFindings(modelOf(entry), []);
     const conflict = model.packages[0]!.finding!.conflict!;
@@ -547,8 +551,8 @@ describe("annotateFindings — cross-image claim divergence overlay", () => {
     expect(conflict.kind).toBe("cross-image-claims");
     if (conflict.kind === "cross-image-claims") {
       expect(conflict.byTarget).toEqual([
-        { target: "docker:image-a", claims: [] },
-        { target: "docker:image-b", claims: ["MIT"] },
+        { target: asTargetIdentity("docker:image-a"), claims: [] },
+        { target: asTargetIdentity("docker:image-b"), claims: ["MIT"] },
       ]);
     }
   });

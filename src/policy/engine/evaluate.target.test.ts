@@ -17,13 +17,15 @@ import {
   asPurl,
   asDependencyName,
   asDependencyVersion,
+  asTargetIdentity,
+  type TargetIdentity,
 } from "../../../test/brandTestSupport";
 import { evaluate } from "./evaluate";
 import type { Policy } from "../schema";
 import type { CanonicalDependencies, Verdict } from "../../model/dependencies";
 
 /** No scanned target in these scenarios is collected by a lane that derives a dependency graph. */
-const WITHOUT_DEPENDENCY_GRAPHS: ReadonlySet<string> = new Set();
+const WITHOUT_DEPENDENCY_GRAPHS: ReadonlySet<TargetIdentity> = new Set();
 
 interface OccurrenceSpec {
   target: string;
@@ -49,7 +51,7 @@ function makeModel(specs: ReadonlyArray<PackageSpec>): CanonicalDependencies {
       name: asDependencyName(spec.name),
       version: asDependencyVersion(spec.version ?? "1.0.0"),
       occurrences: spec.occurrences.map((o) => ({
-        target: o.target,
+        target: asTargetIdentity(o.target),
         isDevDependency: o.dev ?? false,
       })),
       licenseClaims:
@@ -90,7 +92,7 @@ function findVerdict(
   return verdicts.find((v) => v.purl === purl && v.occurrenceTarget === target);
 }
 
-const TARGET = "apps/api";
+const TARGET = asTargetIdentity("apps/api");
 const MIT_TARGET_EXTERNAL = [
   "[target]",
   'license = "MIT"',

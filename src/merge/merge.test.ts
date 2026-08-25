@@ -11,12 +11,12 @@ import {
   type DependencyIntroduction,
   type PackageEntry,
 } from "../model/dependencies";
-import { asRawLicense, asPurl, widen } from "../../test/brandTestSupport";
+import { asRawLicense, asPurl, widen, asTargetIdentity } from "../../test/brandTestSupport";
 import { assertDependencyGraphCoverage, targetsWithDependencyGraph } from "./dependencyGraphs";
 import { mergeSboms, purlSetOf } from "./merge";
 
-const TARGET = "libraries/iframe-rpc";
-const SYNTHETIC_TARGET = "apps/synthetic";
+const TARGET = asTargetIdentity("libraries/iframe-rpc");
+const SYNTHETIC_TARGET = asTargetIdentity("apps/synthetic");
 
 function loadFixture(name: string): unknown {
   return JSON.parse(
@@ -163,14 +163,14 @@ describe("mergeSboms — purl-keyed dedup and root exclusion", () => {
     // The multi-target merge shape: every shared dependency with a known
     // license would otherwise render "MIT, MIT".
     const model = mergeSboms([
-      { sbom: shapesDoc, targetIdentity: "apps/a" },
-      { sbom: shapesDoc, targetIdentity: "apps/b" },
+      { sbom: shapesDoc, targetIdentity: asTargetIdentity("apps/a") },
+      { sbom: shapesDoc, targetIdentity: asTargetIdentity("apps/b") },
     ]);
     const mitPkg = model.packages.find((p) => p.purl === "pkg:npm/mit-pkg@1.0.0");
 
     expect(mitPkg?.occurrences).toEqual([
-      { target: "apps/a", isDevDependency: false },
-      { target: "apps/b", isDevDependency: false },
+      { target: asTargetIdentity("apps/a"), isDevDependency: false },
+      { target: asTargetIdentity("apps/b"), isDevDependency: false },
     ]);
     expect(mitPkg?.licenseClaims).toEqual([
       { raw: asRawLicense("MIT"), kind: "spdx-id", source: "generator" },
@@ -293,13 +293,13 @@ describe("mergeSboms — ordering, occurrences, and malformed entries", () => {
 
   test("multiple inputs union occurrences, sorted ascending", () => {
     const model = mergeSboms([
-      { sbom: trimmedDoc, targetIdentity: "libraries/iframe-rpc" },
-      { sbom: trimmedDoc, targetIdentity: "apps/example" },
+      { sbom: trimmedDoc, targetIdentity: asTargetIdentity("libraries/iframe-rpc") },
+      { sbom: trimmedDoc, targetIdentity: asTargetIdentity("apps/example") },
     ]);
 
     expect(model.packages.length).toBeGreaterThan(0);
     for (const pkg of model.packages) {
-      expect(pkg.occurrences.map((o) => o.target)).toEqual([
+      expect(pkg.occurrences.map((o) => widen(o.target))).toEqual([
         "apps/example",
         "libraries/iframe-rpc",
       ]);
@@ -487,15 +487,15 @@ describe("mergeSboms — occurrence-level dev/prod scope", () => {
 
   test("a purl shared by two targets carries independent per-target dev flags", () => {
     const model = mergeSboms([
-      { sbom: sharedDevDoc, targetIdentity: "apps/a" },
-      { sbom: sharedProdDoc, targetIdentity: "apps/b" },
+      { sbom: sharedDevDoc, targetIdentity: asTargetIdentity("apps/a") },
+      { sbom: sharedProdDoc, targetIdentity: asTargetIdentity("apps/b") },
     ]);
 
     // One row per purl with one occurrence object per target.
     expect(model.packages.length).toBe(1);
     expect(model.packages[0]?.occurrences).toEqual([
-      { target: "apps/a", isDevDependency: true },
-      { target: "apps/b", isDevDependency: false },
+      { target: asTargetIdentity("apps/a"), isDevDependency: true },
+      { target: asTargetIdentity("apps/b"), isDevDependency: false },
     ]);
   });
 
@@ -533,13 +533,13 @@ describe("mergeSboms — occurrence-level dev/prod scope", () => {
   test("occurrences sort by target via compareCodeUnits regardless of input order", () => {
     // Merge inputs given in reverse target order still yield sorted output.
     const model = mergeSboms([
-      { sbom: sharedProdDoc, targetIdentity: "apps/b" },
-      { sbom: sharedDevDoc, targetIdentity: "apps/a" },
+      { sbom: sharedProdDoc, targetIdentity: asTargetIdentity("apps/b") },
+      { sbom: sharedDevDoc, targetIdentity: asTargetIdentity("apps/a") },
     ]);
 
     expect(model.packages[0]?.occurrences).toEqual([
-      { target: "apps/a", isDevDependency: true },
-      { target: "apps/b", isDevDependency: false },
+      { target: asTargetIdentity("apps/a"), isDevDependency: true },
+      { target: asTargetIdentity("apps/b"), isDevDependency: false },
     ]);
   });
 });
@@ -567,7 +567,7 @@ describe("mergeSboms — CollectedSbom.scope threading", () => {
 
   test('an input with scope:"os" tags every produced PackageEntry scope "os"', () => {
     const model = mergeSboms([
-      { sbom: osDoc, targetIdentity: "docker:img/Dockerfile", scope: "os" },
+      { sbom: osDoc, targetIdentity: asTargetIdentity("docker:img/Dockerfile"), scope: "os" },
     ]);
 
     expect(model.packages.length).toBe(2);
@@ -575,7 +575,7 @@ describe("mergeSboms — CollectedSbom.scope threading", () => {
   });
 
   test('absent scope still defaults to "app" (regression — existing entries unchanged)', () => {
-    const model = mergeSboms([{ sbom: osDoc, targetIdentity: "backend" }]);
+    const model = mergeSboms([{ sbom: osDoc, targetIdentity: asTargetIdentity("backend") }]);
 
     expect(model.packages.length).toBe(2);
     expect(model.packages.every((p) => p.scope === "app")).toBe(true);
@@ -584,7 +584,7 @@ describe("mergeSboms — CollectedSbom.scope threading", () => {
   test("scope is per-input: app-scope and os-scope inputs coexist in one model", () => {
     const model = mergeSboms([
       { sbom: trimmedDoc, targetIdentity: TARGET },
-      { sbom: osDoc, targetIdentity: "docker:img/Dockerfile", scope: "os" },
+      { sbom: osDoc, targetIdentity: asTargetIdentity("docker:img/Dockerfile"), scope: "os" },
     ]);
     const os = model.packages.filter((p) => p.scope === "os");
     const app = model.packages.filter((p) => p.scope === "app");
@@ -611,8 +611,8 @@ describe("mergeSboms — CollectedSbom.scope threading", () => {
 
     test("os-input FIRST, app-input second → shared purl resolves to app", () => {
       const model = mergeSboms([
-        { sbom: osDoc, targetIdentity: "docker:img/Dockerfile", scope: "os" },
-        { sbom: appDoc, targetIdentity: "backend" },
+        { sbom: osDoc, targetIdentity: asTargetIdentity("docker:img/Dockerfile"), scope: "os" },
+        { sbom: appDoc, targetIdentity: asTargetIdentity("backend") },
       ]);
       const shared = model.packages.find((p) => p.purl === SHARED);
 
@@ -621,8 +621,8 @@ describe("mergeSboms — CollectedSbom.scope threading", () => {
 
     test("app-input FIRST, os-input second → shared purl still resolves to app (order-independent)", () => {
       const model = mergeSboms([
-        { sbom: appDoc, targetIdentity: "backend" },
-        { sbom: osDoc, targetIdentity: "docker:img/Dockerfile", scope: "os" },
+        { sbom: appDoc, targetIdentity: asTargetIdentity("backend") },
+        { sbom: osDoc, targetIdentity: asTargetIdentity("docker:img/Dockerfile"), scope: "os" },
       ]);
       const shared = model.packages.find((p) => p.purl === SHARED);
 
@@ -631,7 +631,7 @@ describe("mergeSboms — CollectedSbom.scope threading", () => {
 
     test("a purl present ONLY in os input keeps os scope (no spurious promotion)", () => {
       const model = mergeSboms([
-        { sbom: osDoc, targetIdentity: "docker:img/Dockerfile", scope: "os" },
+        { sbom: osDoc, targetIdentity: asTargetIdentity("docker:img/Dockerfile"), scope: "os" },
       ]);
       const musl = model.packages.find((p) => p.purl === "pkg:apk/alpine/musl@1.2.4-r2");
 
@@ -680,8 +680,8 @@ describe("mergeSboms — full-image scope collision (app wins, image occurrence 
 
   test("an npm purl shared between an app input and the image input folds to one app-scope row with the docker occurrence in Used-in — os-first order", () => {
     const model = mergeSboms([
-      { sbom: imageDoc, targetIdentity: "docker:img/Dockerfile", scope: "os" },
-      { sbom: appDoc, targetIdentity: "backend" },
+      { sbom: imageDoc, targetIdentity: asTargetIdentity("docker:img/Dockerfile"), scope: "os" },
+      { sbom: appDoc, targetIdentity: asTargetIdentity("backend") },
     ]);
     const shared = model.packages.filter((p) => p.purl === SHARED_NPM);
 
@@ -689,23 +689,23 @@ describe("mergeSboms — full-image scope collision (app wins, image occurrence 
     expect(shared.length).toBe(1);
     expect(shared[0]?.scope).toBe("app");
     expect(shared[0]?.occurrences).toEqual([
-      { target: "backend", isDevDependency: false },
-      { target: "docker:img/Dockerfile", isDevDependency: false },
+      { target: asTargetIdentity("backend"), isDevDependency: false },
+      { target: asTargetIdentity("docker:img/Dockerfile"), isDevDependency: false },
     ]);
   });
 
   test("an npm purl shared between an app input and the image input folds to one app-scope row with the docker occurrence in Used-in — app-first order (#4 makes order irrelevant)", () => {
     const model = mergeSboms([
-      { sbom: appDoc, targetIdentity: "backend" },
-      { sbom: imageDoc, targetIdentity: "docker:img/Dockerfile", scope: "os" },
+      { sbom: appDoc, targetIdentity: asTargetIdentity("backend") },
+      { sbom: imageDoc, targetIdentity: asTargetIdentity("docker:img/Dockerfile"), scope: "os" },
     ]);
     const shared = model.packages.filter((p) => p.purl === SHARED_NPM);
 
     expect(shared.length).toBe(1);
     expect(shared[0]?.scope).toBe("app");
     expect(shared[0]?.occurrences).toEqual([
-      { target: "backend", isDevDependency: false },
-      { target: "docker:img/Dockerfile", isDevDependency: false },
+      { target: asTargetIdentity("backend"), isDevDependency: false },
+      { target: asTargetIdentity("docker:img/Dockerfile"), isDevDependency: false },
     ]);
   });
 
@@ -734,8 +734,8 @@ describe("mergeSboms — full-image scope collision (app wins, image occurrence 
       ],
     };
     const model = mergeSboms([
-      { sbom: devAppDoc, targetIdentity: "backend" },
-      { sbom: imageDoc, targetIdentity: "docker:img/Dockerfile", scope: "os" },
+      { sbom: devAppDoc, targetIdentity: asTargetIdentity("backend") },
+      { sbom: imageDoc, targetIdentity: asTargetIdentity("docker:img/Dockerfile"), scope: "os" },
     ]);
     const shared = model.packages.find((p) => p.purl === SHARED_NPM);
 
@@ -743,8 +743,8 @@ describe("mergeSboms — full-image scope collision (app wins, image occurrence 
     // package-level classification (isDevelopmentOnly requires EVERY
     // occurrence dev; here one is not, so the package is production).
     expect(shared?.occurrences).toEqual([
-      { target: "backend", isDevDependency: true },
-      { target: "docker:img/Dockerfile", isDevDependency: false },
+      { target: asTargetIdentity("backend"), isDevDependency: true },
+      { target: asTargetIdentity("docker:img/Dockerfile"), isDevDependency: false },
     ]);
     expect(shared?.occurrences.every((o) => o.isDevDependency)).toBe(false);
   });
@@ -763,7 +763,7 @@ describe("mergeSboms — full-image scope collision (app wins, image occurrence 
       ],
     };
     const model = mergeSboms([
-      { sbom: osOnlyDoc, targetIdentity: "docker:img/Dockerfile", scope: "os" },
+      { sbom: osOnlyDoc, targetIdentity: asTargetIdentity("docker:img/Dockerfile"), scope: "os" },
     ]);
     const os = model.packages.find((p) => p.purl === "pkg:deb/debian/libc6@2.36-9");
 
@@ -793,7 +793,7 @@ describe("mergeSboms — full-image scope collision (app wins, image occurrence 
     const model = mergeSboms([
       {
         sbom: selfInImageDoc,
-        targetIdentity: "docker:img/Dockerfile",
+        targetIdentity: asTargetIdentity("docker:img/Dockerfile"),
         scope: "os",
       },
     ]);
@@ -936,25 +936,25 @@ describe("mergeSboms — per-workspace inputs (yarn workspace units)", () => {
     const model = mergeSboms([
       {
         sbom: backendDoc,
-        targetIdentity: "backend",
+        targetIdentity: asTargetIdentity("backend"),
         prodPurlSet: new Set(["pkg:npm/ms@2.1.3"]),
       },
       {
         sbom: frontendDoc,
-        targetIdentity: "frontend",
+        targetIdentity: asTargetIdentity("frontend"),
         prodPurlSet: new Set(["pkg:npm/sax@1.4.1"]),
       },
     ]);
     const byPurl = new Map(model.packages.map((p) => [p.purl, p]));
 
     expect(byPurl.get(asPurl("pkg:npm/ms@2.1.3"))?.occurrences).toEqual([
-      { target: "backend", isDevDependency: false },
+      { target: asTargetIdentity("backend"), isDevDependency: false },
     ]);
     expect(byPurl.get(asPurl("pkg:npm/isarray@2.0.5"))?.occurrences).toEqual([
-      { target: "backend", isDevDependency: true },
+      { target: asTargetIdentity("backend"), isDevDependency: true },
     ]);
     expect(byPurl.get(asPurl("pkg:npm/sax@1.4.1"))?.occurrences).toEqual([
-      { target: "frontend", isDevDependency: false },
+      { target: asTargetIdentity("frontend"), isDevDependency: false },
     ]);
   });
 
@@ -983,12 +983,12 @@ describe("mergeSboms — per-workspace inputs (yarn workspace units)", () => {
     const model = mergeSboms([
       {
         sbom: backendDoc,
-        targetIdentity: "backend",
+        targetIdentity: asTargetIdentity("backend"),
         prodPurlSet: new Set([sharedPurl]),
       },
       {
         sbom: frontendDoc,
-        targetIdentity: "frontend",
+        targetIdentity: asTargetIdentity("frontend"),
         prodPurlSet: new Set(),
       },
     ]);
@@ -998,8 +998,8 @@ describe("mergeSboms — per-workspace inputs (yarn workspace units)", () => {
     expect(shared.length).toBe(1);
     // Two occurrences, sorted by target: backend (prod) before frontend (dev).
     expect(shared[0]?.occurrences).toEqual([
-      { target: "backend", isDevDependency: false },
-      { target: "frontend", isDevDependency: true },
+      { target: asTargetIdentity("backend"), isDevDependency: false },
+      { target: asTargetIdentity("frontend"), isDevDependency: true },
     ]);
     // First-seen license claim, never duplicated by the second input's
     // identical MIT claim.
@@ -1027,12 +1027,12 @@ describe("mergeSboms — per-workspace inputs (yarn workspace units)", () => {
     const model = mergeSboms([
       {
         sbom: rootDoc,
-        targetIdentity: ".",
+        targetIdentity: asTargetIdentity("."),
         prodPurlSet: new Set(), // the dev-only root's empty --production run
       },
       {
         sbom: backendDoc,
-        targetIdentity: "backend",
+        targetIdentity: asTargetIdentity("backend"),
         prodPurlSet: new Set([sharedPurl]),
       },
     ]);
@@ -1041,8 +1041,8 @@ describe("mergeSboms — per-workspace inputs (yarn workspace units)", () => {
     // Two occurrences: root correctly dev, backend correctly production —
     // root's empty set decided ONLY root's own occurrence.
     expect(shared?.occurrences).toEqual([
-      { target: ".", isDevDependency: true },
-      { target: "backend", isDevDependency: false },
+      { target: asTargetIdentity("."), isDevDependency: true },
+      { target: asTargetIdentity("backend"), isDevDependency: false },
     ]);
   });
 
@@ -1068,7 +1068,7 @@ describe("mergeSboms — per-workspace inputs (yarn workspace units)", () => {
     const model = mergeSboms([
       {
         sbom: frontendDoc,
-        targetIdentity: "frontend",
+        targetIdentity: asTargetIdentity("frontend"),
         prodPurlSet: new Set(["pkg:npm/sax@1.4.1"]),
         firstPartyNames: new Set(["backend", "frontend"]),
       },
@@ -1094,7 +1094,7 @@ describe("mergeSboms — per-workspace inputs (yarn workspace units)", () => {
     const model = mergeSboms([
       {
         sbom: frontendDoc,
-        targetIdentity: "frontend",
+        targetIdentity: asTargetIdentity("frontend"),
         firstPartyNames: new Set(["backend"]),
       },
     ]);
@@ -1104,7 +1104,7 @@ describe("mergeSboms — per-workspace inputs (yarn workspace units)", () => {
 });
 
 describe("mergeSboms — python dev-group marker", () => {
-  const PY_TARGET = "apps/jupyter";
+  const PY_TARGET = asTargetIdentity("apps/jupyter");
 
   test("cdx:pyproject:group 'dev' is dev; custom group and group-less stay prod; purls are pkg:pypi", () => {
     const model = mergeSboms([{ sbom: poetryGroupsDoc, targetIdentity: PY_TARGET }]);
@@ -1133,7 +1133,7 @@ describe("mergeSboms — npm optional guard on the dev property", () => {
   // vanish into the dev column and their prod license obligations are silently
   // understated.
   const scopePropsDoc = loadFixture("npm-scope-properties.json");
-  const NPM_TARGET = "fixture/npm-app";
+  const NPM_TARGET = asTargetIdentity("fixture/npm-app");
 
   function scopeByPurl(): Map<string, PackageEntry> {
     const model = mergeSboms([{ sbom: scopePropsDoc, targetIdentity: NPM_TARGET }]);
@@ -1252,11 +1252,13 @@ describe("mergeSboms — first-party exclusion (belt-and-braces)", () => {
     // poetry.lock does not list the root project (verified); the
     // metadata.component root-purl skip already covers it — no exclusion
     // set is built for python targets.
-    const withUndefined = mergeSboms([{ sbom: poetryGroupsDoc, targetIdentity: "apps/jupyter" }]);
+    const withUndefined = mergeSboms([
+      { sbom: poetryGroupsDoc, targetIdentity: asTargetIdentity("apps/jupyter") },
+    ]);
     const explicit = mergeSboms([
       {
         sbom: poetryGroupsDoc,
-        targetIdentity: "apps/jupyter",
+        targetIdentity: asTargetIdentity("apps/jupyter"),
         firstPartyNames: undefined,
       },
     ]);
@@ -1275,7 +1277,7 @@ describe("mergeSboms — npm first-party double signal", () => {
   // alone keeps the package — a crafted isWorkspace property can never drop a
   // third-party package, and a name collision alone never drops one either.
   const workspaceMemberDoc = loadFixture("npm-workspace-member.json");
-  const WS_TARGET = "fixture/npm-ws";
+  const WS_TARGET = asTargetIdentity("fixture/npm-ws");
 
   function wsModel(firstPartyNames?: ReadonlySet<string>): CanonicalDependencies {
     return mergeSboms([{ sbom: workspaceMemberDoc, targetIdentity: WS_TARGET, firstPartyNames }]);
@@ -1359,11 +1361,11 @@ describe("mergeSboms — multi-PM shared-purl merge proof", () => {
     const model = mergeSboms([
       {
         sbom: yarnDoc,
-        targetIdentity: "fixture/yarn-app",
+        targetIdentity: asTargetIdentity("fixture/yarn-app"),
         // Full run == prod run for this fixture: everything yarn sees is prod.
         prodPurlSet: purlSetOf(yarnDoc),
       },
-      { sbom: npmDoc, targetIdentity: "fixture/npm-app" },
+      { sbom: npmDoc, targetIdentity: asTargetIdentity("fixture/npm-app") },
     ]);
     const byPurl = new Map(model.packages.map((p) => [p.purl, p]));
     const shared = byPurl.get(asPurl("pkg:npm/shared-lib@1.0.0"));
@@ -1372,15 +1374,15 @@ describe("mergeSboms — multi-PM shared-purl merge proof", () => {
     // deterministic compareCodeUnits occurrence order.
     expect(model.packages.filter((p) => p.purl === "pkg:npm/shared-lib@1.0.0").length).toBe(1);
     expect(shared?.occurrences).toEqual([
-      { target: "fixture/npm-app", isDevDependency: true },
-      { target: "fixture/yarn-app", isDevDependency: false },
+      { target: asTargetIdentity("fixture/npm-app"), isDevDependency: true },
+      { target: asTargetIdentity("fixture/yarn-app"), isDevDependency: false },
     ]);
     // Each input's unique packages are present exactly once, single-target.
     expect(byPurl.get(asPurl("pkg:npm/yarn-only-pkg@1.1.0"))?.occurrences).toEqual([
-      { target: "fixture/yarn-app", isDevDependency: false },
+      { target: asTargetIdentity("fixture/yarn-app"), isDevDependency: false },
     ]);
     expect(byPurl.get(asPurl("pkg:npm/npm-only-pkg@2.2.0"))?.occurrences).toEqual([
-      { target: "fixture/npm-app", isDevDependency: false },
+      { target: asTargetIdentity("fixture/npm-app"), isDevDependency: false },
     ]);
     expect(model.packages.length).toBe(3);
   });
@@ -1391,7 +1393,7 @@ describe("mergeSboms — evidence parsing into attribution", () => {
   // component.evidence.licenses[].license = { name: "file: <basename>",
   // text: { content: <base64>, contentType, encoding: "base64" } }.
   const evidenceDoc = loadFixture("plugin-evidence.json");
-  const EV_TARGET = "libraries/evidence-target";
+  const EV_TARGET = asTargetIdentity("libraries/evidence-target");
 
   function evidenceByPurl(): Map<string, PackageEntry> {
     const model = mergeSboms([{ sbom: evidenceDoc, targetIdentity: EV_TARGET }]);
@@ -1615,15 +1617,15 @@ describe("mergeSboms — evidence parsing into attribution", () => {
 
   test("Test 6: the same purl from two CollectedSboms carries attribution once, first-seen", () => {
     const model = mergeSboms([
-      { sbom: evidenceDoc, targetIdentity: "apps/a" },
-      { sbom: loadFixture("plugin-evidence.json"), targetIdentity: "apps/b" },
+      { sbom: evidenceDoc, targetIdentity: asTargetIdentity("apps/a") },
+      { sbom: loadFixture("plugin-evidence.json"), targetIdentity: asTargetIdentity("apps/b") },
     ]);
     const byPurl = new Map(model.packages.map((p) => [p.purl, p]));
     const alpha = byPurl.get(asPurl("pkg:npm/alpha-license-pkg@1.0.0"));
     const notice = byPurl.get(asPurl("pkg:npm/notice-pkg@2.0.0"));
 
     // Two targets, ONE attribution — no duplicated lines or NOTICE texts.
-    expect(alpha?.occurrences.map((o) => o.target)).toEqual(["apps/a", "apps/b"]);
+    expect(alpha?.occurrences.map((o) => widen(o.target))).toEqual(["apps/a", "apps/b"]);
     expect(alpha?.attribution?.copyrightLines).toEqual(["Copyright (c) 2015 Jane Doe"]);
     expect(notice?.attribution?.noticeTexts?.length).toBe(1);
   });
@@ -1691,7 +1693,9 @@ describe("mergeSboms — dependency provenance threading", () => {
         },
       ],
     ]);
-    const model = mergeSboms([{ sbom: PROV_DOC, targetIdentity: "apps/x", introductions }]);
+    const model = mergeSboms([
+      { sbom: PROV_DOC, targetIdentity: asTargetIdentity("apps/x"), introductions },
+    ]);
     const a = model.packages.find((p) => p.purl === "pkg:npm/a@1.0.0");
     const b = model.packages.find((p) => p.purl === "pkg:npm/b@2.0.0");
 
@@ -1710,7 +1714,7 @@ describe("mergeSboms — dependency provenance threading", () => {
     const model = mergeSboms([
       {
         sbom: PROV_DOC,
-        targetIdentity: "apps/x",
+        targetIdentity: asTargetIdentity("apps/x"),
         introductions: new Map([["pkg:npm/a@1.0.0", { direct: true, introducedBy: [] }]]),
       },
     ]);
@@ -1720,7 +1724,7 @@ describe("mergeSboms — dependency provenance threading", () => {
   });
 
   test("no introductions map at all → no occurrence carries introduction (byte-identical residual)", () => {
-    const model = mergeSboms([{ sbom: PROV_DOC, targetIdentity: "apps/x" }]);
+    const model = mergeSboms([{ sbom: PROV_DOC, targetIdentity: asTargetIdentity("apps/x") }]);
 
     for (const pkg of model.packages) {
       for (const occurrence of pkg.occurrences) {
@@ -1733,12 +1737,12 @@ describe("mergeSboms — dependency provenance threading", () => {
     const model = mergeSboms([
       {
         sbom: PROV_DOC,
-        targetIdentity: "apps/x",
+        targetIdentity: asTargetIdentity("apps/x"),
         introductions: new Map([["pkg:npm/b@2.0.0", { direct: true, introducedBy: [] }]]),
       },
       {
         sbom: PROV_DOC,
-        targetIdentity: "apps/y",
+        targetIdentity: asTargetIdentity("apps/y"),
         introductions: new Map([
           ["pkg:npm/b@2.0.0", { direct: false, introducedBy: ["pkg:npm/a@1.0.0"] }],
         ]),
@@ -1750,12 +1754,12 @@ describe("mergeSboms — dependency provenance threading", () => {
     // unchanged through the merge (no cross-target reconciliation).
     expect(b?.occurrences).toEqual([
       {
-        target: "apps/x",
+        target: asTargetIdentity("apps/x"),
         isDevDependency: false,
         introduction: { direct: true, introducedBy: [] },
       },
       {
-        target: "apps/y",
+        target: asTargetIdentity("apps/y"),
         isDevDependency: false,
         introduction: { direct: false, introducedBy: ["pkg:npm/a@1.0.0"] },
       },
@@ -1792,8 +1796,8 @@ describe("mergeSboms — dependency provenance threading", () => {
       second: ReadonlyMap<string, DependencyIntroduction>,
     ): unknown => {
       const model = mergeSboms([
-        { sbom: PROV_DOC, targetIdentity: "apps/x", introductions: first },
-        { sbom: PROV_DOC, targetIdentity: "apps/x", introductions: second },
+        { sbom: PROV_DOC, targetIdentity: asTargetIdentity("apps/x"), introductions: first },
+        { sbom: PROV_DOC, targetIdentity: asTargetIdentity("apps/x"), introductions: second },
       ]);
       const b = model.packages.find((p) => p.purl === "pkg:npm/b@2.0.0");
 
@@ -1822,8 +1826,8 @@ describe("mergeSboms — dependency provenance threading", () => {
       second: ReadonlyMap<string, DependencyIntroduction>,
     ): unknown => {
       const model = mergeSboms([
-        { sbom: PROV_DOC, targetIdentity: "apps/x", introductions: first },
-        { sbom: PROV_DOC, targetIdentity: "apps/x", introductions: second },
+        { sbom: PROV_DOC, targetIdentity: asTargetIdentity("apps/x"), introductions: first },
+        { sbom: PROV_DOC, targetIdentity: asTargetIdentity("apps/x"), introductions: second },
       ]);
 
       return model.packages.find((p) => p.purl === "pkg:npm/b@2.0.0")?.occurrences[0]?.introduction;
@@ -1857,8 +1861,8 @@ describe("mergeSboms — dependency provenance threading", () => {
       second: ReadonlyMap<string, DependencyIntroduction>,
     ): unknown => {
       const model = mergeSboms([
-        { sbom: PROV_DOC, targetIdentity: "apps/x", introductions: first },
-        { sbom: PROV_DOC, targetIdentity: "apps/x", introductions: second },
+        { sbom: PROV_DOC, targetIdentity: asTargetIdentity("apps/x"), introductions: first },
+        { sbom: PROV_DOC, targetIdentity: asTargetIdentity("apps/x"), introductions: second },
       ]);
 
       return model.packages.find((p) => p.purl === "pkg:npm/b@2.0.0")?.occurrences[0]?.introduction;
@@ -1900,7 +1904,7 @@ describe("mergeSboms — reserved docker: occurrence namespace", () => {
       mergeSboms([
         {
           sbom: appDoc,
-          targetIdentity: "docker:examples/docker-scan/Dockerfile",
+          targetIdentity: asTargetIdentity("docker:examples/docker-scan/Dockerfile"),
         },
       ]),
     ).toThrow(/reserved docker occurrence namespace/);
@@ -1911,7 +1915,7 @@ describe("mergeSboms — reserved docker: occurrence namespace", () => {
       mergeSboms([
         {
           sbom: appDoc,
-          targetIdentity: "docker:evil",
+          targetIdentity: asTargetIdentity("docker:evil"),
           scope: "app",
         },
       ]),
@@ -1920,30 +1924,32 @@ describe("mergeSboms — reserved docker: occurrence namespace", () => {
 
   test("the WHOLE prefix is reserved: any non-docker identity starting with docker: is refused", () => {
     for (const identity of ["docker:", "docker:x", "docker:os-packagesx"]) {
-      expect(() => mergeSboms([{ sbom: appDoc, targetIdentity: identity }])).toThrow(
-        /reserved docker occurrence namespace/,
-      );
+      expect(() =>
+        mergeSboms([{ sbom: appDoc, targetIdentity: asTargetIdentity(identity) }]),
+      ).toThrow(/reserved docker occurrence namespace/);
     }
   });
 
   test('an identity merely CONTAINING "docker:" elsewhere passes', () => {
-    const model = mergeSboms([{ sbom: appDoc, targetIdentity: "apps/docker:tools" }]);
+    const model = mergeSboms([
+      { sbom: appDoc, targetIdentity: asTargetIdentity("apps/docker:tools") },
+    ]);
 
     expect(model.packages.length).toBe(1);
   });
 
   test('scope:"os" inputs own the namespace: Dockerfile and image-ref identities both pass', () => {
     const model = mergeSboms([
-      { sbom: appDoc, targetIdentity: "docker:postgres:18", scope: "os" },
+      { sbom: appDoc, targetIdentity: asTargetIdentity("docker:postgres:18"), scope: "os" },
       {
         sbom: appDoc,
-        targetIdentity: "docker:a/Dockerfile",
+        targetIdentity: asTargetIdentity("docker:a/Dockerfile"),
         scope: "os",
       },
     ]);
 
     expect(model.packages.length).toBe(1);
-    expect(model.packages[0]?.occurrences.map((o) => o.target)).toEqual([
+    expect(model.packages[0]?.occurrences.map((o) => widen(o.target))).toEqual([
       "docker:a/Dockerfile",
       "docker:postgres:18",
     ]);
@@ -1980,12 +1986,12 @@ describe("mergeSboms — cross-image claim divergence (dockerClaimDivergence)", 
     const model = mergeSboms([
       {
         sbom: dockerDoc(["GPL-2.0-only"]),
-        targetIdentity: "docker:image-a",
+        targetIdentity: asTargetIdentity("docker:image-a"),
         scope: "os",
       },
       {
         sbom: dockerDoc(["GPL-2.0-only"]),
-        targetIdentity: "docker:image-b",
+        targetIdentity: asTargetIdentity("docker:image-b"),
         scope: "os",
       },
     ]);
@@ -1998,12 +2004,12 @@ describe("mergeSboms — cross-image claim divergence (dockerClaimDivergence)", 
     const model = mergeSboms([
       {
         sbom: dockerDoc(["MIT"]),
-        targetIdentity: "docker:image-a",
+        targetIdentity: asTargetIdentity("docker:image-a"),
         scope: "os",
       },
       {
         sbom: dockerDoc(["Apache-2.0"]),
-        targetIdentity: "docker:image-b",
+        targetIdentity: asTargetIdentity("docker:image-b"),
         scope: "os",
       },
     ]);
@@ -2012,8 +2018,8 @@ describe("mergeSboms — cross-image claim divergence (dockerClaimDivergence)", 
     expect(pkg?.dockerClaimDivergence).toEqual({
       kind: "cross-image-claims",
       byTarget: [
-        { target: "docker:image-a", claims: ["MIT"] },
-        { target: "docker:image-b", claims: ["Apache-2.0"] },
+        { target: asTargetIdentity("docker:image-a"), claims: ["MIT"] },
+        { target: asTargetIdentity("docker:image-b"), claims: ["Apache-2.0"] },
       ],
     });
   });
@@ -2022,12 +2028,12 @@ describe("mergeSboms — cross-image claim divergence (dockerClaimDivergence)", 
     const model = mergeSboms([
       {
         sbom: dockerDoc(["MIT", "Apache-2.0"]),
-        targetIdentity: "docker:image-a",
+        targetIdentity: asTargetIdentity("docker:image-a"),
         scope: "os",
       },
       {
         sbom: dockerDoc(["Apache-2.0", "MIT"]),
-        targetIdentity: "docker:image-b",
+        targetIdentity: asTargetIdentity("docker:image-b"),
         scope: "os",
       },
     ]);
@@ -2040,12 +2046,12 @@ describe("mergeSboms — cross-image claim divergence (dockerClaimDivergence)", 
     const model = mergeSboms([
       {
         sbom: dockerDoc(["MIT", "MIT"]),
-        targetIdentity: "docker:image-a",
+        targetIdentity: asTargetIdentity("docker:image-a"),
         scope: "os",
       },
       {
         sbom: dockerDoc(["MIT"]),
-        targetIdentity: "docker:image-b",
+        targetIdentity: asTargetIdentity("docker:image-b"),
         scope: "os",
       },
     ]);
@@ -2058,12 +2064,12 @@ describe("mergeSboms — cross-image claim divergence (dockerClaimDivergence)", 
     const model = mergeSboms([
       {
         sbom: dockerDoc([]),
-        targetIdentity: "docker:image-a",
+        targetIdentity: asTargetIdentity("docker:image-a"),
         scope: "os",
       },
       {
         sbom: dockerDoc(["MIT"]),
-        targetIdentity: "docker:image-b",
+        targetIdentity: asTargetIdentity("docker:image-b"),
         scope: "os",
       },
     ]);
@@ -2076,26 +2082,26 @@ describe("mergeSboms — cross-image claim divergence (dockerClaimDivergence)", 
     const model = mergeSboms([
       {
         sbom: dockerDoc(["MIT"]),
-        targetIdentity: "docker:image-a",
+        targetIdentity: asTargetIdentity("docker:image-a"),
         scope: "os",
       },
       {
         sbom: dockerDoc(["MIT"]),
-        targetIdentity: "docker:image-b",
+        targetIdentity: asTargetIdentity("docker:image-b"),
         scope: "os",
       },
       {
         sbom: dockerDoc(["Apache-2.0"]),
-        targetIdentity: "docker:image-c",
+        targetIdentity: asTargetIdentity("docker:image-c"),
         scope: "os",
       },
     ]);
     const pkg = model.packages.find((p) => p.purl === SHARED);
 
     expect(pkg?.dockerClaimDivergence?.byTarget).toEqual([
-      { target: "docker:image-a", claims: ["MIT"] },
-      { target: "docker:image-b", claims: ["MIT"] },
-      { target: "docker:image-c", claims: ["Apache-2.0"] },
+      { target: asTargetIdentity("docker:image-a"), claims: ["MIT"] },
+      { target: asTargetIdentity("docker:image-b"), claims: ["MIT"] },
+      { target: asTargetIdentity("docker:image-c"), claims: ["Apache-2.0"] },
     ]);
   });
 
@@ -2114,15 +2120,15 @@ describe("mergeSboms — cross-image claim divergence (dockerClaimDivergence)", 
       ],
     };
     const model = mergeSboms([
-      { sbom: workspaceDoc, targetIdentity: "apps/backend" },
+      { sbom: workspaceDoc, targetIdentity: asTargetIdentity("apps/backend") },
       {
         sbom: dockerDoc(["MIT"]),
-        targetIdentity: "docker:image-a",
+        targetIdentity: asTargetIdentity("docker:image-a"),
         scope: "os",
       },
       {
         sbom: dockerDoc(["Apache-2.0"]),
-        targetIdentity: "docker:image-b",
+        targetIdentity: asTargetIdentity("docker:image-b"),
         scope: "os",
       },
     ]);
@@ -2136,24 +2142,24 @@ describe("mergeSboms — cross-image claim divergence (dockerClaimDivergence)", 
     const forward = mergeSboms([
       {
         sbom: dockerDoc(["MIT"]),
-        targetIdentity: "docker:image-a",
+        targetIdentity: asTargetIdentity("docker:image-a"),
         scope: "os",
       },
       {
         sbom: dockerDoc(["Apache-2.0"]),
-        targetIdentity: "docker:image-b",
+        targetIdentity: asTargetIdentity("docker:image-b"),
         scope: "os",
       },
     ]);
     const reversed = mergeSboms([
       {
         sbom: dockerDoc(["Apache-2.0"]),
-        targetIdentity: "docker:image-b",
+        targetIdentity: asTargetIdentity("docker:image-b"),
         scope: "os",
       },
       {
         sbom: dockerDoc(["MIT"]),
-        targetIdentity: "docker:image-a",
+        targetIdentity: asTargetIdentity("docker:image-a"),
         scope: "os",
       },
     ]);
@@ -2165,7 +2171,7 @@ describe("mergeSboms — cross-image claim divergence (dockerClaimDivergence)", 
     )?.dockerClaimDivergence;
 
     expect(forwardDivergence).toEqual(reversedDivergence);
-    expect(forwardDivergence?.byTarget.map((t) => t.target)).toEqual([
+    expect(forwardDivergence?.byTarget.map((t) => widen(t.target))).toEqual([
       "docker:image-a",
       "docker:image-b",
     ]);
@@ -2191,12 +2197,12 @@ describe("mergeSboms — cross-image claim divergence (dockerClaimDivergence)", 
     const model = mergeSboms([
       {
         sbom: dockerExpressionDoc("MIT AND CC0-1.0"),
-        targetIdentity: "docker:image-a",
+        targetIdentity: asTargetIdentity("docker:image-a"),
         scope: "os",
       },
       {
         sbom: dockerExpressionDoc("CC0-1.0 AND MIT"),
-        targetIdentity: "docker:image-b",
+        targetIdentity: asTargetIdentity("docker:image-b"),
         scope: "os",
       },
     ]);
@@ -2209,12 +2215,12 @@ describe("mergeSboms — cross-image claim divergence (dockerClaimDivergence)", 
     const model = mergeSboms([
       {
         sbom: dockerExpressionDoc("MIT AND CC0-1.0"),
-        targetIdentity: "docker:image-a",
+        targetIdentity: asTargetIdentity("docker:image-a"),
         scope: "os",
       },
       {
         sbom: dockerExpressionDoc("MIT AND ISC"),
-        targetIdentity: "docker:image-b",
+        targetIdentity: asTargetIdentity("docker:image-b"),
         scope: "os",
       },
     ]);
@@ -2223,15 +2229,15 @@ describe("mergeSboms — cross-image claim divergence (dockerClaimDivergence)", 
     expect(pkg?.dockerClaimDivergence).toEqual({
       kind: "cross-image-claims",
       byTarget: [
-        { target: "docker:image-a", claims: ["MIT AND CC0-1.0"] },
-        { target: "docker:image-b", claims: ["MIT AND ISC"] },
+        { target: asTargetIdentity("docker:image-a"), claims: ["MIT AND CC0-1.0"] },
+        { target: asTargetIdentity("docker:image-b"), claims: ["MIT AND ISC"] },
       ],
     });
   });
 });
 
-const GRAPH_TARGET = "apps/web";
-const GRAPHLESS_TARGET = "apps/legacy";
+const GRAPH_TARGET = asTargetIdentity("apps/web");
+const GRAPHLESS_TARGET = asTargetIdentity("apps/legacy");
 
 /** A yarn-plugin-shaped BOM: a root-anchored graph over root -> direct -> deep. */
 function graphBom(dependencies?: unknown): unknown {
@@ -2284,7 +2290,11 @@ describe("dependency-graph coverage", () => {
     const targets = targetsWithDependencyGraph([
       { sbom: graphBom(), targetIdentity: GRAPH_TARGET, derivesDependencyGraph: true },
       { sbom: graphlessBom(), targetIdentity: GRAPHLESS_TARGET },
-      { sbom: graphlessBom(), targetIdentity: "docker:image-a", derivesDependencyGraph: false },
+      {
+        sbom: graphlessBom(),
+        targetIdentity: asTargetIdentity("docker:image-a"),
+        derivesDependencyGraph: false,
+      },
     ]);
 
     expect([...targets]).toEqual([GRAPH_TARGET]);

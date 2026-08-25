@@ -12,14 +12,16 @@ import {
   asDependencyVersion,
   asPurl,
   asRawLicense,
+  asTargetIdentity,
   type CanonicalDependencies,
   type LicenseClaimKind,
+  type TargetIdentity,
   type Verdict,
 } from "../src/model/dependencies";
 import type { Policy } from "../src/policy/schema";
 
 /** No scanned target in these scenarios is collected by a lane that derives a dependency graph. */
-export const WITHOUT_DEPENDENCY_GRAPHS: ReadonlySet<string> = new Set();
+export const WITHOUT_DEPENDENCY_GRAPHS: ReadonlySet<TargetIdentity> = new Set();
 
 // Inline TOML fixtures (dispatch.test.ts idiom) — each one is commented with
 // the trap it encodes. Policy text is untrusted config: schema validation
@@ -228,8 +230,8 @@ export function makeModel(specs: ReadonlyArray<PackageSpec>): CanonicalDependenc
       version: asDependencyVersion(spec.version),
       occurrences: spec.occurrences.map((o) =>
         typeof o === "string"
-          ? { target: o, isDevDependency: false }
-          : { target: o.target, isDevDependency: o.dev },
+          ? { target: asTargetIdentity(o), isDevDependency: false }
+          : { target: asTargetIdentity(o.target), isDevDependency: o.dev },
       ),
       licenseClaims: [
         ...spec.claims.map((raw) => {
@@ -253,7 +255,10 @@ export function makeModel(specs: ReadonlyArray<PackageSpec>): CanonicalDependenc
         ? {
             dockerClaimDivergence: {
               kind: "cross-image-claims" as const,
-              byTarget: spec.dockerClaimDivergence,
+              byTarget: spec.dockerClaimDivergence.map((d) => ({
+                target: asTargetIdentity(d.target),
+                claims: d.claims,
+              })),
             },
           }
         : {}),
@@ -404,11 +409,11 @@ export function crossImagePkgSpec(
 // do not exist yet; the engine must not care.
 // ===========================================================================
 
-export const TARGET_A = "docker:a/Dockerfile";
+export const TARGET_A = asTargetIdentity("docker:a/Dockerfile");
 
-export const TARGET_B = "docker:b/Dockerfile";
+export const TARGET_B = asTargetIdentity("docker:b/Dockerfile");
 
-export const TARGET_A_EXTRA = "docker:a/Dockerfile-extra";
+export const TARGET_A_EXTRA = asTargetIdentity("docker:a/Dockerfile-extra");
 
 export const TARGET_A_PREFIX = "docker:a";
 
@@ -466,14 +471,14 @@ export const ACCEPTANCE_POLICY = [
 
 /** A copyleft package with one DEV occurrence (A) and one PROD occurrence (B). */
 export const DEV_PROD_COPYLEFT = pkgSpec("agpl-pkg", "AGPL-3.0-only", [
-  { target: "apps/a", dev: true },
-  { target: "apps/b", dev: false },
+  { target: asTargetIdentity("apps/a"), dev: true },
+  { target: asTargetIdentity("apps/b"), dev: false },
 ]);
 
 /** An UNKNOWN-license package with one DEV occurrence (A) and one PROD (B). */
 export const DEV_PROD_UNKNOWN = pkgSpec("no-claims", null, [
-  { target: "apps/a", dev: true },
-  { target: "apps/b", dev: false },
+  { target: asTargetIdentity("apps/a"), dev: true },
+  { target: asTargetIdentity("apps/b"), dev: false },
 ]);
 
 // ===========================================================================

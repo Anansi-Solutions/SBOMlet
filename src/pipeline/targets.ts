@@ -16,7 +16,12 @@ import {
 } from "../collectors/mavenSbom";
 import { assertNugetLockSize } from "../collectors/nugetLock";
 import { collectors } from "../collectors/registry";
-import { asAbsolutePath, compareCodeUnits, type AbsolutePath } from "../model/dependencies";
+import {
+  asAbsolutePath,
+  asTargetIdentity,
+  compareCodeUnits,
+  type AbsolutePath,
+} from "../model/dependencies";
 import { type CollectedSbom } from "../merge/merge";
 import {
   discoverTargets,
@@ -212,7 +217,9 @@ function expandYarnWorkspaceUnits(
       unit: {
         ...target,
         dir: memberDir,
-        identity: target.identity === "." ? member.relPath : `${target.identity}/${member.relPath}`,
+        identity: asTargetIdentity(
+          target.identity === "." ? member.relPath : `${target.identity}/${member.relPath}`,
+        ),
         lockfileDir: target.dir,
         workspacePath: member.relPath,
       },

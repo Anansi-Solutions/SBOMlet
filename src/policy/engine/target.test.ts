@@ -4,7 +4,12 @@
  * models are hand-built CanonicalDependencies since these builders never touch a real SBOM.
  */
 import { describe, expect, test } from "bun:test";
-import { asPurl, asDependencyName, asDependencyVersion } from "../../../test/brandTestSupport";
+import {
+  asPurl,
+  asDependencyName,
+  asDependencyVersion,
+  asTargetIdentity,
+} from "../../../test/brandTestSupport";
 
 import { parsePolicy } from "../parse/parse";
 import {
@@ -21,7 +26,10 @@ function pkg(purl: string, targets: readonly string[]): PackageEntry {
     version: asDependencyVersion("1.0.0"),
     scope: "app",
     licenseClaims: [],
-    occurrences: targets.map((target) => ({ target, isDevDependency: false })),
+    occurrences: targets.map((target) => ({
+      target: asTargetIdentity(target),
+      isDevDependency: false,
+    })),
   };
 }
 
@@ -33,8 +41,8 @@ describe("resolveTargetProfile", () => {
   test("no [target] table -> undefined for any occurrence", () => {
     const policy = parsePolicy('[unknown]\nhandling = "warn"\n');
 
-    expect(resolveTargetProfile("apps/api", policy)).toBeUndefined();
-    expect(resolveTargetProfile("docker:svc/Dockerfile", policy)).toBeUndefined();
+    expect(resolveTargetProfile(asTargetIdentity("apps/api"), policy)).toBeUndefined();
+    expect(resolveTargetProfile(asTargetIdentity("docker:svc/Dockerfile"), policy)).toBeUndefined();
   });
 
   test("a complete project profile governs an ungoverned workspace occurrence", () => {
@@ -44,7 +52,7 @@ describe("resolveTargetProfile", () => {
       ),
     );
 
-    expect(resolveTargetProfile("apps/anything", policy)).toEqual({
+    expect(resolveTargetProfile(asTargetIdentity("apps/anything"), policy)).toEqual({
       license: { kind: "oss", id: "MIT" },
       network: false,
       distribution: "external",
@@ -67,7 +75,7 @@ describe("resolveTargetProfile", () => {
       ].join("\n"),
     );
 
-    expect(resolveTargetProfile("docker:svc/Dockerfile", policy)).toEqual({
+    expect(resolveTargetProfile(asTargetIdentity("docker:svc/Dockerfile"), policy)).toEqual({
       license: { kind: "oss", id: "MIT" },
       network: false,
       distribution: "external",
@@ -87,7 +95,9 @@ describe("resolveTargetProfile", () => {
       ].join("\n"),
     );
 
-    expect(resolveTargetProfile("docker:apps/api/Dockerfile", policy)).toBeUndefined();
+    expect(
+      resolveTargetProfile(asTargetIdentity("docker:apps/api/Dockerfile"), policy),
+    ).toBeUndefined();
   });
 
   test("the most-specific covering [[target.workspace]] wins (longest path)", () => {
@@ -111,11 +121,11 @@ describe("resolveTargetProfile", () => {
       ].join("\n"),
     );
 
-    expect(resolveTargetProfile("apps/api", policy)?.license).toEqual({
+    expect(resolveTargetProfile(asTargetIdentity("apps/api"), policy)?.license).toEqual({
       kind: "oss",
       id: "GPL-3.0-only",
     });
-    expect(resolveTargetProfile("apps/web", policy)?.license).toEqual({
+    expect(resolveTargetProfile(asTargetIdentity("apps/web"), policy)?.license).toEqual({
       kind: "oss",
       id: "Apache-2.0",
     });
@@ -137,15 +147,15 @@ describe("resolveTargetProfile", () => {
       ].join("\n"),
     );
 
-    expect(resolveTargetProfile("apps/studio-helper", policy)?.license).toEqual({
+    expect(resolveTargetProfile(asTargetIdentity("apps/studio-helper"), policy)?.license).toEqual({
       kind: "oss",
       id: "MIT",
     });
-    expect(resolveTargetProfile("apps/studio", policy)?.license).toEqual({
+    expect(resolveTargetProfile(asTargetIdentity("apps/studio"), policy)?.license).toEqual({
       kind: "oss",
       id: "AGPL-3.0-only",
     });
-    expect(resolveTargetProfile("apps/studio/nested", policy)?.license).toEqual({
+    expect(resolveTargetProfile(asTargetIdentity("apps/studio/nested"), policy)?.license).toEqual({
       kind: "oss",
       id: "AGPL-3.0-only",
     });
@@ -167,7 +177,7 @@ describe("resolveTargetProfile", () => {
       ].join("\n"),
     );
 
-    expect(resolveTargetProfile("apps/api", policy)).toEqual({
+    expect(resolveTargetProfile(asTargetIdentity("apps/api"), policy)).toEqual({
       license: { kind: "oss", id: "GPL-3.0-only" },
       network: true,
       distribution: "internal",
@@ -187,7 +197,7 @@ describe("resolveTargetProfile", () => {
       ].join("\n"),
     );
 
-    expect(resolveTargetProfile("apps/unrelated", policy)).toBeUndefined();
+    expect(resolveTargetProfile(asTargetIdentity("apps/unrelated"), policy)).toBeUndefined();
   });
 });
 

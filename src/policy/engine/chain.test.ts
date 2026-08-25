@@ -7,14 +7,14 @@ import { describe, expect, test } from "bun:test";
 
 import { npmIntroductions } from "../../collectors/npmProvenance";
 import { mergeSboms, type CollectedSbom } from "../../merge/merge";
-import { purlDisplayName } from "../../model/dependencies";
+import { asTargetIdentity, purlDisplayName } from "../../model/dependencies";
 import {
   dependencyGraphsByTarget,
   firstUncoveredIntroduction,
   type TargetDependencyGraph,
 } from "./chain";
 
-const TARGET = "apps/web";
+const TARGET = asTargetIdentity("apps/web");
 const UI_PURL = "pkg:npm/%40acme/ui@0.0.0-use.local";
 const LEFT_PAD_PURL = "pkg:npm/left-pad@1.3.0";
 const MS_PURL = "pkg:npm/ms@2.1.3";
@@ -119,7 +119,7 @@ describe("dependencyGraphsByTarget", () => {
     const graphs = dependencyGraphsByTarget(
       mergeSboms([
         { sbom, targetIdentity: TARGET, introductions: npmIntroductions(sbom) },
-        { sbom, targetIdentity: "apps/other" },
+        { sbom, targetIdentity: asTargetIdentity("apps/other") },
       ]),
     );
 
