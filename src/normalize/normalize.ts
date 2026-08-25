@@ -638,27 +638,33 @@ function observedExpressions(claims: ReadonlyArray<LicenseClaim>): readonly Cano
   return [...seen].sort(compareCodeUnits);
 }
 
-/** Case-insensitive, trimmed equality of a recorded value against any signal member. */
-function signalMatches(signal: ReadonlyArray<RawLicense>, recorded: RawLicense): boolean {
-  const want = recorded.trim().toLowerCase();
+/** Case- and whitespace-folded form of a RAW value - the raw-label comparison key. */
+function rawFold(value: RawLicense): string {
+  return value.trim().toLowerCase();
+}
 
-  return signal.some((s) => s.trim().toLowerCase() === want);
+/** Case-insensitive, trimmed equality of a recorded RAW value against any signal member. */
+function signalMatches(signal: ReadonlyArray<RawLicense>, recorded: RawLicense): boolean {
+  const want = rawFold(recorded);
+
+  return signal.some((s) => rawFold(s) === want);
 }
 
 /**
- * {@link signalMatches}, canonicalized first: the recorded value and each signal member run through
- * {@link canonicalizeExpression}, then the same case-insensitive, trimmed equality, so a
- * boolean-algebra re-spelling of the same license set (`MIT AND CC0-1.0` read back as `CC0-1.0 AND
- * MIT`, a duplicated conjunct, an absorbable branch) never counts as a divergence. The
- * trim/lowercase stay load-bearing: canonicalizeExpression normalizes STRUCTURE but not case, and
- * returns unparseable input verbatim, so a non-SPDX family label (" bsd " against "BSD") is
- * reconciled only by the text normalization. The proper home for case/whitespace folding is
- * canonicalizeExpression itself; until then it lives here.
+ * {@link signalMatches} plus canonical set-equality: a recorded value matches a signal member when
+ * their canonical forms are `===` (so a boolean-algebra re-spelling of the same set - `MIT AND
+ * CC0-1.0` read back as `CC0-1.0 AND MIT`, a duplicated conjunct, an absorbable branch - never
+ * counts as a divergence) OR their raw folds are equal (so a non-SPDX registry label that
+ * canonicalizeExpression passes through verbatim, `" bsd "` against `"BSD"`, still reconciles). The
+ * comparison is `===` on {@link CanonicalLicense} values - never string-operated: canonicalization
+ * normalizes id casing as well as structure, so a canonical form is genuinely
+ * case-invariant. The fold stays on the RAW inputs, where case/whitespace folding belongs.
  */
 function signalMatchesCanonical(signal: ReadonlyArray<RawLicense>, recorded: RawLicense): boolean {
-  const want = canonicalizeExpression(recorded).trim().toLowerCase();
+  const wantCanonical = canonicalizeExpression(recorded);
+  const wantRaw = rawFold(recorded);
 
-  return signal.some((s) => canonicalizeExpression(s).trim().toLowerCase() === want);
+  return signal.some((s) => canonicalizeExpression(s) === wantCanonical || rawFold(s) === wantRaw);
 }
 
 /**
@@ -690,14 +696,17 @@ function unaccountedMember(
   recorded: ReadonlyArray<RawLicense>,
   expression: CanonicalLicense,
 ): RawLicense | undefined {
-  // Canonicalize STRUCTURE, then trim/lowercase: canonicalizeExpression passes a non-SPDX label
-  // through verbatim, so the text normalization is what reconciles a re-spelling of a recorded
-  // family label. Belongs in canonicalizeExpression eventually; here for now.
-  const fold = (value: RawLicense): string => canonicalizeExpression(value).trim().toLowerCase();
-  const wanted = new Set(recorded.map(fold));
+  // A member is already-recorded when it matches a recorded value by canonical set-equality (=== on
+  // the CanonicalLicense, never string-operated) OR by raw fold (a non-SPDX label
+  // canonicalizeExpression passes through verbatim - `" bsd "` against `"BSD"` - reconciled on the
+  // raw side where folding belongs).
+  const recordedCanonical = new Set(recorded.map((value) => canonicalizeExpression(value)));
+  const recordedRaw = new Set(recorded.map(rawFold));
+  const isRecorded = (value: RawLicense): boolean =>
+    recordedCanonical.has(canonicalizeExpression(value)) || recordedRaw.has(rawFold(value));
 
   for (const member of signal) {
-    if (wanted.has(fold(member))) {
+    if (isRecorded(member)) {
       continue;
     }
 
@@ -714,7 +723,7 @@ function unaccountedMember(
 
       // A family label is accounted only when the entry recorded that family or the assertion falls
       // within it; otherwise the appended family obligation is unaccounted.
-      if (!wanted.has(fold(asRawLicense(family))) && !expressionInFamily(expression, family)) {
+      if (!isRecorded(asRawLicense(family)) && !expressionInFamily(expression, family)) {
         return member;
       }
 
