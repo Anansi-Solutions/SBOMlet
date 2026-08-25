@@ -22,11 +22,13 @@ import {
 } from "../policy/parse/clarificationsFile";
 import { crossValidatePolicy } from "../policy/engine/crossValidate";
 import {
+  asRelativePath,
   compareCodeUnits,
   DOCKER_IDENTITY_PREFIX,
   toSortedDependenciesJson,
   type CanonicalDependencies,
   type EvaluatedDependencies,
+  type RelativePath,
   type Verdict,
 } from "../model/dependencies";
 import { annotateFindings } from "../normalize/normalize";
@@ -319,15 +321,15 @@ function readCommittedDockerSbom(opts: GenerateOptions, dir: string): CollectedS
  * path. (Using the raw --policy value broke determinism when an absolute path was passed - e.g.
  * from the GitHub Action, which must run from its own directory, not the repo root.)
  */
-function policyPointerPath(opts: GenerateOptions): string {
+function policyPointerPath(opts: GenerateOptions): RelativePath {
   const policyFile = resolveFrom(opts.baseDir, opts.policyPath!);
   const repoRoot = resolvedRepoRoot(opts);
 
   if (repoRoot === undefined) {
-    return basename(policyFile);
+    return asRelativePath(basename(policyFile));
   }
 
-  return relative(repoRoot, policyFile).replaceAll("\\", "/");
+  return asRelativePath(relative(repoRoot, policyFile).replaceAll("\\", "/"));
 }
 
 /** What anchoring a repo-relative path takes: the scanned root, and what it resolves against. */
@@ -604,7 +606,7 @@ function targetProfileSummaryOf(policy: Policy): TargetProfileSummary | undefine
  */
 function projectPolicyView(
   policy: Policy,
-  policyPath: string,
+  policyPath: RelativePath,
   model: CanonicalDependencies,
   verdicts: ReadonlyArray<Verdict>,
   developmentContainers: ReadonlySet<string>,

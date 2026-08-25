@@ -22,7 +22,7 @@ import { renderMarkdown, type PolicyView } from "../src/render/markdown";
 import { PolicyError } from "../src/policy/schema/diagnostics";
 import { parsePolicy } from "../src/policy/parse/parse";
 import { claim, modelOf, pkg } from "./normalizeTestSupport";
-import { widen, asPurl } from "./brandTestSupport";
+import { widen, asPurl, asRelativePath } from "./brandTestSupport";
 
 /** One `[[clarify]]` table naming `name`, recording the registry lane, electing `expression`. */
 const clarifyTable = (name: string, expression: string, version = "0.0.1"): string =>
@@ -342,7 +342,7 @@ describe("an imported entry on the reader-facing surfaces", () => {
       [],
     );
     const view: PolicyView = {
-      policyPath: "policy.toml",
+      policyPath: asRelativePath("policy.toml"),
       suppressedWorkspaces: [],
       verdicts: [
         {

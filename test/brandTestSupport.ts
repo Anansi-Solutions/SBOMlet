@@ -10,12 +10,13 @@ import {
   asAbsolutePath,
   asPurl,
   asRawLicense,
+  asRelativePath,
   type CanonicalLicense,
   type Purl,
 } from "../src/model/dependencies";
 import { canonicalizeExpression } from "../src/normalize/expression";
 
-export { asAbsolutePath, asPurl, asRawLicense };
+export { asAbsolutePath, asPurl, asRawLicense, asRelativePath };
 export type { Purl };
 
 /**

@@ -17,7 +17,7 @@ import { parsePolicy } from "../src/policy/parse/parse";
 import { alignTables } from "../src/render/alignTables";
 import { renderMarkdown, type PolicyView } from "../src/render/markdown";
 import { globToRegExp } from "../src/targets/discover";
-import { asPurl } from "./brandTestSupport";
+import { asPurl, asRelativePath } from "./brandTestSupport";
 import type { Policy } from "../src/policy/schema";
 
 /** No scanned target in these scenarios is collected by a lane that derives a dependency graph. */
@@ -335,7 +335,7 @@ function renderScenario(): string {
   const scoped = applyContainerScopes(annotated, developmentContainers);
   const verdicts = evaluate(scoped, policy, WITHOUT_DEPENDENCY_GRAPHS);
   const policyView: PolicyView = {
-    policyPath: "policy.toml",
+    policyPath: asRelativePath("policy.toml"),
     suppressedWorkspaces: policy.suppressedWorkspaces,
     verdicts,
     developmentContainers,
@@ -718,7 +718,7 @@ describe("a shared workspace+docker package through the real merge/scope/evaluat
     const scoped = applyContainerScopes(annotated, developmentContainers);
     const verdicts = evaluate(scoped, policy, WITHOUT_DEPENDENCY_GRAPHS);
     const policyView: PolicyView = {
-      policyPath: "policy.toml",
+      policyPath: asRelativePath("policy.toml"),
       suppressedWorkspaces: policy.suppressedWorkspaces,
       verdicts,
       developmentContainers,

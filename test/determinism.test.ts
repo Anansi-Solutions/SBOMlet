@@ -20,6 +20,7 @@ import { collectWithBunLock } from "../src/collectors/bunLock";
 import { collectWithMavenSbom } from "../src/collectors/mavenSbom";
 import { collectWithNugetLock } from "../src/collectors/nugetLock";
 import {
+  asRelativePath,
   toSortedDependenciesJson,
   type EvaluatedDependencies,
   type Verdict,
@@ -782,7 +783,7 @@ describe("target lane — no-target corpus byte-identity", () => {
     expect(inertTargetVerdicts).toEqual(noTargetVerdicts);
 
     const viewFor = (verdicts: typeof noTargetVerdicts): PolicyView => ({
-      policyPath: "policy.toml",
+      policyPath: asRelativePath("policy.toml"),
       suppressedWorkspaces: [],
       verdicts,
     });
@@ -812,7 +813,11 @@ describe("target lane — double-generate determinism with an active profile", (
 
     const build = (): { md: string; notices: string; verdicts: string } => {
       const verdicts = evaluate(model, policy, WITHOUT_DEPENDENCY_GRAPHS);
-      const view: PolicyView = { policyPath: "policy.toml", suppressedWorkspaces: [], verdicts };
+      const view: PolicyView = {
+        policyPath: asRelativePath("policy.toml"),
+        suppressedWorkspaces: [],
+        verdicts,
+      };
 
       return {
         md: renderMarkdown(model, view),
