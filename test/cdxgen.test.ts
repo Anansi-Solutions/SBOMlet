@@ -20,6 +20,7 @@ import {
   cdxgenCacheArgs,
   computeCacheKey,
 } from "../src/collectors/cdxgen";
+import { asAbsolutePath } from "../src/model/dependencies";
 import type { Target } from "../src/targets/target";
 
 /** Writes the given files into a fresh temp dir and returns it as a Target. */
@@ -30,7 +31,7 @@ function makeTargetWithFiles(files: Record<string, string>): Target {
     writeFileSync(join(dir, name), content);
   }
 
-  return { dir, identity: "test/synthetic" };
+  return { dir: asAbsolutePath(dir), identity: "test/synthetic" };
 }
 
 function makeTarget(yarnLock: string, packageJson: string): Target {
