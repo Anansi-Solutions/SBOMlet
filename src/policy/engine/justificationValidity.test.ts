@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
+import { asRawLicense, canon } from "../../../test/brandTestSupport";
 import { justificationValidity, type JustificationValidity } from "./justificationValidity";
 import type { ObservedSignal } from "../../normalize/normalize";
 
@@ -9,16 +10,19 @@ import type { ObservedSignal } from "../../normalize/normalize";
 // detection satisfied and asks only whether the stated justification holds.
 
 const signal = (registry: readonly string[], intensive: readonly string[]): ObservedSignal => ({
-  registry,
-  intensive,
-  union: [...new Set([...registry, ...intensive])],
+  registry: registry.map(asRawLicense),
+  intensive: intensive.map(asRawLicense),
+  union: [...new Set([...registry, ...intensive])].map(asRawLicense),
 });
 
 const NO_SIGNAL = signal([], []);
 
 describe("justificationValidity — dual-license-choice", () => {
   const dual = (expression: string, s: ObservedSignal): JustificationValidity =>
-    justificationValidity({ justification: "dual-license-choice", expression }, s);
+    justificationValidity(
+      { justification: "dual-license-choice", expression: canon(expression) },
+      s,
+    );
 
   test("the recorded choice matches the leaves the scan joined", () => {
     expect(dual("MIT OR CC0-1.0", signal(["(MIT OR CC0-1.0)"], ["CC0-1.0 AND MIT"]))).toEqual({
@@ -59,7 +63,10 @@ describe("justificationValidity — dual-license-choice", () => {
 
 describe("justificationValidity — scan-overdetection", () => {
   const overdetected = (expression: string, s: ObservedSignal): JustificationValidity =>
-    justificationValidity({ justification: "scan-overdetection", expression }, s);
+    justificationValidity(
+      { justification: "scan-overdetection", expression: canon(expression) },
+      s,
+    );
 
   test("the scan still reports a leaf the expression drops", () => {
     expect(overdetected("MIT", signal(["MIT"], ["MIT AND CC-BY-3.0"]))).toEqual({ outcome: "ok" });
@@ -79,7 +86,10 @@ describe("justificationValidity — scan-overdetection", () => {
 
 describe("justificationValidity — scan-found-additional-content", () => {
   const additional = (expression: string, s: ObservedSignal): JustificationValidity =>
-    justificationValidity({ justification: "scan-found-additional-content", expression }, s);
+    justificationValidity(
+      { justification: "scan-found-additional-content", expression: canon(expression) },
+      s,
+    );
 
   test("the expression accounts for everything the scan reads", () => {
     expect(additional("MIT AND WTFPL", signal(["MIT"], ["WTFPL"]))).toEqual({ outcome: "ok" });
@@ -99,7 +109,7 @@ describe("justificationValidity — scan-found-additional-content", () => {
 
 describe("justificationValidity — scan-more-precise", () => {
   const precise = (expression: string, s: ObservedSignal): JustificationValidity =>
-    justificationValidity({ justification: "scan-more-precise", expression }, s);
+    justificationValidity({ justification: "scan-more-precise", expression: canon(expression) }, s);
 
   test("the precise variant is still what the scan reads", () => {
     expect(precise("BSD-2-Clause-Views", signal(["BSD-2-Clause"], ["BSD-2-Clause-Views"]))).toEqual(
@@ -116,7 +126,10 @@ describe("justificationValidity — scan-more-precise", () => {
 
 describe("justificationValidity — declared-more-complete", () => {
   const declared = (expression: string, s: ObservedSignal): JustificationValidity =>
-    justificationValidity({ justification: "declared-more-complete", expression }, s);
+    justificationValidity(
+      { justification: "declared-more-complete", expression: canon(expression) },
+      s,
+    );
 
   test("the declared claim still names everything the entry adopted", () => {
     expect(declared("MIT AND CC-BY-3.0", signal(["(MIT AND CC-BY-3.0)"], ["MIT"]))).toEqual({
@@ -138,7 +151,10 @@ describe("justificationValidity — declared-more-complete", () => {
 
 describe("justificationValidity — contradictory-claims-recorded", () => {
   const contradictory = (expression: string, s: ObservedSignal): JustificationValidity =>
-    justificationValidity({ justification: "contradictory-claims-recorded", expression }, s);
+    justificationValidity(
+      { justification: "contradictory-claims-recorded", expression: canon(expression) },
+      s,
+    );
 
   test("the two sides still disagree", () => {
     expect(contradictory("AGPL-3.0-only", signal(["BSD-3-Clause"], ["AGPL-3.0-only"]))).toEqual({
@@ -168,7 +184,7 @@ describe("justificationValidity — contradictory-claims-recorded", () => {
 
 describe("justificationValidity — license-not-found", () => {
   const notFound = (expression: string, s: ObservedSignal): JustificationValidity =>
-    justificationValidity({ justification: "license-not-found", expression }, s);
+    justificationValidity({ justification: "license-not-found", expression: canon(expression) }, s);
 
   test("neither side states a licence, so the researched expression stands", () => {
     expect(notFound("MIT", NO_SIGNAL)).toEqual({ outcome: "ok" });
@@ -193,7 +209,7 @@ describe("justificationValidity — license-not-found", () => {
 describe("justificationValidity — the reason an invalid entry carries", () => {
   test("it names both sanctioned fallbacks, so the legal refile is in the message", () => {
     const result = justificationValidity(
-      { justification: "license-not-found", expression: "MIT" },
+      { justification: "license-not-found", expression: canon("MIT") },
       signal(["Apache-2.0"], []),
     );
 

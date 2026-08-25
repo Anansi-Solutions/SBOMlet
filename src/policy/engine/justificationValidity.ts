@@ -14,7 +14,7 @@
 
 import parseSpdx from "spdx-expression-parse";
 
-import { asRawLicense, type CanonicalLicense } from "../../model/dependencies";
+import { type CanonicalLicense, type RawLicense } from "../../model/dependencies";
 import { leafIds, orLeaves, type ExpressionNode } from "../../normalize/expression";
 import { accountsFor, type ObservedSignal } from "../../normalize/normalize";
 import { statedLicense } from "../statedLicense";
@@ -23,7 +23,7 @@ import { type Justification } from "../schema/clarify";
 /** What a validity check reads off an entry: its stated reason and the expression it records. */
 export interface JustifiedExpression {
   readonly justification: Justification;
-  readonly expression: string;
+  readonly expression: CanonicalLicense;
 }
 
 /**
@@ -61,9 +61,9 @@ function unnecessary(detail: string, justification: Justification): Justificatio
 }
 
 /** Every lane member the normalizer reads as a precise expression, in lane order. */
-function preciseMembers(lane: ReadonlyArray<string>): CanonicalLicense[] {
+function preciseMembers(lane: ReadonlyArray<RawLicense>): CanonicalLicense[] {
   return lane
-    .map((member) => statedLicense(asRawLicense(member)))
+    .map((member) => statedLicense(member))
     .filter((expression): expression is CanonicalLicense => expression !== null);
 }
 
