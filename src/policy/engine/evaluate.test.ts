@@ -855,7 +855,11 @@ describe("evaluate — an unassessed LicenseRef never reaches default:ok (silent
 describe("evaluate — staleness-guarded overrides", () => {
   test("a tool-level override that decides a verdict cites override:builtin[i], not default:ok", () => {
     const builtins: BuiltinOverrideInput[] = [
-      { name: "ipython", detected: { registry: "BSD" }, expression: canon("BSD-3-Clause") },
+      {
+        name: "ipython",
+        detected: { registry: asRawLicense("BSD") },
+        expression: canon("BSD-3-Clause"),
+      },
     ];
     const { verdicts } = runEngine([pkgSpec("ipython", "BSD", ["backend"])], "", builtins);
 
@@ -867,7 +871,11 @@ describe("evaluate — staleness-guarded overrides", () => {
 
   test("HEADLINE: a stale BSD→BSD-3-Clause override on a now-GPL-3.0 dep FAILS naming pkg/expected/observed", () => {
     const builtins: BuiltinOverrideInput[] = [
-      { name: "relicensed", detected: { registry: "BSD" }, expression: canon("BSD-3-Clause") },
+      {
+        name: "relicensed",
+        detected: { registry: asRawLicense("BSD") },
+        expression: canon("BSD-3-Clause"),
+      },
     ];
     const { verdicts } = runEngine(
       [pkgSpec("relicensed", "GPL-3.0-only", ["backend"])],
@@ -933,7 +941,11 @@ describe("evaluate — staleness-guarded overrides", () => {
       'comment = "project says MIT"',
     ].join("\n");
     const builtins: BuiltinOverrideInput[] = [
-      { name: "ipython", detected: { registry: "BSD" }, expression: canon("BSD-3-Clause") },
+      {
+        name: "ipython",
+        detected: { registry: asRawLicense("BSD") },
+        expression: canon("BSD-3-Clause"),
+      },
     ];
     const { verdicts } = runEngine([pkgSpec("ipython", "BSD", ["backend"])], policyText, builtins);
 
@@ -954,7 +966,11 @@ describe("evaluate — staleness-guarded overrides", () => {
     // signal, but the observed precise license already satisfies the asserted
     // BSD-3-Clause — nothing is masked, so the gate must NOT fire override:stale.
     const builtins: BuiltinOverrideInput[] = [
-      { name: "ipython", detected: { registry: "BSD" }, expression: canon("BSD-3-Clause") },
+      {
+        name: "ipython",
+        detected: { registry: asRawLicense("BSD") },
+        expression: canon("BSD-3-Clause"),
+      },
     ];
     const { verdicts } = runEngine([pkgSpec("ipython", "BSD-3-Clause", ["backend"])], "", builtins);
 
@@ -966,7 +982,11 @@ describe("evaluate — staleness-guarded overrides", () => {
     // The recorded "BSD" is absent AND the observed precise license (MIT) does
     // not satisfy the asserted BSD-3-Clause → genuine drift → must fail closed.
     const builtins: BuiltinOverrideInput[] = [
-      { name: "relicensed", detected: { registry: "BSD" }, expression: canon("BSD-3-Clause") },
+      {
+        name: "relicensed",
+        detected: { registry: asRawLicense("BSD") },
+        expression: canon("BSD-3-Clause"),
+      },
     ];
     const { verdicts } = runEngine([pkgSpec("relicensed", "MIT", ["backend"])], "", builtins);
 
@@ -978,7 +998,7 @@ describe("evaluate — staleness-guarded overrides", () => {
     const builtins: BuiltinOverrideInput[] = [
       {
         name: "or-expression-pkg",
-        detected: { registry: "MIT" },
+        detected: { registry: asRawLicense("MIT") },
         expression: canon("MIT OR Apache-2.0"),
       },
     ];
@@ -1280,7 +1300,7 @@ describe("evaluate — a compound recorded detection", () => {
   test("parsePolicy ACCEPTS a compound recorded detection — validation never restricts its shape", () => {
     const policy = parsePolicy(compoundClarify);
 
-    expect(policy.clarify[0]?.detected.registry).toBe(compoundClaim);
+    expect(policy.clarify[0]?.detected.registry).toBe(asRawLicense(compoundClaim));
   });
 });
 
@@ -2108,7 +2128,11 @@ describe("evaluate — precedence is preserved (downgrade is last)", () => {
     // The load-bearing precedence guard: a stale override is a compliance gate
     // failure that must NEVER be dev-downgraded.
     const builtins: BuiltinOverrideInput[] = [
-      { name: "relicensed", detected: { registry: "BSD" }, expression: canon("BSD-3-Clause") },
+      {
+        name: "relicensed",
+        detected: { registry: asRawLicense("BSD") },
+        expression: canon("BSD-3-Clause"),
+      },
     ];
     const { verdicts } = runEngine(
       [pkgSpec("relicensed", "GPL-3.0-only", [{ target: "apps/a", dev: true }])],
@@ -2223,7 +2247,11 @@ describe("evaluate — deny is terminal-0 (beats every accept lever)", () => {
     // The package carries a stale builtin override (recorded BSD, observes
     // BUSL-1.1) AND the observed license is denied → deny wins over stale.
     const builtins: BuiltinOverrideInput[] = [
-      { name: "relicensed", detected: { registry: "BSD" }, expression: canon("BSD-3-Clause") },
+      {
+        name: "relicensed",
+        detected: { registry: asRawLicense("BSD") },
+        expression: canon("BSD-3-Clause"),
+      },
     ];
     const { verdicts } = runEngine(
       [pkgSpec("relicensed", "BUSL-1.1", ["backend"])],
@@ -2306,7 +2334,7 @@ describe("evaluate — deny is terminal OVER OVERRIDES (C#1: deny reads the pre-
     const builtins: BuiltinOverrideInput[] = [
       {
         name: "relicensed-evil",
-        detected: { registry: "BUSL-1.1" },
+        detected: { registry: asRawLicense("BUSL-1.1") },
         expression: canon("Apache-2.0"),
       },
     ];
@@ -3414,7 +3442,7 @@ describe("evaluate — a clarify entry the current signal disproves", () => {
       [
         {
           name: "choice-lib",
-          detected: { registry: "MIT OR Apache-2.0", intensive: "MIT" },
+          detected: { registry: asRawLicense("MIT OR Apache-2.0"), intensive: asRawLicense("MIT") },
           expression: canon("MIT OR Apache-2.0"),
         },
       ],

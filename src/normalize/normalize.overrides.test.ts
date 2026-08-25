@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import { BUILTIN_OVERRIDES } from "../policy/engine/builtinOverrides";
 import { claim, pkg, modelOf } from "../../test/normalizeTestSupport";
-import { canon, widen } from "../../test/brandTestSupport";
+import { asRawLicense, canon, widen } from "../../test/brandTestSupport";
 import { annotateFindings, type ClarifyInput, type BuiltinOverrideInput } from "./normalize";
 
 describe("annotateFindings — clarify overrides", () => {
@@ -14,7 +14,7 @@ describe("annotateFindings — clarify overrides", () => {
       {
         name: "@img/sharp-win32-x64",
         version: "0.34.5",
-        detected: { registry: "Apache-2.0 AND LGPL-3.0-or-later" },
+        detected: { registry: asRawLicense("Apache-2.0 AND LGPL-3.0-or-later") },
         expression: canon("Apache-2.0"),
       },
     ];
@@ -36,7 +36,7 @@ describe("annotateFindings — clarify overrides", () => {
       {
         name: "@img/sharp-win32-x64",
         version: "9.9.9",
-        detected: { registry: "Apache-2.0 AND LGPL-3.0-or-later" },
+        detected: { registry: asRawLicense("Apache-2.0 AND LGPL-3.0-or-later") },
         expression: canon("MIT"),
       },
     ];
@@ -51,7 +51,11 @@ describe("annotateFindings — clarify overrides", () => {
   test("version-less clarify matches any version of the named package", () => {
     const entry = pkg("jsonify", "0.0.1", [claim("Public Domain", "name")]);
     const clarify: ClarifyInput[] = [
-      { name: "jsonify", detected: { registry: "Public Domain" }, expression: canon("Unlicense") },
+      {
+        name: "jsonify",
+        detected: { registry: asRawLicense("Public Domain") },
+        expression: canon("Unlicense"),
+      },
     ];
     const { model, usedClarifyIndices } = annotateFindings(modelOf(entry), clarify);
 
@@ -69,7 +73,11 @@ describe("annotateFindings — staleness-guarded clarify", () => {
   test("a recorded registry detection matching the imprecise-BSD signal APPLIES the disambiguation", () => {
     const entry = pkg("jupyter-thing", "1.0.0", [claim("BSD", "name")]);
     const clarify: ClarifyInput[] = [
-      { name: "jupyter-thing", detected: { registry: "BSD" }, expression: canon("BSD-3-Clause") },
+      {
+        name: "jupyter-thing",
+        detected: { registry: asRawLicense("BSD") },
+        expression: canon("BSD-3-Clause"),
+      },
     ];
     const { model, usedClarifyIndices } = annotateFindings(modelOf(entry), clarify);
     const finding = model.packages[0]!.finding!;
@@ -85,7 +93,7 @@ describe("annotateFindings — staleness-guarded clarify", () => {
     const clarify: ClarifyInput[] = [
       {
         name: "dateutil-ish",
-        detected: { registry: "Dual License" },
+        detected: { registry: asRawLicense("Dual License") },
         expression: canon("Apache-2.0 OR BSD-3-Clause"),
       },
     ];
@@ -100,7 +108,11 @@ describe("annotateFindings — staleness-guarded clarify", () => {
   test("STALE: registry recorded BSD but the package now reports GPL-3.0 → not applied, staleOverride recorded", () => {
     const entry = pkg("relicensed", "2.0.0", [claim("GPL-3.0-only")]);
     const clarify: ClarifyInput[] = [
-      { name: "relicensed", detected: { registry: "BSD" }, expression: canon("BSD-3-Clause") },
+      {
+        name: "relicensed",
+        detected: { registry: asRawLicense("BSD") },
+        expression: canon("BSD-3-Clause"),
+      },
     ];
     const { model } = annotateFindings(modelOf(entry), clarify);
     const finding = model.packages[0]!.finding!;
@@ -118,7 +130,11 @@ describe("annotateFindings — staleness-guarded clarify", () => {
   test("a recorded detection is matched case-insensitively and trimmed", () => {
     const entry = pkg("ci-pkg", "1.0.0", [claim("BSD", "name")]);
     const clarify: ClarifyInput[] = [
-      { name: "ci-pkg", detected: { registry: "  bsd  " }, expression: canon("BSD-3-Clause") },
+      {
+        name: "ci-pkg",
+        detected: { registry: asRawLicense("  bsd  ") },
+        expression: canon("BSD-3-Clause"),
+      },
     ];
     const { model } = annotateFindings(modelOf(entry), clarify);
 
@@ -128,7 +144,11 @@ describe("annotateFindings — staleness-guarded clarify", () => {
   test("a non-SPDX registry value recorded verbatim still satisfies the precondition", () => {
     const entry = pkg("jsonify", "0.0.1", [claim("Public Domain", "name")]);
     const clarify: ClarifyInput[] = [
-      { name: "jsonify", detected: { registry: "Public Domain" }, expression: canon("Unlicense") },
+      {
+        name: "jsonify",
+        detected: { registry: asRawLicense("Public Domain") },
+        expression: canon("Unlicense"),
+      },
     ];
     const { model } = annotateFindings(modelOf(entry), clarify);
     const finding = model.packages[0]!.finding!;
@@ -141,7 +161,11 @@ describe("annotateFindings — staleness-guarded clarify", () => {
 
 describe("annotateFindings — tool-level BUILTIN overrides", () => {
   const jupyterBuiltin: BuiltinOverrideInput[] = [
-    { name: "ipython", detected: { registry: "BSD" }, expression: canon("BSD-3-Clause") },
+    {
+      name: "ipython",
+      detected: { registry: asRawLicense("BSD") },
+      expression: canon("BSD-3-Clause"),
+    },
   ];
 
   test("a tool-level override applies when no project clarify matches and is cited override:builtin[i]", () => {
@@ -166,7 +190,7 @@ describe("annotateFindings — tool-level BUILTIN overrides", () => {
   test("project clarify WINS over a tool-level override on conflict (project-wins)", () => {
     const entry = pkg("ipython", "8.0.0", [claim("BSD", "name")]);
     const clarify: ClarifyInput[] = [
-      { name: "ipython", detected: { registry: "BSD" }, expression: canon("MIT") },
+      { name: "ipython", detected: { registry: asRawLicense("BSD") }, expression: canon("MIT") },
     ];
     const { model, usedClarifyIndices } = annotateFindings(modelOf(entry), clarify, jupyterBuiltin);
     const finding = model.packages[0]!.finding!;
@@ -292,7 +316,7 @@ describe("annotateFindings — redundant override when metadata catches up (gap 
     const clarify: ClarifyInput[] = [
       {
         name: "relicensed-permissive",
-        detected: { registry: "BSD" },
+        detected: { registry: asRawLicense("BSD") },
         expression: canon("BSD-3-Clause"),
       },
     ];
@@ -311,7 +335,7 @@ describe("annotateFindings — redundant override when metadata catches up (gap 
     const clarify: ClarifyInput[] = [
       {
         name: "relicensed-copyleft",
-        detected: { registry: "BSD" },
+        detected: { registry: asRawLicense("BSD") },
         expression: canon("BSD-3-Clause"),
       },
     ];
@@ -359,7 +383,11 @@ describe("annotateFindings — redundant override when metadata catches up (gap 
 
 describe("annotateFindings — an imprecise member the assertion cannot account for", () => {
   const OLD_SIGNAL_ONLY: ClarifyInput[] = [
-    { name: "family-appended", detected: { registry: "MIT" }, expression: canon("MIT") },
+    {
+      name: "family-appended",
+      detected: { registry: asRawLicense("MIT") },
+      expression: canon("MIT"),
+    },
   ];
 
   test("control: with no entry at all, the appended AGPL label reaches the finding", () => {
@@ -393,7 +421,11 @@ describe("annotateFindings — an imprecise member the assertion cannot account 
   test("the disambiguation case is untouched: a recorded BSD label still upgrades to BSD-3-Clause", () => {
     const entry = pkg("disambiguated", "1.0.0", [claim("BSD License", "name")]);
     const clarify: ClarifyInput[] = [
-      { name: "disambiguated", detected: { registry: "BSD" }, expression: canon("BSD-3-Clause") },
+      {
+        name: "disambiguated",
+        detected: { registry: asRawLicense("BSD") },
+        expression: canon("BSD-3-Clause"),
+      },
     ];
     const { model } = annotateFindings(modelOf(entry), clarify);
     const finding = model.packages[0]!.finding!;
@@ -409,7 +441,11 @@ describe("annotateFindings — an imprecise member the assertion cannot account 
       claim("Some Proprietary Thing", "name"),
     ]);
     const clarify: ClarifyInput[] = [
-      { name: "unreadable-label", detected: { registry: "MIT" }, expression: canon("MIT") },
+      {
+        name: "unreadable-label",
+        detected: { registry: asRawLicense("MIT") },
+        expression: canon("MIT"),
+      },
     ];
     const { model } = annotateFindings(modelOf(entry), clarify);
     const finding = model.packages[0]!.finding!;
@@ -433,7 +469,11 @@ describe("annotateFindings — a null-expression member naming no family (H1)", 
   test("a newly-appeared UNLICENSED claim beside MIT goes STALE, not licensed out as MIT", () => {
     const entry = pkg("proprietary-slipped-in", "1.0.0", [claim("MIT"), claim("UNLICENSED")]);
     const clarify: ClarifyInput[] = [
-      { name: "proprietary-slipped-in", detected: { registry: "MIT" }, expression: canon("MIT") },
+      {
+        name: "proprietary-slipped-in",
+        detected: { registry: asRawLicense("MIT") },
+        expression: canon("MIT"),
+      },
     ];
     const { model } = annotateFindings(modelOf(entry), clarify);
     const finding = model.packages[0]!.finding!;
@@ -447,7 +487,11 @@ describe("annotateFindings — a null-expression member naming no family (H1)", 
   test("a bare Proprietary marker beside MIT goes STALE the same way", () => {
     const entry = pkg("proprietary-marker", "1.0.0", [claim("MIT"), claim("Proprietary", "name")]);
     const clarify: ClarifyInput[] = [
-      { name: "proprietary-marker", detected: { registry: "MIT" }, expression: canon("MIT") },
+      {
+        name: "proprietary-marker",
+        detected: { registry: asRawLicense("MIT") },
+        expression: canon("MIT"),
+      },
     ];
     const { model } = annotateFindings(modelOf(entry), clarify);
     const finding = model.packages[0]!.finding!;
@@ -461,7 +505,7 @@ describe("annotateFindings — a null-expression member naming no family (H1)", 
     const clarify: ClarifyInput[] = [
       {
         name: "recorded-unlicensed",
-        detected: { registry: "UNLICENSED" },
+        detected: { registry: asRawLicense("UNLICENSED") },
         expression: canon("MIT"),
       },
     ];

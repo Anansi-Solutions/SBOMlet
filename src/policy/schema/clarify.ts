@@ -186,7 +186,7 @@ function detectedProblems(entry: Record<string, unknown>): {
       continue;
     }
 
-    detected[source] = value;
+    detected[source] = value === false ? false : asRawLicense(value);
   }
 
   if (problems.length === 0 && Object.keys(detected).length === 0) {
