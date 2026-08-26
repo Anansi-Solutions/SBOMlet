@@ -15,7 +15,7 @@ import {
   denyNameFixture,
   developmentFixture,
 } from "../../../test/policyTestSupport";
-import { asRawLicense, canon } from "../../../test/brandTestSupport";
+import { asRawLicense, canon, leaf } from "../../../test/brandTestSupport";
 import { parsePolicy } from "./parse";
 
 describe("parsePolicy — happy path", () => {
@@ -26,7 +26,7 @@ describe("parsePolicy — happy path", () => {
     expect(policy.suppressedWorkspaces).toEqual([
       {
         path: "apps/scratch",
-        license: "AGPL-3.0-only",
+        license: leaf("AGPL-3.0-only"),
         description: SUPPRESSION_DESCRIPTION,
       },
     ]);
@@ -34,7 +34,7 @@ describe("parsePolicy — happy path", () => {
       {
         match: "license",
         pattern: "MPL-2.0",
-        allowlist: ["MPL-2.0"],
+        allowlist: [leaf("MPL-2.0")],
         rationale: "license-reviewed",
         where: ["/"],
         comment: MPL_COMMENT,
@@ -147,7 +147,7 @@ describe("parsePolicy — [[deny]] parsing (mirrors compatible two-mode)", () =>
       {
         match: "license",
         pattern: "BUSL-1.1",
-        allowlist: ["BUSL-1.1"],
+        allowlist: [leaf("BUSL-1.1")],
         reason: "source-available; cannot ship",
       },
     ]);

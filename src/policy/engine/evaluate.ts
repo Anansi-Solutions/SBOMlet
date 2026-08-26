@@ -74,6 +74,7 @@ import parseSpdx from "spdx-expression-parse";
 import satisfies from "spdx-satisfies";
 
 import {
+  asSpdxLicenseLeaf,
   compareCodeUnits,
   matchesIdentityPrefix,
   type AssessmentConflict,
@@ -392,7 +393,7 @@ function suppressionJustification(
     return undefined;
   }
 
-  const workspaceFamily = COPYLEFT_FAMILY.get(workspaceLeaf);
+  const workspaceFamily = COPYLEFT_FAMILY.get(asSpdxLicenseLeaf(workspaceLeaf));
 
   if (workspaceFamily === undefined) {
     return undefined;

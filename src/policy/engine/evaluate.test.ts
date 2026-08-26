@@ -2779,7 +2779,7 @@ describe("evaluate — os-scope partial finding", () => {
 
 describe("AGPL_IDS — literal set (copyleft.ts)", () => {
   test("is exactly the six AGPL ids", () => {
-    expect([...AGPL_IDS].sort()).toEqual([
+    expect(widen([...AGPL_IDS].sort())).toEqual([
       "AGPL-1.0",
       "AGPL-1.0-only",
       "AGPL-1.0-or-later",

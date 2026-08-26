@@ -15,7 +15,13 @@
  */
 import parseSpdx from "spdx-expression-parse";
 
-import { compareCodeUnits, type CanonicalLicense, type RawLicense } from "../model/dependencies";
+import {
+  asSpdxLicenseLeaf,
+  compareCodeUnits,
+  type CanonicalLicense,
+  type RawLicense,
+  type SpdxLicenseLeaf,
+} from "../model/dependencies";
 import { COPYLEFT_IDS } from "../policy/engine/copyleft";
 import { CANONICAL_EXCEPTION_ID, CANONICAL_LICENSE_ID } from "./spdxCasing";
 
@@ -59,7 +65,7 @@ export function renderNode(node: ExpressionNode): string {
  */
 export function isCopyleft(node: ExpressionNode): boolean {
   if ("license" in node) {
-    return COPYLEFT_IDS.has(node.license);
+    return COPYLEFT_IDS.has(asSpdxLicenseLeaf(node.license));
   }
 
   if (node.conjunction === "and") {
@@ -74,9 +80,11 @@ export function isCopyleft(node: ExpressionNode): boolean {
  * verify against the workspace's own license. Exact COPYLEFT_IDS membership per leaf - a `plus`
  * leaf reports its base id (same convention as isCopyleft); non-copyleft leaves are omitted.
  */
-export function copyleftLeafIds(node: ExpressionNode): string[] {
+export function copyleftLeafIds(node: ExpressionNode): SpdxLicenseLeaf[] {
   if ("license" in node) {
-    return COPYLEFT_IDS.has(node.license) ? [node.license] : [];
+    const leaf = asSpdxLicenseLeaf(node.license);
+
+    return COPYLEFT_IDS.has(leaf) ? [leaf] : [];
   }
 
   return [...copyleftLeafIds(node.left), ...copyleftLeafIds(node.right)];
@@ -172,11 +180,11 @@ export function elect(node: ExpressionNode): ExpressionNode {
  * spdx-satisfies allowlists (its entries must be single ids, optionally WITH). Returns null the
  * moment ANY "and" conjunction appears anywhere in the tree.
  */
-export function orLeaves(node: ExpressionNode): string[] | null {
-  const leaves: string[] = [];
+export function orLeaves(node: ExpressionNode): SpdxLicenseLeaf[] | null {
+  const leaves: SpdxLicenseLeaf[] = [];
   const walk = (n: ExpressionNode): boolean => {
     if ("license" in n) {
-      leaves.push(renderNode(n));
+      leaves.push(asSpdxLicenseLeaf(renderNode(n)));
       return true;
     }
 

@@ -7,7 +7,7 @@ import satisfies from "spdx-satisfies";
 
 import { COPYLEFT_IDS } from "../policy/engine/copyleft";
 import { denyRuleFor } from "../policy/engine/deny";
-import { asRawLicense, widen } from "../../test/brandTestSupport";
+import { asRawLicense, leaf, widen } from "../../test/brandTestSupport";
 import {
   canonicalizeExpression,
   elect,
@@ -24,36 +24,36 @@ const p = (expr: string): ExpressionNode => parse(expr) as ExpressionNode;
 
 describe("COPYLEFT_IDS membership", () => {
   test("contains current, deprecated, and family ids", () => {
-    expect(COPYLEFT_IDS.has("AGPL-3.0-only")).toBe(true);
-    expect(COPYLEFT_IDS.has("AGPL-3.0")).toBe(true); // deprecated form
-    expect(COPYLEFT_IDS.has("GPL-2.0")).toBe(true); // deprecated form
-    expect(COPYLEFT_IDS.has("MPL-2.0")).toBe(true);
-    expect(COPYLEFT_IDS.has("SSPL-1.0")).toBe(true);
+    expect(COPYLEFT_IDS.has(leaf("AGPL-3.0-only"))).toBe(true);
+    expect(COPYLEFT_IDS.has(leaf("AGPL-3.0"))).toBe(true); // deprecated form
+    expect(COPYLEFT_IDS.has(leaf("GPL-2.0"))).toBe(true); // deprecated form
+    expect(COPYLEFT_IDS.has(leaf("MPL-2.0"))).toBe(true);
+    expect(COPYLEFT_IDS.has(leaf("SSPL-1.0"))).toBe(true);
   });
 
   test("contains the CR-01 reciprocal families (CC-BY-SA, Sleepycat, CPAL, MS-RL, RPL, QPL, APSL, GFDL)", () => {
     // CC ShareAlike IS copyleft — the CC family demonstrably reaches this
     // tool's input (CC-BY-3.0/4.0 are in the live corpus below).
-    expect(COPYLEFT_IDS.has("CC-BY-SA-4.0")).toBe(true);
-    expect(COPYLEFT_IDS.has("CC-BY-SA-1.0")).toBe(true);
-    expect(COPYLEFT_IDS.has("CC-BY-SA-3.0-DE")).toBe(true); // jurisdiction port
-    expect(COPYLEFT_IDS.has("Sleepycat")).toBe(true);
-    expect(COPYLEFT_IDS.has("CPAL-1.0")).toBe(true);
-    expect(COPYLEFT_IDS.has("MS-RL")).toBe(true);
-    expect(COPYLEFT_IDS.has("RPL-1.1")).toBe(true);
-    expect(COPYLEFT_IDS.has("RPL-1.5")).toBe(true);
-    expect(COPYLEFT_IDS.has("QPL-1.0")).toBe(true);
-    expect(COPYLEFT_IDS.has("APSL-1.0")).toBe(true);
-    expect(COPYLEFT_IDS.has("APSL-2.0")).toBe(true);
-    expect(COPYLEFT_IDS.has("GFDL-1.3")).toBe(true); // deprecated base
-    expect(COPYLEFT_IDS.has("GFDL-1.3-only")).toBe(true);
-    expect(COPYLEFT_IDS.has("GFDL-1.3-or-later")).toBe(true);
-    expect(COPYLEFT_IDS.has("GFDL-1.1-invariants-only")).toBe(true);
+    expect(COPYLEFT_IDS.has(leaf("CC-BY-SA-4.0"))).toBe(true);
+    expect(COPYLEFT_IDS.has(leaf("CC-BY-SA-1.0"))).toBe(true);
+    expect(COPYLEFT_IDS.has(leaf("CC-BY-SA-3.0-DE"))).toBe(true); // jurisdiction port
+    expect(COPYLEFT_IDS.has(leaf("Sleepycat"))).toBe(true);
+    expect(COPYLEFT_IDS.has(leaf("CPAL-1.0"))).toBe(true);
+    expect(COPYLEFT_IDS.has(leaf("MS-RL"))).toBe(true);
+    expect(COPYLEFT_IDS.has(leaf("RPL-1.1"))).toBe(true);
+    expect(COPYLEFT_IDS.has(leaf("RPL-1.5"))).toBe(true);
+    expect(COPYLEFT_IDS.has(leaf("QPL-1.0"))).toBe(true);
+    expect(COPYLEFT_IDS.has(leaf("APSL-1.0"))).toBe(true);
+    expect(COPYLEFT_IDS.has(leaf("APSL-2.0"))).toBe(true);
+    expect(COPYLEFT_IDS.has(leaf("GFDL-1.3"))).toBe(true); // deprecated base
+    expect(COPYLEFT_IDS.has(leaf("GFDL-1.3-only"))).toBe(true);
+    expect(COPYLEFT_IDS.has(leaf("GFDL-1.3-or-later"))).toBe(true);
+    expect(COPYLEFT_IDS.has(leaf("GFDL-1.1-invariants-only"))).toBe(true);
     // Plain CC attribution (no ShareAlike) is NOT copyleft.
-    expect(COPYLEFT_IDS.has("CC-BY-4.0")).toBe(false);
-    expect(COPYLEFT_IDS.has("CC-BY-3.0")).toBe(false);
+    expect(COPYLEFT_IDS.has(leaf("CC-BY-4.0"))).toBe(false);
+    expect(COPYLEFT_IDS.has(leaf("CC-BY-3.0"))).toBe(false);
     // Microsoft PUBLIC license (permissive sibling of MS-RL) stays out.
-    expect(COPYLEFT_IDS.has("MS-PL")).toBe(false);
+    expect(COPYLEFT_IDS.has(leaf("MS-PL"))).toBe(false);
   });
 
   test("is the verbatim 94-id literal (54 from research + 40 CR-01 additions)", () => {
@@ -83,10 +83,10 @@ describe("COPYLEFT_IDS membership", () => {
 
 describe("COPYLEFT_IDS collision exclusions (never substring)", () => {
   test("GPL-substring ids that are NOT copyleft are excluded", () => {
-    expect(COPYLEFT_IDS.has("LGPLLR")).toBe(false);
-    expect(COPYLEFT_IDS.has("NGPL")).toBe(false);
-    expect(COPYLEFT_IDS.has("SMAIL-GPL")).toBe(false);
-    expect(COPYLEFT_IDS.has("CNRI-Python-GPL-Compatible")).toBe(false);
+    expect(COPYLEFT_IDS.has(leaf("LGPLLR"))).toBe(false);
+    expect(COPYLEFT_IDS.has(leaf("NGPL"))).toBe(false);
+    expect(COPYLEFT_IDS.has(leaf("SMAIL-GPL"))).toBe(false);
+    expect(COPYLEFT_IDS.has(leaf("CNRI-Python-GPL-Compatible"))).toBe(false);
   });
 });
 
@@ -141,15 +141,15 @@ describe("elect — deterministic OR-branch election", () => {
 
 describe("orLeaves — satisfies-allowlist decomposition primitive", () => {
   test("pure OR tree yields compareCodeUnits-sorted rendered leaves", () => {
-    expect(orLeaves(p("(MIT OR Apache-2.0)"))).toEqual(["Apache-2.0", "MIT"]);
+    expect(widen(orLeaves(p("(MIT OR Apache-2.0)")))).toEqual(["Apache-2.0", "MIT"]);
   });
 
   test("single leaf yields a one-element list", () => {
-    expect(orLeaves(p("MIT"))).toEqual(["MIT"]);
+    expect(widen(orLeaves(p("MIT")))).toEqual(["MIT"]);
   });
 
   test("WITH leaf is preserved as a unit", () => {
-    expect(orLeaves(p("GPL-2.0-only WITH Classpath-exception-2.0"))).toEqual([
+    expect(widen(orLeaves(p("GPL-2.0-only WITH Classpath-exception-2.0")))).toEqual([
       "GPL-2.0-only WITH Classpath-exception-2.0",
     ]);
   });

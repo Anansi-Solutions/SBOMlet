@@ -1,5 +1,6 @@
 import { type } from "arktype";
 
+import { type SpdxLicenseLeaf } from "../../model/dependencies";
 import { recordOf, stringOf } from "../../validate/record";
 
 import { collectArkProblems, formatProblems, nonBlankString } from "./arkAdapter";
@@ -39,7 +40,7 @@ export interface CompatibleLicenseRule {
    * Pre-decomposed satisfies allowlist: rendered OR-leaves of the pattern (single ID, optionally
    * WITH ⇒ one entry). Computed at validation time, never at evaluate time.
    */
-  allowlist: ReadonlyArray<string>;
+  allowlist: ReadonlyArray<SpdxLicenseLeaf>;
   /** Why this licence is accepted where the scope below covers it. */
   rationale: Rationale;
   /**
