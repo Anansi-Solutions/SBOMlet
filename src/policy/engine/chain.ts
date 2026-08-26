@@ -17,6 +17,7 @@ import {
   compareCodeUnits,
   purlDisplayName,
   type CanonicalDependencies,
+  type Purl,
   type TargetIdentity,
 } from "../../model/dependencies";
 import { SELF_PARENT } from "../schema/dependencyChain";
@@ -31,19 +32,19 @@ export interface TargetDependencyGraph {
    * provenance at all - a first-party workspace member the merge excluded, say - which is a
    * different answer from a recorded empty list (reported, and introduced by nothing reachable).
    */
-  readonly parents: ReadonlyMap<string, readonly string[]>;
+  readonly parents: ReadonlyMap<Purl, readonly Purl[]>;
   /** Node purl -> display name: the model's own where it has one, else read from the purl. */
-  readonly names: ReadonlyMap<string, string>;
+  readonly names: ReadonlyMap<Purl, string>;
   /** The purls the project at this target declared as direct dependencies. */
-  readonly direct: ReadonlySet<string>;
+  readonly direct: ReadonlySet<Purl>;
 }
 
 interface MutableGraph {
-  parents: Map<string, readonly string[]>;
-  names: Map<string, string>;
-  direct: Set<string>;
+  parents: Map<Purl, readonly Purl[]>;
+  names: Map<Purl, string>;
+  direct: Set<Purl>;
   /** Introducer purls seen so far; named from their purl unless the model names them first. */
-  introducers: Set<string>;
+  introducers: Set<Purl>;
 }
 
 function emptyGraph(): MutableGraph {
@@ -117,16 +118,16 @@ export function dependencyGraphsByTarget(
 
 /** One step of the walk upward: a node and the chain from it down to the package asked about. */
 interface Ascent {
-  purl: string;
-  chain: readonly string[];
+  purl: Purl;
+  chain: readonly Purl[];
 }
 
 /** The package an entry cannot cover, and the chain that carries it. */
 export interface UncoveredIntroduction {
   /** The governed package the chain ends at - the one to name first when reporting it. */
-  readonly purl: string;
+  readonly purl: Purl;
   /** Purls from the project's own dependency down to that package. */
-  readonly chain: readonly string[];
+  readonly chain: readonly Purl[];
 }
 
 /**
@@ -141,7 +142,7 @@ export interface UncoveredIntroduction {
  * direct edge, which {@link uncoveredChain} settles before the walk starts. Every other node on the
  * way up was already checked against the judged names by {@link ascend}.
  */
-function hangsOffProject(graph: TargetDependencyGraph, purl: string): boolean {
+function hangsOffProject(graph: TargetDependencyGraph, purl: Purl): boolean {
   return graph.direct.has(purl) || !graph.parents.has(purl);
 }
 
@@ -153,7 +154,7 @@ function hangsOffProject(graph: TargetDependencyGraph, purl: string): boolean {
 function ascend(
   graph: TargetDependencyGraph,
   frontier: readonly Ascent[],
-  visited: Set<string>,
+  visited: Set<Purl>,
   judgedUnder: ReadonlySet<string>,
 ): Ascent[] {
   const next: Ascent[] = [];
@@ -190,9 +191,9 @@ function ascend(
  */
 function uncoveredChain(
   graph: TargetDependencyGraph,
-  purl: string,
+  purl: Purl,
   judgedUnder: ReadonlySet<string>,
-): readonly string[] | undefined {
+): readonly Purl[] | undefined {
   if (!graph.parents.has(purl)) {
     return undefined;
   }
@@ -203,7 +204,7 @@ function uncoveredChain(
     return judgedUnder.has(SELF_PARENT) ? undefined : [purl];
   }
 
-  const visited = new Set<string>([purl]);
+  const visited = new Set<Purl>([purl]);
   let frontier: Ascent[] = [{ purl, chain: [purl] }];
 
   while (frontier.length > 0) {
@@ -229,7 +230,7 @@ function uncoveredChain(
  */
 export function firstUncoveredIntroduction(
   graph: TargetDependencyGraph,
-  governed: readonly string[],
+  governed: readonly Purl[],
   judgedUnder: ReadonlySet<string>,
 ): UncoveredIntroduction | undefined {
   for (const purl of governed) {
@@ -261,8 +262,8 @@ function governedPurlsAt(
   model: CanonicalDependencies,
   rule: CompatiblePackageRule,
   target: string,
-): string[] {
-  const purls: string[] = [];
+): Purl[] {
+  const purls: Purl[] = [];
 
   for (const entry of model.packages) {
     if (!matchesPackage(rule, entry)) {
@@ -278,7 +279,7 @@ function governedPurlsAt(
 }
 
 /** A chain of purls read back as the names an `as-dependency-of` list would spell. */
-function namedChain(graph: TargetDependencyGraph, chain: readonly string[]): string[] {
+function namedChain(graph: TargetDependencyGraph, chain: readonly Purl[]): string[] {
   return chain.map((purl) => graph.names.get(purl) ?? purl);
 }
 

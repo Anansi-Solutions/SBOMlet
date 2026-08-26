@@ -17,26 +17,26 @@
  * introducer.
  */
 
-import { compareCodeUnits, type DependencyIntroduction } from "../model/dependencies";
+import { compareCodeUnits, type DependencyIntroduction, type Purl } from "../model/dependencies";
 
 /** Purl-space directed graph anchored at a synthetic root (the scanned target). */
 export interface PurlGraph {
   /** parent purl → sorted-unique child purls (self-edges excluded). */
-  edges: Map<string, string[]>;
+  edges: Map<Purl, Purl[]>;
   /** child purl → sorted-unique parent purls (root excluded). */
-  parents: Map<string, string[]>;
+  parents: Map<Purl, Purl[]>;
   /** The root's declared-direct child purls. */
-  rootChildren: Set<string>;
+  rootChildren: Set<Purl>;
   /** The universe of package purls to emit provenance for (root excluded). */
-  nodes: Set<string>;
+  nodes: Set<Purl>;
 }
 
 /** Insert one (key→value) into a Set-of-values map. */
-export function addToSetMap(map: Map<string, Set<string>>, key: string, value: string): void {
+export function addToSetMap<K, V>(map: Map<K, Set<V>>, key: K, value: V): void {
   let set = map.get(key);
 
   if (set === undefined) {
-    set = new Set<string>();
+    set = new Set<V>();
     map.set(key, set);
   }
 
@@ -44,8 +44,8 @@ export function addToSetMap(map: Map<string, Set<string>>, key: string, value: s
 }
 
 /** Materialize a Set-of-values map into a sorted-array adjacency map. */
-export function sortSetMap(map: Map<string, Set<string>>): Map<string, string[]> {
-  const out = new Map<string, string[]>();
+export function sortSetMap<K, V extends string>(map: Map<K, Set<V>>): Map<K, V[]> {
+  const out = new Map<K, V[]>();
 
   for (const [key, set] of map) {
     out.set(key, [...set].sort(compareCodeUnits));
@@ -55,8 +55,8 @@ export function sortSetMap(map: Map<string, Set<string>>): Map<string, string[]>
 }
 
 interface BfsNode {
-  purl: string;
-  path: string[];
+  purl: Purl;
+  path: Purl[];
 }
 
 /**
@@ -97,8 +97,8 @@ function expandLevel(
  * lexicographically-smallest-path comparison would select. Returns undefined when unreachable from
  * the root.
  */
-export function shortestPath(graph: PurlGraph, target: string): string[] | undefined {
-  const visited = new Set<string>();
+export function shortestPath(graph: PurlGraph, target: Purl): Purl[] | undefined {
+  const visited = new Set<Purl>();
   let frontier: BfsNode[] = [];
 
   for (const child of [...graph.rootChildren].sort(compareCodeUnits)) {
@@ -140,10 +140,10 @@ export function shortestPath(graph: PurlGraph, target: string): string[] | undef
  */
 function expandReachable(
   graph: PurlGraph,
-  frontier: readonly string[],
-  reachable: Set<string>,
-): string[] {
-  const next: string[] = [];
+  frontier: readonly Purl[],
+  reachable: Set<Purl>,
+): Purl[] {
+  const next: Purl[] = [];
 
   for (const purl of frontier) {
     for (const child of graph.edges.get(purl) ?? []) {
@@ -159,9 +159,9 @@ function expandReachable(
   return next;
 }
 
-function reachableFromRoots(graph: PurlGraph): Set<string> {
-  const reachable = new Set<string>();
-  let frontier: string[] = [];
+function reachableFromRoots(graph: PurlGraph): Set<Purl> {
+  const reachable = new Set<Purl>();
+  let frontier: Purl[] = [];
 
   for (const child of graph.rootChildren) {
     if (reachable.has(child)) {
@@ -200,9 +200,9 @@ function reachableFromRoots(graph: PurlGraph): Set<string> {
  *
  * Optionality is descoped - no `optional` field is ever emitted.
  */
-export function deriveIntroductions(graph: PurlGraph): Map<string, DependencyIntroduction> {
+export function deriveIntroductions(graph: PurlGraph): Map<Purl, DependencyIntroduction> {
   const reachable = reachableFromRoots(graph);
-  const result = new Map<string, DependencyIntroduction>();
+  const result = new Map<Purl, DependencyIntroduction>();
 
   for (const purl of graph.nodes) {
     const direct = graph.rootChildren.has(purl);

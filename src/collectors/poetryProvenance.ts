@@ -204,8 +204,8 @@ function parseLockPackages(lockfileText: string): LockPackage[] {
 
 /** The mutable purl-space edge accumulators built per lock package. */
 interface EdgeAccumulators {
-  edgeSets: Map<string, Set<string>>;
-  parentSets: Map<string, Set<string>>;
+  edgeSets: Map<Purl, Set<Purl>>;
+  parentSets: Map<Purl, Set<Purl>>;
 }
 
 /**
@@ -220,7 +220,7 @@ interface EdgeAccumulators {
  */
 function ingestPackageEdges(
   edges: EdgeAccumulators,
-  precisePurlByName: ReadonlyMap<string, string>,
+  precisePurlByName: ReadonlyMap<string, Purl>,
   pkg: LockPackage,
 ): void {
   for (const depName of Object.keys(pkg.dependencies)) {
@@ -273,15 +273,15 @@ function buildPurlGraph(
 ): PurlGraph {
   // Partition by version-multiplicity: a name → its single purl ONLY when it maps to exactly one
   // lock purl; multi-version names are dropped (ambiguous).
-  const purlsByName = new Map<string, Set<string>>();
-  const nodes = new Set<string>();
+  const purlsByName = new Map<string, Set<Purl>>();
+  const nodes = new Set<Purl>();
 
   for (const pkg of packages) {
     addToSetMap(purlsByName, pkg.normalizedName, pkg.purl);
     nodes.add(pkg.purl);
   }
 
-  const precisePurlByName = new Map<string, string>();
+  const precisePurlByName = new Map<string, Purl>();
 
   for (const [name, purls] of purlsByName) {
     if (purls.size === 1) {
@@ -290,10 +290,10 @@ function buildPurlGraph(
   }
 
   const edges: EdgeAccumulators = {
-    edgeSets: new Map<string, Set<string>>(),
-    parentSets: new Map<string, Set<string>>(),
+    edgeSets: new Map<Purl, Set<Purl>>(),
+    parentSets: new Map<Purl, Set<Purl>>(),
   };
-  const rootChildren = new Set<string>();
+  const rootChildren = new Set<Purl>();
 
   for (const pkg of packages) {
     // A declared-root NAME marks a purl direct ONLY when that name maps to exactly one lock purl
@@ -327,7 +327,7 @@ function buildPurlGraph(
 export function poetryIntroductions(
   lockfileText: string,
   pyprojectText: string,
-): ReadonlyMap<string, DependencyIntroduction> {
+): ReadonlyMap<Purl, DependencyIntroduction> {
   const packages = parseLockPackages(lockfileText);
 
   if (packages.length === 0) {

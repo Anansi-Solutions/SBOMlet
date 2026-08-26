@@ -26,6 +26,7 @@ import {
   type Verdict,
   asAbsolutePath,
   asTargetIdentity,
+  type Purl,
   type TargetIdentity,
 } from "../src/model/dependencies";
 import { annotateFindings } from "../src/normalize/normalize";
@@ -34,7 +35,7 @@ import { parsePolicy } from "../src/policy/parse/parse";
 import { renderCyclonedx } from "../src/render/cyclonedx";
 import { renderMarkdown, type PolicyView } from "../src/render/markdown";
 import { renderNotices } from "../src/render/notices";
-import { widen } from "./brandTestSupport";
+import { widen, asPurl } from "./brandTestSupport";
 import type { Target } from "../src/targets/target";
 
 /** No scanned target in these scenarios is collected by a lane that derives a dependency graph. */
@@ -116,7 +117,7 @@ describe("determinism — multi-target merge", () => {
       {
         sbom: JSON.parse(fixtureRaw),
         targetIdentity: asTargetIdentity("a"),
-        prodPurlSet: new Set<string>(),
+        prodPurlSet: new Set<Purl>(),
       },
       { sbom: JSON.parse(fixtureRaw), targetIdentity: asTargetIdentity("b") },
     ]);
@@ -347,8 +348,8 @@ describe("determinism — bun collector double-run byte-identity", () => {
 
     // Not vacuously equal: the nested-conflict purl reaches the model
     // alongside its 4.0.0 twin, and the first-party member never renders.
-    expect(first.dump.includes("pkg:npm/spdx-expression-parse@3.0.1")).toBe(true);
-    expect(first.dump.includes("pkg:npm/spdx-expression-parse@4.0.0")).toBe(true);
+    expect(first.dump.includes(asPurl("pkg:npm/spdx-expression-parse@3.0.1"))).toBe(true);
+    expect(first.dump.includes(asPurl("pkg:npm/spdx-expression-parse@4.0.0"))).toBe(true);
     expect(first.md.includes("libb")).toBe(false);
 
     // LF contract holds on the collector-fed render path too.
@@ -381,8 +382,8 @@ describe("determinism — bun collector double-run byte-identity", () => {
     expect(first.dump).toBe(second.dump);
 
     // Both kinds are present in the merged dump (multi-PM, not vacuous).
-    expect(first.dump.includes("pkg:npm/smol-toml@1.6.1")).toBe(true);
-    expect(first.dump.includes("pkg:npm/%40next/swc-win32-x64-msvc@16.0.10")).toBe(true);
+    expect(first.dump.includes(asPurl("pkg:npm/smol-toml@1.6.1"))).toBe(true);
+    expect(first.dump.includes(asPurl("pkg:npm/%40next/swc-win32-x64-msvc@16.0.10"))).toBe(true);
   });
 });
 
@@ -494,8 +495,8 @@ describe("determinism — nuget collector double-run byte-identity", () => {
     // Not vacuously equal: the CentralTransitive entry reaches the model,
     // the cross-section duplicate folds to one row, and the first-party
     // Project entry never renders.
-    expect(first.dump.includes("pkg:nuget/Microsoft.Extensions.Logging@9.0.9")).toBe(true);
-    expect(first.dump.includes("pkg:nuget/Newtonsoft.Json@13.0.4")).toBe(true);
+    expect(first.dump.includes(asPurl("pkg:nuget/Microsoft.Extensions.Logging@9.0.9"))).toBe(true);
+    expect(first.dump.includes(asPurl("pkg:nuget/Newtonsoft.Json@13.0.4"))).toBe(true);
     expect(first.md.includes("det.lib")).toBe(false);
 
     // LF contract holds on the collector-fed render path too.
@@ -582,7 +583,9 @@ describe("determinism — maven collector double-run byte-identity", () => {
 
     // Verbatim pass-through is exercised on both the classifier purl and the
     // no-license component, not vacuously equal.
-    expect(first).toContain("pkg:maven/com.example/det-lib@2.0.0?classifier=jakarta&type=jar");
+    expect(first).toContain(
+      asPurl("pkg:maven/com.example/det-lib@2.0.0?classifier=jakarta&type=jar"),
+    );
     expect(first).toContain("det-proprietary");
   });
 
@@ -607,7 +610,9 @@ describe("determinism — maven collector double-run byte-identity", () => {
     // Not vacuously equal: both the classifier purl and the no-license
     // component reach the merged model.
     expect(
-      first.dump.includes("pkg:maven/com.example/det-lib@2.0.0?classifier=jakarta&type=jar"),
+      first.dump.includes(
+        asPurl("pkg:maven/com.example/det-lib@2.0.0?classifier=jakarta&type=jar"),
+      ),
     ).toBe(true);
     expect(first.md.includes("det-proprietary")).toBe(true);
 
@@ -623,12 +628,12 @@ describe("determinism — maven collector double-run byte-identity", () => {
       specVersion: "1.6",
       metadata: {
         component: {
-          purl: "pkg:maven/com.example.det/dual-app@1.0.0?type=jar",
+          purl: asPurl("pkg:maven/com.example.det/dual-app@1.0.0?type=jar"),
         },
       },
       components: [
         {
-          purl: "pkg:maven/com.example.det/dual-compile-lib@1.0.0?type=jar",
+          purl: asPurl("pkg:maven/com.example.det/dual-compile-lib@1.0.0?type=jar"),
           name: "dual-compile-lib",
           version: "1.0.0",
           group: "com.example.det",
@@ -642,19 +647,19 @@ describe("determinism — maven collector double-run byte-identity", () => {
       specVersion: "1.6",
       metadata: {
         component: {
-          purl: "pkg:maven/com.example.det/dual-app@1.0.0?type=jar",
+          purl: asPurl("pkg:maven/com.example.det/dual-app@1.0.0?type=jar"),
         },
       },
       components: [
         {
-          purl: "pkg:maven/com.example.det/dual-compile-lib@1.0.0?type=jar",
+          purl: asPurl("pkg:maven/com.example.det/dual-compile-lib@1.0.0?type=jar"),
           name: "dual-compile-lib",
           version: "1.0.0",
           group: "com.example.det",
           licenses: [{ license: { id: "MIT" } }],
         },
         {
-          purl: "pkg:maven/com.example.det/dual-test-only-lib@1.0.0?type=jar",
+          purl: asPurl("pkg:maven/com.example.det/dual-test-only-lib@1.0.0?type=jar"),
           name: "dual-test-only-lib",
           version: "1.0.0",
           group: "com.example.det",
@@ -746,8 +751,8 @@ describe("determinism — maven collector double-run byte-identity", () => {
     expect(first.dump).toBe(second.dump);
 
     // Both kinds are present in the merged dump (multi-PM, not vacuous).
-    expect(first.dump.includes("pkg:npm/smol-toml@1.6.1")).toBe(true);
-    expect(first.dump.includes("pkg:npm/%40next/swc-win32-x64-msvc@16.0.10")).toBe(true);
+    expect(first.dump.includes(asPurl("pkg:npm/smol-toml@1.6.1"))).toBe(true);
+    expect(first.dump.includes(asPurl("pkg:npm/%40next/swc-win32-x64-msvc@16.0.10"))).toBe(true);
   });
 });
 

@@ -26,7 +26,7 @@ import {
 } from "../src/collectors/mavenSbom";
 import { collectors } from "../src/collectors/registry";
 import { mergeSboms } from "../src/merge/merge";
-import { asAbsolutePath, asTargetIdentity } from "../src/model/dependencies";
+import { asAbsolutePath, asPurl, asTargetIdentity } from "../src/model/dependencies";
 import { widen } from "./brandTestSupport";
 import type { Target } from "../src/targets/target";
 
@@ -878,7 +878,7 @@ describe("collectWithMavenSbom — dual-document composed inventory", () => {
       "pkg:maven/com.example.dual/test-only-lib@1.0.0?type=jar",
     ]);
     expect(result.prodPurlSet).toEqual(
-      new Set(["pkg:maven/com.example.dual/compile-lib@1.0.0?type=jar"]),
+      new Set([asPurl("pkg:maven/com.example.dual/compile-lib@1.0.0?type=jar")]),
     );
   });
 
@@ -1004,7 +1004,7 @@ describe("collectWithMavenSbom — dual-document mediation edge cases", () => {
       "pkg:maven/com.example.dual/system-lib@1.0.0?type=jar",
     ]);
     expect(result.prodPurlSet).toEqual(
-      new Set(["pkg:maven/com.example.dual/system-lib@1.0.0?type=jar"]),
+      new Set([asPurl("pkg:maven/com.example.dual/system-lib@1.0.0?type=jar")]),
     );
   });
 
@@ -1176,7 +1176,7 @@ describe("maven registry collector — dual-doc prodPurlSet threading", () => {
     );
 
     expect(result.prodPurlSet).toEqual(
-      new Set(["pkg:maven/com.example.dual/compile-lib@1.0.0?type=jar"]),
+      new Set([asPurl("pkg:maven/com.example.dual/compile-lib@1.0.0?type=jar")]),
     );
   });
 
