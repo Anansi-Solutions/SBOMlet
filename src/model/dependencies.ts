@@ -5,6 +5,228 @@
  * reserves fields so later work is purely additive: provenance layers, scope taxonomy for Docker,
  * and the dev/prod marker.
  */
+import { isAbsolute } from "node:path";
+
+import { type } from "arktype";
+
+/**
+ * Untrusted, unresolved license text exactly as it entered the tool - a collector-read license
+ * string, a registry answer, a ScanCode raw. It is what {@link canonicalizeExpression} consumes;
+ * nothing downstream may treat it as resolved. Minted at the raw-claim origins via {@link
+ * asRawLicense} - the one place a plain string becomes a RawLicense.
+ */
+const _rawLicenseBrand = type("string").brand("RawLicense");
+
+export type RawLicense = typeof _rawLicenseBrand.infer;
+
+/**
+ * The single resolved-and-canonical SPDX state: there is no intermediate "normalized but not yet
+ * canonical" license anywhere in the model. Everything resolved is canonical. Minted ONLY by
+ * canonicalizeExpression (normalize/expression.ts) - the sole boundary that turns raw text into a
+ * canonical expression.
+ */
+const _canonicalLicenseBrand = type("string").brand("CanonicalLicense");
+
+export type CanonicalLicense = typeof _canonicalLicenseBrand.infer;
+
+/**
+ * A single SPDX license-expression LEAF: one license id, optionally a trailing `+` and/or a `WITH
+ * <exception>` clause - NEVER a compound AND/OR expression, and NEVER a bare imprecise family
+ * token. The brand is NOMINAL only (no runtime narrow): the two policy-schema validators that admit
+ * a leaf ({@link singleWorkspaceLicense} and licenseAllowlist's no-AND rule) already enforce the
+ * shape at their boundary, so a value reaches {@link asSpdxLicenseLeaf} already shape-checked.
+ * Widens to `string` for spdx-satisfies, whose allowlists are `string[]`.
+ */
+const _spdxLicenseLeafBrand = type("string").brand("SpdxLicenseLeaf");
+
+export type SpdxLicenseLeaf = typeof _spdxLicenseLeafBrand.infer;
+
+/**
+ * The minimal package-URL shape a {@link Purl} must satisfy: a `pkg:` scheme, a non-empty type, a
+ * slash, and a non-empty name. Deliberately permissive about qualifiers and subpaths - it gates the
+ * gross shape, not the full purl grammar, so a real `pkg:npm/...` / `pkg:deb/...` always passes.
+ */
+const PURL_SHAPE = /^pkg:[^/]+\/.+/;
+
+/**
+ * A package URL (`pkg:<type>/<name>@<version>`), the tool-wide dedup and cache key. The brand is
+ * VALIDATED: a value must match {@link PURL_SHAPE} (a `pkg:` scheme, a type, a slash, a name), so a
+ * plainly non-purl string can never enter the type. Minted at purl construction and at the {@link
+ * parsePurl} boundary via {@link asPurl}; kept verbatim thereafter (URL-encoding intact).
+ */
+const _purlBrand = type("string")
+  .narrow((value, ctx) => PURL_SHAPE.test(value) || ctx.reject("a pkg: package URL"))
+  .brand("Purl");
+
+export type Purl = typeof _purlBrand.infer;
+
+/**
+ * An absolute filesystem path (a `path.resolve`/`join` result, or a base/repo root the CLI resolved
+ * to absolute). The brand is VALIDATED: a value must satisfy node:path's {@link isAbsolute}, so a
+ * relative string can never enter the type. Minted via {@link asAbsolutePath} at the resolution
+ * boundary - every current call site passes a `resolve`/`join` result, so the check catches a real
+ * bug (a non-absolute leak) rather than ever firing in practice.
+ */
+const _absolutePathBrand = type("string")
+  .narrow((value, ctx) => isAbsolute(value) || ctx.reject("an absolute path"))
+  .brand("AbsolutePath");
+
+export type AbsolutePath = typeof _absolutePathBrand.infer;
+
+/**
+ * A non-empty repo-relative path (forward-slash), as it lands in a committed artifact - never an
+ * absolute machine path. The brand is VALIDATED: a value must be non-empty AND not satisfy
+ * node:path {@link isAbsolute}, so an empty or absolute string can never enter the type. Minted via
+ * {@link asRelativePath} where such a path is established (the report's policy-pointer line).
+ */
+const _relativePathBrand = type("string")
+  .narrow(
+    (value, ctx) =>
+      (value.length > 0 && !isAbsolute(value)) || ctx.reject("a non-empty relative path"),
+  )
+  .brand("RelativePath");
+
+export type RelativePath = typeof _relativePathBrand.infer;
+
+/**
+ * A tool-minted target identity: a repo-relative forward-slash path ("libraries/iframe-rpc") OR a
+ * docker occurrence identity ("docker:" + source). The brand is VALIDATED: non-empty, no backslash,
+ * and NOT node:path {@link isAbsolute}, so an absolute machine path (an {@link AbsolutePath}) or a
+ * Windows-separated path can never enter the type - the abs/rel fence that keeps a target's machine
+ * `dir` and its `identity` from ever being confused. Minted via {@link asTargetIdentity} at the
+ * three identity origins (target resolution, discovery, the docker fan-out). The reserved
+ * "docker:"-namespace guard for non-os inputs (assertNotReservedIdentity) is enforced separately at
+ * the merge boundary; the brand admits the shape an app path and a docker identity share.
+ */
+const _targetIdentityBrand = type("string")
+  .narrow(
+    (value, ctx) =>
+      (value.length > 0 && !value.includes("\\") && !isAbsolute(value)) ||
+      ctx.reject("a repo-relative or docker: target identity"),
+  )
+  .brand("TargetIdentity");
+
+export type TargetIdentity = typeof _targetIdentityBrand.infer;
+
+/**
+ * A dependency's display name (`@scope/pkg`, `busybox`, an `<ns>/<name>` terraform address). The
+ * brand is VALIDATED non-blank, so a blank name can never identify a package. Minted via {@link
+ * asDependencyName} where a package name is CONSTRUCTED (a collector building a component, the
+ * merge deriving a display name); a distinct value that is not specifically a dependency name (a
+ * policy pattern, a family token, a display label) stays a plain string.
+ */
+const _dependencyNameBrand = type("string")
+  .narrow((value, ctx) => value.trim().length > 0 || ctx.reject("a non-blank dependency name"))
+  .brand("DependencyName");
+
+export type DependencyName = typeof _dependencyNameBrand.infer;
+
+/**
+ * A dependency's resolved version string, kept verbatim from its source (never parsed). The brand
+ * is VALIDATED non-blank, so a blank version can never identify a package. Minted via {@link
+ * asDependencyVersion} at the same construction sites as {@link DependencyName}.
+ */
+const _dependencyVersionBrand = type("string")
+  .narrow((value, ctx) => value.trim().length > 0 || ctx.reject("a non-blank dependency version"))
+  .brand("DependencyVersion");
+
+export type DependencyVersion = typeof _dependencyVersionBrand.infer;
+
+/**
+ * Mint a {@link RawLicense} from untrusted license text - the one cast that admits a plain string
+ * into the raw-license state, used at the claim origins (collector, enrichment, ScanCode) and by
+ * canonicalization's own input path.
+ */
+export function asRawLicense(text: string): RawLicense {
+  return text as RawLicense;
+}
+
+/**
+ * Mint a {@link SpdxLicenseLeaf} at a boundary that has already established the value is a single
+ * license leaf - the two SPDX-shape validators (single-workspace-license, the no-AND allowlist
+ * rule) and the leaf-decomposition helpers (orLeaves, copyleftLeafIds) that yield rendered leaves.
+ * A nominal (unchecked) cast: the leaf shape is enforced where a leaf is first established, not
+ * here.
+ */
+export function asSpdxLicenseLeaf(value: string): SpdxLicenseLeaf {
+  return value as SpdxLicenseLeaf;
+}
+
+/**
+ * Mint a {@link Purl} from a constructed or parsed package-URL string - used at every purl
+ * CONSTRUCTION site (a collector building `pkg:...`) and at trusted disk-key sites, where the value
+ * is a purl by construction.
+ *
+ * @throws if `text` is not a {@link PURL_SHAPE} package URL. Safe at those sites because the value
+ * is valid by construction; the EXTERNAL SBOM boundary uses {@link tryAsPurl} instead so a malformed
+ * component purl is tolerantly dropped rather than crashing the run.
+ */
+export function asPurl(text: string): Purl {
+  return _purlBrand.assert(text) as Purl;
+}
+
+/**
+ * Tolerantly mint a {@link Purl} at an EXTERNAL boundary (a parsed SBOM component / metadata purl).
+ *
+ * @returns the branded purl, or undefined when `text` is not a {@link PURL_SHAPE} package URL - the
+ * caller then treats the purl as absent (the component drops via the existing skip path), matching
+ * the skip-don't-throw posture the tool holds over untrusted SBOM data.
+ */
+export function tryAsPurl(text: string): Purl | undefined {
+  const result = _purlBrand(text);
+
+  return result instanceof type.errors ? undefined : result;
+}
+
+/**
+ * Mint an {@link AbsolutePath} at the point a path is resolved to absolute.
+ *
+ * @throws if `path` is not absolute per node:path's {@link isAbsolute}. Every call site passes a
+ * `resolve`/`join` result, so this never fires in practice but catches a non-absolute leak.
+ */
+export function asAbsolutePath(path: string): AbsolutePath {
+  return _absolutePathBrand.assert(path) as AbsolutePath;
+}
+
+/**
+ * Mint a {@link RelativePath} where a repo-relative path is established for a committed artifact.
+ *
+ * @throws if `path` is empty or absolute per node:path's {@link isAbsolute}. Fires on a bug that
+ * would otherwise leak an absolute machine path into committed bytes.
+ */
+export function asRelativePath(path: string): RelativePath {
+  return _relativePathBrand.assert(path) as RelativePath;
+}
+
+/**
+ * Mint a {@link TargetIdentity} at an identity origin (target resolution, discovery, the docker
+ * fan-out).
+ *
+ * @throws if `value` is empty, contains a backslash, or is absolute per node:path {@link isAbsolute}
+ * - a machine path or a Windows-separated string can never become a target identity.
+ */
+export function asTargetIdentity(value: string): TargetIdentity {
+  return _targetIdentityBrand.assert(value) as TargetIdentity;
+}
+
+/**
+ * Mint a {@link DependencyName} where a package name is constructed.
+ *
+ * @throws if `name` is blank. Fires on a bug (or malformed input not filtered upstream) that would
+ * otherwise let a blank string identify a package.
+ */
+export function asDependencyName(name: string): DependencyName {
+  return _dependencyNameBrand.assert(name) as DependencyName;
+}
+
+/**
+ * Mint a {@link DependencyVersion} where a package version is constructed.
+ *
+ * @throws if `version` is blank, for the same reason as {@link asDependencyName}.
+ */
+export function asDependencyVersion(version: string): DependencyVersion {
+  return _dependencyVersionBrand.assert(version) as DependencyVersion;
+}
 
 /**
  * Provenance of a license claim. "generator" is the source produced by the collectors; "registry"
@@ -26,7 +248,7 @@ export type LicenseClaimSource =
 export type LicenseClaimKind = "spdx-id" | "name" | "expression";
 
 export interface LicenseClaim {
-  raw: string;
+  raw: RawLicense;
   kind: LicenseClaimKind;
   source: LicenseClaimSource;
 }
@@ -49,17 +271,28 @@ export interface LicenseClaim {
 export type FindingConfidence = "exact" | "corrected" | "none" | "imprecise";
 
 /**
+ * The closed vocabulary of imprecise license-FAMILY tokens: the bare family labels a {@link
+ * LicenseFinding} carries when confidence is "imprecise" - never a precise SPDX id, never a
+ * compound expression. Exactly the distinct VALUES the normalizer's AMBIGUOUS_FAMILY map elects.
+ * The could-be-copyleft subset (GPL/AGPL/LGPL/EUPL) routes to review; the permissive rest
+ * (BSD/Apache) is non-gating. Distinct from the copyleft-grouping family vocabulary
+ * (CopyleftFamily, copyleft.ts) that keys COPYLEFT_FAMILY / WORKSPACE_ABSORBS - those are exact-id
+ * groupings (GNU/MPL/...), never these imprecise labels.
+ */
+export type LicenseFamily = "AGPL" | "Apache" | "BSD" | "EUPL" | "GPL" | "LGPL";
+
+/**
  * Normalized license conclusion for one package. Produced by the normalization layer; provenance is
  * mandatory for auditability.
  */
 export interface LicenseFinding {
   /**
-   * Full normalized SPDX expression; null = unknown OR imprecise (an imprecise family is not a
-   * valid SPDX expression and must never be emitted as one - see {@link FindingConfidence}).
+   * Full canonical SPDX expression; null = unknown OR imprecise (an imprecise family is not a valid
+   * SPDX expression and must never be emitted as one - see {@link FindingConfidence}).
    */
-  expression: string | null;
-  /** Elected branch as rendered canonical string; null = unknown or imprecise. */
-  elected: string | null;
+  expression: CanonicalLicense | null;
+  /** Elected branch as canonical expression; null = unknown or imprecise. */
+  elected: CanonicalLicense | null;
   /**
    * "generator" (exact parse or unknown), "corrected", "registry" (enrichment-appended), "override"
    * (clarify); "curated" reserved.
@@ -71,7 +304,7 @@ export interface LicenseFinding {
    * "imprecise". It is what the render layer surfaces and what the policy could-be-copyleft check
    * matches against the literal COULD_BE_COPYLEFT_FAMILIES token set.
    */
-  impreciseFamily?: string;
+  impreciseFamily?: LicenseFamily;
   /**
    * Distinct audit citation for a TOOL-LEVEL builtin override that decided this finding. Present
    * ONLY when a shipped BUILTIN_OVERRIDES entry (not a project [[clarify]]) replaced the finding
@@ -103,7 +336,7 @@ export interface LicenseFinding {
    * over overrides). Absent when no override ran (the un-overridden finding's `expression` already
    * IS the observed value) or when the base finding had no parseable expression.
    */
-  observedExpression?: string;
+  observedExpression?: CanonicalLicense;
   /**
    * The SET of EVERY observed per-claim normalized PRECISE expression (deny must see every observed
    * claim, not only the lossy COMBINED expression). Produced by annotateFindings by running
@@ -122,7 +355,7 @@ export interface LicenseFinding {
    *
    * Absent when no claim normalized to a precise expression (nothing to carry).
    */
-  observedExpressions?: readonly string[];
+  observedExpressions?: readonly CanonicalLicense[];
   /**
    * Surfaced non-normalizable raw claim tokens for a NON-GATING `os`-scope PARTIAL finding. Set
    * ONLY when an os-scope package's claim set mixes ≥1 normalizable SPDX member with ≥1
@@ -181,7 +414,7 @@ export interface CrossImageClaimDivergence {
    * declared license strings (deduped, sorted); empty when the image declared no license claim for
    * this purl at all.
    */
-  byTarget: ReadonlyArray<{ target: string; claims: readonly string[] }>;
+  byTarget: ReadonlyArray<{ target: TargetIdentity; claims: readonly string[] }>;
 }
 
 /**
@@ -194,8 +427,8 @@ export type VerdictStatus = "ok" | "warn" | "fail" | "suppressed";
 
 /** One policy decision per (package x occurrence). */
 export interface Verdict {
-  purl: string;
-  occurrenceTarget: string;
+  purl: Purl;
+  occurrenceTarget: TargetIdentity;
   status: VerdictStatus;
   /**
    * Machine-readable deciding rule: "compatible[1]", "clarify[0]",
@@ -224,12 +457,33 @@ export const DOCKER_IDENTITY_PREFIX = "docker:";
  * it as a whole path segment - "apps/studio-helper" never matches "apps/studio". The one prefix
  * comparison every policy-surface matcher shares (copyleft suppression paths, `[[compatible]]`
  * `where` scopes, target-profile resolution) so a crafted narrower/wider path can never
- * accidentally match the wrong side. Both directions matter: the scope "docker:a" covers every
- * target under it ("docker:a/Dockerfile"), while the scope "docker:a/Dockerfile" never covers the
- * shorter target "docker:a" (the fail-safe direction).
+ * accidentally match the wrong side. `target` is a branded {@link TargetIdentity}; `pattern` stays
+ * a plain string, so the two arguments can never be passed swapped - a pattern-vs-pattern overlap
+ * uses {@link identityPathsOverlap} instead. Both directions matter: the scope "docker:a" covers
+ * every target under it ("docker:a/Dockerfile"), while the scope "docker:a/Dockerfile" never covers
+ * the shorter target "docker:a" (the fail-safe direction).
  */
-export function matchesIdentityPrefix(target: string, path: string): boolean {
-  return target === path || target.startsWith(path + "/");
+export function matchesIdentityPrefix(target: TargetIdentity, pattern: string): boolean {
+  return isSegmentPrefix(target, pattern);
+}
+
+/**
+ * The shared segment-aware prefix rule behind {@link matchesIdentityPrefix} and {@link
+ * identityPathsOverlap} - `value` IS `prefix` or sits under it as a whole path segment. One prefix
+ * comparison, never two.
+ */
+function isSegmentPrefix(value: string, prefix: string): boolean {
+  return value === prefix || value.startsWith(prefix + "/");
+}
+
+/**
+ * Whether two identity PATTERNS overlap as a prefix chain: either one is the other or sits under
+ * it. Both sides are policy patterns (a `[[workspace.copyleft_suppressed]]` path, a
+ * `[[target.workspace]]` path), so neither is a branded identity - the symmetric peer of {@link
+ * matchesIdentityPrefix}, sharing its one {@link isSegmentPrefix} rule.
+ */
+export function identityPathsOverlap(a: string, b: string): boolean {
+  return isSegmentPrefix(a, b) || isSegmentPrefix(b, a);
 }
 
 /**
@@ -261,7 +515,7 @@ export interface DependencyIntroduction {
    * package reached through multiple parents (or a duplicated purl) carries every real introducer
    * here. Empty for a direct dependency.
    */
-  introducedBy: readonly string[];
+  introducedBy: readonly Purl[];
   /**
    * Deterministic representative root→component purl chain (one shortest path). Omitted for a
    * direct dependency (the chain would be just the package itself).
@@ -271,7 +525,7 @@ export interface DependencyIntroduction {
    * whole-path order. A multi-parent package has several real chains:
    * `introducedBy` is complete, `path` is one representative.
    */
-  path?: readonly string[];
+  path?: readonly Purl[];
 }
 
 /**
@@ -281,7 +535,7 @@ export interface DependencyIntroduction {
  */
 export interface Occurrence {
   /** Target identity, e.g. "apps/scratch". Forward-slash, never backslash. */
-  target: string;
+  target: TargetIdentity;
   /** Scope of this package in this target (dev in docs, prod in frontend is legal). */
   isDevDependency: boolean;
   /**
@@ -318,10 +572,10 @@ export interface PackageAttribution {
 
 export interface PackageEntry {
   /** Dedup key, kept verbatim from the SBOM (URL-encoding like %40 intact). */
-  purl: string;
+  purl: Purl;
   /** Display name including group, e.g. "@ampproject/remapping". */
-  name: string;
-  version: string;
+  name: DependencyName;
+  version: DependencyVersion;
   /** Consuming targets with per-occurrence scope, sorted by target. */
   occurrences: Occurrence[];
   licenseClaims: LicenseClaim[];

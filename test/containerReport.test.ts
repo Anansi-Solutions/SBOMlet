@@ -3,9 +3,12 @@ import { join } from "node:path";
 import { describe, expect, test } from "bun:test";
 
 import {
+  asRawLicense,
   DOCKER_IDENTITY_PREFIX,
   type CanonicalDependencies,
   type PackageEntry,
+  asTargetIdentity,
+  type TargetIdentity,
 } from "../src/model/dependencies";
 import { mergeSboms } from "../src/merge/merge";
 import { annotateFindings } from "../src/normalize/normalize";
@@ -16,10 +19,11 @@ import { parsePolicy } from "../src/policy/parse/parse";
 import { alignTables } from "../src/render/alignTables";
 import { renderMarkdown, type PolicyView } from "../src/render/markdown";
 import { globToRegExp } from "../src/targets/discover";
+import { asPurl, asRelativePath, asDependencyName, asDependencyVersion } from "./brandTestSupport";
 import type { Policy } from "../src/policy/schema";
 
 /** No scanned target in these scenarios is collected by a lane that derives a dependency graph. */
-const WITHOUT_DEPENDENCY_GRAPHS: ReadonlySet<string> = new Set();
+const WITHOUT_DEPENDENCY_GRAPHS: ReadonlySet<TargetIdentity> = new Set();
 
 /**
  * A synthetic scenario shaped like the real-world report that motivated the
@@ -30,9 +34,9 @@ const WITHOUT_DEPENDENCY_GRAPHS: ReadonlySet<string> = new Set();
  * consumer-identifying string appears anywhere in this file.
  */
 
-const API_CONTAINER = `${DOCKER_IDENTITY_PREFIX}services/api/Dockerfile`;
-const BUILD_CONTAINER = `${DOCKER_IDENTITY_PREFIX}tools/build/Dockerfile`;
-const APP_TARGET = "apps/web";
+const API_CONTAINER = asTargetIdentity(`${DOCKER_IDENTITY_PREFIX}services/api/Dockerfile`);
+const BUILD_CONTAINER = asTargetIdentity(`${DOCKER_IDENTITY_PREFIX}tools/build/Dockerfile`);
+const APP_TARGET = asTargetIdentity("apps/web");
 
 const POLICY_TOML = [
   "[unknown]",
@@ -83,43 +87,43 @@ function entry(
 }
 
 const bash = entry({
-  purl: "pkg:deb/bash@5.2-6",
-  name: "bash",
-  version: "5.2-6",
+  purl: asPurl("pkg:deb/bash@5.2-6"),
+  name: asDependencyName("bash"),
+  version: asDependencyVersion("5.2-6"),
   scope: "os",
   occurrences: [{ target: API_CONTAINER, isDevDependency: false }],
-  licenseClaims: [{ raw: "GPL-3.0-or-later", kind: "spdx-id", source: "generator" }],
+  licenseClaims: [{ raw: asRawLicense("GPL-3.0-or-later"), kind: "spdx-id", source: "generator" }],
 });
 
 const libc6 = entry({
-  purl: "pkg:deb/libc6@2.36-9",
-  name: "libc6",
-  version: "2.36-9",
+  purl: asPurl("pkg:deb/libc6@2.36-9"),
+  name: asDependencyName("libc6"),
+  version: asDependencyVersion("2.36-9"),
   scope: "os",
   occurrences: [{ target: API_CONTAINER, isDevDependency: false }],
-  licenseClaims: [{ raw: "LGPL-2.1-or-later", kind: "spdx-id", source: "generator" }],
+  licenseClaims: [{ raw: asRawLicense("LGPL-2.1-or-later"), kind: "spdx-id", source: "generator" }],
 });
 
 const coreutils = entry({
-  purl: "pkg:deb/coreutils@9.1-1",
-  name: "coreutils",
-  version: "9.1-1",
+  purl: asPurl("pkg:deb/coreutils@9.1-1"),
+  name: asDependencyName("coreutils"),
+  version: asDependencyVersion("9.1-1"),
   scope: "os",
   occurrences: [{ target: API_CONTAINER, isDevDependency: false }],
-  licenseClaims: [{ raw: "GPL-3.0-or-later", kind: "spdx-id", source: "generator" }],
+  licenseClaims: [{ raw: asRawLicense("GPL-3.0-or-later"), kind: "spdx-id", source: "generator" }],
 });
 
 /** Shared across BOTH containers — must row in each container's subsection. */
 const zlib = entry({
-  purl: "pkg:deb/zlib1g@1.2.13-1",
-  name: "zlib1g",
-  version: "1.2.13-1",
+  purl: asPurl("pkg:deb/zlib1g@1.2.13-1"),
+  name: asDependencyName("zlib1g"),
+  version: asDependencyVersion("1.2.13-1"),
   scope: "os",
   occurrences: [
     { target: API_CONTAINER, isDevDependency: false },
     { target: BUILD_CONTAINER, isDevDependency: false },
   ],
-  licenseClaims: [{ raw: "Zlib", kind: "spdx-id", source: "generator" }],
+  licenseClaims: [{ raw: asRawLicense("Zlib"), kind: "spdx-id", source: "generator" }],
 });
 
 /**
@@ -130,12 +134,12 @@ const zlib = entry({
  * container, opposite ecosystem).
  */
 const metricsDaemon = entry({
-  purl: "pkg:golang/metrics-daemon@1.2.0",
-  name: "metrics-daemon",
-  version: "1.2.0",
+  purl: asPurl("pkg:golang/metrics-daemon@1.2.0"),
+  name: asDependencyName("metrics-daemon"),
+  version: asDependencyVersion("1.2.0"),
   scope: "os",
   occurrences: [{ target: API_CONTAINER, isDevDependency: false }],
-  licenseClaims: [{ raw: "AGPL-3.0-only", kind: "spdx-id", source: "generator" }],
+  licenseClaims: [{ raw: asRawLicense("AGPL-3.0-only"), kind: "spdx-id", source: "generator" }],
 });
 
 /**
@@ -147,12 +151,12 @@ const metricsDaemon = entry({
  * purely because of ecosystem, not because of anything else in the fixture.
  */
 const diagTools = entry({
-  purl: "pkg:apk/diag-tools@3.0.1",
-  name: "diag-tools",
-  version: "3.0.1",
+  purl: asPurl("pkg:apk/diag-tools@3.0.1"),
+  name: asDependencyName("diag-tools"),
+  version: asDependencyVersion("3.0.1"),
   scope: "os",
   occurrences: [{ target: API_CONTAINER, isDevDependency: false }],
-  licenseClaims: [{ raw: "AGPL-3.0-only", kind: "spdx-id", source: "generator" }],
+  licenseClaims: [{ raw: asRawLicense("AGPL-3.0-only"), kind: "spdx-id", source: "generator" }],
 });
 
 /**
@@ -163,12 +167,12 @@ const diagTools = entry({
  * never in Problematic and never counted toward the copyleft warning total.
  */
 const licensedDaemon = entry({
-  purl: "pkg:deb/licensed-daemon@2.1.0",
-  name: "licensed-daemon",
-  version: "2.1.0",
+  purl: asPurl("pkg:deb/licensed-daemon@2.1.0"),
+  name: asDependencyName("licensed-daemon"),
+  version: asDependencyVersion("2.1.0"),
   scope: "os",
   occurrences: [{ target: API_CONTAINER, isDevDependency: false }],
-  licenseClaims: [{ raw: "AGPL-3.0-only", kind: "spdx-id", source: "generator" }],
+  licenseClaims: [{ raw: asRawLicense("AGPL-3.0-only"), kind: "spdx-id", source: "generator" }],
 });
 
 /**
@@ -178,14 +182,14 @@ const licensedDaemon = entry({
  * the same kind of special notice as the precise case.
  */
 const licensedRelay = entry({
-  purl: "pkg:apk/licensed-relay@1.0.0",
-  name: "licensed-relay",
-  version: "1.0.0",
+  purl: asPurl("pkg:apk/licensed-relay@1.0.0"),
+  name: asDependencyName("licensed-relay"),
+  version: asDependencyVersion("1.0.0"),
   scope: "os",
   occurrences: [{ target: API_CONTAINER, isDevDependency: false }],
   licenseClaims: [
     {
-      raw: "GNU Affero General Public License",
+      raw: asRawLicense("GNU Affero General Public License"),
       kind: "name",
       source: "generator",
     },
@@ -198,14 +202,14 @@ const licensedRelay = entry({
  * default:agpl-container rule as the precise case (impreciseVerdict).
  */
 const relayAgent = entry({
-  purl: "pkg:golang/relay-agent@0.4.0",
-  name: "relay-agent",
-  version: "0.4.0",
+  purl: asPurl("pkg:golang/relay-agent@0.4.0"),
+  name: asDependencyName("relay-agent"),
+  version: asDependencyVersion("0.4.0"),
   scope: "os",
   occurrences: [{ target: BUILD_CONTAINER, isDevDependency: false }],
   licenseClaims: [
     {
-      raw: "GNU Affero General Public License",
+      raw: asRawLicense("GNU Affero General Public License"),
       kind: "name",
       source: "generator",
     },
@@ -221,12 +225,12 @@ const relayAgent = entry({
  * Copyleft and special notices section, not the Imprecise review section.
  */
 const cacheRelay = entry({
-  purl: "pkg:pypi/cache-relay@0.9.0",
-  name: "cache-relay",
-  version: "0.9.0",
+  purl: asPurl("pkg:pypi/cache-relay@0.9.0"),
+  name: asDependencyName("cache-relay"),
+  version: asDependencyVersion("0.9.0"),
   scope: "os",
   occurrences: [{ target: BUILD_CONTAINER, isDevDependency: false }],
-  licenseClaims: [{ raw: "AGPL-3.0-only", kind: "spdx-id", source: "generator" }],
+  licenseClaims: [{ raw: asRawLicense("AGPL-3.0-only"), kind: "spdx-id", source: "generator" }],
 });
 
 /**
@@ -234,34 +238,34 @@ const cacheRelay = entry({
  * introduction path, so it exercises the Why-cell provenance rendering too.
  */
 const chartRender = entry({
-  purl: "pkg:npm/chart-render@2.3.1",
-  name: "chart-render",
-  version: "2.3.1",
+  purl: asPurl("pkg:npm/chart-render@2.3.1"),
+  name: asDependencyName("chart-render"),
+  version: asDependencyVersion("2.3.1"),
   occurrences: [
     {
       target: APP_TARGET,
       isDevDependency: false,
       introduction: {
         direct: false,
-        introducedBy: ["pkg:npm/dashboard-kit@1.0.0"],
+        introducedBy: [asPurl("pkg:npm/dashboard-kit@1.0.0")],
         path: [
-          "pkg:npm/web-root@1.0.0",
-          "pkg:npm/dashboard-kit@1.0.0",
-          "pkg:npm/chart-render@2.3.1",
+          asPurl("pkg:npm/web-root@1.0.0"),
+          asPurl("pkg:npm/dashboard-kit@1.0.0"),
+          asPurl("pkg:npm/chart-render@2.3.1"),
         ],
       },
     },
   ],
-  licenseClaims: [{ raw: "LGPL-3.0-or-later", kind: "spdx-id", source: "generator" }],
+  licenseClaims: [{ raw: asRawLicense("LGPL-3.0-or-later"), kind: "spdx-id", source: "generator" }],
 });
 
 /** App-level dev-only copyleft warn — the obligation that must stay in Copyleft. */
 const docGen = entry({
-  purl: "pkg:npm/doc-gen@1.0.0",
-  name: "doc-gen",
-  version: "1.0.0",
+  purl: asPurl("pkg:npm/doc-gen@1.0.0"),
+  name: asDependencyName("doc-gen"),
+  version: asDependencyVersion("1.0.0"),
   occurrences: [{ target: APP_TARGET, isDevDependency: true }],
-  licenseClaims: [{ raw: "LGPL-2.1-or-later", kind: "spdx-id", source: "generator" }],
+  licenseClaims: [{ raw: asRawLicense("LGPL-2.1-or-later"), kind: "spdx-id", source: "generator" }],
 });
 
 const rawModel: CanonicalDependencies = {
@@ -333,7 +337,7 @@ function renderScenario(): string {
   const scoped = applyContainerScopes(annotated, developmentContainers);
   const verdicts = evaluate(scoped, policy, WITHOUT_DEPENDENCY_GRAPHS);
   const policyView: PolicyView = {
-    policyPath: "policy.toml",
+    policyPath: asRelativePath("policy.toml"),
     suppressedWorkspaces: policy.suppressedWorkspaces,
     verdicts,
     developmentContainers,
@@ -393,7 +397,7 @@ describe("containerReport — multi-container golden scenario", () => {
         resolveDevelopmentContainersForTest(annotated, policy),
       );
       const relayAgentVerdict = evaluate(scoped, policy, WITHOUT_DEPENDENCY_GRAPHS).find(
-        (v) => v.purl === "pkg:golang/relay-agent@0.4.0",
+        (v) => v.purl === asPurl("pkg:golang/relay-agent@0.4.0"),
       );
 
       expect(relayAgentVerdict?.status).toBe("warn");
@@ -533,7 +537,7 @@ describe("containerReport — multi-container golden scenario", () => {
       const policy = parsePolicy(POLICY_TOML);
       const { model: annotated } = annotateFindings(rawModel, policy.clarify, BUILTIN_OVERRIDES);
       const coreutilsVerdict = evaluate(annotated, policy, WITHOUT_DEPENDENCY_GRAPHS).find(
-        (v) => v.purl === "pkg:deb/coreutils@9.1-1",
+        (v) => v.purl === asPurl("pkg:deb/coreutils@9.1-1"),
       );
 
       expect(coreutilsVerdict?.status).toBe("ok");
@@ -580,9 +584,9 @@ describe("containerReport — multi-container golden scenario", () => {
         resolveDevelopmentContainersForTest(annotated, policy),
       );
       const verdicts = evaluate(scoped, policy, WITHOUT_DEPENDENCY_GRAPHS);
-      const diagToolsVerdict = verdicts.find((v) => v.purl === "pkg:apk/diag-tools@3.0.1");
+      const diagToolsVerdict = verdicts.find((v) => v.purl === asPurl("pkg:apk/diag-tools@3.0.1"));
       const metricsDaemonVerdict = verdicts.find(
-        (v) => v.purl === "pkg:golang/metrics-daemon@1.2.0",
+        (v) => v.purl === asPurl("pkg:golang/metrics-daemon@1.2.0"),
       );
 
       expect(diagToolsVerdict?.status).toBe("fail");
@@ -673,8 +677,8 @@ describe("containerReport — multi-container golden scenario", () => {
 // ===========================================================================
 
 describe("a shared workspace+docker package through the real merge/scope/evaluate/render path", () => {
-  const SHARED_PURL = "pkg:npm/shared-workspace-and-image@2.0.0";
-  const WORKSPACE_TARGET = "apps/dashboard";
+  const SHARED_PURL = asPurl("pkg:npm/shared-workspace-and-image@2.0.0");
+  const WORKSPACE_TARGET = asTargetIdentity("apps/dashboard");
 
   function sharedCopyleftDoc(): unknown {
     return {
@@ -716,7 +720,7 @@ describe("a shared workspace+docker package through the real merge/scope/evaluat
     const scoped = applyContainerScopes(annotated, developmentContainers);
     const verdicts = evaluate(scoped, policy, WITHOUT_DEPENDENCY_GRAPHS);
     const policyView: PolicyView = {
-      policyPath: "policy.toml",
+      policyPath: asRelativePath("policy.toml"),
       suppressedWorkspaces: policy.suppressedWorkspaces,
       verdicts,
       developmentContainers,

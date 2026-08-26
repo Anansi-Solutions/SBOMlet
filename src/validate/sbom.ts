@@ -5,6 +5,22 @@
  */
 import { type } from "arktype";
 
+import { asRawLicense, tryAsPurl, type Purl } from "../model/dependencies";
+
+/**
+ * The external SBOM is the parse boundary for its purls and license claims, so both are branded
+ * here at first validation - {@link tryAsPurl} / {@link asRawLicense} - rather than one step
+ * downstream in merge. A component purl becomes a {@link Purl}; a CycloneDX license-claim string
+ * becomes a RawLicense.
+ *
+ * TOLERANT purl: an SBOM is untrusted, so a component whose purl is not a `pkg:` package URL has
+ * the purl coerced to undefined (the field is then absent) rather than throwing - the component
+ * drops via merge's existing purl/name/version gate, matching the {@link StringOrAbsent} posture
+ * the rest of this file uses for wrong-typed fields.
+ */
+const SbomPurl = type("string").pipe((value) => tryAsPurl(value));
+const SbomRawLicense = type("string").pipe((value) => asRawLicense(value));
+
 /**
  * Whole-document subset: ONLY the components array is a document-level drop gate. The root purl is
  * NOT declared here - a malformed `metadata` (the JSON generators emit `metadata: null` freely for
@@ -30,10 +46,14 @@ export const SbomDocument = type({
  */
 const SbomRootPurl = type({
   "metadata?": { "component?": { "purl?": "string" } },
-}).pipe((doc) => doc.metadata?.component?.purl);
+}).pipe((doc) => {
+  const purl = doc.metadata?.component?.purl;
+
+  return purl === undefined ? undefined : tryAsPurl(purl);
+});
 
 /** The root component purl, or undefined for any absent/malformed metadata. */
-export function rootPurlOf(sbom: unknown): string | undefined {
+export function rootPurlOf(sbom: unknown): Purl | undefined {
   const result = SbomRootPurl(sbom);
 
   return result instanceof type.errors ? undefined : result;
@@ -89,7 +109,7 @@ export const SbomDependencyEdge = type({
  * the per-entry leniency over their items remains explicit code in merge.ts.
  */
 export const SbomComponent = type({
-  "purl?": "string",
+  "purl?": SbomPurl,
   "name?": "string",
   "version?": "string",
   /**
@@ -111,9 +131,9 @@ export type SbomComponentShape = typeof SbomComponent.infer;
 // The three CycloneDX license claim shapes, tried in this order - expression, then license.id, then
 // license.name (the merge.ts fall-through contract; a mistyped field falls through to the next
 // shape).
-export const SbomExpressionClaim = type({ expression: "string" });
-export const SbomIdClaim = type({ license: { id: "string" } });
-export const SbomNameClaim = type({ license: { name: "string" } });
+export const SbomExpressionClaim = type({ expression: SbomRawLicense });
+export const SbomIdClaim = type({ license: { id: SbomRawLicense } });
+export const SbomNameClaim = type({ license: { name: SbomRawLicense } });
 
 /** One usable evidence attachment; any other shape is skipped by the caller. */
 export const SbomEvidenceEntry = type({

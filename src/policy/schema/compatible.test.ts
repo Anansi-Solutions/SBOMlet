@@ -10,6 +10,7 @@ import {
   DEMO_COMPATIBLE,
   compatibleWithout,
 } from "../../../test/policyTestSupport";
+import { leaf, widen } from "../../../test/brandTestSupport";
 import { RATIONALE_VALUES } from "./compatible";
 
 describe("parsePolicy — compatible pattern decomposition", () => {
@@ -21,7 +22,7 @@ describe("parsePolicy — compatible pattern decomposition", () => {
       throw new Error("expected a compatible license rule");
     }
 
-    expect(rule.allowlist).toEqual(["Apache-2.0", "MIT"]);
+    expect(widen(rule.allowlist)).toEqual(["Apache-2.0", "MIT"]);
   });
 
   test("WITH leaf is preserved as a single allowlist entry", () => {
@@ -32,7 +33,7 @@ describe("parsePolicy — compatible pattern decomposition", () => {
       throw new Error("expected a compatible license rule");
     }
 
-    expect(rule.allowlist).toEqual(["GPL-2.0-only WITH Classpath-exception-2.0"]);
+    expect(widen(rule.allowlist)).toEqual(["GPL-2.0-only WITH Classpath-exception-2.0"]);
   });
 
   test("AND pattern is rejected at validation time (satisfies throws on AND allowlists)", () => {
@@ -51,7 +52,7 @@ describe("parsePolicy — compatible `where` scope", () => {
       {
         match: "license",
         pattern: "MPL-2.0",
-        allowlist: ["MPL-2.0"],
+        allowlist: [leaf("MPL-2.0")],
         rationale: "license-reviewed",
         where: [DOCKER_ID],
       },

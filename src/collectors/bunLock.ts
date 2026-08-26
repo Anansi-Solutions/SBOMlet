@@ -30,6 +30,14 @@ import { join } from "node:path";
 import { type } from "arktype";
 
 import { BunLockDocument } from "../validate/bunLock";
+import {
+  asDependencyName,
+  asDependencyVersion,
+  asPurl,
+  type DependencyName,
+  type DependencyVersion,
+  type Purl,
+} from "../model/dependencies";
 import { recordOf } from "../validate/record";
 import { computeCacheKey, type CollectorSbomFile } from "./cdxgen";
 import { manifestFilesFor } from "./dispatch";
@@ -128,7 +136,13 @@ function splitSpec(spec: string): { name: string; version: string } | undefined 
     return undefined;
   } // no separator, or a bare leading-@ scope
 
-  return { name: spec.slice(0, at), version: spec.slice(at + 1) };
+  const version = spec.slice(at + 1);
+
+  if (version === "") {
+    return undefined;
+  } // a version-less spec ("name@") is malformed - tolerant skip
+
+  return { name: spec.slice(0, at), version };
 }
 
 /**
@@ -136,11 +150,11 @@ function splitSpec(spec: string): { name: string; version: string } | undefined 
  * percent-encoding) - byte-identical to cdxgen's npm purl output, so a build-metadata version
  * ("1.0.0+build") reached via both a bun target and an npm/yarn target folds into one row.
  */
-function purlOf(name: string, version: string): string {
+function purlOf(name: string, version: string): Purl {
   const encodedName = name.startsWith("@") ? `%40${name.slice(1)}` : name;
   const encodedVersion = version.replaceAll("+", "%2B");
 
-  return `pkg:npm/${encodedName}@${encodedVersion}`;
+  return asPurl(`pkg:npm/${encodedName}@${encodedVersion}`);
 }
 
 /**
@@ -336,9 +350,9 @@ function transitiveDevKeys(
 
 interface BunComponent {
   type: "library";
-  name: string;
-  version: string;
-  purl: string;
+  name: DependencyName;
+  version: DependencyVersion;
+  purl: Purl;
   properties?: Array<{ name: string; value: string }>;
 }
 
@@ -390,8 +404,8 @@ function componentsOf(
 
     const component: BunComponent = {
       type: "library",
-      name: identity.name,
-      version: identity.version,
+      name: asDependencyName(identity.name),
+      version: asDependencyVersion(identity.version),
       purl: purlOf(identity.name, identity.version),
     };
 

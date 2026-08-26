@@ -5,8 +5,8 @@ import { describe, expect, test } from "bun:test";
 import parse from "spdx-expression-parse";
 
 import { claim, pkg, osPkg, modelOf } from "../../test/normalizeTestSupport";
+import { asRawLicense, canon, widen } from "../../test/brandTestSupport";
 import { annotateFindings, normalizeRaw, type ClarifyInput } from "./normalize";
-import { canonicalizeExpression } from "./expression";
 import type { LicenseClaim, LicenseClaimKind } from "../model/dependencies";
 
 // ---------------------------------------------------------------------------
@@ -79,9 +79,9 @@ describe("normalizeRaw — live 33-value corpus", () => {
 
   for (const [raw, , expected, klass] of CORPUS) {
     test(`"${raw}" → ${expected === null ? "unknown" : `"${expected}"`}`, () => {
-      const result = normalizeRaw(raw);
+      const result = normalizeRaw(asRawLicense(raw));
 
-      expect(result.expression).toBe(expected);
+      expect(result.expression).toBe(expected === null ? null : canon(expected));
       expect(result.source).toBe(klass === "corrected" ? "corrected" : "generator");
     });
   }
@@ -97,7 +97,7 @@ describe("normalizeRaw — live 33-value corpus", () => {
       // annotateFindings canonicalizes the finding's expression at formation, so a compound claim
       // may reorder/absorb relative to CORPUS's as-written column - compare against the canonical
       // reading of the expected value, not the literal corpus text.
-      expect(finding!.expression).toBe(expected === null ? null : canonicalizeExpression(expected));
+      expect(finding!.expression).toBe(expected === null ? null : canon(expected));
       expect(finding!.confidence).toBe(klass);
       if (expected === null) {
         expect(finding!.elected).toBeNull();
@@ -124,7 +124,7 @@ describe("normalizeRaw — live 33-value corpus", () => {
 describe("normalizeRaw — real-world Maven free-text raws (locked)", () => {
   test("mysql-connector-j's FOSS-exception GPLv2 label resolves to the PRECISE GPL-2.0-only WITH Universal-FOSS-exception-1.0 — never the GPL-3.0-or-later fuzzy guess that contradicted the stated v2", () => {
     const result = normalizeRaw(
-      "The GNU General Public License, v2 with Universal FOSS Exception, v1.0",
+      asRawLicense("The GNU General Public License, v2 with Universal FOSS Exception, v1.0"),
     );
 
     // The label states BOTH a version (v2) and an exception (Universal FOSS
@@ -133,13 +133,13 @@ describe("normalizeRaw — real-world Maven free-text raws (locked)", () => {
     // GPL-3.0-or-later, contradicting the stated version and dropping the
     // exception clause entirely.
     expect(result).toEqual({
-      expression: "GPL-2.0-only WITH Universal-FOSS-exception-1.0",
+      expression: canon("GPL-2.0-only WITH Universal-FOSS-exception-1.0"),
       source: "corrected",
     });
   });
 
   test('bare "GNU Lesser General Public License" (jasperreports, jasperreports-fonts) is an IMPRECISE LGPL family — never a guessed version id', () => {
-    const result = normalizeRaw("GNU Lesser General Public License");
+    const result = normalizeRaw(asRawLicense("GNU Lesser General Public License"));
 
     // The spelled-out family name carries no version; correct() used to
     // guess LGPL-2.1-only from it. It now routes to the same imprecise
@@ -153,7 +153,7 @@ describe("normalizeRaw — real-world Maven free-text raws (locked)", () => {
   });
 
   test('the British-spelling "GNU Lesser General Public Licence" (jcommon, jfreechart) is the SAME imprecise LGPL family — never the GPL-3.0-or-later family flip', () => {
-    const result = normalizeRaw("GNU Lesser General Public Licence");
+    const result = normalizeRaw(asRawLicense("GNU Lesser General Public Licence"));
 
     // correct() used to send the spelling variant to the GPL family,
     // resolving a weak-copyleft label to a strong-copyleft id.
@@ -172,7 +172,7 @@ describe("normalizeRaw — real-world Maven free-text raws (locked)", () => {
       ["GNU Affero General Public License", "AGPL"],
       ["GNU Affero General Public Licence", "AGPL"],
     ] as const) {
-      expect(normalizeRaw(raw)).toEqual({
+      expect(normalizeRaw(asRawLicense(raw))).toEqual({
         expression: null,
         source: "generator",
         imprecise: true,
@@ -182,22 +182,24 @@ describe("normalizeRaw — real-world Maven free-text raws (locked)", () => {
   });
 
   test('juniversalchardet\'s "Mozilla Public License Version 1.1" resolves PRECISELY to MPL-1.1', () => {
-    const result = normalizeRaw("Mozilla Public License Version 1.1");
+    const result = normalizeRaw(asRawLicense("Mozilla Public License Version 1.1"));
 
-    expect(result).toEqual({ expression: "MPL-1.1", source: "corrected" });
+    expect(result).toEqual({ expression: canon("MPL-1.1"), source: "corrected" });
   });
 
   test('juniversalchardet\'s "GENERAL PUBLIC LICENSE, version 3 (GPL-3.0)" resolves to GPL-3.0-or-later (the bare-GPL correct() convention)', () => {
-    const result = normalizeRaw("GENERAL PUBLIC LICENSE, version 3 (GPL-3.0)");
+    const result = normalizeRaw(asRawLicense("GENERAL PUBLIC LICENSE, version 3 (GPL-3.0)"));
 
     expect(result).toEqual({
-      expression: "GPL-3.0-or-later",
+      expression: canon("GPL-3.0-or-later"),
       source: "corrected",
     });
   });
 
   test('juniversalchardet\'s PARALLEL "GNU LESSER GENERAL PUBLIC LICENSE, version 3 (LGPL-3.0)" stays an honest UNKNOWN — an asymmetry with its GPL sibling above, locked as-observed', () => {
-    const result = normalizeRaw("GNU LESSER GENERAL PUBLIC LICENSE, version 3 (LGPL-3.0)");
+    const result = normalizeRaw(
+      asRawLicense("GNU LESSER GENERAL PUBLIC LICENSE, version 3 (LGPL-3.0)"),
+    );
 
     // LOCKED: despite the identical structure and an explicit "(LGPL-3.0)"
     // hint, correct() fails to resolve this one while its GPL sibling (same
@@ -217,7 +219,7 @@ describe("normalizeRaw — real-world Maven free-text raws (locked)", () => {
     // — never joined, never guessed at the claim level.
     const perClaim = claims.map((c) => normalizeRaw(c.raw).expression);
 
-    expect(perClaim).toEqual(["MPL-1.1", "GPL-3.0-or-later", null]);
+    expect(perClaim.map((e) => widen(e))).toEqual(["MPL-1.1", "GPL-3.0-or-later", null]);
 
     const { model } = annotateFindings(modelOf(pkg("juniversalchardet", "2.5.0", claims)), []);
     const finding = model.packages[0]!.finding;
@@ -230,30 +232,30 @@ describe("normalizeRaw — real-world Maven free-text raws (locked)", () => {
       elected: null,
       source: "generator",
       confidence: "none",
-      observedExpressions: ["GPL-3.0-or-later", "MPL-1.1"],
+      observedExpressions: [canon("GPL-3.0-or-later"), canon("MPL-1.1")],
     });
   });
 });
 
 describe("normalizeRaw — guards", () => {
   test("UNLICENSED is unknown and NEVER Unlicense", () => {
-    const result = normalizeRaw("UNLICENSED");
+    const result = normalizeRaw(asRawLicense("UNLICENSED"));
 
     expect(result.expression).toBeNull();
     expect(result.expression).not.toBe("Unlicense");
   });
 
   test("SEE LICENSE IN … is unknown (never corrected)", () => {
-    expect(normalizeRaw("SEE LICENSE IN LICENSE.md").expression).toBeNull();
+    expect(normalizeRaw(asRawLicense("SEE LICENSE IN LICENSE.md")).expression).toBeNull();
   });
 
   test("empty and whitespace input degrade to unknown without throwing", () => {
-    expect(normalizeRaw("").expression).toBeNull();
-    expect(normalizeRaw("   ").expression).toBeNull();
+    expect(normalizeRaw(asRawLicense("")).expression).toBeNull();
+    expect(normalizeRaw(asRawLicense("   ")).expression).toBeNull();
   });
 
   test("comma lists are not correctable — correct() would drop MIT", () => {
-    expect(normalizeRaw("MIT,Apache-2.0").expression).toBeNull();
+    expect(normalizeRaw(asRawLicense("MIT,Apache-2.0")).expression).toBeNull();
   });
 });
 
@@ -265,7 +267,7 @@ describe("normalizeRaw — guards", () => {
 
 describe("normalizeRaw — imprecise family labels", () => {
   test('"BSD" is imprecise family "BSD" — never the BSD-2-Clause guess', () => {
-    const result = normalizeRaw("BSD");
+    const result = normalizeRaw(asRawLicense("BSD"));
 
     expect(result.expression).toBeNull();
     expect(result.expression).not.toBe("BSD-2-Clause");
@@ -274,7 +276,7 @@ describe("normalizeRaw — imprecise family labels", () => {
   });
 
   test('"BSD License" is imprecise family "BSD" — never BSD-2-Clause, never null-unknown', () => {
-    const result = normalizeRaw("BSD License");
+    const result = normalizeRaw(asRawLicense("BSD License"));
 
     expect(result.expression).toBeNull();
     expect(result.imprecise).toBe(true);
@@ -282,7 +284,7 @@ describe("normalizeRaw — imprecise family labels", () => {
   });
 
   test('"Apache Software License" (no version) is imprecise family "Apache", not a guessed Apache-2.0', () => {
-    const result = normalizeRaw("Apache Software License");
+    const result = normalizeRaw(asRawLicense("Apache Software License"));
 
     expect(result.expression).toBeNull();
     expect(result.expression).not.toBe("Apache-2.0");
@@ -291,16 +293,16 @@ describe("normalizeRaw — imprecise family labels", () => {
   });
 
   test('bare "Apache" (no version) is imprecise family "Apache"', () => {
-    const result = normalizeRaw("Apache");
+    const result = normalizeRaw(asRawLicense("Apache"));
 
     expect(result.imprecise).toBe(true);
     expect(result.impreciseFamily).toBe("Apache");
   });
 
   test('a precise corrected value is NOT imprecise — "Apache License, Version 2.0" still corrects to Apache-2.0', () => {
-    const result = normalizeRaw("Apache License, Version 2.0");
+    const result = normalizeRaw(asRawLicense("Apache License, Version 2.0"));
 
-    expect(result.expression).toBe("Apache-2.0");
+    expect(widen(result.expression)).toBe("Apache-2.0");
     expect(result.source).toBe("corrected");
     expect(result.imprecise).toBeUndefined();
     expect(result.impreciseFamily).toBeUndefined();
@@ -308,16 +310,16 @@ describe("normalizeRaw — imprecise family labels", () => {
 
   test("an exact id stays exact and never imprecise (MIT, Apache-2.0, BSD-2-Clause)", () => {
     for (const id of ["MIT", "Apache-2.0", "BSD-2-Clause", "BSD-3-Clause"]) {
-      const result = normalizeRaw(id);
+      const result = normalizeRaw(asRawLicense(id));
 
-      expect(result.expression).toBe(id);
+      expect(widen(result.expression)).toBe(id);
       expect(result.imprecise).toBeUndefined();
     }
   });
 
   test("imprecise is distinct from unknown — garbage stays unknown (no impreciseFamily)", () => {
     for (const garbage of ["", "   ", "total garbage xyz", "MIT,Apache-2.0"]) {
-      const result = normalizeRaw(garbage);
+      const result = normalizeRaw(asRawLicense(garbage));
 
       expect(result.expression).toBeNull();
       expect(result.imprecise).toBeUndefined();
@@ -329,7 +331,7 @@ describe("normalizeRaw — imprecise family labels", () => {
   // PERMISSIVE id ("EUPL" → UPL-1.0) must be intercepted as the imprecise
   // copyleft family, never silently rewritten to a permissive (non-copyleft) id.
   test('"EUPL" is imprecise family "EUPL" — never the permissive UPL-1.0 guess', () => {
-    const result = normalizeRaw("EUPL");
+    const result = normalizeRaw(asRawLicense("EUPL"));
 
     expect(result.expression).toBeNull();
     expect(result.expression).not.toBe("UPL-1.0");
@@ -338,7 +340,7 @@ describe("normalizeRaw — imprecise family labels", () => {
   });
 
   test('"EUPL License" is also intercepted as imprecise family "EUPL"', () => {
-    const result = normalizeRaw("EUPL License");
+    const result = normalizeRaw(asRawLicense("EUPL License"));
 
     expect(result.expression).toBeNull();
     expect(result.imprecise).toBe(true);
@@ -346,31 +348,31 @@ describe("normalizeRaw — imprecise family labels", () => {
   });
 
   test('a precise "EUPL-1.2" is NOT imprecise — stays the exact copyleft id', () => {
-    const result = normalizeRaw("EUPL-1.2");
+    const result = normalizeRaw(asRawLicense("EUPL-1.2"));
 
-    expect(result.expression).toBe("EUPL-1.2");
+    expect(widen(result.expression)).toBe("EUPL-1.2");
     expect(result.imprecise).toBeUndefined();
   });
 
   test("weak-copyleft families correct() KEEPS copyleft stay on the precise path (MPL/CDDL)", () => {
-    expect(normalizeRaw("MPL").expression).toBe("MPL-2.0");
-    expect(normalizeRaw("MPL").imprecise).toBeUndefined();
-    expect(normalizeRaw("CDDL").expression).toBe("CDDL-1.1");
-    expect(normalizeRaw("CDDL").imprecise).toBeUndefined();
+    expect(widen(normalizeRaw(asRawLicense("MPL")).expression)).toBe("MPL-2.0");
+    expect(normalizeRaw(asRawLicense("MPL")).imprecise).toBeUndefined();
+    expect(widen(normalizeRaw(asRawLicense("CDDL")).expression)).toBe("CDDL-1.1");
+    expect(normalizeRaw(asRawLicense("CDDL")).imprecise).toBeUndefined();
   });
 });
 
 describe("normalizeRaw — ISC-license suffix fix", () => {
   test('"ISC license" resolves to ISC (the suffix false-negative)', () => {
-    expect(normalizeRaw("ISC license").expression).toBe("ISC");
+    expect(widen(normalizeRaw(asRawLicense("ISC license")).expression)).toBe("ISC");
   });
 
   test('"ISC License" (capitalized) also resolves to ISC', () => {
-    expect(normalizeRaw("ISC License").expression).toBe("ISC");
+    expect(widen(normalizeRaw(asRawLicense("ISC License")).expression)).toBe("ISC");
   });
 
   test('bare "ISC" still resolves to ISC', () => {
-    expect(normalizeRaw("ISC").expression).toBe("ISC");
+    expect(widen(normalizeRaw(asRawLicense("ISC")).expression)).toBe("ISC");
   });
 });
 
@@ -412,13 +414,17 @@ describe("annotateFindings — imprecise findings", () => {
   test("a clarify override on an imprecise package wins (precise expression, source override)", () => {
     const entry = pkg("jupyter-thing", "1.0.0", [claim("BSD", "name")]);
     const clarify: ClarifyInput[] = [
-      { name: "jupyter-thing", detected: { registry: "BSD" }, expression: "BSD-3-Clause" },
+      {
+        name: "jupyter-thing",
+        detected: { registry: asRawLicense("BSD") },
+        expression: canon("BSD-3-Clause"),
+      },
     ];
     const { model } = annotateFindings(modelOf(entry), clarify);
     const finding = model.packages[0]!.finding!;
 
     expect(finding.source).toBe("override");
-    expect(finding.expression).toBe("BSD-3-Clause");
+    expect(widen(finding.expression)).toBe("BSD-3-Clause");
     expect(finding.confidence).toBe("exact");
     expect(finding.impreciseFamily).toBeUndefined();
   });
@@ -430,7 +436,7 @@ describe("annotateFindings — claim combination (Pitfalls 7-8)", () => {
     const entry = pkg("buffer-crc32", "0.2.13", [claim("MIT"), claim("MIT")]);
     const { model } = annotateFindings(modelOf(entry), []);
 
-    expect(model.packages[0]!.finding!.expression).toBe("MIT");
+    expect(widen(model.packages[0]!.finding!.expression)).toBe("MIT");
   });
 
   test("distinct claims AND-combine conservatively, re-parse, and canonicalize", () => {
@@ -440,7 +446,7 @@ describe("annotateFindings — claim combination (Pitfalls 7-8)", () => {
 
     // Canonical (compareCodeUnits-sorted) reading of the AND-combine, not claim insertion order -
     // the model invariant every finding.expression carries at formation.
-    expect(expression).toBe("Apache-2.0 AND MIT");
+    expect(widen(expression)).toBe("Apache-2.0 AND MIT");
     expect(() => parse(expression!)).not.toThrow();
   });
 
@@ -475,7 +481,7 @@ describe("findingFromClaims — copyleft dominates a permissive sibling (C2/W2)"
 
     // The precise copyleft must survive — not be discarded by the imprecise
     // short-circuit and downgraded to a non-gating warn.
-    expect(finding.expression).toBe("AGPL-3.0-only");
+    expect(widen(finding.expression)).toBe("AGPL-3.0-only");
     expect(finding.confidence).not.toBe("imprecise");
   });
 
@@ -484,7 +490,7 @@ describe("findingFromClaims — copyleft dominates a permissive sibling (C2/W2)"
     const { model } = annotateFindings(modelOf(entry), []);
     const finding = model.packages[0]!.finding!;
 
-    expect(finding.expression).toBe("GPL-3.0-only");
+    expect(widen(finding.expression)).toBe("GPL-3.0-only");
     expect(finding.confidence).not.toBe("imprecise");
   });
 
@@ -550,8 +556,8 @@ describe("annotateFindings — coverage, immutability, election", () => {
     const finding = model.packages[0]!.finding!;
 
     // Canonical: compareCodeUnits-sorted, outer redundant parens dropped.
-    expect(finding.expression).toBe("Apache-2.0 OR MPL-2.0");
-    expect(finding.elected).toBe("Apache-2.0");
+    expect(widen(finding.expression)).toBe("Apache-2.0 OR MPL-2.0");
+    expect(widen(finding.elected)).toBe("Apache-2.0");
   });
 });
 
@@ -598,9 +604,9 @@ const DEBIAN_SHORTHAND_CASES: ReadonlyArray<
 describe("normalizeRaw — Debian/DEP-5 shorthand map", () => {
   for (const [shorthand, expected, source] of DEBIAN_SHORTHAND_CASES) {
     test(`"${shorthand}" → "${expected}"`, () => {
-      const result = normalizeRaw(shorthand);
+      const result = normalizeRaw(asRawLicense(shorthand));
 
-      expect(result.expression).toBe(expected);
+      expect(widen(result.expression)).toBe(expected);
       expect(result.source).toBe(source);
       expect(result.imprecise).toBeUndefined();
     });
@@ -623,9 +629,9 @@ describe("normalizeRaw — Debian/DEP-5 shorthand map", () => {
 
   test("matching is case-insensitive on the exact token (Debian is inconsistent)", () => {
     // BSD-3-clause vs BSD-3-Clause: Debian uses lowercase-clause.
-    expect(normalizeRaw("bsd-3-clause").expression).toBe("BSD-3-Clause");
-    expect(normalizeRaw("EXPAT").expression).toBe("MIT");
-    expect(normalizeRaw("gpl-2+").expression).toBe("GPL-2.0-or-later");
+    expect(widen(normalizeRaw(asRawLicense("bsd-3-clause")).expression)).toBe("BSD-3-Clause");
+    expect(widen(normalizeRaw(asRawLicense("EXPAT")).expression)).toBe("MIT");
+    expect(widen(normalizeRaw(asRawLicense("gpl-2+")).expression)).toBe("GPL-2.0-or-later");
   });
 
   test("the DEBIAN_SHORTHAND map itself never broadens to substring — a custom name that merely CONTAINS a shorthand is not mapped BY THE MAP", () => {
@@ -635,16 +641,16 @@ describe("normalizeRaw — Debian/DEP-5 shorthand map", () => {
     // sharpest probe — bare "Expat" maps via the new map, but the hyphenated
     // custom names must NOT, and correct() returns null for them, so they stay
     // genuinely unknown.
-    expect(normalizeRaw("Expat-ISC").expression).toBeNull();
-    expect(normalizeRaw("Expat-UNM").expression).toBeNull();
-    expect(normalizeRaw("Expat-ISC").imprecise).toBeUndefined();
+    expect(normalizeRaw(asRawLicense("Expat-ISC")).expression).toBeNull();
+    expect(normalizeRaw(asRawLicense("Expat-UNM")).expression).toBeNull();
+    expect(normalizeRaw(asRawLicense("Expat-ISC")).imprecise).toBeUndefined();
   });
 
   test("bare GPL/LGPL/AGPL stay IMPRECISE — the shorthand map never collides with the family lane", () => {
     // The shorthand keys are all VERSIONED; bare family labels must still route
     // to the could-be-copyleft imprecise lane, never a guessed id.
-    for (const fam of ["GPL", "LGPL", "AGPL"]) {
-      const result = normalizeRaw(fam);
+    for (const fam of ["GPL", "LGPL", "AGPL"] as const) {
+      const result = normalizeRaw(asRawLicense(fam));
 
       expect(result.expression).toBeNull();
       expect(result.imprecise).toBe(true);
@@ -663,7 +669,7 @@ describe("normalizeRaw — Debian/DEP-5 shorthand map", () => {
       "AND",
       "sha256:fd7e4aae7e7b05f217bcf2d02322825c360e66c52c4c2f1b28d784d6297a1c23",
     ]) {
-      const result = normalizeRaw(token);
+      const result = normalizeRaw(asRawLicense(token));
 
       expect(result.expression).toBeNull();
     }
@@ -672,16 +678,16 @@ describe("normalizeRaw — Debian/DEP-5 shorthand map", () => {
   test("existing valid SPDX ids are unchanged — no shorthand collision regression", () => {
     // The shorthands must not shadow any valid SPDX id the corpus already emits.
     for (const [raw, , expected, klass] of CORPUS) {
-      const result = normalizeRaw(raw);
+      const result = normalizeRaw(asRawLicense(raw));
 
-      expect(result.expression).toBe(expected);
+      expect(result.expression).toBe(expected === null ? null : canon(expected));
       expect(result.source).toBe(klass === "corrected" ? "corrected" : "generator");
     }
 
     // And the canonical TARGETs themselves still parse as exact (not re-corrected).
-    expect(normalizeRaw("GPL-2.0-only").source).toBe("generator");
-    expect(normalizeRaw("MIT").source).toBe("generator");
-    expect(normalizeRaw("BSD-3-Clause").source).toBe("generator");
+    expect(normalizeRaw(asRawLicense("GPL-2.0-only")).source).toBe("generator");
+    expect(normalizeRaw(asRawLicense("MIT")).source).toBe("generator");
+    expect(normalizeRaw(asRawLicense("BSD-3-Clause")).source).toBe("generator");
   });
 });
 
@@ -692,8 +698,8 @@ describe("annotateFindings — OS packages render real licenses for mapped short
     const { model } = annotateFindings(modelOf(entry), []);
     const finding = model.packages[0]!.finding!;
 
-    expect(finding.expression).toBe("MIT");
-    expect(finding.elected).toBe("MIT");
+    expect(widen(finding.expression)).toBe("MIT");
+    expect(widen(finding.elected)).toBe("MIT");
     expect(finding.confidence).toBe("corrected");
   });
 
@@ -701,7 +707,7 @@ describe("annotateFindings — OS packages render real licenses for mapped short
     const entry = pkg("libtinfo6", "6.4-4", [claim("MIT/X11", "name")]);
     const { model } = annotateFindings(modelOf(entry), []);
 
-    expect(model.packages[0]!.finding!.expression).toBe("MIT");
+    expect(widen(model.packages[0]!.finding!.expression)).toBe("MIT");
   });
 
   test("a real coreutils-style GPL OS package renders a real copyleft license", () => {
@@ -709,13 +715,13 @@ describe("annotateFindings — OS packages render real licenses for mapped short
     const entry = pkg("coreutils", "9.1-1", [claim("GPL-3+", "name")]);
     const finding = annotateFindings(modelOf(entry), []).model.packages[0]!.finding!;
 
-    expect(finding.expression).toBe("GPL-3.0-or-later");
+    expect(widen(finding.expression)).toBe("GPL-3.0-or-later");
   });
 
   test("a BSD OS package renders a real permissive license", () => {
     const entry = pkg("libbsd0", "0.11", [claim("BSD-3-clause", "name")]);
 
-    expect(annotateFindings(modelOf(entry), []).model.packages[0]!.finding!.expression).toBe(
+    expect(widen(annotateFindings(modelOf(entry), []).model.packages[0]!.finding!.expression)).toBe(
       "BSD-3-Clause",
     );
   });
@@ -741,7 +747,7 @@ describe("annotateFindings — OS packages render real licenses for mapped short
     const entry = pkg("font-pkg", "1.0", [claim("FTL OR GPL-2.0-or-later", "expression")]);
     const finding = annotateFindings(modelOf(entry), []).model.packages[0]!.finding!;
 
-    expect(finding.expression).toBe("FTL OR GPL-2.0-or-later");
+    expect(widen(finding.expression)).toBe("FTL OR GPL-2.0-or-later");
     expect(finding.elected).not.toBeNull();
   });
 });
@@ -772,7 +778,7 @@ describe("findingFromClaims — os-scope partial finding", () => {
     const finding = annotateFindings(modelOf(entry), []).model.packages[0]!.finding!;
 
     // Canonical (compareCodeUnits-sorted) AND-combine, not claim insertion order.
-    expect(finding.expression).toBe("BSD-3-Clause AND GPL-2.0-only");
+    expect(widen(finding.expression)).toBe("BSD-3-Clause AND GPL-2.0-only");
     expect(finding.elected).not.toBeNull();
     expect(finding.unrecognizedTokens).toEqual(["public-domain"]);
     // The known copyleft member survives — the finding is NOT unknown.
@@ -791,7 +797,7 @@ describe("findingFromClaims — os-scope partial finding", () => {
     ]);
     const finding = annotateFindings(modelOf(entry), []).model.packages[0]!.finding!;
 
-    expect(finding.expression).toBe("MIT");
+    expect(widen(finding.expression)).toBe("MIT");
     expect(finding.unrecognizedTokens).toEqual(["custom", "public-domain"]);
   });
 
@@ -835,7 +841,7 @@ describe("findingFromClaims — os-scope partial finding", () => {
     const finding = annotateFindings(modelOf(entry), []).model.packages[0]!.finding!;
 
     // Canonical (compareCodeUnits-sorted) AND-combine, not claim insertion order.
-    expect(finding.expression).toBe("BSD-3-Clause AND MIT");
+    expect(widen(finding.expression)).toBe("BSD-3-Clause AND MIT");
     expect(finding.unrecognizedTokens).toBeUndefined();
   });
 
@@ -860,7 +866,7 @@ describe("findingFromClaims — os-scope partial finding", () => {
     ]);
     const finding = annotateFindings(modelOf(entry), []).model.packages[0]!.finding!;
 
-    expect(finding.expression).toBe("MIT");
+    expect(widen(finding.expression)).toBe("MIT");
     // trimmed but otherwise verbatim.
     expect(finding.unrecognizedTokens).toEqual(["Weird Custom Name"]);
   });
@@ -879,7 +885,7 @@ describe("findingFromClaims — os-scope partial finding", () => {
 
     // The two real licenses combine; "AND" is NOT surfaced as an unknown token.
     expect(finding.unrecognizedTokens ?? []).not.toContain("AND");
-    expect(finding.expression).toBe("GPL-2.0-only AND MIT");
+    expect(widen(finding.expression)).toBe("GPL-2.0-only AND MIT");
   });
 
   test("#3/#10: bare OR/WITH/and (any case) are all filtered, a real custom token survives", () => {
@@ -907,7 +913,7 @@ describe("findingFromClaims — os-scope partial finding", () => {
     const entry = osPkg("os-mit-and", "1.0", [claim("MIT", "spdx-id"), claim("AND", "name")]);
     const finding = annotateFindings(modelOf(entry), []).model.packages[0]!.finding!;
 
-    expect(finding.expression).toBe("MIT");
+    expect(widen(finding.expression)).toBe("MIT");
     expect(finding.unrecognizedTokens).toBeUndefined();
   });
 
@@ -915,7 +921,7 @@ describe("findingFromClaims — os-scope partial finding", () => {
     const entry = pkg("app-mit-and", "1.0", [claim("MIT", "spdx-id"), claim("AND", "name")]);
     const finding = annotateFindings(modelOf(entry), []).model.packages[0]!.finding!;
 
-    expect(finding.expression).toBe("MIT");
+    expect(widen(finding.expression)).toBe("MIT");
     expect(finding.confidence).not.toBe("none");
   });
 

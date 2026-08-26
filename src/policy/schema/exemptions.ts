@@ -1,5 +1,6 @@
 import { type } from "arktype";
 
+import { asSpdxLicenseLeaf, type SpdxLicenseLeaf } from "../../model/dependencies";
 import { recordOf } from "../../validate/record";
 
 import { collectArkProblems, nonBlankString } from "./arkAdapter";
@@ -16,7 +17,7 @@ export interface SuppressedWorkspace {
    * optionally WITH/+) - never a compound expression: this field is verdict-affecting (the
    * family-aware suppression check compares it to the finding's copyleft obligations).
    */
-  license: string;
+  license: SpdxLicenseLeaf;
   /** Mandatory documentation: why suppression is justified. */
   description: string;
 }
@@ -25,7 +26,7 @@ export interface SuppressedWorkspace {
  * A single SPDX license id (a leaf, optionally WITH/+), never a compound expression - a compound
  * has no single family/identity to verify the suppression against. The verbatim text flows through.
  */
-const singleWorkspaceLicense = type("string").pipe((value, ctx): string => {
+const singleWorkspaceLicense = type("string").pipe((value, ctx): SpdxLicenseLeaf => {
   const node = parseSpdxNode(value);
 
   if (node === undefined) {
@@ -38,7 +39,7 @@ const singleWorkspaceLicense = type("string").pipe((value, ctx): string => {
     }) as never;
   }
 
-  return value;
+  return asSpdxLicenseLeaf(value);
 });
 
 /**
@@ -126,7 +127,7 @@ export function validateSuppressions(
  */
 export interface AllowSourceAvailable {
   /** A built-in source-available SPDX id (BUSL-1.1, SSPL-1.0, Elastic-2.0). */
-  license: string;
+  license: SpdxLicenseLeaf;
   /** Mandatory documentation: why this source-available licence is accepted. */
   reason: string;
 }
@@ -181,7 +182,7 @@ export function validateAllowSourceAvailable(
       return;
     }
 
-    exemptions.push({ license: envelope.license, reason: envelope.reason });
+    exemptions.push({ license: asSpdxLicenseLeaf(envelope.license), reason: envelope.reason });
   });
   return exemptions;
 }

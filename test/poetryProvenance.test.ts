@@ -31,6 +31,7 @@
 import { describe, expect, test } from "bun:test";
 
 import { poetryIntroductions } from "../src/collectors/poetryProvenance";
+import { asPurl, widen } from "./brandTestSupport";
 
 /**
  * Synthetic poetry.lock: root declares a + b (via pyproject); c is a shared
@@ -94,28 +95,28 @@ describe("poetryIntroductions (PEP 621 roots)", () => {
   const intro = poetryIntroductions(POETRY_LOCK, PYPROJECT_PEP621);
 
   test("declared roots are direct with empty introducedBy and no path", () => {
-    const a = intro.get("pkg:pypi/a-pkg@1.0.0");
+    const a = intro.get(asPurl("pkg:pypi/a-pkg@1.0.0"));
 
     expect(a).toBeDefined();
     expect(a!.direct).toBe(true);
-    expect(a!.introducedBy).toEqual([]);
+    expect(widen(a!.introducedBy)).toEqual([]);
     expect(a!.path).toBeUndefined();
   });
 
   test("multi-parent transitive carries the sorted-unique introducer SET", () => {
-    const c = intro.get("pkg:pypi/c-pkg@3.0.0");
+    const c = intro.get(asPurl("pkg:pypi/c-pkg@3.0.0"));
 
     expect(c!.direct).toBe(false);
-    expect(c!.introducedBy).toEqual(["pkg:pypi/a-pkg@1.0.0", "pkg:pypi/b-pkg@2.0.0"]);
+    expect(widen(c!.introducedBy)).toEqual(["pkg:pypi/a-pkg@1.0.0", "pkg:pypi/b-pkg@2.0.0"]);
   });
 
   test("transitive path is a deterministic tie-broken representative chain", () => {
-    const c = intro.get("pkg:pypi/c-pkg@3.0.0");
+    const c = intro.get(asPurl("pkg:pypi/c-pkg@3.0.0"));
 
-    expect(c!.path).toEqual(["pkg:pypi/a-pkg@1.0.0", "pkg:pypi/c-pkg@3.0.0"]);
-    const d = intro.get("pkg:pypi/d-pkg@4.0.0");
+    expect(widen(c!.path)).toEqual(["pkg:pypi/a-pkg@1.0.0", "pkg:pypi/c-pkg@3.0.0"]);
+    const d = intro.get(asPurl("pkg:pypi/d-pkg@4.0.0"));
 
-    expect(d!.path).toEqual([
+    expect(widen(d!.path)).toEqual([
       "pkg:pypi/a-pkg@1.0.0",
       "pkg:pypi/c-pkg@3.0.0",
       "pkg:pypi/d-pkg@4.0.0",
@@ -123,10 +124,10 @@ describe("poetryIntroductions (PEP 621 roots)", () => {
   });
 
   test("a dependency declared with a marker/optional spec object is a plain transitive (optionality descoped)", () => {
-    const e = intro.get("pkg:pypi/e-pkg@5.0.0");
+    const e = intro.get(asPurl("pkg:pypi/e-pkg@5.0.0"));
 
     expect(e!.direct).toBe(false);
-    expect(e!.introducedBy).toEqual(["pkg:pypi/a-pkg@1.0.0"]);
+    expect(widen(e!.introducedBy)).toEqual(["pkg:pypi/a-pkg@1.0.0"]);
     // No `optional` field is ever emitted.
     expect("optional" in e!).toBe(false);
   });
@@ -146,9 +147,9 @@ describe("poetryIntroductions (legacy [tool.poetry] roots)", () => {
   test("legacy declared roots are recognized as direct", () => {
     const intro = poetryIntroductions(POETRY_LOCK, PYPROJECT_LEGACY);
 
-    expect(intro.get("pkg:pypi/a-pkg@1.0.0")!.direct).toBe(true);
-    expect(intro.get("pkg:pypi/b-pkg@2.0.0")!.direct).toBe(true);
-    expect(intro.get("pkg:pypi/c-pkg@3.0.0")!.direct).toBe(false);
+    expect(intro.get(asPurl("pkg:pypi/a-pkg@1.0.0"))!.direct).toBe(true);
+    expect(intro.get(asPurl("pkg:pypi/b-pkg@2.0.0"))!.direct).toBe(true);
+    expect(intro.get(asPurl("pkg:pypi/c-pkg@3.0.0"))!.direct).toBe(false);
   });
 });
 
@@ -171,10 +172,10 @@ describe("poetryIntroductions — PEP 503 normalization", () => {
     const pyproject = '[project]\ndependencies = ["Parent_Pkg (>=1.0)"]\n';
     const intro = poetryIntroductions(lock, pyproject);
 
-    expect(intro.get("pkg:pypi/parent-pkg@1.0.0")!.direct).toBe(true);
-    const child = intro.get("pkg:pypi/child-dep-name@2.0.0");
+    expect(intro.get(asPurl("pkg:pypi/parent-pkg@1.0.0"))!.direct).toBe(true);
+    const child = intro.get(asPurl("pkg:pypi/child-dep-name@2.0.0"));
 
-    expect(child!.introducedBy).toEqual(["pkg:pypi/parent-pkg@1.0.0"]);
+    expect(widen(child!.introducedBy)).toEqual(["pkg:pypi/parent-pkg@1.0.0"]);
   });
 });
 
@@ -220,11 +221,11 @@ describe("poetryIntroductions — optionality descoped", () => {
     ].join("\n");
     const pyproject = '[project]\ndependencies = ["host-pkg (>=1.0)"]\n';
     const intro = poetryIntroductions(lock, pyproject);
-    const m = intro.get("pkg:pypi/multi-pkg@2.0.0");
+    const m = intro.get(asPurl("pkg:pypi/multi-pkg@2.0.0"));
 
     expect(m!.direct).toBe(false);
-    expect(m!.introducedBy).toEqual(["pkg:pypi/host-pkg@1.0.0"]);
-    expect(m!.path).toEqual(["pkg:pypi/host-pkg@1.0.0", "pkg:pypi/multi-pkg@2.0.0"]);
+    expect(widen(m!.introducedBy)).toEqual(["pkg:pypi/host-pkg@1.0.0"]);
+    expect(widen(m!.path)).toEqual(["pkg:pypi/host-pkg@1.0.0", "pkg:pypi/multi-pkg@2.0.0"]);
     expect("optional" in m!).toBe(false);
   });
 
@@ -248,10 +249,10 @@ describe("poetryIntroductions — optionality descoped", () => {
     ].join("\n");
     const pyproject = '[project]\ndependencies = ["host-pkg (>=1.0)"]\n';
     const intro = poetryIntroductions(lock, pyproject);
-    const v = intro.get("pkg:pypi/value-pkg@1.0.0");
+    const v = intro.get(asPurl("pkg:pypi/value-pkg@1.0.0"));
 
     expect(v!.direct).toBe(false);
-    expect(v!.introducedBy).toEqual(["pkg:pypi/host-pkg@1.0.0"]);
+    expect(widen(v!.introducedBy)).toEqual(["pkg:pypi/host-pkg@1.0.0"]);
     expect("optional" in v!).toBe(false);
   });
 
@@ -272,11 +273,11 @@ describe("poetryIntroductions — optionality descoped", () => {
     ].join("\n");
     const pyproject = '[project]\ndependencies = ["a-pkg (>=1.0)"]\n';
     const intro = poetryIntroductions(lock, pyproject);
-    const c = intro.get("pkg:pypi/c-pkg@3.0.0");
+    const c = intro.get(asPurl("pkg:pypi/c-pkg@3.0.0"));
 
     expect(c!.direct).toBe(false);
-    expect(c!.introducedBy).toEqual(["pkg:pypi/a-pkg@1.0.0"]);
-    expect(c!.path).toEqual(["pkg:pypi/a-pkg@1.0.0", "pkg:pypi/c-pkg@3.0.0"]);
+    expect(widen(c!.introducedBy)).toEqual(["pkg:pypi/a-pkg@1.0.0"]);
+    expect(widen(c!.path)).toEqual(["pkg:pypi/a-pkg@1.0.0", "pkg:pypi/c-pkg@3.0.0"]);
     expect("optional" in c!).toBe(false);
   });
 });
@@ -317,8 +318,8 @@ describe("poetryIntroductions — honest residual on multi-version names", () =>
   test("(#2) a name→multi-version edge fabricates NO edge to ANY colliding purl", () => {
     const pyproject = '[project]\ndependencies = ["black (>=23)"]\n';
     const intro = poetryIntroductions(MULTI_VERSION_CLICK, pyproject);
-    const click7 = intro.get("pkg:pypi/click@7.1.2");
-    const click8 = intro.get("pkg:pypi/click@8.1.7");
+    const click7 = intro.get(asPurl("pkg:pypi/click@7.1.2"));
+    const click8 = intro.get(asPurl("pkg:pypi/click@8.1.7"));
 
     // No fabricated black → click@7.1.2 edge (the wrong-version chain).
     expect(click7!.introducedBy).not.toContain("pkg:pypi/black@23.0.0");
@@ -328,10 +329,10 @@ describe("poetryIntroductions — honest residual on multi-version names", () =>
     // Multi-version click with no precise introducer + not a precise direct →
     // the honest "—" residual: not direct, no introducer, no path.
     expect(click7!.direct).toBe(false);
-    expect(click7!.introducedBy).toEqual([]);
+    expect(widen(click7!.introducedBy)).toEqual([]);
     expect(click7!.path).toBeUndefined();
     expect(click8!.direct).toBe(false);
-    expect(click8!.introducedBy).toEqual([]);
+    expect(widen(click8!.introducedBy)).toEqual([]);
     expect(click8!.path).toBeUndefined();
   });
 
@@ -365,10 +366,10 @@ describe("poetryIntroductions — honest residual on multi-version names", () =>
 
     // foo is a multi-version declared-root name → NEITHER version is
     // blanket-marked direct (version-agnostic direct would mislabel foo@2.0.0).
-    expect(intro.get("pkg:pypi/foo@2.0.0")!.direct).toBe(false);
-    expect(intro.get("pkg:pypi/foo@1.0.0")!.direct).toBe(false);
+    expect(intro.get(asPurl("pkg:pypi/foo@2.0.0"))!.direct).toBe(false);
+    expect(intro.get(asPurl("pkg:pypi/foo@1.0.0"))!.direct).toBe(false);
     // bar is single-version declared root → still precisely direct.
-    expect(intro.get("pkg:pypi/bar@1.0.0")!.direct).toBe(true);
+    expect(intro.get(asPurl("pkg:pypi/bar@1.0.0"))!.direct).toBe(true);
   });
 
   // (baseline) the COMMON case — every name single-version — must be UNCHANGED:
@@ -398,13 +399,13 @@ describe("poetryIntroductions — honest residual on multi-version names", () =>
     const pyproject = '[project]\ndependencies = ["foo (>=1.0)", "bar (>=1.0)"]\n';
     const intro = poetryIntroductions(SINGLE_VERSION_BASELINE, pyproject);
 
-    expect(intro.get("pkg:pypi/foo@1.0.0")!.direct).toBe(true);
-    expect(intro.get("pkg:pypi/bar@1.0.0")!.direct).toBe(true);
-    const baz = intro.get("pkg:pypi/baz@1.0.0");
+    expect(intro.get(asPurl("pkg:pypi/foo@1.0.0"))!.direct).toBe(true);
+    expect(intro.get(asPurl("pkg:pypi/bar@1.0.0"))!.direct).toBe(true);
+    const baz = intro.get(asPurl("pkg:pypi/baz@1.0.0"));
 
     expect(baz!.direct).toBe(false);
-    expect(baz!.introducedBy).toEqual(["pkg:pypi/bar@1.0.0"]);
-    expect(baz!.path).toEqual(["pkg:pypi/bar@1.0.0", "pkg:pypi/baz@1.0.0"]);
+    expect(widen(baz!.introducedBy)).toEqual(["pkg:pypi/bar@1.0.0"]);
+    expect(widen(baz!.path)).toEqual(["pkg:pypi/bar@1.0.0", "pkg:pypi/baz@1.0.0"]);
   });
 
   test("(baseline) a single-version parent precisely introduces its single-version child even amid OTHER multi-version names", () => {
@@ -414,11 +415,11 @@ describe("poetryIntroductions — honest residual on multi-version names", () =>
     const lock = [MULTI_VERSION_CLICK, SINGLE_VERSION_BASELINE].join("\n");
     const pyproject = '[project]\ndependencies = ["black (>=23)", "bar (>=1.0)"]\n';
     const intro = poetryIntroductions(lock, pyproject);
-    const baz = intro.get("pkg:pypi/baz@1.0.0");
+    const baz = intro.get(asPurl("pkg:pypi/baz@1.0.0"));
 
-    expect(baz!.introducedBy).toEqual(["pkg:pypi/bar@1.0.0"]);
+    expect(widen(baz!.introducedBy)).toEqual(["pkg:pypi/bar@1.0.0"]);
     // click stays the honest residual.
-    expect(intro.get("pkg:pypi/click@8.1.7")!.introducedBy).toEqual([]);
+    expect(widen(intro.get(asPurl("pkg:pypi/click@8.1.7"))!.introducedBy)).toEqual([]);
   });
 
   test("an asymmetric permutation of multi-version packages yields identical output (order-independent)", () => {
@@ -482,14 +483,14 @@ describe("poetryIntroductions — dependency-group roots", () => {
       "",
     ].join("\n");
     const intro = poetryIntroductions(GROUP_LOCK, pyproject);
-    const copier = intro.get("pkg:pypi/copier@9.0.0");
+    const copier = intro.get(asPurl("pkg:pypi/copier@9.0.0"));
 
     expect(copier).toBeDefined();
     expect(copier!.direct).toBe(true);
-    expect(copier!.introducedBy).toEqual([]);
+    expect(widen(copier!.introducedBy)).toEqual([]);
     expect(copier!.path).toBeUndefined();
     // the PEP 621 main dep is still direct
-    expect(intro.get("pkg:pypi/runtime-pkg@1.0.0")!.direct).toBe(true);
+    expect(intro.get(asPurl("pkg:pypi/runtime-pkg@1.0.0"))!.direct).toBe(true);
   });
 
   test("group roots are read in LEGACY mode too (no [project], main deps from [tool.poetry.dependencies])", () => {
@@ -504,8 +505,8 @@ describe("poetryIntroductions — dependency-group roots", () => {
     ].join("\n");
     const intro = poetryIntroductions(GROUP_LOCK, pyproject);
 
-    expect(intro.get("pkg:pypi/copier@9.0.0")!.direct).toBe(true);
-    expect(intro.get("pkg:pypi/runtime-pkg@1.0.0")!.direct).toBe(true);
+    expect(intro.get(asPurl("pkg:pypi/copier@9.0.0"))!.direct).toBe(true);
+    expect(intro.get(asPurl("pkg:pypi/runtime-pkg@1.0.0"))!.direct).toBe(true);
   });
 
   test("the conventional `python` key inside a group table is skipped (interpreter, not a dep)", () => {
@@ -534,8 +535,8 @@ describe("poetryIntroductions — dependency-group roots", () => {
     const intro = poetryIntroductions(lock, pyproject);
 
     // python is the interpreter — never a declared-direct root.
-    expect(intro.get("pkg:pypi/python@3.11.0")!.direct).toBe(false);
-    expect(intro.get("pkg:pypi/tool-pkg@1.0.0")!.direct).toBe(true);
+    expect(intro.get(asPurl("pkg:pypi/python@3.11.0"))!.direct).toBe(false);
+    expect(intro.get(asPurl("pkg:pypi/tool-pkg@1.0.0"))!.direct).toBe(true);
   });
 
   test("MULTIPLE groups (dev + docs) all contribute roots", () => {
@@ -565,8 +566,8 @@ describe("poetryIntroductions — dependency-group roots", () => {
     ].join("\n");
     const intro = poetryIntroductions(lock, pyproject);
 
-    expect(intro.get("pkg:pypi/dev-pkg@1.0.0")!.direct).toBe(true);
-    expect(intro.get("pkg:pypi/docs-pkg@2.0.0")!.direct).toBe(true);
+    expect(intro.get(asPurl("pkg:pypi/dev-pkg@1.0.0"))!.direct).toBe(true);
+    expect(intro.get(asPurl("pkg:pypi/docs-pkg@2.0.0"))!.direct).toBe(true);
   });
 });
 
@@ -610,12 +611,12 @@ describe("poetryIntroductions — legacy main-deps precedence", () => {
     ].join("\n");
     const intro = poetryIntroductions(PRECEDENCE_LOCK, pyproject);
 
-    expect(intro.get("pkg:pypi/app@1.0.0")!.direct).toBe(true);
-    const leftover = intro.get("pkg:pypi/leftover@1.0.0");
+    expect(intro.get(asPurl("pkg:pypi/app@1.0.0"))!.direct).toBe(true);
+    const leftover = intro.get(asPurl("pkg:pypi/leftover@1.0.0"));
 
     expect(leftover!.direct).toBe(false);
-    expect(leftover!.introducedBy).toEqual(["pkg:pypi/app@1.0.0"]);
-    expect(leftover!.path).toEqual(["pkg:pypi/app@1.0.0", "pkg:pypi/leftover@1.0.0"]);
+    expect(widen(leftover!.introducedBy)).toEqual(["pkg:pypi/app@1.0.0"]);
+    expect(widen(leftover!.path)).toEqual(["pkg:pypi/app@1.0.0", "pkg:pypi/leftover@1.0.0"]);
   });
 
   test("legacy-only baseline (no [project]) — the legacy main table IS still used as roots", () => {
@@ -629,8 +630,8 @@ describe("poetryIntroductions — legacy main-deps precedence", () => {
     const intro = poetryIntroductions(PRECEDENCE_LOCK, pyproject);
 
     // No [project] → legacy table authoritative; BOTH app and leftover direct.
-    expect(intro.get("pkg:pypi/app@1.0.0")!.direct).toBe(true);
-    expect(intro.get("pkg:pypi/leftover@1.0.0")!.direct).toBe(true);
+    expect(intro.get(asPurl("pkg:pypi/app@1.0.0"))!.direct).toBe(true);
+    expect(intro.get(asPurl("pkg:pypi/leftover@1.0.0"))!.direct).toBe(true);
   });
 
   test("groups are read even WITH [project] present (independent of main-deps precedence)", () => {
@@ -661,7 +662,7 @@ describe("poetryIntroductions — legacy main-deps precedence", () => {
     const intro = poetryIntroductions(lock, pyproject);
 
     // group root honored despite [project] being present (legacy main table NOT)
-    expect(intro.get("pkg:pypi/grouponly@1.0.0")!.direct).toBe(true);
+    expect(intro.get(asPurl("pkg:pypi/grouponly@1.0.0"))!.direct).toBe(true);
   });
 });
 
@@ -705,18 +706,18 @@ describe("poetryIntroductions — introducedBy ⊆ root-reachable", () => {
   test("a transitive whose only parent is root-disconnected has introducedBy [] (not the disconnected parent)", () => {
     const pyproject = ["[project]", 'name = "root"', 'dependencies = ["app (>=1)"]', ""].join("\n");
     const intro = poetryIntroductions(ORPHAN_PARENT_LOCK, pyproject);
-    const child = intro.get("pkg:pypi/child@1.0.0");
+    const child = intro.get(asPurl("pkg:pypi/child@1.0.0"));
 
     expect(child).toBeDefined();
     // Was ['pkg:pypi/orphanparent@1.0.0'] — now [] (orphanparent is unreachable).
-    expect(child!.introducedBy).toEqual([]);
+    expect(widen(child!.introducedBy)).toEqual([]);
     expect(child!.path).toBeUndefined();
     expect(child!.direct).toBe(false);
     // app (the real root) is unaffected.
-    expect(intro.get("pkg:pypi/app@1.0.0")!.direct).toBe(true);
+    expect(intro.get(asPurl("pkg:pypi/app@1.0.0"))!.direct).toBe(true);
     // orphanparent itself is also a root-disconnected orphan: not direct, no
     // introducer.
-    expect(intro.get("pkg:pypi/orphanparent@1.0.0")!.introducedBy).toEqual([]);
+    expect(widen(intro.get(asPurl("pkg:pypi/orphanparent@1.0.0"))!.introducedBy)).toEqual([]);
   });
 
   test("legacy→PEP-621 migration: a top-level declared only in legacy [tool.poetry] is NOT a root, so its child renders orphan (main-deps precedence × reachability)", () => {
@@ -759,14 +760,14 @@ describe("poetryIntroductions — introducedBy ⊆ root-reachable", () => {
 
     // realroot is NOT a root → realroot is root-disconnected → dep's
     // only parent is disconnected → dep is an orphan.
-    expect(intro.get("pkg:pypi/realroot@1.0.0")!.direct).toBe(false);
-    const dep = intro.get("pkg:pypi/dep@1.0.0");
+    expect(intro.get(asPurl("pkg:pypi/realroot@1.0.0"))!.direct).toBe(false);
+    const dep = intro.get(asPurl("pkg:pypi/dep@1.0.0"));
 
     expect(dep!.direct).toBe(false);
-    expect(dep!.introducedBy).toEqual([]); // NOT ['pkg:pypi/realroot@1.0.0']
+    expect(widen(dep!.introducedBy)).toEqual([]); // NOT ['pkg:pypi/realroot@1.0.0']
     expect(dep!.path).toBeUndefined();
     // the genuine PEP 621 root is direct.
-    expect(intro.get("pkg:pypi/other@1.0.0")!.direct).toBe(true);
+    expect(intro.get(asPurl("pkg:pypi/other@1.0.0"))!.direct).toBe(true);
   });
 
   test("a mix of reachable + disconnected parents keeps ONLY the reachable ones", () => {
@@ -796,11 +797,11 @@ describe("poetryIntroductions — introducedBy ⊆ root-reachable", () => {
     ].join("\n");
     const pyproject = ["[project]", 'name = "root"', 'dependencies = ["app (>=1)"]', ""].join("\n");
     const intro = poetryIntroductions(lock, pyproject);
-    const child = intro.get("pkg:pypi/child@1.0.0");
+    const child = intro.get(asPurl("pkg:pypi/child@1.0.0"));
 
     // Only the reachable parent survives.
-    expect(child!.introducedBy).toEqual(["pkg:pypi/app@1.0.0"]);
-    expect(child!.path).toEqual(["pkg:pypi/app@1.0.0", "pkg:pypi/child@1.0.0"]);
+    expect(widen(child!.introducedBy)).toEqual(["pkg:pypi/app@1.0.0"]);
+    expect(widen(child!.path)).toEqual(["pkg:pypi/app@1.0.0", "pkg:pypi/child@1.0.0"]);
   });
 
   test("reachability filter is order-independent (asymmetric permutation byte-identical)", () => {
@@ -840,7 +841,7 @@ describe("poetryIntroductions — tolerance", () => {
     // No pyproject roots → nothing is direct, but the lock entries still emit.
     const intro = poetryIntroductions(POETRY_LOCK, "");
 
-    expect(intro.get("pkg:pypi/a-pkg@1.0.0")!.direct).toBe(false);
+    expect(intro.get(asPurl("pkg:pypi/a-pkg@1.0.0"))!.direct).toBe(false);
     expect(intro.size).toBe(5);
   });
 });

@@ -15,6 +15,8 @@ import { type } from "arktype";
 import { extractCopyrightLines } from "../extract/copyright";
 import { canonicalizeExpression } from "../normalize/expression";
 import {
+  asDependencyName,
+  asDependencyVersion,
   compareCodeUnits,
   comparePackages,
   DOCKER_IDENTITY_PREFIX,
@@ -25,7 +27,9 @@ import {
   type Occurrence,
   type PackageAttribution,
   type PackageEntry,
+  type Purl,
   type ScopeTaxonomy,
+  type TargetIdentity,
 } from "../model/dependencies";
 import {
   rootPurlOf,
@@ -43,13 +47,13 @@ export interface CollectedSbom {
   /** Parsed CycloneDX JSON document, treated as an untrusted shape. */
   sbom: unknown;
   /** Forward-slash repo-relative target identity, e.g. "libraries/iframe-rpc". */
-  targetIdentity: string;
+  targetIdentity: TargetIdentity;
   /**
    * Purl set of the --production run. When present (plugin targets), the dual-run diff is
    * authoritative: occurrence dev = !prodPurlSet.has(purl). When absent, the property-based markers
    * apply. Built from an untrusted document via purlSetOf, same tolerance posture as sbom.
    */
-  prodPurlSet?: ReadonlySet<string>;
+  prodPurlSet?: ReadonlySet<Purl>;
   /**
    * Did the collector lane that produced this input reconstruct a root-anchored dependency graph?
    * Declared by the registration and stamped by the collect loop, never inferred from whether
@@ -81,7 +85,7 @@ export interface CollectedSbom {
    * introduction and goldens stay byte-identical. Introduction is per-target, so it is attached at
    * occurrence creation and rides through the merge unchanged (no cross-purl reconciliation).
    */
-  introductions?: ReadonlyMap<string, DependencyIntroduction>;
+  introductions?: ReadonlyMap<Purl, DependencyIntroduction>;
 }
 
 /** Property name cdxgen uses to mark JS dev dependencies. */
@@ -372,8 +376,8 @@ function hasWorkspaceMarker(component: SbomComponentShape): boolean {
  * Every string purl in components[], for the dual-run prod diff. Same tolerant walk as mergeSboms:
  * malformed entries are skipped, never thrown on.
  */
-export function purlSetOf(sbom: unknown): Set<string> {
-  const purls = new Set<string>();
+export function purlSetOf(sbom: unknown): Set<Purl> {
+  const purls = new Set<Purl>();
   const doc = SbomDocument(sbom);
 
   if (doc instanceof type.errors) {
@@ -408,7 +412,7 @@ function claimKey(claim: LicenseClaim): string {
  * alongside byPurl in mergeSboms, from each docker occurrence's OWN claims before they are folded
  * into the package-wide licenseClaims union. Never read outside this module.
  */
-type DockerClaimsByTarget = Map<string, Map<string, LicenseClaim[]>>;
+type DockerClaimsByTarget = Map<string, Map<TargetIdentity, LicenseClaim[]>>;
 
 /**
  * Union one docker occurrence's claims into the accumulator, deduped by claimKey - the same-target
@@ -418,7 +422,7 @@ type DockerClaimsByTarget = Map<string, Map<string, LicenseClaim[]>>;
 function recordDockerOccurrenceClaims(
   acc: DockerClaimsByTarget,
   purl: string,
-  target: string,
+  target: TargetIdentity,
   claims: ReadonlyArray<LicenseClaim>,
 ): void {
   let byTarget = acc.get(purl);
@@ -475,7 +479,7 @@ function claimSetKey(claims: ReadonlyArray<LicenseClaim>): string {
  */
 function crossImageClaimDivergence(
   entry: PackageEntry,
-  byTarget: ReadonlyMap<string, LicenseClaim[]> | undefined,
+  byTarget: ReadonlyMap<TargetIdentity, LicenseClaim[]> | undefined,
 ): CrossImageClaimDivergence | undefined {
   if (byTarget === undefined || byTarget.size < 2) {
     return undefined;
@@ -559,7 +563,7 @@ function reconcileIntroductions(
 
   // Smallest path by compareCodeUnits over the joined chain (NUL-joined so a shorter prefix can
   // never tie a longer chain by concatenation ambiguity).
-  const paths = [a.path, b.path].filter((p): p is readonly string[] => p !== undefined);
+  const paths = [a.path, b.path].filter((p): p is readonly Purl[] => p !== undefined);
 
   if (paths.length > 0) {
     reconciled.path = paths.reduce((best, candidate) =>
@@ -763,19 +767,41 @@ function isFirstPartyMember(
   );
 }
 
+/**
+ * The required identity triple, or undefined when the component is missing any of purl/name/version
+ * OR carries a blank name/version. Malformed entries are skipped, never thrown on - this is the
+ * tolerant boundary that keeps the downstream DependencyName/DependencyVersion mints seeing only
+ * valid-by-construction values (a blank name/version drops the package rather than crashing).
+ */
+function requiredIdentityOf(
+  component: SbomComponentShape,
+): { purl: Purl; name: string; version: string } | undefined {
+  const { purl, name, version } = component;
+
+  if (purl === undefined || name === undefined || version === undefined) {
+    return undefined;
+  }
+
+  if (name.trim() === "" || version.trim() === "") {
+    return undefined;
+  }
+
+  return { purl, name, version };
+}
+
 /** One narrowed component → its PackageEntry, or undefined for every skip. */
 function packageEntryOf(
   input: CollectedSbom,
   component: SbomComponentShape,
-  rootPurl: string | undefined,
+  rootPurl: Purl | undefined,
 ): PackageEntry | undefined {
-  const { purl, name, version } = component;
+  const identity = requiredIdentityOf(component);
 
-  // Malformed entries are skipped, never thrown on - the required purl/name/version triple gate
-  // stays explicit.
-  if (purl === undefined || name === undefined || version === undefined) {
+  if (identity === undefined) {
     return undefined;
   }
+
+  const { purl, name, version } = identity;
 
   // The scanned root never appears in the inventory.
   if (rootPurl !== undefined && purl === rootPurl) {
@@ -812,8 +838,8 @@ function packageEntryOf(
 
   const entry: PackageEntry = {
     purl,
-    name: displayName,
-    version,
+    name: asDependencyName(displayName),
+    version: asDependencyVersion(version),
     occurrences: [occurrence],
     licenseClaims: licenseClaimsOf(component),
     scope: input.scope ?? "app", // per-input scope; the docker sidecar inputs set "os"

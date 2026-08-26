@@ -47,6 +47,7 @@ import {
   TERRAFORM_COLLECTOR_TOOL,
 } from "../src/collectors/terraform";
 import { computeCacheKey } from "../src/collectors/cdxgen";
+import { asAbsolutePath, asTargetIdentity } from "../src/model/dependencies";
 import type { Target } from "../src/targets/target";
 
 // ---------------------------------------------------------------------------
@@ -394,7 +395,7 @@ function makeTerraformTarget(lockText: string, options: TerraformTargetOptions =
     writeFileSync(join(dir, ".terraform"), "not a directory");
   }
 
-  return { dir, identity: "infrastructure" };
+  return { dir: asAbsolutePath(dir), identity: asTargetIdentity("infrastructure") };
 }
 
 function makeOutDir(): string {

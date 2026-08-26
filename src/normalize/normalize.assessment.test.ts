@@ -1,13 +1,15 @@
 import { describe, expect, test } from "bun:test";
 
 import { claim, pkg, osPkg, modelOf } from "../../test/normalizeTestSupport";
-import { annotateFindings, applyScancodeAssessment, type ClarifyInput } from "./normalize";
-import type {
-  LicenseClaim,
-  LicenseClaimKind,
-  LicenseFinding,
-  PackageEntry,
+import { asRawLicense, canon, widen } from "../../test/brandTestSupport";
+import {
+  asTargetIdentity,
+  type LicenseClaim,
+  type LicenseClaimKind,
+  type LicenseFinding,
+  type PackageEntry,
 } from "../model/dependencies";
+import { annotateFindings, applyScancodeAssessment, type ClarifyInput } from "./normalize";
 
 // ---------------------------------------------------------------------------
 // ScanCode senior assessment. applyScancodeAssessment
@@ -28,7 +30,7 @@ const sourcedClaim = (
   raw: string,
   source: LicenseClaim["source"],
   kind: LicenseClaimKind = "name",
-): LicenseClaim => ({ raw, kind, source });
+): LicenseClaim => ({ raw: asRawLicense(raw), kind, source });
 
 /** A scancode-sourced claim (the assessment trigger). */
 const scancodeClaim = (raw: string): LicenseClaim => sourcedClaim(raw, "scancode", "expression");
@@ -39,7 +41,7 @@ describe("annotateFindings — scancode senior assessment (the re-pinned fill ma
     const { model } = annotateFindings(modelOf(entry), []);
     const finding = model.packages[0]!.finding!;
 
-    expect(finding.expression).toBe("MIT");
+    expect(widen(finding.expression)).toBe("MIT");
     expect(finding.confidence).toBe("exact");
     expect(finding.source).toBe("scancode");
     expect(finding.conflict).toBeUndefined();
@@ -70,7 +72,7 @@ describe("annotateFindings — scancode senior assessment (the re-pinned fill ma
     const { model } = annotateFindings(modelOf(entry), []);
     const finding = model.packages[0]!.finding!;
 
-    expect(finding.expression).toBe("BSD-3-Clause");
+    expect(widen(finding.expression)).toBe("BSD-3-Clause");
     expect(finding.confidence).toBe("exact");
     expect(finding.impreciseFamily).toBeUndefined();
     expect(finding.source).toBe("scancode");
@@ -150,7 +152,7 @@ describe("annotateFindings — scancode senior assessment (the re-pinned fill ma
     // genuinely-observed LGPL-2.1-only, never a fabricated bare-GPL guess.
     // NEW under the assessment model: the GPL family member is out-of-family
     // for the LGPL leaf (prefix boundary), so the disagreement is surfaced.
-    expect(finding.expression).toBe("LGPL-2.1-only");
+    expect(widen(finding.expression)).toBe("LGPL-2.1-only");
     expect(finding.confidence).toBe("exact");
     expect(finding.conflict).toEqual({
       kind: "scancode",
@@ -187,15 +189,15 @@ describe("annotateFindings — scancode senior assessment (the re-pinned fill ma
     const clarify: ClarifyInput[] = [
       {
         name: "imprecise-clarified-pkg",
-        detected: { registry: "BSD", intensive: "BSD-3-Clause" },
-        expression: "MIT",
+        detected: { registry: asRawLicense("BSD"), intensive: asRawLicense("BSD-3-Clause") },
+        expression: canon("MIT"),
       },
     ];
     const { model } = annotateFindings(modelOf(entry), clarify);
     const finding = model.packages[0]!.finding!;
 
     expect(finding.source).toBe("override");
-    expect(finding.expression).toBe("MIT");
+    expect(widen(finding.expression)).toBe("MIT");
   });
 
   test("seniority (formerly never-override): a PRECISE declared claim agreeing with the assessment yields the scancode-sourced finding — the in-depth assessment outranks the quick check", () => {
@@ -203,7 +205,7 @@ describe("annotateFindings — scancode senior assessment (the re-pinned fill ma
     const { model } = annotateFindings(modelOf(entry), []);
     const finding = model.packages[0]!.finding!;
 
-    expect(finding.expression).toBe("MIT");
+    expect(widen(finding.expression)).toBe("MIT");
     expect(finding.confidence).toBe("exact");
     expect(finding.source).toBe("scancode");
     expect(finding.conflict).toBeUndefined();
@@ -219,7 +221,7 @@ describe("annotateFindings — scancode senior assessment (the re-pinned fill ma
 
     // The base finding — the quick-check AND-combine of every precise claim —
     // stands untouched; the marker names both sides for a human.
-    expect(finding.expression).toBe("Apache-2.0 AND MIT");
+    expect(widen(finding.expression)).toBe("Apache-2.0 AND MIT");
     expect(finding.source).not.toBe("scancode");
     expect(finding.conflict).toEqual({
       kind: "scancode",
@@ -236,7 +238,7 @@ describe("annotateFindings — scancode senior assessment (the re-pinned fill ma
     const { model } = annotateFindings(modelOf(entry), []);
     const finding = model.packages[0]!.finding!;
 
-    expect(finding.expression).toBe("MIT");
+    expect(widen(finding.expression)).toBe("MIT");
     expect(finding.source).toBe("scancode");
     expect(finding.conflict).toBeUndefined();
   });
@@ -251,7 +253,7 @@ describe("annotateFindings — scancode senior assessment (the re-pinned fill ma
     const equalFinding = annotateFindings(modelOf(equal), []).model.packages[0]!.finding!;
 
     // Canonical (compareCodeUnits-sorted) reading, not claim-as-written order.
-    expect(equalFinding.expression).toBe("Apache-2.0 AND MIT");
+    expect(widen(equalFinding.expression)).toBe("Apache-2.0 AND MIT");
     expect(equalFinding.source).toBe("scancode");
     expect(equalFinding.conflict).toBeUndefined();
 
@@ -264,7 +266,7 @@ describe("annotateFindings — scancode senior assessment (the re-pinned fill ma
     expect(differingFinding.source).not.toBe("scancode");
     expect(differingFinding.conflict).toEqual({
       kind: "scancode",
-      assessed: "MIT AND Apache-2.0",
+      assessed: "Apache-2.0 AND MIT",
       disagreeing: ["MIT"],
     });
   });
@@ -277,7 +279,7 @@ describe("annotateFindings — scancode senior assessment (the re-pinned fill ma
     const agreeingFinding = annotateFindings(modelOf(agreeing), []).model.packages[0]!.finding!;
 
     expect(agreeingFinding.source).toBe("scancode");
-    expect(agreeingFinding.expression).toBe("CC0-1.0 AND MIT");
+    expect(widen(agreeingFinding.expression)).toBe("CC0-1.0 AND MIT");
     expect(agreeingFinding.conflict).toBeUndefined();
 
     const differing = pkg("canonical-disagree-pkg", "1.0.0", [
@@ -290,7 +292,7 @@ describe("annotateFindings — scancode senior assessment (the re-pinned fill ma
     expect(differingFinding.conflict).toEqual({
       kind: "scancode",
       assessed: "CC0-1.0 AND MIT",
-      disagreeing: ["MIT AND ISC"],
+      disagreeing: ["ISC AND MIT"],
     });
   });
 
@@ -302,7 +304,7 @@ describe("annotateFindings — scancode senior assessment (the re-pinned fill ma
     const { model } = annotateFindings(modelOf(entry), []);
     const finding = model.packages[0]!.finding!;
 
-    expect(finding.expression).toBe("GPL-3.0-only");
+    expect(widen(finding.expression)).toBe("GPL-3.0-only");
     expect(finding.confidence).toBe("exact");
     expect(finding.conflict).toEqual({
       kind: "scancode",
@@ -319,7 +321,7 @@ describe("annotateFindings — scancode senior assessment (the re-pinned fill ma
     const { model } = annotateFindings(modelOf(entry), []);
     const finding = model.packages[0]!.finding!;
 
-    expect(finding.expression).toBe("GPL-3.0-only");
+    expect(widen(finding.expression)).toBe("GPL-3.0-only");
     expect(finding.confidence).toBe("exact");
     expect(finding.conflict).toBeUndefined();
   });
@@ -332,7 +334,7 @@ describe("annotateFindings — scancode senior assessment (the re-pinned fill ma
     const { model } = annotateFindings(modelOf(entry), []);
     const finding = model.packages[0]!.finding!;
 
-    expect(finding.expression).toBe("MIT");
+    expect(widen(finding.expression)).toBe("MIT");
     expect(finding.source).toBe("scancode");
     expect(finding.conflict).toBeUndefined();
   });
@@ -366,15 +368,15 @@ describe("annotateFindings — scancode senior assessment (the re-pinned fill ma
     const clarify: ClarifyInput[] = [
       {
         name: "conflicted-clarified-pkg",
-        detected: { registry: "Apache-2.0", intensive: "MIT" },
-        expression: "MIT",
+        detected: { registry: asRawLicense("Apache-2.0"), intensive: asRawLicense("MIT") },
+        expression: canon("MIT"),
       },
     ];
     const { model } = annotateFindings(modelOf(entry), clarify);
     const finding = model.packages[0]!.finding!;
 
     expect(finding.source).toBe("override");
-    expect(finding.expression).toBe("MIT");
+    expect(widen(finding.expression)).toBe("MIT");
     expect(finding.conflict).toBeUndefined();
     expect(finding.staleOverride).toBeUndefined();
   });
@@ -382,7 +384,11 @@ describe("annotateFindings — scancode senior assessment (the re-pinned fill ma
   test("a STALE clarify override keeps the base finding, which carries BOTH markers — stale + conflict coexist (chain ordering is the policy engine's concern)", () => {
     const entry = pkg("stale-conflicted-pkg", "1.0.0", [claim("Apache-2.0"), scancodeClaim("MIT")]);
     const clarify: ClarifyInput[] = [
-      { name: "stale-conflicted-pkg", detected: { registry: "BSD" }, expression: "MIT" },
+      {
+        name: "stale-conflicted-pkg",
+        detected: { registry: asRawLicense("BSD") },
+        expression: canon("MIT"),
+      },
     ];
     const { model } = annotateFindings(modelOf(entry), clarify);
     const finding = model.packages[0]!.finding!;
@@ -403,15 +409,15 @@ describe("annotateFindings — scancode senior assessment (the re-pinned fill ma
     const clarify: ClarifyInput[] = [
       {
         name: "guarded-clarified-pkg",
-        detected: { registry: "MIT", intensive: "BSD-3-Clause" },
-        expression: "BSD-3-Clause",
+        detected: { registry: asRawLicense("MIT"), intensive: asRawLicense("BSD-3-Clause") },
+        expression: canon("BSD-3-Clause"),
       },
     ];
     const { model } = annotateFindings(modelOf(entry), clarify);
     const finding = model.packages[0]!.finding!;
 
     expect(finding.source).toBe("override");
-    expect(finding.expression).toBe("BSD-3-Clause");
+    expect(widen(finding.expression)).toBe("BSD-3-Clause");
     expect(finding.conflict).toBeUndefined();
     expect(finding.staleOverride).toBeUndefined();
   });
@@ -427,15 +433,15 @@ describe("annotateFindings — scancode senior assessment (the re-pinned fill ma
     const clarify: ClarifyInput[] = [
       {
         name: "registry-only-clarified-pkg",
-        detected: { registry: "MIT" },
-        expression: "MIT AND BSD-3-Clause",
+        detected: { registry: asRawLicense("MIT") },
+        expression: canon("MIT AND BSD-3-Clause"),
       },
     ];
     const { model } = annotateFindings(modelOf(entry), clarify);
     const finding = model.packages[0]!.finding!;
 
     expect(finding.source).toBe("override");
-    expect(finding.expression).toBe("MIT AND BSD-3-Clause");
+    expect(widen(finding.expression)).toBe("BSD-3-Clause AND MIT");
     expect(finding.conflict).toEqual({
       kind: "scancode",
       assessed: "BSD-3-Clause",
@@ -452,8 +458,8 @@ describe("annotateFindings — scancode senior assessment (the re-pinned fill ma
     const finding = model.packages[0]!.finding!;
 
     expect(finding.source).toBe("scancode");
-    expect(finding.expression).toBe("MIT");
-    expect(finding.observedExpressions).toContain("BUSL-1.1 OR MIT");
+    expect(widen(finding.expression)).toBe("MIT");
+    expect(widen(finding.observedExpressions!)).toContain("BUSL-1.1 OR MIT");
   });
 });
 
@@ -465,17 +471,20 @@ const dockerPkgWithDivergence = (
 ): PackageEntry => ({
   ...osPkg(name, version, []),
   occurrences: byTarget.map((t) => ({
-    target: t.target,
+    target: asTargetIdentity(t.target),
     isDevDependency: false,
   })),
-  dockerClaimDivergence: { kind: "cross-image-claims", byTarget },
+  dockerClaimDivergence: {
+    kind: "cross-image-claims",
+    byTarget: byTarget.map((t) => ({ target: asTargetIdentity(t.target), claims: t.claims })),
+  },
 });
 
 describe("annotateFindings — cross-image claim divergence overlay", () => {
   test("a package carrying dockerClaimDivergence and no scancode conflict surfaces it as finding.conflict, and the merge-only field is stripped from the entry", () => {
     const entry = dockerPkgWithDivergence("busybox", "1.37.0-r20", [
-      { target: "docker:image-a", claims: ["MIT"] },
-      { target: "docker:image-b", claims: ["Apache-2.0"] },
+      { target: asTargetIdentity("docker:image-a"), claims: ["MIT"] },
+      { target: asTargetIdentity("docker:image-b"), claims: ["Apache-2.0"] },
     ]);
     const { model } = annotateFindings(modelOf(entry), []);
     const resultEntry = model.packages[0]!;
@@ -483,8 +492,8 @@ describe("annotateFindings — cross-image claim divergence overlay", () => {
     expect(resultEntry.finding!.conflict).toEqual({
       kind: "cross-image-claims",
       byTarget: [
-        { target: "docker:image-a", claims: ["MIT"] },
-        { target: "docker:image-b", claims: ["Apache-2.0"] },
+        { target: asTargetIdentity("docker:image-a"), claims: ["MIT"] },
+        { target: asTargetIdentity("docker:image-b"), claims: ["Apache-2.0"] },
       ],
     });
     expect(resultEntry).not.toHaveProperty("dockerClaimDivergence");
@@ -500,8 +509,8 @@ describe("annotateFindings — cross-image claim divergence overlay", () => {
   test("a ScanCode assessment conflict takes the conflict slot over a co-present cross-image divergence — the in-depth ScanCode assessment wins the shared slot", () => {
     const entry: PackageEntry = {
       ...dockerPkgWithDivergence("both-conflicts-pkg", "1.0.0", [
-        { target: "docker:image-a", claims: ["MIT"] },
-        { target: "docker:image-b", claims: ["Apache-2.0"] },
+        { target: asTargetIdentity("docker:image-a"), claims: ["MIT"] },
+        { target: asTargetIdentity("docker:image-b"), claims: ["Apache-2.0"] },
       ]),
       licenseClaims: [claim("Apache-2.0"), scancodeClaim("MIT")],
     };
@@ -513,28 +522,28 @@ describe("annotateFindings — cross-image claim divergence overlay", () => {
 
   test("resolution: a [[clarify]] override on a cross-image conflict decides the finding and clears the marker — same resolution path as a ScanCode conflict", () => {
     const entry = dockerPkgWithDivergence("clarified-divergent-pkg", "1.0.0", [
-      { target: "docker:image-a", claims: ["MIT"] },
-      { target: "docker:image-b", claims: ["Apache-2.0"] },
+      { target: asTargetIdentity("docker:image-a"), claims: ["MIT"] },
+      { target: asTargetIdentity("docker:image-b"), claims: ["Apache-2.0"] },
     ]);
     const clarify: ClarifyInput[] = [
       {
         name: "clarified-divergent-pkg",
         detected: { registry: false, intensive: false },
-        expression: "MIT",
+        expression: canon("MIT"),
       },
     ];
     const { model } = annotateFindings(modelOf(entry), clarify);
     const finding = model.packages[0]!.finding!;
 
     expect(finding.source).toBe("override");
-    expect(finding.expression).toBe("MIT");
+    expect(widen(finding.expression)).toBe("MIT");
     expect(finding.conflict).toBeUndefined();
   });
 
   test("an image with no declared claim is carried losslessly in the marker as an empty claims array, never dropped", () => {
     const entry = dockerPkgWithDivergence("partial-claim-pkg", "1.0.0", [
-      { target: "docker:image-a", claims: [] },
-      { target: "docker:image-b", claims: ["MIT"] },
+      { target: asTargetIdentity("docker:image-a"), claims: [] },
+      { target: asTargetIdentity("docker:image-b"), claims: ["MIT"] },
     ]);
     const { model } = annotateFindings(modelOf(entry), []);
     const conflict = model.packages[0]!.finding!.conflict!;
@@ -542,8 +551,8 @@ describe("annotateFindings — cross-image claim divergence overlay", () => {
     expect(conflict.kind).toBe("cross-image-claims");
     if (conflict.kind === "cross-image-claims") {
       expect(conflict.byTarget).toEqual([
-        { target: "docker:image-a", claims: [] },
-        { target: "docker:image-b", claims: ["MIT"] },
+        { target: asTargetIdentity("docker:image-a"), claims: [] },
+        { target: asTargetIdentity("docker:image-b"), claims: ["MIT"] },
       ]);
     }
   });
@@ -564,7 +573,7 @@ describe("applyScancodeAssessment — unit surface", () => {
     const b = applyScancodeAssessment(claims, impreciseBsdBase);
 
     expect(a).toEqual(b);
-    expect(a.expression).toBe("BSD-3-Clause");
+    expect(widen(a.expression)).toBe("BSD-3-Clause");
     expect(a.source).toBe("scancode");
   });
 

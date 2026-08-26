@@ -8,9 +8,11 @@ import { join } from "node:path";
 import { describe, expect, test } from "bun:test";
 
 import {
+  asRawLicense,
   DOCKER_IDENTITY_PREFIX,
   type CanonicalDependencies,
   type Verdict,
+  asTargetIdentity,
 } from "../src/model/dependencies";
 import { npmIntroductions } from "../src/collectors/npmProvenance";
 import { withCacheClaim } from "../src/enrich/enrich";
@@ -27,6 +29,13 @@ import { alignTables } from "../src/render/alignTables";
 import { renderMarkdown, type PolicyView } from "../src/render/markdown";
 import { renderNotices } from "../src/render/notices";
 import { globToRegExp } from "../src/targets/discover";
+import {
+  canon,
+  asPurl,
+  asRelativePath,
+  asDependencyName,
+  asDependencyVersion,
+} from "./brandTestSupport";
 import type { Policy } from "../src/policy/schema";
 
 const DEPENDENCY_CLASSIFICATION_DOC = join(
@@ -237,7 +246,7 @@ function sbomComponent(spec: ComponentSpec): Record<string, unknown> {
 
 /** The synthetic project a graphed input's dependency edges hang off. */
 const ROOT_REF = "project@workspace:.";
-const ROOT_PURL = "pkg:npm/project@0.0.0";
+const ROOT_PURL = asPurl("pkg:npm/project@0.0.0");
 
 /** The key standing for the project itself in a scenario's dependency edges. */
 const ROOT_EDGE = ".";
@@ -343,7 +352,7 @@ function withIntensiveClaims(
     packages: model.packages.map((entry) => {
       const raw = byPurl.get(entry.purl);
 
-      return raw === undefined ? entry : withCacheClaim(entry, raw, "scancode");
+      return raw === undefined ? entry : withCacheClaim(entry, asRawLicense(raw), "scancode");
     }),
   };
 }
@@ -355,7 +364,7 @@ function buildScenario(inputs: ReadonlyArray<ScenarioInput>, policyToml: string)
 
     return {
       sbom,
-      targetIdentity: input.targetIdentity,
+      targetIdentity: asTargetIdentity(input.targetIdentity),
       ...(input.scope !== undefined ? { scope: input.scope } : {}),
       ...(input.dependencies !== undefined
         ? { introductions: npmIntroductions(sbom), derivesDependencyGraph: true }
@@ -370,7 +379,7 @@ function buildScenario(inputs: ReadonlyArray<ScenarioInput>, policyToml: string)
   const scoped = applyContainerScopes(annotated, developmentContainers);
   const verdicts = evaluate(scoped, policy, graphTargets);
   const policyView: PolicyView = {
-    policyPath: "policy.toml",
+    policyPath: asRelativePath("policy.toml"),
     suppressedWorkspaces: policy.suppressedWorkspaces,
     verdicts,
     developmentContainers,
@@ -477,8 +486,8 @@ function containerPartition(block: string): {
 
 const UNKNOWN_WARN = ["[unknown]", 'handling = "warn"', ""].join("\n");
 
-const WORKSPACE = "apps/web";
-const WORKSPACE_B = "apps/api";
+const WORKSPACE = asTargetIdentity("apps/web");
+const WORKSPACE_B = asTargetIdentity("apps/api");
 const PROD_CONTAINER = `${DOCKER_IDENTITY_PREFIX}services/app/Dockerfile`;
 const DEV_CONTAINER = `${DOCKER_IDENTITY_PREFIX}tools/build/Dockerfile`;
 const OTHER_CONTAINER = `${DOCKER_IDENTITY_PREFIX}services/other/Dockerfile`;
@@ -508,7 +517,7 @@ function targetProfileLines(
 const SCENARIOS: Record<PlacementPath, () => void> = {
   "workspace-prod-permissive": () => {
     const slug = "workspace-prod-permissive";
-    const purl = "pkg:npm/permissive-lib@1.0.0";
+    const purl = asPurl("pkg:npm/permissive-lib@1.0.0");
     const { doc, verdicts, scoped } = buildScenario(
       [
         {
@@ -539,7 +548,7 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
 
   "workspace-dev-only": () => {
     const slug = "workspace-dev-only";
-    const purl = "pkg:npm/dev-only-lib@1.0.0";
+    const purl = asPurl("pkg:npm/dev-only-lib@1.0.0");
     const { doc, verdicts, scoped } = buildScenario(
       [
         {
@@ -570,7 +579,7 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
 
   "shared-workspace-and-container": () => {
     const slug = "shared-workspace-and-container";
-    const purl = "pkg:npm/shared-lib@2.0.0";
+    const purl = asPurl("pkg:npm/shared-lib@2.0.0");
     const { doc, verdicts, scoped } = buildScenario(
       [
         {
@@ -603,7 +612,7 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
 
   "container-only-system": () => {
     const slug = "container-only-system";
-    const purl = "pkg:apk/alpine/system-pkg@1.0.0";
+    const purl = asPurl("pkg:apk/alpine/system-pkg@1.0.0");
     const { doc, verdicts, scoped } = buildScenario(
       [
         {
@@ -642,7 +651,7 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
 
   "container-only-app-ecosystem": () => {
     const slug = "container-only-app-ecosystem";
-    const purl = "pkg:npm/baked-npm-lib@1.0.0";
+    const purl = asPurl("pkg:npm/baked-npm-lib@1.0.0");
     const { doc, verdicts, scoped } = buildScenario(
       [
         {
@@ -681,7 +690,7 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
 
   "unrecognized-ecosystem-gates": () => {
     const slug = "unrecognized-ecosystem-gates";
-    const purl = "pkg:mystery-eco/mystery-pkg@1.0.0";
+    const purl = asPurl("pkg:mystery-eco/mystery-pkg@1.0.0");
     const { doc, verdicts, scoped } = buildScenario(
       [
         {
@@ -719,7 +728,7 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
 
   "system-copyleft-os-warn": () => {
     const slug = "system-copyleft-os-warn";
-    const purl = "pkg:apk/alpine/gpl-tool@1.0.0";
+    const purl = asPurl("pkg:apk/alpine/gpl-tool@1.0.0");
     const { doc, verdicts, scoped } = buildScenario(
       [
         {
@@ -762,7 +771,7 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
 
   "system-copyleft-os-fail": () => {
     const slug = "system-copyleft-os-fail";
-    const purl = "pkg:apk/alpine/gpl-tool@1.0.0";
+    const purl = asPurl("pkg:apk/alpine/gpl-tool@1.0.0");
     const { doc, verdicts, scoped } = buildScenario(
       [
         {
@@ -793,7 +802,7 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
 
   "system-copyleft-os-ignore": () => {
     const slug = "system-copyleft-os-ignore";
-    const purl = "pkg:apk/alpine/gpl-tool@1.0.0";
+    const purl = asPurl("pkg:apk/alpine/gpl-tool@1.0.0");
     const { doc, verdicts, scoped } = buildScenario(
       [
         {
@@ -832,7 +841,7 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
 
   "system-agpl-escalates": () => {
     const slug = "system-agpl-escalates";
-    const purl = "pkg:apk/alpine/agpl-daemon@1.0.0";
+    const purl = asPurl("pkg:apk/alpine/agpl-daemon@1.0.0");
     const { doc, verdicts, scoped } = buildScenario(
       [
         {
@@ -863,7 +872,7 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
 
   "system-agpl-accepted-notice": () => {
     const slug = "system-agpl-accepted-notice";
-    const purl = "pkg:apk/alpine/agpl-daemon@1.0.0";
+    const purl = asPurl("pkg:apk/alpine/agpl-daemon@1.0.0");
     const policy = [
       UNKNOWN_WARN,
       "[[compatible]]",
@@ -916,7 +925,7 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
 
   "system-agpl-imprecise-escalates": () => {
     const slug = "system-agpl-imprecise-escalates";
-    const purl = "pkg:apk/alpine/relay-imprecise@1.0.0";
+    const purl = asPurl("pkg:apk/alpine/relay-imprecise@1.0.0");
     const { doc, verdicts, scoped } = buildScenario(
       [
         {
@@ -958,7 +967,7 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
 
   "system-agpl-imprecise-accepted": () => {
     const slug = "system-agpl-imprecise-accepted";
-    const purl = "pkg:apk/alpine/relay-imprecise@1.0.0";
+    const purl = asPurl("pkg:apk/alpine/relay-imprecise@1.0.0");
     const policy = [
       UNKNOWN_WARN,
       "[[compatible]]",
@@ -1017,7 +1026,7 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
 
   "mixed-agpl-fail-and-accept": () => {
     const slug = "mixed-agpl-fail-and-accept";
-    const purl = "pkg:apk/alpine/shared-agpl-daemon@1.0.0";
+    const purl = asPurl("pkg:apk/alpine/shared-agpl-daemon@1.0.0");
     const policy = [
       UNKNOWN_WARN,
       "[[compatible]]",
@@ -1068,7 +1077,7 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
 
   "app-copyleft-prod-container": () => {
     const slug = "app-copyleft-prod-container";
-    const purl = "pkg:golang/metrics-tool@1.0.0";
+    const purl = asPurl("pkg:golang/metrics-tool@1.0.0");
     const { doc, verdicts, scoped } = buildScenario(
       [
         {
@@ -1106,7 +1115,7 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
 
   "app-copyleft-dev-container": () => {
     const slug = "app-copyleft-dev-container";
-    const purl = "pkg:npm/dev-tool-lib@1.0.0";
+    const purl = asPurl("pkg:npm/dev-tool-lib@1.0.0");
     const { doc, verdicts, scoped } = buildScenario(
       [
         {
@@ -1144,7 +1153,7 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
 
   "app-copyleft-workspace-dev": () => {
     const slug = "app-copyleft-workspace-dev";
-    const purl = "pkg:npm/doc-tool@1.0.0";
+    const purl = asPurl("pkg:npm/doc-tool@1.0.0");
     const { doc, verdicts, scoped } = buildScenario(
       [
         {
@@ -1191,7 +1200,7 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
 
   "problematic-dedup-keeps-inventory": () => {
     const slug = "problematic-dedup-keeps-inventory";
-    const purl = "pkg:npm/prod-copyleft@1.0.0";
+    const purl = asPurl("pkg:npm/prod-copyleft@1.0.0");
     const { doc, verdicts, scoped } = buildScenario(
       [
         {
@@ -1231,7 +1240,7 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
 
   "imprecise-copyleft-family-only-imprecise": () => {
     const slug = "imprecise-copyleft-family-only-imprecise";
-    const purl = "pkg:npm/bare-gpl-lib@1.0.0";
+    const purl = asPurl("pkg:npm/bare-gpl-lib@1.0.0");
     const { doc, verdicts, scoped } = buildScenario(
       [
         {
@@ -1266,7 +1275,7 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
 
   "imprecise-permissive-family": () => {
     const slug = "imprecise-permissive-family";
-    const purl = "pkg:npm/bare-bsd-lib@1.0.0";
+    const purl = asPurl("pkg:npm/bare-bsd-lib@1.0.0");
     const { doc, verdicts, scoped } = buildScenario(
       [
         {
@@ -1302,7 +1311,7 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
 
   "unknown-license-counted": () => {
     const slug = "unknown-license-counted";
-    const purl = "pkg:npm/unknown-lib@1.0.0";
+    const purl = asPurl("pkg:npm/unknown-lib@1.0.0");
     const { doc, verdicts, scoped } = buildScenario(
       [
         {
@@ -1337,7 +1346,7 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
 
   "licenseref-only-unknown": () => {
     const slug = "licenseref-only-unknown";
-    const purl = "pkg:npm/licenseref-only-lib@1.0.0";
+    const purl = asPurl("pkg:npm/licenseref-only-lib@1.0.0");
     const { doc, verdicts, scoped } = buildScenario(
       [
         {
@@ -1385,7 +1394,7 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
 
   "suppressed-workspace-copyleft": () => {
     const slug = "suppressed-workspace-copyleft";
-    const purl = "pkg:npm/gpl-inside-agpl-workspace@1.0.0";
+    const purl = asPurl("pkg:npm/gpl-inside-agpl-workspace@1.0.0");
     const suppressedWorkspace = "libs/shared";
     const policy = [
       UNKNOWN_WARN,
@@ -1437,7 +1446,7 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
 
   "denied-license-terminal": () => {
     const slug = "denied-license-terminal";
-    const purl = "pkg:npm/denied-pkg@1.0.0";
+    const purl = asPurl("pkg:npm/denied-pkg@1.0.0");
     const policy = [
       UNKNOWN_WARN,
       "[[deny]]",
@@ -1481,7 +1490,7 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
 
   "system-package-in-dev-container-counts-dev": () => {
     const slug = "system-package-in-dev-container-counts-dev";
-    const purl = "pkg:apk/alpine/sys-in-dev-container@1.0.0";
+    const purl = asPurl("pkg:apk/alpine/sys-in-dev-container@1.0.0");
     const { doc, verdicts, scoped } = buildScenario(
       [
         {
@@ -1520,7 +1529,7 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
 
   "conflict-scancode": () => {
     const slug = "conflict-scancode";
-    const purl = "pkg:npm/disputed-lib@1.0.0";
+    const purl = asPurl("pkg:npm/disputed-lib@1.0.0");
     const { doc, verdicts, scoped } = buildScenario(
       [
         {
@@ -1563,7 +1572,7 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
 
   "detected-mismatch": () => {
     const slug = "detected-mismatch";
-    const purl = "pkg:npm/moved-on-lib@1.0.0";
+    const purl = asPurl("pkg:npm/moved-on-lib@1.0.0");
     const policy = [
       UNKNOWN_WARN,
       "[[clarify]]",
@@ -1613,7 +1622,7 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
 
   "cross-image-claim-divergence": () => {
     const slug = "cross-image-claim-divergence";
-    const purl = "pkg:apk/alpine/shared-daemon@1.0.0";
+    const purl = asPurl("pkg:apk/alpine/shared-daemon@1.0.0");
     const { doc, verdicts, scoped } = buildScenario(
       [
         {
@@ -1664,7 +1673,7 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
 
   "target-ok-permissive": () => {
     const slug = "target-ok-permissive";
-    const purl = "pkg:npm/target-ok-lib@1.0.0";
+    const purl = asPurl("pkg:npm/target-ok-lib@1.0.0");
     const policy = [UNKNOWN_WARN, ...targetProfileLines("MIT", false, "external")].join("\n");
     const { doc, verdicts, scoped } = buildScenario(
       [
@@ -1691,7 +1700,7 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
 
   "target-incompatible-prod": () => {
     const slug = "target-incompatible-prod";
-    const purl = "pkg:npm/target-incompatible-prod@1.0.0";
+    const purl = asPurl("pkg:npm/target-incompatible-prod@1.0.0");
     const policy = [UNKNOWN_WARN, ...targetProfileLines("MIT", false, "external")].join("\n");
     const { doc, verdicts, scoped } = buildScenario(
       [
@@ -1722,7 +1731,7 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
 
   "target-incompatible-dev-downgrade": () => {
     const slug = "target-incompatible-dev-downgrade";
-    const purl = "pkg:npm/target-dev-downgrade@1.0.0";
+    const purl = asPurl("pkg:npm/target-dev-downgrade@1.0.0");
     const policy = [UNKNOWN_WARN, ...targetProfileLines("MIT", false, "external")].join("\n");
     const { doc, verdicts, scoped } = buildScenario(
       [
@@ -1763,7 +1772,7 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
 
   "target-apache-gpl2-incompatible": () => {
     const slug = "target-apache-gpl2-incompatible";
-    const purl = "pkg:npm/target-apache-gpl2@1.0.0";
+    const purl = asPurl("pkg:npm/target-apache-gpl2@1.0.0");
     const policy = [UNKNOWN_WARN, ...targetProfileLines("GPL-2.0-only", false, "external")].join(
       "\n",
     );
@@ -1796,7 +1805,7 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
 
   "target-or-election-flip": () => {
     const slug = "target-or-election-flip";
-    const purl = "pkg:npm/target-or-election-flip@1.0.0";
+    const purl = asPurl("pkg:npm/target-or-election-flip@1.0.0");
     const policy = [UNKNOWN_WARN, ...targetProfileLines("GPL-2.0-only", false, "external")].join(
       "\n",
     );
@@ -1834,7 +1843,7 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
 
   "target-proprietary-boundary-external": () => {
     const slug = "target-proprietary-boundary-external";
-    const purl = "pkg:npm/target-proprietary-boundary@1.0.0";
+    const purl = asPurl("pkg:npm/target-proprietary-boundary@1.0.0");
     const policy = [UNKNOWN_WARN, ...targetProfileLines("proprietary", true, "external")].join(
       "\n",
     );
@@ -1872,7 +1881,7 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
 
   "target-unknown-pair-residual": () => {
     const slug = "target-unknown-pair-residual";
-    const purl = "pkg:npm/target-unknown-pair@1.0.0";
+    const purl = asPurl("pkg:npm/target-unknown-pair@1.0.0");
     const warnPolicy = [UNKNOWN_WARN, ...targetProfileLines("MIT", false, "external")].join("\n");
     const component = { name: "target-unknown-pair", purl, license: "QPL-1.0" };
     const warnRun = buildScenario(
@@ -1929,7 +1938,7 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
 
   "target-internal-holds-gpl": () => {
     const slug = "target-internal-holds-gpl";
-    const purl = "pkg:npm/target-internal-holds-gpl@1.0.0";
+    const purl = asPurl("pkg:npm/target-internal-holds-gpl@1.0.0");
     const policy = [UNKNOWN_WARN, ...targetProfileLines("MIT", false, "internal")].join("\n");
     const { doc, verdicts, scoped } = buildScenario(
       [
@@ -1965,7 +1974,7 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
 
   "target-internal-network-agpl-fails": () => {
     const slug = "target-internal-network-agpl-fails";
-    const purl = "pkg:npm/target-internal-network-agpl@1.0.0";
+    const purl = asPurl("pkg:npm/target-internal-network-agpl@1.0.0");
     const policy = [UNKNOWN_WARN, ...targetProfileLines("MIT", true, "internal")].join("\n");
     const { doc, verdicts, scoped } = buildScenario(
       [
@@ -1997,7 +2006,7 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
 
   "target-network-agpl-absorbed": () => {
     const slug = "target-network-agpl-absorbed";
-    const purl = "pkg:npm/target-network-agpl-absorbed@1.0.0";
+    const purl = asPurl("pkg:npm/target-network-agpl-absorbed@1.0.0");
     const policy = [UNKNOWN_WARN, ...targetProfileLines("AGPL-3.0-only", true, "external")].join(
       "\n",
     );
@@ -2033,7 +2042,7 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
 
   "target-network-false-agpl-internal-held": () => {
     const slug = "target-network-false-agpl-internal-held";
-    const purl = "pkg:npm/target-network-false-agpl-held@1.0.0";
+    const purl = asPurl("pkg:npm/target-network-false-agpl-held@1.0.0");
     const policy = [UNKNOWN_WARN, ...targetProfileLines("MIT", false, "internal")].join("\n");
     const { doc, verdicts, scoped } = buildScenario(
       [
@@ -2064,7 +2073,7 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
 
   "target-internal-nondistribution-conflict-stays": () => {
     const slug = "target-internal-nondistribution-conflict-stays";
-    const purl = "pkg:npm/target-internal-nondist-conflict@1.0.0";
+    const purl = asPurl("pkg:npm/target-internal-nondist-conflict@1.0.0");
     const policy = [UNKNOWN_WARN, ...targetProfileLines("GPL-2.0-only", false, "internal")].join(
       "\n",
     );
@@ -2097,7 +2106,7 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
 
   "target-workspace-divergence": () => {
     const slug = "target-workspace-divergence";
-    const purl = "pkg:npm/target-workspace-divergence@1.0.0";
+    const purl = asPurl("pkg:npm/target-workspace-divergence@1.0.0");
     const policy = [
       UNKNOWN_WARN,
       ...targetProfileLines("MIT", false, "external"),
@@ -2156,7 +2165,7 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
 
   "target-container-app-ecosystem": () => {
     const slug = "target-container-app-ecosystem";
-    const purl = "pkg:npm/target-container-app-ecosystem@1.0.0";
+    const purl = asPurl("pkg:npm/target-container-app-ecosystem@1.0.0");
     const policy = [UNKNOWN_WARN, ...targetProfileLines("GPL-3.0-only", false, "external")].join(
       "\n",
     );
@@ -2197,7 +2206,7 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
 
   "target-os-agpl-network-true-escalates": () => {
     const slug = "target-os-agpl-network-true-escalates";
-    const purl = "pkg:apk/alpine/target-os-agpl-true@1.0.0";
+    const purl = asPurl("pkg:apk/alpine/target-os-agpl-true@1.0.0");
     const policy = [UNKNOWN_WARN, ...targetProfileLines("MIT", true, "external")].join("\n");
     const { doc, verdicts, scoped } = buildScenario(
       [
@@ -2229,8 +2238,8 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
 
   "target-os-agpl-network-false-routine": () => {
     const slug = "target-os-agpl-network-false-routine";
-    const precisePurl = "pkg:apk/alpine/target-os-agpl-false-precise@1.0.0";
-    const imprecisePurl = "pkg:apk/alpine/target-os-agpl-false-imprecise@1.0.0";
+    const precisePurl = asPurl("pkg:apk/alpine/target-os-agpl-false-precise@1.0.0");
+    const imprecisePurl = asPurl("pkg:apk/alpine/target-os-agpl-false-imprecise@1.0.0");
     const policy = [UNKNOWN_WARN, ...targetProfileLines("MIT", false, "external")].join("\n");
     const { doc, verdicts, scoped } = buildScenario(
       [
@@ -2297,7 +2306,7 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
 
   "target-os-scope-untouched": () => {
     const slug = "target-os-scope-untouched";
-    const purl = "pkg:apk/alpine/target-os-scope-untouched@1.0.0";
+    const purl = asPurl("pkg:apk/alpine/target-os-scope-untouched@1.0.0");
     const component = { name: "target-os-scope-untouched", purl, license: "GPL-2.0-only" };
     const noTargetRun = buildScenario(
       [{ targetIdentity: PROD_CONTAINER, scope: "os", components: [component] }],
@@ -2331,7 +2340,7 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
 
   "target-supersedes-suppression": () => {
     const slug = "target-supersedes-suppression";
-    const purl = "pkg:npm/target-supersedes-suppression@1.0.0";
+    const purl = asPurl("pkg:npm/target-supersedes-suppression@1.0.0");
     const policy = [
       UNKNOWN_WARN,
       ...targetProfileLines("AGPL-3.0-only", true, "external"),
@@ -2375,7 +2384,7 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
 
   "target-os-agpl-network-false-ignored-notice": () => {
     const slug = "target-os-agpl-network-false-ignored-notice";
-    const purl = "pkg:apk/alpine/target-os-agpl-ignored@1.0.0";
+    const purl = asPurl("pkg:apk/alpine/target-os-agpl-ignored@1.0.0");
     const policy = [
       UNKNOWN_WARN,
       ...targetProfileLines("MIT", false, "external"),
@@ -2424,7 +2433,7 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
   // of staying enumerable per report-placement.md's own held-row invariant.
   "target-held-survives-purl-fail": () => {
     const slug = "target-held-survives-purl-fail";
-    const purl = "pkg:npm/target-held-survives-purl-fail@1.0.0";
+    const purl = asPurl("pkg:npm/target-held-survives-purl-fail@1.0.0");
     const policy = [
       UNKNOWN_WARN,
       ...targetProfileLines("MIT", false, "external"),
@@ -2494,10 +2503,10 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
   // package it governs in that workspace fails with it.
   "voided-compatible": () => {
     const slug = "voided-compatible";
-    const gpl = "pkg:npm/voided-compatible-gpl-lib@1.0.0";
-    const mpl = "pkg:npm/voided-compatible-mpl-lib@1.0.0";
-    const judged = "pkg:npm/voided-compatible-judged@1.0.0";
-    const other = "pkg:npm/voided-compatible-other@1.0.0";
+    const gpl = asPurl("pkg:npm/voided-compatible-gpl-lib@1.0.0");
+    const mpl = asPurl("pkg:npm/voided-compatible-mpl-lib@1.0.0");
+    const judged = asPurl("pkg:npm/voided-compatible-judged@1.0.0");
+    const other = asPurl("pkg:npm/voided-compatible-other@1.0.0");
     const policy = [
       UNKNOWN_WARN,
       "[[compatible]]",
@@ -2576,7 +2585,7 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
 
   "invalid-justification": () => {
     const slug = "invalid-justification";
-    const purl = "pkg:npm/choice-lib@1.0.0";
+    const purl = asPurl("pkg:npm/choice-lib@1.0.0");
     const policy = [
       UNKNOWN_WARN,
       "[[clarify]]",
@@ -2724,7 +2733,7 @@ describe("dependency classification and report placement — Path index E2E", ()
 // ===========================================================================
 
 describe("cross-document invariants — LICENSES and NOTICES agree on one shared model", () => {
-  const UNKNOWN_OR_IMPRECISE_WORKSPACE = "apps/mixed";
+  const UNKNOWN_OR_IMPRECISE_WORKSPACE = asTargetIdentity("apps/mixed");
 
   /**
    * One workspace with four packages spanning every unknown-adjacent lane:
@@ -2746,18 +2755,18 @@ describe("cross-document invariants — LICENSES and NOTICES agree on one shared
           components: [
             {
               name: "known-mit",
-              purl: "pkg:npm/known-mit@1.0.0",
+              purl: asPurl("pkg:npm/known-mit@1.0.0"),
               license: "MIT",
             },
-            { name: "unknown-null", purl: "pkg:npm/unknown-null@1.0.0" },
+            { name: "unknown-null", purl: asPurl("pkg:npm/unknown-null@1.0.0") },
             {
               name: "unknown-ref",
-              purl: "pkg:npm/unknown-ref@1.0.0",
+              purl: asPurl("pkg:npm/unknown-ref@1.0.0"),
               license: "LicenseRef-proprietary-eula",
             },
             {
               name: "imprecise-bsd",
-              purl: "pkg:npm/imprecise-bsd@1.0.0",
+              purl: asPurl("pkg:npm/imprecise-bsd@1.0.0"),
               licenseName: "BSD",
             },
           ],
@@ -2831,20 +2840,25 @@ describe("cross-document invariants — LICENSES and NOTICES agree on one shared
 
   test("canonical-display: a noisy declared expression renders identically canonical in both LICENSES' inventory cell and NOTICES' per-package License line", () => {
     const noisy = "(MIT OR Apache-2.0) AND (Apache-2.0 AND MIT)";
-    const canonical = canonicalizeExpression(noisy);
+    const canonical = canonicalizeExpression(asRawLicense(noisy));
     // Hand-built shared model - both renderers consume the same package
     // entry, one attribution line so the package qualifies for a NOTICES
     // section.
     const model: CanonicalDependencies = {
       packages: [
         {
-          purl: "pkg:npm/noisy-lib@1.0.0",
-          name: "noisy-lib",
-          version: "1.0.0",
+          purl: asPurl("pkg:npm/noisy-lib@1.0.0"),
+          name: asDependencyName("noisy-lib"),
+          version: asDependencyVersion("1.0.0"),
           occurrences: [{ target: WORKSPACE, isDevDependency: false }],
-          licenseClaims: [{ raw: noisy, kind: "expression", source: "generator" }],
+          licenseClaims: [{ raw: asRawLicense(noisy), kind: "expression", source: "generator" }],
           scope: "app",
-          finding: { expression: noisy, elected: "MIT", source: "generator", confidence: "exact" },
+          finding: {
+            expression: canon(noisy),
+            elected: canon("MIT"),
+            source: "generator",
+            confidence: "exact",
+          },
           attribution: {
             copyrightLines: ["Copyright (c) 2020 Noisy Lib Authors"],
             noticeTexts: [],

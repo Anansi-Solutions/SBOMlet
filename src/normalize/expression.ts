@@ -15,8 +15,15 @@
  */
 import parseSpdx from "spdx-expression-parse";
 
-import { compareCodeUnits } from "../model/dependencies";
+import {
+  asSpdxLicenseLeaf,
+  compareCodeUnits,
+  type CanonicalLicense,
+  type RawLicense,
+  type SpdxLicenseLeaf,
+} from "../model/dependencies";
 import { COPYLEFT_IDS } from "../policy/engine/copyleft";
+import { CANONICAL_EXCEPTION_ID, CANONICAL_LICENSE_ID } from "./spdxCasing";
 
 export type ExpressionNode =
   | { license: string; plus?: true; exception?: string }
@@ -58,7 +65,7 @@ export function renderNode(node: ExpressionNode): string {
  */
 export function isCopyleft(node: ExpressionNode): boolean {
   if ("license" in node) {
-    return COPYLEFT_IDS.has(node.license);
+    return COPYLEFT_IDS.has(asSpdxLicenseLeaf(node.license));
   }
 
   if (node.conjunction === "and") {
@@ -73,9 +80,11 @@ export function isCopyleft(node: ExpressionNode): boolean {
  * verify against the workspace's own license. Exact COPYLEFT_IDS membership per leaf - a `plus`
  * leaf reports its base id (same convention as isCopyleft); non-copyleft leaves are omitted.
  */
-export function copyleftLeafIds(node: ExpressionNode): string[] {
+export function copyleftLeafIds(node: ExpressionNode): SpdxLicenseLeaf[] {
   if ("license" in node) {
-    return COPYLEFT_IDS.has(node.license) ? [node.license] : [];
+    const leaf = asSpdxLicenseLeaf(node.license);
+
+    return COPYLEFT_IDS.has(leaf) ? [leaf] : [];
   }
 
   return [...copyleftLeafIds(node.left), ...copyleftLeafIds(node.right)];
@@ -171,11 +180,11 @@ export function elect(node: ExpressionNode): ExpressionNode {
  * spdx-satisfies allowlists (its entries must be single ids, optionally WITH). Returns null the
  * moment ANY "and" conjunction appears anywhere in the tree.
  */
-export function orLeaves(node: ExpressionNode): string[] | null {
-  const leaves: string[] = [];
+export function orLeaves(node: ExpressionNode): SpdxLicenseLeaf[] | null {
+  const leaves: SpdxLicenseLeaf[] = [];
   const walk = (n: ExpressionNode): boolean => {
     if ("license" in n) {
-      leaves.push(renderNode(n));
+      leaves.push(asSpdxLicenseLeaf(renderNode(n)));
       return true;
     }
 
@@ -286,9 +295,22 @@ function buildSet(op: "and" | "or", rawItems: CanonicalNode[]): CanonicalNode {
  * - FLATTEN, IDEMPOTENCE, ABSORPTION, COMMUTATIVITY only, never distribution or any other
  * cross-operator rewrite.
  */
+/** One leaf with its license id and exception normalized to their registered SPDX casing. */
+function canonicalLeafId(leaf: Leaf): Leaf {
+  const license = CANONICAL_LICENSE_ID.get(leaf.license.toLowerCase()) ?? leaf.license;
+
+  if (leaf.exception === undefined) {
+    return license === leaf.license ? leaf : { ...leaf, license };
+  }
+
+  const exception = CANONICAL_EXCEPTION_ID.get(leaf.exception.toLowerCase()) ?? leaf.exception;
+
+  return { ...leaf, license, exception };
+}
+
 function canonicalizeNode(node: ExpressionNode): CanonicalNode {
   if ("license" in node) {
-    return node;
+    return canonicalLeafId(node);
   }
 
   const op = node.conjunction;
@@ -314,15 +336,20 @@ function canonicalizeNode(node: ExpressionNode): CanonicalNode {
  * this output is spelling-blind under reordering, duplication, and absorption noise, but never
  * under re-factoring - `(A OR B) AND (A OR C)` and `A OR (B AND C)` stay distinct - so that
  * direction fails safe as a visible conflict instead of a silently-accepted rewrite.
+ *
+ * This is the sole mint of {@link CanonicalLicense}: it accepts raw or already-canonical text and
+ * yields the canonical state when the input parses, passing unparseable input through verbatim (the
+ * honest-residual posture above), so no other boundary needs to fabricate one. Idempotent, so a
+ * CanonicalLicense passed back in is returned unchanged.
  */
-export function canonicalizeExpression(text: string): string {
+export function canonicalizeExpression(text: RawLicense | CanonicalLicense): CanonicalLicense {
   let parsed: ExpressionNode;
 
   try {
     parsed = parseSpdx(text) as ExpressionNode;
   } catch {
-    return text;
+    return text as CanonicalLicense;
   }
 
-  return serializeCanonical(canonicalizeNode(parsed));
+  return serializeCanonical(canonicalizeNode(parsed)) as CanonicalLicense;
 }

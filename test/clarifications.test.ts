@@ -21,7 +21,9 @@ import {
 import { renderMarkdown, type PolicyView } from "../src/render/markdown";
 import { PolicyError } from "../src/policy/schema/diagnostics";
 import { parsePolicy } from "../src/policy/parse/parse";
+import { asTargetIdentity } from "../src/model/dependencies";
 import { claim, modelOf, pkg } from "./normalizeTestSupport";
+import { widen, asPurl, asRelativePath } from "./brandTestSupport";
 
 /** One `[[clarify]]` table naming `name`, recording the registry lane, electing `expression`. */
 const clarifyTable = (name: string, expression: string, version = "0.0.1"): string =>
@@ -225,8 +227,10 @@ describe("parseClarificationsAt", () => {
 
   test("a valid file passes its entries through unchanged", () => {
     expect(
-      parseClarificationsAt("c.toml", clarifyTable("jsonify", "Unlicense")).map(
-        (rule) => rule.expression,
+      widen(
+        parseClarificationsAt("c.toml", clarifyTable("jsonify", "Unlicense")).map(
+          (rule) => rule.expression,
+        ),
       ),
     ).toEqual(["Unlicense"]);
   });
@@ -263,7 +267,7 @@ describe("combining the two files", () => {
       combined.clarify,
     );
 
-    expect(model.packages[0]!.finding!.expression).toBe("Unlicense");
+    expect(widen(model.packages[0]!.finding!.expression)).toBe("Unlicense");
     expect([...usedClarifyIndices]).toEqual([0]);
   });
 
@@ -277,7 +281,7 @@ describe("combining the two files", () => {
       combined.clarify,
     );
 
-    expect(model.packages[0]!.finding!.expression).toBe("0BSD");
+    expect(widen(model.packages[0]!.finding!.expression)).toBe("0BSD");
   });
 });
 
@@ -339,12 +343,12 @@ describe("an imported entry on the reader-facing surfaces", () => {
       [],
     );
     const view: PolicyView = {
-      policyPath: "policy.toml",
+      policyPath: asRelativePath("policy.toml"),
       suppressedWorkspaces: [],
       verdicts: [
         {
-          purl: "pkg:npm/choice-lib@1.0.0",
-          occurrenceTarget: "frontend",
+          purl: asPurl("pkg:npm/choice-lib@1.0.0"),
+          occurrenceTarget: asTargetIdentity("frontend"),
           status: "fail",
           rule: "clarifications:invalid[0]",
           reason: 'INVALID justification on "choice-lib@1.0.0"',

@@ -23,7 +23,11 @@
  * - the fail-closed direction.
  */
 
-import { compareCodeUnits, type CanonicalDependencies } from "../model/dependencies";
+import {
+  compareCodeUnits,
+  type CanonicalDependencies,
+  type TargetIdentity,
+} from "../model/dependencies";
 import type { CollectedSbom } from "./merge";
 
 /** How many package names an integrity failure quotes before summarizing the rest. */
@@ -35,8 +39,8 @@ const NAMED_PACKAGE_LIMIT = 3;
  */
 export function targetsWithDependencyGraph(
   inputs: ReadonlyArray<CollectedSbom>,
-): ReadonlySet<string> {
-  const targets = new Set<string>();
+): ReadonlySet<TargetIdentity> {
+  const targets = new Set<TargetIdentity>();
 
   for (const input of inputs) {
     if (input.derivesDependencyGraph === true) {

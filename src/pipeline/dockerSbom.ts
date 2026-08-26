@@ -30,7 +30,7 @@ import { buildImage, imageTag, type ExecFn } from "../collectors/dockerBuild";
 import { collectDockerOsSbom, type ScanImage } from "../collectors/dockerOs";
 import { discoverDockerfiles } from "../collectors/dockerfile";
 import { execTool } from "../collectors/exec";
-import { compareCodeUnits } from "../model/dependencies";
+import { compareCodeUnits, type AbsolutePath } from "../model/dependencies";
 import { parsePolicy } from "../policy/parse/parse";
 import { resolveFrom, writeArtifact } from "./paths";
 import { DOCKER_SBOM_FILE, resolveCacheDir } from "./pipeline";
@@ -69,7 +69,7 @@ export interface ResolveDiscoveredImagesOptions {
   /** The `[docker] ignore` globs from the policy. */
   dockerIgnore?: readonly string[];
   /** This tool's own directory, excluded from the walk. */
-  toolDir?: string;
+  toolDir?: AbsolutePath;
 }
 
 /** One Dockerfile in the discovery/target build set: its identity + build tag. */
@@ -77,7 +77,7 @@ export interface DockerfileBuild {
   /** Repo-relative (discovery) / caller-supplied (targeted) identity string. */
   identity: string;
   /** Absolute filesystem path. */
-  path: string;
+  path: AbsolutePath;
   /** The deterministic image tag this Dockerfile builds to (imageTag(identity)). */
   tag: string;
 }
@@ -142,7 +142,7 @@ export function resolveDiscoveredImages(
 /** Options for the pure --list-dockerfiles resolution. */
 export interface DockerfileListingOptions {
   /** This tool's own directory, excluded from the walk. */
-  toolDir?: string;
+  toolDir?: AbsolutePath;
   /** Repeatable --exclude globs forwarded to discovery. */
   excludes?: readonly string[];
   /** The `[docker] ignore` globs from the policy. */
@@ -171,7 +171,7 @@ export interface TargetedDockerfile {
   /** The path as the caller gave it - used (sanitized) in the stderr summary. */
   identity: string;
   /** Absolute, base-dir-resolved path. */
-  path: string;
+  path: AbsolutePath;
 }
 
 /** The result of targeted-lane resolution: the build set + a stderr summary. */
@@ -301,7 +301,7 @@ export interface GenerateDockerSbomOptions {
    * `join(import.meta.dir, "..", "..")`): cli.ts populates it so the tool's own
    * dockerfile.ts/.test.ts are pruned by shouldDescendDir rather than relying on a name blocklist.
    */
-  toolDir?: string;
+  toolDir?: AbsolutePath;
   /** Pass syft/docker/buildx child stdout/stderr through to process.stderr. */
   verbose?: boolean;
   /**

@@ -39,6 +39,7 @@ import { parseArgs } from "node:util";
 
 import { runGenerateDockerSbom, type GenerateDockerSbomOptions } from "./pipeline/dockerSbom";
 import { exitCodeFor, runCheck, type CheckResult } from "./gate/check";
+import { asAbsolutePath } from "./model/dependencies";
 import { defaultNoticesPath, resolveFrom } from "./pipeline/paths";
 import { runGenerate } from "./pipeline/pipeline";
 import {
@@ -482,7 +483,7 @@ export function dockerSbomOptionsFrom(values: CliValues): GenerateDockerSbomOpti
      * discovery does (targets.ts). cli.ts lives in src/, so one level up is the tool root. Computed
      * with zero hardcoded paths.
      */
-    toolDir: join(import.meta.dir, ".."),
+    toolDir: asAbsolutePath(join(import.meta.dir, "..")),
     dockerSbomPath: values["docker-sbom"],
     baseDir: values["base-dir"],
     verbose: values.verbose ?? false,

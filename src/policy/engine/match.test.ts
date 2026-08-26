@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
+import { asDependencyName, asDependencyVersion } from "../../../test/brandTestSupport";
 import { JUSTIFICATION_VALUES } from "../schema/clarify";
 import { RATIONALE_VALUES } from "../schema/compatible";
 import { matchesPackage, type PackageMatchTarget } from "./match";
@@ -9,7 +10,10 @@ import { matchesPackage, type PackageMatchTarget } from "./match";
 // optional version or version list. Versions are always literal - a wildcard
 // version is not in the schema, and must not sneak in through the matcher.
 
-const target = (name: string, version: string): PackageMatchTarget => ({ name, version });
+const target = (name: string, version: string): PackageMatchTarget => ({
+  name: asDependencyName(name),
+  version: asDependencyVersion(version),
+});
 
 describe("matchesPackage - name and pattern", () => {
   test("an exact name is string equality", () => {

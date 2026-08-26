@@ -20,6 +20,7 @@ import * as cdxgenModule from "../src/collectors/cdxgen";
 import { imageTag } from "../src/collectors/dockerBuild";
 import { exitCodeFor, runCheck } from "../src/gate/check";
 import { buildOutputs, runGenerate } from "../src/pipeline/pipeline";
+import { asPurl } from "../src/model/dependencies";
 
 /** Original exports captured BEFORE any mock.module call (restore target). */
 const REAL_CDXGEN = { ...cdxgenModule };
@@ -1180,7 +1181,7 @@ describe("sidecar fan-out and the malformed-sidecar failure", () => {
 const TAG_A = imageTag("a/Dockerfile");
 const TAG_B = imageTag("b/Dockerfile");
 
-const BUSYBOX_PURL = "pkg:apk/alpine/busybox@1.37.0-r19?arch=x86_64&distro=alpine-3.23.4";
+const BUSYBOX_PURL = asPurl("pkg:apk/alpine/busybox@1.37.0-r19?arch=x86_64&distro=alpine-3.23.4");
 
 /** The two-Dockerfile scenario sidecar: busybox in A+B, musl in A, zlib in B. */
 const SCENARIO_SIDECAR = {

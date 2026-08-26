@@ -35,8 +35,11 @@
  * family (mirrors copyleft.ts's literal-reviewable-data idiom).
  */
 
+import { type LicenseFamily } from "../../model/dependencies";
+import { type CopyleftFamily } from "./copyleft";
+
 /** Bare imprecise family TOKENS that could carry a copyleft obligation. */
-export const COULD_BE_COPYLEFT_FAMILIES: ReadonlySet<string> = new Set([
+export const COULD_BE_COPYLEFT_FAMILIES: ReadonlySet<LicenseFamily> = new Set([
   "GPL",
   "AGPL",
   "LGPL",
@@ -75,7 +78,7 @@ export const COULD_BE_COPYLEFT_FAMILIES: ReadonlySet<string> = new Set([
  * NEVER absorbed. The source-available [[deny]] terminal additionally sits ABOVE suppression, so a
  * denied license under a suppressed path fails regardless of this map.
  */
-export const WORKSPACE_ABSORBS: ReadonlyMap<string, ReadonlySet<string>> = new Map([
+export const WORKSPACE_ABSORBS: ReadonlyMap<CopyleftFamily, ReadonlySet<CopyleftFamily>> = new Map([
   [
     // An AGPL-3.0 (GNU-family) workspace re-releases everything it bundles under AGPL, absorbing
     // the inbound-compatible copyleft families present there.

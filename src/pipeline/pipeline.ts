@@ -22,11 +22,16 @@ import {
 } from "../policy/parse/clarificationsFile";
 import { crossValidatePolicy } from "../policy/engine/crossValidate";
 import {
+  asRelativePath,
+  asTargetIdentity,
   compareCodeUnits,
   DOCKER_IDENTITY_PREFIX,
   toSortedDependenciesJson,
   type CanonicalDependencies,
   type EvaluatedDependencies,
+  type Purl,
+  type RelativePath,
+  type TargetIdentity,
   type Verdict,
 } from "../model/dependencies";
 import { annotateFindings } from "../normalize/normalize";
@@ -123,7 +128,7 @@ export interface BuiltOutputs {
    * (no entry, no fetch allowed). Empty in generate mode (generate fetches on a miss). check maps
    * these to stale (exit 2).
    */
-  staleUnknowns: string[];
+  staleUnknowns: Purl[];
 }
 
 /** A sidecar component narrowed to its attribution: non-empty string images. */
@@ -308,7 +313,7 @@ function readCommittedDockerSbom(opts: GenerateOptions, dir: string): CollectedS
       ...attributed.doc,
       components: attributed.components.filter((component) => component.images.includes(image)),
     },
-    targetIdentity: `${DOCKER_IDENTITY_PREFIX}${source}`,
+    targetIdentity: asTargetIdentity(`${DOCKER_IDENTITY_PREFIX}${source}`),
     scope: "os",
   }));
 }
@@ -319,15 +324,15 @@ function readCommittedDockerSbom(opts: GenerateOptions, dir: string): CollectedS
  * path. (Using the raw --policy value broke determinism when an absolute path was passed - e.g.
  * from the GitHub Action, which must run from its own directory, not the repo root.)
  */
-function policyPointerPath(opts: GenerateOptions): string {
+function policyPointerPath(opts: GenerateOptions): RelativePath {
   const policyFile = resolveFrom(opts.baseDir, opts.policyPath!);
   const repoRoot = resolvedRepoRoot(opts);
 
   if (repoRoot === undefined) {
-    return basename(policyFile);
+    return asRelativePath(basename(policyFile));
   }
 
-  return relative(repoRoot, policyFile).replaceAll("\\", "/");
+  return asRelativePath(relative(repoRoot, policyFile).replaceAll("\\", "/"));
 }
 
 /** What anchoring a repo-relative path takes: the scanned root, and what it resolves against. */
@@ -582,7 +587,7 @@ function targetProfileSummaryOf(policy: Policy): TargetProfileSummary | undefine
 
   const workspaces = target.workspaces
     .map((entry) => {
-      const profile = resolveTargetProfile(entry.path, policy);
+      const profile = resolveTargetProfile(asTargetIdentity(entry.path), policy);
 
       return profile === undefined ? undefined : { path: entry.path, profile };
     })
@@ -604,7 +609,7 @@ function targetProfileSummaryOf(policy: Policy): TargetProfileSummary | undefine
  */
 function projectPolicyView(
   policy: Policy,
-  policyPath: string,
+  policyPath: RelativePath,
   model: CanonicalDependencies,
   verdicts: ReadonlyArray<Verdict>,
   developmentContainers: ReadonlySet<string>,
@@ -641,7 +646,7 @@ function projectPolicyView(
 function checkedDependencyGraphTargets(
   model: CanonicalDependencies,
   inputs: ReadonlyArray<CollectedSbom>,
-): ReadonlySet<string> {
+): ReadonlySet<TargetIdentity> {
   const targets = targetsWithDependencyGraph(inputs);
 
   assertDependencyGraphCoverage(model, targets);

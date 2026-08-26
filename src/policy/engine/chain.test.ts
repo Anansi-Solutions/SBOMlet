@@ -7,17 +7,18 @@ import { describe, expect, test } from "bun:test";
 
 import { npmIntroductions } from "../../collectors/npmProvenance";
 import { mergeSboms, type CollectedSbom } from "../../merge/merge";
-import { purlDisplayName } from "../../model/dependencies";
+import { asTargetIdentity, purlDisplayName } from "../../model/dependencies";
+import { asPurl, type Purl } from "../../../test/brandTestSupport";
 import {
   dependencyGraphsByTarget,
   firstUncoveredIntroduction,
   type TargetDependencyGraph,
 } from "./chain";
 
-const TARGET = "apps/web";
-const UI_PURL = "pkg:npm/%40acme/ui@0.0.0-use.local";
-const LEFT_PAD_PURL = "pkg:npm/left-pad@1.3.0";
-const MS_PURL = "pkg:npm/ms@2.1.3";
+const TARGET = asTargetIdentity("apps/web");
+const UI_PURL = asPurl("pkg:npm/%40acme/ui@0.0.0-use.local");
+const LEFT_PAD_PURL = asPurl("pkg:npm/left-pad@1.3.0");
+const MS_PURL = asPurl("pkg:npm/ms@2.1.3");
 
 /**
  * A yarn-plugin-shaped BOM: the project depends on its own workspace member and on ms; the
@@ -27,7 +28,7 @@ function workspaceBom(): unknown {
   return {
     bomFormat: "CycloneDX",
     specVersion: "1.6",
-    metadata: { component: { "bom-ref": "root@workspace:.", purl: "pkg:npm/root@1.0.0" } },
+    metadata: { component: { "bom-ref": "root@workspace:.", purl: asPurl("pkg:npm/root@1.0.0") } },
     components: [
       {
         type: "library",
@@ -119,7 +120,7 @@ describe("dependencyGraphsByTarget", () => {
     const graphs = dependencyGraphsByTarget(
       mergeSboms([
         { sbom, targetIdentity: TARGET, introductions: npmIntroductions(sbom) },
-        { sbom, targetIdentity: "apps/other" },
+        { sbom, targetIdentity: asTargetIdentity("apps/other") },
       ]),
     );
 
@@ -132,8 +133,8 @@ describe("dependencyGraphsByTarget", () => {
 describe("purlDisplayName", () => {
   test("reads the namespace and name, percent-decoded, and drops the version", () => {
     expect(purlDisplayName(UI_PURL)).toBe("@acme/ui");
-    expect(purlDisplayName("pkg:pypi/left-pad@1.0.0?extension=whl")).toBe("left-pad");
-    expect(purlDisplayName("pkg:npm/versionless")).toBe("versionless");
+    expect(purlDisplayName(asPurl("pkg:pypi/left-pad@1.0.0?extension=whl"))).toBe("left-pad");
+    expect(purlDisplayName(asPurl("pkg:npm/versionless"))).toBe("versionless");
   });
 
   test("anything that is not a purl has no name to read", () => {
@@ -142,14 +143,14 @@ describe("purlDisplayName", () => {
   });
 
   test("a malformed percent escape is kept verbatim rather than dropped", () => {
-    expect(purlDisplayName("pkg:npm/%ZZ@1.0.0")).toBe("%ZZ");
+    expect(purlDisplayName(asPurl("pkg:npm/%ZZ@1.0.0"))).toBe("%ZZ");
   });
 });
 
 const ROOT = ".";
 
-function purlOf(name: string): string {
-  return `pkg:npm/${name}@1.0.0`;
+function purlOf(name: string): Purl {
+  return asPurl(`pkg:npm/${name}@1.0.0`);
 }
 
 function refOf(name: string): string {
@@ -165,7 +166,7 @@ function bomFrom(edges: Readonly<Record<string, readonly string[]>>): unknown {
   return {
     bomFormat: "CycloneDX",
     specVersion: "1.6",
-    metadata: { component: { "bom-ref": "root@workspace:.", purl: "pkg:npm/root@1.0.0" } },
+    metadata: { component: { "bom-ref": "root@workspace:.", purl: asPurl("pkg:npm/root@1.0.0") } },
     components: names.map((name) => ({
       type: "library",
       name,

@@ -27,7 +27,7 @@
  * an added schema-version check, so a poisoned/garbage/wrong-version memo is a config error, never
  * a silent empty.
  */
-import { toSortedJson } from "../../model/dependencies";
+import { asRawLicense, toSortedJson, type Purl } from "../../model/dependencies";
 import { canonicalizeExpression } from "../../normalize/expression";
 import { readEnvelope } from "../cache";
 
@@ -69,12 +69,12 @@ interface ScancodeMemoFile {
  * `license: null` no-answer entry is untouched, and an unparseable string passes through unchanged
  * per canonicalizeExpression's own honest-residual rule.
  */
-export function readScancodeMemo(path: string): Map<string, ScancodeMemoEntry> {
+export function readScancodeMemo(path: string): Map<Purl, ScancodeMemoEntry> {
   const memo = readEnvelope<ScancodeMemoEntry>(path, "scancode memo", MEMO_VERSION);
 
   for (const [purl, entry] of memo) {
     if (entry.license !== null) {
-      memo.set(purl, { ...entry, license: canonicalizeExpression(entry.license) });
+      memo.set(purl, { ...entry, license: canonicalizeExpression(asRawLicense(entry.license)) });
     }
   }
 
@@ -86,7 +86,7 @@ export function readScancodeMemo(path: string): Map<string, ScancodeMemoEntry> {
  * indent 2, LF, trailing newline, no timestamp) - double-serialize is byte-identical. There is one
  * sorter tool-wide, never a second JSON writer.
  */
-export function serializeScancodeMemo(memo: Map<string, ScancodeMemoEntry>): string {
+export function serializeScancodeMemo(memo: Map<Purl, ScancodeMemoEntry>): string {
   const file: ScancodeMemoFile = {
     version: MEMO_VERSION,
     entries: Object.fromEntries(memo),
@@ -103,8 +103,8 @@ export function serializeScancodeMemo(memo: Map<string, ScancodeMemoEntry>): str
  * fetchedAt precedent: creation-only, never rendered.
  */
 export function putMemoEntry(
-  memo: Map<string, ScancodeMemoEntry>,
-  purl: string,
+  memo: Map<Purl, ScancodeMemoEntry>,
+  purl: Purl,
   entry: ScancodeMemoEntry,
   now: () => Date = defaultNow,
 ): void {
@@ -120,8 +120,8 @@ export function putMemoEntry(
 
 /** Look up a purl: the entry on a hit, undefined on a miss (zero I/O). */
 export function getMemoEntry(
-  memo: Map<string, ScancodeMemoEntry>,
-  purl: string,
+  memo: Map<Purl, ScancodeMemoEntry>,
+  purl: Purl,
 ): ScancodeMemoEntry | undefined {
   return memo.get(purl);
 }

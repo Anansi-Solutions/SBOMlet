@@ -20,9 +20,14 @@ import { collectWithBunLock } from "../src/collectors/bunLock";
 import { collectWithMavenSbom } from "../src/collectors/mavenSbom";
 import { collectWithNugetLock } from "../src/collectors/nugetLock";
 import {
+  asRelativePath,
   toSortedDependenciesJson,
   type EvaluatedDependencies,
   type Verdict,
+  asAbsolutePath,
+  asTargetIdentity,
+  type Purl,
+  type TargetIdentity,
 } from "../src/model/dependencies";
 import { annotateFindings } from "../src/normalize/normalize";
 import { evaluate } from "../src/policy/engine/evaluate";
@@ -30,12 +35,13 @@ import { parsePolicy } from "../src/policy/parse/parse";
 import { renderCyclonedx } from "../src/render/cyclonedx";
 import { renderMarkdown, type PolicyView } from "../src/render/markdown";
 import { renderNotices } from "../src/render/notices";
+import { widen, asPurl } from "./brandTestSupport";
 import type { Target } from "../src/targets/target";
 
 /** No scanned target in these scenarios is collected by a lane that derives a dependency graph. */
-const WITHOUT_DEPENDENCY_GRAPHS: ReadonlySet<string> = new Set();
+const WITHOUT_DEPENDENCY_GRAPHS: ReadonlySet<TargetIdentity> = new Set();
 
-const TARGET = "libraries/iframe-rpc";
+const TARGET = asTargetIdentity("libraries/iframe-rpc");
 
 const fixtureRaw = readFileSync(
   join(import.meta.dir, "fixtures", "volatile-retained.json"),
@@ -110,10 +116,10 @@ describe("determinism — multi-target merge", () => {
     const model = mergeSboms([
       {
         sbom: JSON.parse(fixtureRaw),
-        targetIdentity: "a",
-        prodPurlSet: new Set<string>(),
+        targetIdentity: asTargetIdentity("a"),
+        prodPurlSet: new Set<Purl>(),
       },
-      { sbom: JSON.parse(fixtureRaw), targetIdentity: "b" },
+      { sbom: JSON.parse(fixtureRaw), targetIdentity: asTargetIdentity("b") },
     ]);
 
     return { md: renderMarkdown(model), dump: toSortedDependenciesJson(model) };
@@ -141,7 +147,9 @@ describe("determinism — multi-target merge", () => {
     const sharedPackage = parsed.packages.find((pkg) => pkg.occurrences.length === 2);
 
     expect(sharedPackage).toBeDefined();
-    const byTarget = new Map(sharedPackage!.occurrences.map((o) => [o.target, o.isDevDependency]));
+    const byTarget = new Map(
+      sharedPackage!.occurrences.map((o) => [widen(o.target), o.isDevDependency]),
+    );
 
     expect(byTarget.get("a")).toBe(true);
   });
@@ -173,7 +181,7 @@ describe("determinism — policy-annotated dump", () => {
     const policy = parsePolicy(POLICY_TOML);
     const model = mergeSboms([
       { sbom: JSON.parse(fixtureRaw), targetIdentity: TARGET },
-      { sbom: JSON.parse(shapesRaw), targetIdentity: "apps/shapes" },
+      { sbom: JSON.parse(shapesRaw), targetIdentity: asTargetIdentity("apps/shapes") },
     ]);
     const { model: annotated } = annotateFindings(model, policy.clarify);
     const verdicts = evaluate(annotated, policy, WITHOUT_DEPENDENCY_GRAPHS);
@@ -276,7 +284,7 @@ const BUN_DET_LOCK = `{
 }
 `;
 
-const BUN_TARGET_IDENTITY = "fixtures/bun-det";
+const BUN_TARGET_IDENTITY = asTargetIdentity("fixtures/bun-det");
 
 const collectorTempDirs: string[] = [];
 
@@ -293,7 +301,7 @@ function makeBunFixtureTarget(): Target {
   collectorTempDirs.push(dir);
   writeFileSync(join(dir, "bun.lock"), BUN_DET_LOCK);
   writeFileSync(join(dir, "package.json"), '{ "name": "det-root", "private": true }\n');
-  return { dir, identity: BUN_TARGET_IDENTITY };
+  return { dir: asAbsolutePath(dir), identity: BUN_TARGET_IDENTITY };
 }
 
 /** One collector run into its own fresh temp dir; returns the raw bom bytes. */
@@ -340,8 +348,8 @@ describe("determinism — bun collector double-run byte-identity", () => {
 
     // Not vacuously equal: the nested-conflict purl reaches the model
     // alongside its 4.0.0 twin, and the first-party member never renders.
-    expect(first.dump.includes("pkg:npm/spdx-expression-parse@3.0.1")).toBe(true);
-    expect(first.dump.includes("pkg:npm/spdx-expression-parse@4.0.0")).toBe(true);
+    expect(first.dump.includes(asPurl("pkg:npm/spdx-expression-parse@3.0.1"))).toBe(true);
+    expect(first.dump.includes(asPurl("pkg:npm/spdx-expression-parse@4.0.0"))).toBe(true);
     expect(first.md.includes("libb")).toBe(false);
 
     // LF contract holds on the collector-fed render path too.
@@ -359,7 +367,7 @@ describe("determinism — bun collector double-run byte-identity", () => {
     const build = (): { md: string; dump: string } => {
       const model = mergeSboms([
         { sbom: JSON.parse(bomText), targetIdentity: BUN_TARGET_IDENTITY },
-        { sbom: JSON.parse(npmRaw), targetIdentity: "fixtures/npm-scope" },
+        { sbom: JSON.parse(npmRaw), targetIdentity: asTargetIdentity("fixtures/npm-scope") },
       ]);
 
       return {
@@ -374,8 +382,8 @@ describe("determinism — bun collector double-run byte-identity", () => {
     expect(first.dump).toBe(second.dump);
 
     // Both kinds are present in the merged dump (multi-PM, not vacuous).
-    expect(first.dump.includes("pkg:npm/smol-toml@1.6.1")).toBe(true);
-    expect(first.dump.includes("pkg:npm/%40next/swc-win32-x64-msvc@16.0.10")).toBe(true);
+    expect(first.dump.includes(asPurl("pkg:npm/smol-toml@1.6.1"))).toBe(true);
+    expect(first.dump.includes(asPurl("pkg:npm/%40next/swc-win32-x64-msvc@16.0.10"))).toBe(true);
   });
 });
 
@@ -427,7 +435,7 @@ const NUGET_DET_LOCK = `{
 }
 `;
 
-const NUGET_TARGET_IDENTITY = "fixtures/nuget-det";
+const NUGET_TARGET_IDENTITY = asTargetIdentity("fixtures/nuget-det");
 
 /** Writes the fixture lockfile into a fresh temp project dir. */
 function makeNugetFixtureTarget(): Target {
@@ -435,7 +443,7 @@ function makeNugetFixtureTarget(): Target {
 
   collectorTempDirs.push(dir);
   writeFileSync(join(dir, "packages.lock.json"), NUGET_DET_LOCK);
-  return { dir, identity: NUGET_TARGET_IDENTITY };
+  return { dir: asAbsolutePath(dir), identity: NUGET_TARGET_IDENTITY };
 }
 
 /** One collector run into its own fresh temp dir; returns the raw bom bytes. */
@@ -487,8 +495,8 @@ describe("determinism — nuget collector double-run byte-identity", () => {
     // Not vacuously equal: the CentralTransitive entry reaches the model,
     // the cross-section duplicate folds to one row, and the first-party
     // Project entry never renders.
-    expect(first.dump.includes("pkg:nuget/Microsoft.Extensions.Logging@9.0.9")).toBe(true);
-    expect(first.dump.includes("pkg:nuget/Newtonsoft.Json@13.0.4")).toBe(true);
+    expect(first.dump.includes(asPurl("pkg:nuget/Microsoft.Extensions.Logging@9.0.9"))).toBe(true);
+    expect(first.dump.includes(asPurl("pkg:nuget/Newtonsoft.Json@13.0.4"))).toBe(true);
     expect(first.md.includes("det.lib")).toBe(false);
 
     // LF contract holds on the collector-fed render path too.
@@ -544,7 +552,7 @@ const MAVEN_DET_SBOM_LINES = [
 ];
 const MAVEN_DET_SBOM = MAVEN_DET_SBOM_LINES.join("\n");
 
-const MAVEN_TARGET_IDENTITY = "fixtures/maven-det";
+const MAVEN_TARGET_IDENTITY = asTargetIdentity("fixtures/maven-det");
 
 /** Writes the fixture sidecar into a fresh temp project dir. */
 function makeMavenFixtureTarget(): Target {
@@ -552,7 +560,7 @@ function makeMavenFixtureTarget(): Target {
 
   collectorTempDirs.push(dir);
   writeFileSync(join(dir, "maven.sbom.json"), MAVEN_DET_SBOM);
-  return { dir, identity: MAVEN_TARGET_IDENTITY };
+  return { dir: asAbsolutePath(dir), identity: MAVEN_TARGET_IDENTITY };
 }
 
 /** One collector run into its own fresh temp dir; returns the raw bom bytes. */
@@ -575,7 +583,9 @@ describe("determinism — maven collector double-run byte-identity", () => {
 
     // Verbatim pass-through is exercised on both the classifier purl and the
     // no-license component, not vacuously equal.
-    expect(first).toContain("pkg:maven/com.example/det-lib@2.0.0?classifier=jakarta&type=jar");
+    expect(first).toContain(
+      asPurl("pkg:maven/com.example/det-lib@2.0.0?classifier=jakarta&type=jar"),
+    );
     expect(first).toContain("det-proprietary");
   });
 
@@ -600,7 +610,9 @@ describe("determinism — maven collector double-run byte-identity", () => {
     // Not vacuously equal: both the classifier purl and the no-license
     // component reach the merged model.
     expect(
-      first.dump.includes("pkg:maven/com.example/det-lib@2.0.0?classifier=jakarta&type=jar"),
+      first.dump.includes(
+        asPurl("pkg:maven/com.example/det-lib@2.0.0?classifier=jakarta&type=jar"),
+      ),
     ).toBe(true);
     expect(first.md.includes("det-proprietary")).toBe(true);
 
@@ -616,12 +628,12 @@ describe("determinism — maven collector double-run byte-identity", () => {
       specVersion: "1.6",
       metadata: {
         component: {
-          purl: "pkg:maven/com.example.det/dual-app@1.0.0?type=jar",
+          purl: asPurl("pkg:maven/com.example.det/dual-app@1.0.0?type=jar"),
         },
       },
       components: [
         {
-          purl: "pkg:maven/com.example.det/dual-compile-lib@1.0.0?type=jar",
+          purl: asPurl("pkg:maven/com.example.det/dual-compile-lib@1.0.0?type=jar"),
           name: "dual-compile-lib",
           version: "1.0.0",
           group: "com.example.det",
@@ -635,19 +647,19 @@ describe("determinism — maven collector double-run byte-identity", () => {
       specVersion: "1.6",
       metadata: {
         component: {
-          purl: "pkg:maven/com.example.det/dual-app@1.0.0?type=jar",
+          purl: asPurl("pkg:maven/com.example.det/dual-app@1.0.0?type=jar"),
         },
       },
       components: [
         {
-          purl: "pkg:maven/com.example.det/dual-compile-lib@1.0.0?type=jar",
+          purl: asPurl("pkg:maven/com.example.det/dual-compile-lib@1.0.0?type=jar"),
           name: "dual-compile-lib",
           version: "1.0.0",
           group: "com.example.det",
           licenses: [{ license: { id: "MIT" } }],
         },
         {
-          purl: "pkg:maven/com.example.det/dual-test-only-lib@1.0.0?type=jar",
+          purl: asPurl("pkg:maven/com.example.det/dual-test-only-lib@1.0.0?type=jar"),
           name: "dual-test-only-lib",
           version: "1.0.0",
           group: "com.example.det",
@@ -656,7 +668,7 @@ describe("determinism — maven collector double-run byte-identity", () => {
       ],
     });
 
-    const DUAL_DET_TARGET_IDENTITY = "fixtures/maven-det-dual";
+    const DUAL_DET_TARGET_IDENTITY = asTargetIdentity("fixtures/maven-det-dual");
 
     function makeDualMavenFixtureTarget(): Target {
       const dir = mkdtempSync(join(tmpdir(), "licenses-det-maven-dual-"));
@@ -664,7 +676,7 @@ describe("determinism — maven collector double-run byte-identity", () => {
       collectorTempDirs.push(dir);
       writeFileSync(join(dir, "maven.sbom.json"), DUAL_DET_DEFAULT_SBOM);
       writeFileSync(join(dir, "maven.test.sbom.json"), DUAL_DET_TEST_SBOM);
-      return { dir, identity: DUAL_DET_TARGET_IDENTITY };
+      return { dir: asAbsolutePath(dir), identity: DUAL_DET_TARGET_IDENTITY };
     }
 
     test("two collector runs over the same dual-doc pair write byte-identical composed bom.json", async () => {
@@ -724,7 +736,7 @@ describe("determinism — maven collector double-run byte-identity", () => {
     const build = (): { md: string; dump: string } => {
       const model = mergeSboms([
         { sbom: JSON.parse(bomText), targetIdentity: BUN_TARGET_IDENTITY },
-        { sbom: JSON.parse(npmRaw), targetIdentity: "fixtures/npm-scope" },
+        { sbom: JSON.parse(npmRaw), targetIdentity: asTargetIdentity("fixtures/npm-scope") },
       ]);
 
       return {
@@ -739,8 +751,8 @@ describe("determinism — maven collector double-run byte-identity", () => {
     expect(first.dump).toBe(second.dump);
 
     // Both kinds are present in the merged dump (multi-PM, not vacuous).
-    expect(first.dump.includes("pkg:npm/smol-toml@1.6.1")).toBe(true);
-    expect(first.dump.includes("pkg:npm/%40next/swc-win32-x64-msvc@16.0.10")).toBe(true);
+    expect(first.dump.includes(asPurl("pkg:npm/smol-toml@1.6.1"))).toBe(true);
+    expect(first.dump.includes(asPurl("pkg:npm/%40next/swc-win32-x64-msvc@16.0.10"))).toBe(true);
   });
 });
 
@@ -750,7 +762,7 @@ describe("determinism — maven collector double-run byte-identity", () => {
 // the run - the target-compatibility lane is purely additive.
 // ---------------------------------------------------------------------------
 
-const TARGET_CORPUS_TARGET = "apps/synthetic";
+const TARGET_CORPUS_TARGET = asTargetIdentity("apps/synthetic");
 
 describe("target lane — no-target corpus byte-identity", () => {
   test("a corpus spanning copyleft/AGPL/imprecise/unknown findings renders byte-identical verdicts + both documents whether [target] is absent or declared-but-inert", () => {
@@ -782,7 +794,7 @@ describe("target lane — no-target corpus byte-identity", () => {
     expect(inertTargetVerdicts).toEqual(noTargetVerdicts);
 
     const viewFor = (verdicts: typeof noTargetVerdicts): PolicyView => ({
-      policyPath: "policy.toml",
+      policyPath: asRelativePath("policy.toml"),
       suppressedWorkspaces: [],
       verdicts,
     });
@@ -812,7 +824,11 @@ describe("target lane — double-generate determinism with an active profile", (
 
     const build = (): { md: string; notices: string; verdicts: string } => {
       const verdicts = evaluate(model, policy, WITHOUT_DEPENDENCY_GRAPHS);
-      const view: PolicyView = { policyPath: "policy.toml", suppressedWorkspaces: [], verdicts };
+      const view: PolicyView = {
+        policyPath: asRelativePath("policy.toml"),
+        suppressedWorkspaces: [],
+        verdicts,
+      };
 
       return {
         md: renderMarkdown(model, view),
