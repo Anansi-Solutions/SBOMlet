@@ -48,6 +48,7 @@ import { join } from "node:path";
 
 import { type } from "arktype";
 
+import { type Purl } from "../model/dependencies";
 import { purlSetOf } from "../merge/merge";
 import { MavenSbomDocument } from "../validate/mavenSbom";
 import { recordOf } from "../validate/record";
@@ -132,7 +133,7 @@ export interface MavenCollectResult extends CollectorSbomFile {
    * maven.sbom.json exists - every component classifies prod and the committed bytes pass through
    * unchanged.
    */
-  prodPurlSet?: ReadonlySet<string>;
+  prodPurlSet?: ReadonlySet<Purl>;
 }
 
 /**
@@ -285,7 +286,7 @@ export async function collectWithMavenSbom(
   const hasTestDoc = existsSync(testSbomPath);
 
   let outputText = text;
-  let prodPurlSet: ReadonlySet<string> | undefined;
+  let prodPurlSet: ReadonlySet<Purl> | undefined;
   let cacheArgs: string[] = MAVEN_CACHE_ARGS;
 
   if (hasTestDoc) {

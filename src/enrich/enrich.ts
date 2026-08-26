@@ -69,7 +69,7 @@ export interface EnrichOptions {
 export interface EnrichResult {
   model: CanonicalDependencies;
   /** Purls of unknowns with no cache entry in check mode (stale, exit 2). */
-  staleUnknowns: string[];
+  staleUnknowns: Purl[];
 }
 
 /** A purl parsed into its ecosystem type and (encoded) name + version. */
@@ -303,7 +303,7 @@ export async function enrichUnknowns(
   // Start from the input packages; replace only the entries we enrich. The input arrays are never
   // mutated (spread on append).
   const packages = [...model.packages];
-  const staleUnknowns: string[] = [];
+  const staleUnknowns: Purl[] = [];
 
   // Cache hits resolve with zero fetch in either mode; collect genuine misses.
   const misses: Unknown[] = [];

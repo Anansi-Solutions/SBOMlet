@@ -481,7 +481,7 @@ export interface DependencyIntroduction {
    * package reached through multiple parents (or a duplicated purl) carries every real introducer
    * here. Empty for a direct dependency.
    */
-  introducedBy: readonly string[];
+  introducedBy: readonly Purl[];
   /**
    * Deterministic representative root→component purl chain (one shortest path). Omitted for a
    * direct dependency (the chain would be just the package itself).
@@ -491,7 +491,7 @@ export interface DependencyIntroduction {
    * whole-path order. A multi-parent package has several real chains:
    * `introducedBy` is complete, `path` is one representative.
    */
-  path?: readonly string[];
+  path?: readonly Purl[];
 }
 
 /**

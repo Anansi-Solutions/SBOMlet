@@ -18,6 +18,7 @@
 
 import { parse as parseToml } from "smol-toml";
 
+import { asPurl, type Purl } from "../model/dependencies";
 import { recordOf, stringOf } from "../validate/record";
 
 /**
@@ -49,8 +50,8 @@ function isProdGroups(groups: unknown): boolean {
  * `[[package]]` whose groups include "main". A package missing a string name or version contributes
  * nothing (cannot form a purl). Returns an empty set for non-TOML / garbage input.
  */
-export function poetryProdPurlSet(lockfileText: string): ReadonlySet<string> {
-  const purls = new Set<string>();
+export function poetryProdPurlSet(lockfileText: string): ReadonlySet<Purl> {
+  const purls = new Set<Purl>();
   let parsed: unknown;
 
   try {
@@ -89,7 +90,7 @@ export function poetryProdPurlSet(lockfileText: string): ReadonlySet<string> {
       continue;
     }
 
-    purls.add(`pkg:pypi/${normalizePep503(name)}@${version}`);
+    purls.add(asPurl(`pkg:pypi/${normalizePep503(name)}@${version}`));
   }
 
   return purls;

@@ -247,11 +247,11 @@ const chartRender = entry({
       isDevDependency: false,
       introduction: {
         direct: false,
-        introducedBy: ["pkg:npm/dashboard-kit@1.0.0"],
+        introducedBy: [asPurl("pkg:npm/dashboard-kit@1.0.0")],
         path: [
-          "pkg:npm/web-root@1.0.0",
-          "pkg:npm/dashboard-kit@1.0.0",
-          "pkg:npm/chart-render@2.3.1",
+          asPurl("pkg:npm/web-root@1.0.0"),
+          asPurl("pkg:npm/dashboard-kit@1.0.0"),
+          asPurl("pkg:npm/chart-render@2.3.1"),
         ],
       },
     },
@@ -397,7 +397,7 @@ describe("containerReport — multi-container golden scenario", () => {
         resolveDevelopmentContainersForTest(annotated, policy),
       );
       const relayAgentVerdict = evaluate(scoped, policy, WITHOUT_DEPENDENCY_GRAPHS).find(
-        (v) => v.purl === "pkg:golang/relay-agent@0.4.0",
+        (v) => v.purl === asPurl("pkg:golang/relay-agent@0.4.0"),
       );
 
       expect(relayAgentVerdict?.status).toBe("warn");
@@ -492,7 +492,7 @@ describe("containerReport — multi-container golden scenario", () => {
       const verdicts = evaluate(scoped, policy, WITHOUT_DEPENDENCY_GRAPHS);
       const notices = acceptedContainerNotices(scoped, verdicts);
 
-      // Sorted by purl: asPurl("pkg:apk/...") < "pkg:deb/..." (apk before deb).
+      // Sorted by purl: "pkg:apk/..." < "pkg:deb/..." (apk before deb).
       expect(notices.map((n) => n.name)).toEqual(["licensed-relay", "licensed-daemon"]);
       expect(notices.every((n) => n.rule.startsWith("compatible["))).toBe(true);
     });
@@ -537,7 +537,7 @@ describe("containerReport — multi-container golden scenario", () => {
       const policy = parsePolicy(POLICY_TOML);
       const { model: annotated } = annotateFindings(rawModel, policy.clarify, BUILTIN_OVERRIDES);
       const coreutilsVerdict = evaluate(annotated, policy, WITHOUT_DEPENDENCY_GRAPHS).find(
-        (v) => v.purl === "pkg:deb/coreutils@9.1-1",
+        (v) => v.purl === asPurl("pkg:deb/coreutils@9.1-1"),
       );
 
       expect(coreutilsVerdict?.status).toBe("ok");
@@ -584,9 +584,9 @@ describe("containerReport — multi-container golden scenario", () => {
         resolveDevelopmentContainersForTest(annotated, policy),
       );
       const verdicts = evaluate(scoped, policy, WITHOUT_DEPENDENCY_GRAPHS);
-      const diagToolsVerdict = verdicts.find((v) => v.purl === "pkg:apk/diag-tools@3.0.1");
+      const diagToolsVerdict = verdicts.find((v) => v.purl === asPurl("pkg:apk/diag-tools@3.0.1"));
       const metricsDaemonVerdict = verdicts.find(
-        (v) => v.purl === "pkg:golang/metrics-daemon@1.2.0",
+        (v) => v.purl === asPurl("pkg:golang/metrics-daemon@1.2.0"),
       );
 
       expect(diagToolsVerdict?.status).toBe("fail");
@@ -677,7 +677,7 @@ describe("containerReport — multi-container golden scenario", () => {
 // ===========================================================================
 
 describe("a shared workspace+docker package through the real merge/scope/evaluate/render path", () => {
-  const SHARED_PURL = "pkg:npm/shared-workspace-and-image@2.0.0";
+  const SHARED_PURL = asPurl("pkg:npm/shared-workspace-and-image@2.0.0");
   const WORKSPACE_TARGET = asTargetIdentity("apps/dashboard");
 
   function sharedCopyleftDoc(): unknown {

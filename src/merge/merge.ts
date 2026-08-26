@@ -53,7 +53,7 @@ export interface CollectedSbom {
    * authoritative: occurrence dev = !prodPurlSet.has(purl). When absent, the property-based markers
    * apply. Built from an untrusted document via purlSetOf, same tolerance posture as sbom.
    */
-  prodPurlSet?: ReadonlySet<string>;
+  prodPurlSet?: ReadonlySet<Purl>;
   /**
    * Did the collector lane that produced this input reconstruct a root-anchored dependency graph?
    * Declared by the registration and stamped by the collect loop, never inferred from whether
@@ -85,7 +85,7 @@ export interface CollectedSbom {
    * introduction and goldens stay byte-identical. Introduction is per-target, so it is attached at
    * occurrence creation and rides through the merge unchanged (no cross-purl reconciliation).
    */
-  introductions?: ReadonlyMap<string, DependencyIntroduction>;
+  introductions?: ReadonlyMap<Purl, DependencyIntroduction>;
 }
 
 /** Property name cdxgen uses to mark JS dev dependencies. */
@@ -376,8 +376,8 @@ function hasWorkspaceMarker(component: SbomComponentShape): boolean {
  * Every string purl in components[], for the dual-run prod diff. Same tolerant walk as mergeSboms:
  * malformed entries are skipped, never thrown on.
  */
-export function purlSetOf(sbom: unknown): Set<string> {
-  const purls = new Set<string>();
+export function purlSetOf(sbom: unknown): Set<Purl> {
+  const purls = new Set<Purl>();
   const doc = SbomDocument(sbom);
 
   if (doc instanceof type.errors) {
@@ -563,7 +563,7 @@ function reconcileIntroductions(
 
   // Smallest path by compareCodeUnits over the joined chain (NUL-joined so a shorter prefix can
   // never tie a longer chain by concatenation ambiguity).
-  const paths = [a.path, b.path].filter((p): p is readonly string[] => p !== undefined);
+  const paths = [a.path, b.path].filter((p): p is readonly Purl[] => p !== undefined);
 
   if (paths.length > 0) {
     reconciled.path = paths.reduce((best, candidate) =>

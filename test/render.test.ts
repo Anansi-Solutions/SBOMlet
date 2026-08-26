@@ -1934,9 +1934,9 @@ describe("renderMarkdown — Containers index", () => {
   test("two containers render a sorted 3-column index, placed immediately before Production", () => {
     const model: CanonicalDependencies = {
       packages: [
-        osPkg("busybox", "pkg:apk/alpine/busybox@1.0.0", ["docker:b/Dockerfile"]),
-        osPkg("musl", "pkg:apk/alpine/musl@1.0.0", ["docker:a/Dockerfile"]),
-        osPkg("zlib", "pkg:apk/alpine/zlib@1.0.0", ["docker:a/Dockerfile"]),
+        osPkg("busybox", asPurl("pkg:apk/alpine/busybox@1.0.0"), ["docker:b/Dockerfile"]),
+        osPkg("musl", asPurl("pkg:apk/alpine/musl@1.0.0"), ["docker:a/Dockerfile"]),
+        osPkg("zlib", asPurl("pkg:apk/alpine/zlib@1.0.0"), ["docker:a/Dockerfile"]),
       ],
     };
     const output = renderMarkdown(model);
@@ -1962,8 +1962,8 @@ describe("renderMarkdown — Containers index", () => {
   test("classification is development for identities in developmentContainers, else production", () => {
     const model: CanonicalDependencies = {
       packages: [
-        osPkg("musl", "pkg:apk/alpine/musl@1.0.0", ["docker:a/Dockerfile"]),
-        osPkg("zlib", "pkg:apk/alpine/zlib@1.0.0", ["docker:b/Dockerfile"]),
+        osPkg("musl", asPurl("pkg:apk/alpine/musl@1.0.0"), ["docker:a/Dockerfile"]),
+        osPkg("zlib", asPurl("pkg:apk/alpine/zlib@1.0.0"), ["docker:b/Dockerfile"]),
       ],
     };
     const view: PolicyView = {
@@ -1984,7 +1984,7 @@ describe("renderMarkdown — Containers index", () => {
 
   test("without a policy view every container classifies production", () => {
     const model: CanonicalDependencies = {
-      packages: [osPkg("musl", "pkg:apk/alpine/musl@1.0.0", ["docker:a/Dockerfile"])],
+      packages: [osPkg("musl", asPurl("pkg:apk/alpine/musl@1.0.0"), ["docker:a/Dockerfile"])],
     };
     const output = renderMarkdown(model);
     const containersSection = output.slice(
@@ -2017,7 +2017,9 @@ describe("renderMarkdown — Containers index", () => {
 
   test("identity cells route through escapeCell", () => {
     const model: CanonicalDependencies = {
-      packages: [osPkg("evil", "pkg:apk/alpine/evil@1.0.0", ["docker:evil|pkg`x/Dockerfile"])],
+      packages: [
+        osPkg("evil", asPurl("pkg:apk/alpine/evil@1.0.0"), ["docker:evil|pkg`x/Dockerfile"]),
+      ],
     };
     const output = renderMarkdown(model);
 
@@ -3016,7 +3018,7 @@ describe("renderMarkdown — provenance Why column", () => {
     const view: PolicyView = {
       policyPath: asRelativePath("policy.toml"),
       suppressedWorkspaces: [],
-      verdicts: [copyleftVerdict("pkg:npm/direct-pkg@1.0.0", "apps/a")],
+      verdicts: [copyleftVerdict(asPurl("pkg:npm/direct-pkg@1.0.0"), "apps/a")],
     };
 
     expect(
@@ -3039,8 +3041,8 @@ describe("renderMarkdown — provenance Why column", () => {
               isDevDependency: false,
               introduction: {
                 direct: false,
-                introducedBy: ["pkg:npm/parent@2.0.0"],
-                path: ["pkg:npm/parent@2.0.0", "pkg:npm/trans-pkg@1.0.0"],
+                introducedBy: [asPurl("pkg:npm/parent@2.0.0")],
+                path: [asPurl("pkg:npm/parent@2.0.0"), asPurl("pkg:npm/trans-pkg@1.0.0")],
               },
             },
           ],
@@ -3056,7 +3058,7 @@ describe("renderMarkdown — provenance Why column", () => {
     const view: PolicyView = {
       policyPath: asRelativePath("policy.toml"),
       suppressedWorkspaces: [],
-      verdicts: [copyleftVerdict("pkg:npm/trans-pkg@1.0.0", "apps/a")],
+      verdicts: [copyleftVerdict(asPurl("pkg:npm/trans-pkg@1.0.0"), "apps/a")],
     };
 
     expect(
@@ -3081,8 +3083,8 @@ describe("renderMarkdown — provenance Why column", () => {
               isDevDependency: false,
               introduction: {
                 direct: false,
-                introducedBy: ["pkg:pypi/host@2.0.0"],
-                path: ["pkg:pypi/host@2.0.0", "pkg:pypi/opt-pkg@1.0.0"],
+                introducedBy: [asPurl("pkg:pypi/host@2.0.0")],
+                path: [asPurl("pkg:pypi/host@2.0.0"), asPurl("pkg:pypi/opt-pkg@1.0.0")],
               },
             },
           ],
@@ -3098,7 +3100,7 @@ describe("renderMarkdown — provenance Why column", () => {
     const view: PolicyView = {
       policyPath: asRelativePath("policy.toml"),
       suppressedWorkspaces: [],
-      verdicts: [copyleftVerdict("pkg:pypi/opt-pkg@1.0.0", "apps/py")],
+      verdicts: [copyleftVerdict(asPurl("pkg:pypi/opt-pkg@1.0.0"), "apps/py")],
     };
     const section = copyleftSectionOf(model, view);
 
@@ -3134,7 +3136,7 @@ describe("renderMarkdown — provenance Why column", () => {
     const view: PolicyView = {
       policyPath: asRelativePath("policy.toml"),
       suppressedWorkspaces: [],
-      verdicts: [copyleftVerdict("pkg:pypi/libssl-bindings@3.0", "apps/py")],
+      verdicts: [copyleftVerdict(asPurl("pkg:pypi/libssl-bindings@3.0"), "apps/py")],
     };
 
     expect(
@@ -3177,8 +3179,8 @@ describe("renderMarkdown — provenance Why column", () => {
       policyPath: asRelativePath("policy.toml"),
       suppressedWorkspaces: [],
       verdicts: [
-        copyleftVerdict("pkg:npm/all-direct@1.0.0", "apps/a"),
-        copyleftVerdict("pkg:npm/all-direct@1.0.0", "apps/b"),
+        copyleftVerdict(asPurl("pkg:npm/all-direct@1.0.0"), "apps/a"),
+        copyleftVerdict(asPurl("pkg:npm/all-direct@1.0.0"), "apps/b"),
       ],
     };
     const section = copyleftSectionOf(model, view);
@@ -3205,8 +3207,8 @@ describe("renderMarkdown — provenance Why column", () => {
               isDevDependency: false,
               introduction: {
                 direct: false,
-                introducedBy: ["pkg:npm/p@2.0.0"],
-                path: ["pkg:npm/p@2.0.0", "pkg:npm/mixed-pkg@1.0.0"],
+                introducedBy: [asPurl("pkg:npm/p@2.0.0")],
+                path: [asPurl("pkg:npm/p@2.0.0"), asPurl("pkg:npm/mixed-pkg@1.0.0")],
               },
             },
             {
@@ -3228,27 +3230,27 @@ describe("renderMarkdown — provenance Why column", () => {
       policyPath: asRelativePath("policy.toml"),
       suppressedWorkspaces: [],
       verdicts: [
-        copyleftVerdict("pkg:npm/mixed-pkg@1.0.0", "apps/a"),
-        copyleftVerdict("pkg:npm/mixed-pkg@1.0.0", "apps/b"),
+        copyleftVerdict(asPurl("pkg:npm/mixed-pkg@1.0.0"), "apps/a"),
+        copyleftVerdict(asPurl("pkg:npm/mixed-pkg@1.0.0"), "apps/b"),
       ],
     };
     const section = copyleftSectionOf(model, view);
 
     expect(section.includes("| mixed-pkg |")).toBe(true);
     // The transitive introducer from apps/a is surfaced...
-    expect(section.includes("pkg:npm/p@2.0.0 → pkg:npm/mixed-pkg@1.0.0")).toBe(true);
+    expect(section.includes(asPurl("pkg:npm/p@2.0.0 → pkg:npm/mixed-pkg@1.0.0"))).toBe(true);
     // ...and the row is NOT collapsed to bare "direct".
     expect(section.includes(" | direct |")).toBe(false);
   });
 
   test("a very long path is bounded with a stable (+N more)", () => {
     const longPath = [
-      "pkg:npm/p1@1",
-      "pkg:npm/p2@1",
-      "pkg:npm/p3@1",
-      "pkg:npm/p4@1",
-      "pkg:npm/p5@1",
-      "pkg:npm/deep@1",
+      asPurl("pkg:npm/p1@1"),
+      asPurl("pkg:npm/p2@1"),
+      asPurl("pkg:npm/p3@1"),
+      asPurl("pkg:npm/p4@1"),
+      asPurl("pkg:npm/p5@1"),
+      asPurl("pkg:npm/deep@1"),
     ];
     const model: CanonicalDependencies = {
       packages: [
@@ -3262,7 +3264,7 @@ describe("renderMarkdown — provenance Why column", () => {
               isDevDependency: false,
               introduction: {
                 direct: false,
-                introducedBy: ["pkg:npm/p5@1"],
+                introducedBy: [asPurl("pkg:npm/p5@1")],
                 path: longPath,
               },
             },
@@ -3279,14 +3281,16 @@ describe("renderMarkdown — provenance Why column", () => {
     const view: PolicyView = {
       policyPath: asRelativePath("policy.toml"),
       suppressedWorkspaces: [],
-      verdicts: [copyleftVerdict("pkg:npm/deep@1", "apps/a")],
+      verdicts: [copyleftVerdict(asPurl("pkg:npm/deep@1"), "apps/a")],
     };
     const section = copyleftSectionOf(model, view);
 
     // First WHY_MAX_ITEMS (4) purls shown, then a stable "(+2 more)" tail.
     expect(section.includes("(+2 more)")).toBe(true);
     expect(
-      section.includes("pkg:npm/p1@1 → pkg:npm/p2@1 → pkg:npm/p3@1 → pkg:npm/p4@1 (+2 more)"),
+      section.includes(
+        asPurl("pkg:npm/p1@1 → pkg:npm/p2@1 → pkg:npm/p3@1 → pkg:npm/p4@1 (+2 more)"),
+      ),
     ).toBe(true);
   });
 
@@ -3303,8 +3307,8 @@ describe("renderMarkdown — provenance Why column", () => {
               isDevDependency: false,
               introduction: {
                 direct: false,
-                introducedBy: ["pkg:npm/intro@2.0.0"],
-                path: ["pkg:npm/intro@2.0.0", "pkg:npm/blocked@1.0.0"],
+                introducedBy: [asPurl("pkg:npm/intro@2.0.0")],
+                path: [asPurl("pkg:npm/intro@2.0.0"), asPurl("pkg:npm/blocked@1.0.0")],
               },
             },
           ],
@@ -3362,7 +3366,7 @@ describe("renderMarkdown — provenance Why column", () => {
     const view: PolicyView = {
       policyPath: asRelativePath("policy.toml"),
       suppressedWorkspaces: [],
-      verdicts: [copyleftVerdict("pkg:npm/plain@1.0.0", "apps/a")],
+      verdicts: [copyleftVerdict(asPurl("pkg:npm/plain@1.0.0"), "apps/a")],
     };
     const first = renderMarkdown(model, view);
     const second = renderMarkdown(model, view);
@@ -3409,8 +3413,8 @@ describe("renderMarkdown — provenance Why column", () => {
       policyPath: asRelativePath("policy.toml"),
       suppressedWorkspaces: [],
       verdicts: [
-        copyleftVerdict("pkg:pypi/realdirect@1.0.0", "ws-a"),
-        copyleftVerdict("pkg:pypi/realdirect@1.0.0", "ws-b"),
+        copyleftVerdict(asPurl("pkg:pypi/realdirect@1.0.0"), "ws-a"),
+        copyleftVerdict(asPurl("pkg:pypi/realdirect@1.0.0"), "ws-b"),
       ],
     };
     const section = copyleftSectionOf(model, view);
@@ -3457,8 +3461,8 @@ describe("renderMarkdown — provenance Why column", () => {
       policyPath: asRelativePath("policy.toml"),
       suppressedWorkspaces: [],
       verdicts: [
-        copyleftVerdict("pkg:pypi/allorphan@1.0.0", "ws-a"),
-        copyleftVerdict("pkg:pypi/allorphan@1.0.0", "ws-b"),
+        copyleftVerdict(asPurl("pkg:pypi/allorphan@1.0.0"), "ws-a"),
+        copyleftVerdict(asPurl("pkg:pypi/allorphan@1.0.0"), "ws-b"),
       ],
     };
 
@@ -3485,8 +3489,8 @@ describe("renderMarkdown — provenance Why column", () => {
               isDevDependency: false,
               introduction: {
                 direct: false,
-                introducedBy: ["pkg:pypi/host@2.0.0"],
-                path: ["pkg:pypi/host@2.0.0", "pkg:pypi/transorphan@1.0.0"],
+                introducedBy: [asPurl("pkg:pypi/host@2.0.0")],
+                path: [asPurl("pkg:pypi/host@2.0.0"), asPurl("pkg:pypi/transorphan@1.0.0")],
               },
             },
             {
@@ -3508,13 +3512,13 @@ describe("renderMarkdown — provenance Why column", () => {
       policyPath: asRelativePath("policy.toml"),
       suppressedWorkspaces: [],
       verdicts: [
-        copyleftVerdict("pkg:pypi/transorphan@1.0.0", "ws-a"),
-        copyleftVerdict("pkg:pypi/transorphan@1.0.0", "ws-b"),
+        copyleftVerdict(asPurl("pkg:pypi/transorphan@1.0.0"), "ws-a"),
+        copyleftVerdict(asPurl("pkg:pypi/transorphan@1.0.0"), "ws-b"),
       ],
     };
     const section = copyleftSectionOf(model, view);
 
-    expect(section.includes("pkg:pypi/host@2.0.0 → pkg:pypi/transorphan@1.0.0")).toBe(true);
+    expect(section.includes(asPurl("pkg:pypi/host@2.0.0 → pkg:pypi/transorphan@1.0.0"))).toBe(true);
     expect(section.includes("| transorphan | pypi | 1.0.0 | GPL-3.0-only")).toBe(true);
   });
 
@@ -3547,7 +3551,7 @@ describe("renderMarkdown — provenance Why column", () => {
     const view: PolicyView = {
       policyPath: asRelativePath("policy.toml"),
       suppressedWorkspaces: [],
-      verdicts: [copyleftVerdict("pkg:npm/orphan@1.0.0", "apps/a")],
+      verdicts: [copyleftVerdict(asPurl("pkg:npm/orphan@1.0.0"), "apps/a")],
     };
 
     expect(
@@ -3589,7 +3593,7 @@ describe("renderMarkdown — provenance Why column", () => {
     const view: PolicyView = {
       policyPath: asRelativePath("policy.toml"),
       suppressedWorkspaces: [],
-      verdicts: [copyleftVerdict("pkg:npm/emptypath@1.0.0", "apps/a")],
+      verdicts: [copyleftVerdict(asPurl("pkg:npm/emptypath@1.0.0"), "apps/a")],
     };
     const section = copyleftSectionOf(model, view);
 
@@ -3614,7 +3618,7 @@ describe("renderMarkdown — provenance Why column", () => {
               isDevDependency: false,
               introduction: {
                 direct: false,
-                introducedBy: ["pkg:npm/host@2.0.0"],
+                introducedBy: [asPurl("pkg:npm/host@2.0.0")],
                 path: [],
               },
             },
@@ -3631,7 +3635,7 @@ describe("renderMarkdown — provenance Why column", () => {
     const view: PolicyView = {
       policyPath: asRelativePath("policy.toml"),
       suppressedWorkspaces: [],
-      verdicts: [copyleftVerdict("pkg:npm/emptypathintro@1.0.0", "apps/a")],
+      verdicts: [copyleftVerdict(asPurl("pkg:npm/emptypathintro@1.0.0"), "apps/a")],
     };
     const section = copyleftSectionOf(model, view);
 
@@ -3694,8 +3698,8 @@ describe("renderMarkdown — Why-cell target scoping", () => {
               isDevDependency: false,
               introduction: {
                 direct: false,
-                introducedBy: ["pkg:npm/deep@9.9.9"],
-                path: ["pkg:npm/deep@9.9.9", "pkg:npm/agpllib@1.0.0"],
+                introducedBy: [asPurl("pkg:npm/deep@9.9.9")],
+                path: [asPurl("pkg:npm/deep@9.9.9"), asPurl("pkg:npm/agpllib@1.0.0")],
               },
             },
           ],
@@ -3749,8 +3753,8 @@ describe("renderMarkdown — Why-cell target scoping", () => {
               isDevDependency: false,
               introduction: {
                 direct: false,
-                introducedBy: ["pkg:npm/via@2.0.0"],
-                path: ["pkg:npm/via@2.0.0", "pkg:npm/shared@1.0.0"],
+                introducedBy: [asPurl("pkg:npm/via@2.0.0")],
+                path: [asPurl("pkg:npm/via@2.0.0"), asPurl("pkg:npm/shared@1.0.0")],
               },
             },
           ],
@@ -3782,7 +3786,7 @@ describe("renderMarkdown — Why-cell target scoping", () => {
       true,
     );
     // The out-of-scope via@2.0.0 chain must NEVER leak into the flagged row.
-    expect(section.includes("pkg:npm/via@2.0.0")).toBe(false);
+    expect(section.includes(asPurl("pkg:npm/via@2.0.0"))).toBe(false);
   });
 
   test("(B) the smallest-target occurrence carrying a path wins; no ', optional' suffix ever appears", () => {
@@ -3803,8 +3807,8 @@ describe("renderMarkdown — Why-cell target scoping", () => {
               isDevDependency: false,
               introduction: {
                 direct: false,
-                introducedBy: ["pkg:pypi/pathparent@2.0.0"],
-                path: ["pkg:pypi/pathparent@2.0.0", "pkg:pypi/hr-pkg@1.0.0"],
+                introducedBy: [asPurl("pkg:pypi/pathparent@2.0.0")],
+                path: [asPurl("pkg:pypi/pathparent@2.0.0"), asPurl("pkg:pypi/hr-pkg@1.0.0")],
               },
             },
             {
@@ -3812,7 +3816,7 @@ describe("renderMarkdown — Why-cell target scoping", () => {
               isDevDependency: false,
               introduction: {
                 direct: false,
-                introducedBy: ["pkg:pypi/setparent@3.0.0"],
+                introducedBy: [asPurl("pkg:pypi/setparent@3.0.0")],
               },
             },
           ],
@@ -3848,7 +3852,9 @@ describe("renderMarkdown — Why-cell target scoping", () => {
     const section = copyleftSectionOf(model, view);
 
     // The smallest-target occurrence carrying a path is surfaced.
-    expect(section.includes("pkg:pypi/pathparent@2.0.0 → pkg:pypi/hr-pkg@1.0.0")).toBe(true);
+    expect(section.includes(asPurl("pkg:pypi/pathparent@2.0.0 → pkg:pypi/hr-pkg@1.0.0"))).toBe(
+      true,
+    );
     // No ", optional" suffix is ever rendered after the descope.
     expect(section.includes(", optional")).toBe(false);
   });

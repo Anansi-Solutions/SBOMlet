@@ -2604,7 +2604,7 @@ describe("evaluate — deny STAYS TERMINAL over the os knob", () => {
       ].join("\n");
       const { verdicts } = runEngine(
         [
-          osPkgSpec("pkg:deb/debian/evil-os@1.0.0", "evil-os", "BUSL-1.1", [
+          osPkgSpec(asPurl("pkg:deb/debian/evil-os@1.0.0"), "evil-os", "BUSL-1.1", [
             "docker:img/Dockerfile",
           ]),
         ],
@@ -2619,7 +2619,11 @@ describe("evaluate — deny STAYS TERMINAL over the os knob", () => {
 
   test("name-mode deny on an os-scope package with UNKNOWN finding still fails", () => {
     const { verdicts } = runEngine(
-      [osPkgSpec("pkg:deb/debian/rider-os@1.0.0", "rider-os", null, ["docker:img/Dockerfile"])],
+      [
+        osPkgSpec(asPurl("pkg:deb/debian/rider-os@1.0.0"), "rider-os", null, [
+          "docker:img/Dockerfile",
+        ]),
+      ],
       denyNameFixture("rider-os"),
     );
 
@@ -2663,7 +2667,7 @@ describe("evaluate — os-scope and dev-scope downgraders compose without intera
     ].join("\n");
     const { verdicts } = runEngine(
       [
-        osPkgSpec("pkg:deb/debian/libc6@2.36-9", "libc6", "LGPL-2.1-or-later", [
+        osPkgSpec(asPurl("pkg:deb/debian/libc6@2.36-9"), "libc6", "LGPL-2.1-or-later", [
           { target: asTargetIdentity("docker:img/Dockerfile"), dev: true },
         ]),
       ],
@@ -2808,7 +2812,11 @@ describe("evaluate — os-scope AGPL container escalation", () => {
 
   test("HEADLINE: os-scope AGPL-3.0-only under os_dependencies=warn escalates to a REAL fail, not the routine warn", () => {
     const { verdicts } = runEngine(
-      [osPkgSpec("pkg:deb/debian/agpl-os@1.0.0", "agpl-os", "AGPL-3.0-only", [AGPL_TARGET])],
+      [
+        osPkgSpec(asPurl("pkg:deb/debian/agpl-os@1.0.0"), "agpl-os", "AGPL-3.0-only", [
+          AGPL_TARGET,
+        ]),
+      ],
       "",
     );
 
@@ -2818,7 +2826,11 @@ describe("evaluate — os-scope AGPL container escalation", () => {
 
   test("os_dependencies=ignore does not license the AGPL container package back in (the loudest current escape)", () => {
     const { verdicts } = runEngine(
-      [osPkgSpec("pkg:deb/debian/agpl-os@1.0.0", "agpl-os", "AGPL-3.0-only", [AGPL_TARGET])],
+      [
+        osPkgSpec(asPurl("pkg:deb/debian/agpl-os@1.0.0"), "agpl-os", "AGPL-3.0-only", [
+          AGPL_TARGET,
+        ]),
+      ],
       '[os_dependencies]\nhandling = "ignore"',
     );
 
@@ -2828,7 +2840,11 @@ describe("evaluate — os-scope AGPL container escalation", () => {
 
   test("os_dependencies=fail also fails with the SAME distinct rule id (deterministic across every handling)", () => {
     const { verdicts } = runEngine(
-      [osPkgSpec("pkg:deb/debian/agpl-os@1.0.0", "agpl-os", "AGPL-3.0-only", [AGPL_TARGET])],
+      [
+        osPkgSpec(asPurl("pkg:deb/debian/agpl-os@1.0.0"), "agpl-os", "AGPL-3.0-only", [
+          AGPL_TARGET,
+        ]),
+      ],
       '[os_dependencies]\nhandling = "fail"',
     );
 
@@ -2839,9 +2855,12 @@ describe("evaluate — os-scope AGPL container escalation", () => {
   test("OR-election: AGPL-3.0-only OR MIT elects MIT and stays default:ok (election semantics preserved)", () => {
     const { verdicts } = runEngine(
       [
-        osPkgSpec("pkg:deb/debian/agpl-or-mit@1.0.0", "agpl-or-mit", "AGPL-3.0-only OR MIT", [
-          AGPL_TARGET,
-        ]),
+        osPkgSpec(
+          asPurl("pkg:deb/debian/agpl-or-mit@1.0.0"),
+          "agpl-or-mit",
+          "AGPL-3.0-only OR MIT",
+          [AGPL_TARGET],
+        ),
       ],
       "",
     );
@@ -2854,7 +2873,7 @@ describe("evaluate — os-scope AGPL container escalation", () => {
     const { verdicts } = runEngine(
       [
         osPkgSpec(
-          "pkg:deb/debian/gpl-and-agpl@1.0.0",
+          asPurl("pkg:deb/debian/gpl-and-agpl@1.0.0"),
           "gpl-and-agpl",
           "GPL-2.0-only AND AGPL-3.0-or-later",
           [AGPL_TARGET],
@@ -2877,7 +2896,7 @@ describe("evaluate — os-scope AGPL container escalation", () => {
   test("defensive: an os-scope AGPL occurrence marked isDevDependency=true still fails (no dev softening)", () => {
     const { verdicts } = runEngine(
       [
-        osPkgSpec("pkg:deb/debian/agpl-os@1.0.0", "agpl-os", "AGPL-3.0-only", [
+        osPkgSpec(asPurl("pkg:deb/debian/agpl-os@1.0.0"), "agpl-os", "AGPL-3.0-only", [
           { target: AGPL_TARGET, dev: true },
         ]),
       ],
@@ -2899,9 +2918,12 @@ describe("evaluate — os-scope AGPL container escalation", () => {
     ].join("\n");
     const { verdicts } = runEngine(
       [
-        osPkgSpec("pkg:deb/debian/agpl-os-accepted@1.0.0", "agpl-os-accepted", "AGPL-3.0-only", [
-          AGPL_TARGET,
-        ]),
+        osPkgSpec(
+          asPurl("pkg:deb/debian/agpl-os-accepted@1.0.0"),
+          "agpl-os-accepted",
+          "AGPL-3.0-only",
+          [AGPL_TARGET],
+        ),
       ],
       policyText,
     );
@@ -2913,9 +2935,12 @@ describe("evaluate — os-scope AGPL container escalation", () => {
   test("a [[deny]] license match still yields denied[..] (deny is terminal above the AGPL escalation too)", () => {
     const { verdicts } = runEngine(
       [
-        osPkgSpec("pkg:deb/debian/agpl-os-denied@1.0.0", "agpl-os-denied", "AGPL-3.0-only", [
-          AGPL_TARGET,
-        ]),
+        osPkgSpec(
+          asPurl("pkg:deb/debian/agpl-os-denied@1.0.0"),
+          "agpl-os-denied",
+          "AGPL-3.0-only",
+          [AGPL_TARGET],
+        ),
       ],
       denyLicenseFixture("AGPL-3.0-only"),
     );
@@ -2938,7 +2963,11 @@ describe("evaluate — os-scope AGPL container escalation", () => {
     // package at the same target has only one reachable outcome: the
     // container escalation fail — never suppressed.
     const { verdicts } = runEngine(
-      [osPkgSpec("pkg:deb/debian/agpl-os@1.0.0", "agpl-os", "AGPL-3.0-only", [AGPL_TARGET])],
+      [
+        osPkgSpec(asPurl("pkg:deb/debian/agpl-os@1.0.0"), "agpl-os", "AGPL-3.0-only", [
+          AGPL_TARGET,
+        ]),
+      ],
       "",
     );
 
@@ -2950,7 +2979,11 @@ describe("evaluate — os-scope AGPL container escalation", () => {
 describe("evaluate — imprecise AGPL container escalation (imprecise variant)", () => {
   test("os-scope imprecise AGPL fails default:agpl-container (the imprecise escape lane is closed too, not just the precise-expression one)", () => {
     const { verdicts } = runEngine(
-      [osPkgSpec("pkg:apk/alpine/agpl-ish@1.0.0", "agpl-ish", "AGPL", ["docker:img/Dockerfile"])],
+      [
+        osPkgSpec(asPurl("pkg:apk/alpine/agpl-ish@1.0.0"), "agpl-ish", "AGPL", [
+          "docker:img/Dockerfile",
+        ]),
+      ],
       "",
     );
 
@@ -2968,7 +3001,7 @@ describe("evaluate — imprecise AGPL container escalation (imprecise variant)",
   test("os-scope imprecise GPL (not AGPL) stays warn default:imprecise-copyleft UNCHANGED — only the literal AGPL token escalates", () => {
     const { verdicts } = runEngine(
       [
-        osPkgSpec("pkg:deb/debian/gpl-ish-os@1.0.0", "gpl-ish-os", "GPL", [
+        osPkgSpec(asPurl("pkg:deb/debian/gpl-ish-os@1.0.0"), "gpl-ish-os", "GPL", [
           "docker:img/Dockerfile",
         ]),
       ],
@@ -3002,9 +3035,12 @@ describe("evaluate — accepted-AGPL container notices (acceptedContainerNotices
     ].join("\n");
     const { verdicts, model } = runEngine(
       [
-        osPkgSpec("pkg:deb/debian/agpl-os-notice@1.0.0", "agpl-os-notice", "AGPL-3.0-only", [
-          NOTICE_TARGET,
-        ]),
+        osPkgSpec(
+          asPurl("pkg:deb/debian/agpl-os-notice@1.0.0"),
+          "agpl-os-notice",
+          "AGPL-3.0-only",
+          [NOTICE_TARGET],
+        ),
       ],
       policyText,
     );
@@ -3036,7 +3072,7 @@ describe("evaluate — accepted-AGPL container notices (acceptedContainerNotices
     ].join("\n");
     const { verdicts, model } = runEngine(
       [
-        osPkgSpec("pkg:apk/alpine/agpl-ish-notice@1.0.0", "agpl-ish-notice", "AGPL", [
+        osPkgSpec(asPurl("pkg:apk/alpine/agpl-ish-notice@1.0.0"), "agpl-ish-notice", "AGPL", [
           NOTICE_TARGET,
         ]),
       ],
@@ -3069,9 +3105,12 @@ describe("evaluate — accepted-AGPL container notices (acceptedContainerNotices
     ].join("\n");
     const { verdicts: acceptedVerdicts, model: acceptedModel } = runEngine(
       [
-        osPkgSpec("pkg:deb/debian/gpl-os-accepted@1.0.0", "gpl-os-accepted", "GPL-3.0-only", [
-          NOTICE_TARGET,
-        ]),
+        osPkgSpec(
+          asPurl("pkg:deb/debian/gpl-os-accepted@1.0.0"),
+          "gpl-os-accepted",
+          "GPL-3.0-only",
+          [NOTICE_TARGET],
+        ),
       ],
       acceptPolicy,
     );
@@ -3081,9 +3120,12 @@ describe("evaluate — accepted-AGPL container notices (acceptedContainerNotices
 
     const { verdicts: warnVerdicts, model: warnModel } = runEngine(
       [
-        osPkgSpec("pkg:deb/debian/lgpl-os-warn@1.0.0", "lgpl-os-warn", "LGPL-2.1-or-later", [
-          NOTICE_TARGET,
-        ]),
+        osPkgSpec(
+          asPurl("pkg:deb/debian/lgpl-os-warn@1.0.0"),
+          "lgpl-os-warn",
+          "LGPL-2.1-or-later",
+          [NOTICE_TARGET],
+        ),
       ],
       "",
     );
@@ -3095,9 +3137,12 @@ describe("evaluate — accepted-AGPL container notices (acceptedContainerNotices
   test("a FAILING AGPL system package (not accepted) is not an accepted-container notice — Problematic only, never duplicated", () => {
     const { verdicts, model } = runEngine(
       [
-        osPkgSpec("pkg:deb/debian/agpl-os-failing@1.0.0", "agpl-os-failing", "AGPL-3.0-only", [
-          NOTICE_TARGET,
-        ]),
+        osPkgSpec(
+          asPurl("pkg:deb/debian/agpl-os-failing@1.0.0"),
+          "agpl-os-failing",
+          "AGPL-3.0-only",
+          [NOTICE_TARGET],
+        ),
       ],
       "",
     );
@@ -3129,11 +3174,13 @@ describe("evaluate — accepted-AGPL container notices (acceptedContainerNotices
     ].join("\n");
     const { verdicts, model } = runEngine(
       [
-        osPkgSpec("pkg:deb/debian/zeta-agpl@1.0.0", "zeta-agpl", "AGPL-3.0-only", [
+        osPkgSpec(asPurl("pkg:deb/debian/zeta-agpl@1.0.0"), "zeta-agpl", "AGPL-3.0-only", [
           TARGET_B,
           TARGET_A,
         ]),
-        osPkgSpec("pkg:deb/debian/alpha-agpl@1.0.0", "alpha-agpl", "AGPL-3.0-only", [TARGET_A]),
+        osPkgSpec(asPurl("pkg:deb/debian/alpha-agpl@1.0.0"), "alpha-agpl", "AGPL-3.0-only", [
+          TARGET_A,
+        ]),
       ],
       policyText,
     );
@@ -3142,8 +3189,8 @@ describe("evaluate — accepted-AGPL container notices (acceptedContainerNotices
 
     expect(notices1).toEqual(notices2);
     expect(widen(notices1.map((n) => n.purl))).toEqual([
-      "pkg:deb/debian/alpha-agpl@1.0.0",
-      "pkg:deb/debian/zeta-agpl@1.0.0",
+      asPurl("pkg:deb/debian/alpha-agpl@1.0.0"),
+      asPurl("pkg:deb/debian/zeta-agpl@1.0.0"),
     ]);
     expect(notices1[1]!.targets).toEqual([TARGET_A, TARGET_B]);
   });
@@ -3196,10 +3243,10 @@ describe("evaluate — [[allow_source_available]] exemption (ADR-0013 opt-out)",
 describe("evaluate — an entry the introduction chains contradict", () => {
   const GRAPH_TARGET = asTargetIdentity("apps/web");
   const WITH_A_DEPENDENCY_GRAPH: ReadonlySet<TargetIdentity> = new Set([GRAPH_TARGET]);
-  const JUDGED = "pkg:npm/judged@1.0.0";
-  const OTHER = "pkg:npm/other@1.0.0";
-  const GPL_LIB = "pkg:npm/gpl-lib@1.0.0";
-  const MPL_LIB = "pkg:npm/mpl-lib@1.0.0";
+  const JUDGED = asPurl("pkg:npm/judged@1.0.0");
+  const OTHER = asPurl("pkg:npm/other@1.0.0");
+  const GPL_LIB = asPurl("pkg:npm/gpl-lib@1.0.0");
+  const MPL_LIB = asPurl("pkg:npm/mpl-lib@1.0.0");
 
   /** The judged entry: both -lib packages, accepted as dependencies of "judged" alone. */
   const LIB_FAMILY_POLICY = [
@@ -3371,7 +3418,7 @@ describe("evaluate — a target without a dependency graph says so", () => {
       `where = ["${FLAT_TARGET}"]`,
     ].join("\n");
     const { verdicts } = runEngine(
-      [osPkgSpec("pkg:apk/alpine/busybox@1.0.0", "busybox", "GPL-2.0-only", [FLAT_TARGET])],
+      [osPkgSpec(asPurl("pkg:apk/alpine/busybox@1.0.0"), "busybox", "GPL-2.0-only", [FLAT_TARGET])],
       policyText,
     );
 

@@ -43,6 +43,7 @@ export function widen(value: string): string;
 export function widen(value: string | null): string | null;
 export function widen(value: string | undefined): string | undefined;
 export function widen(value: readonly string[]): readonly string[];
+export function widen(value: readonly string[] | undefined): readonly string[] | undefined;
 export function widen(
   value: string | null | undefined | readonly string[],
 ): string | null | undefined | readonly string[] {

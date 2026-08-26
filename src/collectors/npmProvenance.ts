@@ -33,7 +33,12 @@
 
 import { type } from "arktype";
 
-import { compareCodeUnits, type DependencyIntroduction } from "../model/dependencies";
+import {
+  asPurl,
+  compareCodeUnits,
+  type DependencyIntroduction,
+  type Purl,
+} from "../model/dependencies";
 import { SbomComponent, SbomDependencyEdge, SbomDocument } from "../validate/sbom";
 import { addToSetMap, deriveIntroductions, sortSetMap, type PurlGraph } from "./provenanceGraph";
 
@@ -68,9 +73,9 @@ function buildBomRefJoin(
   components: readonly unknown[],
   rootBomRef: string | undefined,
   rootPurl: string | undefined,
-): { bomRefToPurl: Map<string, string>; componentPurls: Set<string> } {
-  const bomRefToPurl = new Map<string, string>();
-  const componentPurls = new Set<string>();
+): { bomRefToPurl: Map<string, Purl>; componentPurls: Set<Purl> } {
+  const bomRefToPurl = new Map<string, Purl>();
+  const componentPurls = new Set<Purl>();
 
   for (const raw of components) {
     const component = SbomComponent(raw);
@@ -100,7 +105,7 @@ function buildBomRefJoin(
   }
 
   if (rootBomRef !== undefined && rootPurl !== undefined) {
-    bomRefToPurl.set(rootBomRef, rootPurl);
+    bomRefToPurl.set(rootBomRef, asPurl(rootPurl));
   }
 
   return { bomRefToPurl, componentPurls };
@@ -108,9 +113,9 @@ function buildBomRefJoin(
 
 /** The mutable purl-space edge accumulators threaded through edge ingestion. */
 interface EdgeAccumulator {
-  edgeSets: Map<string, Set<string>>;
-  parentSets: Map<string, Set<string>>;
-  rootChildren: Set<string>;
+  edgeSets: Map<Purl, Set<Purl>>;
+  parentSets: Map<Purl, Set<Purl>>;
+  rootChildren: Set<Purl>;
   /**
    * #4: the REAL bom-ref adjacency - parent bom-ref → sorted-unique child bom-refs (root bom-ref
    * included as a key). Every edge here exists on a single concrete variant, so a path computed on
@@ -128,7 +133,7 @@ interface EdgeAccumulator {
  */
 function ingestEdge(
   acc: EdgeAccumulator,
-  bomRefToPurl: Map<string, string>,
+  bomRefToPurl: Map<string, Purl>,
   ref: string,
   dependsOn: readonly unknown[],
   rootBomRef: string | undefined,
@@ -175,7 +180,7 @@ interface NpmGraph {
   /** Real bom-ref adjacency (sorted children), root bom-ref included as a key. */
   refEdges: Map<string, string[]>;
   /** bom-ref → purl, for mapping a real ref-chain to a purl-chain. */
-  bomRefToPurl: Map<string, string>;
+  bomRefToPurl: Map<string, Purl>;
   rootBomRef: string | undefined;
 }
 
@@ -252,9 +257,9 @@ function buildNpmGraph(sbom: unknown): NpmGraph | undefined {
   }
 
   const acc: EdgeAccumulator = {
-    edgeSets: new Map<string, Set<string>>(),
-    parentSets: new Map<string, Set<string>>(),
-    rootChildren: new Set<string>(),
+    edgeSets: new Map<Purl, Set<Purl>>(),
+    parentSets: new Map<Purl, Set<Purl>>(),
+    rootChildren: new Set<Purl>(),
     refEdges: new Map<string, Set<string>>(),
   };
 
@@ -286,7 +291,7 @@ function buildNpmGraph(sbom: unknown): NpmGraph | undefined {
 interface RefBfsNode {
   ref: string;
   /** purl-chain accumulated so far (root-excluded, each ref mapped to its purl). */
-  path: string[];
+  path: Purl[];
 }
 
 /** Stable frontier order: by PURL-chain, then bom-ref - the #4 tie-break. */
@@ -379,10 +384,10 @@ function reachableRefsFromRoot(npm: NpmGraph): Set<string> {
  * from {@link realIntroducerPurls} to keep nesting shallow.
  */
 function hasReachableChildPurl(
-  bomRefToPurl: Map<string, string>,
+  bomRefToPurl: Map<string, Purl>,
   children: readonly string[],
   reachableRefs: Set<string>,
-  targetPurl: string,
+  targetPurl: Purl,
 ): boolean {
   for (const childRef of children) {
     if (!reachableRefs.has(childRef)) {
@@ -410,13 +415,9 @@ function hasReachableChildPurl(
  * Returns a sorted-unique purl set (root purl excluded - the root is never an introducer; the
  * declared-direct set carries root children).
  */
-function realIntroducerPurls(
-  npm: NpmGraph,
-  targetPurl: string,
-  reachableRefs: Set<string>,
-): string[] {
+function realIntroducerPurls(npm: NpmGraph, targetPurl: Purl, reachableRefs: Set<string>): Purl[] {
   const { bomRefToPurl, rootBomRef } = npm;
-  const introducers = new Set<string>();
+  const introducers = new Set<Purl>();
 
   for (const [parentRef, children] of npm.refEdges) {
     if (!reachableRefs.has(parentRef) || parentRef === rootBomRef) {
@@ -445,7 +446,7 @@ function realIntroducerPurls(
  * serializations of the same graph pick the identical representative chain. Returns undefined when
  * the target purl is unreachable on the real graph.
  */
-function realShortestPath(npm: NpmGraph, targetPurl: string): string[] | undefined {
+function realShortestPath(npm: NpmGraph, targetPurl: Purl): Purl[] | undefined {
   const { bomRefToPurl, rootBomRef } = npm;
 
   if (rootBomRef === undefined) {
@@ -490,7 +491,7 @@ function realShortestPath(npm: NpmGraph, targetPurl: string): string[] | undefin
  * output) neither the shared filter nor this branch changes anything, so the common case is
  * unchanged.
  */
-export function npmIntroductions(sbom: unknown): ReadonlyMap<string, DependencyIntroduction> {
+export function npmIntroductions(sbom: unknown): ReadonlyMap<Purl, DependencyIntroduction> {
   const npm = buildNpmGraph(sbom);
 
   if (npm === undefined) {

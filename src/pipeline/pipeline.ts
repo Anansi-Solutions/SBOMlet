@@ -29,6 +29,7 @@ import {
   toSortedDependenciesJson,
   type CanonicalDependencies,
   type EvaluatedDependencies,
+  type Purl,
   type RelativePath,
   type TargetIdentity,
   type Verdict,
@@ -127,7 +128,7 @@ export interface BuiltOutputs {
    * (no entry, no fetch allowed). Empty in generate mode (generate fetches on a miss). check maps
    * these to stale (exit 2).
    */
-  staleUnknowns: string[];
+  staleUnknowns: Purl[];
 }
 
 /** A sidecar component narrowed to its attribution: non-empty string images. */

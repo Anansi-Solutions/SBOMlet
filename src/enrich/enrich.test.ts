@@ -603,8 +603,8 @@ describe("committed purl-keyed cache", () => {
     expect(bytes.includes("\r")).toBe(false);
     expect(bytes).not.toMatch(/timestamp|fetchedAt|\d{4}-\d{2}-\d{2}T/);
     // Keys sorted by code unit: "pkg:npm/..." < "pkg:pypi/..."; indent 2.
-    expect(bytes.indexOf("pkg:npm/node-clone@0.1.1")).toBeLessThan(
-      bytes.indexOf("pkg:pypi/anyio@4.12.1"),
+    expect(bytes.indexOf(asPurl("pkg:npm/node-clone@0.1.1"))).toBeLessThan(
+      bytes.indexOf(asPurl("pkg:pypi/anyio@4.12.1")),
     );
     expect(bytes).toContain('  "version": 1');
     // Double-serialize is byte-identical.
@@ -1150,7 +1150,7 @@ describe("enrichUnknowns orchestrator (cache-first, generate-fetch, check-stale)
       );
 
       expect(calls).toEqual([]);
-      expect(result.staleUnknowns).toEqual(["pkg:npm/no-claims@2.0.0"]);
+      expect(result.staleUnknowns).toEqual([asPurl("pkg:npm/no-claims@2.0.0")]);
       expect(registryClaim(result.model.packages[0])).toBeUndefined();
       // Check writes nothing — the cache file was never created.
       expect(readCache(path).size).toBe(0);
@@ -1379,7 +1379,7 @@ describe("enrichUnknowns terraform/github (version-tag, transient-vs-definitive,
       // missing license slipped past check).
       expect(calls).toEqual([]);
       expect(result.staleUnknowns).toEqual([
-        "pkg:terraform/registry.opentofu.org/hashicorp/aws@6.42.0",
+        asPurl("pkg:terraform/registry.opentofu.org/hashicorp/aws@6.42.0"),
       ]);
       expect(registryClaim(result.model.packages[0])).toBeUndefined();
       expect(readCache(path).size).toBe(0);
@@ -2532,7 +2532,7 @@ describe("enrichUnknowns nuget (two-step fetch, negative discipline, offline che
         }),
       );
 
-      expect(result.staleUnknowns).toEqual(["pkg:nuget/Newtonsoft.Json@13.0.4"]);
+      expect(result.staleUnknowns).toEqual([asPurl("pkg:nuget/Newtonsoft.Json@13.0.4")]);
       expect(registryClaim(result.model.packages[0])).toBeUndefined();
       expect(readCache(path).size).toBe(0); // no file was ever written
     } finally {
@@ -3073,7 +3073,7 @@ describe("enrichUnknowns maven (deps.dev single fetch, honest sentinel, 404-defi
         }),
       );
 
-      expect(result.staleUnknowns).toEqual(["pkg:maven/com.example/lib@2.0.0?type=jar"]);
+      expect(result.staleUnknowns).toEqual([asPurl("pkg:maven/com.example/lib@2.0.0?type=jar")]);
       expect(registryClaims(result.model.packages[0])).toEqual([]);
       expect(readCache(path).size).toBe(0);
     } finally {
