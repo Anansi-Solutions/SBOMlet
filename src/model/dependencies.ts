@@ -30,6 +30,18 @@ const _canonicalLicenseBrand = type("string").brand("CanonicalLicense");
 export type CanonicalLicense = typeof _canonicalLicenseBrand.infer;
 
 /**
+ * A single SPDX license-expression LEAF: one license id, optionally a trailing `+` and/or a `WITH
+ * <exception>` clause - NEVER a compound AND/OR expression, and NEVER a bare imprecise family
+ * token. The brand is NOMINAL only (no runtime narrow): the two policy-schema validators that admit
+ * a leaf ({@link singleWorkspaceLicense} and licenseAllowlist's no-AND rule) already enforce the
+ * shape at their boundary, so a value reaches {@link asSpdxLicenseLeaf} already shape-checked.
+ * Widens to `string` for spdx-satisfies, whose allowlists are `string[]`.
+ */
+const _spdxLicenseLeafBrand = type("string").brand("SpdxLicenseLeaf");
+
+export type SpdxLicenseLeaf = typeof _spdxLicenseLeafBrand.infer;
+
+/**
  * The minimal package-URL shape a {@link Purl} must satisfy: a `pkg:` scheme, a non-empty type, a
  * slash, and a non-empty name. Deliberately permissive about qualifiers and subpaths - it gates the
  * gross shape, not the full purl grammar, so a real `pkg:npm/...` / `pkg:deb/...` always passes.
@@ -127,6 +139,17 @@ export type DependencyVersion = typeof _dependencyVersionBrand.infer;
  */
 export function asRawLicense(text: string): RawLicense {
   return text as RawLicense;
+}
+
+/**
+ * Mint a {@link SpdxLicenseLeaf} at a boundary that has already established the value is a single
+ * license leaf - the two SPDX-shape validators (single-workspace-license, the no-AND allowlist
+ * rule) and the leaf-decomposition helpers (orLeaves, copyleftLeafIds) that yield rendered leaves.
+ * A nominal (unchecked) cast: the leaf shape is enforced where a leaf is first established, not
+ * here.
+ */
+export function asSpdxLicenseLeaf(value: string): SpdxLicenseLeaf {
+  return value as SpdxLicenseLeaf;
 }
 
 /**

@@ -10,7 +10,11 @@
 import { type } from "arktype";
 
 import parseSpdx from "spdx-expression-parse";
-import { asRawLicense, type CanonicalLicense } from "../../model/dependencies";
+import {
+  asRawLicense,
+  type CanonicalLicense,
+  type SpdxLicenseLeaf,
+} from "../../model/dependencies";
 import { canonicalizeExpression, orLeaves, type ExpressionNode } from "../../normalize/expression";
 
 /** Parse an SPDX expression, or undefined when it does not parse. */
@@ -43,7 +47,7 @@ export const spdxExpression = type("string").pipe(
  * forms, which decompose their pattern identically.
  */
 export function licenseAllowlist(pattern: string): {
-  allowlist?: ReadonlyArray<string>;
+  allowlist?: ReadonlyArray<SpdxLicenseLeaf>;
   problem?: string;
 } {
   const node = parseSpdxNode(pattern);

@@ -13,9 +13,11 @@ import {
   asPurl,
   asRawLicense,
   asRelativePath,
+  asSpdxLicenseLeaf,
   asTargetIdentity,
   type CanonicalLicense,
   type Purl,
+  type SpdxLicenseLeaf,
   type TargetIdentity,
 } from "../src/model/dependencies";
 import { canonicalizeExpression } from "../src/normalize/expression";
@@ -27,9 +29,13 @@ export {
   asPurl,
   asRawLicense,
   asRelativePath,
+  asSpdxLicenseLeaf,
   asTargetIdentity,
 };
-export type { Purl, TargetIdentity };
+export type { Purl, SpdxLicenseLeaf, TargetIdentity };
+
+/** Mint a {@link SpdxLicenseLeaf} from a test literal through the production mint. */
+export const leaf = (value: string): SpdxLicenseLeaf => asSpdxLicenseLeaf(value);
 
 /**
  * Mint a {@link CanonicalLicense} from a test literal by routing it through the production mint
@@ -44,6 +50,7 @@ export function widen(value: string | null): string | null;
 export function widen(value: string | undefined): string | undefined;
 export function widen(value: readonly string[]): readonly string[];
 export function widen(value: readonly string[] | undefined): readonly string[] | undefined;
+export function widen(value: readonly string[] | null): readonly string[] | null;
 export function widen(
   value: string | null | undefined | readonly string[],
 ): string | null | undefined | readonly string[] {

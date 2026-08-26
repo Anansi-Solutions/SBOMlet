@@ -3,6 +3,7 @@ import { join } from "node:path";
 
 import { describe, expect, test } from "bun:test";
 
+import { leaf } from "../../../test/brandTestSupport";
 import { BUILTIN_DENY_RULES, BUILTIN_DENY_RULE_ID } from "./builtinDenylist";
 import { denyRuleFor } from "./deny";
 import type { Policy } from "../schema";
@@ -69,7 +70,7 @@ describe("builtin source-available deny defaults", () => {
         {
           match: "license",
           pattern: "BUSL-1.1",
-          allowlist: ["BUSL-1.1"],
+          allowlist: [leaf("BUSL-1.1")],
           reason: "consumer-authored",
         },
       ],

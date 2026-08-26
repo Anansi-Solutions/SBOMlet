@@ -71,6 +71,7 @@ import satisfies from "spdx-satisfies";
 
 import parseSpdx from "spdx-expression-parse";
 
+import { asSpdxLicenseLeaf, type SpdxLicenseLeaf } from "../../model/dependencies";
 import { type ExpressionNode } from "../../normalize/expression";
 import { BUILTIN_DENY_RULES, BUILTIN_DENY_RULE_ID } from "./builtinDenylist";
 import type { DenyRule } from "../schema/deny";
@@ -104,7 +105,7 @@ function effectiveDenyRules(policy: Policy): IndexedDenyRule[] {
 }
 
 /** True iff a single leaf id satisfies the deny allowlist (defensive catch). */
-function leafDenied(leaf: string, allowlist: ReadonlyArray<string>): boolean {
+function leafDenied(leaf: SpdxLicenseLeaf, allowlist: readonly SpdxLicenseLeaf[]): boolean {
   try {
     return satisfies(leaf, [...allowlist]);
   } catch {
@@ -117,9 +118,9 @@ function leafDenied(leaf: string, allowlist: ReadonlyArray<string>): boolean {
  * (an electable branch defeats the denial); AND is denied when either conjunct is denied (no
  * conjunct can be elected away).
  */
-function nodeDenied(node: ExpressionNode, allowlist: ReadonlyArray<string>): boolean {
+function nodeDenied(node: ExpressionNode, allowlist: readonly SpdxLicenseLeaf[]): boolean {
   if ("license" in node) {
-    return leafDenied(renderLeaf(node), allowlist);
+    return leafDenied(asSpdxLicenseLeaf(renderLeaf(node)), allowlist);
   }
 
   if (node.conjunction === "and") {
@@ -138,9 +139,9 @@ function renderLeaf(node: { license: string; plus?: true; exception?: string }):
 }
 
 /** True when any leaf of the parsed expression satisfies the allowlist. */
-function anyLeafDenied(node: ExpressionNode, allowlist: ReadonlyArray<string>): boolean {
+function anyLeafDenied(node: ExpressionNode, allowlist: readonly SpdxLicenseLeaf[]): boolean {
   if ("license" in node) {
-    return leafDenied(renderLeaf(node), allowlist);
+    return leafDenied(asSpdxLicenseLeaf(renderLeaf(node)), allowlist);
   }
 
   return anyLeafDenied(node.left, allowlist) || anyLeafDenied(node.right, allowlist);
@@ -163,7 +164,7 @@ function unionLicenseDeny(
     return undefined;
   }
 
-  const union: string[] = [];
+  const union: SpdxLicenseLeaf[] = [];
 
   for (const r of licenseRules) {
     if (r.rule.match === "license") {

@@ -15,7 +15,11 @@
  * chain replaces hand-authored accept-lists, the scope-gating principle, and the rejected
  * alternatives.
  */
-import { compareCodeUnits } from "../../model/dependencies";
+import {
+  asSpdxLicenseLeaf,
+  compareCodeUnits,
+  type SpdxLicenseLeaf,
+} from "../../model/dependencies";
 import { hasRefLeaf, renderNode, type ExpressionNode } from "../../normalize/expression";
 import { AGPL_IDS, COPYLEFT_IDS } from "../engine/copyleft";
 import {
@@ -47,10 +51,12 @@ function baseLeafId(rendered: string): string {
 }
 
 /** Lookup keys for a rendered leaf, exact form first, then its base id (deduped when equal). */
-function leafKeys(leaf: string): readonly string[] {
+function leafKeys(leaf: string): readonly SpdxLicenseLeaf[] {
   const base = baseLeafId(leaf);
 
-  return base === leaf ? [leaf] : [leaf, base];
+  return base === leaf
+    ? [asSpdxLicenseLeaf(leaf)]
+    : [asSpdxLicenseLeaf(leaf), asSpdxLicenseLeaf(base)];
 }
 
 /** Maps a raw OSADL matrix cell to an axis class (OSS targets only - proprietary has no rows). */
@@ -187,7 +193,7 @@ function scancodeTier(
  * is an honest `residual` - vetted data does not cover it, but it is a known copyleft license, so
  * it is never silently `compatible`; a non-member keeps today's `default:ok` semantics.
  */
-function literalSetTier(keys: readonly string[]): { class: AxisClass; source: string } {
+function literalSetTier(keys: readonly SpdxLicenseLeaf[]): { class: AxisClass; source: string } {
   if (keys.some((key) => COPYLEFT_IDS.has(key))) {
     return {
       class: "residual",
@@ -206,7 +212,7 @@ function literalSetTier(keys: readonly string[]): { class: AxisClass; source: st
  * Public-Domain / no data anywhere for a non-copyleft id is `none`; otherwise `unknown` - never
  * guessed from a Questionable class or an absent dataset entry alone.
  */
-function obligationFor(keys: readonly string[]): ObligationClass {
+function obligationFor(keys: readonly SpdxLicenseLeaf[]): ObligationClass {
   if (keys.some((key) => AGPL_IDS.has(key))) {
     return "agpl";
   }

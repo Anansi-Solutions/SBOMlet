@@ -27,6 +27,8 @@
  * the precise per-license/per-package escape hatch.
  */
 
+import { asSpdxLicenseLeaf, type SpdxLicenseLeaf } from "../../model/dependencies";
+
 /** Literal (family → member ids) groups; the single reviewable source. */
 const FAMILY_MEMBERS: ReadonlyArray<readonly [family: string, ids: ReadonlyArray<string>]> = [
   [
@@ -132,12 +134,14 @@ const FAMILY_MEMBERS: ReadonlyArray<readonly [family: string, ids: ReadonlyArray
  * Exact-ID → family token. Derived from the literal groups above - one source, no drift between
  * membership and family data.
  */
-export const COPYLEFT_FAMILY: ReadonlyMap<string, string> = new Map(
-  FAMILY_MEMBERS.flatMap(([family, ids]) => ids.map((id) => [id, family] as const)),
+export const COPYLEFT_FAMILY: ReadonlyMap<SpdxLicenseLeaf, string> = new Map(
+  FAMILY_MEMBERS.flatMap(([family, ids]) =>
+    ids.map((id) => [asSpdxLicenseLeaf(id), family] as const),
+  ),
 );
 
 /** Exact-ID copyleft membership - the keys of the family map. */
-export const COPYLEFT_IDS: ReadonlySet<string> = new Set(COPYLEFT_FAMILY.keys());
+export const COPYLEFT_IDS: ReadonlySet<SpdxLicenseLeaf> = new Set(COPYLEFT_FAMILY.keys());
 
 /**
  * Exact-ID AGPL membership - the network-copyleft subset of the GNU family. The FAMILY_MEMBERS
@@ -148,11 +152,13 @@ export const COPYLEFT_IDS: ReadonlySet<string> = new Set(COPYLEFT_FAMILY.keys())
  * - never derived from COPYLEFT_FAMILY by prefix at runtime - keeps the same auditability posture
  * as the module above.
  */
-export const AGPL_IDS: ReadonlySet<string> = new Set([
-  "AGPL-1.0",
-  "AGPL-1.0-only",
-  "AGPL-1.0-or-later",
-  "AGPL-3.0",
-  "AGPL-3.0-only",
-  "AGPL-3.0-or-later",
-]);
+export const AGPL_IDS: ReadonlySet<SpdxLicenseLeaf> = new Set(
+  [
+    "AGPL-1.0",
+    "AGPL-1.0-only",
+    "AGPL-1.0-or-later",
+    "AGPL-3.0",
+    "AGPL-3.0-only",
+    "AGPL-3.0-or-later",
+  ].map(asSpdxLicenseLeaf),
+);

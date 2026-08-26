@@ -22,6 +22,7 @@ import {
   asRelativePath,
   asDependencyName,
   asDependencyVersion,
+  leaf,
 } from "./brandTestSupport";
 
 const TARGET = asTargetIdentity("libraries/iframe-rpc");
@@ -64,7 +65,7 @@ const goldenPolicyView: PolicyView = {
   suppressedWorkspaces: [
     {
       path: "apps/scratch",
-      license: "AGPL-3.0-only",
+      license: leaf("AGPL-3.0-only"),
       description:
         "Scratch fork is itself AGPL-distributed | upstream `scratch-gui` [GPL-compatible]",
     },
@@ -663,7 +664,7 @@ const basicView: PolicyView = {
   suppressedWorkspaces: [
     {
       path: "apps/scratch",
-      license: "AGPL-3.0-only",
+      license: leaf("AGPL-3.0-only"),
       description: "Scratch fork is itself AGPL-distributed",
     },
   ],
@@ -1126,7 +1127,7 @@ describe("renderMarkdown — the full document", () => {
       suppressedWorkspaces: [
         {
           path: "apps/scratch",
-          license: "AGPL-3.0-only",
+          license: leaf("AGPL-3.0-only"),
           description: "fork | of `scratch-gui`\nAGPL upstream",
         },
       ],
