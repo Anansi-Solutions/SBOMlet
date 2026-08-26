@@ -560,32 +560,36 @@ describe("evaluate — copyleft dominates a permissive sibling end-to-end (C2/W2
 // ===========================================================================
 
 describe("COULD_BE_COPYLEFT_FAMILIES — literal token set", () => {
+  // Widened to string only to probe NON-member tokens (MIT/MPL/EPL/CDDL) the literal-union type
+  // otherwise forbids as arguments; the set itself stays ReadonlySet<LicenseFamily>.
+  const couldBe: ReadonlySet<string> = COULD_BE_COPYLEFT_FAMILIES;
+
   test("contains the bare GNU-family copyleft tokens", () => {
-    expect(COULD_BE_COPYLEFT_FAMILIES.has("GPL")).toBe(true);
-    expect(COULD_BE_COPYLEFT_FAMILIES.has("AGPL")).toBe(true);
-    expect(COULD_BE_COPYLEFT_FAMILIES.has("LGPL")).toBe(true);
+    expect(couldBe.has("GPL")).toBe(true);
+    expect(couldBe.has("AGPL")).toBe(true);
+    expect(couldBe.has("LGPL")).toBe(true);
   });
 
   test("does NOT contain permissive family tokens (BSD/Apache/MIT)", () => {
-    expect(COULD_BE_COPYLEFT_FAMILIES.has("BSD")).toBe(false);
-    expect(COULD_BE_COPYLEFT_FAMILIES.has("Apache")).toBe(false);
-    expect(COULD_BE_COPYLEFT_FAMILIES.has("MIT")).toBe(false);
+    expect(couldBe.has("BSD")).toBe(false);
+    expect(couldBe.has("Apache")).toBe(false);
+    expect(couldBe.has("MIT")).toBe(false);
   });
 
   test("deliberately excludes the weak-copyleft family tokens (MPL/EPL/CDDL)", () => {
     // These are gated on the EXPRESSION path via COPYLEFT_FAMILY; an imprecise
     // finding never reaches it, and no producing path emits a bare MPL/EPL/CDDL
     // family token, so adding them would be untested dead data.
-    expect(COULD_BE_COPYLEFT_FAMILIES.has("MPL")).toBe(false);
-    expect(COULD_BE_COPYLEFT_FAMILIES.has("EPL")).toBe(false);
-    expect(COULD_BE_COPYLEFT_FAMILIES.has("CDDL")).toBe(false);
+    expect(couldBe.has("MPL")).toBe(false);
+    expect(couldBe.has("EPL")).toBe(false);
+    expect(couldBe.has("CDDL")).toBe(false);
   });
 
   test("contains EUPL — the copyleft family correct() cross-maps to permissive (W1)", () => {
     // "EUPL" → spdx-correct → UPL-1.0 (permissive). Intercepting it as the
     // imprecise copyleft family routes it to the could-be-copyleft review lane
     // instead of a silent default:ok.
-    expect(COULD_BE_COPYLEFT_FAMILIES.has("EUPL")).toBe(true);
+    expect(couldBe.has("EUPL")).toBe(true);
   });
 
   test("is exactly the four-token set", () => {

@@ -29,8 +29,37 @@
 
 import { asSpdxLicenseLeaf, type SpdxLicenseLeaf } from "../../model/dependencies";
 
+/**
+ * The closed vocabulary of COPYLEFT-GROUPING family tokens - the family each copyleft SPDX id is
+ * grouped under below, and the key/value space of {@link COPYLEFT_FAMILY} and WORKSPACE_ABSORBS.
+ * Distinct from the imprecise-family vocabulary (LicenseFamily, the model hub): these are exact-id
+ * groupings a finding never carries as a bare label. Typing the FAMILY_MEMBERS family slot with it
+ * makes a new group a compile error unless it is listed here (the drift guard the size test
+ * mirrors).
+ */
+export type CopyleftFamily =
+  | "APSL"
+  | "CC-BY-SA"
+  | "CDDL"
+  | "CECILL"
+  | "CPAL"
+  | "EPL"
+  | "EUPL"
+  | "GFDL"
+  | "GNU"
+  | "MPL"
+  | "MS-RL"
+  | "OSL"
+  | "QPL"
+  | "RPL"
+  | "SSPL"
+  | "Sleepycat";
+
+/** One reviewable (family → member ids) group. */
+type FamilyGroup = readonly [family: CopyleftFamily, ids: ReadonlyArray<string>];
+
 /** Literal (family → member ids) groups; the single reviewable source. */
-const FAMILY_MEMBERS: ReadonlyArray<readonly [family: string, ids: ReadonlyArray<string>]> = [
+const FAMILY_MEMBERS: ReadonlyArray<FamilyGroup> = [
   [
     "GNU",
     [
@@ -134,7 +163,7 @@ const FAMILY_MEMBERS: ReadonlyArray<readonly [family: string, ids: ReadonlyArray
  * Exact-ID → family token. Derived from the literal groups above - one source, no drift between
  * membership and family data.
  */
-export const COPYLEFT_FAMILY: ReadonlyMap<SpdxLicenseLeaf, string> = new Map(
+export const COPYLEFT_FAMILY: ReadonlyMap<SpdxLicenseLeaf, CopyleftFamily> = new Map(
   FAMILY_MEMBERS.flatMap(([family, ids]) =>
     ids.map((id) => [asSpdxLicenseLeaf(id), family] as const),
   ),

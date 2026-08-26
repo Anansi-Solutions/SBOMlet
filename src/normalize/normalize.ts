@@ -24,6 +24,7 @@ import {
   type CrossImageClaimDivergence,
   type LicenseClaim,
   type LicenseClaimSource,
+  type LicenseFamily,
   type LicenseFinding,
   type PackageEntry,
   type RawLicense,
@@ -58,7 +59,7 @@ const NEVER_CORRECT = [/^UNLICENSED$/i, /^SEE LICEN[CS]E IN /i];
  * ("Apache License, Version 2.0") are deliberately ABSENT: their spdx-correct result (Apache-2.0)
  * is precise and correct, not a guess.
  */
-const AMBIGUOUS_FAMILY: ReadonlyMap<string, string> = new Map([
+const AMBIGUOUS_FAMILY: ReadonlyMap<string, LicenseFamily> = new Map([
   ["bsd", "BSD"],
   ["bsd license", "BSD"],
   ["apache", "Apache"],
@@ -215,7 +216,7 @@ export interface NormalizeResult {
   expression: CanonicalLicense | null;
   source: "generator" | "corrected";
   imprecise?: true;
-  impreciseFamily?: string;
+  impreciseFamily?: LicenseFamily;
 }
 
 /**
@@ -431,8 +432,8 @@ function expressionIsCopyleft(expression: CanonicalLicense): boolean {
  * to the could-be-copyleft review lane deterministically. Returns undefined when no imprecise
  * family is present.
  */
-function electImpreciseFamily(results: ReadonlyArray<NormalizeResult>): string | undefined {
-  let permissive: string | undefined;
+function electImpreciseFamily(results: ReadonlyArray<NormalizeResult>): LicenseFamily | undefined {
+  let permissive: LicenseFamily | undefined;
 
   for (const r of results) {
     if (r.imprecise !== true || r.impreciseFamily === undefined) {
@@ -571,7 +572,7 @@ function rawSignalValues(claims: ReadonlyArray<LicenseClaim>): RawLicense[] {
 }
 
 /** True when this claim on its own normalizes to the family token the finding carries. */
-function yieldsFamily(claim: LicenseClaim, family: string): boolean {
+function yieldsFamily(claim: LicenseClaim, family: LicenseFamily): boolean {
   const result = normalizeRaw(claim.raw);
 
   return result.imprecise === true && result.impreciseFamily === family;
@@ -581,7 +582,7 @@ function yieldsFamily(claim: LicenseClaim, family: string): boolean {
 function laneSignal(
   claims: ReadonlyArray<LicenseClaim>,
   sources: ReadonlySet<LicenseClaimSource>,
-  family: string | undefined,
+  family: LicenseFamily | undefined,
 ): RawLicense[] {
   const lane = claims.filter((c) => sources.has(c.source));
   const signal = new Set(rawSignalValues(lane));
@@ -979,7 +980,7 @@ function resolveOverride(
  * reject (fail closed, mirroring signalContradicts/baseSatisfiesAssertion's posture: every member
  * must agree, not just some).
  */
-function everyLeafInFamily(node: ExpressionNode, family: string): boolean {
+function everyLeafInFamily(node: ExpressionNode, family: LicenseFamily): boolean {
   const { ids } = leafIds(node);
 
   return ids.every((id) => id === family || id.startsWith(`${family}-`));
@@ -992,7 +993,7 @@ function everyLeafInFamily(node: ExpressionNode, family: string): boolean {
  * (baseSatisfiesAssertion, signalContradicts): ANY throw is treated as inconsistent, never as a
  * crash, never a silent pass.
  */
-function expressionInFamily(expression: string, family: string): boolean {
+function expressionInFamily(expression: string, family: LicenseFamily): boolean {
   try {
     return everyLeafInFamily(parse(expression) as ExpressionNode, family);
   } catch {
@@ -1131,7 +1132,7 @@ function assessPrecise(
  * everything else stands unchanged, including an out-of-family imprecise base (nothing precise on
  * either side to weigh).
  */
-function assessImprecise(family: string, base: LicenseFinding): LicenseFinding {
+function assessImprecise(family: LicenseFamily, base: LicenseFinding): LicenseFinding {
   if (base.expression !== null && !expressionInFamily(base.expression, family)) {
     return {
       ...base,
