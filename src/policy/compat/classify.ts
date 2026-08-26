@@ -257,6 +257,10 @@ function obligationFor(keys: readonly SpdxLicenseLeaf[]): ObligationClass {
  * `LicenseRef-scancode-*` ids the OSADL matrix models), and `unassessed-ref` (obligation `unknown`)
  * otherwise, never falling through to the class/category/literal-set tiers a ref cannot honestly
  * satisfy honestly.
+ *
+ * Precondition: `leaf` is a single rendered leaf (`id[+][ WITH exception]`), never a compound
+ * expression - the caller decomposes first. `leafKeys` mints a {@link SpdxLicenseLeaf} on that
+ * basis.
  */
 export function classifyLeaf(target: TargetLicense, leaf: string): AxisResult {
   const keys = leafKeys(leaf);
