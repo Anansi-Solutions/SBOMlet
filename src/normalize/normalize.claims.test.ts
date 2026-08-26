@@ -649,7 +649,7 @@ describe("normalizeRaw — Debian/DEP-5 shorthand map", () => {
   test("bare GPL/LGPL/AGPL stay IMPRECISE — the shorthand map never collides with the family lane", () => {
     // The shorthand keys are all VERSIONED; bare family labels must still route
     // to the could-be-copyleft imprecise lane, never a guessed id.
-    for (const fam of ["GPL", "LGPL", "AGPL"]) {
+    for (const fam of ["GPL", "LGPL", "AGPL"] as const) {
       const result = normalizeRaw(asRawLicense(fam));
 
       expect(result.expression).toBeNull();

@@ -7,6 +7,7 @@ import {
   asRawLicense,
   toSortedDependenciesJson,
   type CanonicalDependencies,
+  type LicenseFamily,
   type PackageEntry,
   type Verdict,
 } from "../src/model/dependencies";
@@ -1243,7 +1244,7 @@ describe("renderMarkdown — the full document", () => {
   });
 
   test("Test 10: imprecise review section is deterministically sorted and cell-escaped", () => {
-    const imp = (name: string, family: string): PackageEntry =>
+    const imp = (name: string, family: LicenseFamily): PackageEntry =>
       entry({
         purl: asPurl(`pkg:pypi/${name}@1.0.0`),
         name: asDependencyName(name),

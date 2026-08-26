@@ -78,6 +78,7 @@ import {
   compareCodeUnits,
   matchesIdentityPrefix,
   type AssessmentConflict,
+  type LicenseFamily,
   type CanonicalDependencies,
   type DependencyIntroduction,
   type Occurrence,
@@ -157,7 +158,7 @@ interface Assessment {
    * has expression null so it never reaches satisfies(); this field routes it to the
    * present-but-needs-clarify lane.
    */
-  impreciseFamily?: string;
+  impreciseFamily?: LicenseFamily;
 }
 
 const UNKNOWN_ASSESSMENT: Assessment = {
@@ -496,7 +497,7 @@ function impreciseVerdict(
   base: { purl: Purl; occurrenceTarget: TargetIdentity },
   entry: PackageEntry,
   occurrence: Occurrence,
-  family: string,
+  family: LicenseFamily,
   policy: Policy,
 ): Verdict {
   const target = occurrence.target;

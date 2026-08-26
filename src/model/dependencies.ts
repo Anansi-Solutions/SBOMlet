@@ -271,6 +271,17 @@ export interface LicenseClaim {
 export type FindingConfidence = "exact" | "corrected" | "none" | "imprecise";
 
 /**
+ * The closed vocabulary of imprecise license-FAMILY tokens: the bare family labels a {@link
+ * LicenseFinding} carries when confidence is "imprecise" - never a precise SPDX id, never a
+ * compound expression. Exactly the distinct VALUES the normalizer's AMBIGUOUS_FAMILY map elects.
+ * The could-be-copyleft subset (GPL/AGPL/LGPL/EUPL) routes to review; the permissive rest
+ * (BSD/Apache) is non-gating. Distinct from the copyleft-grouping family vocabulary
+ * (CopyleftFamily, copyleft.ts) that keys COPYLEFT_FAMILY / WORKSPACE_ABSORBS - those are exact-id
+ * groupings (GNU/MPL/...), never these imprecise labels.
+ */
+export type LicenseFamily = "AGPL" | "Apache" | "BSD" | "EUPL" | "GPL" | "LGPL";
+
+/**
  * Normalized license conclusion for one package. Produced by the normalization layer; provenance is
  * mandatory for auditability.
  */
@@ -293,7 +304,7 @@ export interface LicenseFinding {
    * "imprecise". It is what the render layer surfaces and what the policy could-be-copyleft check
    * matches against the literal COULD_BE_COPYLEFT_FAMILIES token set.
    */
-  impreciseFamily?: string;
+  impreciseFamily?: LicenseFamily;
   /**
    * Distinct audit citation for a TOOL-LEVEL builtin override that decided this finding. Present
    * ONLY when a shipped BUILTIN_OVERRIDES entry (not a project [[clarify]]) replaced the finding

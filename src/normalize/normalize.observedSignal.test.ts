@@ -2,7 +2,12 @@ import { describe, expect, test } from "bun:test";
 
 import { asRawLicense, canon } from "../../test/brandTestSupport";
 import { observedSignalBySource, type ObservedSignal } from "./normalize";
-import type { LicenseClaim, LicenseClaimSource, LicenseFinding } from "../model/dependencies";
+import type {
+  LicenseClaim,
+  LicenseClaimSource,
+  LicenseFamily,
+  LicenseFinding,
+} from "../model/dependencies";
 
 // The pre-override observed signal, split by the lane that produced it. The
 // union is what the override machinery has always consumed and stays
@@ -22,7 +27,7 @@ const precise = (expression: string): LicenseFinding => ({
   confidence: "exact",
 });
 
-const impreciseAs = (family: string): LicenseFinding => ({
+const impreciseAs = (family: LicenseFamily): LicenseFinding => ({
   expression: null,
   elected: null,
   source: "generator",
