@@ -569,6 +569,13 @@ License: MIT
 
 - Copyright (c) 2024 Lan
 
+### @stylistic/eslint-plugin@5.10.0
+
+License: MIT
+
+- Copyright (c) 2023-PRESENT ESLint Stylistic contributors
+- Copyright OpenJS Foundation and other contributors, &lt;www.openjsf.org&gt;
+
 ### @types/bun@1.3.14
 
 License: MIT
@@ -674,11 +681,30 @@ License: MIT
 - Copyright (c) 2019 typescript-eslint and other contributors
 - Copyright (c) 2025 typescript-eslint and other contributors
 
+### @typescript-eslint/project-service@8.56.1
+
+License: MIT
+
+- Copyright (c) 2019 typescript-eslint and other contributors
+- Copyright (c) 2025 typescript-eslint and other contributors
+
 ### @typescript-eslint/project-service@8.61.0
 
 License: MIT
 
 - Copyright (c) 2025 typescript-eslint and other contributors
+
+### @typescript-eslint/project-service@8.64.0
+
+License: MIT
+
+- Copyright (c) 2025 typescript-eslint and other contributors
+
+### @typescript-eslint/scope-manager@8.56.1
+
+License: MIT
+
+- Copyright (c) 2019 typescript-eslint and other contributors
 
 ### @typescript-eslint/scope-manager@8.61.0
 
@@ -686,7 +712,25 @@ License: MIT
 
 - Copyright (c) 2019 typescript-eslint and other contributors
 
+### @typescript-eslint/scope-manager@8.64.0
+
+License: MIT
+
+- Copyright (c) 2019 typescript-eslint and other contributors
+
+### @typescript-eslint/tsconfig-utils@8.56.1
+
+License: MIT
+
+- Copyright (c) 2025 typescript-eslint and other contributors
+
 ### @typescript-eslint/tsconfig-utils@8.61.0
+
+License: MIT
+
+- Copyright (c) 2025 typescript-eslint and other contributors
+
+### @typescript-eslint/tsconfig-utils@8.64.0
 
 License: MIT
 
@@ -706,11 +750,30 @@ License: MIT
 - Copyright (c) 2021 typescript-eslint and other contributors
 - Copyright (c) 2025 typescript-eslint and other contributors
 
+### @typescript-eslint/types@8.56.1
+
+License: MIT
+
+- Copyright (c) 2019 typescript-eslint and other contributors
+
 ### @typescript-eslint/types@8.61.0
 
 License: MIT
 
 - Copyright (c) 2019 typescript-eslint and other contributors
+
+### @typescript-eslint/types@8.64.0
+
+License: MIT
+
+- Copyright (c) 2019 typescript-eslint and other contributors
+
+### @typescript-eslint/typescript-estree@8.56.1
+
+License: MIT
+
+- Copyright (c) 2019 typescript-eslint and other contributors
+- Copyright (c) 2025 typescript-eslint and other contributors
 
 ### @typescript-eslint/typescript-estree@8.61.0
 
@@ -718,7 +781,33 @@ License: MIT
 
 - Copyright (c) 2019 typescript-eslint and other contributors
 
+### @typescript-eslint/typescript-estree@8.64.0
+
+License: MIT
+
+- Copyright (c) 2019 typescript-eslint and other contributors
+- Copyright (c) 2025 typescript-eslint and other contributors
+
+### @typescript-eslint/utils@8.56.1
+
+License: MIT
+
+- Copyright (c) 2019 typescript-eslint and other contributors
+- Copyright (c) 2025 typescript-eslint and other contributors
+
 ### @typescript-eslint/utils@8.61.0
+
+License: MIT
+
+- Copyright (c) 2019 typescript-eslint and other contributors
+
+### @typescript-eslint/utils@8.64.0
+
+License: MIT
+
+- Copyright (c) 2019 typescript-eslint and other contributors
+
+### @typescript-eslint/visitor-keys@8.56.1
 
 License: MIT
 
@@ -761,6 +850,13 @@ License: MIT
 - (c) 2011 Gary Court
 - Copyright (c) 2015-2017 Evgeny Poberezkin
 - Copyright 2011 Gary Court
+
+### ajv@8.18.0
+
+License: MIT
+
+- Copyright (c) 2015-2021 Evgeny Poberezkin
+- Copyright (c) 2017 Evgeny Poberezkin
 
 ### arkregex@0.0.5
 
@@ -998,6 +1094,12 @@ License: MIT
 
 - Copyright (c) Sindre Sorhus &lt;sindresorhus@gmail.com&gt; (https://sindresorhus.com)
 
+### escape-string-regexp@5.0.0
+
+License: MIT
+
+- Copyright (c) Sindre Sorhus &lt;sindresorhus@gmail.com&gt; (https://sindresorhus.com)
+
 ### eslint@10.7.0
 
 License: MIT
@@ -1023,6 +1125,12 @@ License: MIT
 License: MIT
 
 - Copyright (c) 2015 Ben Mosher
+
+### eslint-plugin-no-comment-slop@0.2.0
+
+License: MIT
+
+- Copyright (c) 2026 Jan Nicklas
 
 ### eslint-plugin-prettier@5.5.6
 
@@ -1067,6 +1175,16 @@ License: BSD-2-Clause
 - Copyright (c) 2015 Yusuke Suzuki &lt;utatane.tea@gmail.com&gt;
 - Copyright (c) Microsoft Corporation
 - Copyright JS Foundation and other contributors, https://js.foundation
+
+### espree@10.4.0
+
+License: BSD-2-Clause
+
+- Copyright (c) Open JS Foundation
+- Copyright (c) jQuery Foundation, Inc. and Contributors
+- Copyright 2012-2015 Acorn
+- Copyright 2014-2015 Sebastian McKenzie &lt;sebmck@gmail.com&gt;
+- Copyright 2014-2015 various
 
 ### espree@11.2.0
 
@@ -1267,6 +1385,12 @@ License: MIT
 
 - Copyright (c) 2013 Kael Zhang &lt;i@kael.me&gt; , contributors http://kael.me
 
+### ignore@7.0.5
+
+License: MIT
+
+- Copyright (c) 2013 Kael Zhang &lt;i@kael.me&gt; , contributors http://kael.me
+
 ### import-fresh@4.0.0
 
 License: MIT
@@ -1345,6 +1469,12 @@ License: MIT
 - Copyright (c) 2013 Dominic Tarr
 
 ### json-schema-traverse@0.4.1
+
+License: MIT
+
+- Copyright (c) 2017 Evgeny Poberezkin
+
+### json-schema-traverse@1.0.0
 
 License: MIT
 
@@ -1993,6 +2123,12 @@ License: Apache-2.0
 License: CC-BY-3.0
 
 - Copyright (c) 2010-2015 Linux Foundation and its Contributors
+
+### spdx-expression-parse@3.0.1
+
+License: MIT
+
+- Copyright (c) 2015 Kyle E. Mitchell
 
 ### spdx-expression-parse@4.0.0
 
