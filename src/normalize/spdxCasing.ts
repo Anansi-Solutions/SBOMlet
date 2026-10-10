@@ -71,14 +71,18 @@ export const DEPRECATED_ID_SUCCESSOR: ReadonlyMap<string, DeprecatedIdSuccessor>
   ["GPL-3.0-with-autoconf-exception", { base: "GPL-3.0", exception: "Autoconf-exception-3.0" }],
 ]);
 
-/** Deprecated SPDX ids with no single current spelling to vouch for; they stay as declared. */
-export const DEPRECATED_IDS_KEPT: ReadonlySet<string> = new Set([
-  "BSD-2-Clause-FreeBSD",
-  "BSD-2-Clause-NetBSD",
-  "Net-SNMP",
-  "Nunit",
-  "StandardML-NJ",
-  "bzip2-1.0.5",
-  "eCos-2.0",
-  "wxWindows",
+/** Deprecated SPDX license ids that SPDX itself replaced with one other id, keyed by spelling. */
+export const DEPRECATED_ID_RENAME: ReadonlyMap<string, string> = new Map([
+  ["BSD-2-Clause-FreeBSD", "BSD-2-Clause-Views"],
+  ["BSD-2-Clause-NetBSD", "BSD-2-Clause"],
+  ["Nunit", "zlib-acknowledgement"],
+  ["StandardML-NJ", "SMLNJ"],
+  ["bzip2-1.0.5", "bzip2-1.0.6"],
+]);
+
+/** Deprecated SPDX ids that stay as declared, each with why no single id can replace it. */
+export const DEPRECATED_IDS_KEPT: ReadonlyMap<string, "compound" | "no-spdx-successor"> = new Map([
+  ["Net-SNMP", "no-spdx-successor"],
+  ["eCos-2.0", "compound"],
+  ["wxWindows", "compound"],
 ]);

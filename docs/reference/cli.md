@@ -375,6 +375,7 @@ except that leading and trailing whitespace is trimmed.
 A deprecated SPDX id is written back in its current spelling: `GPL-3.0` becomes
 `GPL-3.0-only`, `GPL-2.0+` becomes `GPL-2.0-or-later`, and
 `GPL-2.0-with-classpath-exception` becomes `GPL-2.0-only WITH Classpath-exception-2.0`.
+An id SPDX replaced with another id follows it: `BSD-2-Clause-NetBSD` becomes `BSD-2-Clause`.
 
 The rewrite is guarded twice. A clarifications file carrying `#` comments is left
 untouched and the run exits 3: the parser discards comments before the entries are

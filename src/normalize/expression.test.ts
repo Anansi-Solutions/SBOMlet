@@ -282,6 +282,25 @@ describe("canonicalizeExpression — conservative boolean-algebra simplification
     assertRoundTripAndIdempotent(canonical);
   });
 
+  test.each([
+    ["BSD-2-Clause-FreeBSD OR MIT", "BSD-2-Clause-Views OR MIT"],
+    ["BSD-2-Clause-NetBSD OR MIT", "BSD-2-Clause OR MIT"],
+    ["StandardML-NJ AND MIT", "MIT AND SMLNJ"],
+    ["bzip2-1.0.5 AND MIT", "MIT AND bzip2-1.0.6"],
+    ["Nunit OR MIT", "MIT OR zlib-acknowledgement"],
+  ])("a deprecated id SPDX renamed is respelled: %s", (noisy, expected) => {
+    const canonical = canonicalizeExpression(asRawLicense(noisy));
+
+    expect(widen(canonical)).toBe(expected);
+    assertRoundTripAndIdempotent(canonical);
+  });
+
+  test("a deprecated id with no single successor stays as declared", () => {
+    expect(widen(canonicalizeExpression(asRawLicense("wxWindows OR MIT")))).toBe(
+      "MIT OR wxWindows",
+    );
+  });
+
   test("deep mixed nesting: both absorption directions fire inside a shared AND", () => {
     const canonical = canonicalizeExpression(
       asRawLicense("(MIT OR (MIT AND Apache-2.0)) AND (BSD-2-Clause OR BSD-2-Clause)"),

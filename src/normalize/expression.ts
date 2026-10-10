@@ -26,6 +26,7 @@ import { COPYLEFT_IDS } from "../policy/engine/copyleft";
 import {
   CANONICAL_EXCEPTION_ID,
   CANONICAL_LICENSE_ID,
+  DEPRECATED_ID_RENAME,
   DEPRECATED_ID_SUCCESSOR,
 } from "./spdxCasing";
 
@@ -295,10 +296,12 @@ function buildSet(op: "and" | "or", rawItems: CanonicalNode[]): CanonicalNode {
 /**
  * One leaf with its license id and exception in their registered SPDX casing, and a deprecated id
  * in its current spelling: `GPL-3.0` reads as `GPL-3.0-only`, `GPL-2.0+` as `GPL-2.0-or-later`,
- * `GPL-2.0-with-classpath-exception` as `GPL-2.0-only WITH Classpath-exception-2.0`.
+ * `GPL-2.0-with-classpath-exception` as `GPL-2.0-only WITH Classpath-exception-2.0`,
+ * `BSD-2-Clause-NetBSD` as `BSD-2-Clause`.
  */
 function canonicalLeafId(leaf: Leaf): Leaf {
-  const license = CANONICAL_LICENSE_ID.get(leaf.license.toLowerCase()) ?? leaf.license;
+  const registered = CANONICAL_LICENSE_ID.get(leaf.license.toLowerCase()) ?? leaf.license;
+  const license = DEPRECATED_ID_RENAME.get(registered) ?? registered;
   const exception =
     leaf.exception && (CANONICAL_EXCEPTION_ID.get(leaf.exception.toLowerCase()) ?? leaf.exception);
   const successor = DEPRECATED_ID_SUCCESSOR.get(license);

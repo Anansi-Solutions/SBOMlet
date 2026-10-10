@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, test } from "bun:test";
 
-import { DEPRECATED_ID_SUCCESSOR, DEPRECATED_IDS_KEPT } from "./spdxCasing";
+import { DEPRECATED_ID_RENAME, DEPRECATED_ID_SUCCESSOR, DEPRECATED_IDS_KEPT } from "./spdxCasing";
 
 const MODULES = join(import.meta.dir, "..", "..", "node_modules");
 const readIds = (...path: string[]): string[] =>
@@ -15,17 +15,28 @@ describe("deprecated SPDX ids", () => {
 
   test("every installed deprecated id is either respelled or explicitly kept", () => {
     const unaccounted = deprecated.filter(
-      (id) => !DEPRECATED_ID_SUCCESSOR.has(id) && !DEPRECATED_IDS_KEPT.has(id),
+      (id) =>
+        !DEPRECATED_ID_SUCCESSOR.has(id) &&
+        !DEPRECATED_ID_RENAME.has(id) &&
+        !DEPRECATED_IDS_KEPT.has(id),
     );
 
     expect(unaccounted).toEqual([]);
   });
 
   test("no id is both respelled and kept, and every listed id is still deprecated", () => {
-    const listed = [...DEPRECATED_ID_SUCCESSOR.keys(), ...DEPRECATED_IDS_KEPT];
+    const respelled = [...DEPRECATED_ID_SUCCESSOR.keys(), ...DEPRECATED_ID_RENAME.keys()];
+    const kept = [...DEPRECATED_IDS_KEPT.keys()];
 
-    expect(listed.filter((id) => !deprecated.includes(id))).toEqual([]);
-    expect([...DEPRECATED_IDS_KEPT].filter((id) => DEPRECATED_ID_SUCCESSOR.has(id))).toEqual([]);
+    expect([...respelled, ...kept].filter((id) => !deprecated.includes(id))).toEqual([]);
+    expect(kept.filter((id) => respelled.includes(id))).toEqual([]);
+    expect(respelled.length).toBe(new Set(respelled).size);
+  });
+
+  test("every rename names a current license id", () => {
+    for (const target of DEPRECATED_ID_RENAME.values()) {
+      expect(current.has(target)).toBe(true);
+    }
   });
 
   test("every successor names current license and exception ids", () => {
@@ -77,6 +88,24 @@ describe("deprecated SPDX ids against the vendored LicenseDB index", () => {
     expect(deprecated.filter((id) => !currentIdOf.has(id)).sort()).toEqual(
       [...INDEX_UNMAPPED].sort(),
     );
+  });
+
+  test("a renamed id becomes the id the index maps it to", () => {
+    const drifted = [...DEPRECATED_ID_RENAME].filter(
+      ([id, target]) => currentIdOf.get(id) !== target,
+    );
+
+    expect(drifted).toEqual([]);
+    expect(DEPRECATED_ID_RENAME.size).toBe(5);
+  });
+
+  test("every kept id the index does map carries a reason", () => {
+    const withoutReason = [...DEPRECATED_IDS_KEPT]
+      .filter(([id]) => currentIdOf.has(id))
+      .filter(([, reason]) => !reason);
+
+    expect(withoutReason).toEqual([]);
+    expect(DEPRECATED_IDS_KEPT.get("Net-SNMP")).toBe("no-spdx-successor");
   });
 
   test("a successor of an id the index maps renders the index's current id", () => {
