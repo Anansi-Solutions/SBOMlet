@@ -4,7 +4,7 @@
  * erased.
  */
 
-import { type Verdict } from "../model/dependencies";
+import { type CanonicalDependencies, type Verdict } from "../model/dependencies";
 import { DEV_DOWNGRADE_REASON_SUFFIX, unusedRuleIds } from "../policy/engine/evaluate";
 import { clarifyCitation } from "../policy/schema/clarify";
 import { ruleReason } from "../policy/schema/diagnostics";
@@ -82,6 +82,7 @@ export function sanitizeForLog(value: string): string {
  */
 export function writePolicySummary(
   policy: Policy,
+  model: CanonicalDependencies,
   verdicts: ReadonlyArray<Verdict>,
   usedClarifyIndices: ReadonlySet<number>,
 ): void {
@@ -156,7 +157,7 @@ export function writePolicySummary(
     }
   }
 
-  for (const ruleId of unusedRuleIds(policy, verdicts, usedClarifyIndices)) {
+  for (const ruleId of unusedRuleIds(policy, model, verdicts, usedClarifyIndices)) {
     process.stderr.write(
       `policy warning: unused entry ${sanitizeForLog(ruleId)} — ` +
         `${sanitizeForLog(unusedRuleReason(policy, ruleId))}\n`,

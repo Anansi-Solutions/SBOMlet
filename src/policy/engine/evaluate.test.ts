@@ -1679,28 +1679,51 @@ describe("unusedRuleIds — stale-policy hygiene", () => {
       'expression = "MIT"',
       'comment = "no package by this name exists"',
     ].join("\n");
-    const { verdicts, usedClarifyIndices, policy } = runEngine(
+    const { verdicts, usedClarifyIndices, policy, model } = runEngine(
       [pkgSpec("mpl-pkg", "MPL-2.0", ["backend"])],
       policyText,
     );
 
     expect(verdicts[0].rule).toBe("compatible[0]");
-    expect(unusedRuleIds(policy, verdicts, usedClarifyIndices)).toEqual([
+    expect(unusedRuleIds(policy, model, verdicts, usedClarifyIndices)).toEqual([
       "compatible[1]",
       "clarify[0]",
     ]);
   });
 });
 
+describe("unusedRuleIds — a licence rule a package rule outranked", () => {
+  test("package form decides before an earlier licence form, which still counts as used", () => {
+    const policyText = [
+      licenseRuleFixture("MPL-2.0"),
+      "",
+      "[[compatible]]",
+      'match = "package"',
+      'name = "weak-pkg"',
+      'version = "1.0.0"',
+      'as-dependency-of = ["self"]',
+      'rationale = "license-reviewed"',
+      'where = ["/"]',
+    ].join("\n");
+    const { verdicts, usedClarifyIndices, policy, model } = runEngine(
+      [pkgSpec("weak-pkg", "MPL-2.0", ["backend"])],
+      policyText,
+    );
+
+    expect(verdicts[0]?.rule).toBe("compatible[1]");
+    expect(unusedRuleIds(policy, model, verdicts, usedClarifyIndices)).toEqual([]);
+  });
+});
+
 describe("unusedRuleIds — a [[deny]] that matches nothing", () => {
   test("a name-mode deny whose name never matches is reported; a firing one is not", () => {
     const policyText = [denyNameFixture("foo-bar"), "", denyLicenseFixture("Zlib")].join("\n");
-    const { verdicts, usedClarifyIndices, policy } = runEngine(
+    const { verdicts, usedClarifyIndices, policy, model } = runEngine(
       [pkgSpec("Foo_Bar", "MIT", ["apps/web"]), pkgSpec("z", "Zlib", ["apps/web"])],
       policyText,
     );
 
-    expect(unusedRuleIds(policy, verdicts, usedClarifyIndices)).toEqual(["denied[0]"]);
+    expect(unusedRuleIds(policy, model, verdicts, usedClarifyIndices)).toEqual(["denied[0]"]);
   });
 });
 
@@ -1757,14 +1780,14 @@ describe("evaluate — where-scoped compatible matching", () => {
     // target docker:a — a broader occurrence must never satisfy a narrower
     // scope, or an acceptance reviewed for one image would leak upward.
     for (const policyText of [scopedBusyboxPolicy([TARGET_A]), scopedGplPolicy([TARGET_A])]) {
-      const { verdicts, usedClarifyIndices, policy } = runEngine(
+      const { verdicts, usedClarifyIndices, policy, model } = runEngine(
         [busyboxAt([TARGET_A_PREFIX])],
         policyText,
       );
 
       expect(verdicts.map((v) => [v.status, v.rule])).toEqual([["warn", "default:copyleft"]]);
       // ...and the rule that decided nothing surfaces as unused.
-      expect(unusedRuleIds(policy, verdicts, usedClarifyIndices)).toEqual(["compatible[0]"]);
+      expect(unusedRuleIds(policy, model, verdicts, usedClarifyIndices)).toEqual(["compatible[0]"]);
     }
   });
 
@@ -1854,13 +1877,13 @@ describe("evaluate — where-scoped compatible matching", () => {
   });
 
   test("dead scoped rule: a where that matches no occurrence lands in unusedRuleIds", () => {
-    const { verdicts, usedClarifyIndices, policy } = runEngine(
+    const { verdicts, usedClarifyIndices, policy, model } = runEngine(
       [busyboxAt([TARGET_A])],
       scopedBusyboxPolicy([TARGET_B]),
     );
 
     expect(verdicts.map((v) => v.rule)).toEqual(["default:copyleft"]);
-    expect(unusedRuleIds(policy, verdicts, usedClarifyIndices)).toEqual(["compatible[0]"]);
+    expect(unusedRuleIds(policy, model, verdicts, usedClarifyIndices)).toEqual(["compatible[0]"]);
   });
 });
 
@@ -3568,10 +3591,10 @@ describe("evaluate — an entry the introduction chains contradict", () => {
   });
 
   test("a contradicted entry is never reported unused - it decided every occurrence it governs", () => {
-    const { verdicts, usedClarifyIndices, policy } = runChainEngine(LIB_FAMILY_POLICY);
+    const { verdicts, usedClarifyIndices, policy, model } = runChainEngine(LIB_FAMILY_POLICY);
 
     expect(verdicts.some((v) => v.rule === "compatible:voided[0]")).toBeTrue();
-    expect(unusedRuleIds(policy, verdicts, usedClarifyIndices)).toEqual([]);
+    expect(unusedRuleIds(policy, model, verdicts, usedClarifyIndices)).toEqual([]);
   });
 
   test("its id stays outside the compatible[ prefix, so no acceptance surface reads it as one", () => {
@@ -3701,13 +3724,13 @@ describe("evaluate — a clarify entry the current signal disproves", () => {
   });
 
   test("the failing entry is never also reported as an unused entry", () => {
-    const { verdicts, usedClarifyIndices, policy } = runEngine(
+    const { verdicts, usedClarifyIndices, policy, model } = runEngine(
       [scanPkgSpec("choice-lib", "MIT OR Apache-2.0", "MIT", ["backend"])],
       DUAL_CHOICE,
     );
 
     expect(verdicts[0].rule).toBe("clarify:invalid[0]");
-    expect(unusedRuleIds(policy, verdicts, usedClarifyIndices)).toEqual([]);
+    expect(unusedRuleIds(policy, model, verdicts, usedClarifyIndices)).toEqual([]);
   });
 
   test("a builtin override carries no justification and never enters this lane", () => {
@@ -3841,20 +3864,20 @@ describe("evaluate — the clarifications file's own citation space", () => {
   });
 
   test("unused accounting reports each file's own ids, policy file first", () => {
-    const { verdicts, usedClarifyIndices, policy } = runEngineWithImports(
+    const { verdicts, usedClarifyIndices, policy, model } = runEngineWithImports(
       [pkgSpec("unrelated", "MIT", ["backend"])],
       importable("policy-only", "MIT"),
       importable("imported-only", "MIT"),
     );
 
-    expect(unusedRuleIds(policy, verdicts, usedClarifyIndices)).toEqual([
+    expect(unusedRuleIds(policy, model, verdicts, usedClarifyIndices)).toEqual([
       "clarify[0]",
       "clarifications[0]",
     ]);
   });
 
   test("a failing imported entry is never also reported as an unused entry", () => {
-    const { verdicts, usedClarifyIndices, policy } = runEngineWithImports(
+    const { verdicts, usedClarifyIndices, policy, model } = runEngineWithImports(
       [scanPkgSpec("choice-lib", "MIT OR Apache-2.0", "MIT", ["backend"])],
       "",
       [
@@ -3868,7 +3891,7 @@ describe("evaluate — the clarifications file's own citation space", () => {
     );
 
     expect(verdicts[0].rule).toBe("clarifications:invalid[0]");
-    expect(unusedRuleIds(policy, verdicts, usedClarifyIndices)).toEqual([]);
+    expect(unusedRuleIds(policy, model, verdicts, usedClarifyIndices)).toEqual([]);
   });
 
   test("an imported entry with nothing left to correct is reported in the imported space", () => {

@@ -574,9 +574,12 @@ the reserved element `/` covers every occurrence. No target identity can be
 `/`, since a leading or trailing slash is rejected wherever a path is
 validated, so the token is unambiguous.
 
-Rules are consulted in file order per occurrence, and the first whose match and
-scope both hold decides. A rule that matches no occurrence is reported as an
-unused entry on stderr.
+Per occurrence, package-mode rules are consulted before licence-mode rules,
+wherever they sit in the file: a rule about one package is more specific than a
+rule about a licence. Within each mode the first rule in file order whose match
+and scope both hold decides. A rule that matches no occurrence is reported as
+an unused entry on stderr; a licence rule that matched an occurrence a package
+rule decided first is not unused.
 
 ### Migrating from the previous schema
 

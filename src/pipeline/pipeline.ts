@@ -787,7 +787,7 @@ export async function buildOutputs(opts: GenerateOptions): Promise<BuiltOutputs>
     // an "os-package-unmodified" entry may legitimately describe.
     crossValidatePolicy(scoped, policy, graphTargets);
     verdicts = evaluate(scoped, policy, graphTargets);
-    writePolicySummary(policy, verdicts, usedClarifyIndices);
+    writePolicySummary(policy, scoped, verdicts, usedClarifyIndices);
     writeTargetHygieneNotices(scoped, policy);
     policyView = projectPolicyView(
       policy,

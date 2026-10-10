@@ -1516,7 +1516,7 @@ export function evaluate(
     for (const occurrence of entry.occurrences) {
       // Compatible matches are per occurrence: an unscoped rule accepts the package at every
       // occurrence; a `where`-scoped rule only at the occurrences its identity prefixes cover.
-      // First match in TOML order wins per occurrence, package form before license form.
+      // Package form is consulted before license form, each in TOML order; the first match wins.
       const packageRule = judgedPackageRule(
         entry,
         occurrence,
@@ -1676,18 +1676,62 @@ export function acceptedContainerNotices(
 }
 
 /**
+ * Indices of license-form compatible rules that matched an occurrence a package-form rule decided
+ * first: they would have accepted it, so they are not unused.
+ */
+function outrankedLicenseRules(
+  model: CanonicalDependencies,
+  policy: Policy,
+  verdicts: ReadonlyArray<Verdict>,
+): Set<number> {
+  const packageDecided = /^compatible(?::voided)?\[(\d+)\]$/;
+  const decidedBy = new Map(verdicts.map((v) => [`${v.purl}\u0000${v.occurrenceTarget}`, v.rule]));
+  const denyUnion = licenseDenyUnion(policy);
+  const outranked = new Set<number>();
+
+  for (const entry of model.packages) {
+    const expression = assessPackage(entry, denyUnion).expression;
+
+    if (expression === null) {
+      continue;
+    }
+
+    for (const occurrence of entry.occurrences) {
+      const decided = packageDecided.exec(
+        decidedBy.get(`${entry.purl}\u0000${occurrence.target}`) ?? "",
+      );
+
+      if (decided === null || policy.compatible[Number(decided[1])]?.match !== "package") {
+        continue;
+      }
+
+      const licenseRule = licenseRuleFor(expression, occurrence.target, policy);
+
+      if (licenseRule !== undefined) {
+        outranked.add(licenseRule.index);
+      }
+    }
+  }
+
+  return outranked;
+}
+
+/**
  * Rule ids of deny/compatible/clarify entries that never decided anything - stale-policy hygiene.
- * Deny and compatible usage is read from cited verdict rules; clarify usage comes from
- * annotateFindings' usedClarifyIndices (a clarify rule is "used" when it replaced a finding, even
- * if a higher-precedence compatible rule decided the final verdict). Suppression entries are never
- * reported. Returned in TOML array order: deny first, then compatible, then clarify.
+ * Deny and compatible usage is read from cited verdict rules (a license-form compatible rule also
+ * counts when a package-form rule outranked it on an occurrence it matched); clarify usage comes
+ * from annotateFindings' usedClarifyIndices (a clarify rule is "used" when it replaced a finding,
+ * even if a higher-precedence compatible rule decided the final verdict). Suppression entries are
+ * never reported. Returned in TOML array order: deny first, then compatible, then clarify.
  */
 export function unusedRuleIds(
   policy: Policy,
+  model: CanonicalDependencies,
   verdicts: ReadonlyArray<Verdict>,
   usedClarifyIndices: ReadonlySet<number>,
 ): string[] {
   const cited = new Set(verdicts.map((v) => v.rule));
+  const outranked = outrankedLicenseRules(model, policy, verdicts);
   const unused: string[] = [];
 
   policy.deny.forEach((_, index) => {
@@ -1700,7 +1744,7 @@ export function unusedRuleIds(
 
     // An entry whose judgment the chains contradicted decided every occurrence it governs - as a
     // failure. Reporting it "unused" beside those failures would contradict them.
-    if (!cited.has(id) && !cited.has(`compatible:voided[${index}]`)) {
+    if (!cited.has(id) && !cited.has(`compatible:voided[${index}]`) && !outranked.has(index)) {
       unused.push(id);
     }
   });

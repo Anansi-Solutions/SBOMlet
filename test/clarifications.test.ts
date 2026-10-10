@@ -327,7 +327,7 @@ describe("an imported entry on the reader-facing surfaces", () => {
       return true;
     }) as typeof process.stderr.write;
     try {
-      writePolicySummary(policy, [], new Set());
+      writePolicySummary(policy, { packages: [] }, [], new Set());
     } finally {
       process.stderr.write = original;
     }

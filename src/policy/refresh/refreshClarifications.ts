@@ -184,7 +184,9 @@ export function refreshFindings(
 
   return {
     upgrades: upgradeAscertainments(model, policy),
-    unused: unusedRuleIds(policy, verdicts, usedClarifyIndices).filter((id) => clarifyIds.has(id)),
+    unused: unusedRuleIds(policy, model, verdicts, usedClarifyIndices).filter((id) =>
+      clarifyIds.has(id),
+    ),
     unnecessary: unnecessaryClarifyEntries(model, policy),
     shadowed: shadowedClarifications(model, policy),
   };

@@ -421,7 +421,7 @@ describe("writePolicySummary — imprecise count line", () => {
       impreciseVerdict("default:imprecise-copyleft"),
     ];
     const stderr = await withCapturedStderr(async () => {
-      writePolicySummary(parsePolicy(""), verdicts, new Set());
+      writePolicySummary(parsePolicy(""), { packages: [] }, verdicts, new Set());
     });
 
     // The locked counts-line shape is intact (both imprecise verdicts are warns).
@@ -445,7 +445,7 @@ describe("writePolicySummary — imprecise count line", () => {
       },
     ];
     const stderr = await withCapturedStderr(async () => {
-      writePolicySummary(parsePolicy(""), verdicts, new Set());
+      writePolicySummary(parsePolicy(""), { packages: [] }, verdicts, new Set());
     });
 
     expect(stderr).toContain("policy: 0 fail, 0 warn, 0 suppressed, 1 ok (1 verdicts)\n");
@@ -468,7 +468,7 @@ describe("writePolicySummary — assessment conflict count line", () => {
       conflictVerdict("pkg:npm/b@1.0.0"),
     ];
     const stderr = await withCapturedStderr(async () => {
-      writePolicySummary(parsePolicy(""), verdicts, new Set());
+      writePolicySummary(parsePolicy(""), { packages: [] }, verdicts, new Set());
     });
 
     // The locked counts-line shape is intact (both conflicts are fails).
@@ -491,7 +491,7 @@ describe("writePolicySummary — assessment conflict count line", () => {
       },
     ];
     const stderr = await withCapturedStderr(async () => {
-      writePolicySummary(parsePolicy(""), verdicts, new Set());
+      writePolicySummary(parsePolicy(""), { packages: [] }, verdicts, new Set());
     });
 
     expect(stderr).not.toContain("assessment conflict");
