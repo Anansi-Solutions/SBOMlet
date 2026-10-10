@@ -122,7 +122,10 @@ highest to lowest:
    governs this occurrence *and* the finding has a parseable, non-imprecise
    expression. The tree below.
 7. **The copyleft lane** — entered only when the elected SPDX branch is
-   copyleft. The tree below.
+   copyleft. The tree below. Election never picks an `OR` branch the deny
+   set covers while another branch remains, so `GPL-3.0-only OR BUSL-1.1`
+   lands here on its GPL branch; the target-compatibility lane above elects
+   from the same remaining branches.
 8. **The imprecise-family lane** — entered when the finding names only a
    family, with no elected expression.
 9. **The unknown lane** — entered when the finding has no expression and isn't

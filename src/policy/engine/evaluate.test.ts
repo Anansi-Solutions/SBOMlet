@@ -2454,6 +2454,51 @@ describe("evaluate — deny election across SEPARATE [[deny]] entries (C#6: unio
   });
 });
 
+describe("evaluate — election never picks a branch the deny set covers", () => {
+  const UNKNOWN_WARN = '[unknown]\nhandling = "warn"\n';
+  const MIT_TARGET = '[target]\nlicense = "MIT"\nnetwork = false\ndistribution = "external"\n';
+
+  test.each([
+    "GPL-3.0-only OR BUSL-1.1",
+    "AGPL-3.0-only OR Elastic-2.0",
+    "GPL-3.0-only OR SSPL-1.0",
+  ])("%s elects the copyleft branch and fails it", (expression) => {
+    const [verdict] = runEngine([pkgSpec("dual", expression, ["apps/web"])], UNKNOWN_WARN).verdicts;
+
+    expect(verdict?.status).toBe("fail");
+    expect(verdict?.rule).toBe("default:copyleft");
+  });
+
+  test("MIT OR BUSL-1.1 elects MIT, and the reason says so", () => {
+    const [verdict] = runEngine(
+      [pkgSpec("dual", "MIT OR BUSL-1.1", ["apps/web"])],
+      UNKNOWN_WARN,
+    ).verdicts;
+
+    expect(verdict?.rule).toBe("default:ok");
+    expect(verdict?.reason).toContain('elected "MIT"');
+  });
+
+  test("a consumer [[deny]] entry steers election the same way", () => {
+    const [verdict] = runEngine(
+      [pkgSpec("dual", "GPL-3.0-only OR Zlib", ["apps/web"])],
+      denyLicenseFixture("Zlib"),
+    ).verdicts;
+
+    expect(verdict?.rule).toBe("default:copyleft");
+  });
+
+  test("the target lane does not elect a denied branch either", () => {
+    const [verdict] = runEngine(
+      [pkgSpec("dual", "GPL-3.0-only OR BUSL-1.1", ["apps/web"])],
+      MIT_TARGET,
+    ).verdicts;
+
+    expect(verdict?.status).toBe("fail");
+    expect(verdict?.rule).toBe("target:incompatible");
+  });
+});
+
 describe("evaluate — deny sees EVERY observed claim (#1/#5/#11: lossy combine must not hide a denied member)", () => {
   const denyBusl = denyLicenseFixture("BUSL-1.1");
   const denyElastic = denyLicenseFixture("Elastic-2.0");
@@ -3037,7 +3082,7 @@ describe("evaluate — accepted-AGPL container notices (acceptedContainerNotices
       'rationale = "license-reviewed"',
       `where = ${JSON.stringify([NOTICE_TARGET])}`,
     ].join("\n");
-    const { verdicts, model } = runEngine(
+    const { verdicts, model, policy } = runEngine(
       [
         osPkgSpec(
           asPurl("pkg:deb/debian/agpl-os-notice@1.0.0"),
@@ -3052,7 +3097,7 @@ describe("evaluate — accepted-AGPL container notices (acceptedContainerNotices
     expect(verdicts[0].status).toBe("ok");
     expect(verdicts[0].rule).toBe("compatible[0]");
 
-    const notices = acceptedContainerNotices(model, verdicts);
+    const notices = acceptedContainerNotices(model, policy, verdicts);
 
     expect(notices).toHaveLength(1);
     expect(notices[0]).toMatchObject({
@@ -3074,7 +3119,7 @@ describe("evaluate — accepted-AGPL container notices (acceptedContainerNotices
       'rationale = "license-reviewed"',
       `where = ${JSON.stringify([NOTICE_TARGET])}`,
     ].join("\n");
-    const { verdicts, model } = runEngine(
+    const { verdicts, model, policy } = runEngine(
       [
         osPkgSpec(asPurl("pkg:apk/alpine/agpl-ish-notice@1.0.0"), "agpl-ish-notice", "AGPL", [
           NOTICE_TARGET,
@@ -3086,7 +3131,7 @@ describe("evaluate — accepted-AGPL container notices (acceptedContainerNotices
     expect(verdicts[0].status).toBe("ok");
     expect(verdicts[0].rule).toBe("compatible[0]");
 
-    const notices = acceptedContainerNotices(model, verdicts);
+    const notices = acceptedContainerNotices(model, policy, verdicts);
 
     expect(notices).toHaveLength(1);
     expect(notices[0]).toMatchObject({
@@ -3107,7 +3152,11 @@ describe("evaluate — accepted-AGPL container notices (acceptedContainerNotices
       'rationale = "license-reviewed"',
       'where = ["/"]',
     ].join("\n");
-    const { verdicts: acceptedVerdicts, model: acceptedModel } = runEngine(
+    const {
+      verdicts: acceptedVerdicts,
+      model: acceptedModel,
+      policy: acceptedPolicy,
+    } = runEngine(
       [
         osPkgSpec(
           asPurl("pkg:deb/debian/gpl-os-accepted@1.0.0"),
@@ -3120,9 +3169,15 @@ describe("evaluate — accepted-AGPL container notices (acceptedContainerNotices
     );
 
     expect(acceptedVerdicts[0].status).toBe("ok");
-    expect(acceptedContainerNotices(acceptedModel, acceptedVerdicts)).toHaveLength(0);
+    expect(acceptedContainerNotices(acceptedModel, acceptedPolicy, acceptedVerdicts)).toHaveLength(
+      0,
+    );
 
-    const { verdicts: warnVerdicts, model: warnModel } = runEngine(
+    const {
+      verdicts: warnVerdicts,
+      model: warnModel,
+      policy: warnPolicy,
+    } = runEngine(
       [
         osPkgSpec(
           asPurl("pkg:deb/debian/lgpl-os-warn@1.0.0"),
@@ -3135,11 +3190,11 @@ describe("evaluate — accepted-AGPL container notices (acceptedContainerNotices
     );
 
     expect(warnVerdicts[0].status).toBe("warn");
-    expect(acceptedContainerNotices(warnModel, warnVerdicts)).toHaveLength(0);
+    expect(acceptedContainerNotices(warnModel, warnPolicy, warnVerdicts)).toHaveLength(0);
   });
 
   test("a FAILING AGPL system package (not accepted) is not an accepted-container notice — Problematic only, never duplicated", () => {
-    const { verdicts, model } = runEngine(
+    const { verdicts, model, policy } = runEngine(
       [
         osPkgSpec(
           asPurl("pkg:deb/debian/agpl-os-failing@1.0.0"),
@@ -3153,7 +3208,7 @@ describe("evaluate — accepted-AGPL container notices (acceptedContainerNotices
 
     expect(verdicts[0].status).toBe("fail");
     expect(verdicts[0].rule).toBe("default:agpl-container");
-    expect(acceptedContainerNotices(model, verdicts)).toHaveLength(0);
+    expect(acceptedContainerNotices(model, policy, verdicts)).toHaveLength(0);
   });
 
   test("determinism: notices sort by purl (compareCodeUnits), target lists dedupe+sort, and repeated calls are byte-identical", () => {
@@ -3176,7 +3231,7 @@ describe("evaluate — accepted-AGPL container notices (acceptedContainerNotices
       'rationale = "license-reviewed"',
       'where = ["/"]',
     ].join("\n");
-    const { verdicts, model } = runEngine(
+    const { verdicts, model, policy } = runEngine(
       [
         osPkgSpec(asPurl("pkg:deb/debian/zeta-agpl@1.0.0"), "zeta-agpl", "AGPL-3.0-only", [
           TARGET_B,
@@ -3188,8 +3243,8 @@ describe("evaluate — accepted-AGPL container notices (acceptedContainerNotices
       ],
       policyText,
     );
-    const notices1 = acceptedContainerNotices(model, verdicts);
-    const notices2 = acceptedContainerNotices(model, verdicts);
+    const notices1 = acceptedContainerNotices(model, policy, verdicts);
+    const notices2 = acceptedContainerNotices(model, policy, verdicts);
 
     expect(notices1).toEqual(notices2);
     expect(widen(notices1.map((n) => n.purl))).toEqual([
@@ -3372,11 +3427,11 @@ describe("evaluate — an entry the introduction chains contradict", () => {
   });
 
   test("its id stays outside the compatible[ prefix, so no acceptance surface reads it as one", () => {
-    const { verdicts, model } = runChainEngine(LIB_FAMILY_POLICY);
+    const { verdicts, model, policy } = runChainEngine(LIB_FAMILY_POLICY);
     const voided = verdicts.find((v) => v.rule.startsWith("compatible:voided")) as Verdict;
 
     expect(voided.rule.startsWith("compatible[")).toBeFalse();
-    expect(acceptedContainerNotices(model, verdicts)).toEqual([]);
+    expect(acceptedContainerNotices(model, policy, verdicts)).toEqual([]);
   });
 
   test("a package recorded as arriving from nothing reachable is not accepted by the entry", () => {
@@ -3671,6 +3726,7 @@ describe("evaluate — the clarifications file's own citation space", () => {
       makeModel([osPkgSpec(purl, "agpl-imported", "AGPL-3.0-only", [target])]),
       [],
     ).model;
+    const NO_POLICY = parsePolicy("");
     const base = {
       purl,
       occurrenceTarget: asTargetIdentity(target),
@@ -3678,9 +3734,15 @@ describe("evaluate — the clarifications file's own citation space", () => {
       reason: 'clarified to "AGPL-3.0-only": license-reviewed',
     };
 
-    expect(acceptedContainerNotices(model, [{ ...base, rule: "clarifications[0]" }])).toEqual([]);
-    expect(acceptedContainerNotices(model, [{ ...base, rule: "clarify[0]" }])).toEqual([]);
-    expect(acceptedContainerNotices(model, [{ ...base, rule: "compatible[0]" }])).toHaveLength(1);
+    expect(
+      acceptedContainerNotices(model, NO_POLICY, [{ ...base, rule: "clarifications[0]" }]),
+    ).toEqual([]);
+    expect(acceptedContainerNotices(model, NO_POLICY, [{ ...base, rule: "clarify[0]" }])).toEqual(
+      [],
+    );
+    expect(
+      acceptedContainerNotices(model, NO_POLICY, [{ ...base, rule: "compatible[0]" }]),
+    ).toHaveLength(1);
   });
 });
 

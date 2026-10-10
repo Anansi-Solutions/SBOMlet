@@ -622,7 +622,7 @@ function projectPolicyView(
     suppressedWorkspaces: policy.suppressedWorkspaces,
     verdicts,
     developmentContainers,
-    acceptedContainerNotices: acceptedContainerNotices(model, verdicts),
+    acceptedContainerNotices: acceptedContainerNotices(model, policy, verdicts),
     ...(policy.document !== undefined ? { document: policy.document } : {}),
     ...(targetProfile !== undefined ? { targetProfile } : {}),
   };

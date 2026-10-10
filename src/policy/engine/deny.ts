@@ -51,7 +51,8 @@
  *   - "GPL-3.0 OR BUSL-1.1" → denied only when the deny set covers both branches, i.e. no branch is
  *     electable out.
  * This keeps deny exactly consistent with the compatible election path while preventing over-denial
- * of a finding that has an acceptable branch.
+ * of a finding that has an acceptable branch. The other lanes then judge the finding without its
+ * denied branches (withoutDeniedBranches), so "GPL-3.0 OR BUSL-1.1" is judged as GPL.
  *
  * One election runs across every license rule, not one per rule (load-bearing): it must run against
  * the union of every match="license" deny allowlist, not each rule's allowlist in isolation. The
@@ -138,6 +139,44 @@ function renderLeaf(node: { license: string; plus?: true; exception?: string }):
   return `${node.license}${plus}${withPart}`;
 }
 
+/** The combined allowlist of every match="license" rule among `rules`. */
+function unionAllowlist(rules: ReadonlyArray<IndexedDenyRule>): SpdxLicenseLeaf[] {
+  return rules.flatMap((r) => (r.rule.match === "license" ? r.rule.allowlist : []));
+}
+
+/** The combined allowlist of every license-mode deny rule, policy entries and shipped defaults. */
+export function licenseDenyUnion(policy: Policy): SpdxLicenseLeaf[] {
+  return unionAllowlist(effectiveDenyRules(policy));
+}
+
+/**
+ * The expression with every OR branch the deny union covers dropped while a sibling branch is not
+ * covered, so election ranks a denied branch below every other, copyleft included. An OR whose
+ * branches are all denied is kept whole: the deny lane fails it.
+ */
+export function withoutDeniedBranches(
+  node: ExpressionNode,
+  union: readonly SpdxLicenseLeaf[],
+): ExpressionNode {
+  if ("license" in node) {
+    return node;
+  }
+
+  if (node.conjunction === "or") {
+    const leftDenied = nodeDenied(node.left, union);
+
+    if (leftDenied !== nodeDenied(node.right, union)) {
+      return withoutDeniedBranches(leftDenied ? node.right : node.left, union);
+    }
+  }
+
+  return {
+    left: withoutDeniedBranches(node.left, union),
+    conjunction: node.conjunction,
+    right: withoutDeniedBranches(node.right, union),
+  };
+}
+
 /** True when any leaf of the parsed expression satisfies the allowlist. */
 function anyLeafDenied(node: ExpressionNode, allowlist: readonly SpdxLicenseLeaf[]): boolean {
   if ("license" in node) {
@@ -164,14 +203,7 @@ function unionLicenseDeny(
     return undefined;
   }
 
-  const union: SpdxLicenseLeaf[] = [];
-
-  for (const r of licenseRules) {
-    if (r.rule.match === "license") {
-      union.push(...r.rule.allowlist);
-    }
-  }
-
+  const union = unionAllowlist(licenseRules);
   let node: ExpressionNode;
 
   try {

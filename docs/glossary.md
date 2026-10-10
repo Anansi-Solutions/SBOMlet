@@ -100,7 +100,11 @@ consumer could legitimately choose, that avoids the obligation or the deny
 rule? A finding is copyleft only if every branch is; a finding is denied only
 when it has no electable branch left — an OR is denied only when every
 branch is denied (an electable branch defeats it), while an AND is denied
-when any conjunct is denied (a conjunct can't be elected away). When a
+when any conjunct is denied (a conjunct can't be elected away). Election
+never picks a branch the deny set covers while another branch remains: a
+denied branch ranks below every other, copyleft included, so
+`GPL-3.0-only OR BUSL-1.1` elects the GPL branch and is judged as copyleft,
+and `MIT OR BUSL-1.1` elects `MIT`. When a
 [target profile](#target-profile) governs the occurrence, election becomes
 target-aware: the preference for a non-copyleft branch can pick a DIFFERENT
 branch than the untargeted walk would, because "non-copyleft" isn't always

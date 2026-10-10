@@ -137,6 +137,12 @@ whose every branch is denied is. The election runs against the union of all
 licence-mode deny patterns, so listing `BUSL-1.1`, `SSPL-1.0`, and
 `Elastic-2.0` as three entries still denies `BUSL-1.1 OR SSPL-1.0`.
 
+A denied branch is never the one the rest of the policy judges. When an `OR`
+keeps at least one branch outside the deny set, election picks among those
+branches only, even when the remaining one is copyleft: `GPL-3.0-only OR
+BUSL-1.1` is judged on `GPL-3.0-only` and fails as copyleft, rather than
+passing on a branch the tool itself forbids.
+
 Name mode covers things SPDX does not register. A
 [use-restriction rider](../glossary.md#source-available) like Commons-Clause
 rides alongside another licence (`MIT AND Commons-Clause`) and has no registered

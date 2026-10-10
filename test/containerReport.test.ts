@@ -342,7 +342,7 @@ function renderScenario(): string {
     suppressedWorkspaces: policy.suppressedWorkspaces,
     verdicts,
     developmentContainers,
-    acceptedContainerNotices: acceptedContainerNotices(scoped, verdicts),
+    acceptedContainerNotices: acceptedContainerNotices(scoped, policy, verdicts),
   };
 
   return alignTables(renderMarkdown(scoped, policyView));
@@ -483,7 +483,7 @@ describe("containerReport — multi-container golden scenario", () => {
       expect(problematic.includes("5 copyleft warning(s)")).toBe(true);
     });
 
-    test("acceptedContainerNotices(scoped, verdicts) reports exactly the two accepted packages, sorted by purl, and excludes the failing diag-tools/metrics-daemon", () => {
+    test("acceptedContainerNotices(scoped, policy, verdicts) reports exactly the two accepted packages, sorted by purl, and excludes the failing diag-tools/metrics-daemon", () => {
       const policy = parsePolicy(POLICY_TOML);
       const { model: annotated } = annotateFindings(rawModel, policy.clarify, BUILTIN_OVERRIDES);
       const scoped = applyContainerScopes(
@@ -491,7 +491,7 @@ describe("containerReport — multi-container golden scenario", () => {
         resolveDevelopmentContainersForTest(annotated, policy),
       );
       const verdicts = evaluate(scoped, policy, WITHOUT_DEPENDENCY_GRAPHS);
-      const notices = acceptedContainerNotices(scoped, verdicts);
+      const notices = acceptedContainerNotices(scoped, policy, verdicts);
 
       // Sorted by purl: "pkg:apk/..." < "pkg:deb/..." (apk before deb).
       expect(notices.map((n) => n.name)).toEqual(["licensed-relay", "licensed-daemon"]);

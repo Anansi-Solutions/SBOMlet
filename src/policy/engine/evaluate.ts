@@ -38,15 +38,16 @@
  *      profile, or on an imprecise/null finding, this lane is a no-op and today's walk is
  *      byte-identical.
  *   4. copyleft-flagged (isCopyleft on the elected branch - an OR with a permissive branch elects
- *      the permissive branch and is not copyleft) and the occurrence target is or is under a
- *      suppressed path and the suppression is family-justified (the elected expression satisfies
- *      the workspace's declared license, or every copyleft leaf in it is in a finding-family the
- *      workspace license family absorbs per the literal WORKSPACE_ABSORBS relation - an AGPL-3.0
- *      workspace absorbs GNU-family GPL/LGPL deps and MPL deps it bundles, but never SSPL or
- *      CC-BY-SA) → suppressed, workspace.copyleft_suppressed[i]. A path match without family
- *      justification falls through to the normal default chain. A target-governed occurrence never
- *      reaches this tier at all (tier 3 above decides it first), so a suppression entry a target
- *      governs is effectively dead there - see policy/target.ts's suppressionOverlapNotices.
+ *      the permissive branch and is not copyleft; a deny-covered branch is never elected while
+ *      another remains) and the occurrence target is or is under a suppressed path and the
+ *      suppression is family-justified (the elected expression satisfies the workspace's declared
+ *      license, or every copyleft leaf in it is in a finding-family the workspace license family
+ *      absorbs per the literal WORKSPACE_ABSORBS relation - an AGPL-3.0 workspace absorbs
+ *      GNU-family GPL/LGPL deps and MPL deps it bundles, but never SSPL or CC-BY-SA) → suppressed,
+ *      workspace.copyleft_suppressed[i]. A path match without family justification falls through to
+ *      the normal default chain. A target-governed occurrence never reaches this tier at all (tier
+ *      3 above decides it first), so a suppression entry a target governs is effectively dead there
+ *      - see policy/target.ts's suppressionOverlapNotices.
  *   5. Defaults: copyleft → fail (default:copyleft, reason names the elected expression and the
  *      occurrence target; an os-scope AGPL leaf escalates to default:agpl-container unless a
  *      complete project target profile declares network = false, which demotes it to the routine
@@ -84,6 +85,7 @@ import {
   type Occurrence,
   type PackageEntry,
   type Purl,
+  type SpdxLicenseLeaf,
   type StaleOverride,
   type TargetIdentity,
   type Verdict,
@@ -117,7 +119,7 @@ import { clarifyCitation, clarifyInvalidRuleId, type ClarifyRule } from "../sche
 import { ruleReason } from "../schema/diagnostics";
 import { BUILTIN_DENY_RULE_ID } from "./builtinDenylist";
 import { AGPL_IDS, COPYLEFT_FAMILY } from "./copyleft";
-import { denyRuleFor, type IndexedDenyRule } from "./deny";
+import { denyRuleFor, licenseDenyUnion, withoutDeniedBranches, type IndexedDenyRule } from "./deny";
 import { voidedCompatibleEntries, voidedEntryKey, type VoidedEntry } from "./chain";
 import { COULD_BE_COPYLEFT_FAMILIES, WORKSPACE_ABSORBS } from "./copyleftFamily";
 import { justificationValidity, type JustificationValidity } from "./justificationValidity";
@@ -143,12 +145,13 @@ interface Assessment {
    */
   electedNode: ExpressionNode | null;
   /**
-   * The PRE-election parsed node - null exactly when `electedNode` is null. The target lane's
-   * classifyExpression needs the raw tree, never the already-elected branch: elect()'s own
-   * non-target-aware preference can discard the branch a target-aware election would have picked
-   * (the Apache-2.0-vs-GPL-2.0-only counterexample - see compat/classify.ts's module doc), so
-   * feeding it the post-election node would silently pre-discard what the lane exists to recover.
-   * Inert when no target is declared - nothing else reads it.
+   * The PRE-election parsed node, deny-covered OR branches dropped - null exactly when
+   * `electedNode` is null. The target lane's classifyExpression needs the raw tree, never the
+   * already-elected branch: elect()'s own non-target-aware preference can discard the branch a
+   * target-aware election would have picked (the Apache-2.0-vs-GPL-2.0-only counterexample - see
+   * compat/classify.ts's module doc), so feeding it the post-election node would silently
+   * pre-discard what the lane exists to recover. Inert when no target is declared - nothing else
+   * reads it.
    */
   rawNode: ExpressionNode | null;
   /** isCopyleft on the elected node - the elected branch decides. */
@@ -170,8 +173,10 @@ const UNKNOWN_ASSESSMENT: Assessment = {
 };
 
 /**
- * Parse the finding's expression once and derive election + copyleft flag. The expression was
- * produced by the normalizer (or validated policy schema via clarify), so it parses by
+ * Parse the finding's expression once and derive election + copyleft flag. Election never picks an
+ * OR branch the deny union covers while another branch remains ({@link withoutDeniedBranches}), so
+ * `GPL-3.0-only OR BUSL-1.1` is judged on its GPL branch. The expression was produced by the
+ * normalizer (or validated policy schema via clarify), so it parses by
  * construction; the defensive catch keeps the never-throws posture by degrading to unknown instead
  * of crashing the run.
  *
@@ -180,7 +185,7 @@ const UNKNOWN_ASSESSMENT: Assessment = {
  * - it must never be conflated with genuine unknown and never reach satisfies() (it has no valid
  * expression).
  */
-function assessPackage(entry: PackageEntry): Assessment {
+function assessPackage(entry: PackageEntry, denyUnion: readonly SpdxLicenseLeaf[]): Assessment {
   const finding = entry.finding;
 
   if (finding?.confidence === "imprecise") {
@@ -194,7 +199,7 @@ function assessPackage(entry: PackageEntry): Assessment {
   }
 
   try {
-    const node = parseSpdx(expression) as ExpressionNode;
+    const node = withoutDeniedBranches(parseSpdx(expression) as ExpressionNode, denyUnion);
     const electedNode = elect(node);
 
     return {
@@ -1497,9 +1502,10 @@ export function evaluate(
   // Which package entries the recorded introduction chains contradict, decided once per entry and
   // target before the walk below reads the answer per occurrence.
   const voided = voidedCompatibleEntries(model, policy, targetsWithDependencyGraph);
+  const denyUnion = licenseDenyUnion(policy);
 
   for (const entry of model.packages) {
-    const assessment = assessPackage(entry);
+    const assessment = assessPackage(entry, denyUnion);
     // Terminal-0 deny match computed once per package: license-mode reads the assessment
     // expression, electing over the deny allowlists (see docs/glossary.md#election); name-mode
     // reads the package name (works even when the expression is null - the use-restriction rider
@@ -1624,8 +1630,10 @@ function acceptsAgplObligation(rule: string): boolean {
  */
 export function acceptedContainerNotices(
   model: CanonicalDependencies,
+  policy: Policy,
   verdicts: ReadonlyArray<Verdict>,
 ): AcceptedContainerNotice[] {
+  const denyUnion = licenseDenyUnion(policy);
   const verdictByKey = new Map<string, Verdict>();
 
   for (const verdict of verdicts) {
@@ -1639,7 +1647,7 @@ export function acceptedContainerNotices(
       continue;
     }
 
-    const assessment = assessPackage(entry);
+    const assessment = assessPackage(entry, denyUnion);
 
     if (!carriesAgplObligation(assessment)) {
       continue;

@@ -383,7 +383,7 @@ function buildScenario(inputs: ReadonlyArray<ScenarioInput>, policyToml: string)
     suppressedWorkspaces: policy.suppressedWorkspaces,
     verdicts,
     developmentContainers,
-    acceptedContainerNotices: acceptedContainerNotices(scoped, verdicts),
+    acceptedContainerNotices: acceptedContainerNotices(scoped, policy, verdicts),
   };
 
   return {
