@@ -39,7 +39,7 @@ distribution = "external"
 # the "dockerfile.<suffix>" naming convention (the discovery module itself and
 # its test). Neither is a real Dockerfile; handing either to docker build would
 # abort the run. Excluded from the Docker-scan workflow's build set.
-ignore = ["src/collectors/dockerfile.ts", "test/dockerfile.test.ts"]
+ignore = ["src/collectors/dockerfile.ts", "src/collectors/dockerfile.test.ts"]
 
 # `source` is a glob over Dockerfile identities, matched exactly like
 # the [docker] ignore globs; a literal path matches one image.
