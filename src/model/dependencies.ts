@@ -370,6 +370,10 @@ export interface LicenseFinding {
    * over the KNOWN member). Absent for every finding that is not an os-scope partial.
    */
   unrecognizedTokens?: readonly string[];
+  /**
+   * The raw labels a correction rewrote into `expression`, sorted; only on a "corrected" finding.
+   */
+  correctedFrom?: readonly RawLicense[];
 }
 
 /** A stale-override condition surfaced to the policy engine. */

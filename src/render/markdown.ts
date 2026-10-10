@@ -167,8 +167,9 @@ function isImprecise(pkg: PackageEntry): boolean {
  * (imprecise)" (the family, faithfully, never a fabricated precise id) - a family token is not an
  * expression and never reaches canonicalizeExpression; an os-scope PARTIAL finding renders the
  * canonical expression PLUS the surfaced remainder ("<expression> (+ tok, tok)") so the known
- * obligation AND the unrecognized tokens are both visible; "unknown" when the expression is null
- * and not imprecise. Packages without a finding (pre-annotation tolerance) fall back to the
+ * obligation AND the unrecognized tokens are both visible; a corrected finding appends
+ * `(corrected from "<raw>")` so the rewritten label stays auditable; "unknown" when the expression
+ * is null and not imprecise. Packages without a finding (pre-annotation tolerance) fall back to the
  * raw-claims dedup join, rendered as-declared - there is no finding yet to canonicalize.
  */
 function licenseCellOf(pkg: PackageEntry): string {
@@ -188,8 +189,13 @@ function licenseCellOf(pkg: PackageEntry): string {
 
     const expression =
       pkg.finding.expression !== null ? canonicalizeExpression(pkg.finding.expression) : "unknown";
+    const corrected = pkg.finding.correctedFrom ?? [];
+    const correctedNote =
+      corrected.length > 0
+        ? ` (corrected from ${corrected.map((raw) => JSON.stringify(raw)).join(", ")})`
+        : "";
 
-    return `${expression}${suffix}`;
+    return `${expression}${correctedNote}${suffix}`;
   }
 
   // Raw values are deduped here, first-seen order preserved: the model deliberately keeps same-raw

@@ -1511,9 +1511,11 @@ describe("buildOutputs and the generate output set", () => {
       });
     });
 
-    // The named raw "Apache License 2.0" was normalized for display.
-    expect(squish(md)).toContain("| apache-lib | npm | 4.0.0 | Apache-2.0 |");
-    expect(md).not.toContain("Apache License 2.0");
+    // The named raw "Apache License 2.0" is normalized for display and quoted only as its origin.
+    expect(squish(md)).toContain(
+      '| apache-lib | npm | 4.0.0 | Apache-2.0 (corrected from "Apache License 2.0") |',
+    );
+    expect(md).not.toMatch(/\| Apache License 2\.0 *\|/);
 
     // Dump packages all carry finding objects; no verdicts key without a
     // policy (the policy-gated surface stays absent).

@@ -158,6 +158,10 @@ comparisons. The variations:
 - A precise finding renders its canonicalized expression, for example
   `Apache-2.0 AND LGPL-3.0-or-later`; a registry declaring redundant noise like
   `(MIT OR Apache-2.0) AND (Apache-2.0 AND MIT)` renders as `Apache-2.0 AND MIT`.
+- A finding that `spdx-correct` or a built-in fixup rewrote from a non-SPDX
+  label appends that label, for example
+  `Apache-2.0 (corrected from "Apache License, Version 2.0")`, so the rewrite
+  can be audited against what the package declared.
 - An [imprecise](../glossary.md#imprecise-family) finding renders its family
   token plus a marker, for example `BSD (imprecise)` — a family token is not an
   expression and is never canonicalized.

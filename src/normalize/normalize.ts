@@ -481,7 +481,7 @@ function findingFromClaims(
     if (scope === "os" && (hasNormalizable || hasImprecise)) {
       const surfaced = [...new Set(unknownTokens)].sort(compareCodeUnits);
 
-      return { ...combineKnown(results), unrecognizedTokens: surfaced };
+      return { ...combineKnown(results, distinct), unrecognizedTokens: surfaced };
     }
 
     // Every non-os scope (and os with zero known members): conservative all-or-nothing - a
@@ -490,7 +490,7 @@ function findingFromClaims(
     return UNKNOWN_FINDING;
   }
 
-  return combineKnown(results);
+  return combineKnown(results, distinct);
 }
 
 /**
@@ -510,15 +510,20 @@ function findingFromClaims(
  *      could-be-copyleft review lane is reached order-independently.
  *   3. Else AND-combine the (all-permissive) precise claims.
  */
-function combineKnown(results: ReadonlyArray<NormalizeResult>): LicenseFinding {
+function combineKnown(
+  results: ReadonlyArray<NormalizeResult>,
+  claims: ReadonlyArray<LicenseClaim>,
+): LicenseFinding {
   const preciseExpressions = results
     .map((r) => r.expression)
     .filter((expression): expression is CanonicalLicense => expression !== null);
-  const anyCorrected = results.some((r) => r.expression !== null && r.source === "corrected");
+  const correctedFrom = claims
+    .filter((_, i) => results[i]!.expression !== null && results[i]!.source === "corrected")
+    .map((c) => asRawLicense(c.raw.trim()));
   const hasPreciseCopyleft = preciseExpressions.some(expressionIsCopyleft);
 
   if (hasPreciseCopyleft) {
-    return combinePrecise(preciseExpressions, anyCorrected);
+    return combinePrecise(preciseExpressions, correctedFrom);
   }
 
   const impreciseFamily = electImpreciseFamily(results);
@@ -533,7 +538,7 @@ function combineKnown(results: ReadonlyArray<NormalizeResult>): LicenseFinding {
     };
   }
 
-  return combinePrecise(preciseExpressions, anyCorrected);
+  return combinePrecise(preciseExpressions, correctedFrom);
 }
 
 /** True if a parseable SPDX expression elects a copyleft branch (defensive). */
@@ -581,7 +586,7 @@ function electedOf(node: ExpressionNode): CanonicalLicense {
 /** AND-combine the precise (already-canonical) claim expressions into one finding. */
 function combinePrecise(
   preciseExpressions: ReadonlyArray<CanonicalLicense>,
-  anyCorrected: boolean,
+  correctedFrom: ReadonlyArray<RawLicense>,
 ): LicenseFinding {
   // Dedupe expressions: an spdx-id claim and a name claim may normalize to the same expression.
   const expressions = [...new Set(preciseExpressions)];
@@ -611,8 +616,11 @@ function combinePrecise(
   return {
     expression,
     elected: electedOf(canonicalNode),
-    source: anyCorrected ? "corrected" : "generator",
-    confidence: anyCorrected ? "corrected" : "exact",
+    source: correctedFrom.length > 0 ? "corrected" : "generator",
+    confidence: correctedFrom.length > 0 ? "corrected" : "exact",
+    ...(correctedFrom.length > 0 && {
+      correctedFrom: [...new Set(correctedFrom)].sort(compareCodeUnits),
+    }),
   };
 }
 

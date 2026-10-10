@@ -4100,3 +4100,36 @@ describe("renderMarkdown — Target compatibility section", () => {
     expect(targetSection.includes("The packages listed below need review")).toBe(false);
   });
 });
+
+describe("License column: a corrected finding names the label it was corrected from", () => {
+  test("the cell carries the raw label next to the corrected expression", () => {
+    const corrected = entry({
+      purl: asPurl("pkg:pypi/corrected-pkg@1.0.0"),
+      name: asDependencyName("corrected-pkg"),
+      version: asDependencyVersion("1.0.0"),
+      licenseClaims: [
+        { raw: asRawLicense("Apache License, Version 2.0"), kind: "name", source: "generator" },
+      ],
+    });
+    const output = renderMarkdown(annotateFindings({ packages: [corrected] }, []).model);
+
+    expect(
+      output.includes(
+        '| corrected-pkg | pypi | 1.0.0 | Apache-2.0 (corrected from "Apache License, Version 2.0") | apps/a |',
+      ),
+    ).toBe(true);
+  });
+
+  test("an exact finding carries no marker", () => {
+    const exact = entry({
+      purl: asPurl("pkg:npm/exact-pkg@1.0.0"),
+      name: asDependencyName("exact-pkg"),
+      version: asDependencyVersion("1.0.0"),
+      licenseClaims: [{ raw: asRawLicense("MIT"), kind: "spdx-id", source: "generator" }],
+    });
+    const output = renderMarkdown(annotateFindings({ packages: [exact] }, []).model);
+
+    expect(output.includes("| exact-pkg | npm | 1.0.0 | MIT | apps/a |")).toBe(true);
+    expect(output.includes("corrected from")).toBe(false);
+  });
+});

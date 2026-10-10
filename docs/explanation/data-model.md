@@ -232,6 +232,7 @@ run; without `--policy` the field is absent.
 | `observedExpressions?` | `readonly string[]`  | The set of every observed per-claim precise expression, deduped and sorted. The deny terminal also reads this so a denied member is seen even when combination elected an imprecise family or collapsed to unknown. |
 | `conflict?`            | `AssessmentConflict` | Set when the in-depth ScanCode assessment disagrees with a quick-check claim. Carries the assessed expression and the disagreeing members, and drives a `conflict:scancode` fail. Absent when no ScanCode claim exists or the assessment agrees. |
 | `unrecognizedTokens?`  | `readonly string[]`  | Non-normalizable tokens surfaced for a non-gating `os`-scope partial finding only. Advisory: never enters `expression`, never gates.                                                |
+| `correctedFrom?`       | `readonly string[]`  | The raw labels a correction rewrote into `expression`, sorted. Present only when `confidence` is `"corrected"`; the License column shows them. |
 
 ### Why `imprecise` is not `none`
 

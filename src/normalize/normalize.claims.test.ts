@@ -331,6 +331,16 @@ describe("normalizeRaw — a correction must account for every word of the label
     });
   });
 
+  test("a corrected finding records the raw labels the correction rewrote", () => {
+    const claims = [claim("MIT", "spdx-id"), claim("Apache License, Version 2.0", "name")];
+    const { model } = annotateFindings(modelOf(pkg("two-claims", "1.0.0", claims)), []);
+
+    const finding = model.packages[0]!.finding!;
+
+    expect(finding.confidence).toBe("corrected");
+    expect(finding.correctedFrom).toEqual([asRawLicense("Apache License, Version 2.0")]);
+  });
+
   test("a valid expression naming a commercial LicenseRef is kept exactly", () => {
     expect(
       widen(normalizeRaw(asRawLicense("GPL-3.0-only OR LicenseRef-Commercial")).expression),
