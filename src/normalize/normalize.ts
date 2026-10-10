@@ -47,7 +47,8 @@ import {
  * Raw values that must never reach correct(): npm's "UNLICENSED" (any spelling) means proprietary
  * (correct() maps it to public-domain "Unlicense"), "SEE LICENSE IN <file>" is a pointer, not a
  * license, and a proprietary, commercial, or Commons Clause marker restricts whatever license it
- * rides on, which correct() would drop.
+ * rides on, which correct() would drop. `*`, `?` and `~` hedge a label (`MIT*` is a guess from the
+ * license text), which correct() would accept as the plain id.
  */
 const NEVER_CORRECT = [
   /\bunlicen[cs]ed\b/i,
@@ -55,6 +56,7 @@ const NEVER_CORRECT = [
   /\bproprietary\b/i,
   /\b(?:non)?commercial\b/i,
   /\bcommons[\s-]*clause\b/i,
+  /[*?~]/,
 ];
 
 /** Label words that never change which license a label names. */
@@ -146,6 +148,15 @@ const AMBIGUOUS_FAMILY: ReadonlyMap<string, LicenseFamily> = new Map([
  */
 const PRECISE_LABEL_FIXUP: ReadonlyMap<string, string> = new Map([
   ["isc license", "ISC"],
+  // Registered aliases whose words the SPDX name does not carry.
+  ["zlib/libpng", "Zlib"],
+  ["zlib/libpng license", "Zlib"],
+  ["modified bsd", "BSD-3-Clause"],
+  ["modified bsd license", "BSD-3-Clause"],
+  ["apache license version 2.0, january 2004", "Apache-2.0"],
+  ["apache public license 2.0", "Apache-2.0"],
+  ["mit (x11)", "MIT"],
+  ["eclipse public license v 2.0", "EPL-2.0"],
   // Exception-carrying labels with one exact SPDX spelling: correct() returns the bare base id.
   ["gplv2 with classpath exception", "GPL-2.0-only WITH Classpath-exception-2.0"],
   ["apache-2.0-with-llvm-exception", "Apache-2.0 WITH LLVM-exception"],
@@ -157,6 +168,19 @@ const PRECISE_LABEL_FIXUP: ReadonlyMap<string, string> = new Map([
     "GPL-2.0-only WITH Universal-FOSS-exception-1.0",
   ],
 ]);
+
+/** The {@link PRECISE_LABEL_FIXUP} key of a label: case-folded, `the` dropped, dashes as spaces. */
+function fixupKey(label: string): string {
+  return label
+    .toLowerCase()
+    .replace(/\bthe\b/g, " ")
+    .replace(/[\s-]+/g, " ")
+    .trim();
+}
+
+const PRECISE_LABEL_FIXUP_BY_KEY: ReadonlyMap<string, string> = new Map(
+  [...PRECISE_LABEL_FIXUP].map(([label, id]) => [fixupKey(label), id]),
+);
 
 /**
  * Debian/DEP-5 copyright SHORT-NAME → canonical SPDX id.
@@ -371,7 +395,7 @@ export function normalizeRaw(raw: RawLicense): NormalizeResult {
   }
 
   // Unambiguous label correct() misses (e.g. "ISC license" → ISC).
-  const fixup = PRECISE_LABEL_FIXUP.get(folded);
+  const fixup = PRECISE_LABEL_FIXUP_BY_KEY.get(fixupKey(trimmed));
 
   if (fixup !== undefined) {
     return { expression: canonicalizeExpression(asRawLicense(fixup)), source: "corrected" };

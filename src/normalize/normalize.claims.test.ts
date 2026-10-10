@@ -301,6 +301,12 @@ describe("normalizeRaw — a correction must account for every word of the label
     "CDDL + GPLv2 with classpath exception",
     "LGPL-2.1-with-linking-exception",
     "Eclipse Public License 2.0",
+    "GNU General Public License v2.0 or later",
+    "GNU Lesser General Public License v2 or later (LGPLv2+)",
+    "Dual MIT/GPL",
+    "MIT/GPL",
+    "CDDL/GPLv2+CE",
+    "Unlicense/MIT",
   ])("%p, whose correction would drop or contradict a word, is unknown", (raw) => {
     expect(normalizeRaw(asRawLicense(raw))).toEqual(UNKNOWN);
   });
@@ -308,6 +314,8 @@ describe("normalizeRaw — a correction must account for every word of the label
   test.each([
     ["GPLv2 with Classpath Exception", "GPL-2.0-only WITH Classpath-exception-2.0"],
     ["Apache-2.0-with-LLVM-exception", "Apache-2.0 WITH LLVM-exception"],
+    ["GPLv2 with the Classpath Exception", "GPL-2.0-only WITH Classpath-exception-2.0"],
+    ["Apache 2.0 with LLVM exception", "Apache-2.0 WITH LLVM-exception"],
   ])("the exception-carrying label %p keeps its exception: %p", (raw, expected) => {
     expect(normalizeRaw(asRawLicense(raw))).toEqual({
       expression: canon(expected),
@@ -324,12 +332,26 @@ describe("normalizeRaw — a correction must account for every word of the label
     ["GPLv2+", "GPL-2.0-or-later"],
     ["Mozilla Public License 2.0 (MPL 2.0)", "MPL-2.0"],
     ["CC BY-SA 4.0", "CC-BY-SA-4.0"],
+    ["Zlib/libpng", "Zlib"],
+    ["zlib/libpng License", "Zlib"],
+    ["Modified BSD License", "BSD-3-Clause"],
+    ["Apache License Version 2.0, January 2004", "Apache-2.0"],
+    ["Apache Public License 2.0", "Apache-2.0"],
+    ["MIT (X11)", "MIT"],
+    ["Eclipse Public License - v 2.0", "EPL-2.0"],
   ])("the cosmetic variant %p still corrects to %p", (raw, expected) => {
     expect(normalizeRaw(asRawLicense(raw))).toEqual({
       expression: canon(expected),
       source: "corrected",
     });
   });
+
+  test.each(["MIT*", "MIT?", "~MIT~"])(
+    "the punctuation hedge %p is unknown, not corrected",
+    (raw) => {
+      expect(normalizeRaw(asRawLicense(raw))).toEqual(UNKNOWN);
+    },
+  );
 
   test("a corrected finding records the raw labels the correction rewrote", () => {
     const claims = [claim("MIT", "spdx-id"), claim("Apache License, Version 2.0", "name")];
