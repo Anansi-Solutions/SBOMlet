@@ -201,14 +201,13 @@ async function runScancode(
     }
 
     // ScanCode exits NON-ZERO when SOME files fail to scan - an undecodable or oversized bundled
-    // data file (a vendored full license-list JSON, say) -
-    // yet still writes a COMPLETE, well-formed result for the rest of the tree;
-    // the file that failed carries no detected expression and is inert to election. Tolerate that
-    // ONLY when an output file was produced: the exists-check, the size gate, and the tool_version
-    // assertion below are the integrity gate, so a substituted/wrong binary, a truncated write, or
-    // a catastrophic failure that left no parseable, correctly-versioned output still throws. With
-    // NO output file the failure is real - rethrow the original error unchanged (its stderr tail is
-    // the diagnostic).
+    // data file (a vendored full license-list JSON, say) - yet still writes a COMPLETE, well-formed
+    // result for the rest of the tree; the file that failed carries `scan_errors`, which election
+    // rejects only when it is a file election reads. Tolerate that ONLY when an output file was
+    // produced: the exists-check, the size gate, and the tool_version assertion below are the
+    // integrity gate, so a substituted/wrong binary, a truncated write, or a catastrophic failure
+    // that left no parseable, correctly-versioned output still throws. With NO output file the
+    // failure is real - rethrow the original error unchanged (its stderr tail is the diagnostic).
     if (!existsSync(outFile)) {
       throw error;
     }
@@ -230,11 +229,10 @@ async function runScancode(
 
 /**
  * Scan one locally-present scan candidate with the pinned scancode-toolkit CLI and return its
- * elected result, or null on a clean no-answer. Mirrors dockerOs.ts's scanImage/parseSyftOutput
- * skeleton: spawn via execTool (the tool's only child_process seam) -> exists-check -> size-gate
- * BEFORE read -> read -> parse + version-assert -> election. A spawn ENOENT (missing tool) is
- * mapped to the loud install-command error; any other
-
+ * elected result, or null on a clean no-answer (an errored legal file or manifest is a rejection).
+ * Mirrors dockerOs.ts's scanImage/parseSyftOutput skeleton: spawn via execTool (the tool's only
+ * child_process seam) -> exists-check -> size-gate BEFORE read -> read -> parse + version-assert ->
+ * election. A spawn ENOENT (missing tool) is mapped to the loud install-command error; any other
  * rejection (non-zero exit, timeout) propagates as-is.
  *
  * The candidate's own `isPackageOwnLegalPath` predicate (see `ScanCandidate` in sources.ts) threads

@@ -816,6 +816,29 @@ describe("electExpression / electCopyrights (pure narrow, no exec)", () => {
     expect(widen(elected?.raw)).toBe("CC-BY-4.0 AND MIT AND OFL-1.1");
   });
 
+  test("a legal file election reads that carries scan_errors rejects instead of falling through to a no-answer", () => {
+    const files = [
+      {
+        path: "pkg/LICENSE",
+        detected_license_expression_spdx: null,
+        scan_errors: ["ERROR: Processing interrupted: timeout after 120 seconds."],
+      },
+      { path: "pkg/package.json", detected_license_expression_spdx: "MIT", scan_errors: [] },
+    ];
+
+    expect(() => electExpression(files, isRootLevelPath)).toThrow(/scan errors on "pkg\/LICENSE"/);
+  });
+
+  test("scan_errors on a file neither lane reads (a data file, a vendored LICENSE) leave election untouched", () => {
+    const files = [
+      { path: "pkg/data/licenses.json", scan_errors: ["ERROR: file too large"] },
+      { path: "pkg/vendor/x/LICENSE", scan_errors: ["ERROR: Processing interrupted"] },
+      { path: "pkg/LICENSE", detected_license_expression_spdx: "MIT", scan_errors: [] },
+    ];
+
+    expect(widen(electExpression(files, isRootLevelPath)?.raw)).toBe("MIT");
+  });
+
   test("a null element inside a copyrights[] array is skipped, never a TypeError", () => {
     const files = [
       {

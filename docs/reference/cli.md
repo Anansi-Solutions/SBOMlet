@@ -109,7 +109,9 @@ installed anywhere in the workspace.
 A package that times out or otherwise fails to scan (each bounded by
 `--package-timeout-mins`, 10 minutes by default) is skipped and reported the same
 way, and retried on the next run — one slow or broken package never aborts the
-rest of the assessment. Every result already computed in the run is still
+rest of the assessment. A scan in which ScanCode reports an error on the
+package's own licence file or manifest is such a failure, not a "no licence
+found" result. Every result already computed in the run is still
 committed, even when a later package's failure would otherwise have aborted it.
 
 When `--intensive` is requested but the scanner isn't on `PATH`, or scancode's

@@ -38,6 +38,12 @@ interface RawScancodeFile {
   path?: unknown;
   detected_license_expression_spdx?: unknown;
   copyrights?: unknown;
+  scan_errors?: unknown;
+}
+
+/** True iff ScanCode reported at least one error while scanning this entry. */
+function hasScanErrors(entry: RawScancodeFile): boolean {
+  return Array.isArray(entry.scan_errors) && entry.scan_errors.length > 0;
 }
 
 /** True iff a raw files[] entry is a well-shaped object we can read fields from. */
@@ -54,6 +60,9 @@ function isRawScancodeFile(raw: unknown): raw is RawScancodeFile {
  * `electExpression`). Either way, this function only ever asks the predicate it is given - it
  * carries no layout knowledge of its own, not which ecosystem, not where a package's own files
  * live.
+ *
+ * @throws When a matching, admissible entry reached before any winner carries `scan_errors`: its
+ * missing expression is a failed scan, not evidence of no license.
  */
 function electFromPattern(
   entries: RawScancodeFile[],
@@ -74,6 +83,12 @@ function electFromPattern(
 
     if (!pattern.test(basename(path))) {
       continue;
+    }
+
+    if (hasScanErrors(entry)) {
+      throw new Error(
+        `scancode reported scan errors on ${JSON.stringify(path)}, a file election reads`,
+      );
     }
 
     const expression = entry.detected_license_expression_spdx;
@@ -110,6 +125,8 @@ function electFromPattern(
  * than accepted as noise - the caller falls through to the next lane, or to a clean no-answer if
  * both lanes reject. The winning expression is simplified via {@link canonicalizeExpression} before
  * it is returned, so ScanCode's own boolean-algebra noise never reaches the memo or a claim.
+ *
+ * @throws When an entry either lane consults carries `scan_errors` (see {@link electFromPattern}).
  */
 export function electExpression(
   files: unknown,
