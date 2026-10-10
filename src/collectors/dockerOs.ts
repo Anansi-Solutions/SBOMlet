@@ -384,13 +384,12 @@ function claimDivergenceOf(
  * `licenses` is the union of every image's claims, so no image order can drop a claim. Name and
  * version are the first-seen values (the purl pins both).
  *
- * @param onClaimDivergence - Called once per purl whose claim sets differ between images, since the
- * single unioned row can no longer say which image carried which claim.
+ * @returns The purl-sorted rows, and one divergence per purl whose claim sets differ between
+ * images (the single unioned row can no longer say which image carried which claim).
  */
 export function unionOsComponents(
   perImage: ReadonlyArray<{ image: string; components: OsComponent[] }>,
-  onClaimDivergence?: (divergence: OsClaimDivergence) => void,
-): AttributedOsComponent[] {
+): [AttributedOsComponent[], OsClaimDivergence[]] {
   const byPurl = new Map<string, AttributedOsComponent>();
   const claimsByPurl = new Map<Purl, Map<string, OsLicense[]>>();
 
@@ -421,17 +420,18 @@ export function unionOsComponents(
   }
 
   const merged = [...byPurl.values()].sort((a, b) => compareCodeUnits(a.purl, b.purl));
+  const divergences: OsClaimDivergence[] = [];
 
   for (const entry of merged) {
     entry.images.sort(compareCodeUnits);
     const divergence = claimDivergenceOf(entry.purl, claimsByPurl.get(entry.purl) ?? new Map());
 
     if (divergence !== undefined) {
-      onClaimDivergence?.(divergence);
+      divergences.push(divergence);
     }
   }
 
-  return merged;
+  return [merged, divergences];
 }
 
 /**
@@ -745,8 +745,7 @@ export async function collectDockerOsSbom(
     dockerImages.push({ image, digest: result.digest, source });
   }
 
-  const claimDivergences: OsClaimDivergence[] = [];
-  const components = unionOsComponents(perImage, (d) => claimDivergences.push(d));
+  const [components, claimDivergences] = unionOsComponents(perImage);
 
   return { doc: emitDockerOsDoc(components, dockerImages), sbomPaths, claimDivergences };
 }
