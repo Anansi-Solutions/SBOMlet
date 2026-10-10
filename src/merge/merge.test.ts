@@ -1571,13 +1571,14 @@ describe("mergeSboms — evidence parsing into attribution", () => {
     expect(lines).not.toContain("Copyright (c) 2010 Holder 10");
   });
 
+  const evidenceEntry = (fileName: string, text: string): unknown => ({
+    license: {
+      name: `file: ${fileName}`,
+      text: { content: Buffer.from(text, "utf8").toString("base64"), encoding: "base64" },
+    },
+  });
+
   test("Test 4e: a NOTICE past the license-text cap is still folded, with its copyright line", () => {
-    const evidenceEntry = (fileName: string, text: string): unknown => ({
-      license: {
-        name: `file: ${fileName}`,
-        text: { content: Buffer.from(text, "utf8").toString("base64"), encoding: "base64" },
-      },
-    });
     const licenseEntries = Array.from({ length: 8 }, (_, i) =>
       evidenceEntry(
         `licenses/LICENSE-dep${i}.txt`,
@@ -1609,6 +1610,57 @@ describe("mergeSboms — evidence parsing into attribution", () => {
     expect(attribution?.copyrightLines).toContain("Copyright 2024 The Big Bundle Authors");
     expect(attribution?.copyrightLines).not.toContain("Copyright (c) 2021 Ninth Vendor");
   });
+
+  test("NOTICE entries are capped at 8 per component, and license texts never displace them", () => {
+    const notices = Array.from({ length: 12 }, (_, i) =>
+      evidenceEntry(`NOTICE.${i}`, `Notice ${i}\nCopyright 2024 Vendor ${i}\n`),
+    );
+    const licenseTexts = Array.from({ length: 12 }, (_, i) =>
+      evidenceEntry(`LICENSE.${i}`, `MIT License\n\nCopyright (c) 2020 Author ${i}\n`),
+    );
+    const doc = {
+      components: [
+        {
+          name: "many-notices",
+          version: "1.0.0",
+          purl: asPurl("pkg:npm/many-notices@1.0.0"),
+          licenses: [{ license: { id: "Apache-2.0" } }],
+          evidence: { licenses: [...licenseTexts, ...notices] },
+        },
+      ],
+    };
+    const attribution = mergeSboms([{ sbom: doc, targetIdentity: EV_TARGET }]).packages[0]
+      ?.attribution;
+
+    expect(attribution?.noticeTexts?.length).toBe(8);
+    expect(attribution?.noticeTexts?.[0]).toBe("Notice 0\nCopyright 2024 Vendor 0\n");
+  });
+
+  test.each(["NOTICES", "NOTICE-2.0", "NOTICE.md", "NOTICE.txt.txt"])(
+    "%p is a NOTICE file; LICENSE-NOTICE is license text",
+    (fileName) => {
+      const doc = {
+        components: [
+          {
+            name: "notice-names",
+            version: "1.0.0",
+            purl: asPurl("pkg:npm/notice-names@1.0.0"),
+            licenses: [{ license: { id: "Apache-2.0" } }],
+            evidence: {
+              licenses: [
+                evidenceEntry(fileName, "Notice body\n"),
+                evidenceEntry("LICENSE-NOTICE", "License body\n"),
+              ],
+            },
+          },
+        ],
+      };
+      const attribution = mergeSboms([{ sbom: doc, targetIdentity: EV_TARGET }]).packages[0]
+        ?.attribution;
+
+      expect(attribution?.noticeTexts).toEqual(["Notice body\n"]);
+    },
+  );
 
   test("Test 4d: CRLF evidence intake yields LF-only text with no trailing spaces", () => {
     // Pre-fix, \r (0x0D) sat inside the control-character class and became

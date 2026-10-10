@@ -171,8 +171,11 @@ function licenseClaimsOf(component: SbomComponentShape): LicenseClaim[] {
  */
 const MAX_EVIDENCE_DECODED_BYTES = 1024 * 1024;
 
-/** Cap on license-text evidence entries folded per component; NOTICE files are never capped. */
+/** Cap on license-text evidence entries folded per component. */
 const MAX_LICENSE_TEXT_EVIDENCE_ENTRIES = 8;
+
+/** Cap on NOTICE evidence entries folded per component, counted apart from license texts. */
+const MAX_NOTICE_EVIDENCE_ENTRIES = 8;
 
 /** Cap on copyright lines per package, matching the extractor's cap. */
 const MAX_COPYRIGHT_LINES = 20;
@@ -199,14 +202,13 @@ export function sanitizeEvidenceText(value: string): string {
 }
 
 /**
- * NOTICE-file classifier: stem "notice" plus an optional single extension,
- * case-insensitive - NOTICE, NOTICE.txt, NOTICE.md, NOTICE.markdown all
- * classify as NOTICE files. This mirrors the yarn plugin's own gather semantics (it collects by
- * ^NOTICE filename prefix and emits the basename verbatim), so an extension variant can never fall
- * into the license-text branch - where, for any package with a parseable claim, its body would be
- * dropped from the legal document entirely (Apache-2.0 §4(d) requires reproducing NOTICE contents).
+ * NOTICE-file classifier: any basename starting with "notice", case-insensitive - NOTICE,
+ * NOTICE.md, NOTICES, NOTICE-2.0. This mirrors the yarn plugin's own gather semantics (it collects
+ * by ^NOTICE filename prefix and emits the basename verbatim), so a variant can never fall into the
+ * license-text branch - where, for any package with a parseable claim, its body would be dropped
+ * from the legal document entirely (Apache-2.0 §4(d) requires reproducing NOTICE contents).
  */
-const NOTICE_FILE_RE = /^notice(\.[a-z0-9]+)?$/i;
+const NOTICE_FILE_RE = /^notice/i;
 
 /** One decoded evidence file: sanitized utf8 text, classified NOTICE or license text. */
 interface EvidenceAttachment {
@@ -231,6 +233,7 @@ function evidenceAttachmentsOf(component: SbomComponentShape): EvidenceAttachmen
 
   const out: EvidenceAttachment[] = [];
   let licenseTextEntries = 0;
+  let noticeEntries = 0;
 
   for (const raw of licenses) {
     // Any deviation from the exact verified shape skips the entry - the same continue every failed
@@ -245,7 +248,11 @@ function evidenceAttachmentsOf(component: SbomComponentShape): EvidenceAttachmen
     const fileName = name.startsWith("file: ") ? name.slice("file: ".length) : name;
     const isNotice = NOTICE_FILE_RE.test(fileName);
 
-    if (!isNotice && licenseTextEntries >= MAX_LICENSE_TEXT_EVIDENCE_ENTRIES) {
+    if (
+      isNotice
+        ? noticeEntries >= MAX_NOTICE_EVIDENCE_ENTRIES
+        : licenseTextEntries >= MAX_LICENSE_TEXT_EVIDENCE_ENTRIES
+    ) {
       continue;
     }
 
@@ -263,7 +270,9 @@ function evidenceAttachmentsOf(component: SbomComponentShape): EvidenceAttachmen
 
     out.push({ text: sanitizeEvidenceText(decoded), isNotice });
 
-    if (!isNotice) {
+    if (isNotice) {
+      noticeEntries++;
+    } else {
       licenseTextEntries++;
     }
   }
