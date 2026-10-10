@@ -187,7 +187,7 @@ const yarnCollector: Collector = {
  * bun targets use the in-process bun.lock collector (no upstream generator preserves bun.lock
  * identity). No subprocess, so timeoutMs is ignored; the lockfile size gate fires inside
  * collectWithBunLock as well as in the CLI loop. NO firstPartyNames: the collector already excluded
- * @workspace: members and workspaces[*].name twins itself.
+ * the @workspace: members itself.
  */
 const bunCollector: Collector = {
   tool: (): ToolIdentity => BUN_COLLECTOR_TOOL,

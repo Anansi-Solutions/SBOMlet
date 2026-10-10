@@ -2143,7 +2143,7 @@ describe("dispatch wiring: bun branch + per-kind firstPartyNames", () => {
     // The collector line printed; the cdxgen path was NEVER involved for
     // this target (zero subprocess by construction — the stub registry
     // recorded no call).
-    expect(stderr).toContain("collecting bunproj via bun-lock-collector@1");
+    expect(stderr).toContain("collecting bunproj via bun-lock-collector@2");
     expect(kindAwareScanIdentities.length).toBe(scansBefore);
 
     const md = readFileSync(outputPath, "utf8");

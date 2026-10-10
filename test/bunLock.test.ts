@@ -241,7 +241,7 @@ describe("BUN_COLLECTOR_TOOL", () => {
   test("identity the CLI prints as name@version", () => {
     expect(BUN_COLLECTOR_TOOL).toEqual({
       name: "bun-lock-collector",
-      version: "1",
+      version: "2",
     });
   });
 });
@@ -496,7 +496,7 @@ describe("collectWithBunLock — contract and cache key", () => {
     expect(typeof result.cacheKey).toBe("string");
   });
 
-  test("cacheKey reuses computeCacheKey with the locked framing (bun-collector-v1 + bun.lock/package.json)", async () => {
+  test("cacheKey reuses computeCacheKey with the locked framing (bun-collector-v2 + bun.lock/package.json)", async () => {
     const target = makeBunTarget(WORKSPACE_LOCK);
     const result = await collectWithBunLock(target, { tempDir: makeOutDir() });
 
@@ -504,7 +504,7 @@ describe("collectWithBunLock — contract and cache key", () => {
       computeCacheKey(
         target,
         BUN_COLLECTOR_TOOL,
-        ["bun-collector-v1"],
+        ["bun-collector-v2"],
         ["bun.lock", "package.json"],
       ),
     );

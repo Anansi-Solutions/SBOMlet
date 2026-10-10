@@ -50,7 +50,7 @@ import type { Target } from "../targets/target";
  */
 export const BUN_COLLECTOR_TOOL = {
   name: "bun-lock-collector",
-  version: "1",
+  version: "2",
 } as const;
 
 /**
@@ -82,7 +82,7 @@ export function assertBunLockSize(lockPath: string): void {
  * hash - this sentinel plays the role cdxgenCacheArgs plays for cdxgen targets, and changes only
  * when the collector's observable behavior changes (alongside the tool version).
  */
-const BUN_CACHE_ARGS = ["bun-collector-v1"];
+const BUN_CACHE_ARGS = ["bun-collector-v2"];
 
 /**
  * Manifest files hashed into the cache key - derived from the single source (dispatch.ts) so the
