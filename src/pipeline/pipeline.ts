@@ -15,7 +15,7 @@ import {
   assertDependencyGraphCoverage,
   targetsWithDependencyGraph,
 } from "../merge/dependencyGraphs";
-import { mergeSboms, type CollectedSbom } from "../merge/merge";
+import { mergeSbomsWithIntake, type CollectedSbom, type SbomIntake } from "../merge/merge";
 import {
   parseClarificationsAt,
   withImportedClarifications,
@@ -49,6 +49,7 @@ import { renderMarkdown, type PolicyView, type TargetProfileSummary } from "../r
 import { renderNotices } from "../render/notices";
 import { globToRegExp } from "../targets/discover";
 import { applyContainerScopes } from "./containerScope";
+import { inventoryShortfallWarning } from "./coverage";
 import { resolveContained, resolveFrom } from "./paths";
 import { sanitizeForLog, writePolicySummary } from "./summary";
 import { collectTargets } from "./targets";
@@ -653,6 +654,26 @@ function checkedDependencyGraphTargets(
   return targets;
 }
 
+/**
+ * Print, per merge input, the counted-vs-inventoried gap and the components the merge skipped, so a
+ * component the merge cannot identify is reported rather than silently missing from the inventory.
+ */
+function reportInventoryShortfalls(
+  inputs: ReadonlyArray<CollectedSbom>,
+  intake: ReadonlyArray<SbomIntake>,
+  log: (line: string) => void,
+): void {
+  for (const [index, input] of inputs.entries()) {
+    const inputIntake = intake[index];
+    const warning =
+      inputIntake === undefined ? undefined : inventoryShortfallWarning(input.sbom, inputIntake);
+
+    if (warning !== undefined) {
+      log(warning);
+    }
+  }
+}
+
 export async function buildOutputs(opts: GenerateOptions): Promise<BuiltOutputs> {
   // Load + validate the policy before any target resolution or scan: an invalid policy must abort
   // through the exit-3 config-error path immediately, never after minutes of scanning. TomlError
@@ -684,9 +705,10 @@ export async function buildOutputs(opts: GenerateOptions): Promise<BuiltOutputs>
 
   // The collect loop owns the per-target stderr lines; the sink is provided here so the pipeline
   // stays the single place wiring stderr.
-  const { inputs, targetDirs } = await collectTargets(opts, (line): void => {
+  const log = (line: string): void => {
     process.stderr.write(`${line}\n`);
-  });
+  };
+  const { inputs, targetDirs } = await collectTargets(opts, log);
 
   // Thread the committed docker SBOM into the merge when it exists - one scope:"os" input per
   // attributed image. A missing file is the offline cache-miss equivalent - no os entries, no
@@ -699,7 +721,9 @@ export async function buildOutputs(opts: GenerateOptions): Promise<BuiltOutputs>
 
   // One merged model from all targets: shared packages appear once with every consumer in their
   // occurrences.
-  const model = mergeSboms(inputs);
+  const { model, intake } = mergeSbomsWithIntake(inputs);
+
+  reportInventoryShortfalls(inputs, intake, log);
 
   const graphTargets = checkedDependencyGraphTargets(model, inputs);
 

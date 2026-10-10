@@ -19,7 +19,7 @@ import {
   type Purl,
 } from "../../test/brandTestSupport";
 import { assertDependencyGraphCoverage, targetsWithDependencyGraph } from "./dependencyGraphs";
-import { mergeSboms, purlSetOf } from "./merge";
+import { mergeSboms, mergeSbomsWithIntake, purlSetOf } from "./merge";
 
 const TARGET = asTargetIdentity("libraries/iframe-rpc");
 const SYNTHETIC_TARGET = asTargetIdentity("apps/synthetic");
@@ -2410,5 +2410,60 @@ describe("dependency-graph coverage", () => {
     ]);
 
     expect(() => assertDependencyGraphCoverage(model, new Set([GRAPH_TARGET]))).not.toThrow();
+  });
+});
+
+describe("mergeSbomsWithIntake — components the merge cannot identify", () => {
+  const INTAKE_TARGET = asTargetIdentity("svc");
+
+  test("nested component.components[] entries are inventoried", () => {
+    const doc = {
+      components: [
+        {
+          name: "bundle",
+          version: "1.0.0",
+          purl: "pkg:maven/g/bundle@1.0.0",
+          components: [{ name: "inner", version: "3.0.0", purl: "pkg:maven/g/inner@3.0.0" }],
+        },
+      ],
+    };
+    const model = mergeSboms([{ sbom: doc, targetIdentity: INTAKE_TARGET }]);
+
+    expect(model.packages.map((p) => widen(p.purl))).toEqual([
+      "pkg:maven/g/bundle@1.0.0",
+      "pkg:maven/g/inner@3.0.0",
+    ]);
+    expect([...purlSetOf(doc)].map((purl) => widen(purl))).toEqual([
+      "pkg:maven/g/bundle@1.0.0",
+      "pkg:maven/g/inner@3.0.0",
+    ]);
+  });
+
+  test("each skipped component is tallied by reason; the root and first-party are exclusions", () => {
+    const doc = {
+      metadata: { component: { purl: "pkg:npm/root@1.0.0" } },
+      components: [
+        { name: "ok", version: "1.0.0", purl: "pkg:npm/ok@1.0.0" },
+        { name: "root", version: "1.0.0", purl: "pkg:npm/root@1.0.0" },
+        { name: "member", version: "0.0.0-use.local", purl: "pkg:npm/member@0.0.0-use.local" },
+        { group: "com.example", name: "no-purl", version: "1.0.0" },
+        { name: "no-version", purl: "pkg:npm/no-version@1.0.0" },
+        { name: "blank-version", version: " ", purl: "pkg:npm/blank-version@1.0.0" },
+        { name: "numeric-version", version: 2, purl: "pkg:npm/numeric-version@2" },
+      ],
+    };
+    const { model, intake } = mergeSbomsWithIntake([
+      { sbom: doc, targetIdentity: INTAKE_TARGET, firstPartyNames: new Set(["member"]) },
+    ]);
+
+    expect(model.packages.map((p) => widen(p.name))).toEqual(["ok"]);
+    expect(intake).toEqual([
+      {
+        target: INTAKE_TARGET,
+        inventoried: 1,
+        excluded: 2,
+        skipped: { "no-purl": 1, "no-version": 1, "blank-version": 1, malformed: 1 },
+      },
+    ]);
   });
 });

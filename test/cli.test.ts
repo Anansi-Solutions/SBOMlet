@@ -648,6 +648,45 @@ describe("runGenerate discovery mode — offline branches", () => {
     expect(stderr).not.toContain("collecting");
   });
 
+  test("a maven component the merge cannot identify is reported on stderr, never dropped silently", async () => {
+    const root = mkdtempSync(join(tmpdir(), "licenses-cli-maven-skip-"));
+    const projDir = join(root, "svc");
+
+    mkdirSync(projDir);
+    writeFileSync(
+      join(projDir, "maven.sbom.json"),
+      JSON.stringify({
+        bomFormat: "CycloneDX",
+        specVersion: "1.6",
+        metadata: { component: { purl: "pkg:maven/com.example/svc@1.0.0?type=jar" } },
+        components: [
+          {
+            group: "junit",
+            name: "junit",
+            version: "4.13.2",
+            purl: "pkg:maven/junit/junit@4.13.2",
+          },
+          { group: "com.example.vendor", name: "driver", version: "19.3.0.0" },
+        ],
+      }),
+    );
+    const outputPath = join(root, "out.md");
+
+    const stderr = await withCapturedStderr(async () => {
+      await runGenerate({
+        repoRoot: root,
+        outputPath,
+        noticesPath: join(root, "notices.md"),
+        verbose: false,
+      });
+    });
+
+    expect(readFileSync(outputPath, "utf8")).toContain("- Total packages: 1");
+    expect(stderr).toContain(
+      "warning: svc: counted 2 components, inventoried 1 (1 skipped: 1 without a purl)\n",
+    );
+  });
+
   test("zero discovered targets rejects naming --repo-root and the resolved path", async () => {
     const root = mkdtempSync(join(tmpdir(), "licenses-cli-empty-"));
     const outputPath = join(root, "out.md");

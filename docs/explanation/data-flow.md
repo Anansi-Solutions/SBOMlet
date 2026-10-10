@@ -171,7 +171,21 @@ Source: `collectors/registry.ts`, `pipeline/targets.ts`, `pipeline/coverage.ts`
 `bom-ref`. The consumed subset of each component is narrowed by an arktype
 boundary, and a malformed component is skipped rather than thrown on. That is the
 same skip-rather-than-throw handling the tool uses everywhere it reads
-third-party data.
+third-party data. Nested components (a component's own `components` array) are
+walked like top-level ones.
+
+A skipped component is never silent. The merge counts, per target, the components
+it could not identify (no purl, no name, no version, a blank name or version, or a
+malformed entry), and `buildOutputs` prints one stderr line per affected target
+with the component count the target reported, the number inventoried, and the
+skips by reason:
+
+```text
+warning: svc: counted 2 components, inventoried 1 (1 skipped: 1 without a purl)
+```
+
+The document's own root and first-party workspace members are deliberate
+exclusions, not skips. The warning does not change the exit code.
 
 For each surviving component it produces a
 [`PackageEntry`](../glossary.md#package-entry) carrying the purl, name, version,

@@ -25,7 +25,8 @@ import {
   pythonThirdPartyEntryCount,
   thirdPartyEntryCount,
 } from "../targets/firstParty";
-import { SbomDocument } from "../validate/sbom";
+import { componentTreeOf, SbomDocument } from "../validate/sbom";
+import type { ComponentSkipReason, SbomIntake } from "../merge/merge";
 
 /**
  * Terraform skip arm. The init-has-run gate is a FILESYSTEM signal: modules.json
@@ -243,7 +244,9 @@ export function classifyCoverage(
   return "include";
 }
 
-/** components[] length of a parsed SBOM document; 0 when absent/malformed. */
+/**
+ * Number of components in a parsed SBOM document, nested ones included; 0 when absent/malformed.
+ */
 export function componentCountOf(sbom: unknown): number {
   // Derive the count from the shared SbomDocument boundary (which already owns the "components?":
   // "unknown[]" shape) instead of a fourth ad-hoc narrow.
@@ -253,5 +256,46 @@ export function componentCountOf(sbom: unknown): number {
     return 0;
   }
 
-  return doc.components?.length ?? 0;
+  return componentTreeOf(doc.components ?? []).length;
+}
+
+/** Stderr wording per skip reason, in the order the reasons are listed. */
+const SKIP_REASON_PHRASES: Readonly<Record<ComponentSkipReason, string>> = {
+  "no-purl": "without a purl",
+  "no-name": "without a name",
+  "no-version": "without a version",
+  "blank-name": "with a blank name",
+  "blank-version": "with a blank version",
+  malformed: "malformed",
+};
+
+function componentsNoun(count: number): string {
+  return count === 1 ? "component" : "components";
+}
+
+/**
+ * The stderr warning for one merge input whose inventory falls short of its own component count:
+ * counted vs inventoried, with the skip tally by reason. Undefined when every component was
+ * inventoried or deliberately excluded.
+ */
+export function inventoryShortfallWarning(sbom: unknown, intake: SbomIntake): string | undefined {
+  const reasons = Object.entries(SKIP_REASON_PHRASES).flatMap(([reason, phrase]) => {
+    const count = intake.skipped[reason as ComponentSkipReason] ?? 0;
+
+    return count > 0 ? [`${count} ${phrase}`] : [];
+  });
+  const skipped = Object.values(intake.skipped).reduce((total, count) => total + count, 0);
+  const counted = componentCountOf(sbom);
+
+  if (skipped === 0 && intake.inventoried + intake.excluded >= counted) {
+    return undefined;
+  }
+
+  const excluded = intake.excluded > 0 ? `, excluded ${intake.excluded} as first-party` : "";
+  const tally = skipped > 0 ? ` (${skipped} skipped: ${reasons.join(", ")})` : "";
+
+  return (
+    `warning: ${intake.target}: counted ${counted} ${componentsNoun(counted)}, ` +
+    `inventoried ${intake.inventoried}${excluded}${tally}`
+  );
 }

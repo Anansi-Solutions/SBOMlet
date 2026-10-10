@@ -6,6 +6,7 @@
 import { type } from "arktype";
 
 import { asRawLicense, tryAsPurl, type Purl } from "../model/dependencies";
+import { recordOf } from "./record";
 
 /**
  * The external SBOM is the parse boundary for its purls and license claims, so both are branded
@@ -127,6 +128,30 @@ export const SbomComponent = type({
 });
 
 export type SbomComponentShape = typeof SbomComponent.infer;
+
+/**
+ * Every entry of a components array in document pre-order, descending into each entry's own
+ * `components` array (CycloneDX nests sub-components there). Entries are returned unnarrowed.
+ *
+ * @privateRemarks Iterative, so a deeply nested crafted document cannot overflow the stack.
+ */
+export function componentTreeOf(components: ReadonlyArray<unknown>): unknown[] {
+  const walked: unknown[] = [];
+  const pending = [...components].reverse();
+
+  while (pending.length > 0) {
+    const raw = pending.pop();
+    const children = recordOf(raw)?.["components"];
+
+    walked.push(raw);
+
+    if (Array.isArray(children)) {
+      pending.push(...[...(children as unknown[])].reverse());
+    }
+  }
+
+  return walked;
+}
 
 // The three CycloneDX license claim shapes, tried in this order - expression, then license.id, then
 // license.name (the merge.ts fall-through contract; a mistyped field falls through to the next
