@@ -109,10 +109,11 @@ export function writePolicySummary(
   }
 
   // Surface the assessment-conflict count on its OWN line (the counts-line shape above is
-  // unchanged). A conflict:scancode verdict is a FAIL (a subset of the fail count) - the in-depth
-  // scan disagrees with the quick check and a human must resolve it via [[clarify]]. Printed only
-  // when any exist, so policies with no conflicts keep byte-identical output.
-  const conflictCount = verdicts.filter((v) => v.rule === "conflict:scancode").length;
+  // unchanged). Every conflict:* verdict is a FAIL (a subset of the fail count) - the in-depth scan
+  // disagrees with the quick check, or images disagree on the declared license - and a human must
+  // resolve it via [[clarify]]. Printed only when any exist, so policies with no conflicts keep
+  // byte-identical output.
+  const conflictCount = verdicts.filter((v) => v.rule.startsWith("conflict:")).length;
 
   if (conflictCount > 0) {
     process.stderr.write(

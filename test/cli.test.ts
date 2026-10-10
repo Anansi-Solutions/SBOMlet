@@ -50,6 +50,7 @@ import { parsePolicy } from "../src/policy/parse/parse";
 import { MAX_BUN_LOCK_BYTES } from "../src/collectors/bunLock";
 import * as cdxgenModule from "../src/collectors/cdxgen";
 import { asTargetIdentity, type Verdict } from "../src/model/dependencies";
+import { crossImagePkgSpec, runEngine } from "./policyTestSupport";
 import { asPurl, widen } from "./brandTestSupport";
 import type { VerifyCacheResult } from "../src/pipeline/verifyCache";
 
@@ -494,6 +495,29 @@ describe("writePolicySummary — assessment conflict count line", () => {
     });
 
     expect(stderr).not.toContain("assessment conflict");
+  });
+
+  test("cross-image claim conflicts count toward the line like ScanCode conflicts", async () => {
+    const { verdicts } = runEngine(
+      [
+        crossImagePkgSpec("libdiverge", [
+          { target: "docker:a/Dockerfile", claims: ["MIT"] },
+          { target: "docker:b/Dockerfile", claims: ["GPL-2.0-only"] },
+        ]),
+      ],
+      "",
+    );
+    const stderr = await withCapturedStderr(async () => {
+      writePolicySummary(parsePolicy(""), verdicts, new Set());
+    });
+
+    expect(verdicts.map((verdict) => verdict.rule)).toEqual([
+      "conflict:cross-image-claims",
+      "conflict:cross-image-claims",
+    ]);
+    expect(stderr).toContain(
+      "policy: 2 assessment conflict(s) — resolve via [[clarify]] (2 verdicts)\n",
+    );
   });
 });
 
