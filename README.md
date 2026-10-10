@@ -125,10 +125,11 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - uses: Anansi-Solutions/SBOMlet@main # pin a tag or SHA in production
-        with:
-          policy: .sbomlet.policy.toml
 ```
 
+The action uses `.sbomlet.policy.toml` at the repository root when it exists and
+runs without a policy gate otherwise. A non-empty `policy` input must name an
+existing file; a missing one fails the run with exit code 3.
 Pass `mode: generate` to write the inventory instead of gating it. The action runs
 the same mise + Task pipeline as the Taskfile path — pick whichever fits your CI.
 
