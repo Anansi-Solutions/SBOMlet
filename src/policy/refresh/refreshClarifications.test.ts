@@ -110,14 +110,19 @@ describe("upgrade-ascertain", () => {
     );
   });
 
-  test("a version nothing has been recorded for is reported as unknown, not as a divergence", () => {
+  test("a version with no current detection is unknown, without claiming the lookup is missing", () => {
     const { findings } = run("", bsdEntry("lib", "1.0.0"), [
       scanned("lib", "1.0.0", "BSD"),
       scanned("lib", "2.0.0", null),
     ]);
 
+    // The model cannot tell a version never looked up from one whose source reports no license.
     expect(findings.upgrades[0]?.outcome).toBe("unknown");
-    expect(findings.upgrades[0]?.detail).toContain("run generate");
+    expect(findings.upgrades[0]?.detail).toBe(
+      'it recorded the registry detection "BSD", but there is no current registry detection — ' +
+        "either generate has not looked 2.0.0 up yet (run it, with --intensive for the in-depth " +
+        "lane) or the source reports no license for it",
+    );
   });
 
   test("a version the sources already settle needs no entry", () => {

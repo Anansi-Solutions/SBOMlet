@@ -308,8 +308,10 @@ that one version runs through the engine, and what the engine decides is what ge
 reported. `EXTEND` means every detection the entry recorded still holds there, so
 the version can join its list. `REVIEW` means a detection reads differently now,
 or the entry's stated reason no longer holds — both name what changed. `UNKNOWN`
-means nothing has been recorded for that version yet; run `generate` (or
-`generate --intensive` for the in-depth lane) and try again. `SETTLED` means the
+means no current detection exists for that version: either `generate` has not
+looked it up yet (run it, or `generate --intensive` for the in-depth lane, and
+try again) or the source reports no licence for it, which the committed data
+cannot tell apart. `SETTLED` means the
 version needs no entry at all. An entry that names no version already covers every
 one, so it is never offered more.
 
