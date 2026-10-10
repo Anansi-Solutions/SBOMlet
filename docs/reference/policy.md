@@ -135,7 +135,9 @@ elect an acceptable branch. With a deny covering `BUSL-1.1`,
 `MIT OR BUSL-1.1` is not denied, because the package can elect `MIT`; a finding
 whose every branch is denied is. The election runs against the union of all
 licence-mode deny patterns, so listing `BUSL-1.1`, `SSPL-1.0`, and
-`Elastic-2.0` as three entries still denies `BUSL-1.1 OR SSPL-1.0`.
+`Elastic-2.0` as three entries still denies `BUSL-1.1 OR SSPL-1.0`. Such a
+verdict cites the first contributing entry as its rule and names every other
+entry the denial rests on in its reason; none of them is reported unused.
 
 A denied branch is never the one the rest of the policy judges. When an `OR`
 keeps at least one branch outside the deny set, election picks among those

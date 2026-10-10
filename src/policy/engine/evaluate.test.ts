@@ -2583,6 +2583,18 @@ describe("evaluate — deny election across SEPARATE [[deny]] entries (C#6: unio
     expect(verdicts[0].rule).not.toBe("denied[0]");
   });
 
+  test("a union denial cites the first rule and names every other contributing one", () => {
+    const { verdicts, usedClarifyIndices, policy, model } = runEngine(
+      [pkgSpec("dual-evil", "BUSL-1.1 OR SSPL-1.0", ["backend"])],
+      THREE_SEPARATE_DENIES,
+    );
+
+    expect(verdicts[0]?.rule).toBe("denied[0]");
+    expect(verdicts[0]?.reason).toContain('denied[1] (license pattern "SSPL-1.0")');
+    expect(verdicts[0]?.reason).not.toContain("default:source-available");
+    expect(unusedRuleIds(policy, model, verdicts, usedClarifyIndices)).toEqual(["denied[2]"]);
+  });
+
   test("denyRuleFor: 'SSPL-1.0 OR Elastic-2.0' across separate entries is denied, attributed to the first contributing rule", () => {
     const policy = parsePolicy(THREE_SEPARATE_DENIES);
     const hit = denyRuleFor(policy, "SSPL-1.0 OR Elastic-2.0", "x");

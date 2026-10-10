@@ -121,6 +121,7 @@ import {
   exemptionAwareDenyRules,
   licenseDenyUnion,
   withoutDeniedBranches,
+  type DenyMatch,
   type ExemptionAwareDenyRules,
   type IndexedDenyRule,
 } from "./deny";
@@ -845,7 +846,7 @@ function firstDeny(
   rules: ReadonlyArray<IndexedDenyRule>,
   entry: PackageEntry,
   expression: string | null,
-): IndexedDenyRule | undefined {
+): DenyMatch | undefined {
   const combined = denyRuleAmong(rules, expression, entry.name);
 
   if (combined !== undefined) {
@@ -876,7 +877,7 @@ function firstDeny(
 /** The deny lane's decision for one package. */
 interface DenyDecision {
   /** The rule cited: one still in force, or an exempted shipped default when `exempted`. */
-  readonly rule: IndexedDenyRule;
+  readonly rule: DenyMatch;
   /** True when only shipped defaults the policy exempts deny the package. */
   readonly exempted: boolean;
 }
@@ -902,29 +903,37 @@ function denyDecision(
   return lifted === undefined ? undefined : { rule: lifted, exempted: true };
 }
 
+/** How a deny rule's pattern reads in a verdict reason. */
+function denyPatternText({ rule }: IndexedDenyRule): string {
+  return rule.match === "license"
+    ? `license pattern "${rule.pattern}"`
+    : `package name "${rule.pattern}"`;
+}
+
 /**
  * Terminal-0 deny verdict. A matched deny rule force-fails the package with the `denied[i]` rule id
- * and a reason naming the matched license/pattern and the source-available rationale. It is a
- * `fail` → mapped to a violation (exit 1) by the existing violations → exitCodeFor mapping. This
- * sits above every other lane (incl. stale), so applyDevScope is never reached for a denied verdict
+ * and a reason naming the matched license/pattern, every other rule the denial rests on (an OR the
+ * deny union covers only across rules), and the source-available rationale. It is a `fail` → mapped
+ * to a violation (exit 1) by the existing violations → exitCodeFor mapping. This sits above every
+ * other lane (incl. stale), so applyDevScope is never reached for a denied verdict
  * - a dev-only occurrence of a denied license still fails.
  */
 function denyVerdict(
   base: { purl: Purl; occurrenceTarget: TargetIdentity },
-  denyRule: IndexedDenyRule,
+  denyMatch: DenyMatch,
 ): Verdict {
-  const { ruleId, rule } = denyRule;
-  const what =
-    rule.match === "license"
-      ? `license pattern "${rule.pattern}"`
-      : `package name "${rule.pattern}"`;
+  const { ruleId, rule } = denyMatch;
+  const others = denyMatch.contributing
+    .slice(1)
+    .map((other) => `${other.ruleId} (${denyPatternText(other)})`);
+  const together = others.length > 0 ? `, together with ${others.join(", ")}` : "";
 
   return {
     ...base,
     status: "fail",
     rule: ruleId,
     reason:
-      `DENIED by ${what}: ${rule.reason} — a use-restricted / ` +
+      `DENIED by ${denyPatternText(denyMatch)}: ${rule.reason}${together} — a use-restricted / ` +
       `source-available license cannot be redistributed in client-shipped ` +
       `artifacts, so no compatible rule, workspace suppression, dev-scope ` +
       `downgrade, or override can license it back in (deny is terminal).`,
@@ -1675,6 +1684,23 @@ export function acceptedContainerNotices(
   return notices.sort((a, b) => compareCodeUnits(a.purl, b.purl));
 }
 
+/** Ids of every deny rule some package's denial rests on, the cited one or not. */
+function denyingRuleIds(model: CanonicalDependencies, policy: Policy): Set<string> {
+  const rules = exemptionAwareDenyRules(policy);
+  const denyUnion = licenseDenyUnion(policy);
+  const ids = new Set<string>();
+
+  for (const entry of model.packages) {
+    const decision = denyDecision(rules, entry, assessPackage(entry, denyUnion).expression);
+
+    for (const rule of decision?.rule.contributing ?? []) {
+      ids.add(rule.ruleId);
+    }
+  }
+
+  return ids;
+}
+
 /**
  * Indices of license-form compatible rules that matched an occurrence a package-form rule decided
  * first: they would have accepted it, so they are not unused.
@@ -1718,11 +1744,12 @@ function outrankedLicenseRules(
 
 /**
  * Rule ids of deny/compatible/clarify entries that never decided anything - stale-policy hygiene.
- * Deny and compatible usage is read from cited verdict rules (a license-form compatible rule also
- * counts when a package-form rule outranked it on an occurrence it matched); clarify usage comes
- * from annotateFindings' usedClarifyIndices (a clarify rule is "used" when it replaced a finding,
- * even if a higher-precedence compatible rule decided the final verdict). Suppression entries are
- * never reported. Returned in TOML array order: deny first, then compatible, then clarify.
+ * Deny usage counts every rule a denial rests on, cited or not. Compatible usage is read from cited
+ * verdict rules (a license-form compatible rule also counts when a package-form rule outranked it
+ * on an occurrence it matched); clarify usage comes from annotateFindings' usedClarifyIndices (a
+ * clarify rule is "used" when it replaced a finding, even if a higher-precedence compatible rule
+ * decided the final verdict). Suppression entries are never reported. Returned in TOML array order:
+ * deny first, then compatible, then clarify.
  */
 export function unusedRuleIds(
   policy: Policy,
@@ -1734,8 +1761,10 @@ export function unusedRuleIds(
   const outranked = outrankedLicenseRules(model, policy, verdicts);
   const unused: string[] = [];
 
+  const denying = denyingRuleIds(model, policy);
+
   policy.deny.forEach((_, index) => {
-    if (!cited.has(`denied[${index}]`)) {
+    if (!cited.has(`denied[${index}]`) && !denying.has(`denied[${index}]`)) {
       unused.push(`denied[${index}]`);
     }
   });

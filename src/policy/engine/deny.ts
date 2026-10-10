@@ -63,8 +63,8 @@
  * combined allowlist once and asks nodeDenied against it: "BUSL-1.1 OR SSPL-1.0" then has no
  * electable branch and is denied, while "MIT OR BUSL-1.1" stays electable (MIT is in neither
  * allowlist). When the union denies, the verdict is attributed to the first license rule that
- * contributes a denied leaf, for the rule-id/reason. Name-mode rules stay per-rule - an exact name
- * compare has nothing to elect.
+ * contributes a denied leaf, and the reason names every other contributing rule. Name-mode rules
+ * stay per-rule - an exact name compare has nothing to elect.
  *
  * Pure functions, no I/O, no logging; the satisfies calls are wrapped in a defensive catch to
  * preserve the engine's never-throws posture.
@@ -228,42 +228,40 @@ function anyLeafDenied(node: ExpressionNode, allowlist: readonly SpdxLicenseLeaf
 
 /**
  * License-mode union election: build the combined allowlist of every match="license" rule (policy +
- * shipped defaults) once and ask nodeDenied against it. When denied, attribute to the first license
- * rule that contributes a denied leaf, so the rule-id/reason names a real rule - policy first per
- * effectiveDenyRules order. A null/unparseable expression can never be license-denied. Returns
- * undefined when no license rule, or no electable-out branch, applies.
+ * shipped defaults) once and ask nodeDenied against it. When denied, returns every license rule
+ * that contributes a denied leaf, in effective order, so the citation names real rules - policy
+ * first. A null/unparseable expression can never be license-denied. Returns an empty list when no
+ * license rule, or no electable-out branch, applies.
  */
 function unionLicenseDeny(
   rules: ReadonlyArray<IndexedDenyRule>,
   expression: string,
-): IndexedDenyRule | undefined {
+): IndexedDenyRule[] {
   const licenseRules = rules.filter((r) => r.rule.match === "license");
-
-  if (licenseRules.length === 0) {
-    return undefined;
-  }
-
-  const union = unionAllowlist(licenseRules);
   let node: ExpressionNode;
 
   try {
     node = parseSpdx(expression) as ExpressionNode;
   } catch {
-    return undefined;
+    return [];
   }
 
-  if (!nodeDenied(node, union)) {
-    return undefined;
+  if (licenseRules.length === 0 || !nodeDenied(node, unionAllowlist(licenseRules))) {
+    return [];
   }
 
-  // Attribute to the first license rule that contributes a denied leaf.
-  for (const candidate of licenseRules) {
-    if (candidate.rule.match === "license" && anyLeafDenied(node, candidate.rule.allowlist)) {
-      return candidate;
-    }
-  }
+  const contributing = licenseRules.filter(
+    (r) => r.rule.match === "license" && anyLeafDenied(node, r.rule.allowlist),
+  );
 
-  return licenseRules[0]; // defensive: denied by the union, attribute to first
+  // defensive: denied by the union, attribute to the first rule
+  return contributing.length > 0 ? contributing : licenseRules.slice(0, 1);
+}
+
+/** A matched deny rule plus every rule the denial rests on. */
+export interface DenyMatch extends IndexedDenyRule {
+  /** Every matching rule with a distinct pattern, this one first, in effective order. */
+  readonly contributing: ReadonlyArray<IndexedDenyRule>;
 }
 
 /**
@@ -281,7 +279,7 @@ export function denyRuleFor(
   policy: Policy,
   expression: string | null,
   name: string,
-): IndexedDenyRule | undefined {
+): DenyMatch | undefined {
   return denyRuleAmong(effectiveDenyRules(policy), expression, name);
 }
 
@@ -290,31 +288,26 @@ export function denyRuleAmong(
   rules: ReadonlyArray<IndexedDenyRule>,
   expression: string | null,
   name: string,
-): IndexedDenyRule | undefined {
-  let nameMatch: IndexedDenyRule | undefined;
-  let namePosition = -1;
+): DenyMatch | undefined {
+  const nameMatches = rules.filter((r) => r.rule.match === "name" && r.rule.pattern === name);
+  const licenseMatches = expression === null ? [] : unionLicenseDeny(rules, expression);
+  const matches = [...nameMatches, ...licenseMatches].sort(
+    (a, b) => rules.indexOf(a) - rules.indexOf(b),
+  );
+  const first = matches[0];
 
-  for (const [position, r] of rules.entries()) {
-    if (r.rule.match === "name" && r.rule.pattern === name) {
-      nameMatch = r;
-      namePosition = position;
-      break;
-    }
+  if (first === undefined) {
+    return undefined;
   }
 
-  const licenseMatch = expression === null ? undefined : unionLicenseDeny(rules, expression);
+  const seen = new Set<string>();
+  const contributing = matches.filter((r) => {
+    const key = `${r.rule.match}\u0000${r.rule.pattern}`;
+    const fresh = !seen.has(key);
 
-  if (nameMatch === undefined) {
-    return licenseMatch;
-  }
+    seen.add(key);
+    return fresh;
+  });
 
-  if (licenseMatch === undefined) {
-    return nameMatch;
-  }
-
-  // Both matched: the earlier rule in effective order wins (mirrors the prior lowest-index
-  // precedence). licenseMatch is a reference into `rules`.
-  const licensePosition = rules.indexOf(licenseMatch);
-
-  return namePosition <= licensePosition ? nameMatch : licenseMatch;
+  return { ...first, contributing };
 }
