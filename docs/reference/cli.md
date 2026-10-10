@@ -363,7 +363,8 @@ because the package it governs is temporarily absent, and only you can tell whic
 A rewritten entry's `expression` is stored in canonical SPDX form — sorted, deduped,
 absorbed — so `(MIT AND CC-BY-3.0)` is written back as `CC-BY-3.0 AND MIT`. The
 license is unchanged and staleness matching is spelling-blind, so the canonical form
-is simply the stored form; your prose in `comment` and `evidence` is kept verbatim.
+is simply the stored form. Your prose in `comment` and `evidence` is kept as written,
+except that leading and trailing whitespace is trimmed.
 
 The rewrite is guarded twice. A clarifications file carrying `#` comments is left
 untouched and the run exits 3: the parser discards comments before the entries are
