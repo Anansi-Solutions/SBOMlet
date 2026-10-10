@@ -16,6 +16,7 @@ import { annotateFindings } from "../src/normalize/normalize";
 import { renderMarkdown, type PolicyView, type TargetProfileSummary } from "../src/render/markdown";
 import { renderNotices } from "../src/render/notices";
 import { TARGET_RULE_INCOMPATIBLE, type TargetProfile } from "../src/policy/compat";
+import { osPkgSpec, pkgSpec, runEngine } from "./policyTestSupport";
 import {
   asTargetIdentity,
   canon,
@@ -2806,10 +2807,10 @@ describe("renderMarkdown — Problematic licenses summary", () => {
     };
     const section = slice(renderMarkdown(model, view));
 
-    // 2 copyleft (copyleft + imprecise-copyleft), 1 unknown, 1 deny.
+    // 2 copyleft (copyleft + imprecise-copyleft), 1 unknown; no rule category takes a deny warn.
     expect(section.includes("2 copyleft warning(s)")).toBe(true);
     expect(section.includes("1 unknown warning(s)")).toBe(true);
-    expect(section.includes("1 deny warning(s)")).toBe(true);
+    expect(section.includes("1 other warning(s)")).toBe(true);
   });
 
   test("non-blocking roll-up names a target:* warn under its own category, not the vague 'other' bucket (adversarial gate finding: the pre-registered warnCategory judgment)", () => {
@@ -4131,5 +4132,88 @@ describe("License column: a corrected finding names the label it was corrected f
 
     expect(output.includes("| exact-pkg | npm | 1.0.0 | MIT | apps/a |")).toBe(true);
     expect(output.includes("corrected from")).toBe(false);
+  });
+});
+
+describe("the non-blocking roll-up line is derived from the warns it counts", () => {
+  const STDERR_POINTER = "(see the `policy warn:` lines on stderr)";
+
+  function rollUpLine(specs: Parameters<typeof runEngine>[0], policyLines: string[]): string {
+    const { verdicts, model } = runEngine(specs, policyLines.join("\n"));
+    const doc = renderMarkdown(model, {
+      policyPath: asRelativePath("policy.toml"),
+      suppressedWorkspaces: [],
+      verdicts,
+    });
+
+    return doc.split("\n").find((line) => line.startsWith("_Non-blocking:")) ?? "";
+  }
+
+  test("a warn whose package fails at another target is not claimed to be detailed under Problematic", () => {
+    const line = rollUpLine(
+      [
+        pkgSpec("gpl-tool", "GPL-3.0-only", [
+          { target: "apps/dev-only", dev: true },
+          { target: "apps/shipped", dev: false },
+        ]),
+      ],
+      ["[dev_dependencies]", 'handling = "warn"'],
+    );
+
+    expect(line).toBe(
+      `_Non-blocking: 1 copyleft warning(s) (1 dev-downgraded). Not detailed below ${STDERR_POINTER}._`,
+    );
+  });
+
+  test("an os-downgraded system-package warn is not claimed to be detailed in the package tables", () => {
+    const line = rollUpLine(
+      [
+        osPkgSpec("pkg:apk/alpine/libgpl@1.0.0", "libgpl", "GPL-2.0-only", [
+          "docker:img/Dockerfile",
+        ]),
+      ],
+      ["[os_dependencies]", 'handling = "warn"'],
+    );
+
+    expect(line).toBe(
+      `_Non-blocking: 1 copyleft warning(s) (1 os-downgraded). Not detailed below ${STDERR_POINTER}._`,
+    );
+  });
+
+  test("detailed and undetailed warns are both accounted for", () => {
+    const line = rollUpLine(
+      [
+        pkgSpec("dev-gpl", "GPL-3.0-only", [{ target: "apps/a", dev: true }]),
+        pkgSpec("mystery", null, ["apps/a"]),
+      ],
+      ["[dev_dependencies]", 'handling = "warn"', "", "[unknown]", 'handling = "warn"'],
+    );
+
+    expect(line).toBe(
+      "_Non-blocking: 1 copyleft warning(s), 1 unknown warning(s) (1 dev-downgraded). Detailed " +
+        `under Copyleft and special notices; 1 not detailed below ${STDERR_POINTER}._`,
+    );
+  });
+
+  test("a warn that no scope lever downgraded carries no downgrade note", () => {
+    const line = rollUpLine(
+      [pkgSpec("mystery", null, ["apps/a"])],
+      ["[unknown]", 'handling = "warn"'],
+    );
+
+    expect(line).toBe(
+      `_Non-blocking: 1 unknown warning(s). Not detailed below ${STDERR_POINTER}._`,
+    );
+  });
+
+  test("an [[allow_source_available]] exemption counts as a source-available warning", () => {
+    const line = rollUpLine(
+      [pkgSpec("busl-thing", "BUSL-1.1", ["apps/a"])],
+      ["[[allow_source_available]]", 'license = "BUSL-1.1"', 'reason = "internal only"'],
+    );
+
+    expect(line).toBe(
+      `_Non-blocking: 1 source-available warning(s). Not detailed below ${STDERR_POINTER}._`,
+    );
   });
 });

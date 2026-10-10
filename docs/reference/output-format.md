@@ -260,15 +260,24 @@ replaced by a single line, `✅ No blocking policy violations.` The columns:
 | Reason | the verdict's reason string |
 
 After the table, when any `warn` verdicts exist, one non-blocking line rolls
-them up by coarse category (copyleft, target, unknown, deny, other) with a count
-each, then names the sections that actually show those warnings - so a counted
-warning is never pointed at a section that renders empty. For example
-`_Non-blocking: 12 copyleft warning(s), 3 unknown warning(s) (dev/os-downgraded or suppressed). Detailed under Copyleft and special notices, Imprecise licenses._`
-The named destinations are, in document order: Problematic licenses (a warn on a
-package that also fails), Copyleft and special notices, Target compatibility,
-Imprecise licenses, and the package tables (an os-scope copyleft warn, or an
-unknown/exempted/denied one, that has no dedicated flagged list). The line is
-omitted when there are no warnings.
+them up by coarse category (copyleft, target, unknown, source-available, other)
+with a count each. A parenthetical counts the warnings that
+`[dev_dependencies]` or `[os_dependencies]` downgraded from a fail, and is
+omitted when none were. The line then names the sections that show the warned
+occurrences, in document order: Copyleft and special notices, Target
+compatibility, Imprecise licenses. A warning no section shows is counted as not
+detailed below: the Problematic table lists only failing targets, so a warning
+on a package that fails elsewhere is not in it, and the package tables carry no
+verdict, so an os-downgraded, unknown, or source-available warning is not
+visible there either. `generate` and `check` print every warning on
+stderr as a `policy warn:` line. For example:
+
+```text
+_Non-blocking: 12 copyleft warning(s), 3 unknown warning(s) (4 dev-downgraded). Detailed under Copyleft and special notices, Imprecise licenses; 3 not detailed below (see the `policy warn:` lines on stderr)._
+```
+
+When no section shows any of the warnings, the pointer reads
+`Not detailed below` instead. The line is omitted when there are no warnings.
 
 Whether a package listed here also repeats in the Copyleft section below, and
 where else it keeps a row (its inventory table, its container subsection,

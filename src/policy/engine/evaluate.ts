@@ -759,6 +759,14 @@ function overrideCitation(
   return undefined;
 }
 
+/** Reason suffix of a would-be fail that `[dev_dependencies] handling = "warn"` downgraded. */
+export const DEV_DOWNGRADE_REASON_SUFFIX =
+  " — downgraded to warn: dev-only occurrence (dev_dependencies=warn)";
+
+/** Reason suffix of a would-be fail that `[os_dependencies] handling = "warn"` downgraded. */
+export const OS_DOWNGRADE_REASON_SUFFIX =
+  " — downgraded to warn: os-scope base-image package (os_dependencies=warn)";
+
 /**
  * Per-occurrence dev-scope downgrade, applied only to a verdict that would otherwise be a default
  * fail (default:copyleft, or default:unknown when unknownHandling="fail"). Keyed strictly on
@@ -795,7 +803,7 @@ function applyDevScope(failVerdict: Verdict, occurrence: Occurrence, policy: Pol
   return {
     ...failVerdict,
     status: "warn",
-    reason: `${failVerdict.reason} — downgraded to warn: dev-only occurrence (dev_dependencies=warn)`,
+    reason: `${failVerdict.reason}${DEV_DOWNGRADE_REASON_SUFFIX}`,
   };
 }
 
@@ -838,7 +846,7 @@ function applyOsScope(failVerdict: Verdict, entry: PackageEntry, policy: Policy)
   return {
     ...failVerdict,
     status: "warn",
-    reason: `${failVerdict.reason} — downgraded to warn: os-scope base-image package (os_dependencies=warn)`,
+    reason: `${failVerdict.reason}${OS_DOWNGRADE_REASON_SUFFIX}`,
   };
 }
 

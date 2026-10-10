@@ -61,9 +61,13 @@ import {
   type TargetProfile,
 } from "../policy/compat";
 import { OS_PACKAGE_ECOSYSTEMS } from "../policy/engine/osEcosystems";
+import {
+  DEV_DOWNGRADE_REASON_SUFFIX,
+  OS_DOWNGRADE_REASON_SUFFIX,
+  type AcceptedContainerNotice,
+} from "../policy/engine/evaluate";
 import { isDevelopmentOccurrence } from "./developmentOccurrence";
 import { isUnknownLicense } from "./unknownLicense";
-import type { AcceptedContainerNotice } from "../policy/engine/evaluate";
 import type { SuppressedWorkspace } from "../policy/schema/exemptions";
 
 const HEADER_LINE = "<!-- AUTO-GENERATED - do not edit. Regenerate with: task generate -->";
@@ -793,15 +797,18 @@ interface BlockingGroup {
   targets: string[];
 }
 
+/** The non-blocking roll-up's warn categories, in the order the line lists them. */
+const WARN_CATEGORIES = ["copyleft", "target", "unknown", "source-available", "other"] as const;
+
+type WarnCategory = (typeof WARN_CATEGORIES)[number];
+
 /**
- * Coarse warn category derived from a verdict rule (non-blocking roll-up): copyleft
- * (default:copyleft / default:imprecise-copyleft), target (the target-compatibility lane's own warn
- * rules - a reviewer must see these are license-compatibility findings, not vague "other" noise,
- * especially since they land right after a Copyleft section a governed tree usually renders empty),
- * unknown (default:unknown / default:imprecise), deny (rule starts with "deny"), else other.
- * Deterministic and total over the rule string.
+ * Coarse warn category derived from a verdict rule: copyleft (default:copyleft /
+ * default:imprecise-copyleft), target (the target-compatibility lane's warn rules, kept apart so a
+ * reviewer reads them as license-compatibility findings), unknown (default:unknown /
+ * default:imprecise), source-available (an `[[allow_source_available]]` exemption), else other.
  */
-function warnCategory(rule: string): "copyleft" | "target" | "unknown" | "deny" | "other" {
+function warnCategory(rule: string): WarnCategory {
   if (rule === "default:copyleft" || rule === "default:imprecise-copyleft") {
     return "copyleft";
   }
@@ -818,60 +825,118 @@ function warnCategory(rule: string): "copyleft" | "target" | "unknown" | "deny" 
     return "unknown";
   }
 
-  if (rule.startsWith("deny")) {
-    return "deny";
+  if (rule.startsWith("allow_source_available[")) {
+    return "source-available";
   }
 
   return "other";
 }
 
-/**
- * The sections a warn's package can be pointed to, in the order they appear in the document - the
- * fixed order the roll-up lists them in.
- */
-const WARN_DESTINATION_ORDER: readonly string[] = [
-  "Problematic licenses",
+/** The scope lever that turned a would-be fail into this warn, if any. */
+function warnDowngrade(verdict: Verdict): "dev" | "os" | undefined {
+  if (verdict.reason.endsWith(DEV_DOWNGRADE_REASON_SUFFIX)) {
+    return "dev";
+  }
+
+  return verdict.reason.endsWith(OS_DOWNGRADE_REASON_SUFFIX) ? "os" : undefined;
+}
+
+/** The sections that render a warned occurrence, in document order. */
+const WARN_DETAIL_SECTIONS: readonly string[] = [
   "Copyleft and special notices",
   "Target compatibility",
   "Imprecise licenses",
-  "the package tables",
 ];
 
 /**
- * Where a warn verdict's package is actually shown, so the non-blocking roll-up can point the
- * reader at it instead of at a section that turns out empty. Mirrors those sections' own membership
- * rules: a purl that also fails rows in the Problematic table; an os-scope copyleft warn and every
- * warn with no dedicated flagged list (unknown, source-available exemption, deny) appear only in
- * the package tables; the rest land in their named section.
- *
- * @returns one entry of {@link WARN_DESTINATION_ORDER}.
+ * The section that renders this warned occurrence, mirroring those sections' own membership rules;
+ * undefined when none does. The Problematic table lists failing targets only and the package tables
+ * carry no verdict, so neither details a warn.
  */
-function warnDestinationSection(
+function warnDetailSection(
   verdict: Verdict,
   pkg: PackageEntry | undefined,
   isProblematic: boolean,
-): string {
-  if (isProblematic) {
-    return "Problematic licenses";
-  }
-
-  if (verdict.rule === "default:copyleft") {
-    return pkg?.scope === "os" ? "the package tables" : "Copyleft and special notices";
-  }
-
-  if (verdict.rule === "default:imprecise-copyleft" || verdict.rule === "default:imprecise") {
+): string | undefined {
+  if (
+    (verdict.rule === "default:imprecise-copyleft" || verdict.rule === "default:imprecise") &&
+    pkg !== undefined &&
+    isImprecise(pkg)
+  ) {
     return "Imprecise licenses";
   }
 
-  if (
-    verdict.rule === TARGET_RULE_BOUNDARY ||
-    verdict.rule === TARGET_RULE_UNKNOWN_PAIR ||
-    verdict.rule === TARGET_RULE_INCOMPATIBLE
-  ) {
+  if (isProblematic) {
+    return undefined;
+  }
+
+  if (verdict.rule === "default:copyleft") {
+    return pkg === undefined || pkg.scope === "os" ? undefined : "Copyleft and special notices";
+  }
+
+  if (warnCategory(verdict.rule) === "target") {
     return "Target compatibility";
   }
 
-  return "the package tables";
+  return undefined;
+}
+
+/**
+ * The non-blocking roll-up line: warn counts by category, how many a scope lever downgraded, and
+ * where the warned occurrences are detailed - or that they are not, rather than pointing at a
+ * section that cannot show them.
+ */
+function nonBlockingLine(
+  warns: readonly Verdict[],
+  byPurl: ReadonlyMap<string, PackageEntry>,
+  problematicPurls: ReadonlySet<string>,
+): string {
+  const counts = new Map<WarnCategory, number>();
+  const downgrades = { dev: 0, os: 0 };
+  const detailedIn = new Set<string>();
+  let undetailed = 0;
+
+  for (const verdict of warns) {
+    const category = warnCategory(verdict.rule);
+    const downgrade = warnDowngrade(verdict);
+    const section = warnDetailSection(
+      verdict,
+      byPurl.get(verdict.purl),
+      problematicPurls.has(verdict.purl),
+    );
+
+    counts.set(category, (counts.get(category) ?? 0) + 1);
+
+    if (downgrade !== undefined) {
+      downgrades[downgrade] += 1;
+    }
+
+    if (section === undefined) {
+      undetailed += 1;
+    } else {
+      detailedIn.add(section);
+    }
+  }
+
+  const tally = WARN_CATEGORIES.filter((category) => counts.has(category))
+    .map((category) => `${counts.get(category)} ${category} warning(s)`)
+    .join(", ");
+  const downgraded = [
+    ...(downgrades.dev > 0 ? [`${downgrades.dev} dev-downgraded`] : []),
+    ...(downgrades.os > 0 ? [`${downgrades.os} os-downgraded`] : []),
+  ];
+  const note = downgraded.length > 0 ? ` (${downgraded.join(", ")})` : "";
+  const stderrPointer = "(see the `policy warn:` lines on stderr)";
+  const sections = WARN_DETAIL_SECTIONS.filter((section) => detailedIn.has(section)).join(", ");
+  let pointer = `Detailed under ${sections}`;
+
+  if (sections === "") {
+    pointer = `Not detailed below ${stderrPointer}`;
+  } else if (undetailed > 0) {
+    pointer += `; ${undetailed} not detailed below ${stderrPointer}`;
+  }
+
+  return `_Non-blocking: ${tally}${note}. ${pointer}._`;
 }
 
 /**
@@ -970,48 +1035,15 @@ function problematicSectionLines(
     lines.push("");
   }
 
-  // Non-blocking roll-up: count warn verdicts by coarse category AND record the section that shows
-  // each one, so the closing pointer names where the warnings actually are - never "see below" at a
-  // section that renders empty. Omitted entirely when zero warns exist.
-  const problematicPurls = new Set(
-    verdicts.filter((verdict) => verdict.status === "fail").map((verdict) => verdict.purl),
-  );
-  const warnCounts = new Map<string, number>();
-  const destinations = new Set<string>();
-  let warnTotal = 0;
+  // Omitted entirely when zero warns exist.
+  const warns = verdicts.filter((verdict) => verdict.status === "warn");
 
-  for (const verdict of verdicts) {
-    if (verdict.status !== "warn") {
-      continue;
-    }
-
-    warnTotal += 1;
-    const category = warnCategory(verdict.rule);
-
-    warnCounts.set(category, (warnCounts.get(category) ?? 0) + 1);
-    destinations.add(
-      warnDestinationSection(verdict, byPurl.get(verdict.purl), problematicPurls.has(verdict.purl)),
+  if (warns.length > 0) {
+    const problematicPurls = new Set(
+      verdicts.filter((verdict) => verdict.status === "fail").map((verdict) => verdict.purl),
     );
-  }
 
-  if (warnTotal > 0) {
-    const order: ReadonlyArray<"copyleft" | "target" | "unknown" | "deny" | "other"> = [
-      "copyleft",
-      "target",
-      "unknown",
-      "deny",
-      "other",
-    ];
-    const parts = order
-      .filter((category) => (warnCounts.get(category) ?? 0) > 0)
-      .map((category) => `${warnCounts.get(category)} ${category} warning(s)`);
-    const shownIn = WARN_DESTINATION_ORDER.filter((section) => destinations.has(section));
-
-    lines.push(
-      `_Non-blocking: ${parts.join(", ")} (dev/os-downgraded or suppressed). Detailed under ` +
-        `${shownIn.join(", ")}._`,
-      "",
-    );
+    lines.push(nonBlockingLine(warns, byPurl, problematicPurls), "");
   }
 
   return lines;

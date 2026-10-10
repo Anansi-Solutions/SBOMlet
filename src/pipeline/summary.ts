@@ -5,7 +5,7 @@
  */
 
 import { type Verdict } from "../model/dependencies";
-import { unusedRuleIds } from "../policy/engine/evaluate";
+import { DEV_DOWNGRADE_REASON_SUFFIX, unusedRuleIds } from "../policy/engine/evaluate";
 import { clarifyCitation } from "../policy/schema/clarify";
 import { ruleReason } from "../policy/schema/diagnostics";
 import type { Policy } from "../policy/schema";
@@ -127,7 +127,7 @@ export function writePolicySummary(
   // policies with no dev downgrades keep byte-identical output. Matched on the auditable
   // dev-downgrade marker that evaluate.applyDevScope appends to the reason.
   const devDowngradedCount = verdicts.filter(
-    (v) => v.status === "warn" && v.reason.includes("downgraded to warn: dev-only occurrence"),
+    (v) => v.status === "warn" && v.reason.includes(DEV_DOWNGRADE_REASON_SUFFIX),
   ).length;
 
   if (devDowngradedCount > 0) {
