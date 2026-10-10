@@ -14,6 +14,7 @@
  */
 import parse from "spdx-expression-parse";
 import correct from "spdx-correct";
+import spdxLicenseList from "spdx-license-list";
 import satisfies from "spdx-satisfies";
 
 import {
@@ -43,10 +44,51 @@ import {
 } from "./expression";
 
 /**
- * Raw values that must never reach correct(): npm's "UNLICENSED" means proprietary (correct() maps
- * it to public-domain "Unlicense"), and "SEE LICENSE IN <file>" is a pointer, not a license.
+ * Raw values that must never reach correct(): npm's "UNLICENSED" (any spelling) means proprietary
+ * (correct() maps it to public-domain "Unlicense"), "SEE LICENSE IN <file>" is a pointer, not a
+ * license, and a proprietary, commercial, or Commons Clause marker restricts whatever license it
+ * rides on, which correct() would drop.
  */
-const NEVER_CORRECT = [/^UNLICENSED$/i, /^SEE LICEN[CS]E IN /i];
+const NEVER_CORRECT = [
+  /\bunlicen[cs]ed\b/i,
+  /^see licen[cs]e in /i,
+  /\bproprietary\b/i,
+  /\b(?:non)?commercial\b/i,
+  /\bcommons[\s-]*clause\b/i,
+];
+
+/** Label words that never change which license a label names. */
+const LABEL_NOISE: ReadonlySet<string> = new Set([
+  "license",
+  "licence",
+  "licensed",
+  "the",
+  "version",
+  "v",
+  "w",
+  "software",
+]);
+
+/**
+ * Words that turn a family name into "something resembling it" (`BSD-like`, `Apache (modified)`).
+ */
+const HEDGE_WORDS: ReadonlySet<string> = new Set([
+  "like",
+  "style",
+  "modified",
+  "custom",
+  "variant",
+]);
+
+/** Family words a hedged label may carry, keyed by the lowercased token. */
+const HEDGEABLE_FAMILY: ReadonlyMap<string, LicenseFamily> = new Map([
+  ["agpl", "AGPL"],
+  ["apache", "Apache"],
+  ["bsd", "BSD"],
+  ["eupl", "EUPL"],
+  ["gpl", "GPL"],
+  ["lgpl", "LGPL"],
+]);
 
 /**
  * Ambiguous license FAMILY labels: a bare family with no clause count or version that spdx-correct
@@ -104,6 +146,9 @@ const AMBIGUOUS_FAMILY: ReadonlyMap<string, LicenseFamily> = new Map([
  */
 const PRECISE_LABEL_FIXUP: ReadonlyMap<string, string> = new Map([
   ["isc license", "ISC"],
+  // Exception-carrying labels with one exact SPDX spelling: correct() returns the bare base id.
+  ["gplv2 with classpath exception", "GPL-2.0-only WITH Classpath-exception-2.0"],
+  ["apache-2.0-with-llvm-exception", "Apache-2.0 WITH LLVM-exception"],
   // MySQL's standard license label: it states BOTH the version (v2) and the exception, and each has
   // an exact SPDX spelling - correct() instead resolved the label to GPL-3.0-or-later,
   // contradicting the stated v2 and dropping the exception clause.
@@ -208,6 +253,72 @@ function isCommaLicenseList(value: string): boolean {
 }
 
 /**
+ * The words of a license label, lowercased: letter runs, number runs (`2.0` and `2` both read as
+ * `2`), and `+`. Punctuation separates words and is dropped; `GPLv2+` reads as gpl, v, 2, +.
+ */
+function labelWords(label: string): string[] {
+  const spaced = label.toLowerCase().replace(/(?<=\p{L})v(?=\p{N})/gu, " v");
+  const words = spaced.match(/\+|\p{L}+|\p{N}+(?:\.\p{N}+)*/gu) ?? [];
+
+  return words.map((word) => word.replace(/(?:\.0)+$/, ""));
+}
+
+/** The label's words that could name or restrict a license: noise and connectives removed. */
+function significantWords(label: string): string[] {
+  return labelWords(label).filter((word) => !LABEL_NOISE.has(word) && !SPDX_CONNECTIVES.has(word));
+}
+
+/**
+ * Every word an SPDX expression accounts for: its ids and exceptions, each license's registered
+ * full name, and `+` when a leaf grants later versions.
+ */
+function expressionVocabulary(expression: string): ReadonlySet<string> {
+  const { ids } = leafIds(parse(expression) as ExpressionNode);
+  const names = ids.map((id) => spdxLicenseList[id]?.name ?? "");
+  const vocabulary = new Set(labelWords([expression, ...names].join(" ")));
+
+  if (vocabulary.has("later")) {
+    vocabulary.add("+");
+  }
+
+  return vocabulary;
+}
+
+/**
+ * True when every significant word of `raw` appears in the corrected expression, so the correction
+ * only respelled the label. A dropped word (`Commons-Clause`, `like`, `classpath`) or a
+ * contradicted version (`Eclipse Public License 2.0` corrected to `EPL-1.0`) fails.
+ */
+function isRespelling(raw: string, corrected: string): boolean {
+  const vocabulary = expressionVocabulary(corrected);
+
+  return significantWords(raw).every((word) => vocabulary.has(word));
+}
+
+/**
+ * The family a hedged label resembles (`BSD-like`, `BSD-3-Clause-Modified`), when its only other
+ * words are version numbers and `clause`; otherwise undefined.
+ */
+function hedgedFamily(raw: string): LicenseFamily | undefined {
+  const words = significantWords(raw);
+
+  if (!words.some((word) => HEDGE_WORDS.has(word))) {
+    return undefined;
+  }
+
+  const families = new Set(words.flatMap((word) => HEDGEABLE_FAMILY.get(word) ?? []));
+  const onlyQualifiers = words.every(
+    (word) =>
+      HEDGE_WORDS.has(word) ||
+      HEDGEABLE_FAMILY.has(word) ||
+      word === "clause" ||
+      /^\p{N}/u.test(word),
+  );
+
+  return families.size === 1 && onlyQualifiers ? [...families][0] : undefined;
+}
+
+/**
  * Result of normalizing one raw license string. An imprecise result carries `imprecise: true` +
  * `impreciseFamily` with `expression` null: an ambiguous family label is present-but-imprecise,
  * never a guessed precise id and never silently unknown.
@@ -221,9 +332,10 @@ export interface NormalizeResult {
 
 /**
  * Normalize one raw license string: exact parse first, an imprecise-family intercept, a
- * precise-label fixup for the cases correct() misses, then
- * a guarded spdx-correct fixup, else unknown. Comma lists are never correctable;
- * `[[clarify]]` is the escape hatch.
+ * precise-label fixup for the cases correct() misses, then a guarded spdx-correct fixup, else
+ * unknown. Comma lists, proprietary markers, and corrections that drop a word of the label are
+ * never accepted; a hedged family label (`BSD-like`) is that imprecise family. `[[clarify]]` is the
+ * escape hatch.
  *
  * Every non-null result is CANONICAL: the resolved text flows through {@link
  * canonicalizeExpression} before it leaves, so there is no intermediate verbatim-normalized state
@@ -233,7 +345,7 @@ export interface NormalizeResult {
 export function normalizeRaw(raw: RawLicense): NormalizeResult {
   const trimmed = raw.trim();
 
-  if (trimmed === "" || NEVER_CORRECT.some((re) => re.test(trimmed))) {
+  if (trimmed === "") {
     return { expression: null, source: "generator" }; // unknown
   }
 
@@ -275,16 +387,23 @@ export function normalizeRaw(raw: RawLicense): NormalizeResult {
     return { expression: canonicalizeExpression(asRawLicense(debian)), source: "corrected" };
   }
 
-  if (isCommaLicenseList(trimmed)) {
+  if (NEVER_CORRECT.some((re) => re.test(trimmed)) || isCommaLicenseList(trimmed)) {
     return { expression: null, source: "generator" }; // unknown
+  }
+
+  const hedged = hedgedFamily(trimmed);
+
+  if (hedged !== undefined) {
+    return { expression: null, source: "generator", imprecise: true, impreciseFamily: hedged };
   }
 
   const fixed = correct(trimmed); // never throws on non-empty input
 
   if (fixed !== null) {
     try {
-      parse(fixed); // belt-and-braces: corrected output must parse
-      return { expression: canonicalizeExpression(asRawLicense(fixed)), source: "corrected" };
+      if (isRespelling(trimmed, fixed)) {
+        return { expression: canonicalizeExpression(asRawLicense(fixed)), source: "corrected" };
+      }
     } catch {
       /* corrected output unparseable - treat as unknown */
     }

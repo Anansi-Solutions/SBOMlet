@@ -6,7 +6,12 @@ import parse from "spdx-expression-parse";
 
 import { claim, pkg, osPkg, modelOf } from "../../test/normalizeTestSupport";
 import { asRawLicense, canon, widen } from "../../test/brandTestSupport";
-import { annotateFindings, normalizeRaw, type ClarifyInput } from "./normalize";
+import {
+  annotateFindings,
+  normalizeRaw,
+  type ClarifyInput,
+  type NormalizeResult,
+} from "./normalize";
 import type { LicenseClaim, LicenseClaimKind } from "../model/dependencies";
 
 // ---------------------------------------------------------------------------
@@ -256,6 +261,80 @@ describe("normalizeRaw — guards", () => {
 
   test("comma lists are not correctable — correct() would drop MIT", () => {
     expect(normalizeRaw(asRawLicense("MIT,Apache-2.0")).expression).toBeNull();
+  });
+});
+
+describe("normalizeRaw — a correction must account for every word of the label", () => {
+  const UNKNOWN: NormalizeResult = { expression: null, source: "generator" };
+
+  test.each([
+    "MIT AND Commons-Clause",
+    "Apache-2.0 WITH Commons-Clause",
+    "MIT (non-commercial)",
+    "MIT, non-commercial use only",
+    "UNLICENCED",
+    "UNLICENSED - proprietary",
+    "Unlicensed, see LICENSE.txt",
+  ])("a use-restriction rider or proprietary marker makes %p unknown", (raw) => {
+    expect(normalizeRaw(asRawLicense(raw))).toEqual(UNKNOWN);
+  });
+
+  test.each([
+    ["BSD-like", "BSD"],
+    ["BSD-style", "BSD"],
+    ["Apache-2.0 (modified)", "Apache"],
+    ["BSD-3-Clause-Modified", "BSD"],
+  ] as const)("the hedged label %p is the imprecise %p family", (raw, family) => {
+    expect(normalizeRaw(asRawLicense(raw))).toEqual({
+      expression: null,
+      source: "generator",
+      imprecise: true,
+      impreciseFamily: family,
+    });
+  });
+
+  test.each([
+    "MIT-like",
+    "Artistic-Custom-Text",
+    "GPL-2.0-with-classpath",
+    "GPL2 w/ CPE",
+    "CDDL + GPLv2 with classpath exception",
+    "LGPL-2.1-with-linking-exception",
+    "Eclipse Public License 2.0",
+  ])("%p, whose correction would drop or contradict a word, is unknown", (raw) => {
+    expect(normalizeRaw(asRawLicense(raw))).toEqual(UNKNOWN);
+  });
+
+  test.each([
+    ["GPLv2 with Classpath Exception", "GPL-2.0-only WITH Classpath-exception-2.0"],
+    ["Apache-2.0-with-LLVM-exception", "Apache-2.0 WITH LLVM-exception"],
+  ])("the exception-carrying label %p keeps its exception: %p", (raw, expected) => {
+    expect(normalizeRaw(asRawLicense(raw))).toEqual({
+      expression: canon(expected),
+      source: "corrected",
+    });
+  });
+
+  test.each([
+    ["Apache License 2.0", "Apache-2.0"],
+    ["Apache Software License 2.0", "Apache-2.0"],
+    ["The MIT License", "MIT"],
+    ["BSD 3-Clause License", "BSD-3-Clause"],
+    ["New BSD License", "BSD-3-Clause"],
+    ["GPLv2+", "GPL-2.0-or-later"],
+    ["Mozilla Public License 2.0 (MPL 2.0)", "MPL-2.0"],
+    ["CC BY-SA 4.0", "CC-BY-SA-4.0"],
+  ])("the cosmetic variant %p still corrects to %p", (raw, expected) => {
+    expect(normalizeRaw(asRawLicense(raw))).toEqual({
+      expression: canon(expected),
+      source: "corrected",
+    });
+  });
+
+  test("a valid expression naming a commercial LicenseRef is kept exactly", () => {
+    expect(
+      widen(normalizeRaw(asRawLicense("GPL-3.0-only OR LicenseRef-Commercial")).expression),
+    ).toBe("GPL-3.0-only OR LicenseRef-Commercial");
   });
 });
 

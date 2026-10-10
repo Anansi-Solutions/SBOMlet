@@ -139,10 +139,13 @@ licence-mode deny patterns, so listing `BUSL-1.1`, `SSPL-1.0`, and
 
 Name mode covers things SPDX does not register. A
 [use-restriction rider](../glossary.md#source-available) like Commons-Clause
-rides alongside another licence (`MIT AND Commons-Clause`) and is not a
-parseable SPDX value, and a licence like RSAL has no registered id at all. Name
-mode matches the package by exact name, so it catches these even on a package
-whose finding is unknown.
+rides alongside another licence (`MIT AND Commons-Clause`) and has no registered
+SPDX id, and a licence like RSAL has no registered id at all. Such a declared
+value is never corrected into the licence it rides on: a value that names Commons
+Clause, a proprietary or commercial marker, or any word the corrected SPDX id does
+not account for is an unknown finding, handled by `[unknown]`. Name mode matches
+the package by exact name, so it catches these even on a package whose finding is
+unknown.
 
 Deny also sees through an override: if a `[[clarify]]` rewrote a denied
 licence into something benign, deny still fires on the original, pre-override
