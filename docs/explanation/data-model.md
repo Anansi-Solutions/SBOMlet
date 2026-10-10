@@ -420,7 +420,7 @@ about. There is exactly one verdict per occurrence, and `evaluate` sorts them by
 `(purl, occurrenceTarget)`.
 
 `status` is `ok` (passes), `warn` (surfaced but non-gating), `fail` (gates the
-build), or `suppressed` (a family-justified workspace copyleft suppression).
+build), or `suppressed` (an absorption-justified workspace copyleft suppression).
 
 `rule` is the machine-readable deciding rule id, such as `compatible[1]`,
 `clarify[0]`, `clarifications[0]`, `denied[2]`,

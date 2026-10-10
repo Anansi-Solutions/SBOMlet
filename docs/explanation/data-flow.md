@@ -347,8 +347,9 @@ It is denied when it cannot elect out of the deny set, so an `X OR MIT` finding
 does not escape a deny on `X` by electing MIT.
 
 Workspace [suppression](../glossary.md#policy-lanes) needs more than a path
-match. The workspace's own license must absorb the copyleft family before
-in-family copyleft inside it stops being flagged; a path alone is never enough.
+match. The workspace's own license must be able to absorb the copyleft licence,
+read directionally from the OSADL compatibility matrix, before copyleft inside
+it stops being flagged; a path alone is never enough.
 
 A would-be default `fail` — copyleft, or unknown when the policy fails on
 unknown — passes through two scope downgrades before it is final. The `os`

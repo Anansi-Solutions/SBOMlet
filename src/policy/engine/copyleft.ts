@@ -19,23 +19,19 @@
  * exclusions stay documented above (LGPLLR, NGPL, SMAIL-GPL, CNRI-Python-GPL-Compatible are
  * GPL-substring collisions, not copyleft).
  *
- * Family grouping: every id carries a family token so workspace suppression can verify that a
- * finding's copyleft obligations are compatible with the workspace's own declared license. The GNU
- * family deliberately spans AGPL/GPL/LGPL (an AGPL-distributed workspace's obligations envelope its
- * GPL/LGPL dependencies); every other family is its own island - an AGPL workspace never
- * auto-suppresses SSPL or CC-BY-SA findings. Grouping is deliberately coarse: `[[compatible]]` is
- * the precise per-license/per-package escape hatch.
+ * Family grouping: every id carries a reviewable family token; COPYLEFT_IDS is derived from it.
+ * Workspace suppression does not read it - absorption is directional per license pair
+ * (copyleftFamily.ts workspaceAbsorbs).
  */
 
 import { asSpdxLicenseLeaf, type SpdxLicenseLeaf } from "../../model/dependencies";
 
 /**
  * The closed vocabulary of COPYLEFT-GROUPING family tokens - the family each copyleft SPDX id is
- * grouped under below, and the key/value space of {@link COPYLEFT_FAMILY} and WORKSPACE_ABSORBS.
- * Distinct from the imprecise-family vocabulary (LicenseFamily, the model hub): these are exact-id
- * groupings a finding never carries as a bare label. Typing the FAMILY_MEMBERS family slot with it
- * makes a new group a compile error unless it is listed here (the drift guard the size test
- * mirrors).
+ * grouped under below, and the value space of {@link COPYLEFT_FAMILY}. Distinct from the
+ * imprecise-family vocabulary (LicenseFamily, the model hub): these are exact-id groupings a
+ * finding never carries as a bare label. Typing the FAMILY_MEMBERS family slot with it makes a new
+ * group a compile error unless it is listed here (the drift guard the size test mirrors).
  */
 export type CopyleftFamily =
   | "APSL"

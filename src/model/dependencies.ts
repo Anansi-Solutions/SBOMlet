@@ -276,8 +276,8 @@ export type FindingConfidence = "exact" | "corrected" | "none" | "imprecise";
  * compound expression. Exactly the distinct VALUES the normalizer's AMBIGUOUS_FAMILY map elects.
  * The could-be-copyleft subset (GPL/AGPL/LGPL/EUPL) routes to review; the permissive rest
  * (BSD/Apache) is non-gating. Distinct from the copyleft-grouping family vocabulary
- * (CopyleftFamily, copyleft.ts) that keys COPYLEFT_FAMILY / WORKSPACE_ABSORBS - those are exact-id
- * groupings (GNU/MPL/...), never these imprecise labels.
+ * (CopyleftFamily, copyleft.ts) that keys COPYLEFT_FAMILY - those are exact-id groupings
+ * (GNU/MPL/...), never these imprecise labels.
  */
 export type LicenseFamily = "AGPL" | "Apache" | "BSD" | "EUPL" | "GPL" | "LGPL";
 

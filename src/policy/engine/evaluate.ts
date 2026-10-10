@@ -40,11 +40,9 @@
  *   4. copyleft-flagged (isCopyleft on the elected branch - an OR with a permissive branch elects
  *      the permissive branch and is not copyleft; a deny-covered branch is never elected while
  *      another remains) and the occurrence target is or is under a suppressed path and the
- *      suppression is family-justified (the elected expression satisfies the workspace's declared
- *      license, or every copyleft leaf in it is in a finding-family the workspace license family
- *      absorbs per the literal WORKSPACE_ABSORBS relation - an AGPL-3.0 workspace absorbs
- *      GNU-family GPL/LGPL deps and MPL deps it bundles, but never SSPL or CC-BY-SA) → suppressed,
- *      workspace.copyleft_suppressed[i]. A path match without family justification falls through to
+ *      suppression is justified (the elected expression satisfies the workspace's declared license,
+ *      or that license absorbs every copyleft leaf in it per workspaceAbsorbs) → suppressed,
+ *      workspace.copyleft_suppressed[i]. A path match without that justification falls through to
  *      the normal default chain. A target-governed occurrence never reaches this tier at all (tier
  *      3 above decides it first), so a suppression entry a target governs is effectively dead there
  *      - see policy/target.ts's suppressionOverlapNotices.
@@ -75,7 +73,6 @@ import parseSpdx from "spdx-expression-parse";
 import satisfies from "spdx-satisfies";
 
 import {
-  asSpdxLicenseLeaf,
   compareCodeUnits,
   matchesIdentityPrefix,
   type AssessmentConflict,
@@ -118,7 +115,7 @@ import {
 import { clarifyCitation, clarifyInvalidRuleId, type ClarifyRule } from "../schema/clarify";
 import { ruleReason } from "../schema/diagnostics";
 import { BUILTIN_DENY_RULE_ID } from "./builtinDenylist";
-import { AGPL_IDS, COPYLEFT_FAMILY } from "./copyleft";
+import { AGPL_IDS } from "./copyleft";
 import {
   denyRuleAmong,
   exemptionAwareDenyRules,
@@ -128,7 +125,7 @@ import {
   type IndexedDenyRule,
 } from "./deny";
 import { voidedCompatibleEntries, voidedEntryKey, type VoidedEntry } from "./chain";
-import { COULD_BE_COPYLEFT_FAMILIES, WORKSPACE_ABSORBS } from "./copyleftFamily";
+import { COULD_BE_COPYLEFT_FAMILIES, workspaceAbsorbs } from "./copyleftFamily";
 import { justificationValidity, type JustificationValidity } from "./justificationValidity";
 import { matchesPackage, scopeCoversTarget } from "./match";
 import { resolveTargetProfile } from "./target";
@@ -358,24 +355,16 @@ function suppressionFor(
 }
 
 /**
- * Family-aware suppression justification: a path match alone is not enough - the finding's copyleft
- * obligations must be absorbable by the workspace's own declared license. Returns the
- * verified-relationship text for the audit-trail reason, or undefined when suppression is
- * unjustified (the verdict then falls through the normal default chain).
+ * Suppression justification: a path match alone is not enough - the finding's copyleft obligations
+ * must be absorbable by the workspace's own declared license. Returns the relationship text for the
+ * audit-trail reason, or undefined when suppression is unjustified (the verdict then falls through
+ * the normal default chain).
  *
- * Minimal sound rule, two branches:
- *   (a) the elected expression satisfies the workspace license itself
- *       (spdx-satisfies against the single-ID allowlist [rule.license]);
- *   (b) absorb-all: every copyleft leaf of the elected expression
- *       is in a finding-family the workspace's license family absorbs, per the literal
- *       WORKSPACE_ABSORBS relation (COPYLEFT_FAMILY exact-ID lookups, never substring). A workspace
- *       re-released under strong copyleft absorbs the inbound-compatible weaker copyleft it bundles
- *       - an AGPL-3.0-only (GNU-family) workspace absorbs GNU (GPL/LGPL/AGPL) and MPL findings, but
- *       the safety floor (absence from the absorbed set) still excludes SSPL and CC-BY-SA.
- *       Absorption is directional/declared, not symmetric: a non-AGPL workspace family absorbs only
- *       what WORKSPACE_ABSORBS declares for it.
- * The catches are defensive (never-throws posture); rule.license was validated as a single SPDX ID
- * by the schema.
+ * Two branches:
+ *   (a) the elected expression satisfies the workspace license itself;
+ *   (b) the workspace license absorbs every copyleft leaf of the elected expression
+ *       ({@link workspaceAbsorbs}, directional: an LGPL-2.1-only workspace never absorbs AGPL, and
+ *       GPL-2.0-only never absorbs GPL-3.0-only).
  */
 function suppressionJustification(
   electedNode: ExpressionNode,
@@ -387,60 +376,18 @@ function suppressionJustification(
       return `elected "${elected}" satisfies the workspace license ${rule.license}`;
     }
   } catch {
-    // defensive: fall through to the family check
-  }
-
-  let workspaceLeaf: string | undefined;
-
-  try {
-    const node = parseSpdx(rule.license) as ExpressionNode;
-
-    if ("license" in node) {
-      workspaceLeaf = node.license;
-    }
-  } catch {
-    workspaceLeaf = undefined;
-  }
-
-  if (workspaceLeaf === undefined) {
-    return undefined;
-  }
-
-  const workspaceFamily = COPYLEFT_FAMILY.get(asSpdxLicenseLeaf(workspaceLeaf));
-
-  if (workspaceFamily === undefined) {
-    return undefined;
-  }
-
-  const absorbed = WORKSPACE_ABSORBS.get(workspaceFamily);
-
-  if (absorbed === undefined) {
-    return undefined;
+    // defensive: fall through to the matrix check
   }
 
   const leaves = copyleftLeafIds(electedNode);
 
-  if (leaves.length === 0) {
+  if (leaves.length === 0 || !leaves.every((leaf) => workspaceAbsorbs(rule.license, leaf))) {
     return undefined;
-  }
-
-  const leafFamilies = leaves.map((id) => COPYLEFT_FAMILY.get(id));
-
-  if (!leafFamilies.every((family) => family !== undefined && absorbed.has(family))) {
-    return undefined;
-  }
-
-  if (leafFamilies.every((family) => family === workspaceFamily)) {
-    return (
-      `every copyleft obligation in elected "${elected}" is in the same ` +
-      `${workspaceFamily} family as the workspace license ${rule.license}`
-    );
   }
 
   return (
-    `every copyleft obligation in elected "${elected}" is in an ` +
-    `inbound-compatible family absorbed by the ${workspaceFamily} workspace ` +
-    `license ${rule.license}`
+    `every copyleft obligation in elected "${elected}" can be absorbed into a work ` +
+    `under the workspace license ${rule.license}`
   );
 }
 

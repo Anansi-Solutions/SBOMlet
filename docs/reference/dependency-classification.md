@@ -189,9 +189,10 @@ still never governs `os`-scope packages.
   `[[workspace.copyleft_suppressed]]` entry a target governs is effectively
   dead there (surfaced by `policy/engine/target.ts`'s `suppressionOverlapNotices`,
   never silently).
-- A family-justified workspace copyleft suppression (the occurrence sits under
-  the suppressed path, and the elected copyleft is absorbed by that
-  workspace's own declared license family) → `suppressed`. Checked *before*
+- A justified workspace copyleft suppression (the occurrence sits under the
+  suppressed path, and the workspace's own declared license absorbs every
+  copyleft leaf of the elected expression, read from the OSADL matrix with the
+  workspace license leading — see [policy.md](./policy.md#workspacecopyleft_suppressed)) → `suppressed`. Checked *before*
   the AGPL check below, ahead of every scope — in practice this only matters
   for a workspace-identity occurrence, since a suppression path is authored
   against workspace paths, not `docker:` ones.
@@ -295,7 +296,7 @@ tables are about slug coverage, not about every classification being unique.
 | `imprecise-permissive-family` | bare `BSD` app package | `app · warn · default:imprecise` |
 | `unknown-license-counted` | [unknown] handling = "warn", no license | `app · warn · default:unknown` |
 | `licenseref-only-unknown` | a package whose only license content is a LicenseRef | `app · warn · default:unknown` |
-| `suppressed-workspace-copyleft` | family-justified `[[workspace.copyleft_suppressed]]` | `app · suppressed · workspace.copyleft_suppressed[0]` |
+| `suppressed-workspace-copyleft` | absorption-justified `[[workspace.copyleft_suppressed]]` | `app · suppressed · workspace.copyleft_suppressed[0]` |
 | `denied-license-terminal` | a `[[deny]]` match with a `[[compatible]]` rule that would otherwise accept it | `app · fail · denied[0]` |
 | `system-package-in-dev-container-counts-dev` | apk permissive package whose only container is dev-marked | `os · ok · default:ok` |
 | `conflict-scancode` | npm workspace package whose in-depth scan answer disagrees with the declared claim, no `[[clarify]]` resolving it | `app · fail · conflict:scancode` |
@@ -318,7 +319,7 @@ tables are about slug coverage, not about every classification being unique.
 | `target-os-agpl-network-true-escalates` | apk AGPL-3.0-only, project target `network = true` | `os · fail · default:agpl-container` |
 | `target-os-agpl-network-false-routine` | same package (precise and imprecise), project target `network = false`, `os_dependencies = "warn"` | `os · warn · default:copyleft` |
 | `target-os-scope-untouched` | apk GPL-2.0-only under any target profile | `os · warn · default:copyleft` (byte-identical reason to the no-target run) |
-| `target-supersedes-suppression` | a governed occurrence matching a family-justified `[[workspace.copyleft_suppressed]]` | `app · ok · target:ok` (never `suppressed`) |
+| `target-supersedes-suppression` | a governed occurrence matching an absorption-justified `[[workspace.copyleft_suppressed]]` | `app · ok · target:ok` (never `suppressed`) |
 | `target-os-agpl-network-false-ignored-notice` | apk AGPL-3.0-only, project target `network = false`, `os_dependencies = "ignore"` | `os · ok · default:copyleft` |
 | `target-held-survives-purl-fail` | one purl, two workspace occurrences: one fails (project MIT/external target), the other holds (a `[[target.workspace]]` MIT/internal override) | `app · fail · target:incompatible` (workspace A) and `app · ok · target:internal-use` (workspace B) |
 | `voided-compatible` | a `[[compatible]]` package entry judged under one introducer, in a workspace where a package it accepts also arrives through another | `app · fail · compatible:voided[0]` — for every package the entry governs there, not only the one that arrives around it |

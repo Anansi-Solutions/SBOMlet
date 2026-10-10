@@ -18,7 +18,12 @@ export {
   type OsadlMatrixCell,
 } from "./data";
 export { interTierDisagreements } from "./consistency";
-export { classifyExpression, classifyLeaf, type ExpressionResult } from "./classify";
+export {
+  classifyExpression,
+  classifyLeaf,
+  absorptionCell,
+  type ExpressionResult,
+} from "./classify";
 export type { AxisClass, AxisResult, ObligationClass, TargetLicense } from "./classification";
 export {
   applyUsageProfile,

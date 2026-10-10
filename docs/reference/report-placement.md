@@ -213,7 +213,7 @@ by the same suite (`test/reportPlacement.test.ts`).
 | `imprecise-permissive-family` | bare `BSD` app package | Imprecise licenses only |
 | `unknown-license-counted` | [unknown] handling = "warn", no license | counted under Unknown license; inventory row (app table) |
 | `licenseref-only-unknown` | a package whose only license content is a LicenseRef | counted under Unknown license; inventory row only |
-| `suppressed-workspace-copyleft` | family-justified `[[workspace.copyleft_suppressed]]` | suppressed-workspaces list in Copyleft and special notices; no flagged row |
+| `suppressed-workspace-copyleft` | absorption-justified `[[workspace.copyleft_suppressed]]` | suppressed-workspaces list in Copyleft and special notices; no flagged row |
 | `denied-license-terminal` | a `[[deny]]` match with a `[[compatible]]` rule that would otherwise accept it | Problematic licenses (deny is terminal) |
 | `system-package-in-dev-container-counts-dev` | apk permissive package whose only container is dev-marked | counted Development-only (via the container's classification); System packages table under the Development-only subsection |
 | `conflict-scancode` | npm workspace package whose in-depth scan answer disagrees with the declared claim, no `[[clarify]]` resolving it | Problematic licenses + Assessment conflicts (ScanCode assessment vs quick check sub-table) + Production dependencies (app table) |
@@ -236,7 +236,7 @@ by the same suite (`test/reportPlacement.test.ts`).
 | `target-os-agpl-network-true-escalates` | apk AGPL-3.0-only, project target `network = true` | Problematic licenses (unchanged escalation) |
 | `target-os-agpl-network-false-routine` | same package (precise and imprecise), project target `network = false`, `os_dependencies = "warn"` | that container's System packages table; not Problematic, not Copyleft |
 | `target-os-scope-untouched` | apk GPL-2.0-only under any target profile | that container's System packages table (byte-identical to the no-target run) |
-| `target-supersedes-suppression` | a governed occurrence matching a family-justified `[[workspace.copyleft_suppressed]]` | Production dependencies (app table) only; no suppressed-workspaces entry decides it |
+| `target-supersedes-suppression` | a governed occurrence matching an absorption-justified `[[workspace.copyleft_suppressed]]` | Production dependencies (app table) only; no suppressed-workspaces entry decides it |
 | `target-os-agpl-network-false-ignored-notice` | apk AGPL-3.0-only, project target `network = false`, `os_dependencies = "ignore"` | accepted-AGPL notice in Copyleft and special notices; not Problematic |
 | `target-held-survives-purl-fail` | one purl, two workspace occurrences: one fails (project MIT/external target), the other holds (a `[[target.workspace]]` MIT/internal override) | Problematic licenses (workspace A's fail) + Target compatibility (held-for-internal-use list, workspace B's hold - never dropped by the Problematic dedup, which applies to the flagged table only) + Production dependencies (app table) |
 | `voided-compatible` | a `[[compatible]]` package entry judged under one introducer, in a workspace where a package it accepts also arrives through another | Problematic licenses, one row per package the entry governs there, each naming the chain that voided it; every one keeps its Production dependencies (app table) row |

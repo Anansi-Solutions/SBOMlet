@@ -18,6 +18,7 @@ import {
   runEngine,
   runEngineWithImports,
   SUPPRESS_SCRATCH,
+  suppressionFixture,
   crossImagePkgSpec,
   TARGET_A,
   TARGET_B,
@@ -53,6 +54,7 @@ import {
   type LicenseFinding,
   type Verdict,
 } from "../../model/dependencies";
+import { absorptionCell } from "../compat/classify";
 import { AGPL_IDS, COPYLEFT_IDS } from "./copyleft";
 import { denyRuleFor } from "./deny";
 import {
@@ -61,7 +63,7 @@ import {
   unnecessaryClarifyEntries,
   unusedRuleIds,
 } from "./evaluate";
-import { COULD_BE_COPYLEFT_FAMILIES, WORKSPACE_ABSORBS } from "./copyleftFamily";
+import { AGPL_WORKSPACE_SECTION_13, COULD_BE_COPYLEFT_FAMILIES } from "./copyleftFamily";
 import type { Policy } from "../schema";
 
 describe("evaluate — a [[compatible]] entry covering a family of packages", () => {
@@ -285,19 +287,21 @@ describe("evaluate — family-aware suppression", () => {
     );
   });
 
-  test("GPL and LGPL deps are suppressed under an AGPL workspace (GNU family)", () => {
+  test("GPL-3.0 and LGPL deps are suppressed under an AGPL workspace; GPL-2.0-only is not", () => {
     const { verdicts } = runEngine(
       [
-        pkgSpec("gpl-pkg", "GPL-2.0-only", ["apps/scratch"]),
-        pkgSpec("lgpl-pkg", "LGPL-3.0-or-later", ["apps/scratch"]),
+        pkgSpec("gpl2-pkg", "GPL-2.0-only", ["apps/reporting"]),
+        pkgSpec("gpl3-pkg", "GPL-3.0-only", ["apps/reporting"]),
+        pkgSpec("lgpl-pkg", "LGPL-3.0-or-later", ["apps/reporting"]),
       ],
-      SUPPRESS_SCRATCH,
+      suppressionFixture("apps/reporting"),
     );
 
-    expect(verdicts.map((v) => v.status)).toEqual(["suppressed", "suppressed"]);
-    // The audit-trail reason states the VERIFIED relationship, never an
-    // unverified in-family assertion.
-    expect(verdicts[0].reason).toContain("same GNU family as the workspace license AGPL-3.0-only");
+    // GPL-2.0-only cannot be combined into an AGPL-3.0 work (OSADL: No).
+    expect(verdicts.map((v) => v.status)).toEqual(["fail", "suppressed", "suppressed"]);
+    expect(verdicts[1].reason).toContain(
+      "can be absorbed into a work under the workspace license AGPL-3.0-only",
+    );
   });
 
   test("AND expressions suppress when every copyleft leaf is in-family", () => {
@@ -341,32 +345,11 @@ describe("evaluate — family-aware suppression", () => {
 });
 
 // ===========================================================================
-// Revision F: apps/scratch absorbs ALL bundled strong copyleft — an AGPL-3.0
-// (GNU-family) workspace absorbs inbound-compatible weaker copyleft (MPL) in
-// ADDITION to its own family (GNU). The safety floor (SSPL/CC-BY-SA), the deny
-// terminal, directionality, and the GPL-prod-outside-suppression scope are all
-// regression-guarded here.
+// An AGPL-3.0-only workspace absorbs the bundled copyleft the OSADL matrix (and
+// GPLv3 section 13) lets it absorb, MPL included. The floor (SSPL/CC-BY-SA),
+// the deny terminal, directionality, and the GPL-prod-outside-suppression
+// scope are regression-guarded here.
 // ===========================================================================
-
-describe("WORKSPACE_ABSORBS — literal absorption relation", () => {
-  test("the GNU family absorbs exactly GNU and MPL (the bundled inbound set)", () => {
-    const gnu = WORKSPACE_ABSORBS.get("GNU");
-
-    expect(gnu).toBeDefined();
-    expect([...(gnu ?? [])].sort()).toEqual(["GNU", "MPL"]);
-  });
-
-  test("the GNU absorbed set NEVER includes the safety-floor families (SSPL/CC-BY-SA)", () => {
-    const gnu = WORKSPACE_ABSORBS.get("GNU");
-
-    expect(gnu?.has("SSPL")).toBe(false);
-    expect(gnu?.has("CC-BY-SA")).toBe(false);
-  });
-
-  test("no non-GNU workspace family declares an absorption set (directional, scoped)", () => {
-    expect([...WORKSPACE_ABSORBS.keys()]).toEqual(["GNU"]);
-  });
-});
 
 describe("evaluate — absorb-all-copyleft suppression", () => {
   test("an AGPL workspace now SUPPRESSES an MPL-2.0 finding (was: fell through to fail)", () => {
@@ -380,8 +363,7 @@ describe("evaluate — absorb-all-copyleft suppression", () => {
 
     expect(verdicts[0].status).toBe("suppressed");
     expect(verdicts[0].rule).toBe("workspace.copyleft_suppressed[0]");
-    // The audit-trail reason names the absorption, not an in-family assertion.
-    expect(verdicts[0].reason).toContain("absorbed by the GNU workspace license");
+    expect(verdicts[0].reason).toContain("absorbed into a work under the workspace license");
   });
 
   test("it STILL suppresses GPL-3.0 and LGPL (exact-family regression intact)", () => {
@@ -394,8 +376,6 @@ describe("evaluate — absorb-all-copyleft suppression", () => {
     );
 
     expect(verdicts.map((v) => v.status)).toEqual(["suppressed", "suppressed"]);
-    // The same-family path keeps its "same GNU family" wording.
-    expect(verdicts[0].reason).toContain("same GNU family as the workspace license AGPL-3.0-only");
   });
 
   test("it STILL does NOT suppress SSPL-1.0 or CC-BY-SA (the safety floor)", () => {
@@ -432,8 +412,7 @@ describe("evaluate — absorb-all-copyleft suppression", () => {
   });
 
   test("absorption is DIRECTIONAL: a non-AGPL (MPL) workspace does NOT absorb GNU-family GPL", () => {
-    // WORKSPACE_ABSORBS declares no MPL key, so an MPL-distributed workspace
-    // absorbs only its own license via branch (a) (satisfies), never GNU.
+    // The matrix answers No for an MPL-2.0 work absorbing GPL-3.0-only.
     const mplWorkspace = [
       "[[workspace.copyleft_suppressed]]",
       'path = "apps/scratch"',
@@ -462,6 +441,53 @@ describe("evaluate — absorb-all-copyleft suppression", () => {
     expect(widen(verdicts[0].occurrenceTarget)).toBe("backend");
     expect(verdicts[0].status).toBe("fail");
     expect(verdicts[0].rule).toBe("default:copyleft");
+  });
+});
+
+describe("evaluate — suppression follows the direction of the OSADL compatibility matrix", () => {
+  const suppressUnder = (license: string): string =>
+    [
+      "[[workspace.copyleft_suppressed]]",
+      'path = "libs/x"',
+      `license = ${JSON.stringify(license)}`,
+      'description = "the workspace ships under this licence"',
+    ].join("\n");
+  const statusUnder = (workspace: string, dependency: string): string | undefined =>
+    runEngine([pkgSpec("dep", dependency, ["libs/x"])], suppressUnder(workspace)).verdicts[0]
+      ?.status;
+
+  test.each([
+    ["LGPL-2.1-only", "AGPL-3.0-only"],
+    ["LGPL-3.0-only", "GPL-3.0-only"],
+    ["GPL-2.0-only", "GPL-3.0-only"],
+    ["GPL-3.0-only", "AGPL-3.0-only"],
+    ["AGPL-3.0-only", "GPL-2.0-only"],
+  ])("a %s workspace does not suppress a %s dependency", (workspace, dependency) => {
+    expect(statusUnder(workspace, dependency)).toBe("fail");
+  });
+
+  test.each([
+    ["AGPL-3.0-only", "AGPL-3.0-or-later"],
+    ["AGPL-3.0-only", "MPL-2.0"],
+    ["GPL-3.0-only", "LGPL-2.1-or-later"],
+    ["GPL-3.0-only", "Apache-2.0 AND LGPL-3.0-or-later"],
+  ])("a %s workspace suppresses a %s dependency", (workspace, dependency) => {
+    expect(statusUnder(workspace, dependency)).toBe("suppressed");
+  });
+
+  test("a workspace licence the matrix has no row for absorbs only what satisfies it", () => {
+    expect(statusUnder("CECILL-2.1", "CECILL-2.1")).toBe("suppressed");
+    expect(statusUnder("CECILL-2.1", "MPL-2.0")).toBe("fail");
+  });
+
+  test("the section-13 supplement only resolves Check dependency cells of the AGPL-3.0-only row", () => {
+    for (const leaf of AGPL_WORKSPACE_SECTION_13) {
+      expect(absorptionCell("AGPL-3.0-only", leaf)).toBe("Check dependency");
+    }
+  });
+
+  test("an AGPL-3.0-or-later workspace gets no supplement", () => {
+    expect(statusUnder("AGPL-3.0-or-later", "GPL-3.0-only")).toBe("fail");
   });
 });
 

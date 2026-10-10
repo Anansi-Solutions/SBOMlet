@@ -608,14 +608,24 @@ it starts with `docker:` — a container image is not a workspace, so accept a
 container's copyleft package with a scoped [`[[compatible]]`](#compatible) rule
 instead.
 
-It is also family-aware. A finding is suppressed only when it satisfies the
-workspace `license`, or when every copyleft obligation in it belongs to a family
-the workspace's own licence family absorbs. The GNU family spans AGPL, GPL, and
-LGPL, and a GNU-family workspace also absorbs MPL, so an `AGPL-3.0-only`
-workspace suppresses AGPL, GPL, LGPL, and MPL findings. It does not suppress
-SSPL, CC-BY-SA, or any other out-of-family copyleft, which falls through to the
-normal fail default. The `license` must be a single id because that family check
-has no single identity to compare against for a compound expression.
+It is also direction-aware. A finding is suppressed only when it satisfies the
+workspace `license`, or when the workspace licence can absorb every copyleft
+licence in it. Absorption is read from the
+[OSADL compatibility matrix](../explanation/adr/0025-target-license-compatibility-lane.md),
+with the workspace licence as the leading licence: a `Yes` or `Same` cell
+absorbs, anything else does not. One supplement applies: an `AGPL-3.0-only`
+workspace also absorbs the GPL and LGPL ids the matrix marks
+`Check dependency` and GPLv3 section 13 resolves (`GPL-3.0-only`, the LGPL-2.1
+and LGPL-3.0 ids, and the `-or-later` GPL ids).
+
+So an `AGPL-3.0-only` workspace suppresses AGPL-3.0, GPL-3.0, LGPL, and
+`MPL-2.0` findings, but not `GPL-2.0-only`; an `LGPL-2.1-only` workspace never
+suppresses AGPL or GPL; a `GPL-2.0-only` workspace never suppresses
+`GPL-3.0-only`. A licence the matrix does not cover, as workspace or as finding
+(SSPL, CC-BY-SA, or a deprecated spelling such as `GPL-3.0`), is never absorbed
+and falls through to the normal fail default; write a `[[compatible]]` rule for
+a pairing you have reviewed. The `license` must be a single id because the
+matrix is keyed by one.
 
 ## `[unknown]`
 

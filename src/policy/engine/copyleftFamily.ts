@@ -1,5 +1,6 @@
 /**
- * The AUTHORITATIVE could-be-copyleft imprecise-family token set.
+ * The AUTHORITATIVE could-be-copyleft imprecise-family token set, and the workspace-suppression
+ * absorption test ({@link workspaceAbsorbs}).
  *
  * An imprecise finding carries a bare family TOKEN (the string "GPL", "BSD", "Apache" - see
  * normalize.ts AMBIGUOUS_FAMILY), never a parseable SPDX expression. To decide whether an imprecise
@@ -35,8 +36,12 @@
  * family (mirrors copyleft.ts's literal-reviewable-data idiom).
  */
 
-import { type LicenseFamily } from "../../model/dependencies";
-import { type CopyleftFamily } from "./copyleft";
+import {
+  asSpdxLicenseLeaf,
+  type LicenseFamily,
+  type SpdxLicenseLeaf,
+} from "../../model/dependencies";
+import { absorptionCell } from "../compat/classify";
 
 /** Bare imprecise family TOKENS that could carry a copyleft obligation. */
 export const COULD_BE_COPYLEFT_FAMILIES: ReadonlySet<LicenseFamily> = new Set([
@@ -53,43 +58,40 @@ export const COULD_BE_COPYLEFT_FAMILIES: ReadonlySet<LicenseFamily> = new Set([
 ]);
 
 /**
- * The absorb-all-copyleft suppression relation.
- *
- * A workspace that is ITSELF distributed under a strong-copyleft license can absorb the obligations
- * of inbound copyleft dependencies it bundles, because the whole workspace is re-released under
- * that strong copyleft. apps/scratch is re-released under AGPL-3.0, so it absorbs not only the
- * exact GNU family (GPL/LGPL/AGPL) but ALSO the weaker/compatible copyleft families actually
- * bundled there (notably MPL via the sharp-libvips Apache/LGPL prebuilds and the MPL-licensed
- * transitive set), since AGPL's obligations envelope them.
- *
- * WHY a LITERAL MAP and NOT a runtime strength computation: mirror the copyleft.ts /
- * COPYLEFT_FAMILY idiom - verdict-affecting data must be a reviewable, enumerated relation, never a
- * runtime prefix/ordering inference. Each absorbed family is listed explicitly with the legal
- * reason it is sound, and the SAFETY FLOOR is enforced purely by ABSENCE: a family not listed here
- * is never absorbed.
- *
- * Keyed by the WORKSPACE license's COPYLEFT_FAMILY token → the set of finding COPYLEFT_FAMILY
- * tokens that workspace ABSORBS. Absorption is DIRECTIONAL and DECLARED, never symmetric: an MPL
- * workspace does NOT absorb GNU unless an MPL key is added here (it is not - no MPL-distributed
- * workspace exists in practice).
- *
- * SAFETY FLOOR (the entries deliberately NOT in the GNU set): SSPL (network / use-restricted) and
- * CC-BY-SA (content ShareAlike) are NOT inbound-compatible with an AGPL software re-release and are
- * NEVER absorbed. The source-available [[deny]] terminal additionally sits ABOVE suppression, so a
- * denied license under a suppressed path fails regardless of this map.
+ * The OSADL `Check dependency` cells of the AGPL-3.0-only row that the GNU licences' own text
+ * resolves: GPLv3 section 13 permits combining GPLv3 code with an AGPLv3 work, LGPLv3 is GPLv3 plus
+ * permissions, and the remaining ids can be taken under GPLv3 (their "or later" clause, or LGPL-2.1
+ * section 3).
  */
-export const WORKSPACE_ABSORBS: ReadonlyMap<CopyleftFamily, ReadonlySet<CopyleftFamily>> = new Map([
+export const AGPL_WORKSPACE_SECTION_13: ReadonlySet<SpdxLicenseLeaf> = new Set(
   [
-    // An AGPL-3.0 (GNU-family) workspace re-releases everything it bundles under AGPL, absorbing
-    // the inbound-compatible copyleft families present there.
-    "GNU",
-    new Set([
-      // GNU itself: AGPL/GPL/LGPL deps are enveloped by the AGPL re-release.
-      "GNU",
-      // MPL: file-level weak copyleft; an MPL file relicensed/bundled into an AGPL work is
-      // compatible with (and absorbed by) the stronger AGPL obligation. Present in apps/scratch via
-      // Apache/LGPL+MPL transitives.
-      "MPL",
-    ]),
-  ],
-]);
+    "GPL-1.0-or-later",
+    "GPL-2.0-or-later",
+    "GPL-3.0-only",
+    "GPL-3.0-or-later",
+    "LGPL-2.1-only",
+    "LGPL-2.1-or-later",
+    "LGPL-3.0-only",
+    "LGPL-3.0-or-later",
+  ].map(asSpdxLicenseLeaf),
+);
+
+/**
+ * Whether a workspace distributed under `workspace` absorbs one copyleft leaf: the OSADL matrix
+ * answers `Yes` or `Same`, or an AGPL-3.0-only workspace meets a `Check dependency` cell in {@link
+ * AGPL_WORKSPACE_SECTION_13}. A workspace license or leaf the matrix does not cover, and every
+ * `No`, is never absorbed.
+ */
+export function workspaceAbsorbs(workspace: string, leaf: SpdxLicenseLeaf): boolean {
+  const cell = absorptionCell(workspace, leaf);
+
+  if (cell === "Yes" || cell === "Same") {
+    return true;
+  }
+
+  return (
+    cell === "Check dependency" &&
+    workspace === "AGPL-3.0-only" &&
+    AGPL_WORKSPACE_SECTION_13.has(leaf)
+  );
+}
