@@ -224,6 +224,35 @@ about it: removing or replacing the dependency, allowing the license with a
 documented reason, or, for copyleft that's expected because your own workspace
 ships under the same terms, suppressing it with the workspace copyleft rule.
 
+## A poetry target stops on poetry.lock or warns that it matches nothing
+
+For a poetry project, the tool reads production and development scope from the
+`groups` array of each package in `poetry.lock`, then matches each package to a
+scanned component by its purl. Two failures of that step are reported instead of
+classifying every package as development-only.
+
+A `poetry.lock` the tool can't read stops the scan:
+
+```text
+poetry.lock at services/ml/poetry.lock is not valid TOML: ...
+```
+
+Regenerate the lockfile with `poetry lock`, commit it, and run `generate` again.
+
+A lockfile that reads fine but whose production packages match none of the
+scanned components prints a warning and the run continues:
+
+```text
+warning: services/ml: none of the 12 production packages in poetry.lock matches a scanned component purl, so every package of this target is classified development-only
+```
+
+The scan reads the same `poetry.lock`, so the two sides should always agree.
+This warning means the tool spells a purl differently from the scanner, which
+is a bug in the tool: report it with the lockfile entry and the component purl
+from the generated inventory. Until it's fixed, every row for that target sits
+in the development-only section, and the development-dependency policy applies
+to all of them.
+
 ## Windows reports everything stale
 
 You run `generate`, then `check` immediately, and `check` reports the documents

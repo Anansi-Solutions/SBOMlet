@@ -20,7 +20,7 @@ import { ecosystemFor, manifestFilesFor, selectJsGenerator } from "./dispatch";
 import { MAVEN_COLLECTOR_TOOL, collectWithMavenSbom } from "./mavenSbom";
 import { npmIntroductions } from "./npmProvenance";
 import { NUGET_COLLECTOR_TOOL, collectWithNugetLock } from "./nugetLock";
-import { poetryProdPurlSet } from "./poetryLock";
+import { poetryProdPurlSet, unmatchedProdPurlSetWarning } from "./poetryLock";
 import { poetryIntroductions } from "./poetryProvenance";
 import { collectWithTerraform, TERRAFORM_COLLECTOR_TOOL } from "./terraform";
 import { collectWithYarnPlugin, YARN_PLUGIN_TOOL } from "./yarnPlugin";
@@ -209,23 +209,32 @@ const bunCollector: Collector = {
  * `groups` arrays into the `pkg:pypi/<pep503>@<version>` prod set, threaded into prodPurlSet
  * exactly like the yarn dual-run path - merge.ts then derives occurrence dev = not in the set,
  * authoritative over the absent markers and prod-wins for a package in both main and a dev group.
+ * The set is derived before the scan so an unreadable lock fails fast, and a set matching none of
+ * the scanned purls is reported on stderr.
  */
 const poetryCollector: Collector = {
   tool: (): ToolIdentity => CDXGEN_TOOL,
   derivesDependencyGraph: (): boolean => true,
   async collect(target, ctx): Promise<CollectedSbom> {
+    const lockfileText = requireLockfileText(ctx);
+    const prodPurlSet = poetryProdPurlSet(lockfileText, join(target.dir, "poetry.lock"));
     const result = await collectWithCdxgen(target, {
       timeoutMs: ctx.timeoutMs,
       verbose: ctx.verbose,
       ecosystem: ecosystemFor("poetry"),
       manifestFiles: manifestFilesFor("poetry"),
     });
-    const lockfileText = requireLockfileText(ctx);
+    const sbom = readSbom(result.sbomPath);
+    const warning = unmatchedProdPurlSetWarning(target.identity, prodPurlSet, purlSetOf(sbom));
+
+    if (warning !== undefined) {
+      ctx.log(`warning: ${warning}`);
+    }
 
     return {
-      sbom: readSbom(result.sbomPath),
+      sbom,
       targetIdentity: target.identity,
-      prodPurlSet: poetryProdPurlSet(lockfileText),
+      prodPurlSet,
       /**
        * Provenance derived from poetry.lock dep tables + pyproject roots - NOT cdxgen, which emits
        * no usable poetry graph. Keyed by the same pkg:pypi/<pep503>@<version> purls cdxgen emits,
