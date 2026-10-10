@@ -829,6 +829,31 @@ describe("electExpression / electCopyrights (pure narrow, no exec)", () => {
     expect(() => electExpression(files, isRootLevelPath)).toThrow(/scan errors on "pkg\/LICENSE"/);
   });
 
+  test("a legal file that carries scan_errors but still yields an expression is elected", () => {
+    const files = [
+      {
+        path: "pkg/LICENSE",
+        detected_license_expression_spdx: "MIT",
+        scan_errors: ["ERROR: for scanner: copyrights: ERROR: Processing interrupted: timeout"],
+      },
+    ];
+
+    expect(widen(electExpression(files, isRootLevelPath)?.raw)).toBe("MIT");
+  });
+
+  test("an errored legal file without an expression yields to a clean one later in the lane", () => {
+    const files = [
+      {
+        path: "pkg/COPYING",
+        detected_license_expression_spdx: null,
+        scan_errors: ["ERROR: Processing interrupted: timeout after 120 seconds."],
+      },
+      { path: "pkg/LICENSE", detected_license_expression_spdx: "MIT", scan_errors: [] },
+    ];
+
+    expect(widen(electExpression(files, isRootLevelPath)?.raw)).toBe("MIT");
+  });
+
   test("scan_errors on a file neither lane reads (a data file, a vendored LICENSE) leave election untouched", () => {
     const files = [
       { path: "pkg/data/licenses.json", scan_errors: ["ERROR: file too large"] },

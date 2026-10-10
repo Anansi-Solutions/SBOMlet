@@ -61,15 +61,17 @@ function isRawScancodeFile(raw: unknown): raw is RawScancodeFile {
  * carries no layout knowledge of its own, not which ecosystem, not where a package's own files
  * live.
  *
- * @throws When a matching, admissible entry reached before any winner carries `scan_errors`: its
- * missing expression is a failed scan, not evidence of no license.
+ * @returns The winner, or the first matching admissible path whose scan errored without an
+ * expression.
  */
 function electFromPattern(
   entries: RawScancodeFile[],
   pattern: RegExp,
   lane: string,
   isAdmissiblePath: (path: string) => boolean,
-): { raw: RawLicense; via: string } | undefined {
+): { elected?: { raw: RawLicense; via: string }; erroredPath?: string } {
+  let erroredPath: string | undefined;
+
   for (const entry of entries) {
     const path = entry.path;
 
@@ -85,15 +87,13 @@ function electFromPattern(
       continue;
     }
 
-    if (hasScanErrors(entry)) {
-      throw new Error(
-        `scancode reported scan errors on ${JSON.stringify(path)}, a file election reads`,
-      );
-    }
-
     const expression = entry.detected_license_expression_spdx;
 
     if (typeof expression !== "string" || expression.length === 0) {
+      if (hasScanErrors(entry)) {
+        erroredPath ??= path;
+      }
+
       continue;
     }
 
@@ -102,12 +102,28 @@ function electFromPattern(
     }
 
     return {
-      raw: asRawLicense(canonicalizeExpression(asRawLicense(expression))),
-      via: `${SCANCODE_TOOL.name}@${SCANCODE_TOOL.version}/${lane}`,
+      elected: {
+        raw: asRawLicense(canonicalizeExpression(asRawLicense(expression))),
+        via: `${SCANCODE_TOOL.name}@${SCANCODE_TOOL.version}/${lane}`,
+      },
     };
   }
 
-  return undefined;
+  return { erroredPath };
+}
+
+/**
+ * Reject a lane that ended without a winner on a failed scan.
+ *
+ * @throws When a lane found no winner past a file whose scan errored: its missing expression is a
+ * failed scan, not evidence of no license.
+ */
+function rejectFailedScan(erroredPath: string | undefined): void {
+  if (erroredPath !== undefined) {
+    throw new Error(
+      `scancode reported scan errors on ${JSON.stringify(erroredPath)}, a file election reads`,
+    );
+  }
 }
 
 /**
@@ -126,7 +142,8 @@ function electFromPattern(
  * both lanes reject. The winning expression is simplified via {@link canonicalizeExpression} before
  * it is returned, so ScanCode's own boolean-algebra noise never reaches the memo or a claim.
  *
- * @throws When an entry either lane consults carries `scan_errors` (see {@link electFromPattern}).
+ * @throws When a lane ends without a winner and one of its files errored without an expression;
+ * an errored legal file also blocks the manifest fallback.
  */
 export function electExpression(
   files: unknown,
@@ -145,11 +162,22 @@ export function electExpression(
     isPackageOwnLegalPath,
   );
 
-  if (legal !== undefined) {
-    return legal;
+  if (legal.elected !== undefined) {
+    return legal.elected;
   }
 
-  return electFromPattern(entries, MANIFEST_FILE_PATTERN, "manifest", isRootLevelManifestPath);
+  rejectFailedScan(legal.erroredPath);
+
+  const manifest = electFromPattern(
+    entries,
+    MANIFEST_FILE_PATTERN,
+    "manifest",
+    isRootLevelManifestPath,
+  );
+
+  rejectFailedScan(manifest.erroredPath);
+
+  return manifest.elected;
 }
 
 /** One narrowed copyrights[] entry. */
