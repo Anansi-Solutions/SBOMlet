@@ -637,6 +637,13 @@ defaults to `warn`.
 |-------|------|----------|---------|
 | `handling` | `"warn"` \| `"fail"` | yes (if table present) | `warn` reports unknowns without failing; `fail` treats every unknown as a violation. |
 
+The same knob governs a finding that names only a copyleft family, such as a
+bare `GPL` or the Maven label `GNU General Public License`
+(`default:imprecise-copyleft`): it could carry a copyleft obligation the tool
+cannot pin down, so it warns or fails with the unknowns, and a `fail` takes the
+same dev and OS downgrades. A permissive family such as bare `BSD`
+(`default:imprecise`) stays a warning either way.
+
 Start with `warn` while you burn down the unknown population, then switch to
 `fail` once the inventory is clean. The knob is global; per-ecosystem handling
 is not yet available.

@@ -219,8 +219,9 @@ still never governs `os`-scope packages.
 - Scope `os` and the family is the bare `AGPL` token → fail
   `default:agpl-container` (the same escalation as the precise case, and the
   same network=false demotion reconciliation).
-- Family is a could-be-copyleft token (bare `GPL`, `AGPL`, `LGPL`) → warn
-  `default:imprecise-copyleft`.
+- Family is a could-be-copyleft token (bare `GPL`, `AGPL`, `LGPL`, `EUPL`) →
+  `default:imprecise-copyleft`, following `[unknown]` handling exactly like the
+  unknown lane below (a `fail` takes the same os/development downgrades).
 - Any other family (a known-permissive one like bare `BSD`) → warn
   `default:imprecise`.
 

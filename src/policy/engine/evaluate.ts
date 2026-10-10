@@ -407,13 +407,12 @@ function clarifyIndexFor(entry: PackageEntry, policy: Policy): number {
  *     network-copyleft obligation and must never be parked at a warn). An application-ecosystem
  *     container package is scope "app" here (re-keyed upstream) and falls through to the next
  *     branch instead.
- *   - family in the set (bare GPL/AGPL/LGPL) → flagged-for-review, a warn that surfaces, rule
- *     "default:imprecise-copyleft". Conservative: an imprecise copyleft family is never silently
- *     passed.
+ *   - family in the set (bare GPL/AGPL/LGPL) → flagged-for-review under `[unknown]` handling, rule
+ *     "default:imprecise-copyleft": a warn, or a fail with the same scope downgrades
+ *     default:unknown gets. Never silently passed.
  *   - family not in the set (a known-permissive family like BSD) → a non-gating warn, rule
  *     "default:imprecise". Surfaced for optional `[[clarify]]` disambiguation, but never a hard
  *     fail purely for being imprecise.
- * The latter two are status "warn": visible in the summary, non-gating by default.
  */
 /**
  * The declared-network basis clause appended to a demoted AGPL-container reason: a complete project
@@ -477,12 +476,16 @@ function impreciseVerdict(
   }
 
   if (COULD_BE_COPYLEFT_FAMILIES.has(family)) {
-    return {
+    const verdict: Verdict = {
       ...base,
-      status: "warn",
+      status: policy.unknownHandling,
       rule: "default:imprecise-copyleft",
       reason: `imprecise license family "${family}" in "${target}" could carry a copyleft obligation — disambiguate via a [[clarify]] override (not silently passed)`,
     };
+
+    return policy.unknownHandling === "fail"
+      ? applyScopeDowngrades(verdict, entry, occurrence, policy)
+      : verdict;
   }
 
   return {

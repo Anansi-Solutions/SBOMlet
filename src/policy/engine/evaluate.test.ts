@@ -713,6 +713,50 @@ describe("evaluate — imprecise findings route to a safe lane", () => {
   });
 });
 
+describe("evaluate — [unknown] handling governs the imprecise-copyleft lane", () => {
+  const FAIL_UNKNOWN = '[unknown]\nhandling = "fail"\n';
+  const PROPRIETARY_TARGET =
+    '[target]\nlicense = "proprietary"\nnetwork = false\ndistribution = "external"\n';
+
+  test.each(["GNU General Public License", "GPL", "AGPL"])(
+    '%s fails under handling = "fail"',
+    (raw) => {
+      const [verdict] = runEngine([pkgSpec("dep", raw, ["services/api"])], FAIL_UNKNOWN).verdicts;
+
+      expect(verdict?.status).toBe("fail");
+      expect(verdict?.rule).toBe("default:imprecise-copyleft");
+    },
+  );
+
+  test("a declared target does not decide it either", () => {
+    const [verdict] = runEngine(
+      [pkgSpec("dep", "GPL", ["services/api"])],
+      FAIL_UNKNOWN + PROPRIETARY_TARGET,
+    ).verdicts;
+
+    expect(verdict?.status).toBe("fail");
+  });
+
+  test("a dev-only occurrence downgrades like default:unknown does", () => {
+    const [verdict] = runEngine(
+      [pkgSpec("dep", "GPL", [{ target: "services/api", dev: true }])],
+      FAIL_UNKNOWN,
+    ).verdicts;
+
+    expect(verdict?.status).toBe("warn");
+    expect(verdict?.rule).toBe("default:imprecise-copyleft");
+  });
+
+  test('handling = "warn" keeps the review warn', () => {
+    const [verdict] = runEngine(
+      [pkgSpec("dep", "GPL", ["services/api"])],
+      '[unknown]\nhandling = "warn"\n',
+    ).verdicts;
+
+    expect(verdict?.status).toBe("warn");
+  });
+});
+
 describe("evaluate — unknown handling knob", () => {
   test('zero-claim package warns under handling "warn" (the absent-table default)', () => {
     const { verdicts } = runEngine([pkgSpec("no-claims", null, ["backend"])], "");
