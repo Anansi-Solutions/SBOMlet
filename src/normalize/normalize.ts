@@ -421,8 +421,7 @@ export function normalizeRaw(raw: RawLicense): NormalizeResult {
 
   // Debian/DEP-5 copyright shorthands → canonical SPDX. MUST run BEFORE correct(): correct() either
   // drops these to unknown or mis-guesses them (e.g. "GPL-2+" → "GPL-2.0-only", dropping the
-  // or-later). Exact-token only,
-  // case-folded; bare GPL/LGPL/AGPL already returned above via AMBIGUOUS_FAMILY.
+  // or-later). Exact-token, case-folded; bare GPL/LGPL/AGPL returned above via AMBIGUOUS_FAMILY.
   const debian = DEBIAN_SHORTHAND.get(folded);
 
   if (debian !== undefined) {
@@ -828,8 +827,8 @@ function signalMatches(signal: ReadonlyArray<RawLicense>, recorded: RawLicense):
  * counts as a divergence) OR their raw folds are equal (so a non-SPDX registry label that
  * canonicalizeExpression passes through verbatim, `" bsd "` against `"BSD"`, still reconciles). The
  * comparison is `===` on {@link CanonicalLicense} values - never string-operated: canonicalization
- * normalizes id casing as well as structure, so a canonical form is genuinely
- * case-invariant. The fold stays on the RAW inputs, where case/whitespace folding belongs.
+ * normalizes id casing as well as structure, so a canonical form is genuinely case-invariant. The
+ * fold stays on the RAW inputs, where case/whitespace folding belongs.
  */
 function signalMatchesCanonical(signal: ReadonlyArray<RawLicense>, recorded: RawLicense): boolean {
   const wantCanonical = canonicalizeExpression(recorded);
@@ -1297,10 +1296,9 @@ function assessPrecise(
 
 /**
  * The in-depth answer is IMPRECISE (a bare family): it never upgrades anything. A precise base
- * whose leaves are out-of-family is a
- * conflict (fail closed - a disagreement in any direction is surfaced);
- * everything else stands unchanged, including an out-of-family imprecise base (nothing precise on
- * either side to weigh).
+ * whose leaves are out-of-family is a conflict (fail closed - a disagreement in any direction is
+ * surfaced); everything else stands unchanged, including an out-of-family imprecise base (nothing
+ * precise on either side to weigh).
  */
 function assessImprecise(family: LicenseFamily, base: LicenseFinding): LicenseFinding {
   if (base.expression !== null && !expressionInFamily(base.expression, family)) {
