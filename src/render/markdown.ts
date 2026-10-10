@@ -61,6 +61,7 @@ import {
   type TargetProfile,
 } from "../policy/compat";
 import { OS_PACKAGE_ECOSYSTEMS } from "../policy/engine/osEcosystems";
+import { isDevelopmentOccurrence } from "./developmentOccurrence";
 import { isUnknownLicense } from "./unknownLicense";
 import type { AcceptedContainerNotice } from "../policy/engine/evaluate";
 import type { SuppressedWorkspace } from "../policy/schema/exemptions";
@@ -372,12 +373,10 @@ function isContainerPackage(pkg: PackageEntry): boolean {
 
 /**
  * The counts-block Development-only predicate - mirrors exactly where the renderer PLACES a
- * package, so the count matches rendered section membership. A package renders development-only
- * when it has no production placement: it is either app-classified development-only ({@link
- * isDevelopmentOnly}) or a pure container package ({@link isContainerPackage}), AND none of its
- * occurrences targets a production (non-dev-marked) container - a single production container
- * occurrence is a production placement regardless of any other occurrence, matching the app-table
- * split's own conservative-to-production rule.
+ * package, so the count matches rendered section membership: a package renders development-only
+ * when it has no production placement, i.e. every occurrence is a development occurrence. A single
+ * production container occurrence is a production placement regardless of any other occurrence,
+ * matching the app-table split's own conservative-to-production rule.
  */
 function rendersDevelopmentOnly(
   pkg: PackageEntry,
@@ -385,11 +384,8 @@ function rendersDevelopmentOnly(
 ): boolean {
   return (
     pkg.occurrences.length > 0 &&
-    (isContainerPackage(pkg) || isDevelopmentOnly(pkg)) &&
-    !pkg.occurrences.some(
-      (occurrence) =>
-        occurrence.target.startsWith(DOCKER_IDENTITY_PREFIX) &&
-        !developmentContainers.has(occurrence.target),
+    pkg.occurrences.every((occurrence) =>
+      isDevelopmentOccurrence(occurrence, developmentContainers),
     )
   );
 }

@@ -30,6 +30,7 @@ import {
   type PackageEntry,
   type Verdict,
 } from "../model/dependencies";
+import { isDevelopmentOccurrence } from "./developmentOccurrence";
 
 type CdxLicense = { expression: string } | { license: { name: string } };
 
@@ -97,6 +98,7 @@ function unrecognizedLicenseProperties(pkg: PackageEntry): CdxProperty[] {
 function propertiesOf(
   pkg: PackageEntry,
   verdicts: ReadonlyArray<Verdict> | undefined,
+  developmentContainers: ReadonlySet<string>,
 ): CdxProperty[] | undefined {
   const properties: CdxProperty[] = [];
 
@@ -110,7 +112,7 @@ function propertiesOf(
   for (const occurrence of pkg.occurrences) {
     properties.push({
       name: `licenses-tool:scope:${occurrence.target}`,
-      value: occurrence.isDevDependency ? "dev" : "prod",
+      value: isDevelopmentOccurrence(occurrence, developmentContainers) ? "dev" : "prod",
     });
   }
 
@@ -139,9 +141,10 @@ function propertiesOf(
 function toComponent(
   pkg: PackageEntry,
   verdicts: ReadonlyArray<Verdict> | undefined,
+  developmentContainers: ReadonlySet<string>,
 ): CdxComponent {
   const licenses = licensesOf(pkg);
-  const properties = propertiesOf(pkg, verdicts);
+  const properties = propertiesOf(pkg, verdicts, developmentContainers);
 
   // Keys in the intended emission order; optional keys spread in conditionally so absent values
   // OMIT the key rather than emit null.
@@ -159,11 +162,13 @@ function toComponent(
 /**
  * Emit the merged, policy-annotated inventory as deterministic CycloneDX 1.6 JSON. No serialNumber,
  * no timestamp, components purl-sorted (defensive - the emitter never trusts input order), indent
- * 2, exactly one trailing LF.
+ * 2, exactly one trailing LF. Occurrences in `developmentContainers` (the `[[docker.development]]`
+ * containers) export scope `dev`.
  */
 export function renderCyclonedx(
   model: CanonicalDependencies,
   verdicts?: ReadonlyArray<Verdict>,
+  developmentContainers: ReadonlySet<string> = new Set(),
 ): string {
   const sorted = [...model.packages].sort((a, b) => compareCodeUnits(a.purl, b.purl));
   const doc = {
@@ -175,7 +180,7 @@ export function renderCyclonedx(
         components: [{ type: "application", name: "licenses-tool" }],
       },
     },
-    components: sorted.map((pkg) => toComponent(pkg, verdicts)),
+    components: sorted.map((pkg) => toComponent(pkg, verdicts, developmentContainers)),
   };
 
   return JSON.stringify(doc, null, 2) + "\n";

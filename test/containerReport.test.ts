@@ -17,6 +17,7 @@ import { BUILTIN_OVERRIDES } from "../src/policy/engine/builtinOverrides";
 import { acceptedContainerNotices, evaluate } from "../src/policy/engine/evaluate";
 import { parsePolicy } from "../src/policy/parse/parse";
 import { alignTables } from "../src/render/alignTables";
+import { renderCyclonedx } from "../src/render/cyclonedx";
 import { renderMarkdown, type PolicyView } from "../src/render/markdown";
 import { globToRegExp } from "../src/targets/discover";
 import { asPurl, asRelativePath, asDependencyName, asDependencyVersion } from "./brandTestSupport";
@@ -762,5 +763,41 @@ describe("a shared workspace+docker package through the real merge/scope/evaluat
     const containerSection = section(doc, `### Container: ${BUILD_CONTAINER}`);
 
     expect(containerSection.includes("shared-workspace-and-image")).toBe(true);
+  });
+});
+
+describe("a system package in a development container: report and SBOM agree", () => {
+  const busybox = entry({
+    purl: asPurl("pkg:apk/busybox@1.37.0"),
+    name: asDependencyName("busybox"),
+    version: asDependencyVersion("1.37.0"),
+    scope: "os",
+    occurrences: [{ target: BUILD_CONTAINER, isDevDependency: false }],
+    licenseClaims: [{ raw: asRawLicense("GPL-2.0-only"), kind: "spdx-id", source: "generator" }],
+  });
+  const policy = parsePolicy(
+    ["[[docker.development]]", 'source = "tools/**"', 'reason = "ci tooling only"', ""].join("\n"),
+  );
+  const { model: annotated } = annotateFindings({ packages: [busybox] }, policy.clarify);
+  const developmentContainers = resolveDevelopmentContainersForTest(annotated, policy);
+  const scoped = applyContainerScopes(annotated, developmentContainers);
+  const verdicts = evaluate(scoped, policy, WITHOUT_DEPENDENCY_GRAPHS);
+
+  test("the report counts it Development-only and the SBOM scope property reads dev", () => {
+    const doc = renderMarkdown(scoped, {
+      policyPath: asRelativePath("policy.toml"),
+      suppressedWorkspaces: policy.suppressedWorkspaces,
+      verdicts,
+      developmentContainers,
+    });
+    const sbom = JSON.parse(renderCyclonedx(scoped, verdicts, developmentContainers)) as {
+      components: Array<{ properties: Array<{ name: string; value: string }> }>;
+    };
+
+    expect(doc).toContain("- Development-only packages: 1");
+    expect(sbom.components[0]!.properties).toContainEqual({
+      name: `licenses-tool:scope:${BUILD_CONTAINER}`,
+      value: "dev",
+    });
   });
 });

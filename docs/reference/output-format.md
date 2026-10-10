@@ -496,6 +496,13 @@ occurrences cleanly. The per-component property names:
 | `licenses-tool:verdict:<target>` | the verdict status (`ok`, `warn`, `fail`, `suppressed`) | once per matching verdict, policy runs only |
 | `licenses-tool:rule:<target>` | the [policy lane](../glossary.md#policy-lanes) rule | once per matching verdict, policy runs only |
 
+`licenses-tool:scope:<target>` follows the same partition as the Markdown's
+Production and Development-only sections: an occurrence in a container marked
+`[[docker.development]]` is `dev`, a system package included, and outside
+containers an occurrence is `dev` when it is a development dependency. It
+describes placement, not gating: a system package in a development container
+reads `dev` here while its verdict still comes from `[os_dependencies]`.
+
 `licenses-tool:rule:<target>` carries whatever rule id decided the verdict,
 unfiltered — a target-compatibility lane verdict (`target:ok`,
 `target:incompatible`, `target:boundary`, `target:unknown-pair`,

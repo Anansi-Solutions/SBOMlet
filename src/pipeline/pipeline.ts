@@ -808,7 +808,7 @@ export async function buildOutputs(opts: GenerateOptions): Promise<BuiltOutputs>
     licensesMd: alignTables(renderMarkdown(scoped, policyView)),
     noticesMd: renderNotices(scoped),
     ...(opts.cyclonedxPath !== undefined
-      ? { cyclonedxJson: renderCyclonedx(scoped, verdicts) }
+      ? { cyclonedxJson: renderCyclonedx(scoped, verdicts, developmentContainers) }
       : {}),
     dumpJson,
     ...(verdicts !== undefined ? { verdicts } : {}),
