@@ -176,9 +176,10 @@ comparisons. The variations:
   commas, as-declared — there is no finding yet to canonicalize.
 
 The raw, as-declared expression survives unchanged in the
-[enrichment cache](#the-committed-sidecars) and the
-[CycloneDX export](#the-cyclonedx-export); only the rendered License column is
-canonicalized.
+[enrichment cache](#the-committed-sidecars). The
+[CycloneDX export](#the-cyclonedx-export) carries the same canonical expression
+as the License column whenever a finding has one, and lists the raw claims as
+named licenses only when it does not.
 
 Which packages row in these two tables versus a container's own subsection —
 including a package that ships both ways — is placement, normatively defined
