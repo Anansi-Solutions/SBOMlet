@@ -1692,6 +1692,18 @@ describe("unusedRuleIds — stale-policy hygiene", () => {
   });
 });
 
+describe("unusedRuleIds — a [[deny]] that matches nothing", () => {
+  test("a name-mode deny whose name never matches is reported; a firing one is not", () => {
+    const policyText = [denyNameFixture("foo-bar"), "", denyLicenseFixture("Zlib")].join("\n");
+    const { verdicts, usedClarifyIndices, policy } = runEngine(
+      [pkgSpec("Foo_Bar", "MIT", ["apps/web"]), pkgSpec("z", "Zlib", ["apps/web"])],
+      policyText,
+    );
+
+    expect(unusedRuleIds(policy, verdicts, usedClarifyIndices)).toEqual(["denied[0]"]);
+  });
+});
+
 describe("evaluate — where-scoped compatible matching", () => {
   test("package form: scoped rule cited ONLY at its target; segment-aware; other occurrences fall to default:copyleft", () => {
     const { verdicts } = runEngine(

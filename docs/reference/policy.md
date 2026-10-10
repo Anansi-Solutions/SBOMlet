@@ -157,7 +157,9 @@ value is never corrected into the licence it rides on: a value that names Common
 Clause, a proprietary or commercial marker, or any word the corrected SPDX id does
 not account for is an unknown finding, handled by `[unknown]`. Name mode matches
 the package by exact name, so it catches these even on a package whose finding is
-unknown.
+unknown. The compare is exact and case-sensitive (`foo-bar` never matches
+`Foo_Bar`), so an entry that denies no package is reported as an unused entry on
+stderr, like an unused `[[compatible]]` rule.
 
 Deny also sees through an override: if a `[[clarify]]` rewrote a denied
 licence into something benign, deny still fires on the original, pre-override

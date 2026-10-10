@@ -176,6 +176,11 @@ const WARN_ONLY_POLICY = [
   'where = ["/"]',
   'comment = "unused-entry-marker"',
   "",
+  "[[deny]]",
+  'match = "name"',
+  'pattern = "no-such-package"',
+  'reason = "dead-deny-marker"',
+  "",
 ].join("\n");
 
 const squish = (s: string): string => s.replace(/ {2,}/g, " ");
@@ -388,6 +393,7 @@ describe("runCheck + exitCodeFor — the CI gate", () => {
     expect(stderr).toContain(
       "policy warning: unused entry compatible[1] — license-reviewed — unused-entry-marker",
     );
+    expect(stderr).toContain("policy warning: unused entry denied[0] — dead-deny-marker");
     // ...and zero fail lines exist to gate on.
     expect(stderr).not.toContain("policy fail:");
   });

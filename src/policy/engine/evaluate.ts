@@ -1676,12 +1676,11 @@ export function acceptedContainerNotices(
 }
 
 /**
- * Rule ids of compatible/clarify entries that never decided anything -
- * stale-policy hygiene. Compatible usage is read from cited verdict rules;
- * clarify usage comes from annotateFindings' usedClarifyIndices (a clarify rule is "used" when it
- * replaced a finding, even if a higher-precedence compatible rule decided the final verdict).
- * Suppression entries are never reported. Returned in TOML array order: compatible first, then
- * clarify.
+ * Rule ids of deny/compatible/clarify entries that never decided anything - stale-policy hygiene.
+ * Deny and compatible usage is read from cited verdict rules; clarify usage comes from
+ * annotateFindings' usedClarifyIndices (a clarify rule is "used" when it replaced a finding, even
+ * if a higher-precedence compatible rule decided the final verdict). Suppression entries are never
+ * reported. Returned in TOML array order: deny first, then compatible, then clarify.
  */
 export function unusedRuleIds(
   policy: Policy,
@@ -1691,6 +1690,11 @@ export function unusedRuleIds(
   const cited = new Set(verdicts.map((v) => v.rule));
   const unused: string[] = [];
 
+  policy.deny.forEach((_, index) => {
+    if (!cited.has(`denied[${index}]`)) {
+      unused.push(`denied[${index}]`);
+    }
+  });
   policy.compatible.forEach((_, index) => {
     const id = `compatible[${index}]`;
 

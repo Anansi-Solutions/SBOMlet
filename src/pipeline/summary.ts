@@ -14,9 +14,15 @@ import type { Policy } from "../policy/schema";
  * Reason text of an unused rule id - surfaced in the unused-entry warning so the stale policy line
  * is self-explanatory. A clarify id is resolved by citation rather than by position: an imported
  * entry is numbered within its own file, not within the combined list. Defensive empty string for
- * an unrecognized id shape (unusedRuleIds only emits these three shapes).
+ * an unrecognized id shape (unusedRuleIds only emits these four shapes).
  */
 function unusedRuleReason(policy: Policy, ruleId: string): string {
+  const denied = /^denied\[(\d+)\]$/.exec(ruleId);
+
+  if (denied !== null) {
+    return policy.deny[Number(denied[1])]?.reason ?? "";
+  }
+
   const compatible = /^compatible\[(\d+)\]$/.exec(ruleId);
   const rule =
     compatible === null
