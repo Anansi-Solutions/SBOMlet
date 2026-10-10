@@ -56,8 +56,17 @@ describe("COPYLEFT_IDS membership", () => {
     expect(COPYLEFT_IDS.has(leaf("MS-PL"))).toBe(false);
   });
 
-  test("is the verbatim 94-id literal (54 from research + 40 CR-01 additions)", () => {
-    expect(COPYLEFT_IDS.size).toBe(94);
+  test("holds every CC ShareAlike id and port spdx-license-ids registers, NonCommercial included", () => {
+    const dataDir = join(import.meta.dir, "..", "..", "node_modules", "spdx-license-ids");
+    const current = JSON.parse(readFileSync(join(dataDir, "index.json"), "utf8")) as string[];
+    const shareAlike = current.filter((id) => /^CC-BY-(NC-)?SA-/.test(id));
+
+    expect(shareAlike).toContain("CC-BY-NC-SA-4.0");
+    expect(shareAlike.filter((id) => !COPYLEFT_IDS.has(leaf(id)))).toEqual([]);
+  });
+
+  test("is the verbatim 105-id literal", () => {
+    expect(COPYLEFT_IDS.size).toBe(105);
   });
 
   test("every member is a real SPDX id — current or deprecated (typo-proof)", () => {

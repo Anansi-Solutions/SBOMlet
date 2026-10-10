@@ -517,6 +517,7 @@ describe("evaluate — CR-01 copyleft families reach default:copyleft", () => {
   test("CC-BY-SA-4.0, Sleepycat, and GFDL-1.3-only packages fail (no more silent default:ok)", () => {
     const { verdicts } = runEngine(
       [
+        pkgSpec("cc-nc-sa-pkg", "CC-BY-NC-SA-4.0", ["backend"]),
         pkgSpec("cc-sa-pkg", "CC-BY-SA-4.0", ["backend"]),
         pkgSpec("gfdl-pkg", "GFDL-1.3-only", ["backend"]),
         pkgSpec("sleepycat-pkg", "Sleepycat", ["backend"]),
@@ -525,6 +526,7 @@ describe("evaluate — CR-01 copyleft families reach default:copyleft", () => {
     );
 
     expect(verdicts.map((v) => [v.status, v.rule])).toEqual([
+      ["fail", "default:copyleft"],
       ["fail", "default:copyleft"],
       ["fail", "default:copyleft"],
       ["fail", "default:copyleft"],

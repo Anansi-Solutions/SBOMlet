@@ -104,11 +104,22 @@ const FAMILY_MEMBERS: ReadonlyArray<FamilyGroup> = [
   ["SSPL", ["SSPL-1.0"]],
   [
     // CC ShareAlike family (ShareAlike = copyleft for adaptations), incl. the jurisdiction ports
-    // - CC-BY-* (no SA) is NOT copyleft and stays out.
+    // and the NonCommercial-ShareAlike ids - CC-BY-* (no SA) is NOT copyleft and stays out.
     "CC-BY-SA",
     [
+      "CC-BY-NC-SA-1.0",
+      "CC-BY-NC-SA-2.0",
+      "CC-BY-NC-SA-2.0-DE",
+      "CC-BY-NC-SA-2.0-FR",
+      "CC-BY-NC-SA-2.0-UK",
+      "CC-BY-NC-SA-2.5",
+      "CC-BY-NC-SA-3.0",
+      "CC-BY-NC-SA-3.0-DE",
+      "CC-BY-NC-SA-3.0-IGO",
+      "CC-BY-NC-SA-4.0",
       "CC-BY-SA-1.0",
       "CC-BY-SA-2.0",
+      "CC-BY-SA-2.0-UK",
       "CC-BY-SA-2.1-JP",
       "CC-BY-SA-2.5",
       "CC-BY-SA-3.0",
