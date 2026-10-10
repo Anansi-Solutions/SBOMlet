@@ -345,13 +345,12 @@ describe("filterOsComponents (full image contents by default)", () => {
 });
 
 // ---------------------------------------------------------------------------
-// unionOsComponents (sidecar v2 membership union) — the cross-image dedup no
-// longer DISCARDS membership: a purl shared between images stays ONE row, but
-// that row now lists every containing image. The retained licenses are the
-// union of every image's claims, so no image order can drop a claim.
+// unionOsComponents (format 3) — a purl shared between images stays ONE row
+// listing every containing image, and each image keeps its own claims in
+// licensesByImage, so no image order can drop or misattribute a claim.
 // ---------------------------------------------------------------------------
 
-describe("unionOsComponents (cross-image membership union, sidecar v2)", () => {
+describe("unionOsComponents (cross-image membership union, format 3)", () => {
   const sharedInA: OsComponent[] = [
     {
       type: "library",
@@ -396,11 +395,12 @@ describe("unionOsComponents (cross-image membership union, sidecar v2)", () => {
     expect(busybox?.images).toEqual(["img/a", "img/b"]);
     // One row per purl — the dedup posture is unchanged, only more visible.
     expect(merged.filter((c) => c.name === "busybox")).toHaveLength(1);
-    // The retained licenses are the union of both images' claims, deduped and sorted.
-    expect(busybox?.licenses).toEqual([
-      { license: { id: "GPL-2.0-only" } },
-      { license: { name: "GPL" } },
-    ]);
+    // Each image keeps its own claims; there is no unioned licenses field.
+    expect(busybox?.licensesByImage).toEqual({
+      "img/a": [{ license: { id: "GPL-2.0-only" } }],
+      "img/b": [{ license: { name: "GPL" } }],
+    });
+    expect(busybox !== undefined && "licenses" in busybox).toBe(false);
   });
 
   test("a purl unique to one image carries exactly that one membership entry", () => {
@@ -428,7 +428,10 @@ describe("unionOsComponents (cross-image membership union, sidecar v2)", () => {
       { image: "img/a", components: sharedInA },
     ]);
 
-    expect(merged.find((c) => c.name === "busybox")?.images).toEqual(["img/a"]);
+    const busybox = merged.find((c) => c.name === "busybox");
+
+    expect(busybox?.images).toEqual(["img/a"]);
+    expect(busybox?.licensesByImage).toEqual({ "img/a": [{ license: { id: "GPL-2.0-only" } }] });
   });
 
   const LIBSSL_PURL = "pkg:deb/debian/libssl3@3.0.15-1~deb12u1?arch=amd64&distro=debian-12";
@@ -449,7 +452,7 @@ describe("unionOsComponents (cross-image membership union, sidecar v2)", () => {
     components: filterOsComponents(libssl([{ expression: "Apache-2.0" }])),
   };
 
-  test("a claim only a later image carries survives the union, whatever the image order", () => {
+  test("each image keeps exactly its own claims, whatever the image order", () => {
     for (const order of [
       [slimImage, fullImage],
       [fullImage, slimImage],
@@ -457,7 +460,10 @@ describe("unionOsComponents (cross-image membership union, sidecar v2)", () => {
       const [[merged]] = unionOsComponents(order);
 
       expect(merged?.images).toEqual(["a-slim", "b-full"]);
-      expect(merged?.licenses).toEqual([{ expression: "Apache-2.0" }]);
+      expect(merged?.licensesByImage).toEqual({
+        "a-slim": [],
+        "b-full": [{ expression: "Apache-2.0" }],
+      });
     }
   });
 
@@ -501,22 +507,23 @@ describe("unionOsComponents (cross-image membership union, sidecar v2)", () => {
   });
 });
 
-describe("emitDockerOsDoc (deterministic emit, sidecar v2)", () => {
+describe("emitDockerOsDoc (deterministic emit, format 3)", () => {
   const DIGESTS = [{ image: "postgres:18", digest: "sha256:abc", source: "postgres:18" }];
   const postgresAttributed = (): AttributedOsComponent[] =>
     unionOsComponents([
       { image: "postgres:18", components: filterOsComponents(postgresFixture) },
     ])[0];
 
-  test("emits ONLY {bomFormat, specVersion, components, dockerImages}", () => {
+  test("emits ONLY {bomFormat, specVersion, formatVersion, components, dockerImages}", () => {
     const json = emitDockerOsDoc(postgresAttributed(), DIGESTS);
     const doc = JSON.parse(json) as Record<string, unknown>;
 
     expect(new Set(Object.keys(doc))).toEqual(
-      new Set(["bomFormat", "specVersion", "components", "dockerImages"]),
+      new Set(["bomFormat", "specVersion", "formatVersion", "components", "dockerImages"]),
     );
     expect(doc.bomFormat).toBe("CycloneDX");
     expect(doc.specVersion).toBe("1.6");
+    expect(doc.formatVersion).toBe(3);
     // No serialNumber, no metadata, no timestamp survive the re-emit.
     expect(doc.serialNumber).toBeUndefined();
     expect(doc.metadata).toBeUndefined();
@@ -524,7 +531,7 @@ describe("emitDockerOsDoc (deterministic emit, sidecar v2)", () => {
     expect(json).not.toContain("serialNumber");
   });
 
-  test("every component carries its sorted image membership (sidecar v2)", () => {
+  test("every component carries its sorted image membership", () => {
     const json = emitDockerOsDoc(postgresAttributed(), DIGESTS);
     const doc = JSON.parse(json) as {
       components: Array<{ images?: unknown }>;
@@ -584,20 +591,21 @@ describe("emitDockerOsDoc (deterministic emit, sidecar v2)", () => {
     expect(emitDockerOsDoc(components, digests)).toBe(emitDockerOsDoc(components, digests));
   });
 
-  test("the emitted doc carries each component's preserved licenses array", () => {
+  test("the emitted doc carries each image's preserved licenses array", () => {
     const json = emitDockerOsDoc(postgresAttributed(), DIGESTS);
     const doc = JSON.parse(json) as {
       components: Array<{
         name: string;
         licenses?: unknown;
+        licensesByImage?: Record<string, unknown>;
       }>;
     };
     const adduser = doc.components.find((c) => c.name === "adduser");
 
-    expect(adduser?.licenses).toEqual([
-      { license: { id: "GPL-2.0-only" } },
-      { license: { id: "GPL-2.0-or-later" } },
-    ]);
+    expect(adduser?.licensesByImage).toEqual({
+      "postgres:18": [{ license: { id: "GPL-2.0-only" } }, { license: { id: "GPL-2.0-or-later" } }],
+    });
+    expect(doc.components.every((c) => c.licenses === undefined)).toBe(true);
     // The license shapes are exactly the CycloneDX claim shapes the merge's
     // licenseClaimsOf reads — so OS packages render REAL licenses, not unknown.
     expect(json).toContain('"GPL-2.0-only"');

@@ -24,12 +24,13 @@
  *     actually scanned (NOT `buildx imagetools inspect`, which returns the manifest-LIST digest);
  *     an image with no RepoDigests (a local-only / never-pushed build) records digest "".
  *
- * Emit: a minimal deterministic `{ bomFormat, specVersion:"1.6", components,
+ * Emit: a minimal deterministic `{ bomFormat, specVersion:"1.6", formatVersion:3, components,
  * dockerImages }` doc and nothing else (no serialNumber, no metadata,
  * no timestamp). Each component carries `images` - the sorted membership of `dockerImages[].image`
- * values it was seen in - and each dockerImages entry carries `source`, the identity the image came
- * from (the Dockerfile identity for built images, the requested ref verbatim otherwise). Serialized
- * via the tool-wide `toSortedJson` contract so a double-emit is byte-identical by
+ * values it was seen in - and `licensesByImage`, each of those images' own claims; each
+ * dockerImages entry carries `source`, the identity the image came from (the Dockerfile identity
+ * for built images, the requested ref verbatim otherwise). Serialized via the tool-wide
+ * `toSortedJson` contract so a double-emit is byte-identical by
  * construction. Zero new runtime deps - syft and docker are orchestrated
  * pinned CLIs, same posture as cdxgen/tofu.
  */
@@ -64,6 +65,13 @@ export const SYFT_TOOL = { name: "syft", version: "1.45.1" } as const;
  * never balloon memory.
  */
 export const MAX_SYFT_SBOM_BYTES = 64 * 1024 * 1024;
+
+/**
+ * The committed docker SBOM format this tool writes, stored as the top-level `formatVersion`.
+ * Format 3 keeps each image's claims apart (`licensesByImage`); format 2, a file with no
+ * `formatVersion`, stored one unioned `licenses` array per component.
+ */
+export const DOCKER_SBOM_FORMAT_VERSION = 3;
 
 /** Per-run + per-image timeout for the syft scan / docker inspect spawns. */
 const DEFAULT_TIMEOUT_MS = 10 * 60 * 1000;
@@ -147,13 +155,17 @@ export interface OsComponent {
 }
 
 /**
- * One EMITTED component: an OsComponent plus its cross-image membership. `images` is the sorted
- * list of `dockerImages[].image` values the component was seen in. Attribution attaches ONLY in the
- * cross-image union ({@link unionOsComponents}) - {@link filterOsComponents} stays per-image and
- * membership-free - so the emitted doc always says which image(s) each component came from.
+ * One EMITTED component: an OsComponent identity plus its cross-image membership. Attribution
+ * attaches ONLY in the cross-image union ({@link unionOsComponents}) - {@link filterOsComponents}
+ * stays per-image and membership-free.
  */
-export interface AttributedOsComponent extends OsComponent {
+export interface AttributedOsComponent extends Omit<OsComponent, "licenses"> {
+  /** The sorted `dockerImages[].image` values the component was seen in. */
   images: string[];
+  /**
+   * Each member image's own sorted, deduped claims (empty when it carried none), keyed by image.
+   */
+  licensesByImage: Record<string, OsLicense[]>;
 }
 
 /**
@@ -363,84 +375,72 @@ function unionLicenses(a: readonly OsLicense[], b: readonly OsLicense[]): OsLice
     .map(([, license]) => license);
 }
 
-/** The divergence for one purl when its images' claim sets are not all identical. */
-function claimDivergenceOf(
-  purl: Purl,
-  claimsByImage: Map<string, OsLicense[]>,
-): OsClaimDivergence | undefined {
-  const entries = [...claimsByImage.entries()].sort(([a], [b]) => compareCodeUnits(a, b));
-  const distinct = new Set(entries.map(([, licenses]) => licenses.map(licenseSortKey).join("\0")));
+/** The divergence for one row when its images' claim sets are not all identical. */
+function claimDivergenceOf({
+  purl,
+  images,
+  licensesByImage,
+}: AttributedOsComponent): OsClaimDivergence | undefined {
+  const claimsByImage = images.map((image) => ({ image, licenses: licensesByImage[image] ?? [] }));
+  const distinct = new Set(
+    claimsByImage.map(({ licenses }) => licenses.map(licenseSortKey).join("\0")),
+  );
 
-  if (distinct.size < 2) {
-    return undefined;
-  }
-
-  return { purl, claimsByImage: entries.map(([image, licenses]) => ({ image, licenses })) };
+  return distinct.size < 2 ? undefined : { purl, claimsByImage };
 }
 
 /**
  * Cross-image membership UNION: fold each image's filtered components into one purl-keyed set where
  * a purl shared between images is ONE row whose `images` lists every containing image and whose
- * `licenses` is the union of every image's claims, so no image order can drop a claim. Name and
- * version are the first-seen values (the purl pins both).
+ * `licensesByImage` keeps each image's own claims, so no image order can drop or misattribute a
+ * claim. Name and version are the first-seen values (the purl pins both).
  *
  * @returns The purl-sorted rows, and one divergence per purl whose claim sets differ between
- * images (the single unioned row can no longer say which image carried which claim).
+ * images.
  */
 export function unionOsComponents(
   perImage: ReadonlyArray<{ image: string; components: OsComponent[] }>,
 ): [AttributedOsComponent[], OsClaimDivergence[]] {
-  const byPurl = new Map<string, AttributedOsComponent>();
-  const claimsByPurl = new Map<Purl, Map<string, OsLicense[]>>();
+  const byPurl = new Map<
+    string,
+    { identity: Omit<OsComponent, "licenses">; claims: Map<string, OsLicense[]> }
+  >();
 
   for (const { image, components } of perImage) {
-    for (const component of components) {
-      const existing = byPurl.get(component.purl);
-      const claimsByImage = claimsByPurl.get(component.purl) ?? new Map<string, OsLicense[]>();
+    for (const { licenses = [], ...identity } of components) {
+      const entry = byPurl.get(identity.purl) ?? { identity, claims: new Map() };
 
-      claimsByPurl.set(component.purl, claimsByImage);
-      claimsByImage.set(image, component.licenses ?? []);
-
-      if (existing === undefined) {
-        byPurl.set(component.purl, { ...component, images: [image] });
-        continue;
-      }
-
-      // The includes guard keeps a duplicated ref in the scan set from double-counting one image.
-      if (!existing.images.includes(image)) {
-        existing.images.push(image);
-      }
-
-      const licenses = unionLicenses(existing.licenses ?? [], component.licenses ?? []);
-
-      if (licenses.length > 0) {
-        existing.licenses = licenses;
-      }
+      byPurl.set(identity.purl, entry);
+      // A duplicated ref in the scan set folds into its one membership entry.
+      entry.claims.set(image, unionLicenses(entry.claims.get(image) ?? [], licenses));
     }
   }
 
-  const merged = [...byPurl.values()].sort((a, b) => compareCodeUnits(a.purl, b.purl));
-  const divergences: OsClaimDivergence[] = [];
+  const merged = [...byPurl.values()]
+    .map(({ identity, claims }): AttributedOsComponent => {
+      const byImage = [...claims.entries()].sort(([a], [b]) => compareCodeUnits(a, b));
 
-  for (const entry of merged) {
-    entry.images.sort(compareCodeUnits);
-    const divergence = claimDivergenceOf(entry.purl, claimsByPurl.get(entry.purl) ?? new Map());
-
-    if (divergence !== undefined) {
-      divergences.push(divergence);
-    }
-  }
+      // fromEntries defines own properties, so no image ref can reach the prototype.
+      return {
+        ...identity,
+        images: byImage.map(([image]) => image),
+        licensesByImage: Object.fromEntries(byImage),
+      };
+    })
+    .sort((a, b) => compareCodeUnits(a.purl, b.purl));
+  const divergences = merged
+    .map(claimDivergenceOf)
+    .filter((divergence) => divergence !== undefined);
 
   return [merged, divergences];
 }
 
 /**
  * Serialize the minimal deterministic OS-SBOM doc:
- * `{ bomFormat, specVersion:"1.6", components, dockerImages }` and nothing else - no serialNumber,
- * no metadata, no timestamp. Components carry their sorted `images` membership; dockerImages
- * entries carry `source` alongside image/digest, and the sidecar is sorted by image. Uses the
- * tool-wide `toSortedJson` contract (sorted keys, LF, indent 2) so a double-emit from the same
- * inputs is byte-identical.
+ * `{ bomFormat, specVersion:"1.6", formatVersion, components, dockerImages }` and nothing else - no
+ * serialNumber, no metadata, no timestamp. dockerImages entries carry `source` alongside
+ * image/digest, and the sidecar is sorted by image. Uses the tool-wide `toSortedJson` contract
+ * (sorted keys, LF, indent 2) so a double-emit from the same inputs is byte-identical.
  */
 export function emitDockerOsDoc(
   components: AttributedOsComponent[],
@@ -451,6 +451,7 @@ export function emitDockerOsDoc(
   return toSortedJson({
     bomFormat: "CycloneDX",
     specVersion: "1.6",
+    formatVersion: DOCKER_SBOM_FORMAT_VERSION,
     components,
     dockerImages: sortedImages,
   });

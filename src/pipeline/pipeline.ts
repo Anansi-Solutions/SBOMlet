@@ -7,7 +7,7 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { basename, relative } from "node:path";
 
-import { assertSyftSbomSize } from "../collectors/dockerOs";
+import { assertSyftSbomSize, DOCKER_SBOM_FORMAT_VERSION } from "../collectors/dockerOs";
 import { assessPackages } from "../enrich/assess";
 import { enrichUnknowns } from "../enrich/enrich";
 import { type IntensiveOptions } from "../enrich/scancode";
@@ -132,9 +132,20 @@ export interface BuiltOutputs {
   staleUnknowns: Purl[];
 }
 
-/** A sidecar component narrowed to its attribution: non-empty string images. */
-interface AttributedSidecarComponent extends Record<string, unknown> {
+/**
+ * The docker SBOM formats this version reads: 2, a file with no `formatVersion` whose rows carry
+ * one `licenses` array shared by every member image, and the current per-image format.
+ */
+type SidecarFormat = 2 | typeof DOCKER_SBOM_FORMAT_VERSION;
+
+/** A sidecar component narrowed to its attribution. */
+interface AttributedSidecarComponent {
+  /** The committed row without `licensesByImage`: what the merge reads. */
+  row: Record<string, unknown>;
+  /** The non-empty string images the row was found in. */
   images: string[];
+  /** Each member image's own claims; undefined for a format-2 row. */
+  claimsByImage: ReadonlyMap<string, unknown[]> | undefined;
 }
 
 /** A narrowed sidecar: the parsed doc plus typed components and images. */
@@ -184,14 +195,102 @@ function narrowSidecarImages(value: unknown): Array<{ image: string; source: str
 }
 
 /**
- * components → attributed components, or undefined on any flaw: a non-array, a non-object entry, a
- * missing/empty/non-string-array `images`, or a membership naming an image absent from
- * dockerImages. An EMPTY membership is a flaw too - it would drop the component from every fan-out
- * input, and dropped inventory is the one failure the degradation path exists to prevent.
+ * A row's `images` → its memberships, or undefined when missing, empty, or naming anything but an
+ * image listed in dockerImages. An EMPTY membership is a flaw too - it would drop the component
+ * from every fan-out input, and dropped inventory is the one failure this reader must never allow.
+ */
+function narrowMemberships(value: unknown, listed: ReadonlySet<string>): string[] | undefined {
+  if (!Array.isArray(value) || value.length === 0) {
+    return undefined;
+  }
+
+  const memberships: string[] = [];
+
+  for (const entry of value) {
+    if (!isNonEmptyString(entry) || !listed.has(entry)) {
+      return undefined;
+    }
+
+    memberships.push(entry);
+  }
+
+  return memberships;
+}
+
+/**
+ * A format-3 row's `licensesByImage` → its per-image claims, or undefined unless it is an object
+ * keyed by exactly the row's images, each holding an array.
+ */
+function narrowClaimsByImage(
+  value: unknown,
+  images: readonly string[],
+): Map<string, unknown[]> | undefined {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    return undefined;
+  }
+
+  const byImage = value as Record<string, unknown>;
+
+  if (Object.keys(byImage).length !== images.length) {
+    return undefined;
+  }
+
+  const claims = new Map<string, unknown[]>();
+
+  for (const image of images) {
+    const licenses = Object.hasOwn(byImage, image) ? byImage[image] : undefined;
+
+    if (!Array.isArray(licenses)) {
+      return undefined;
+    }
+
+    claims.set(image, licenses);
+  }
+
+  return claims;
+}
+
+/**
+ * One row → its attributed component, or undefined on any flaw: a non-object, bad memberships, or a
+ * claims field that does not match the format (a format-2 row carrying `licensesByImage`, a
+ * format-3 row carrying a unioned `licenses` or malformed `licensesByImage`).
+ */
+function narrowSidecarComponent(
+  raw: unknown,
+  listed: ReadonlySet<string>,
+  format: SidecarFormat,
+): AttributedSidecarComponent | undefined {
+  if (typeof raw !== "object" || raw === null) {
+    return undefined;
+  }
+
+  const { licensesByImage, ...row } = raw as Record<string, unknown>;
+  const images = narrowMemberships(row["images"], listed);
+
+  if (images === undefined) {
+    return undefined;
+  }
+
+  if (format === 2) {
+    return licensesByImage === undefined ? { row, images, claimsByImage: undefined } : undefined;
+  }
+
+  const claimsByImage = narrowClaimsByImage(licensesByImage, images);
+
+  if (claimsByImage === undefined || "licenses" in row) {
+    return undefined;
+  }
+
+  return { row, images, claimsByImage };
+}
+
+/**
+ * components → attributed components, or undefined when it is not an array or any row is flawed.
  */
 function narrowSidecarComponents(
   value: unknown,
   listed: ReadonlySet<string>,
+  format: SidecarFormat,
 ): AttributedSidecarComponent[] | undefined {
   if (!Array.isArray(value)) {
     return undefined;
@@ -200,33 +299,27 @@ function narrowSidecarComponents(
   const components: AttributedSidecarComponent[] = [];
 
   for (const raw of value) {
-    if (typeof raw !== "object" || raw === null) {
+    const component = narrowSidecarComponent(raw, listed, format);
+
+    if (component === undefined) {
       return undefined;
     }
 
-    const images = (raw as { images?: unknown }).images;
-
-    if (!Array.isArray(images) || images.length === 0) {
-      return undefined;
-    }
-
-    const memberships: string[] = [];
-
-    for (const entry of images) {
-      if (!isNonEmptyString(entry) || !listed.has(entry)) {
-        return undefined;
-      }
-
-      memberships.push(entry);
-    }
-
-    components.push({
-      ...(raw as Record<string, unknown>),
-      images: memberships,
-    });
+    components.push(component);
   }
 
   return components;
+}
+
+/**
+ * One image's view of a row: a format-3 row carries that image's own claims as `licenses`; a
+ * format-2 row passes through with the one claim set every member image shares.
+ */
+function componentForImage(
+  { row, claimsByImage }: AttributedSidecarComponent,
+  image: string,
+): Record<string, unknown> {
+  return claimsByImage === undefined ? row : { ...row, licenses: claimsByImage.get(image) };
 }
 
 /**
@@ -234,12 +327,10 @@ function narrowSidecarComponents(
  * narrows cleanly, undefined otherwise - the caller then fails the whole run, never building a
  * partial per-image model.
  */
-function narrowAttributedSidecar(parsed: unknown): AttributedSidecar | undefined {
-  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
-    return undefined;
-  }
-
-  const doc = parsed as Record<string, unknown>;
+function narrowAttributedSidecar(
+  doc: Record<string, unknown>,
+  format: SidecarFormat,
+): AttributedSidecar | undefined {
   const images = narrowSidecarImages(doc["dockerImages"]);
 
   if (images === undefined) {
@@ -247,13 +338,22 @@ function narrowAttributedSidecar(parsed: unknown): AttributedSidecar | undefined
   }
 
   const listed = new Set(images.map((entry) => entry.image));
-  const components = narrowSidecarComponents(doc["components"], listed);
+  const components = narrowSidecarComponents(doc["components"], listed, format);
 
   if (components === undefined) {
     return undefined;
   }
 
   return { doc, components, images };
+}
+
+/** The committed file's format: 2 when `formatVersion` is absent, undefined when unreadable. */
+function sidecarFormatOf(formatVersion: unknown): SidecarFormat | undefined {
+  if (formatVersion === undefined) {
+    return 2;
+  }
+
+  return formatVersion === DOCKER_SBOM_FORMAT_VERSION ? DOCKER_SBOM_FORMAT_VERSION : undefined;
 }
 
 /**
@@ -272,6 +372,12 @@ function narrowAttributedSidecar(parsed: unknown): AttributedSidecar | undefined
  * silently dropping docker inventory is the one failure this reader must never allow. The fan-out
  * iterates the sidecar's stored order (the emitter sorts dockerImages by image), so repeated reads
  * are byte-identical.
+ *
+ * @remarks
+ * Format 3 hands each image exactly its own claims, so images that disagree reach the merge as a
+ * cross-image conflict. A format-2 file (no `formatVersion`) is still read: its one claim set per
+ * row goes to every member image, so it cannot show such a conflict. The next
+ * `generate-docker-sbom` run rewrites it as format 3. Any other `formatVersion` fails the run.
  */
 function readCommittedDockerSbom(opts: GenerateOptions, dir: string): CollectedSbom[] | undefined {
   const osSbomPath =
@@ -300,7 +406,21 @@ function readCommittedDockerSbom(opts: GenerateOptions, dir: string): CollectedS
   // Size gate BEFORE read: a committed artifact must never balloon a run.
   assertSyftSbomSize(osSbomPath);
   const parsed: unknown = JSON.parse(readFileSync(osSbomPath, "utf8"));
-  const attributed = narrowAttributedSidecar(parsed);
+  const doc =
+    typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)
+      ? (parsed as Record<string, unknown>)
+      : {};
+  const format = sidecarFormatOf(doc["formatVersion"]);
+
+  if (format === undefined) {
+    throw new Error(
+      `${osSbomPath} has formatVersion ${sanitizeForLog(JSON.stringify(doc["formatVersion"]))}, ` +
+        `which this version does not read (it reads 2 and ${DOCKER_SBOM_FORMAT_VERSION}) — ` +
+        `re-run the docker scan (task generate DOCKER=1) to regenerate it`,
+    );
+  }
+
+  const attributed = narrowAttributedSidecar(doc, format);
 
   if (attributed === undefined) {
     throw new Error(
@@ -312,7 +432,9 @@ function readCommittedDockerSbom(opts: GenerateOptions, dir: string): CollectedS
   return attributed.images.map(({ image, source }) => ({
     sbom: {
       ...attributed.doc,
-      components: attributed.components.filter((component) => component.images.includes(image)),
+      components: attributed.components
+        .filter((component) => component.images.includes(image))
+        .map((component) => componentForImage(component, image)),
     },
     targetIdentity: asTargetIdentity(`${DOCKER_IDENTITY_PREFIX}${source}`),
     scope: "os",

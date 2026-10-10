@@ -349,10 +349,10 @@ describe("collectDockerOsSbom one posture (full contents, generalized digest, pr
     expect(argvStrings().some((s) => s.includes("cyclonedx-json="))).toBe(false);
   });
 
-  // Two images sharing a purl with DIFFERENT
-  // licenses — the license claim attached to a shared purl must be a pure
-  // function of the image SET, never of argument order, for byte-determinism.
-  test("a purl shared between two images resolves the SAME license regardless of argument order", async () => {
+  // Two images sharing a purl with DIFFERENT licenses — the claims attached to
+  // a shared purl must be a pure function of the image SET, never of argument
+  // order, for byte-determinism.
+  test("a purl shared between two images records the SAME per-image claims regardless of argument order", async () => {
     const licenseByImage = {
       "local/scan-mit": "MIT",
       "local/scan-gpl": "GPL-3.0-only",
@@ -374,22 +374,22 @@ describe("collectDockerOsSbom one posture (full contents, generalized digest, pr
 
     rmSync(dirBA, { recursive: true, force: true });
 
-    const licenseOf = (doc: string): unknown => {
+    const claimsOf = (doc: string): unknown => {
       const parsed = JSON.parse(doc) as {
-        components: {
-          purl: string;
-          licenses?: { license?: { id?: string } }[];
-        }[];
+        components: { purl: string; licensesByImage?: unknown }[];
       };
 
-      return parsed.components.find((c) => c.purl === "pkg:npm/shared@1.0.0")?.licenses?.[0]
-        ?.license?.id;
+      return parsed.components.find((c) => c.purl === "pkg:npm/shared@1.0.0")?.licensesByImage;
     };
 
-    expect(licenseOf(docAB)).toBe(licenseOf(docBA));
+    expect(claimsOf(docAB)).toEqual({
+      "local/scan-gpl": [{ license: { id: "GPL-3.0-only" } }],
+      "local/scan-mit": [{ license: { id: "MIT" } }],
+    });
+    expect(docAB).toBe(docBA);
   });
 
-  test("runGenerateDockerSbom keeps a claim only one image carries and prints one divergence line for it", async () => {
+  test("runGenerateDockerSbom records each image's own claims and prints one divergence line for them", async () => {
     currentExec = makePerImageExecTool({ "local/a-slim": undefined, "local/b-full": "Apache-2.0" });
     const outDir = mkdtempSync(join(tmpdir(), "licenses-docker-divergence-"));
     const original = process.stderr.write.bind(process.stderr);
@@ -411,11 +411,17 @@ describe("collectDockerOsSbom one posture (full contents, generalized digest, pr
 
     try {
       const parsed = JSON.parse(readFileSync(join(outDir, "docker.sbom.json"), "utf8")) as {
-        components: { purl: string; licenses?: unknown[] }[];
+        formatVersion: unknown;
+        components: { purl: string; licenses?: unknown[]; licensesByImage?: unknown }[];
       };
       const divergenceLines = stderr.split("\n").filter((line) => line.includes("differ"));
 
-      expect(parsed.components[0]?.licenses).toEqual([{ license: { id: "Apache-2.0" } }]);
+      expect(parsed.formatVersion).toBe(3);
+      expect(parsed.components[0]?.licensesByImage).toEqual({
+        "local/a-slim": [],
+        "local/b-full": [{ license: { id: "Apache-2.0" } }],
+      });
+      expect(parsed.components[0]?.licenses).toBeUndefined();
       expect(divergenceLines).toEqual([
         "docker: pkg:npm/shared@1.0.0 license claims differ across images: " +
           "local/a-slim (none); local/b-full (Apache-2.0)",
