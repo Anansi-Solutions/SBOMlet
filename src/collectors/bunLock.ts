@@ -157,6 +157,11 @@ function purlOf(name: string, version: string): Purl {
   return asPurl(`pkg:npm/${encodedName}@${encodedVersion}`);
 }
 
+/** Whether a packages entry's spec is a workspace member - the lockfile's first-party marker. */
+function isWorkspaceMemberSpec(spec: string): boolean {
+  return spec.includes("@workspace:");
+}
+
 /**
  * Third-party entry count for the coverage policy:
  * - a number when the grammar positively determines it (entries whose value[0]
@@ -191,7 +196,7 @@ export function bunThirdPartyEntryCount(lockfileText: string): number | undefine
   for (const value of Object.values(packages)) {
     const spec = specOf(value);
 
-    if (spec !== undefined && !spec.includes("@workspace:")) {
+    if (spec !== undefined && !isWorkspaceMemberSpec(spec)) {
       count += 1;
     }
   }
@@ -360,23 +365,13 @@ interface BunComponent {
  * Emit one component per third-party packages entry (duplicate purls from nested conflict keys
  * kept; the fold to one row happens at merge).
  *
- * First-party exclusion belt-and-braces: workspaces[*].name members are never emitted even if an
- * entry lacks the @workspace: protocol.
+ * @remarks Only the `@workspace:` protocol marks a first-party member. A registry entry that merely
+ * shares a member's name (bun nests one under a dependent the member does not satisfy) is emitted.
  */
 function componentsOf(
   packages: Record<string, unknown>,
   workspaces: Record<string, unknown>,
 ): BunComponent[] {
-  const memberNames = new Set<string>();
-
-  for (const member of Object.values(workspaces)) {
-    const name = recordOf(member)?.["name"];
-
-    if (typeof name === "string") {
-      memberNames.add(name);
-    }
-  }
-
   const devKeys = transitiveDevKeys(packages, workspaces);
 
   const components: BunComponent[] = [];
@@ -388,19 +383,15 @@ function componentsOf(
       continue;
     } // malformed entry - tolerant skip
 
-    if (spec.includes("@workspace:")) {
+    if (isWorkspaceMemberSpec(spec)) {
       continue;
-    } // first-party member
+    }
 
     const identity = splitSpec(spec);
 
     if (identity === undefined) {
       continue;
     } // malformed spec - tolerant skip
-
-    if (memberNames.has(identity.name)) {
-      continue;
-    } // belt-and-braces
 
     const component: BunComponent = {
       type: "library",
