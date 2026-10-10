@@ -38,7 +38,7 @@ is evaluated and its verdicts print to stderr, but the gate is `check`, never
 | Flag | Meaning | Default |
 | --- | --- | --- |
 | `--repo-root <path>` | Discovery mode: scan every lockfile [target](../glossary.md#target) under this root. | current directory |
-| `--target <path>` | Single-target mode: scan one lockfile or Terraform directory. For debugging one ecosystem. | — |
+| `--target <path>` | Single-target mode: scan one Yarn project, a directory holding `yarn.lock` and `package.json`. For debugging; any other directory, or a file path, is a config error (exit 3), so use `--repo-root` for every other ecosystem. | — |
 | `--exclude <glob>` | Drop targets whose identity matches the glob. Repeatable. | none |
 | `--policy <path>` | TOML policy file. Validated before any scan; verdicts print to stderr. | none |
 | `--output <path>` | Where to write `THIRD_PARTY_LICENSES.md`. | `THIRD_PARTY_LICENSES.md` |
@@ -231,7 +231,7 @@ either is a config error (exit 3).
 | Flag | Meaning | Default |
 | --- | --- | --- |
 | `--repo-root <path>` | Discovery mode: regenerate from every target under this root. | current directory |
-| `--target <path>` | Single-target mode: regenerate from one target. | — |
+| `--target <path>` | Single-target mode: regenerate from one Yarn project directory, as on `generate`. | — |
 | `--exclude <glob>` | Drop targets whose identity matches the glob. Repeatable. | none |
 | `--policy <path>` | TOML policy file. A fail verdict makes the gate exit 1. | none |
 | `--output <path>` | The `THIRD_PARTY_LICENSES.md` to compare against. | `THIRD_PARTY_LICENSES.md` |
@@ -326,7 +326,7 @@ policy-file entry decides ahead of, so it is left with nothing to do.
 | Flag | Meaning | Default |
 | --- | --- | --- |
 | `--repo-root <path>` | The repository to scan. | working directory |
-| `--target <path>` | Single-target mode: audit the entries against one lockfile or Terraform directory rather than the whole repository. For debugging one ecosystem; it takes precedence over `--repo-root`. | — |
+| `--target <path>` | Single-target mode: audit the entries against one Yarn project directory (holding `yarn.lock` and `package.json`) rather than the whole repository, as on `generate`. For debugging; it takes precedence over `--repo-root`. | — |
 | `--policy <path>` | The policy whose entries are audited. | `.sbomlet.policy.toml` at the repo root |
 | `--write` | Apply what was ascertained to the clarifications file. | off |
 | `--exclude <glob>` | Repeatable; skip matching targets. | none |
