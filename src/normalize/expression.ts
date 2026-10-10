@@ -40,8 +40,8 @@ type Leaf = Extract<ExpressionNode, { license: string }>;
 
 /** Leaf rendering: `id[+][ WITH exception]` - the one leaf format, never duplicated. */
 function renderLeaf(leaf: Leaf): string {
-  const plus = leaf.plus === true ? "+" : "";
-  const withPart = leaf.exception !== undefined ? ` WITH ${leaf.exception}` : "";
+  const plus = leaf.plus ? "+" : "";
+  const withPart = leaf.exception ? ` WITH ${leaf.exception}` : "";
 
   return `${leaf.license}${plus}${withPart}`;
 }
@@ -107,7 +107,7 @@ export function leafIds(node: ExpressionNode): {
   if ("license" in node) {
     return {
       ids: [node.license],
-      exceptions: node.exception !== undefined ? [node.exception] : [],
+      exceptions: node.exception ? [node.exception] : [],
     };
   }
 
@@ -300,21 +300,19 @@ function buildSet(op: "and" | "or", rawItems: CanonicalNode[]): CanonicalNode {
 function canonicalLeafId(leaf: Leaf): Leaf {
   const license = CANONICAL_LICENSE_ID.get(leaf.license.toLowerCase()) ?? leaf.license;
   const exception =
-    leaf.exception === undefined
-      ? undefined
-      : (CANONICAL_EXCEPTION_ID.get(leaf.exception.toLowerCase()) ?? leaf.exception);
+    leaf.exception && (CANONICAL_EXCEPTION_ID.get(leaf.exception.toLowerCase()) ?? leaf.exception);
   const successor = DEPRECATED_ID_SUCCESSOR.get(license);
 
-  if (successor === undefined || (exception !== undefined && successor.exception !== undefined)) {
-    return exception === undefined ? { ...leaf, license } : { ...leaf, license, exception };
+  if (!successor || (exception && successor.exception)) {
+    return exception ? { ...leaf, license, exception } : { ...leaf, license };
   }
 
-  const current = `${successor.base}-${leaf.plus === true ? "or-later" : "only"}`;
+  const current = `${successor.base}-${leaf.plus ? "or-later" : "only"}`;
   const currentException = exception ?? successor.exception;
 
-  return currentException === undefined
-    ? { license: current }
-    : { license: current, exception: currentException };
+  return currentException
+    ? { license: current, exception: currentException }
+    : { license: current };
 }
 
 /**
