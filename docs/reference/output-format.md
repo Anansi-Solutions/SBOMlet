@@ -382,6 +382,11 @@ diverging docker occurrence and that image's own declared claims:
 | Package | the package name |
 | Claims by image | every docker occurrence, semicolon-joined as `<target>: <claims>`; an occurrence that declared no claim at all reads `(no declared license)` |
 
+This sub-table is not reached from the committed `docker.sbom.json`: `generate-docker-sbom`
+stores one unioned claim set per package, so every image's occurrence carries the same
+claims. Images that disagree are reported when the SBOM is generated, as a `docker:` line on
+stderr ([cli.md](./cli.md#generate-docker-sbom)).
+
 Every comparison this report and the policy gate make — ScanCode vs quick
 check, the cross-image claim sets, and a `[[clarify]]` entry against its
 recorded `detected` values ([policy.md#clarify](./policy.md#clarify)) — canonicalizes
