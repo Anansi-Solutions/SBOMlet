@@ -168,7 +168,7 @@ describe("parseClarifications", () => {
     expect(error.problems[0]).toContain('unknown top-level key "unknown"');
   });
 
-  test("a malformed entry's problem names its position in this file", () => {
+  test("a malformed entry's problem names it the way every other surface cites it", () => {
     const error = expectClarificationsError(
       [
         clarifyTable("jsonify", "Unlicense"),
@@ -181,7 +181,7 @@ describe("parseClarifications", () => {
       ].join("\n"),
     );
 
-    expect(error.problems.some((problem) => problem.startsWith("clarify[1]: "))).toBe(true);
+    expect(error.problems.some((problem) => problem.startsWith("clarifications[1]: "))).toBe(true);
   });
 
   test("the same validator runs: an entry with no detected record rejects", () => {
@@ -194,7 +194,7 @@ describe("parseClarifications", () => {
       ].join("\n"),
     );
 
-    expect(error.problems[0]).toContain("clarify[0]");
+    expect(error.problems[0]).toContain("clarifications[0]");
   });
 });
 

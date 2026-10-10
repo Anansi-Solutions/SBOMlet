@@ -312,8 +312,9 @@ The two files have separate citation spaces. The policy's own entries are
 `clarify[i]`; the imported ones are `clarifications[j]`, numbered within the
 imported file. Every id derived from an entry follows: the citation on an
 accepted verdict, `clarifications:invalid[j]`, the unused-entry warning, and
-the entry a stale-override failure tells you to update. A citation therefore
-names both which file to open and which table in it.
+the entry a stale-override failure tells you to update, and the position a
+validation error names. A citation therefore names both which file to open and
+which table in it.
 
 The entries are combined policy-first, and the first entry matching a package
 decides it. A policy entry naming a package an imported entry also names
