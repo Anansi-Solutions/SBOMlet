@@ -59,7 +59,7 @@ The packages listed below need review against the declared target profile.
 | arkregex              | npm       | 0.0.5   | MIT               | .       |
 | arktype               | npm       | 2.2.0   | MIT               | .       |
 | array-find-index      | npm       | 1.0.2   | MIT               | .       |
-| smol-toml             | npm       | 1.6.1   | BSD-3-Clause      | .       |
+| smol-toml             | npm       | 1.7.1   | BSD-3-Clause      | .       |
 | spdx-compare          | npm       | 1.0.0   | MIT               | .       |
 | spdx-correct          | npm       | 3.2.0   | Apache-2.0        | .       |
 | spdx-exceptions       | npm       | 2.5.0   | CC-BY-3.0         | .       |

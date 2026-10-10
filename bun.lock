@@ -6,7 +6,7 @@
       "name": "licenses",
       "dependencies": {
         "arktype": "2.2.0",
-        "smol-toml": "1.6.1",
+        "smol-toml": "1.7.1",
         "spdx-correct": "3.2.0",
         "spdx-expression-parse": "4.0.0",
         "spdx-license-list": "6.11.0",
@@ -702,7 +702,7 @@
 
     "smog-formula": ["smog-formula@2.0.1", "", {}, "sha512-CuJPMBnQhWrB3AE5v6z5cEbJYdMcqnHXVgNHfWoWqYes/dU64SbX8+ZVT5L9xc5J3eLcZpKKGIi89Ti4HbdXBQ=="],
 
-    "smol-toml": ["smol-toml@1.6.1", "", {}, "sha512-dWUG8F5sIIARXih1DTaQAX4SsiTXhInKf1buxdY9DIg4ZYPZK5nGM1VRIYmEbDbsHt7USo99xSLFu5Q1IqTmsg=="],
+    "smol-toml": ["smol-toml@1.7.1", "", {}, "sha512-PPlsspAZ4jbMBu5DMFhfUGDQLu/vrL4SyBROVS37x8ynnVmFIs1VPBz1Co8Xks3TvpIaZXmU85y4DrQ+UyVFoQ=="],
 
     "spache": ["spache@2.0.1", "", {}, "sha512-MwoZvTF//ID33YVXDpY2S54NNLQM+Bb+hzYKuMhGZbfHMUSK8iFJRlJSesA29CF5owkR5Ep24gCwriHBkH/nBQ=="],
 

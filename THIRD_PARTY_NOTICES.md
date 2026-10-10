@@ -1955,12 +1955,6 @@ License: MIT
 - (c) Titus Wormer
 - Copyright (c) 2014 Titus Wormer &lt;tituswormer@gmail.com&gt;
 
-### smol-toml@1.6.1
-
-License: BSD-3-Clause
-
-- Copyright (c) Squirrel Chat et al
-
 ### spache@2.0.1
 
 License: MIT

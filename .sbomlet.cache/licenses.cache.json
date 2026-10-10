@@ -2148,6 +2148,12 @@
       "resolvable": true,
       "via": "version-license"
     },
+    "pkg:npm/smol-toml@1.7.1": {
+      "fetchedFrom": "npm",
+      "license": "BSD-3-Clause",
+      "resolvable": true,
+      "via": "version-license"
+    },
     "pkg:npm/spache-formula@2.0.1": {
       "fetchedFrom": "npm",
       "license": "MIT",
