@@ -27,6 +27,8 @@ import { afterAll, beforeAll, describe, expect, mock, test } from "bun:test";
 import * as cdxgenModule from "../collectors/cdxgen";
 import * as yarnPluginModule from "../collectors/yarnPlugin";
 import { mergeSboms } from "../merge/merge";
+import { asAbsolutePath, asTargetIdentity } from "../model/dependencies";
+import { widen, asPurl } from "../../test/brandTestSupport";
 import { collectTargets } from "./targets";
 import { runGenerate } from "./pipeline";
 import type { GenerateOptions } from "./options";
@@ -255,20 +257,20 @@ describe("collectTargets — yarn workspace expansion (mechanism test)", () => {
         const dirName = basename(target.dir);
         const full =
           dirName === "web-app"
-            ? sbomFor([{ name: "ms", version: "2.1.3", purl: "pkg:npm/ms@2.1.3" }])
+            ? sbomFor([{ name: "ms", version: "2.1.3", purl: asPurl("pkg:npm/ms@2.1.3") }])
             : dirName === "backend-api"
               ? sbomFor([
                   {
                     name: "sax",
                     version: "1.4.1",
-                    purl: "pkg:npm/sax@1.4.1",
+                    purl: asPurl("pkg:npm/sax@1.4.1"),
                   },
                 ])
               : sbomFor([
                   {
                     name: "left-pad",
                     version: "1.3.0",
-                    purl: "pkg:npm/left-pad@1.3.0",
+                    purl: asPurl("pkg:npm/left-pad@1.3.0"),
                   },
                 ]);
         const prod = dirName === "web-app" || dirName === "backend-api" ? full : sbomFor([]);
@@ -288,19 +290,21 @@ describe("collectTargets — yarn workspace expansion (mechanism test)", () => {
       const result = await collectTargets(baseOpts(root), () => {});
 
       // Identity is the lock-declared PATH, never the package name.
-      expect(result.inputs.map((input) => input.targetIdentity)).toEqual([
+      expect(result.inputs.map((input) => widen(input.targetIdentity))).toEqual([
         ".",
         "packages/web-app",
         "services/backend-api",
       ]);
 
       const model = mergeSboms(result.inputs);
-      const ms = model.packages.find((pkg) => pkg.purl === "pkg:npm/ms@2.1.3");
-      const sax = model.packages.find((pkg) => pkg.purl === "pkg:npm/sax@1.4.1");
+      const ms = model.packages.find((pkg) => pkg.purl === asPurl("pkg:npm/ms@2.1.3"));
+      const sax = model.packages.find((pkg) => pkg.purl === asPurl("pkg:npm/sax@1.4.1"));
 
-      expect(ms?.occurrences).toEqual([{ target: "packages/web-app", isDevDependency: false }]);
+      expect(ms?.occurrences).toEqual([
+        { target: asTargetIdentity("packages/web-app"), isDevDependency: false },
+      ]);
       expect(sax?.occurrences).toEqual([
-        { target: "services/backend-api", isDevDependency: false },
+        { target: asTargetIdentity("services/backend-api"), isDevDependency: false },
       ]);
     } finally {
       mock.module("../collectors/yarnPlugin", () => ({
@@ -319,7 +323,7 @@ describe("collectTargets — yarn workspace expansion (mechanism test)", () => {
     });
 
     // (a) exactly three inputs, identities in sorted order.
-    expect(result.inputs.map((input) => input.targetIdentity)).toEqual([
+    expect(result.inputs.map((input) => widen(input.targetIdentity))).toEqual([
       ".",
       "backend",
       "frontend",
@@ -328,23 +332,27 @@ describe("collectTargets — yarn workspace expansion (mechanism test)", () => {
     // (b) backend's prodPurlSet contains ms, excludes isarray.
     const backendInput = result.inputs.find((input) => input.targetIdentity === "backend");
 
-    expect(backendInput?.prodPurlSet?.has("pkg:npm/ms@2.1.3")).toBe(true);
-    expect(backendInput?.prodPurlSet?.has("pkg:npm/isarray@2.0.5")).toBe(false);
+    expect(backendInput?.prodPurlSet?.has(asPurl("pkg:npm/ms@2.1.3"))).toBe(true);
+    expect(backendInput?.prodPurlSet?.has(asPurl("pkg:npm/isarray@2.0.5"))).toBe(false);
 
     // (c) both reported symptoms die in one test: ms classifies prod in
     // backend; left-pad classifies dev in the root.
     const model = mergeSboms(result.inputs);
-    const ms = model.packages.find((pkg) => pkg.purl === "pkg:npm/ms@2.1.3");
+    const ms = model.packages.find((pkg) => pkg.purl === asPurl("pkg:npm/ms@2.1.3"));
 
     const directOfItsWorkspace = { direct: true, introducedBy: [] };
 
     expect(ms?.occurrences).toEqual([
-      { target: "backend", isDevDependency: false, introduction: directOfItsWorkspace },
+      {
+        target: asTargetIdentity("backend"),
+        isDevDependency: false,
+        introduction: directOfItsWorkspace,
+      },
     ]);
-    const leftPad = model.packages.find((pkg) => pkg.purl === "pkg:npm/left-pad@1.3.0");
+    const leftPad = model.packages.find((pkg) => pkg.purl === asPurl("pkg:npm/left-pad@1.3.0"));
 
     expect(leftPad?.occurrences).toEqual([
-      { target: ".", isDevDependency: true, introduction: directOfItsWorkspace },
+      { target: asTargetIdentity("."), isDevDependency: true, introduction: directOfItsWorkspace },
     ]);
 
     // (d) exactly three "collecting <identity> via ..." lines, sorted.
@@ -362,7 +370,7 @@ describe("collectTargets — yarn workspace expansion (mechanism test)", () => {
     const result = await collectTargets(baseOpts(root), () => {});
 
     for (const input of result.inputs) {
-      expect(input.targetIdentity).not.toContain("\\");
+      expect(widen(input.targetIdentity)).not.toContain("\\");
     }
   });
 
@@ -449,7 +457,7 @@ describe("collectTargets — yarn workspace expansion (mechanism test)", () => {
 
     const result = await collectTargets(baseOpts(root), () => {});
 
-    expect(result.inputs.map((input) => input.targetIdentity)).toEqual([
+    expect(result.inputs.map((input) => widen(input.targetIdentity))).toEqual([
       ".",
       "backend",
       "frontend",
@@ -694,7 +702,7 @@ describe("collectTargets — yarn workspace expansion edge behavior", () => {
 
     const result = await collectTargets(baseOpts(root), () => {});
 
-    expect(result.inputs.map((input) => input.targetIdentity)).toEqual(["."]);
+    expect(result.inputs.map((input) => widen(input.targetIdentity))).toEqual(["."]);
   });
 
   test("--target mode: expansion fires identically, unit identities are [base, base/backend, base/frontend]", async () => {
@@ -712,7 +720,7 @@ describe("collectTargets — yarn workspace expansion edge behavior", () => {
       () => {},
     );
 
-    expect(result.inputs.map((input) => input.targetIdentity)).toEqual([
+    expect(result.inputs.map((input) => widen(input.targetIdentity))).toEqual([
       base,
       `${base}/backend`,
       `${base}/frontend`,
@@ -796,7 +804,7 @@ describe("collectTargets — yarn workspace expansion edge behavior", () => {
     // same directory) — the safety property is that a real production
     // dependency (ms) is never lost from the merged model as a result.
     const model = mergeSboms(result.inputs);
-    const ms = model.packages.find((pkg) => pkg.purl === "pkg:npm/ms@2.1.3");
+    const ms = model.packages.find((pkg) => pkg.purl === asPurl("pkg:npm/ms@2.1.3"));
 
     expect(ms?.occurrences.some((o) => !o.isDevDependency)).toBe(true);
   });
@@ -966,7 +974,10 @@ describe("collectTargets — yarn workspace expansion edge behavior", () => {
 
     // The dep-less root unit skips loudly; backend and frontend still scan.
     expect(log).toContain("warning: skipping . — workspace declares no dependencies in yarn.lock");
-    expect(result.inputs.map((input) => input.targetIdentity)).toEqual(["backend", "frontend"]);
+    expect(result.inputs.map((input) => widen(input.targetIdentity))).toEqual([
+      "backend",
+      "frontend",
+    ]);
   });
 
   test("containment: a traversal @workspace: path throws before any spawn, naming the identity and offending path", async () => {
@@ -1354,7 +1365,7 @@ describe("collectTargets — yarn workspace expansion edge behavior", () => {
               {
                 name: "ms",
                 version: "2.1.3",
-                purl: "pkg:npm/ms@2.1.3",
+                purl: asPurl("pkg:npm/ms@2.1.3"),
                 licenses: [{ license: { id: "MIT" } }],
               },
             ],
@@ -1381,7 +1392,7 @@ describe("collectTargets — yarn workspace expansion edge behavior", () => {
 
       // Exactly ONE input with the root identity — never a unit for the
       // on-disk packages/evil directory the lock's text points at.
-      expect(result.inputs.map((input) => input.targetIdentity)).toEqual(["."]);
+      expect(result.inputs.map((input) => widen(input.targetIdentity))).toEqual(["."]);
 
       // One cdxgen scan, zero yarn-plugin scans, one collecting line: the
       // whole-root single-scan path, identical to any other cdxgen target.
@@ -1561,8 +1572,8 @@ describe("collectTargets — nuget packages.lock.json coverage integration", () 
     });
 
     expect(log).toContain("collecting . via nuget-lock-collector@1");
-    expect(result.inputs.map((input) => input.targetIdentity)).toEqual(["."]);
-    expect(result.targetDirs).toEqual([root]);
+    expect(result.inputs.map((input) => widen(input.targetIdentity))).toEqual(["."]);
+    expect(result.targetDirs).toEqual([asAbsolutePath(root)]);
   });
 });
 
@@ -1577,7 +1588,7 @@ const REACTOR_AGGREGATOR_SBOM = JSON.stringify({
   bomFormat: "CycloneDX",
   metadata: {
     component: {
-      purl: "pkg:maven/com.example.fixture/reactor-parent@1.0.0?type=pom",
+      purl: asPurl("pkg:maven/com.example.fixture/reactor-parent@1.0.0?type=pom"),
     },
   },
   components: [],
@@ -1587,11 +1598,11 @@ const REACTOR_AGGREGATOR_SBOM = JSON.stringify({
 const REACTOR_LIBA_SBOM = JSON.stringify({
   bomFormat: "CycloneDX",
   metadata: {
-    component: { purl: "pkg:maven/com.example.fixture/liba@1.0.0?type=jar" },
+    component: { purl: asPurl("pkg:maven/com.example.fixture/liba@1.0.0?type=jar") },
   },
   components: [
     {
-      purl: "pkg:maven/com.example.fixture/commons-lang3@3.12.0?type=jar",
+      purl: asPurl("pkg:maven/com.example.fixture/commons-lang3@3.12.0?type=jar"),
       licenses: [{ license: { id: "Apache-2.0" } }],
     },
   ],
@@ -1604,16 +1615,16 @@ const REACTOR_LIBA_SBOM = JSON.stringify({
 const REACTOR_APPB_SBOM = JSON.stringify({
   bomFormat: "CycloneDX",
   metadata: {
-    component: { purl: "pkg:maven/com.example.fixture/appb@1.0.0?type=jar" },
+    component: { purl: asPurl("pkg:maven/com.example.fixture/appb@1.0.0?type=jar") },
   },
   components: [
-    { purl: "pkg:maven/com.example.fixture/liba@1.0.0?type=jar" },
+    { purl: asPurl("pkg:maven/com.example.fixture/liba@1.0.0?type=jar") },
     {
-      purl: "pkg:maven/com.example.fixture/commons-lang3@3.12.0?type=jar",
+      purl: asPurl("pkg:maven/com.example.fixture/commons-lang3@3.12.0?type=jar"),
       licenses: [{ license: { id: "Apache-2.0" } }],
     },
     {
-      purl: "pkg:maven/com.example.fixture/gson@2.10.1?type=jar",
+      purl: asPurl("pkg:maven/com.example.fixture/gson@2.10.1?type=jar"),
       licenses: [{ license: { id: "Apache-2.0" } }],
     },
   ],
@@ -1629,10 +1640,10 @@ const REACTOR_ALLSIBLINGS_SBOM = JSON.stringify({
   bomFormat: "CycloneDX",
   metadata: {
     component: {
-      purl: "pkg:maven/com.example.fixture/allsiblings@1.0.0?type=jar",
+      purl: asPurl("pkg:maven/com.example.fixture/allsiblings@1.0.0?type=jar"),
     },
   },
-  components: [{ purl: "pkg:maven/com.example.fixture/liba@1.0.0?type=jar" }],
+  components: [{ purl: asPurl("pkg:maven/com.example.fixture/liba@1.0.0?type=jar") }],
 });
 
 function componentPurlsOf(sbom: unknown): string[] {
@@ -1672,7 +1683,7 @@ describe("collectTargets — maven reactor attribution", () => {
       ),
     ).toBe(true);
 
-    expect(result.inputs.map((input) => input.targetIdentity).sort()).toEqual([
+    expect(result.inputs.map((input) => widen(input.targetIdentity)).sort()).toEqual([
       "allsiblings",
       "appb",
       "liba",
@@ -1681,14 +1692,14 @@ describe("collectTargets — maven reactor attribution", () => {
     const appbInput = result.inputs.find((input) => input.targetIdentity === "appb");
 
     expect(componentPurlsOf(appbInput?.sbom)).toEqual([
-      "pkg:maven/com.example.fixture/commons-lang3@3.12.0?type=jar",
-      "pkg:maven/com.example.fixture/gson@2.10.1?type=jar",
+      asPurl("pkg:maven/com.example.fixture/commons-lang3@3.12.0?type=jar"),
+      asPurl("pkg:maven/com.example.fixture/gson@2.10.1?type=jar"),
     ]);
 
     const libaInput = result.inputs.find((input) => input.targetIdentity === "liba");
 
     expect(componentPurlsOf(libaInput?.sbom)).toEqual([
-      "pkg:maven/com.example.fixture/commons-lang3@3.12.0?type=jar",
+      asPurl("pkg:maven/com.example.fixture/commons-lang3@3.12.0?type=jar"),
     ]);
 
     const allsiblingsInput = result.inputs.find((input) => input.targetIdentity === "allsiblings");
@@ -1706,15 +1717,15 @@ describe("collectTargets — maven reactor attribution", () => {
 const REACTOR_LIBA_TEST_SBOM = JSON.stringify({
   bomFormat: "CycloneDX",
   metadata: {
-    component: { purl: "pkg:maven/com.example.fixture/liba@1.0.0?type=jar" },
+    component: { purl: asPurl("pkg:maven/com.example.fixture/liba@1.0.0?type=jar") },
   },
   components: [
     {
-      purl: "pkg:maven/com.example.fixture/commons-lang3@3.12.0?type=jar",
+      purl: asPurl("pkg:maven/com.example.fixture/commons-lang3@3.12.0?type=jar"),
       licenses: [{ license: { id: "Apache-2.0" } }],
     },
     {
-      purl: "pkg:maven/com.example.fixture/junit-fixture@5.0.0?type=jar",
+      purl: asPurl("pkg:maven/com.example.fixture/junit-fixture@5.0.0?type=jar"),
       licenses: [{ license: { id: "EPL-2.0" } }],
     },
   ],
@@ -1757,7 +1768,7 @@ describe("collectTargets — maven reactor attribution with a test-inclusive sid
 
     // The target set is unchanged — one target per module, never a second
     // target for the test doc.
-    expect(result.inputs.map((input) => input.targetIdentity).sort()).toEqual([
+    expect(result.inputs.map((input) => widen(input.targetIdentity)).sort()).toEqual([
       "allsiblings",
       "appb",
       "liba",
@@ -1769,8 +1780,8 @@ describe("collectTargets — maven reactor attribution with a test-inclusive sid
 
     expect(componentPurlsOf(libaInput?.sbom).sort()).toEqual(
       [
-        "pkg:maven/com.example.fixture/commons-lang3@3.12.0?type=jar",
-        "pkg:maven/com.example.fixture/junit-fixture@5.0.0?type=jar",
+        asPurl("pkg:maven/com.example.fixture/commons-lang3@3.12.0?type=jar"),
+        asPurl("pkg:maven/com.example.fixture/junit-fixture@5.0.0?type=jar"),
       ].sort(),
     );
 
@@ -1780,8 +1791,8 @@ describe("collectTargets — maven reactor attribution with a test-inclusive sid
     const appbInput = result.inputs.find((input) => input.targetIdentity === "appb");
 
     expect(componentPurlsOf(appbInput?.sbom)).toEqual([
-      "pkg:maven/com.example.fixture/commons-lang3@3.12.0?type=jar",
-      "pkg:maven/com.example.fixture/gson@2.10.1?type=jar",
+      asPurl("pkg:maven/com.example.fixture/commons-lang3@3.12.0?type=jar"),
+      asPurl("pkg:maven/com.example.fixture/gson@2.10.1?type=jar"),
     ]);
 
     // allsiblings is untouched by liba's test doc — still collapses to zero.
@@ -1799,15 +1810,15 @@ describe("collectTargets — maven reactor attribution with a test-inclusive sid
 const REACTOR_APPB_NON_SUPERSET_TEST_SBOM = JSON.stringify({
   bomFormat: "CycloneDX",
   metadata: {
-    component: { purl: "pkg:maven/com.example.fixture/appb@1.0.0?type=jar" },
+    component: { purl: asPurl("pkg:maven/com.example.fixture/appb@1.0.0?type=jar") },
   },
   components: [
     {
-      purl: "pkg:maven/com.example.fixture/gson@2.10.1?type=jar",
+      purl: asPurl("pkg:maven/com.example.fixture/gson@2.10.1?type=jar"),
       licenses: [{ license: { id: "Apache-2.0" } }],
     },
     {
-      purl: "pkg:maven/com.example.fixture/mockito-fixture@4.0.0?type=jar",
+      purl: asPurl("pkg:maven/com.example.fixture/mockito-fixture@4.0.0?type=jar"),
       licenses: [{ license: { id: "MIT" } }],
     },
   ],
@@ -1832,14 +1843,16 @@ describe("collectTargets — maven reactor: the residual never re-introduces a s
     // residual-carried third-party dep) survives; the test-only dep joins.
     expect(componentPurlsOf(appbInput?.sbom).sort()).toEqual(
       [
-        "pkg:maven/com.example.fixture/commons-lang3@3.12.0?type=jar",
-        "pkg:maven/com.example.fixture/gson@2.10.1?type=jar",
-        "pkg:maven/com.example.fixture/mockito-fixture@4.0.0?type=jar",
+        asPurl("pkg:maven/com.example.fixture/commons-lang3@3.12.0?type=jar"),
+        asPurl("pkg:maven/com.example.fixture/gson@2.10.1?type=jar"),
+        asPurl("pkg:maven/com.example.fixture/mockito-fixture@4.0.0?type=jar"),
       ].sort(),
     );
     // The prod purl set (the default doc's own purls) rides the filter spread.
     expect(
-      appbInput?.prodPurlSet?.has("pkg:maven/com.example.fixture/commons-lang3@3.12.0?type=jar"),
+      appbInput?.prodPurlSet?.has(
+        asPurl("pkg:maven/com.example.fixture/commons-lang3@3.12.0?type=jar"),
+      ),
     ).toBe(true);
   });
 });

@@ -20,7 +20,7 @@
  */
 import { existsSync, readFileSync } from "node:fs";
 
-import { toSortedJson } from "../model/dependencies";
+import { asPurl, toSortedJson, type Purl } from "../model/dependencies";
 
 /** Schema version - bump for a clean future invalidation of the whole cache. */
 const CACHE_VERSION = 1;
@@ -64,7 +64,7 @@ interface CacheFile {
  * (never an error - generate populates it). A malformed envelope (bad JSON, missing/ill-typed
  * `entries`) throws loudly with the path.
  */
-export function readCache(path: string): Map<string, CacheEntry> {
+export function readCache(path: string): Map<Purl, CacheEntry> {
   return readEnvelope<CacheEntry>(path, "enrichment cache");
 }
 
@@ -82,7 +82,7 @@ export function readEnvelope<T>(
   path: string,
   label: string,
   expectedVersion?: number,
-): Map<string, T> {
+): Map<Purl, T> {
   if (!existsSync(path)) {
     return new Map();
   }
@@ -109,7 +109,7 @@ export function readEnvelope<T>(
     );
   }
 
-  return new Map(Object.entries(entries));
+  return new Map(Object.entries(entries).map(([key, value]) => [asPurl(key), value] as const));
 }
 
 /** Validate the {version,entries} envelope, throwing loudly on any deviation. */
@@ -137,7 +137,7 @@ function envelopeEntries<T>(parsed: unknown, path: string, label: string): Recor
  * bytes follow the identical tool-wide sorted-key/LF/indent-2 contract; double-serialize is
  * byte-identical.
  */
-export function serializeCache(cache: Map<string, CacheEntry>): string {
+export function serializeCache(cache: Map<Purl, CacheEntry>): string {
   const file: CacheFile = {
     version: CACHE_VERSION,
     entries: Object.fromEntries(cache),
@@ -147,11 +147,11 @@ export function serializeCache(cache: Map<string, CacheEntry>): string {
 }
 
 /** Store an entry under its verbatim purl key (mutates the Map in place). */
-export function putEntry(cache: Map<string, CacheEntry>, purl: string, entry: CacheEntry): void {
+export function putEntry(cache: Map<Purl, CacheEntry>, purl: Purl, entry: CacheEntry): void {
   cache.set(purl, entry);
 }
 
 /** Look up a purl: the entry on a hit, undefined on a miss (zero I/O). */
-export function getEntry(cache: Map<string, CacheEntry>, purl: string): CacheEntry | undefined {
+export function getEntry(cache: Map<Purl, CacheEntry>, purl: Purl): CacheEntry | undefined {
   return cache.get(purl);
 }

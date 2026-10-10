@@ -24,6 +24,7 @@ import {
 } from "../src/collectors/bunLock";
 import { computeCacheKey } from "../src/collectors/cdxgen";
 import { mergeSboms } from "../src/merge/merge";
+import { asAbsolutePath, asTargetIdentity } from "../src/model/dependencies";
 import type { Target } from "../src/targets/target";
 
 // ---------------------------------------------------------------------------
@@ -195,7 +196,7 @@ function makeTargetWithFiles(files: Record<string, string>): Target {
     writeFileSync(join(dir, name), content);
   }
 
-  return { dir, identity: "test/synthetic" };
+  return { dir: asAbsolutePath(dir), identity: asTargetIdentity("test/synthetic") };
 }
 
 function makeBunTarget(bunLock: string): Target {
@@ -757,10 +758,10 @@ describe("collectWithBunLock — transitive dev/prod scope BFS (research A4)", (
     // Merge safety: the production occurrence wins — the folded occurrence is
     // production, so a shipped copyleft/unknown on twin@1.0.0 can never be
     // dev-downgraded out of the gate.
-    const model = mergeSboms([{ sbom: doc, targetIdentity: "." }]);
+    const model = mergeSboms([{ sbom: doc, targetIdentity: asTargetIdentity(".") }]);
     const twin = model.packages.find((p) => p.purl === "pkg:npm/twin@1.0.0");
 
-    expect(twin?.occurrences).toEqual([{ target: ".", isDevDependency: false }]);
+    expect(twin?.occurrences).toEqual([{ target: asTargetIdentity("."), isDevDependency: false }]);
   });
 
   test("dev components carry exactly the merge-consumed property; prod components carry none", async () => {

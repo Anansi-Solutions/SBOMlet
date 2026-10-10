@@ -22,11 +22,12 @@
  * resolution authority downstream). Returns null when no license is found anywhere. A malformed
  * packument narrows to null, never a throw (ASVS V5 boundary).
  */
+import { asRawLicense, type RawLicense } from "../model/dependencies";
 import { narrowNpmPackument } from "../validate/registry";
 
 /** A resolved raw license: the string and which packument field won. */
 export interface NpmResolution {
-  raw: string;
+  raw: RawLicense;
   via:
     | "version-license"
     | "version-license-object"
@@ -79,19 +80,19 @@ function resolveFields(
   const license = nonEmpty(fields.license);
 
   if (license !== undefined) {
-    return { raw: license, via: vias.string };
+    return { raw: asRawLicense(license), via: vias.string };
   }
 
   const objectType = nonEmpty(fields.licenseObject?.type);
 
   if (objectType !== undefined) {
-    return { raw: objectType, via: vias.object };
+    return { raw: asRawLicense(objectType), via: vias.object };
   }
 
   const arrayJoined = joinLicensesArray(fields.licensesArray);
 
   if (arrayJoined !== undefined) {
-    return { raw: arrayJoined, via: vias.array };
+    return { raw: asRawLicense(arrayJoined), via: vias.array };
   }
 
   return null;

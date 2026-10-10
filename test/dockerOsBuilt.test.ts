@@ -19,7 +19,7 @@ import * as execModule from "../src/collectors/exec";
 import { collectDockerOsSbom } from "../src/collectors/dockerOs";
 import { runGenerateDockerSbom } from "../src/pipeline/dockerSbom";
 import { imageTag } from "../src/collectors/dockerBuild";
-import { compareCodeUnits } from "../src/model/dependencies";
+import { asRelativePath, compareCodeUnits } from "../src/model/dependencies";
 
 /** Original exec export captured BEFORE any mock.module call (restore target). */
 const REAL_EXEC = { ...execModule };
@@ -518,7 +518,7 @@ describe("collectDockerOsSbom one posture (full contents, generalized digest, pr
     await runGenerateDockerSbom({
       repoRoot: tempDir,
       baseDir: tempDir,
-      policyPath: "policy.toml",
+      policyPath: asRelativePath("policy.toml"),
       dockerSbomPath: out,
     });
 
@@ -542,7 +542,7 @@ describe("collectDockerOsSbom one posture (full contents, generalized digest, pr
       runGenerateDockerSbom({
         repoRoot: tempDir,
         baseDir: tempDir,
-        policyPath: "policy.toml",
+        policyPath: asRelativePath("policy.toml"),
         dockerSbomPath: out,
       }),
     ).rejects.toThrow(/ignored/);

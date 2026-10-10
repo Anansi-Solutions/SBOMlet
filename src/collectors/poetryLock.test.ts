@@ -20,6 +20,7 @@
 
 import { describe, expect, test } from "bun:test";
 
+import { asPurl } from "../../test/brandTestSupport";
 import { poetryProdPurlSet } from "./poetryLock";
 
 /** Minimal poetry.lock with main-only, dev-only, and main+dev packages. */
@@ -58,26 +59,26 @@ describe("poetryProdPurlSet", () => {
   test("includes main-only and excludes dev-only packages", () => {
     const set = poetryProdPurlSet(POETRY_LOCK);
 
-    expect(set.has("pkg:pypi/anyio@4.12.1")).toBe(true);
-    expect(set.has("pkg:pypi/jinja2-ansible-filters@1.3.2")).toBe(false);
+    expect(set.has(asPurl("pkg:pypi/anyio@4.12.1"))).toBe(true);
+    expect(set.has(asPurl("pkg:pypi/jinja2-ansible-filters@1.3.2"))).toBe(false);
   });
 
   test("a package in both main and dev is prod (prod-wins)", () => {
     const set = poetryProdPurlSet(POETRY_LOCK);
 
-    expect(set.has("pkg:pypi/shared-tool@2.0.0")).toBe(true);
+    expect(set.has(asPurl("pkg:pypi/shared-tool@2.0.0"))).toBe(true);
   });
 
   test("normalizes names per PEP 503 to match cdxgen's purl", () => {
     const set = poetryProdPurlSet(POETRY_LOCK);
 
-    expect(set.has("pkg:pypi/underscore-and-dots@3.1.0")).toBe(true);
+    expect(set.has(asPurl("pkg:pypi/underscore-and-dots@3.1.0"))).toBe(true);
   });
 
   test("a package with no groups key defaults to prod", () => {
     const set = poetryProdPurlSet(POETRY_LOCK);
 
-    expect(set.has("pkg:pypi/groupless-pkg@1.0.0")).toBe(true);
+    expect(set.has(asPurl("pkg:pypi/groupless-pkg@1.0.0"))).toBe(true);
   });
 
   test("garbage text yields an empty set without throwing", () => {

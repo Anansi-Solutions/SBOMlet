@@ -5,6 +5,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 
 import { imageTag } from "../src/collectors/dockerBuild";
 import { resolveTargetedDockerfiles } from "../src/pipeline/dockerSbom";
+import { asAbsolutePath } from "../src/model/dependencies";
 
 const tempRoots: string[] = [];
 
@@ -40,9 +41,9 @@ describe("resolveTargetedDockerfiles (targeted build lane, NO docker, NO file re
     const c = writeFile(root, "db/Dockerfile", "FROM postgres:18\n");
 
     const { build } = resolveTargetedDockerfiles([
-      { identity: "backend/Dockerfile", path: a },
-      { identity: "frontend/Dockerfile", path: b },
-      { identity: "db/Dockerfile", path: c },
+      { identity: "backend/Dockerfile", path: asAbsolutePath(a) },
+      { identity: "frontend/Dockerfile", path: asAbsolutePath(b) },
+      { identity: "db/Dockerfile", path: asAbsolutePath(c) },
     ]);
 
     // Sorted by identity; each file → its own imageTag (no base collapse).
@@ -63,8 +64,8 @@ describe("resolveTargetedDockerfiles (targeted build lane, NO docker, NO file re
     const a = writeFile(root, "app/Dockerfile", "FROM alpine:3.20\n");
 
     const { build } = resolveTargetedDockerfiles([
-      { identity: "app/Dockerfile", path: a },
-      { identity: "app/Dockerfile", path: a },
+      { identity: "app/Dockerfile", path: asAbsolutePath(a) },
+      { identity: "app/Dockerfile", path: asAbsolutePath(a) },
     ]);
 
     expect(build.map((x) => x.identity)).toEqual(["app/Dockerfile"]);
@@ -76,8 +77,8 @@ describe("resolveTargetedDockerfiles (targeted build lane, NO docker, NO file re
     const b = writeFile(root, "db/Dockerfile", "FROM postgres:18\n");
 
     const { summary } = resolveTargetedDockerfiles([
-      { identity: "app/Dockerfile", path: a },
-      { identity: "db/Dockerfile", path: b },
+      { identity: "app/Dockerfile", path: asAbsolutePath(a) },
+      { identity: "db/Dockerfile", path: asAbsolutePath(b) },
     ]);
 
     expect(summary).toContain("building 2 targeted Dockerfile(s):");
@@ -101,7 +102,9 @@ describe("resolveTargetedDockerfiles (targeted build lane, NO docker, NO file re
     const a = writeFile(root, "app/Dockerfile", "FROM alpine:3.20\n");
     const craftedIdentity = `app${String.fromCharCode(7)}/Dockerfile`; // embedded BEL
 
-    const { summary } = resolveTargetedDockerfiles([{ identity: craftedIdentity, path: a }]);
+    const { summary } = resolveTargetedDockerfiles([
+      { identity: craftedIdentity, path: asAbsolutePath(a) },
+    ]);
 
     expect(summary).not.toContain(String.fromCharCode(7));
     expect(summary).toContain(`app /Dockerfile -> ${imageTag(craftedIdentity)}`);
@@ -115,7 +118,9 @@ describe("resolveTargetedDockerfiles (targeted build lane, NO docker, NO file re
     const a = writeFile(root, "app/Dockerfile", "FROM alpine:3.20\n");
     const craftedIdentity = `app${String.fromCharCode(7)}/Dockerfile`; // embedded BEL
 
-    const { summary } = resolveTargetedDockerfiles([{ identity: craftedIdentity, path: a }]);
+    const { summary } = resolveTargetedDockerfiles([
+      { identity: craftedIdentity, path: asAbsolutePath(a) },
+    ]);
     const buildSetLine = summary.split("\n").find((l) => l.includes("build set"));
 
     expect(buildSetLine).toBeDefined();
@@ -130,8 +135,8 @@ describe("resolveTargetedDockerfiles (targeted build lane, NO docker, NO file re
 
     expect(() =>
       resolveTargetedDockerfiles([
-        { identity: "real/Dockerfile", path: real },
-        { identity: "nope/Dockerfile", path: missing },
+        { identity: "real/Dockerfile", path: asAbsolutePath(real) },
+        { identity: "nope/Dockerfile", path: asAbsolutePath(missing) },
       ]),
     ).toThrow(missing);
   });

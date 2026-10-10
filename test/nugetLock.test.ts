@@ -22,6 +22,8 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { computeCacheKey } from "../src/collectors/cdxgen";
 import { collectWithNugetLock, NUGET_COLLECTOR_TOOL } from "../src/collectors/nugetLock";
 import { collectors } from "../src/collectors/registry";
+import { asAbsolutePath, asTargetIdentity } from "../src/model/dependencies";
+import { widen } from "./brandTestSupport";
 import type { Target } from "../src/targets/target";
 
 // ---------------------------------------------------------------------------
@@ -259,7 +261,7 @@ function makeTargetWithFiles(files: Record<string, string>): Target {
     writeFileSync(join(dir, name), content);
   }
 
-  return { dir, identity: "test/synthetic" };
+  return { dir: asAbsolutePath(dir), identity: asTargetIdentity("test/synthetic") };
 }
 
 function makeNugetTarget(lock: string): Target {
@@ -522,7 +524,7 @@ describe("nuget registry collector — CollectedSbom shape", () => {
     expect(Object.keys(result).sort()).toEqual(["sbom", "targetIdentity"]);
     expect("prodPurlSet" in result).toBe(false);
     expect("firstPartyNames" in result).toBe(false);
-    expect(result.targetIdentity).toBe(target.identity);
+    expect(widen(result.targetIdentity)).toBe(target.identity);
   });
 });
 

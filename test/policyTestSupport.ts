@@ -7,11 +7,21 @@ import {
 } from "../src/policy/parse/clarificationsFile";
 import { parsePolicy } from "../src/policy/parse/parse";
 import { PolicyError } from "../src/policy/schema/diagnostics";
+import {
+  asDependencyName,
+  asDependencyVersion,
+  asPurl,
+  asRawLicense,
+  asTargetIdentity,
+  type CanonicalDependencies,
+  type LicenseClaimKind,
+  type TargetIdentity,
+  type Verdict,
+} from "../src/model/dependencies";
 import type { Policy } from "../src/policy/schema";
-import type { CanonicalDependencies, LicenseClaimKind, Verdict } from "../src/model/dependencies";
 
 /** No scanned target in these scenarios is collected by a lane that derives a dependency graph. */
-export const WITHOUT_DEPENDENCY_GRAPHS: ReadonlySet<string> = new Set();
+export const WITHOUT_DEPENDENCY_GRAPHS: ReadonlySet<TargetIdentity> = new Set();
 
 // Inline TOML fixtures (dispatch.test.ts idiom) — each one is commented with
 // the trap it encodes. Policy text is untrusted config: schema validation
@@ -215,25 +225,25 @@ export interface PackageSpec {
 export function makeModel(specs: ReadonlyArray<PackageSpec>): CanonicalDependencies {
   return {
     packages: specs.map((spec) => ({
-      purl: spec.purl,
-      name: spec.name,
-      version: spec.version,
+      purl: asPurl(spec.purl),
+      name: asDependencyName(spec.name),
+      version: asDependencyVersion(spec.version),
       occurrences: spec.occurrences.map((o) =>
         typeof o === "string"
-          ? { target: o, isDevDependency: false }
-          : { target: o.target, isDevDependency: o.dev },
+          ? { target: asTargetIdentity(o), isDevDependency: false }
+          : { target: asTargetIdentity(o.target), isDevDependency: o.dev },
       ),
       licenseClaims: [
         ...spec.claims.map((raw) => {
           const kind: LicenseClaimKind =
             raw.includes(" ") || raw.includes("(") ? "expression" : "spdx-id";
 
-          return { raw, kind, source: "generator" as const };
+          return { raw: asRawLicense(raw), kind, source: "generator" as const };
         }),
         ...(spec.scancode !== undefined
           ? [
               {
-                raw: spec.scancode,
+                raw: asRawLicense(spec.scancode),
                 kind: "expression" as const,
                 source: "scancode" as const,
               },
@@ -245,7 +255,10 @@ export function makeModel(specs: ReadonlyArray<PackageSpec>): CanonicalDependenc
         ? {
             dockerClaimDivergence: {
               kind: "cross-image-claims" as const,
-              byTarget: spec.dockerClaimDivergence,
+              byTarget: spec.dockerClaimDivergence.map((d) => ({
+                target: asTargetIdentity(d.target),
+                claims: d.claims,
+              })),
             },
           }
         : {}),
@@ -279,7 +292,7 @@ export function pkgSpec(
   version = "1.0.0",
 ): PackageSpec {
   return {
-    purl: `pkg:npm/${name}@${version}`,
+    purl: asPurl(`pkg:npm/${name}@${version}`),
     name,
     version,
     claims: claim === null ? [] : [claim],
@@ -300,7 +313,7 @@ export function scanPkgSpec(
   version = "1.0.0",
 ): PackageSpec {
   return {
-    purl: `pkg:npm/${name}@${version}`,
+    purl: asPurl(`pkg:npm/${name}@${version}`),
     name,
     version,
     claims: claim === null ? [] : [claim],
@@ -378,7 +391,7 @@ export function crossImagePkgSpec(
   version = "1.0.0",
 ): PackageSpec {
   return {
-    purl: `pkg:apk/alpine/${name}@${version}`,
+    purl: asPurl(`pkg:apk/alpine/${name}@${version}`),
     name,
     version,
     claims: [],
@@ -396,11 +409,11 @@ export function crossImagePkgSpec(
 // do not exist yet; the engine must not care.
 // ===========================================================================
 
-export const TARGET_A = "docker:a/Dockerfile";
+export const TARGET_A = asTargetIdentity("docker:a/Dockerfile");
 
-export const TARGET_B = "docker:b/Dockerfile";
+export const TARGET_B = asTargetIdentity("docker:b/Dockerfile");
 
-export const TARGET_A_EXTRA = "docker:a/Dockerfile-extra";
+export const TARGET_A_EXTRA = asTargetIdentity("docker:a/Dockerfile-extra");
 
 export const TARGET_A_PREFIX = "docker:a";
 
@@ -458,14 +471,14 @@ export const ACCEPTANCE_POLICY = [
 
 /** A copyleft package with one DEV occurrence (A) and one PROD occurrence (B). */
 export const DEV_PROD_COPYLEFT = pkgSpec("agpl-pkg", "AGPL-3.0-only", [
-  { target: "apps/a", dev: true },
-  { target: "apps/b", dev: false },
+  { target: asTargetIdentity("apps/a"), dev: true },
+  { target: asTargetIdentity("apps/b"), dev: false },
 ]);
 
 /** An UNKNOWN-license package with one DEV occurrence (A) and one PROD (B). */
 export const DEV_PROD_UNKNOWN = pkgSpec("no-claims", null, [
-  { target: "apps/a", dev: true },
-  { target: "apps/b", dev: false },
+  { target: asTargetIdentity("apps/a"), dev: true },
+  { target: asTargetIdentity("apps/b"), dev: false },
 ]);
 
 // ===========================================================================
@@ -521,7 +534,7 @@ export function multiClaimSpec(
   version = "1.0.0",
 ): PackageSpec {
   return {
-    purl: `pkg:npm/${name}@${version}`,
+    purl: asPurl(`pkg:npm/${name}@${version}`),
     name,
     version,
     claims,
@@ -561,7 +574,7 @@ export const osMultiSpec = (
   claims: ReadonlyArray<string>,
   occurrences: ReadonlyArray<OccurrenceSpec> = ["docker:img/Dockerfile"],
 ): PackageSpec => ({
-  purl: `pkg:deb/debian/${name}@1.0.0`,
+  purl: asPurl(`pkg:deb/debian/${name}@1.0.0`),
   name,
   version: "1.0.0",
   claims,

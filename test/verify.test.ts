@@ -16,6 +16,7 @@ import { putEntry, serializeCache, type CacheEntry } from "../src/enrich/cache";
 import { putMemoEntry, serializeScancodeMemo } from "../src/enrich/scancode/cache";
 import { verifyCache } from "../src/enrich/verify";
 import { runVerifyCache } from "../src/pipeline/verifyCache";
+import { asPurl, type Purl, widen } from "./brandTestSupport";
 
 const tempDirs: string[] = [];
 
@@ -33,10 +34,10 @@ afterEach(() => {
 });
 
 function writeCache(path: string, entries: Record<string, CacheEntry>): void {
-  const cache = new Map<string, CacheEntry>();
+  const cache = new Map<Purl, CacheEntry>();
 
   for (const [purl, entry] of Object.entries(entries)) {
-    putEntry(cache, purl, entry);
+    putEntry(cache, asPurl(purl), entry);
   }
 
   writeFileSync(path, serializeCache(cache));
@@ -166,7 +167,7 @@ describe("verifyCache", () => {
 
     expect(result.mismatches).toHaveLength(1);
     expect(result.mismatches[0]).toMatchObject({
-      purl: "pkg:npm/foo@1.2.3",
+      purl: asPurl("pkg:npm/foo@1.2.3"),
       cached: "MIT",
       current: "GPL-3.0-only",
     });
@@ -308,7 +309,7 @@ describe("verifyCache", () => {
     );
     const result = await withFetch(fetch, () => verifyCache({ cachePath: path, verbose: false }));
 
-    expect(result.mismatches.map((m) => m.purl)).toEqual([
+    expect(widen(result.mismatches.map((m) => m.purl))).toEqual([
       "pkg:npm/alpha@1.0.0",
       "pkg:npm/zeta@1.0.0",
     ]);
@@ -583,11 +584,11 @@ describe("runVerifyCache (pipeline wrapper) — the scancode memo count", () => 
     const root = tempRepoRoot();
     const memo = new Map();
 
-    putMemoEntry(memo, "pkg:npm/analyzed-a@1.0.0", {
+    putMemoEntry(memo, asPurl("pkg:npm/analyzed-a@1.0.0"), {
       license: "MIT",
       via: "scancode@1",
     });
-    putMemoEntry(memo, "pkg:npm/analyzed-b@2.0.0", {
+    putMemoEntry(memo, asPurl("pkg:npm/analyzed-b@2.0.0"), {
       license: null,
       via: "scancode@1",
     });

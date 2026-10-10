@@ -1,5 +1,6 @@
 import { type } from "arktype";
 
+import { type SpdxLicenseLeaf } from "../../model/dependencies";
 import { recordOf, stringOf } from "../../validate/record";
 
 import { collectArkProblems, nonBlankString } from "./arkAdapter";
@@ -16,7 +17,7 @@ export type DenyRule =
       /** The pattern exactly as written in the policy file. */
       pattern: string;
       /** Pre-decomposed satisfies allowlist (OR-leaves), computed at validation. */
-      allowlist: ReadonlyArray<string>;
+      allowlist: ReadonlyArray<SpdxLicenseLeaf>;
       reason: string;
     }
   | { match: "name"; pattern: string; reason: string };

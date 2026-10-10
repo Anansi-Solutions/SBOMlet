@@ -63,6 +63,14 @@ import { join } from "node:path";
 
 import { type } from "arktype";
 
+import {
+  asDependencyName,
+  asDependencyVersion,
+  asPurl,
+  type DependencyName,
+  type DependencyVersion,
+  type Purl,
+} from "../model/dependencies";
 import { recordOf, stringOf } from "../validate/record";
 import { computeCacheKey, type CollectorSbomFile } from "./cdxgen";
 import { manifestFilesFor } from "./dispatch";
@@ -450,9 +458,9 @@ export function modulesJsonIsPresentFile(modulesJsonPath: string): boolean {
 
 interface TerraformComponent {
   type: "library";
-  name: string;
-  version: string;
-  purl: string;
+  name: DependencyName;
+  version: DependencyVersion;
+  purl: Purl;
 }
 
 /** Provider → component: `pkg:terraform/<host>/<ns>/<name>@<v>`, no group. */
@@ -461,9 +469,9 @@ function providerComponent(provider: TerraformProvider): TerraformComponent {
 
   return {
     type: "library",
-    name,
-    version: provider.version,
-    purl: `pkg:terraform/${provider.host}/${name}@${provider.version}`,
+    name: asDependencyName(name),
+    version: asDependencyVersion(provider.version),
+    purl: asPurl(`pkg:terraform/${provider.host}/${name}@${provider.version}`),
   };
 }
 
@@ -479,9 +487,9 @@ function moduleComponent(module: TerraformModule): TerraformComponent {
 
   return {
     type: "library",
-    name,
-    version: module.version,
-    purl: `pkg:terraform/${module.host}/${name}@${module.version}`,
+    name: asDependencyName(name),
+    version: asDependencyVersion(module.version),
+    purl: asPurl(`pkg:terraform/${module.host}/${name}@${module.version}`),
   };
 }
 

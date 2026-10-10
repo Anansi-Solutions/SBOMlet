@@ -2,6 +2,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, test } from "bun:test";
+import { asAbsolutePath } from "../src/model/dependencies";
 
 import {
   csprojNoLockWarnings,
@@ -11,6 +12,7 @@ import {
   mavenTestSbomOrphanWarnings,
   pomNoSidecarWarnings,
 } from "../src/targets/discover";
+import { widen } from "./brandTestSupport";
 
 // Self-contained temp trees only — no reference to any host-project path.
 const tempRoots: string[] = [];
@@ -112,7 +114,7 @@ describe("discoverTargets", () => {
 
     const targets = discoverTargets(root);
 
-    expect(targets.map((t) => t.identity)).toEqual(["a", "a/b/c", "py", "uv"]);
+    expect(targets.map((t) => widen(t.identity))).toEqual(["a", "a/b/c", "py", "uv"]);
     expect(targets.map((t) => t.lockfile)).toEqual(["yarn", "yarn", "poetry", "uv"]);
   });
 
@@ -127,9 +129,9 @@ describe("discoverTargets", () => {
 
     makeYarnProject(toolDir);
 
-    const targets = discoverTargets(root, { toolDir });
+    const targets = discoverTargets(root, { toolDir: asAbsolutePath(toolDir) });
 
-    expect(targets.map((t) => t.identity)).toEqual(["app"]);
+    expect(targets.map((t) => widen(t.identity))).toEqual(["app"]);
   });
 
   test("build/out/target/vendor are GENERIC source names — lockfiles under them ARE discovered; only dist stays pruned", () => {
@@ -150,7 +152,7 @@ describe("discoverTargets", () => {
 
     const targets = discoverTargets(root);
 
-    expect(targets.map((t) => t.identity)).toEqual([
+    expect(targets.map((t) => widen(t.identity))).toEqual([
       "app",
       "build/pkg",
       "out/pkg",
@@ -169,7 +171,7 @@ describe("discoverTargets", () => {
 
     const targets = discoverTargets(root);
 
-    expect(targets.map((t) => t.identity)).toEqual(["app"]);
+    expect(targets.map((t) => widen(t.identity))).toEqual(["app"]);
   });
 
   test("a git-SUBMODULE root (.git is a FILE / gitlink) is NOT descended in the lockfile lane", () => {
@@ -192,7 +194,7 @@ describe("discoverTargets", () => {
 
     const targets = discoverTargets(root);
 
-    expect(targets.map((t) => t.identity)).toEqual(["app", "normal"]);
+    expect(targets.map((t) => widen(t.identity))).toEqual(["app", "normal"]);
   });
 
   test("#3: case-insensitive exclusion prunes Node_Modules / NODE_MODULES / Dist on Windows", () => {
@@ -205,7 +207,7 @@ describe("discoverTargets", () => {
 
     const targets = discoverTargets(root);
 
-    expect(targets.map((t) => t.identity)).toEqual(["app"]);
+    expect(targets.map((t) => widen(t.identity))).toEqual(["app"]);
   });
 
   test("--exclude globs match case-INSENSITIVELY (Windows on-disk identity parity)", () => {
@@ -218,7 +220,7 @@ describe("discoverTargets", () => {
     // A mis-cased glob `CASED/**` must still exclude the on-disk `Cased/pkg`.
     const excluded = discoverTargets(root, { excludes: ["CASED/**"] });
 
-    expect(excluded.map((t) => t.identity)).toEqual(["app"]);
+    expect(excluded.map((t) => widen(t.identity))).toEqual(["app"]);
   });
 
   test("#4: the lockfile lane STILL prunes ALL dot-dirs (.docker/.devcontainer included)", () => {
@@ -232,7 +234,7 @@ describe("discoverTargets", () => {
 
     const targets = discoverTargets(root);
 
-    expect(targets.map((t) => t.identity)).toEqual(["app"]);
+    expect(targets.map((t) => widen(t.identity))).toEqual(["app"]);
   });
 
   test("identities never contain a backslash, even on Windows", () => {
@@ -258,17 +260,17 @@ describe("discoverTargets", () => {
 
     const exact = discoverTargets(root, { excludes: ["a/b/c"] });
 
-    expect(exact.map((t) => t.identity)).toEqual(["a", "a/b"]);
+    expect(exact.map((t) => widen(t.identity))).toEqual(["a", "a/b"]);
 
     // "*" matches within a single path segment: removes "a/b" but NOT "a/b/c".
     const single = discoverTargets(root, { excludes: ["a/*"] });
 
-    expect(single.map((t) => t.identity)).toEqual(["a", "a/b/c"]);
+    expect(single.map((t) => widen(t.identity))).toEqual(["a", "a/b/c"]);
 
     // "**" crosses segments: removes everything under "a" (but not "a" itself).
     const cross = discoverTargets(root, { excludes: ["a/**"] });
 
-    expect(cross.map((t) => t.identity)).toEqual(["a"]);
+    expect(cross.map((t) => widen(t.identity))).toEqual(["a"]);
   });
 
   test('a lockfile directly in repoRoot yields identity "."', () => {
@@ -278,7 +280,7 @@ describe("discoverTargets", () => {
 
     const targets = discoverTargets(root);
 
-    expect(targets.map((t) => t.identity)).toEqual(["."]);
+    expect(targets.map((t) => widen(t.identity))).toEqual(["."]);
     expect(targets[0]?.lockfile).toBe("yarn");
   });
 
@@ -291,7 +293,7 @@ describe("discoverTargets", () => {
 
     const targets = discoverTargets(root);
 
-    expect(targets.map((t) => t.identity)).toEqual(["dual", "dual"]);
+    expect(targets.map((t) => widen(t.identity))).toEqual(["dual", "dual"]);
     // "poetry" < "yarn" by codepoint — deterministic tiebreak on lockfile kind.
     expect(targets.map((t) => t.lockfile)).toEqual(["poetry", "yarn"]);
   });
@@ -316,7 +318,7 @@ describe("discoverTargets — npm/pnpm/bun lockfile kinds", () => {
 
     const targets = discoverTargets(root);
 
-    expect(targets.map((t) => t.identity)).toEqual(["bun-app", "npm-app", "pnpm-app"]);
+    expect(targets.map((t) => widen(t.identity))).toEqual(["bun-app", "npm-app", "pnpm-app"]);
     expect(targets.map((t) => t.lockfile)).toEqual(["bun", "npm", "pnpm"]);
   });
 });
@@ -329,7 +331,7 @@ describe("discoverTargets — terraform lockfile kind", () => {
 
     const targets = discoverTargets(root);
 
-    expect(targets.map((t) => t.identity)).toEqual(["infra"]);
+    expect(targets.map((t) => widen(t.identity))).toEqual(["infra"]);
     expect(targets.map((t) => t.lockfile)).toEqual(["terraform"]);
   });
 
@@ -342,7 +344,7 @@ describe("discoverTargets — terraform lockfile kind", () => {
 
     const { targets, warnings } = discoverTargetsWithWarnings(root);
 
-    expect(targets.map((t) => t.identity)).toEqual(["mixed", "mixed"]);
+    expect(targets.map((t) => widen(t.identity))).toEqual(["mixed", "mixed"]);
     // "terraform" > "yarn"? "terraform" < "yarn" by codepoint ('t' < 'y').
     expect(targets.map((t) => t.lockfile)).toEqual(["terraform", "yarn"]);
     // terraform never participates in JS precedence — no collision warning.
@@ -365,7 +367,7 @@ describe("discoverTargetsWithWarnings — same-dir JS collision resolution", () 
     const { targets, warnings } = discoverTargetsWithWarnings(root);
 
     expect(targets.map((t) => t.lockfile)).toEqual(["bun"]);
-    expect(targets.map((t) => t.identity)).toEqual(["app"]);
+    expect(targets.map((t) => widen(t.identity))).toEqual(["app"]);
     expect(warnings).toEqual([
       'target "app" has multiple JS lockfiles — scanning bun.lock (precedence bun > pnpm > yarn > npm); ignoring package-lock.json',
     ]);
@@ -427,7 +429,7 @@ describe("discoverTargetsWithWarnings — same-dir JS collision resolution", () 
 
     const { targets, warnings } = discoverTargetsWithWarnings(root);
 
-    expect(targets.map((t) => t.identity)).toEqual(["dual", "dual"]);
+    expect(targets.map((t) => widen(t.identity))).toEqual(["dual", "dual"]);
     // "bun" < "poetry" by codepoint — kind tiebreak preserved.
     expect(targets.map((t) => t.lockfile)).toEqual(["bun", "poetry"]);
     expect(warnings).toEqual([]);
@@ -442,7 +444,7 @@ describe("discoverTargetsWithWarnings — same-dir JS collision resolution", () 
 
     const { targets, warnings } = discoverTargetsWithWarnings(root);
 
-    expect(targets.map((t) => t.identity)).toEqual(["a-app", "b-app"]);
+    expect(targets.map((t) => widen(t.identity))).toEqual(["a-app", "b-app"]);
     expect(targets.map((t) => t.lockfile)).toEqual(["yarn", "bun"]);
     expect(warnings.length).toBe(1);
   });
@@ -575,7 +577,7 @@ describe("discoverTargetsWithWarnings — csproj sighted without packages.lock.j
 
     const { targets, warnings } = discoverTargetsWithWarnings(root);
 
-    expect(targets.map((t) => t.identity)).toEqual(["locked"]);
+    expect(targets.map((t) => widen(t.identity))).toEqual(["locked"]);
     expect(targets.map((t) => t.lockfile)).toEqual(["nuget"]);
     expect(warnings).toEqual([]);
   });
@@ -589,7 +591,7 @@ describe("discoverTargetsWithWarnings — csproj sighted without packages.lock.j
 
     const { targets, warnings } = discoverTargetsWithWarnings(root);
 
-    expect(targets.map((t) => t.identity)).toEqual(["locked"]);
+    expect(targets.map((t) => widen(t.identity))).toEqual(["locked"]);
     expect(warnings).toEqual([
       "1 directory contains a .csproj but no packages.lock.json, which is " +
         'required for .NET scanning ("lockless") — set ' +
@@ -650,7 +652,7 @@ describe("discoverTargetsWithWarnings — csproj sighted without packages.lock.j
 
     const { targets, warnings } = discoverTargetsWithWarnings(root);
 
-    expect(targets.map((t) => t.identity)).toEqual(["x", "x"]);
+    expect(targets.map((t) => widen(t.identity))).toEqual(["x", "x"]);
     // "npm" < "nuget" by codepoint ("p" < "u") — kind tiebreak preserved;
     // JS_PRECEDENCE never sees nuget, so no collision warning.
     expect(targets.map((t) => t.lockfile)).toEqual(["npm", "nuget"]);
@@ -720,7 +722,7 @@ describe("discoverTargetsWithWarnings — pom.xml sighted without maven.sbom.jso
 
     const { targets, warnings } = discoverTargetsWithWarnings(root);
 
-    expect(targets.map((t) => t.identity)).toEqual(["app"]);
+    expect(targets.map((t) => widen(t.identity))).toEqual(["app"]);
     expect(targets.map((t) => t.lockfile)).toEqual(["maven"]);
     expect(warnings).toEqual([]);
   });
@@ -734,7 +736,7 @@ describe("discoverTargetsWithWarnings — pom.xml sighted without maven.sbom.jso
 
     const { targets, warnings } = discoverTargetsWithWarnings(root);
 
-    expect(targets.map((t) => t.identity)).toEqual(["liba"]);
+    expect(targets.map((t) => widen(t.identity))).toEqual(["liba"]);
     expect(warnings).toEqual([
       "2 directories contain a pom.xml but no committed maven.sbom.json, " +
         'which is required for Maven scanning (".", "libb") — generate it ' +
@@ -789,7 +791,7 @@ describe("discoverTargetsWithWarnings — pom.xml sighted without maven.sbom.jso
 
     const { targets, warnings } = discoverTargetsWithWarnings(root);
 
-    expect(targets.map((t) => t.identity)).toEqual(["covered"]);
+    expect(targets.map((t) => widen(t.identity))).toEqual(["covered"]);
     expect(warnings).toEqual([
       "1 directory contains a pom.xml but no committed maven.sbom.json, " +
         'which is required for Maven scanning ("uncovered") — generate it ' +
@@ -905,7 +907,7 @@ describe("discoverTargetsWithWarnings — maven.test.sbom.json without maven.sbo
 
     const { targets, warnings } = discoverTargetsWithWarnings(root);
 
-    expect(targets.map((t) => t.identity)).toEqual(["app"]);
+    expect(targets.map((t) => widen(t.identity))).toEqual(["app"]);
     expect(targets.map((t) => t.lockfile)).toEqual(["maven"]);
     expect(warnings).toEqual([]);
   });
@@ -934,7 +936,7 @@ describe("discoverTargetsWithWarnings — maven.test.sbom.json without maven.sbo
 
     const { targets, warnings } = discoverTargetsWithWarnings(root);
 
-    expect(targets.map((t) => t.identity)).toEqual(["covered"]);
+    expect(targets.map((t) => widen(t.identity))).toEqual(["covered"]);
     expect(warnings).toEqual([
       "1 directory contains a maven.test.sbom.json but no maven.sbom.json " +
         '("uncovered") — commit maven.sbom.json (the default sidecar) ' +

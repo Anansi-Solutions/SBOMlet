@@ -12,6 +12,7 @@
  * - and the orchestrator (enrich.ts) classifies it as a definitive negative: the package stays
  * honestly unknown, generate never hard-fails on it, and no guess is ever recorded.
  */
+import { asRawLicense, type RawLicense } from "../model/dependencies";
 import { narrowNugetCatalogEntry, narrowNugetLeaf } from "../validate/registry";
 
 /** The NuGet V3 API base - a FIXED host (the SSRF control, the GITHUB_API_HOST idiom). */
@@ -52,7 +53,7 @@ export function catalogEntryUrlOf(leaf: unknown): string | undefined {
 
 /** A resolved raw license: the string, which metadata class won, and a confidence. */
 export interface NugetResolution {
-  raw: string;
+  raw: RawLicense;
   via: "license-expression" | "license-url-spdx";
   confidence: "high";
 }
@@ -85,7 +86,7 @@ export function resolveNugetCatalogLicense(doc: unknown): NugetResolution | null
   const expression = entry.licenseExpression?.trim();
 
   if (expression !== undefined && expression !== "") {
-    return { raw: expression, via: "license-expression", confidence: "high" };
+    return { raw: asRawLicense(expression), via: "license-expression", confidence: "high" };
   }
 
   // Embedded file BEFORE licenseUrl: the aka.ms sentinel never reads as a URL.
@@ -99,7 +100,7 @@ export function resolveNugetCatalogLicense(doc: unknown): NugetResolution | null
     const decoded = decodeSpdxPath(url.slice(LICENSES_NUGET_ORG_PREFIX.length));
 
     if (decoded !== undefined && decoded !== "") {
-      return { raw: decoded, via: "license-url-spdx", confidence: "high" };
+      return { raw: asRawLicense(decoded), via: "license-url-spdx", confidence: "high" };
     }
   }
 

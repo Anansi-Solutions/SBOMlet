@@ -27,6 +27,8 @@
  * to the Phase-6 dogfood .sbomlet.policy.toml - it is a project-specific call, not a general
  * well-known disambiguation, so it does NOT belong here.
  */
+import { asRawLicense, type CanonicalLicense } from "../../model/dependencies";
+import { canonicalizeExpression } from "../../normalize/expression";
 import type { DetectedSignal } from "../../normalize/normalize";
 
 /** One shipped tool-level disambiguation override. */
@@ -41,8 +43,8 @@ export interface BuiltinOverride {
    * STALE and fails the gate.
    */
   detected: DetectedSignal;
-  /** The asserted precise SPDX expression (validated against spdx in tests). */
-  expression: string;
+  /** The asserted precise, canonical SPDX expression (validated against spdx in tests). */
+  expression: CanonicalLicense;
   /** Mandatory documentation: why this disambiguation is correct. */
   reason: string;
 }
@@ -81,8 +83,8 @@ const JUPYTER_BSD_REASON =
 export const BUILTIN_OVERRIDES: ReadonlyArray<BuiltinOverride> = [
   {
     name: "python-dateutil",
-    detected: { registry: "Dual License" },
-    expression: "Apache-2.0 OR BSD-3-Clause",
+    detected: { registry: asRawLicense("Dual License") },
+    expression: canonicalizeExpression(asRawLicense("Apache-2.0 OR BSD-3-Clause")),
     reason:
       "python-dateutil is dual-licensed Apache-2.0 OR BSD-3-Clause; PyPI " +
       "reports the imprecise 'Dual License' classifier",
@@ -90,8 +92,8 @@ export const BUILTIN_OVERRIDES: ReadonlyArray<BuiltinOverride> = [
   ...JUPYTER_BSD_PROJECTS.map(
     (name): BuiltinOverride => ({
       name,
-      detected: { registry: "BSD" },
-      expression: "BSD-3-Clause",
+      detected: { registry: asRawLicense("BSD") },
+      expression: canonicalizeExpression(asRawLicense("BSD-3-Clause")),
       reason: JUPYTER_BSD_REASON,
     }),
   ),

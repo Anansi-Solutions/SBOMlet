@@ -22,6 +22,7 @@
 import { describe, expect, test } from "bun:test";
 
 import { npmIntroductions } from "../src/collectors/npmProvenance";
+import { asPurl, widen } from "./brandTestSupport";
 
 /**
  * Synthetic BOM exercising: a root with two direct deps (a, b), a shared
@@ -81,48 +82,48 @@ describe("npmIntroductions", () => {
   const intro = npmIntroductions(SYNTH_BOM);
 
   test("direct deps are marked direct with empty introducedBy and no path", () => {
-    const a = intro.get("pkg:npm/a@1.0.0");
+    const a = intro.get(asPurl("pkg:npm/a@1.0.0"));
 
     expect(a).toBeDefined();
     expect(a!.direct).toBe(true);
-    expect(a!.introducedBy).toEqual([]);
+    expect(widen(a!.introducedBy)).toEqual([]);
     expect(a!.path).toBeUndefined();
     expect("optional" in a!).toBe(false); // optionality is descoped: no optional field exists
   });
 
   test("a transitive's introducedBy is the sorted-unique SET of direct parents (multi-parent)", () => {
-    const c = intro.get("pkg:npm/c@3.0.0");
+    const c = intro.get(asPurl("pkg:npm/c@3.0.0"));
 
     expect(c).toBeDefined();
     expect(c!.direct).toBe(false);
     // c is reached via a AND b (and via a's dup-purl variant, which unions to a)
-    expect(c!.introducedBy).toEqual(["pkg:npm/a@1.0.0", "pkg:npm/b@2.0.0"]);
+    expect(widen(c!.introducedBy)).toEqual(["pkg:npm/a@1.0.0", "pkg:npm/b@2.0.0"]);
   });
 
   test("transitive path is a deterministic tie-broken shortest root→purl chain", () => {
-    const c = intro.get("pkg:npm/c@3.0.0");
+    const c = intro.get(asPurl("pkg:npm/c@3.0.0"));
 
     // shortest paths root→a→c and root→b→c tie at length 3; tie-break expands
     // frontier in compareCodeUnits purl order, so a (< b) wins.
-    expect(c!.path).toEqual(["pkg:npm/a@1.0.0", "pkg:npm/c@3.0.0"]);
-    const d = intro.get("pkg:npm/d@4.0.0");
+    expect(widen(c!.path)).toEqual(["pkg:npm/a@1.0.0", "pkg:npm/c@3.0.0"]);
+    const d = intro.get(asPurl("pkg:npm/d@4.0.0"));
 
-    expect(d!.path).toEqual(["pkg:npm/a@1.0.0", "pkg:npm/c@3.0.0", "pkg:npm/d@4.0.0"]);
+    expect(widen(d!.path)).toEqual(["pkg:npm/a@1.0.0", "pkg:npm/c@3.0.0", "pkg:npm/d@4.0.0"]);
   });
 
   test("dup-purl bom-refs union to one purl node — no self-loop, no duplicate entry", () => {
     // a appears under two bom-refs; the provenance map has exactly one a entry.
-    const a = intro.get("pkg:npm/a@1.0.0");
+    const a = intro.get(asPurl("pkg:npm/a@1.0.0"));
 
     expect(a!.introducedBy).not.toContain("pkg:npm/a@1.0.0");
   });
 
   test("cycle is bounded: d→a→c→d does not loop and a never appears in its own path", () => {
-    const d = intro.get("pkg:npm/d@4.0.0");
+    const d = intro.get(asPurl("pkg:npm/d@4.0.0"));
 
     expect(d!.path).not.toContain("pkg:npm/d@4.0.0"[0]); // sanity
     // d's introducedBy is c only (the cycle d→a does not make a a parent OF d)
-    expect(d!.introducedBy).toEqual(["pkg:npm/c@3.0.0"]);
+    expect(widen(d!.introducedBy)).toEqual(["pkg:npm/c@3.0.0"]);
   });
 
   test("every component purl gets an entry", () => {
@@ -179,17 +180,17 @@ describe("npmIntroductions", () => {
       ],
     };
     const intro = npmIntroductions(dupBom);
-    const n = intro.get("pkg:npm/n@1");
+    const n = intro.get(asPurl("pkg:npm/n@1"));
 
     expect(n).toBeDefined();
     // The emitted path must be the REAL chain [y, p, n]; never [x, p, n].
-    expect(n!.path).toEqual(["pkg:npm/y@1", "pkg:npm/p@1", "pkg:npm/n@1"]);
+    expect(widen(n!.path)).toEqual(["pkg:npm/y@1", "pkg:npm/p@1", "pkg:npm/n@1"]);
     // The introducedBy SET stays correct (p introduces n).
-    expect(n!.introducedBy).toEqual(["pkg:npm/p@1"]);
+    expect(widen(n!.introducedBy)).toEqual(["pkg:npm/p@1"]);
     // m is reached only via p1; its path is the real [x, p, m].
-    const m = intro.get("pkg:npm/m@1");
+    const m = intro.get(asPurl("pkg:npm/m@1"));
 
-    expect(m!.path).toEqual(["pkg:npm/x@1", "pkg:npm/p@1", "pkg:npm/m@1"]);
+    expect(widen(m!.path)).toEqual(["pkg:npm/x@1", "pkg:npm/p@1", "pkg:npm/m@1"]);
   });
 
   test("the dup-purl real-chain path is order-independent (BOM reversal stable, #4)", () => {
@@ -316,24 +317,24 @@ describe("npmIntroductions", () => {
       ],
     };
     const intro = npmIntroductions(trimmedBom);
-    const p = intro.get("pkg:npm/p@1");
+    const p = intro.get(asPurl("pkg:npm/p@1"));
 
     expect(p).toBeDefined();
     // p is a true orphan: no path (op unreachable) AND no introducedBy.
     expect(p!.path).toBeUndefined();
-    expect(p!.introducedBy).toEqual([]);
+    expect(widen(p!.introducedBy)).toEqual([]);
     expect(p!.direct).toBe(false);
     // The reachable direct dep is unaffected.
-    expect(intro.get("pkg:npm/reachable@1")!.direct).toBe(true);
+    expect(intro.get(asPurl("pkg:npm/reachable@1"))!.direct).toBe(true);
   });
 
   test("a root-reachable parent's introducedBy is RETAINED (the orphan guard does not over-prune)", () => {
     // Sanity: when the parent IS reachable, introducedBy + path both stand.
     const intro = npmIntroductions(SYNTH_BOM);
-    const c = intro.get("pkg:npm/c@3.0.0");
+    const c = intro.get(asPurl("pkg:npm/c@3.0.0"));
 
-    expect(c!.introducedBy).toEqual(["pkg:npm/a@1.0.0", "pkg:npm/b@2.0.0"]);
-    expect(c!.path).toEqual(["pkg:npm/a@1.0.0", "pkg:npm/c@3.0.0"]);
+    expect(widen(c!.introducedBy)).toEqual(["pkg:npm/a@1.0.0", "pkg:npm/b@2.0.0"]);
+    expect(widen(c!.path)).toEqual(["pkg:npm/a@1.0.0", "pkg:npm/c@3.0.0"]);
   });
 
   test("introducedBy honors REAL bom-ref root-reachability, not purl-space union", () => {
@@ -401,21 +402,21 @@ describe("npmIntroductions", () => {
       ],
     };
     const intro = npmIntroductions(dupReachBom);
-    const x = intro.get("pkg:npm/x@1.0.0");
+    const x = intro.get(asPurl("pkg:npm/x@1.0.0"));
 
     expect(x).toBeDefined();
     // introducedBy must be [b] only — NOT [b, p]. The p→x edge is on a
     // root-disconnected variant (P_p2); p is not a REAL introducer of x.
-    expect(x!.introducedBy).toEqual(["pkg:npm/b@1.0.0"]);
+    expect(widen(x!.introducedBy)).toEqual(["pkg:npm/b@1.0.0"]);
     // `path` stays the real chain root→b→x.
-    expect(x!.path).toEqual(["pkg:npm/b@1.0.0", "pkg:npm/x@1.0.0"]);
+    expect(widen(x!.path)).toEqual(["pkg:npm/b@1.0.0", "pkg:npm/x@1.0.0"]);
     expect(x!.direct).toBe(false);
     // p stays a normal root-reachable transitive (introduced by a, via P_p1).
-    const p = intro.get("pkg:npm/p@1.0.0");
+    const p = intro.get(asPurl("pkg:npm/p@1.0.0"));
 
     expect(p!.direct).toBe(false);
-    expect(p!.introducedBy).toEqual(["pkg:npm/a@1.0.0"]);
-    expect(p!.path).toEqual(["pkg:npm/a@1.0.0", "pkg:npm/p@1.0.0"]);
+    expect(widen(p!.introducedBy)).toEqual(["pkg:npm/a@1.0.0"]);
+    expect(widen(p!.path)).toEqual(["pkg:npm/a@1.0.0", "pkg:npm/p@1.0.0"]);
   });
 
   test("partial reachability: a transitive's introducedBy keeps only its ROOT-REACHABLE parents", () => {
@@ -442,17 +443,17 @@ describe("npmIntroductions", () => {
       ],
     };
     const intro = npmIntroductions(partialBom);
-    const t = intro.get("pkg:npm/t@1");
+    const t = intro.get(asPurl("pkg:npm/t@1"));
 
     expect(t).toBeDefined();
     // b dropped (root-disconnected); only the reachable parent a survives.
-    expect(t!.introducedBy).toEqual(["pkg:npm/a@1"]);
-    expect(t!.path).toEqual(["pkg:npm/a@1", "pkg:npm/t@1"]);
+    expect(widen(t!.introducedBy)).toEqual(["pkg:npm/a@1"]);
+    expect(widen(t!.path)).toEqual(["pkg:npm/a@1", "pkg:npm/t@1"]);
     expect(t!.direct).toBe(false);
     // a stays direct; b is a root-disconnected orphan (no introducer, no direct).
-    expect(intro.get("pkg:npm/a@1")!.direct).toBe(true);
-    expect(intro.get("pkg:npm/b@1")!.introducedBy).toEqual([]);
-    expect(intro.get("pkg:npm/b@1")!.direct).toBe(false);
+    expect(intro.get(asPurl("pkg:npm/a@1"))!.direct).toBe(true);
+    expect(widen(intro.get(asPurl("pkg:npm/b@1"))!.introducedBy)).toEqual([]);
+    expect(intro.get(asPurl("pkg:npm/b@1"))!.direct).toBe(false);
   });
 
   test("no locatable root bom-ref → ABSTAIN (empty map), never mislabel real directs as transitive", () => {
@@ -492,7 +493,7 @@ describe("npmIntroductions", () => {
     expect(intro.size).toBe(0);
     // Specifically, a (a TRUE direct dep) must NOT be present as a mislabeled
     // transitive {direct:false} — that is the silent mislabel we forbid.
-    expect(intro.get("pkg:npm/a@1")).toBeUndefined();
+    expect(intro.get(asPurl("pkg:npm/a@1"))).toBeUndefined();
   });
 
   test("root bom-ref present but NO dependencies edge anchors it → ABSTAIN (root not anchored)", () => {
@@ -519,7 +520,7 @@ describe("npmIntroductions", () => {
     const intro = npmIntroductions(rootBomRefNotAnchored);
 
     expect(intro.size).toBe(0);
-    expect(intro.get("pkg:npm/a@1")).toBeUndefined();
+    expect(intro.get(asPurl("pkg:npm/a@1"))).toBeUndefined();
   });
 
   test("positive baseline: a well-formed BOM (root bom-ref + root-anchored edge) still populates with correct direct:true (no over-abstention)", () => {
@@ -545,8 +546,8 @@ describe("npmIntroductions", () => {
     const intro = npmIntroductions(wellFormed);
 
     expect(intro.size).toBe(2);
-    expect(intro.get("pkg:npm/a@1")!.direct).toBe(true);
-    expect(intro.get("pkg:npm/b@1")!.direct).toBe(false);
-    expect(intro.get("pkg:npm/b@1")!.introducedBy).toEqual(["pkg:npm/a@1"]);
+    expect(intro.get(asPurl("pkg:npm/a@1"))!.direct).toBe(true);
+    expect(intro.get(asPurl("pkg:npm/b@1"))!.direct).toBe(false);
+    expect(widen(intro.get(asPurl("pkg:npm/b@1"))!.introducedBy)).toEqual(["pkg:npm/a@1"]);
   });
 });

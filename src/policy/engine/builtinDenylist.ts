@@ -22,11 +22,12 @@
  * name-mode opt-ins in the consumer's policy: a name-mode default would have to guess encumbered
  * package names, which the deny matcher must never do.
  */
+import { asSpdxLicenseLeaf } from "../../model/dependencies";
 import { SOURCE_AVAILABLE_LICENSE_IDS, type DenyRule } from "../schema/deny";
 
 /** One shipped source-available deny default, license-mode (allowlist = the id). */
 function sourceAvailable(pattern: string, reason: string): DenyRule {
-  return { match: "license", pattern, allowlist: [pattern], reason };
+  return { match: "license", pattern, allowlist: [asSpdxLicenseLeaf(pattern)], reason };
 }
 
 /** The rule id every builtin source-available deny is cited under. */

@@ -1,4 +1,8 @@
-import { matchesIdentityPrefix, type PackageEntry } from "../../model/dependencies";
+import {
+  matchesIdentityPrefix,
+  type PackageEntry,
+  type TargetIdentity,
+} from "../../model/dependencies";
 import { EVERYWHERE_SCOPE } from "../schema/scope";
 import { compileNamePattern } from "./namePattern";
 
@@ -69,6 +73,6 @@ export function matchesPackage(selector: PackageSelector, target: PackageMatchTa
  * one. The single scope comparison behind every policy surface that decides which occurrences an
  * entry reaches.
  */
-export function scopeCoversTarget(where: ReadonlyArray<string>, target: string): boolean {
+export function scopeCoversTarget(where: ReadonlyArray<string>, target: TargetIdentity): boolean {
   return where.some((path) => path === EVERYWHERE_SCOPE || matchesIdentityPrefix(target, path));
 }

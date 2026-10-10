@@ -17,6 +17,7 @@
  * - it consumes an already-fetched body (the pypi/npm contract); fetch wiring + ordered-ref
  * fallback live in enrich.ts.
  */
+import { asRawLicense, type RawLicense } from "../model/dependencies";
 import { narrowGithubLicense } from "../validate/registry";
 
 /** A `terraform`-typed purl parsed into its encoded name + version. */
@@ -41,7 +42,7 @@ export interface GithubTarget {
 
 /** A resolved raw license: the SPDX string, the `via` tag, and the raw-text URL. */
 export interface GithubResolution {
-  raw: string;
+  raw: RawLicense;
   via: "github-license";
   /** download_url to the raw LICENSE text - reused for OUT-02 notices later. */
   downloadUrl?: string;
@@ -111,7 +112,9 @@ export function resolveGithubLicense(body: unknown): GithubResolution | null {
     return null;
   }
 
+  const raw = asRawLicense(spdxId);
+
   return narrowed.downloadUrl === undefined
-    ? { raw: spdxId, via: "github-license" }
-    : { raw: spdxId, via: "github-license", downloadUrl: narrowed.downloadUrl };
+    ? { raw, via: "github-license" }
+    : { raw, via: "github-license", downloadUrl: narrowed.downloadUrl };
 }

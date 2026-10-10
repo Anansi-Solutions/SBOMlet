@@ -1,7 +1,7 @@
 import { basename } from "node:path";
 
 import { sanitizeEvidenceText } from "../../merge/merge";
-import { compareCodeUnits } from "../../model/dependencies";
+import { asRawLicense, compareCodeUnits, type RawLicense } from "../../model/dependencies";
 import { canonicalizeExpression } from "../../normalize/expression";
 import { SCANCODE_TOOL } from "./tool";
 
@@ -60,7 +60,7 @@ function electFromPattern(
   pattern: RegExp,
   lane: string,
   isAdmissiblePath: (path: string) => boolean,
-): { raw: string; via: string } | undefined {
+): { raw: RawLicense; via: string } | undefined {
   for (const entry of entries) {
     const path = entry.path;
 
@@ -87,7 +87,7 @@ function electFromPattern(
     }
 
     return {
-      raw: canonicalizeExpression(expression),
+      raw: asRawLicense(canonicalizeExpression(asRawLicense(expression))),
       via: `${SCANCODE_TOOL.name}@${SCANCODE_TOOL.version}/${lane}`,
     };
   }
@@ -114,7 +114,7 @@ function electFromPattern(
 export function electExpression(
   files: unknown,
   isPackageOwnLegalPath: (path: string) => boolean,
-): { raw: string; via: string } | undefined {
+): { raw: RawLicense; via: string } | undefined {
   if (!Array.isArray(files)) {
     return undefined;
   }
