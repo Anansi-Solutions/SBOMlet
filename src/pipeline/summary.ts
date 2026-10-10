@@ -5,7 +5,11 @@
  */
 
 import { type CanonicalDependencies, type Verdict } from "../model/dependencies";
-import { DEV_DOWNGRADE_REASON_SUFFIX, unusedRuleIds } from "../policy/engine/evaluate";
+import {
+  DEV_DOWNGRADE_REASON_SUFFIX,
+  OS_DOWNGRADE_REASON_SUFFIX,
+  unusedRuleIds,
+} from "../policy/engine/evaluate";
 import { clarifyCitation } from "../policy/schema/clarify";
 import { ruleReason } from "../policy/schema/diagnostics";
 import type { Policy } from "../policy/schema";
@@ -142,6 +146,17 @@ export function writePolicySummary(
     process.stderr.write(
       `policy: ${devDowngradedCount} dev-downgraded (would-be fail on a ` +
         `dev-only occurrence → warn) (${devDowngradedCount} verdicts)\n`,
+    );
+  }
+
+  const osDowngradedCount = verdicts.filter(
+    (v) => v.status === "warn" && v.reason.includes(OS_DOWNGRADE_REASON_SUFFIX),
+  ).length;
+
+  if (osDowngradedCount > 0) {
+    process.stderr.write(
+      `policy: ${osDowngradedCount} os-downgraded (would-be fail on an ` +
+        `os-scope base-image package → warn) (${osDowngradedCount} verdicts)\n`,
     );
   }
 

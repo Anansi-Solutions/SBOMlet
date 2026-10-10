@@ -47,6 +47,7 @@ import {
 } from "../src/pipeline/refreshClarifications";
 import { sanitizeForLog, writePolicySummary } from "../src/pipeline/summary";
 import { parsePolicy } from "../src/policy/parse/parse";
+import { OS_DOWNGRADE_REASON_SUFFIX } from "../src/policy/engine/evaluate";
 import { MAX_BUN_LOCK_BYTES } from "../src/collectors/bunLock";
 import * as cdxgenModule from "../src/collectors/cdxgen";
 import { asTargetIdentity, type Verdict } from "../src/model/dependencies";
@@ -403,6 +404,29 @@ describe("sanitizeForLog — stderr injection boundary", () => {
 
     expect(out.length).toBeLessThan(600);
     expect(out.endsWith("...[truncated]")).toBe(true);
+  });
+});
+
+describe("writePolicySummary — os-downgraded count line", () => {
+  test("os-downgraded warns get their own count line, as dev-downgraded ones do", async () => {
+    const verdicts: Verdict[] = [
+      {
+        purl: asPurl("pkg:deb/debian/libfoo@1.0"),
+        occurrenceTarget: asTargetIdentity("docker:app"),
+        status: "warn",
+        rule: "default:copyleft",
+        reason: `copyleft license "GPL-2.0-only"${OS_DOWNGRADE_REASON_SUFFIX}`,
+      },
+    ];
+    const stderr = await withCapturedStderr(async () => {
+      writePolicySummary(parsePolicy(""), { packages: [] }, verdicts, new Set());
+    });
+
+    expect(stderr).toContain(
+      "policy: 1 os-downgraded (would-be fail on an os-scope base-image package → warn) " +
+        "(1 verdicts)\n",
+    );
+    expect(stderr).not.toContain("dev-downgraded");
   });
 });
 
