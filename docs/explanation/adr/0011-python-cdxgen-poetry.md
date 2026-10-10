@@ -75,7 +75,8 @@ conservative-on-uncertainty driver.
 An empty or mismatched production set would classify every package of the
 target as development-only, so neither is left silent: a `poetry.lock` that
 is not TOML stops the scan with an error naming the file, and a production set
-that matches none of the scanned purls prints a `warning:` line on stderr.
+with purls that match no scanned component prints a `warning:` line on stderr
+(a stronger wording when none match).
 
 ## Consequences
 

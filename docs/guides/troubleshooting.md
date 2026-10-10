@@ -253,6 +253,13 @@ from the generated inventory. Until it's fixed, every row for that target sits
 in the development-only section, and the development-dependency policy applies
 to all of them.
 
+When only some production packages are unmatched, the warning instead reads
+`<k> of <n> production packages in poetry.lock matched no scanned component:`
+followed by up to ten purls and a `+N more` count. That does not fail the run
+and is often legitimate: the scanner skips platform-conditional dependencies
+that do not apply on the host. If a listed purl differs from the generated
+inventory only in spelling, report it as above.
+
 ## Windows reports everything stale
 
 You run `generate`, then `check` immediately, and `check` reports the documents

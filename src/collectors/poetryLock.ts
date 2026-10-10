@@ -18,7 +18,7 @@
 
 import { parse as parseToml } from "smol-toml";
 
-import { asPurl, type Purl, type TargetIdentity } from "../model/dependencies";
+import { asPurl, compareCodeUnits, type Purl, type TargetIdentity } from "../model/dependencies";
 import { recordOf, stringOf } from "../validate/record";
 
 /**
@@ -130,11 +130,17 @@ export function poetryProdPurlSet(lockfileText: string, lockPath: string): Reado
   return purls;
 }
 
+/** Most unmatched purls named in the warning before the rest are summarised as a count. */
+const UNMATCHED_PURLS_LISTED = 10;
+
 /**
- * The warning for a non-empty prod set that matches none of the scanned component purls - a purl
- * spelling drift that would classify the whole target dev.
+ * The warning for production packages in poetry.lock that match no scanned component purl. A miss
+ * is informational, not a gate: a lock entry can be legitimately absent from the scan
+ * (platform-conditional dependencies the generator skipped on this host), so the line points at
+ * possible spelling drift without failing the run.
  *
- * @returns undefined when either set is empty or at least one purl matches.
+ * @returns undefined when either set is empty or every production purl is scanned. When none
+ * match, a stronger message states that the whole target is classified development-only.
  */
 export function unmatchedProdPurlSetWarning(
   identity: TargetIdentity,
@@ -145,14 +151,26 @@ export function unmatchedProdPurlSetWarning(
     return undefined;
   }
 
-  for (const purl of prodPurlSet) {
-    if (componentPurls.has(purl)) {
-      return undefined;
-    }
+  const unmatched = [...prodPurlSet].filter((purl) => !componentPurls.has(purl));
+
+  if (unmatched.length === 0) {
+    return undefined;
   }
 
+  if (unmatched.length === prodPurlSet.size) {
+    return (
+      `${identity}: none of the ${prodPurlSet.size} production packages in poetry.lock matches a` +
+      " scanned component purl, so every package of this target is classified development-only"
+    );
+  }
+
+  unmatched.sort(compareCodeUnits);
+  const listed = unmatched.slice(0, UNMATCHED_PURLS_LISTED).join(", ");
+  const rest = unmatched.length - UNMATCHED_PURLS_LISTED;
+  const more = rest > 0 ? `, +${rest} more` : "";
+
   return (
-    `${identity}: none of the ${prodPurlSet.size} production packages in poetry.lock matches a` +
-    " scanned component purl, so every package of this target is classified development-only"
+    `${identity}: ${unmatched.length} of ${prodPurlSet.size} production packages in poetry.lock` +
+    ` matched no scanned component: ${listed}${more}`
   );
 }

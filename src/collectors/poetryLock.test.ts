@@ -179,10 +179,35 @@ describe("unmatchedProdPurlSetWarning", () => {
     );
   });
 
-  test("a prod set with at least one match produces no warning", () => {
-    const prod = new Set([asPurl("pkg:pypi/requests@2.32.3"), asPurl("pkg:pypi/other@1.0.0")]);
+  test("a prod set fully contained in the scan produces no warning", () => {
+    const prod = new Set([asPurl("pkg:pypi/requests@2.32.3")]);
 
     expect(unmatchedProdPurlSetWarning(asTargetIdentity("svc"), prod, scanned)).toBeUndefined();
+  });
+
+  test("a partial miss lists exactly the unmatched purls, sorted", () => {
+    const prod = new Set([
+      asPurl("pkg:pypi/requests@2.32.3"),
+      asPurl("pkg:pypi/zeta@1.0.0"),
+      asPurl("pkg:pypi/alpha@2.0.0"),
+    ]);
+
+    expect(unmatchedProdPurlSetWarning(asTargetIdentity("svc"), prod, scanned)).toBe(
+      "svc: 2 of 3 production packages in poetry.lock matched no scanned component:" +
+        " pkg:pypi/alpha@2.0.0, pkg:pypi/zeta@1.0.0",
+    );
+  });
+
+  test("more than ten misses list the first ten and count the rest", () => {
+    const missing = Array.from({ length: 13 }, (_, index) =>
+      asPurl(`pkg:pypi/pkg-${String(index).padStart(2, "0")}@1.0.0`),
+    );
+    const prod = new Set([asPurl("pkg:pypi/requests@2.32.3"), ...missing]);
+
+    expect(unmatchedProdPurlSetWarning(asTargetIdentity("svc"), prod, scanned)).toBe(
+      "svc: 13 of 14 production packages in poetry.lock matched no scanned component: " +
+        `${missing.slice(0, 10).join(", ")}, +3 more`,
+    );
   });
 
   test("an empty prod set or an empty scan produces no warning", () => {
