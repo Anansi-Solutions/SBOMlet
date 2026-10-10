@@ -4,6 +4,7 @@ import { sanitizeEvidenceText } from "../../merge/merge";
 import { asRawLicense, compareCodeUnits, type RawLicense } from "../../model/dependencies";
 import { canonicalizeExpression } from "../../normalize/expression";
 import { SCANCODE_TOOL } from "./tool";
+import type { ScancodeFile } from "../../validate/scancode";
 
 /** Cap on copyright lines returned per scanned package (extractor-cap parity). */
 const MAX_SCANCODE_COPYRIGHT_LINES = 20;
@@ -33,22 +34,20 @@ function isRootLevelManifestPath(path: string): boolean {
   return !path.includes("\\") && path.split("/").length === 2;
 }
 
-/** One narrowed `files[]` entry we read from scancode's `--json-pp` output. */
-interface RawScancodeFile {
-  path?: unknown;
-  detected_license_expression_spdx?: unknown;
-  copyrights?: unknown;
-  scan_errors?: unknown;
+/** The license expression ScanCode election picked for a scanned package. */
+export interface ElectedExpression {
+  /** The canonicalized SPDX expression. */
+  raw: RawLicense;
+  /** The pinned tool and the lane that produced it, as `<tool>@<version>/<lane>`. */
+  via: string;
 }
 
-/** True iff ScanCode reported at least one error while scanning this entry. */
-function hasScanErrors(entry: RawScancodeFile): boolean {
-  return Array.isArray(entry.scan_errors) && entry.scan_errors.length > 0;
-}
-
-/** True iff a raw files[] entry is a well-shaped object we can read fields from. */
-function isRawScancodeFile(raw: unknown): raw is RawScancodeFile {
-  return typeof raw === "object" && raw !== null;
+/** The outcome of one election lane. */
+export interface LaneElection {
+  /** The lane's winner; absent when no file in the lane qualified. */
+  elected?: ElectedExpression;
+  /** The first lane file whose scan errored without an expression; absent when none did. */
+  erroredPath?: string;
 }
 
 /**
@@ -65,17 +64,17 @@ function isRawScancodeFile(raw: unknown): raw is RawScancodeFile {
  * expression.
  */
 function electFromPattern(
-  entries: RawScancodeFile[],
+  files: readonly ScancodeFile[],
   pattern: RegExp,
   lane: string,
   isAdmissiblePath: (path: string) => boolean,
-): { elected?: { raw: RawLicense; via: string }; erroredPath?: string } {
+): LaneElection {
   let erroredPath: string | undefined;
 
-  for (const entry of entries) {
-    const path = entry.path;
+  for (const file of files) {
+    const path = file.path;
 
-    if (typeof path !== "string") {
+    if (path === undefined) {
       continue;
     }
 
@@ -87,10 +86,10 @@ function electFromPattern(
       continue;
     }
 
-    const expression = entry.detected_license_expression_spdx;
+    const expression = file.detected_license_expression_spdx;
 
-    if (typeof expression !== "string" || expression.length === 0) {
-      if (hasScanErrors(entry)) {
+    if (expression === undefined) {
+      if ((file.scan_errors?.length ?? 0) > 0) {
         erroredPath ??= path;
       }
 
@@ -146,21 +145,10 @@ function rejectFailedScan(erroredPath: string | undefined): void {
  * an errored legal file also blocks the manifest fallback.
  */
 export function electExpression(
-  files: unknown,
+  files: readonly ScancodeFile[],
   isPackageOwnLegalPath: (path: string) => boolean,
-): { raw: RawLicense; via: string } | undefined {
-  if (!Array.isArray(files)) {
-    return undefined;
-  }
-
-  const entries = files.filter(isRawScancodeFile);
-
-  const legal = electFromPattern(
-    entries,
-    LEGAL_FILE_PATTERN,
-    "license-file",
-    isPackageOwnLegalPath,
-  );
+): ElectedExpression | undefined {
+  const legal = electFromPattern(files, LEGAL_FILE_PATTERN, "license-file", isPackageOwnLegalPath);
 
   if (legal.elected !== undefined) {
     return legal.elected;
@@ -169,7 +157,7 @@ export function electExpression(
   rejectFailedScan(legal.erroredPath);
 
   const manifest = electFromPattern(
-    entries,
+    files,
     MANIFEST_FILE_PATTERN,
     "manifest",
     isRootLevelManifestPath,
@@ -180,50 +168,17 @@ export function electExpression(
   return manifest.elected;
 }
 
-/** One narrowed copyrights[] entry. */
-interface RawCopyrightEntry {
-  copyright?: unknown;
-}
-
 /**
  * Collect the union of all `copyrights[].copyright` strings across every scanned file, sanitized
  * via the same control-char intake rule evidence text uses ({@link sanitizeEvidenceText},
  * merge.ts), deduped, {@link compareCodeUnits}-sorted, and capped at {@link
  * MAX_SCANCODE_COPYRIGHT_LINES}.
  */
-export function electCopyrights(files: unknown): string[] {
-  if (!Array.isArray(files)) {
-    return [];
-  }
-
+export function electCopyrights(files: readonly ScancodeFile[]): string[] {
   const seen = new Set<string>();
 
-  for (const raw of files) {
-    if (!isRawScancodeFile(raw)) {
-      continue;
-    }
-
-    const copyrights = (raw as { copyrights?: unknown }).copyrights;
-
-    if (!Array.isArray(copyrights)) {
-      continue;
-    }
-
-    for (const entry of copyrights) {
-      // Tolerant narrowing, matching the rest of this parse path: a null or mistyped element is
-      // skipped, never a TypeError mid-scan.
-      if (typeof entry !== "object" || entry === null) {
-        continue;
-      }
-
-      const text = (entry as RawCopyrightEntry).copyright;
-
-      if (typeof text !== "string" || text.length === 0) {
-        continue;
-      }
-
-      seen.add(sanitizeEvidenceText(text));
-    }
+  for (const text of files.flatMap((file) => file.copyrights ?? [])) {
+    seen.add(sanitizeEvidenceText(text));
   }
 
   return [...seen].sort(compareCodeUnits).slice(0, MAX_SCANCODE_COPYRIGHT_LINES);

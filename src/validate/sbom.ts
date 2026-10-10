@@ -6,7 +6,7 @@
 import { type } from "arktype";
 
 import { asRawLicense, tryAsPurl, type Purl } from "../model/dependencies";
-import { recordOf } from "./record";
+import { ArrayOrAbsent, recordOf } from "./record";
 
 /**
  * The external SBOM is the parse boundary for its purls and license claims, so both are branded
@@ -21,11 +21,6 @@ import { recordOf } from "./record";
  */
 const SbomPurl = type("string").pipe((value) => tryAsPurl(value));
 const SbomRawLicense = type("string").pipe((value) => asRawLicense(value));
-
-/** An array field that coerces a present-but-non-array value to undefined. */
-const ArrayOrAbsent = type("unknown[]")
-  .or("unknown")
-  .pipe((value) => (Array.isArray(value) ? value : undefined));
 
 /**
  * Whole-document subset: ONLY the components array is a document-level drop gate. The root purl is

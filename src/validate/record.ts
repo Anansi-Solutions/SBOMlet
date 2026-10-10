@@ -10,6 +10,11 @@ export const UnknownRecord = type("Record<string, unknown>").narrow(
   (value) => !Array.isArray(value),
 );
 
+/** An array field that coerces a present-but-non-array value to undefined. */
+export const ArrayOrAbsent = type("unknown[]")
+  .or("unknown")
+  .pipe((value) => (Array.isArray(value) ? value : undefined));
+
 /**
  * Option-returning form of UnknownRecord for per-entry tolerant walks: a failed narrow yields
  * undefined - the callers' existing skip path.

@@ -11,7 +11,7 @@ export {
   type NpmSourceIndexCache,
   type ScanCandidate,
 } from "./sources";
-export { electCopyrights, electExpression } from "./election";
+export { electCopyrights, electExpression, type ElectedExpression } from "./election";
 export {
   scancodeArgs,
   scanPackageSources,

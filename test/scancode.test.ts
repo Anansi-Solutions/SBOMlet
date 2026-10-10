@@ -42,6 +42,7 @@ import { serializeCache } from "../src/enrich/cache";
 import { annotateFindings } from "../src/normalize/normalize";
 import { runGenerate } from "../src/pipeline/pipeline";
 import { assessPackages } from "../src/enrich/assess";
+import { scancodeFilesOf } from "../src/validate/scancode";
 import {
   toSortedDependenciesJson,
   type LicenseClaim,
@@ -682,7 +683,7 @@ describe("electExpression / electCopyrights (pure narrow, no exec)", () => {
         detected_license_expression_spdx: "Apache-2.0",
       },
     ];
-    const elected = electExpression(files, isRootLevelPath);
+    const elected = electExpression(scancodeFilesOf(files), isRootLevelPath);
 
     expect(widen(elected?.raw)).toBe("Apache-2.0");
     expect(elected?.via).toContain("/manifest");
@@ -696,7 +697,7 @@ describe("electExpression / electCopyrights (pure narrow, no exec)", () => {
         detected_license_expression_spdx: "BSD-3-Clause",
       },
     ];
-    const elected = electExpression(files, isRootLevelPath);
+    const elected = electExpression(scancodeFilesOf(files), isRootLevelPath);
 
     expect(widen(elected?.raw)).toBe("MIT");
   });
@@ -712,7 +713,7 @@ describe("electExpression / electCopyrights (pure narrow, no exec)", () => {
       },
       { path: "pkg/LICENSE", detected_license_expression_spdx: "MIT" },
     ];
-    const elected = electExpression(files, isRootLevelPath);
+    const elected = electExpression(scancodeFilesOf(files), isRootLevelPath);
 
     // The scanned package's OWN root license must win — a nested vendored
     // file two-or-more segments deep is never "the" root legal file.
@@ -726,7 +727,7 @@ describe("electExpression / electCopyrights (pure narrow, no exec)", () => {
         detected_license_expression_spdx: "MIT",
       },
     ];
-    const elected = electExpression(files, isRootLevelOrDistInfoLicensesPath);
+    const elected = electExpression(scancodeFilesOf(files), isRootLevelOrDistInfoLicensesPath);
 
     expect(widen(elected?.raw)).toBe("MIT");
     expect(elected?.via).toContain("/license-file");
@@ -739,7 +740,7 @@ describe("electExpression / electCopyrights (pure narrow, no exec)", () => {
         detected_license_expression_spdx: "MIT",
       },
     ];
-    const elected = electExpression(files, isRootLevelOrDistInfoLicensesPath);
+    const elected = electExpression(scancodeFilesOf(files), isRootLevelOrDistInfoLicensesPath);
 
     expect(widen(elected?.raw)).toBe("MIT");
     expect(elected?.via).toContain("/license-file");
@@ -752,7 +753,7 @@ describe("electExpression / electCopyrights (pure narrow, no exec)", () => {
         detected_license_expression_spdx: "MIT",
       },
     ];
-    const elected = electExpression(files, isRootLevelPath);
+    const elected = electExpression(scancodeFilesOf(files), isRootLevelPath);
 
     expect(elected).toBeUndefined();
   });
@@ -764,7 +765,7 @@ describe("electExpression / electCopyrights (pure narrow, no exec)", () => {
         detected_license_expression_spdx: "MIT",
       },
     ];
-    const elected = electExpression(files, isRootLevelOrDistInfoLicensesPath);
+    const elected = electExpression(scancodeFilesOf(files), isRootLevelOrDistInfoLicensesPath);
 
     expect(widen(elected?.raw)).toBe("MIT");
   });
@@ -776,7 +777,7 @@ describe("electExpression / electCopyrights (pure narrow, no exec)", () => {
         detected_license_expression_spdx: "GPL-3.0-only",
       },
     ];
-    const elected = electExpression(files, isRootLevelOrDistInfoLicensesPath);
+    const elected = electExpression(scancodeFilesOf(files), isRootLevelOrDistInfoLicensesPath);
 
     expect(elected).toBeUndefined();
   });
@@ -788,7 +789,7 @@ describe("electExpression / electCopyrights (pure narrow, no exec)", () => {
         detected_license_expression_spdx: "MIT",
       },
     ];
-    const elected = electExpression(files, isRootLevelOrDistInfoLicensesPath);
+    const elected = electExpression(scancodeFilesOf(files), isRootLevelOrDistInfoLicensesPath);
 
     expect(elected).toBeUndefined();
   });
@@ -801,7 +802,7 @@ describe("electExpression / electCopyrights (pure narrow, no exec)", () => {
       },
       { path: "pkg/LICENSE", detected_license_expression_spdx: "MIT" },
     ];
-    const elected = electExpression(files, isRootLevelPath);
+    const elected = electExpression(scancodeFilesOf(files), isRootLevelPath);
 
     expect(widen(elected?.raw)).toBe("MIT");
   });
@@ -811,7 +812,7 @@ describe("electExpression / electCopyrights (pure narrow, no exec)", () => {
       "(MIT AND OFL-1.1 AND CC-BY-4.0) AND (CC-BY-4.0 OR CC-BY-3.0) AND " +
       "(OFL-1.1 AND (CC-BY-4.0 AND OFL-1.1 AND MIT) AND MIT AND (MIT AND OFL-1.1 AND CC-BY-4.0))";
     const files = [{ path: "pkg/LICENSE", detected_license_expression_spdx: noisy }];
-    const elected = electExpression(files, isRootLevelPath);
+    const elected = electExpression(scancodeFilesOf(files), isRootLevelPath);
 
     expect(widen(elected?.raw)).toBe("CC-BY-4.0 AND MIT AND OFL-1.1");
   });
@@ -826,7 +827,9 @@ describe("electExpression / electCopyrights (pure narrow, no exec)", () => {
       { path: "pkg/package.json", detected_license_expression_spdx: "MIT", scan_errors: [] },
     ];
 
-    expect(() => electExpression(files, isRootLevelPath)).toThrow(/scan errors on "pkg\/LICENSE"/);
+    expect(() => electExpression(scancodeFilesOf(files), isRootLevelPath)).toThrow(
+      /scan errors on "pkg\/LICENSE"/,
+    );
   });
 
   test("a legal file that carries scan_errors but still yields an expression is elected", () => {
@@ -838,7 +841,7 @@ describe("electExpression / electCopyrights (pure narrow, no exec)", () => {
       },
     ];
 
-    expect(widen(electExpression(files, isRootLevelPath)?.raw)).toBe("MIT");
+    expect(widen(electExpression(scancodeFilesOf(files), isRootLevelPath)?.raw)).toBe("MIT");
   });
 
   test("an errored legal file without an expression yields to a clean one later in the lane", () => {
@@ -851,7 +854,7 @@ describe("electExpression / electCopyrights (pure narrow, no exec)", () => {
       { path: "pkg/LICENSE", detected_license_expression_spdx: "MIT", scan_errors: [] },
     ];
 
-    expect(widen(electExpression(files, isRootLevelPath)?.raw)).toBe("MIT");
+    expect(widen(electExpression(scancodeFilesOf(files), isRootLevelPath)?.raw)).toBe("MIT");
   });
 
   test("scan_errors on a file neither lane reads (a data file, a vendored LICENSE) leave election untouched", () => {
@@ -861,7 +864,7 @@ describe("electExpression / electCopyrights (pure narrow, no exec)", () => {
       { path: "pkg/LICENSE", detected_license_expression_spdx: "MIT", scan_errors: [] },
     ];
 
-    expect(widen(electExpression(files, isRootLevelPath)?.raw)).toBe("MIT");
+    expect(widen(electExpression(scancodeFilesOf(files), isRootLevelPath)?.raw)).toBe("MIT");
   });
 
   test("a null element inside a copyrights[] array is skipped, never a TypeError", () => {
@@ -875,8 +878,8 @@ describe("electExpression / electCopyrights (pure narrow, no exec)", () => {
       },
     ];
 
-    expect(() => electCopyrights(files)).not.toThrow();
-    expect(electCopyrights(files)).toEqual(["Copyright (c) 2020 Example Author"]);
+    expect(() => electCopyrights(scancodeFilesOf(files))).not.toThrow();
+    expect(electCopyrights(scancodeFilesOf(files))).toEqual(["Copyright (c) 2020 Example Author"]);
   });
 });
 

@@ -24,9 +24,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { execTool } from "../../collectors/exec";
-import { electCopyrights, electExpression } from "./election";
+import { scancodeFilesOf, type ScancodeFile } from "../../validate/scancode";
+import { electCopyrights, electExpression, type ElectedExpression } from "./election";
 import { SCANCODE_TOOL } from "./tool";
-import type { RawLicense } from "../../model/dependencies";
 import type { ScanCandidate } from "./sources";
 
 /**
@@ -89,10 +89,9 @@ export interface ScancodeScanOptions {
   tempDir?: string;
 }
 
-/** A resolved scancode result: the raw expression, its election lane, and copyrights. */
-export interface ScancodeResolution {
-  raw: RawLicense;
-  via: string;
+/** A resolved scancode result: the elected expression plus the scanned copyright lines. */
+export interface ScancodeResolution extends ElectedExpression {
+  /** The sanitized, deduplicated, sorted, capped copyright lines. */
   copyrights: string[];
 }
 
@@ -145,12 +144,16 @@ function assertScancodeVersion(parsed: unknown, invocation: string): void {
   }
 }
 
-/** Parse + version-assert scancode's `--json-pp` output, naming the invocation on failure. */
+/**
+ * Parse + version-assert scancode's `--json-pp` output, naming the invocation on failure.
+ *
+ * @returns The narrowed `files[]` entries.
+ */
 function parseScancodeOutput(
   rawOutput: string,
   outFile: string,
   invocation: string,
-): RawScancodeOutput {
+): ScancodeFile[] {
   let parsed: unknown;
 
   try {
@@ -164,7 +167,7 @@ function parseScancodeOutput(
   }
 
   assertScancodeVersion(parsed, invocation);
-  return parsed as RawScancodeOutput;
+  return scancodeFilesOf((parsed as RawScancodeOutput).files);
 }
 
 /** True iff an error looks like a spawn-time ENOENT (missing tool binary). */
@@ -177,16 +180,16 @@ function isEnoentError(error: unknown): boolean {
 }
 
 /**
- * Run the pinned scancode binary against one source dir, returning the parsed + version-asserted
- * output. Extracted from scanPackageSources to keep that orchestrator under the complexity bound
- * (dockerOs.ts's scanImage/parseSyftOutput split).
+ * Run the pinned scancode binary against one source dir, returning the narrowed `files[]` entries
+ * of its parsed + version-asserted output. Extracted from scanPackageSources to keep that
+ * orchestrator under the complexity bound (dockerOs.ts's scanImage/parseSyftOutput split).
  */
 async function runScancode(
   sourceDir: string,
   outFile: string,
   scancodeBin: string,
   opts: { timeoutMs: number; verbose: boolean },
-): Promise<RawScancodeOutput> {
+): Promise<ScancodeFile[]> {
   const args = scancodeArgs(outFile, sourceDir);
   const invocation = `${scancodeBin} ${args.join(" ")}`;
 
@@ -260,12 +263,12 @@ export async function scanPackageSources(
   rmSync(outFile, { force: true });
 
   try {
-    const parsed = await runScancode(sourceDir, outFile, scancodeBin, {
+    const files = await runScancode(sourceDir, outFile, scancodeBin, {
       timeoutMs,
       verbose,
     });
 
-    const elected = electExpression(parsed.files, isPackageOwnLegalPath);
+    const elected = electExpression(files, isPackageOwnLegalPath);
 
     if (elected === undefined) {
       return null;
@@ -274,7 +277,7 @@ export async function scanPackageSources(
     return {
       raw: elected.raw,
       via: elected.via,
-      copyrights: electCopyrights(parsed.files),
+      copyrights: electCopyrights(files),
     };
   } finally {
     if (ownsTempDir) {
