@@ -288,9 +288,9 @@ imprecise-family step. An ambiguous family label — `BSD`, `Apache`, a bare
 precise id. The normalizer intercepts those and records them as an
 [imprecise family](../glossary.md#imprecise-family) instead: present, flagged for
 a human to pin down, never a fabricated id. The `spdx-correct` step is guarded
-the same way: a correction is kept only when it respells the label, so a label
-carrying a word the corrected id does not account for (a rider, an exception, a
-`-like` hedge, a proprietary marker) becomes unknown or an imprecise family
+the same way: a correction is kept only when it keeps every family, version,
+or-later grant, and exception the label states, and a label carrying a rider, a
+proprietary marker, or a `-like` hedge becomes unknown or an imprecise family
 rather than a clean id. When several claims combine, a
 copyleft signal, precise or imprecise, is never discarded by a permissive
 sibling.
