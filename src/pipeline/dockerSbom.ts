@@ -27,7 +27,12 @@
 import { readFileSync, statSync } from "node:fs";
 
 import { buildImage, imageTag, type ExecFn } from "../collectors/dockerBuild";
-import { collectDockerOsSbom, type ScanImage } from "../collectors/dockerOs";
+import {
+  collectDockerOsSbom,
+  type OsClaimDivergence,
+  type OsLicense,
+  type ScanImage,
+} from "../collectors/dockerOs";
 import { discoverDockerfiles } from "../collectors/dockerfile";
 import { execTool } from "../collectors/exec";
 import { compareCodeUnits, type AbsolutePath } from "../model/dependencies";
@@ -340,6 +345,29 @@ export async function buildImages(
   return tags;
 }
 
+/** The value a claim carries, whatever its CycloneDX shape. */
+function osLicenseValue(license: OsLicense): string {
+  if ("expression" in license) {
+    return license.expression;
+  }
+
+  return "id" in license.license ? license.license.id : license.license.name;
+}
+
+/**
+ * The stderr line for a purl whose claims differ across images. The committed row carries the union
+ * of their claims, so this line is the only record of which image carried which.
+ */
+function claimDivergenceLine({ purl, claimsByImage }: OsClaimDivergence): string {
+  const perImage = claimsByImage.map(({ image, licenses }) => {
+    const values = licenses.length > 0 ? licenses.map(osLicenseValue).join(", ") : "none";
+
+    return `${sanitizeForLog(image)} (${sanitizeForLog(values)})`;
+  });
+
+  return `docker: ${sanitizeForLog(purl)} license claims differ across images: ${perImage.join("; ")}`;
+}
+
 /**
  * Scan an already-resolved image set with the single-posture collector, write the committed doc,
  * and narrate to stderr. Shared by all three lanes so the output-path resolution and byte-identity
@@ -352,7 +380,12 @@ async function scanAndWrite(
   outputPath: string,
   verbose: boolean,
 ): Promise<void> {
-  const { doc } = await collectDockerOsSbom(images, { verbose });
+  const { doc, claimDivergences } = await collectDockerOsSbom(images, { verbose });
+
+  for (const divergence of claimDivergences) {
+    process.stderr.write(`${claimDivergenceLine(divergence)}
+`);
+  }
 
   writeArtifact(outputPath, doc);
   process.stderr.write(`wrote ${sanitizeForLog(outputPath)} (${images.length} image(s) scanned)\n`);

@@ -387,6 +387,15 @@ ends the same way: [syft](../glossary.md#generator) scans a real image's full
 contents — the OS packages and the application packages alike — and the result is
 written to the committed SBOM.
 
+A package found in several images is recorded once, with the union of the license
+claims syft found for it in each image. When those images disagree, the run prints
+one line per package naming each image and its claims, since the committed row no
+longer says which image carried which:
+
+```
+docker: pkg:deb/debian/libssl3@3.0.15-1~deb12u1?arch=amd64&distro=debian-12 license claims differ across images: app-slim (none); app-full (Apache-2.0)
+```
+
 `--dockerfile` builds each named Dockerfile and scans the image it produces. Pass it
 more than once to build and scan several. Each Dockerfile is built to a local tag
 derived from its path, so the same Dockerfile always scans under the same identity.
