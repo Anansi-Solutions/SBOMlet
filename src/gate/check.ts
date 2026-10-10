@@ -65,6 +65,7 @@ export async function runCheck(opts: GenerateOptions): Promise<CheckResult> {
 
   // Locked stderr report shapes; every path through sanitizeForLog.
   const staleFiles: string[] = [];
+  let currentOutputs = 0;
 
   for (const [path, rendered] of pairs) {
     let committed: string;
@@ -82,7 +83,10 @@ export async function runCheck(opts: GenerateOptions): Promise<CheckResult> {
     if (committed.replaceAll("\r\n", "\n") !== rendered) {
       staleFiles.push(path);
       process.stderr.write(`check stale: ${sanitizeForLog(path)} differs from generated output\n`);
+      continue;
     }
+
+    currentOutputs += 1;
   }
 
   // A miss-needing-enrichment with no committed cache entry is stale by the same logic as a missing
@@ -101,7 +105,12 @@ export async function runCheck(opts: GenerateOptions): Promise<CheckResult> {
   // lines.
   const violations = (outputs.verdicts ?? []).filter((verdict) => verdict.status === "fail").length;
 
-  if (staleFiles.length === 0) {
+  // The closing line must never read "ok" on a run that exits 1.
+  if (violations > 0) {
+    process.stderr.write(
+      `check: FAIL (${violations} policy violation(s); ${currentOutputs} outputs current)\n`,
+    );
+  } else if (staleFiles.length === 0) {
     process.stderr.write(`check: ok (${pairs.length} outputs verified)\n`);
   }
 

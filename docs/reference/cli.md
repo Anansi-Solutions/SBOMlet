@@ -254,6 +254,11 @@ licence gap the committed cache cannot answer all count as stale and exit 2. A
 policy fail verdict exits 1 and takes priority over staleness. See the
 [exit codes](#exit-codes) for the full mapping.
 
+The last stderr line summarizes the run: `check: ok (N outputs verified)` only on
+exit 0, and `check: FAIL (N policy violation(s); M outputs current)` whenever a
+fail verdict exits 1, where M counts the committed documents that matched. A
+stale run without violations ends with its `check stale:` lines.
+
 ## verify-cache
 
 The cache-integrity audit, and the only subcommand that re-reads the registries

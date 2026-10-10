@@ -327,6 +327,32 @@ describe("runCheck + exitCodeFor — the CI gate", () => {
     // Both report classes are visible on stderr.
     expect(stderr).toContain("policy fail:");
     expect(stderr).toContain("check stale:");
+    expect(stderr).toContain(
+      `check: FAIL (${result!.violations} policy violation(s); 1 outputs current)`,
+    );
+  });
+
+  test("Test 5b: a policy violation over current outputs never ends with check: ok", async () => {
+    const { root } = makeScannableTree();
+    const paths = pathsFor(root, false);
+    const policyPath = writePolicy(root, '[unknown]\nhandling = "warn"\n');
+
+    await withCapturedStderr(async () => {
+      await runGenerate({ repoRoot: root, ...paths, policyPath, verbose: false });
+    });
+
+    let result: Awaited<ReturnType<typeof runCheck>> | undefined;
+    const stderr = await withCapturedStderr(async () => {
+      result = await runCheck({ repoRoot: root, ...paths, policyPath, verbose: false });
+    });
+
+    expect(result!.violations).toBeGreaterThanOrEqual(1);
+    expect(result!.staleFiles).toEqual([]);
+    expect(exitCodeFor(result!)).toBe(1);
+    expect(stderr).not.toContain("check: ok");
+    expect(stderr.trimEnd().split("\n").at(-1)).toBe(
+      `check: FAIL (${result!.violations} policy violation(s); 2 outputs current)`,
+    );
   });
 
   test("Test 6: warn verdicts and unused-entry warnings print but never gate — exit 0", async () => {
