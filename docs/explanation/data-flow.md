@@ -157,11 +157,15 @@ is never scanned per run. It is produced separately by the maintainer-only
 `generate-docker-sbom` subcommand, the only path in the tool that touches a
 docker daemon or syft. A missing file is the offline cache-miss equivalent: no
 `os` entries, no docker, no syft. When the file is present it is size-gated
-before any read, as a bound against a hostile committed artifact.
+before any read, as a bound against a hostile committed artifact. It then fans
+out to one merge input per scanned image, identified `docker:<source>`. With a
+format-3 file each input carries the license claims syft found in that image, so
+the merge can see images disagree; a format-2 file gives every input the
+package's one combined claim list.
 
 Source: `collectors/registry.ts`, `pipeline/targets.ts`, `pipeline/coverage.ts`
 (`coverageSkipReason`, `classifyCoverage`), `pipeline/pipeline.ts`
-(`readCommittedDockerOsSbom`).
+(`readCommittedDockerSbom`).
 
 ### Merge
 

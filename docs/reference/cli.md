@@ -404,14 +404,27 @@ ends the same way: [syft](../glossary.md#generator) scans a real image's full
 contents — the OS packages and the application packages alike — and the result is
 written to the committed SBOM.
 
-A package found in several images is recorded once, with the union of the license
-claims syft found for it in each image. When those images disagree, the run prints
-one line per package naming each image and its claims, since the committed row no
-longer says which image carried which:
+A package found in several images is recorded once, listing those images and, for
+each, the license claims syft found for it there. When those images disagree, the
+run prints one line per package naming each image and its claims:
 
 ```
 docker: pkg:deb/debian/libssl3@3.0.15-1~deb12u1?arch=amd64&distro=debian-12 license claims differ across images: app-full (Apache-2.0); app-slim (none)
 ```
+
+When two of those images declared different licenses, `generate` and `check` then
+fail the package as a `conflict:cross-image-claims` until a `[[clarify]]` entry
+records the decision. An image that declared none, like `app-slim` above, is not
+a disagreement on its own
+([output-format.md](./output-format.md#assessment-conflicts)).
+
+The file records its format as `formatVersion`; this version writes format 3,
+which keeps each image's claims apart. A file without `formatVersion` is format
+2, written by earlier versions with one combined claim list per package. It keeps
+working: `generate` and `check` read it and give every image that combined list,
+so it cannot show images disagreeing. The next `generate-docker-sbom` run writes
+format 3; commit the rewritten file. A `formatVersion` this version does not know
+fails the run, naming the regenerate remedy.
 
 `--dockerfile` builds each named Dockerfile and scans the image it produces. Pass it
 more than once to build and scan several. Each Dockerfile is built to a local tag
