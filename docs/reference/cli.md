@@ -404,7 +404,7 @@ one line per package naming each image and its claims, since the committed row n
 longer says which image carried which:
 
 ```
-docker: pkg:deb/debian/libssl3@3.0.15-1~deb12u1?arch=amd64&distro=debian-12 license claims differ across images: app-slim (none); app-full (Apache-2.0)
+docker: pkg:deb/debian/libssl3@3.0.15-1~deb12u1?arch=amd64&distro=debian-12 license claims differ across images: app-full (Apache-2.0); app-slim (none)
 ```
 
 `--dockerfile` builds each named Dockerfile and scans the image it produces. Pass it

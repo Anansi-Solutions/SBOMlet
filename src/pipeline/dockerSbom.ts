@@ -383,8 +383,7 @@ async function scanAndWrite(
   const { doc, claimDivergences } = await collectDockerOsSbom(images, { verbose });
 
   for (const divergence of claimDivergences) {
-    process.stderr.write(`${claimDivergenceLine(divergence)}
-`);
+    process.stderr.write(`${claimDivergenceLine(divergence)}\n`);
   }
 
   writeArtifact(outputPath, doc);
