@@ -1,6 +1,22 @@
 import { describe, expect, test } from "bun:test";
+import { type } from "arktype";
 
-import { componentTreeOf } from "./sbom";
+import { componentTreeOf, SbomDocument } from "./sbom";
+
+describe("SbomDocument", () => {
+  test("a non-array dependencies is absent and keeps the components", () => {
+    for (const dependencies of [null, 5, "edges", { ref: "a" }]) {
+      const doc = SbomDocument({ components: [{ name: "a" }], dependencies });
+
+      if (doc instanceof type.errors) {
+        throw new Error(doc.summary);
+      }
+
+      expect(doc.components).toEqual([{ name: "a" }]);
+      expect(doc.dependencies).toBeUndefined();
+    }
+  });
+});
 
 describe("componentTreeOf", () => {
   test("walks nested components in document pre-order", () => {

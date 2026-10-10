@@ -453,6 +453,15 @@ describe("mergeSboms — field-level tolerance at the boundary (C1, W1, I1)", ()
     ]);
   });
 
+  test("purlSetOf with dependencies: null still collects every component purl", () => {
+    const doc = {
+      components: [{ name: "a", version: "1.0.0", purl: asPurl("pkg:npm/a@1.0.0") }],
+      dependencies: null,
+    };
+
+    expect([...purlSetOf(doc)]).toEqual([asPurl("pkg:npm/a@1.0.0")]);
+  });
+
   test("purlSetOf keeps a component's purl even when a sibling optional field is wrong-typed", () => {
     const doc = {
       components: [

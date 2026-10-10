@@ -22,6 +22,11 @@ import { recordOf } from "./record";
 const SbomPurl = type("string").pipe((value) => tryAsPurl(value));
 const SbomRawLicense = type("string").pipe((value) => asRawLicense(value));
 
+/** An array field that coerces a present-but-non-array value to undefined. */
+const ArrayOrAbsent = type("unknown[]")
+  .or("unknown")
+  .pipe((value) => (Array.isArray(value) ? value : undefined));
+
 /**
  * Whole-document subset: ONLY the components array is a document-level drop gate. The root purl is
  * NOT declared here - a malformed `metadata` (the JSON generators emit `metadata: null` freely for
@@ -36,7 +41,7 @@ export const SbomDocument = type({
    * present-but-malformed) value is simply absent - never a document drop. Per-edge narrowing
    * happens entry-by-entry via SbomDependencyEdge.
    */
-  "dependencies?": "unknown[]",
+  "dependencies?": ArrayOrAbsent,
 });
 
 /**
@@ -68,11 +73,6 @@ export function rootPurlOf(sbom: unknown): Purl | undefined {
 const StringOrAbsent = type("string")
   .or("unknown")
   .pipe((value) => (typeof value === "string" ? value : undefined));
-
-/** An array field that coerces a present-but-non-array value to undefined. */
-const ArrayOrAbsent = type("unknown[]")
-  .or("unknown")
-  .pipe((value) => (Array.isArray(value) ? value : undefined));
 
 /**
  * The evidence field: coerces any non-record value to undefined, and inside a record coerces a
