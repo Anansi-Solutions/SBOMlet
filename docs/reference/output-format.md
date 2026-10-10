@@ -478,8 +478,11 @@ Each component is a `library` with `type`, `name`, `version`, `purl`, and a
 expression entry, `[{ "expression": "MIT OR Apache-2.0" }]`. When there is no
 expression, the raw [license claims](../glossary.md#license-claim) emit named
 entries, `{ "license": { "name": "Public Domain" } }`. A package with neither
-omits the key. OS-scope unrecognized tokens are appended as additional named
-entries, so the export never drops what the Markdown shows in its `(+ …)` suffix.
+omits the key. CycloneDX 1.6 allows either named entries or one expression entry,
+never both, so OS-scope unrecognized tokens (the Markdown's `(+ …)` suffix) are
+carried by the form that fits: beside an expression, each token becomes a
+`licenses-tool:unrecognized-license` property; without one, each becomes a named
+entry. A name is emitted once even when a token repeats a raw claim.
 
 `properties` carries provenance and verdicts as `{name, value}` pairs. CycloneDX
 allows duplicate property names, which is how one package records several
@@ -489,6 +492,7 @@ occurrences cleanly. The per-component property names:
 | --- | --- | --- |
 | `licenses-tool:used-in` | a target | once per [occurrence](../glossary.md#occurrence) |
 | `licenses-tool:scope:<target>` | `dev` or `prod` | once per occurrence |
+| `licenses-tool:unrecognized-license` | an OS-scope token no SPDX id covers | once per token, only beside an expression |
 | `licenses-tool:verdict:<target>` | the verdict status (`ok`, `warn`, `fail`, `suppressed`) | once per matching verdict, policy runs only |
 | `licenses-tool:rule:<target>` | the [policy lane](../glossary.md#policy-lanes) rule | once per matching verdict, policy runs only |
 
