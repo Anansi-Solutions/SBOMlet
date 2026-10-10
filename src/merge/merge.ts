@@ -32,10 +32,8 @@ import {
   type TargetIdentity,
 } from "../model/dependencies";
 import {
-  componentTreeOf,
+  documentComponentsOf,
   rootPurlOf,
-  SbomComponent,
-  SbomDocument,
   SbomEvidenceEntry,
   SbomExpressionClaim,
   SbomIdClaim,
@@ -103,6 +101,8 @@ export interface SbomIntake {
   target: TargetIdentity;
   /** Components that became, or folded into, an inventory entry. */
   inventoried: number;
+  /** Inventoried components whose purl was minted from group/name/version. */
+  minted: number;
   /** Components deliberately left out: the document's own root and first-party members. */
   excluded: number;
   /** Components the merge could not identify, counted by reason. */
@@ -416,26 +416,15 @@ function hasWorkspaceMarker(component: SbomComponentShape): boolean {
 }
 
 /**
- * Every string purl in components[], nested ones included, for the dual-run prod diff. Same
- * tolerant walk as mergeSboms: malformed entries are skipped, never thrown on.
+ * Every component purl, nested and minted ones included, for the dual-run prod diff. Same tolerant
+ * walk as mergeSboms: malformed entries are skipped, never thrown on.
  */
 export function purlSetOf(sbom: unknown): Set<Purl> {
   const purls = new Set<Purl>();
-  const doc = SbomDocument(sbom);
 
-  if (doc instanceof type.errors) {
-    return purls;
-  }
-
-  for (const raw of componentTreeOf(doc.components ?? [])) {
-    const component = SbomComponent(raw);
-
-    if (component instanceof type.errors) {
-      continue;
-    }
-
-    if (component.purl !== undefined) {
-      purls.add(component.purl);
+  for (const entry of documentComponentsOf(sbom)) {
+    if (entry !== "malformed" && entry.component.purl !== undefined) {
+      purls.add(entry.component.purl);
     }
   }
 
@@ -730,33 +719,23 @@ export function mergeSbomsWithIntake(inputs: ReadonlyArray<CollectedSbom>): Merg
     const tally: SbomIntake = {
       target: input.targetIdentity,
       inventoried: 0,
+      minted: 0,
       excluded: 0,
       skipped: {},
     };
 
     intake.push(tally);
-    // A malformed document is skipped, never thrown on.
-    const doc = SbomDocument(input.sbom);
-
-    if (doc instanceof type.errors) {
-      continue;
-    }
-
     // The scanned root's purl excludes first-party leaks - read via an independent tolerant narrow,
     // so malformed metadata leaves the root simply absent (every component still walks and emits).
     const rootPurl = rootPurlOf(input.sbom);
-    const components = doc.components;
-
-    if (components === undefined) {
-      continue;
-    }
-
     const isDockerInput = input.targetIdentity.startsWith(DOCKER_IDENTITY_PREFIX);
 
-    for (const raw of componentTreeOf(components)) {
-      const component = SbomComponent(raw);
+    // A malformed document yields no components, never a throw.
+    for (const documentComponent of documentComponentsOf(input.sbom)) {
       const entry =
-        component instanceof type.errors ? "malformed" : packageEntryOf(input, component, rootPurl);
+        documentComponent === "malformed"
+          ? "malformed"
+          : packageEntryOf(input, documentComponent.component, rootPurl);
 
       if (entry === undefined) {
         tally.excluded++;
@@ -769,6 +748,10 @@ export function mergeSbomsWithIntake(inputs: ReadonlyArray<CollectedSbom>): Merg
       }
 
       tally.inventoried++;
+
+      if (documentComponent !== "malformed" && documentComponent.purlMinted) {
+        tally.minted++;
+      }
 
       if (isDockerInput) {
         recordDockerOccurrenceClaims(

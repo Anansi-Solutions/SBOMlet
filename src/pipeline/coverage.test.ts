@@ -31,7 +31,7 @@ import {
   classifyCoverage,
   componentCountOf,
   coverageSkipReason,
-  inventoryShortfallWarning,
+  inventoryIntakeWarning,
 } from "./coverage";
 
 const tempDirs: string[] = [];
@@ -382,7 +382,7 @@ describe("classifyCoverage — maven.sbom.json warn+skip vs hard-fail split", ()
   });
 });
 
-describe("inventoryShortfallWarning — counted vs inventoried reconciliation", () => {
+describe("inventoryIntakeWarning — counted vs inventoried reconciliation", () => {
   const SVC = asTargetIdentity("svc");
   const OK = { name: "ok", version: "1.0.0", purl: "pkg:maven/g/ok@1.0.0" };
 
@@ -391,7 +391,7 @@ describe("inventoryShortfallWarning — counted vs inventoried reconciliation", 
       { sbom, targetIdentity: SVC, ...(firstPartyNames !== undefined ? { firstPartyNames } : {}) },
     ]).intake;
 
-    return intake === undefined ? undefined : inventoryShortfallWarning(sbom, intake);
+    return intake === undefined ? undefined : inventoryIntakeWarning(sbom, intake);
   }
 
   test("a purl-less component is reported in one line with the counted/inventoried gap", () => {
@@ -440,5 +440,32 @@ describe("inventoryShortfallWarning — counted vs inventoried reconciliation", 
     const sbom = { metadata: { component: { purl: OK.purl } }, components: [OK] };
 
     expect(warningFor(sbom)).toBeUndefined();
+  });
+
+  test("a purl minted from group/name/version is reported even when nothing is skipped", () => {
+    const sbom = {
+      metadata: { component: { purl: "pkg:maven/g/svc@1.0.0?type=jar" } },
+      components: [OK, { group: "com.example", name: "driver", version: "19.3.0.0" }],
+    };
+
+    expect(warningFor(sbom)).toBe(
+      "warning: svc: counted 2 components, inventoried 2 (1 purl minted from group/name/version)",
+    );
+  });
+
+  test("minted purls and skips are reported together", () => {
+    const sbom = {
+      metadata: { component: { purl: "pkg:maven/g/svc@1.0.0?type=jar" } },
+      components: [
+        { group: "g", name: "a", version: "1" },
+        { group: "g", name: "b", version: "1" },
+        { name: "c", version: "1" },
+      ],
+    };
+
+    expect(warningFor(sbom)).toBe(
+      "warning: svc: counted 3 components, inventoried 2 " +
+        "(2 purls minted from group/name/version) (1 skipped: 1 without a purl)",
+    );
   });
 });

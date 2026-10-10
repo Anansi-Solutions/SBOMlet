@@ -172,7 +172,11 @@ Source: `collectors/registry.ts`, `pipeline/targets.ts`, `pipeline/coverage.ts`
 boundary, and a malformed component is skipped rather than thrown on. That is the
 same skip-rather-than-throw handling the tool uses everywhere it reads
 third-party data. Nested components (a component's own `components` array) are
-walked like top-level ones.
+walked like top-level ones. In a Maven module's BOM (a `pkg:maven/` root purl),
+a component with a group, name and version but no usable purl, such as a
+`system`-scoped jar, is inventoried under a minted
+`pkg:maven/<group>/<name>@<version>` purl, without a `?type=` qualifier since
+its packaging is unknown.
 
 A skipped component is never silent. The merge counts, per target, the components
 it could not identify (no purl, no name, no version, a blank name or version, or a
@@ -183,6 +187,10 @@ skips by reason:
 ```text
 warning: svc: counted 2 components, inventoried 1 (1 skipped: 1 without a purl)
 ```
+
+The same line reports minted purls, as
+`inventoried 2 (1 purl minted from group/name/version)`, even when nothing was
+skipped.
 
 The document's own root and first-party workspace members are deliberate
 exclusions, not skips. The warning does not change the exit code.

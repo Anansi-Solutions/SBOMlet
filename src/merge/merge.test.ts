@@ -2522,9 +2522,96 @@ describe("mergeSbomsWithIntake — components the merge cannot identify", () => 
       {
         target: INTAKE_TARGET,
         inventoried: 1,
+        minted: 0,
         excluded: 2,
         skipped: { "no-purl": 1, "no-version": 1, "blank-version": 1, malformed: 1 },
       },
     ]);
+  });
+
+  describe("purl-less rows of a Maven module's BOM", () => {
+    const MAVEN_ROOT = { component: { purl: "pkg:maven/com.example/svc@1.0.0?type=jar" } };
+    const OJDBC8 = {
+      group: "com.oracle.database.jdbc",
+      name: "ojdbc8",
+      version: "19.3.0.0",
+      licenses: [{ license: { name: "Oracle Free Use Terms and Conditions (FUTC)" } }],
+    };
+    const MINTED_OJDBC8 = "pkg:maven/com.oracle.database.jdbc/ojdbc8@19.3.0.0";
+
+    function intakeOf(sbom: unknown): ReturnType<typeof mergeSbomsWithIntake> {
+      return mergeSbomsWithIntake([{ sbom, targetIdentity: INTAKE_TARGET }]);
+    }
+
+    test("a row with group, name and version is inventoried under a minted purl", () => {
+      const doc = { metadata: MAVEN_ROOT, components: [OJDBC8] };
+      const { model, intake } = intakeOf(doc);
+
+      expect(model.packages.map((p) => [widen(p.purl), widen(p.name)])).toEqual([
+        [MINTED_OJDBC8, "com.oracle.database.jdbc/ojdbc8"],
+      ]);
+      expect(model.packages[0]?.licenseClaims).toEqual([
+        {
+          raw: asRawLicense("Oracle Free Use Terms and Conditions (FUTC)"),
+          kind: "name",
+          source: "generator",
+        },
+      ]);
+      expect(intake).toEqual([
+        { target: INTAKE_TARGET, inventoried: 1, minted: 1, excluded: 0, skipped: {} },
+      ]);
+      expect([...purlSetOf(doc)].map((purl) => widen(purl))).toEqual([MINTED_OJDBC8]);
+    });
+
+    test("a purl that is not a package URL is replaced by the minted one", () => {
+      const doc = { metadata: MAVEN_ROOT, components: [{ ...OJDBC8, purl: "ojdbc8.jar" }] };
+
+      expect(intakeOf(doc).model.packages.map((p) => widen(p.purl))).toEqual([MINTED_OJDBC8]);
+    });
+
+    test("each coordinate is percent-encoded as one purl segment, `:` kept", () => {
+      const doc = {
+        metadata: MAVEN_ROOT,
+        components: [{ group: "com.example", name: "my lib", version: "2.0+local:1" }],
+      };
+
+      expect(intakeOf(doc).model.packages.map((p) => widen(p.purl))).toEqual([
+        "pkg:maven/com.example/my%20lib@2.0%2Blocal:1",
+      ]);
+    });
+
+    test("a row without a usable group is still skipped without a purl", () => {
+      const doc = {
+        metadata: MAVEN_ROOT,
+        components: [
+          { name: "ojdbc8", version: "19.3.0.0" },
+          { ...OJDBC8, group: " " },
+        ],
+      };
+      const { model, intake } = intakeOf(doc);
+
+      expect(model.packages).toEqual([]);
+      expect(intake).toEqual([
+        {
+          target: INTAKE_TARGET,
+          inventoried: 0,
+          minted: 0,
+          excluded: 0,
+          skipped: { "no-purl": 2 },
+        },
+      ]);
+      expect(purlSetOf(doc).size).toBe(0);
+    });
+
+    test("a document whose root is not a Maven module never mints", () => {
+      for (const metadata of [{ component: { purl: "pkg:npm/svc@1.0.0" } }, undefined]) {
+        const doc = { metadata, components: [OJDBC8] };
+        const { model, intake } = intakeOf(doc);
+
+        expect(model.packages).toEqual([]);
+        expect(intake[0]?.skipped).toEqual({ "no-purl": 1 });
+        expect(purlSetOf(doc).size).toBe(0);
+      }
+    });
   });
 });

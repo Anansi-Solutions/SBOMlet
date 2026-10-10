@@ -49,7 +49,7 @@ import { renderMarkdown, type PolicyView, type TargetProfileSummary } from "../r
 import { renderNotices } from "../render/notices";
 import { globToRegExp } from "../targets/discover";
 import { applyContainerScopes } from "./containerScope";
-import { inventoryShortfallWarning } from "./coverage";
+import { inventoryIntakeWarning } from "./coverage";
 import { resolveContained, resolveFrom } from "./paths";
 import { sanitizeForLog, writePolicySummary } from "./summary";
 import { collectTargets } from "./targets";
@@ -655,10 +655,11 @@ function checkedDependencyGraphTargets(
 }
 
 /**
- * Print, per merge input, the counted-vs-inventoried gap and the components the merge skipped, so a
- * component the merge cannot identify is reported rather than silently missing from the inventory.
+ * Print, per merge input, the counted-vs-inventoried gap, the purls the merge minted, and the
+ * components it skipped, so a component the merge cannot identify is reported rather than silently
+ * missing from the inventory.
  */
-function reportInventoryShortfalls(
+function reportInventoryIntake(
   inputs: ReadonlyArray<CollectedSbom>,
   intake: ReadonlyArray<SbomIntake>,
   log: (line: string) => void,
@@ -666,7 +667,7 @@ function reportInventoryShortfalls(
   for (const [index, input] of inputs.entries()) {
     const inputIntake = intake[index];
     const warning =
-      inputIntake === undefined ? undefined : inventoryShortfallWarning(input.sbom, inputIntake);
+      inputIntake === undefined ? undefined : inventoryIntakeWarning(input.sbom, inputIntake);
 
     if (warning !== undefined) {
       log(warning);
@@ -723,7 +724,7 @@ export async function buildOutputs(opts: GenerateOptions): Promise<BuiltOutputs>
   // occurrences.
   const { model, intake } = mergeSbomsWithIntake(inputs);
 
-  reportInventoryShortfalls(inputs, intake, log);
+  reportInventoryIntake(inputs, intake, log);
 
   const graphTargets = checkedDependencyGraphTargets(model, inputs);
 

@@ -7,8 +7,6 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
-import { type } from "arktype";
-
 import { bunThirdPartyEntryCount } from "../collectors/bunLock";
 import { isLockfileEmpty } from "../collectors/dispatch";
 import {
@@ -25,7 +23,7 @@ import {
   pythonThirdPartyEntryCount,
   thirdPartyEntryCount,
 } from "../targets/firstParty";
-import { componentTreeOf, SbomDocument } from "../validate/sbom";
+import { documentComponentsOf } from "../validate/sbom";
 import type { ComponentSkipReason, SbomIntake } from "../merge/merge";
 
 /**
@@ -248,15 +246,7 @@ export function classifyCoverage(
  * Number of components in a parsed SBOM document, nested ones included; 0 when absent/malformed.
  */
 export function componentCountOf(sbom: unknown): number {
-  // Derive the count from the shared SbomDocument boundary (which already owns the "components?":
-  // "unknown[]" shape) instead of a fourth ad-hoc narrow.
-  const doc = SbomDocument(sbom);
-
-  if (doc instanceof type.errors) {
-    return 0;
-  }
-
-  return componentTreeOf(doc.components ?? []).length;
+  return documentComponentsOf(sbom).length;
 }
 
 /** Stderr wording per skip reason, in the order the reasons are listed. */
@@ -274,11 +264,11 @@ function componentsNoun(count: number): string {
 }
 
 /**
- * The stderr warning for one merge input whose inventory falls short of its own component count:
- * counted vs inventoried, with the skip tally by reason. Undefined when every component was
- * inventoried or deliberately excluded.
+ * The stderr warning for one merge input whose inventory falls short of its own component count or
+ * carries minted purls: counted vs inventoried, with the minted count and the skip tally by reason.
+ * Undefined when every component was inventoried as published or deliberately excluded.
  */
-export function inventoryShortfallWarning(sbom: unknown, intake: SbomIntake): string | undefined {
+export function inventoryIntakeWarning(sbom: unknown, intake: SbomIntake): string | undefined {
   const reasons = Object.entries(SKIP_REASON_PHRASES).flatMap(([reason, phrase]) => {
     const count = intake.skipped[reason as ComponentSkipReason] ?? 0;
 
@@ -287,15 +277,18 @@ export function inventoryShortfallWarning(sbom: unknown, intake: SbomIntake): st
   const skipped = Object.values(intake.skipped).reduce((total, count) => total + count, 0);
   const counted = componentCountOf(sbom);
 
-  if (skipped === 0 && intake.inventoried + intake.excluded >= counted) {
+  if (skipped === 0 && intake.minted === 0 && intake.inventoried + intake.excluded >= counted) {
     return undefined;
   }
 
+  const purlsNoun = intake.minted === 1 ? "purl" : "purls";
+  const minted =
+    intake.minted > 0 ? ` (${intake.minted} ${purlsNoun} minted from group/name/version)` : "";
   const excluded = intake.excluded > 0 ? `, excluded ${intake.excluded} as first-party` : "";
   const tally = skipped > 0 ? ` (${skipped} skipped: ${reasons.join(", ")})` : "";
 
   return (
     `warning: ${intake.target}: counted ${counted} ${componentsNoun(counted)}, ` +
-    `inventoried ${intake.inventoried}${excluded}${tally}`
+    `inventoried ${intake.inventoried}${minted}${excluded}${tally}`
   );
 }

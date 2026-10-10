@@ -196,6 +196,11 @@ The lane's limits, stated plainly:
   fails the run.
 - A commercial or system-scoped jar with no public licence record resolves
   the same way: an honest unknown, not a guess.
+- A component the sidecar lists with a group, name and version but no purl,
+  such as a hand-added system-scoped jar, is inventoried under a minted
+  `pkg:maven/<group>/<name>@<version>` purl, without a `?type=` qualifier
+  since its packaging is unknown; the run's stderr counts the minted purls.
+  One missing any of the three is reported there as skipped.
 
 The system-scoped jars a `<dependency>` with `<scope>system</scope>` declares
 are exactly this last case — a commercial licence with no public claim to

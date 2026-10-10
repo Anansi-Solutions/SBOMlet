@@ -166,6 +166,17 @@ export function asPurl(text: string): Purl {
 }
 
 /**
+ * Percent-encode one purl namespace, name or version segment.
+ *
+ * @privateRemarks
+ * Mirrors the packageurl-js encoding the generators spell their purls with (`encodeURIComponent`,
+ * then `:` restored), so a PEP 440 local version `2.1.0+cpu` becomes `2.1.0%2Bcpu` on both sides.
+ */
+export function encodePurlSegment(segment: string): string {
+  return encodeURIComponent(segment).replaceAll("%3A", ":");
+}
+
+/**
  * Tolerantly mint a {@link Purl} at an EXTERNAL boundary (a parsed SBOM component / metadata purl).
  *
  * @returns the branded purl, or undefined when `text` is not a {@link PURL_SHAPE} package URL - the

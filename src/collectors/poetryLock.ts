@@ -18,7 +18,13 @@
 
 import { parse as parseToml } from "smol-toml";
 
-import { asPurl, compareCodeUnits, type Purl, type TargetIdentity } from "../model/dependencies";
+import {
+  asPurl,
+  compareCodeUnits,
+  encodePurlSegment,
+  type Purl,
+  type TargetIdentity,
+} from "../model/dependencies";
 import { recordOf, stringOf } from "../validate/record";
 
 /**
@@ -29,17 +35,6 @@ import { recordOf, stringOf } from "../validate/record";
  */
 export function normalizePep503(name: string): string {
   return name.replace(/[-_.]+/g, "-").toLowerCase();
-}
-
-/**
- * Percent-encode one purl name or version segment.
- *
- * @privateRemarks
- * Mirrors the packageurl-js encoding cdxgen spells its purls with (`encodeURIComponent`, then `:`
- * restored), so a PEP 440 local version `2.1.0+cpu` becomes `2.1.0%2Bcpu` on both sides.
- */
-function encodePurlSegment(segment: string): string {
-  return encodeURIComponent(segment).replaceAll("%3A", ":");
 }
 
 /** The `pkg:pypi/<pep503-name>@<version>` purl cdxgen emits for a poetry.lock package. */

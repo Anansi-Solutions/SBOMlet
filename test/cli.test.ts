@@ -696,7 +696,7 @@ describe("runGenerate discovery mode — offline branches", () => {
     expect(stderr).not.toContain("collecting");
   });
 
-  test("a maven component the merge cannot identify is reported on stderr, never dropped silently", async () => {
+  test("a purl-less maven row is inventoried under a minted purl; one without a group is reported", async () => {
     const root = mkdtempSync(join(tmpdir(), "licenses-cli-maven-skip-"));
     const projDir = join(root, "svc");
 
@@ -714,7 +714,13 @@ describe("runGenerate discovery mode — offline branches", () => {
             version: "4.13.2",
             purl: "pkg:maven/junit/junit@4.13.2",
           },
-          { group: "com.example.vendor", name: "driver", version: "19.3.0.0" },
+          {
+            group: "com.oracle.database.jdbc",
+            name: "ojdbc8",
+            version: "19.3.0.0",
+            licenses: [{ license: { name: "Oracle Free Use Terms and Conditions (FUTC)" } }],
+          },
+          { name: "driver", version: "19.3.0.0" },
         ],
       }),
     );
@@ -728,10 +734,13 @@ describe("runGenerate discovery mode — offline branches", () => {
         verbose: false,
       });
     });
+    const report = readFileSync(outputPath, "utf8");
 
-    expect(readFileSync(outputPath, "utf8")).toContain("- Total packages: 1");
+    expect(report).toContain("- Total packages: 2");
+    expect(report).toContain("com.oracle.database.jdbc/ojdbc8");
     expect(stderr).toContain(
-      "warning: svc: counted 2 components, inventoried 1 (1 skipped: 1 without a purl)\n",
+      "warning: svc: counted 3 components, inventoried 2 " +
+        "(1 purl minted from group/name/version) (1 skipped: 1 without a purl)\n",
     );
   });
 

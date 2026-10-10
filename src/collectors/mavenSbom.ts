@@ -52,6 +52,7 @@ import { type Purl } from "../model/dependencies";
 import { purlSetOf } from "../merge/merge";
 import { MavenSbomDocument } from "../validate/mavenSbom";
 import { recordOf } from "../validate/record";
+import { documentComponentOf, isMavenModuleRoot, rootPurlOf } from "../validate/sbom";
 import { computeCacheKey, type CollectorSbomFile } from "./cdxgen";
 import { manifestFilesFor } from "./dispatch";
 import type { Target } from "../targets/target";
@@ -197,6 +198,20 @@ function readAndNarrowMavenSbom(
 }
 
 /**
+ * The purl the merge inventories a component under, a minted one included, else its published purl
+ * string; undefined when it has neither.
+ */
+function inventoryPurlOf(raw: unknown, mintsMavenPurls: boolean): string | undefined {
+  const entry = documentComponentOf(raw, mintsMavenPurls);
+  const published = recordOf(raw)?.["purl"];
+
+  return (
+    (entry === "malformed" ? undefined : entry.component.purl) ??
+    (typeof published === "string" ? published : undefined)
+  );
+}
+
+/**
  * Compose the dual-document inventory: the test doc's own components PLUS any default-doc component
  * whose purl is absent from the test doc's purl set (the mediation residual - guarantees a version
  * Maven mediated differently between the two builds is never silently dropped). Every other
@@ -214,12 +229,13 @@ function composeMavenInventory(testParsed: unknown, defaultParsed: unknown): unk
   const testComponents = Array.isArray(testDoc["components"])
     ? (testDoc["components"] as unknown[])
     : [];
+  const mintsMavenPurls = isMavenModuleRoot(rootPurlOf(testParsed));
   const testPurls = new Set<string>();
 
   for (const raw of testComponents) {
-    const purl = recordOf(raw)?.["purl"];
+    const purl = inventoryPurlOf(raw, mintsMavenPurls);
 
-    if (typeof purl === "string") {
+    if (purl !== undefined) {
       testPurls.add(purl);
     }
   }
@@ -230,9 +246,9 @@ function composeMavenInventory(testParsed: unknown, defaultParsed: unknown): unk
       ? (defaultDoc["components"] as unknown[])
       : [];
   const residual = defaultComponents.filter((raw) => {
-    const purl = recordOf(raw)?.["purl"];
+    const purl = inventoryPurlOf(raw, mintsMavenPurls);
 
-    return typeof purl !== "string" || !testPurls.has(purl);
+    return purl === undefined || !testPurls.has(purl);
   });
 
   return { ...testDoc, components: [...testComponents, ...residual] };
