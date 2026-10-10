@@ -549,3 +549,18 @@ describe("canonicalizeExpression — adversarial property suite (truth-table ora
     expect(agreementsChecked).toBeGreaterThan(0);
   });
 });
+
+describe("canonicalizeExpression — deprecated SPDX ids read in their current spelling", () => {
+  test.each([
+    ["GPL-3.0", "GPL-3.0-only"],
+    ["GPL-2.0+", "GPL-2.0-or-later"],
+    ["LGPL-2.1+ OR MIT", "LGPL-2.1-or-later OR MIT"],
+    ["GFDL-1.3", "GFDL-1.3-only"],
+    ["GPL-2.0-with-classpath-exception", "GPL-2.0-only WITH Classpath-exception-2.0"],
+    ["GPL-2.0-with-classpath-exception+", "GPL-2.0-or-later WITH Classpath-exception-2.0"],
+    ["GPL-3.0 WITH GCC-exception-3.1", "GPL-3.0-only WITH GCC-exception-3.1"],
+    ["eCos-2.0", "eCos-2.0"],
+  ])("%p reads as %p", (declared, current) => {
+    expect(widen(canonicalizeExpression(asRawLicense(declared)))).toBe(current);
+  });
+});

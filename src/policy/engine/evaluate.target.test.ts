@@ -548,3 +548,25 @@ distribution = "external"
     expect(() => runEngine(specs, policyText)).toThrow(PolicyError);
   });
 });
+
+describe("target lane — a deprecated SPDX spelling gates like its current spelling", () => {
+  test.each([
+    ["GPL-3.0", "GPL-3.0-only"],
+    ["GPL-2.0+", "GPL-2.0-or-later"],
+    ["AGPL-3.0", "AGPL-3.0-only"],
+    ["LGPL-2.1", "LGPL-2.1-only"],
+    ["GPL-2.0-with-classpath-exception", "GPL-2.0-only WITH Classpath-exception-2.0"],
+  ])("%p under an MIT target gives the verdict of %p", (deprecated, current) => {
+    const purl = "pkg:npm/deprecated-spelling@1.0.0";
+    const verdictFor = (claim: string): Verdict | undefined => {
+      const specs = [
+        { purl, name: "deprecated-spelling", claims: [claim], occurrences: [{ target: TARGET }] },
+      ];
+
+      return findVerdict(runEngine(specs, MIT_TARGET_EXTERNAL).verdicts, purl, TARGET);
+    };
+
+    expect(verdictFor(current)).toMatchObject({ status: "fail", rule: "target:incompatible" });
+    expect(verdictFor(deprecated)).toEqual(verdictFor(current));
+  });
+});

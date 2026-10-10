@@ -666,10 +666,9 @@ describe("annotateFindings — coverage, immutability, election", () => {
 // spdx-license-ids below — a typo'd target would silently re-create the unknown.
 // [shorthand, expectedExpression, source]. The "+" forms with a NON-SPDX base
 // ("GPL-2+", "LGPL-2+", "LGPL-3+", "GPL-3+") are mapped to the precise -or-later
-// id; "LGPL-2.1+" is ALREADY valid SPDX (LGPL-2.1 is a real base id) so it is
-// preserved verbatim by the exact-parse path (source "generator") — rewriting an
-// already-valid SPDX id would violate the verbatim-preservation invariant. Both
-// forms mean GPL/LGPL "or-later", so the OS section renders a real license.
+// id; "LGPL-2.1" and "LGPL-2.1+" are deprecated but valid SPDX, so the exact-parse
+// path keeps them (source "generator") and canonicalization respells them to the
+// current -only / -or-later id. Every form renders a real license in the OS section.
 const DEBIAN_SHORTHAND_CASES: ReadonlyArray<
   [shorthand: string, expected: string, source: "corrected" | "generator"]
 > = [
@@ -680,8 +679,8 @@ const DEBIAN_SHORTHAND_CASES: ReadonlyArray<
   ["GPL-3+", "GPL-3.0-or-later", "corrected"],
   ["LGPL-2", "LGPL-2.0-only", "corrected"],
   ["LGPL-2+", "LGPL-2.0-or-later", "corrected"],
-  ["LGPL-2.1", "LGPL-2.1", "generator"], // deprecated-but-valid SPDX id — preserved verbatim
-  ["LGPL-2.1+", "LGPL-2.1+", "generator"], // already valid SPDX — preserved verbatim
+  ["LGPL-2.1", "LGPL-2.1-only", "generator"],
+  ["LGPL-2.1+", "LGPL-2.1-or-later", "generator"],
   ["LGPL-3", "LGPL-3.0-only", "corrected"],
   ["LGPL-3+", "LGPL-3.0-or-later", "corrected"],
   ["BSD-2-clause", "BSD-2-Clause", "corrected"],
@@ -709,8 +708,7 @@ describe("normalizeRaw — Debian/DEP-5 shorthand map", () => {
     ) as string[];
     const known = new Set([...current, ...deprecated]);
     // Strip a trailing "+" (the SPDX or-later operator) to recover the base id
-    // that must exist in spdx-license-ids — "LGPL-2.1+" is a valid expression
-    // whose base "LGPL-2.1" is the listed id.
+    // that must exist in spdx-license-ids.
     const targets = DEBIAN_SHORTHAND_CASES.map(([, t]) => t.replace(/\+$/, ""));
 
     expect(targets.filter((t) => !known.has(t))).toEqual([]);

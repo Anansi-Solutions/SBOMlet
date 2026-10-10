@@ -157,7 +157,9 @@ comparisons. The variations:
 
 - A precise finding renders its canonicalized expression, for example
   `Apache-2.0 AND LGPL-3.0-or-later`; a registry declaring redundant noise like
-  `(MIT OR Apache-2.0) AND (Apache-2.0 AND MIT)` renders as `Apache-2.0 AND MIT`.
+  `(MIT OR Apache-2.0) AND (Apache-2.0 AND MIT)` renders as `Apache-2.0 AND MIT`,
+  and a deprecated SPDX id renders in its current spelling (`LGPL-3.0` as
+  `LGPL-3.0-only`, `GPL-2.0+` as `GPL-2.0-or-later`).
 - A finding that `spdx-correct` or a built-in fixup rewrote from a non-SPDX
   label appends that label, for example
   `Apache-2.0 (corrected from "Apache License, Version 2.0")`, so the rewrite

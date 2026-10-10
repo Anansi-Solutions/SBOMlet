@@ -3731,3 +3731,23 @@ describe("unnecessaryClarifyEntries — the entries a maintainer can drop", () =
     expect(unnecessaryClarifyEntries(model, policy)).toEqual([]);
   });
 });
+
+describe("a deprecated SPDX spelling matches across policy patterns and findings", () => {
+  test.each([
+    ["GPL-2.0-with-classpath-exception", "GPL-2.0-with-classpath-exception"],
+    ["GPL-2.0-only WITH Classpath-exception-2.0", "GPL-2.0-with-classpath-exception"],
+    ["GPL-2.0-with-classpath-exception", "GPL-2.0-only WITH Classpath-exception-2.0"],
+    ["GPL-3.0", "GPL-3.0-only"],
+    ["GPL-3.0-only", "GPL-3.0"],
+  ])("a deny on %p denies a package declaring %p", (pattern, declared) => {
+    const policyText = [
+      "[[deny]]",
+      'match = "license"',
+      `pattern = "${pattern}"`,
+      'reason = "not shippable"',
+    ].join("\n");
+    const { verdicts } = runEngine([pkgSpec("respelled", declared, ["apps/a"])], policyText);
+
+    expect([verdicts[0].status, verdicts[0].rule]).toEqual(["fail", "denied[0]"]);
+  });
+});
