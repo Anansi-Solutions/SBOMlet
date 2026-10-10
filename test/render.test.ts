@@ -4121,6 +4121,29 @@ describe("License column: a corrected finding names the label it was corrected f
     ).toBe(true);
   });
 
+  test("the marker truncates each label to 80 characters and names at most 3", () => {
+    const labels = ["Apache License 2.0", "The MIT License", "BSD 3-Clause License", "ISC license"];
+    const pkg = entry({
+      purl: asPurl("pkg:pypi/long-label@1.0.0"),
+      name: asDependencyName("long-label"),
+      version: asDependencyVersion("1.0.0"),
+      licenseClaims: labels.map((raw) => ({
+        raw: asRawLicense(raw),
+        kind: "name" as const,
+        source: "generator" as const,
+      })),
+    });
+    const annotated = annotateFindings({ packages: [pkg] }, []).model.packages[0]!;
+    const longLabel = `Apache License 2.0 ${"x".repeat(2700)}`;
+    const finding = { ...annotated.finding!, correctedFrom: [asRawLicense(longLabel)] };
+    const long = renderMarkdown({ packages: [{ ...annotated, finding }] });
+    const many = renderMarkdown({ packages: [annotated] });
+
+    expect(long).toContain(`(corrected from "${longLabel.slice(0, 80)}…")`);
+    expect(long).not.toContain("x".repeat(100));
+    expect(many).toMatch(/\(corrected from "[^"]+", "[^"]+", "[^"]+", \+1 more\)/);
+  });
+
   test("an exact finding carries no marker", () => {
     const exact = entry({
       purl: asPurl("pkg:npm/exact-pkg@1.0.0"),

@@ -163,7 +163,8 @@ comparisons. The variations:
 - A finding that `spdx-correct` or a built-in fixup rewrote from a non-SPDX
   label appends that label, for example
   `Apache-2.0 (corrected from "Apache License, Version 2.0")`, so the rewrite
-  can be audited against what the package declared.
+  can be audited against what the package declared. Each label is cut to 80
+  characters with `…`, and at most three are named, followed by `+N more`.
 - An [imprecise](../glossary.md#imprecise-family) finding renders its family
   token plus a marker, for example `BSD (imprecise)` — a family token is not an
   expression and is never canonicalized.

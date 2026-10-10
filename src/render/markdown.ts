@@ -165,6 +165,28 @@ function isImprecise(pkg: PackageEntry): boolean {
   return pkg.finding?.confidence === "imprecise";
 }
 
+/** Longest raw label, in code points, the corrected-from marker quotes before truncating. */
+const MAX_CORRECTED_LABEL_LENGTH = 80;
+
+/** Most raw labels the corrected-from marker names before summarizing the rest as a count. */
+const MAX_CORRECTED_LABELS = 3;
+
+/** The quoted raw labels of a corrected-from marker: `"a", "b", "c", +2 more`. */
+function correctedLabels(labels: readonly string[]): string {
+  const quoted = labels.slice(0, MAX_CORRECTED_LABELS).map((label) => {
+    const codePoints = [...label];
+    const shown =
+      codePoints.length > MAX_CORRECTED_LABEL_LENGTH
+        ? `${codePoints.slice(0, MAX_CORRECTED_LABEL_LENGTH).join("")}…`
+        : label;
+
+    return JSON.stringify(shown);
+  });
+  const hidden = labels.length - quoted.length;
+
+  return [...quoted, ...(hidden > 0 ? [`+${hidden} more`] : [])].join(", ");
+}
+
 /**
  * License cell rule: the full normalized expression when a finding exists, canonicalized via {@link
  * canonicalizeExpression} (spelling-blind reordering/dedup/absorption only - never a distribution
@@ -196,9 +218,7 @@ function licenseCellOf(pkg: PackageEntry): string {
       pkg.finding.expression !== null ? canonicalizeExpression(pkg.finding.expression) : "unknown";
     const corrected = pkg.finding.correctedFrom ?? [];
     const correctedNote =
-      corrected.length > 0
-        ? ` (corrected from ${corrected.map((raw) => JSON.stringify(raw)).join(", ")})`
-        : "";
+      corrected.length > 0 ? ` (corrected from ${correctedLabels(corrected)})` : "";
 
     return `${expression}${correctedNote}${suffix}`;
   }
