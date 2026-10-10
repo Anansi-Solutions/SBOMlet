@@ -119,6 +119,7 @@ import { AGPL_IDS } from "./copyleft";
 import {
   denyRuleAmong,
   exemptionAwareDenyRules,
+  inForceLicenseDenyUnion,
   licenseDenyUnion,
   withoutDeniedBranches,
   type DenyMatch,
@@ -177,11 +178,23 @@ const UNKNOWN_ASSESSMENT: Assessment = {
   copyleft: false,
 };
 
+/** The license deny unions election avoids: every rule, and only the rules still in force. */
+interface DenyUnions {
+  readonly all: readonly SpdxLicenseLeaf[];
+  readonly inForce: readonly SpdxLicenseLeaf[];
+}
+
+function denyUnions(policy: Policy): DenyUnions {
+  return { all: licenseDenyUnion(policy), inForce: inForceLicenseDenyUnion(policy) };
+}
+
 /**
  * Parse the finding's expression once and derive election + copyleft flag. Election never picks an
  * OR branch the deny union covers while another branch remains ({@link withoutDeniedBranches}), so
- * `GPL-3.0-only OR BUSL-1.1` is judged on its GPL branch. The expression was produced by the
- * normalizer (or validated policy schema via clarify), so it parses by
+ * `GPL-3.0-only OR BUSL-1.1` is judged on its GPL branch - unless the policy exempts BUSL-1.1: a
+ * branch only an exemption lets through ranks below a clean branch but above copyleft. The
+ * expression was produced by the normalizer (or validated policy schema via clarify), so it parses
+ * by
  * construction; the defensive catch keeps the never-throws posture by degrading to unknown instead
  * of crashing the run.
  *
@@ -190,7 +203,7 @@ const UNKNOWN_ASSESSMENT: Assessment = {
  * - it must never be conflated with genuine unknown and never reach satisfies() (it has no valid
  * expression).
  */
-function assessPackage(entry: PackageEntry, denyUnion: readonly SpdxLicenseLeaf[]): Assessment {
+function assessPackage(entry: PackageEntry, unions: DenyUnions): Assessment {
   const finding = entry.finding;
 
   if (finding?.confidence === "imprecise") {
@@ -204,8 +217,14 @@ function assessPackage(entry: PackageEntry, denyUnion: readonly SpdxLicenseLeaf[
   }
 
   try {
-    const node = withoutDeniedBranches(parseSpdx(expression) as ExpressionNode, denyUnion);
-    const electedNode = elect(node);
+    const parsed = parseSpdx(expression) as ExpressionNode;
+    const strictNode = withoutDeniedBranches(parsed, unions.all);
+    const lenientNode = withoutDeniedBranches(parsed, unions.inForce);
+    const strict = elect(strictNode);
+    const lenient = elect(lenientNode);
+    const takeExempted = isCopyleft(strict) && !isCopyleft(lenient);
+    const node = takeExempted ? lenientNode : strictNode;
+    const electedNode = takeExempted ? lenient : strict;
 
     return {
       expression,
@@ -874,6 +893,21 @@ function firstDeny(
   return undefined;
 }
 
+/**
+ * The exemption decision for an elected branch only an exempted shipped default denies, so the
+ * package takes the exemption's warn instead of passing on that branch.
+ */
+function exemptedElection(
+  rules: ExemptionAwareDenyRules,
+  entry: PackageEntry,
+  elected: string | null,
+): DenyDecision | undefined {
+  const match =
+    elected === null ? undefined : denyRuleAmong(rules.exemptedFirst, elected, entry.name);
+
+  return match === undefined ? undefined : { rule: match, exempted: true };
+}
+
 /** The deny lane's decision for one package. */
 interface DenyDecision {
   /** The rule cited: one still in force, or an exempted shipped default when `exempted`. */
@@ -1492,7 +1526,7 @@ export function evaluate(
   // Which package entries the recorded introduction chains contradict, decided once per entry and
   // target before the walk below reads the answer per occurrence.
   const voided = voidedCompatibleEntries(model, policy, targetsWithDependencyGraph);
-  const denyUnion = licenseDenyUnion(policy);
+  const denyUnion = denyUnions(policy);
   const denyRules = exemptionAwareDenyRules(policy);
 
   for (const entry of model.packages) {
@@ -1518,7 +1552,9 @@ export function evaluate(
     // of how combine rendered the finding (precise/imprecise/unknown), in every scope. Name-mode
     // (passed null here) is inert per observed expression - it already matched via entry.name
     // above.
-    const denied = denyDecision(denyRules, entry, assessment.expression);
+    const denied =
+      denyDecision(denyRules, entry, assessment.expression) ??
+      exemptedElection(denyRules, entry, assessment.elected);
     // Decided once per package: the clarify entry governing it is the same at every occurrence.
     const clarifyDecided = clarifyDecision(entry, policy);
 
@@ -1624,7 +1660,7 @@ export function acceptedContainerNotices(
   policy: Policy,
   verdicts: ReadonlyArray<Verdict>,
 ): AcceptedContainerNotice[] {
-  const denyUnion = licenseDenyUnion(policy);
+  const denyUnion = denyUnions(policy);
   const verdictByKey = new Map<string, Verdict>();
 
   for (const verdict of verdicts) {
@@ -1687,7 +1723,7 @@ export function acceptedContainerNotices(
 /** Ids of every deny rule some package's denial rests on, the cited one or not. */
 function denyingRuleIds(model: CanonicalDependencies, policy: Policy): Set<string> {
   const rules = exemptionAwareDenyRules(policy);
-  const denyUnion = licenseDenyUnion(policy);
+  const denyUnion = denyUnions(policy);
   const ids = new Set<string>();
 
   for (const entry of model.packages) {
@@ -1712,7 +1748,7 @@ function outrankedLicenseRules(
 ): Set<number> {
   const packageDecided = /^compatible(?::voided)?\[(\d+)\]$/;
   const decidedBy = new Map(verdicts.map((v) => [`${v.purl}\u0000${v.occurrenceTarget}`, v.rule]));
-  const denyUnion = licenseDenyUnion(policy);
+  const denyUnion = denyUnions(policy);
   const outranked = new Set<number>();
 
   for (const entry of model.packages) {

@@ -104,7 +104,10 @@ when any conjunct is denied (a conjunct can't be elected away). Election
 never picks a branch the deny set covers while another branch remains: a
 denied branch ranks below every other, copyleft included, so
 `GPL-3.0-only OR BUSL-1.1` elects the GPL branch and is judged as copyleft,
-and `MIT OR BUSL-1.1` elects `MIT`. When a
+and `MIT OR BUSL-1.1` elects `MIT`. A branch only an
+`[[allow_source_available]]` exemption lets through ranks below a clean branch
+but above copyleft, so with `BUSL-1.1` exempted `GPL-3.0-only OR BUSL-1.1`
+elects `BUSL-1.1` and takes the exemption's warning. When a
 [target profile](#target-profile) governs the occurrence, election becomes
 target-aware: the preference for a non-copyleft branch can pick a DIFFERENT
 branch than the untargeted walk would, because "non-copyleft" isn't always

@@ -143,7 +143,11 @@ A denied branch is never the one the rest of the policy judges. When an `OR`
 keeps at least one branch outside the deny set, election picks among those
 branches only, even when the remaining one is copyleft: `GPL-3.0-only OR
 BUSL-1.1` is judged on `GPL-3.0-only` and fails as copyleft, rather than
-passing on a branch the tool itself forbids.
+passing on a branch the tool itself forbids. A branch the deny set covers only
+through a default you exempted in
+[`[[allow_source_available]]`](#allow_source_available) stays electable: it
+ranks below a clean branch but above copyleft, so with `BUSL-1.1` exempted the
+same package elects `BUSL-1.1` and warns, citing the exemption.
 
 A licence-mode pattern naming a bare id also denies that id under any `WITH`
 exception: an exception only narrows obligations, so

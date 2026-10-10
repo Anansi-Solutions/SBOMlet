@@ -189,6 +189,11 @@ export function licenseDenyUnion(policy: Policy): SpdxLicenseLeaf[] {
   return unionAllowlist(effectiveDenyRules(policy));
 }
 
+/** {@link licenseDenyUnion} without the shipped defaults `[[allow_source_available]]` lifts. */
+export function inForceLicenseDenyUnion(policy: Policy): SpdxLicenseLeaf[] {
+  return unionAllowlist(exemptionAwareDenyRules(policy).inForce);
+}
+
 /**
  * The expression with every OR branch the deny union covers dropped while a sibling branch is not
  * covered, so election ranks a denied branch below every other, copyleft included. An OR whose

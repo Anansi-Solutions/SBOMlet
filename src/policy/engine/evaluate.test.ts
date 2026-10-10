@@ -2639,6 +2639,28 @@ describe("evaluate — election never picks a branch the deny set covers", () =>
     expect(verdict?.rule).toBe("default:copyleft");
   });
 
+  test("an exempted branch stays electable over copyleft and warns, citing the exemption", () => {
+    const exemptBusl = '[[allow_source_available]]\nlicense = "BUSL-1.1"\nreason = "reviewed"\n';
+    const [verdict] = runEngine(
+      [pkgSpec("dual", "GPL-3.0-only OR BUSL-1.1", ["apps/web"])],
+      exemptBusl,
+    ).verdicts;
+
+    expect(verdict?.status).toBe("warn");
+    expect(verdict?.rule).toBe("allow_source_available[0]");
+  });
+
+  test("a clean branch still wins over an exempted one", () => {
+    const exemptBusl = '[[allow_source_available]]\nlicense = "BUSL-1.1"\nreason = "reviewed"\n';
+    const [verdict] = runEngine(
+      [pkgSpec("dual", "MIT OR BUSL-1.1", ["apps/web"])],
+      exemptBusl,
+    ).verdicts;
+
+    expect(verdict?.rule).toBe("default:ok");
+    expect(verdict?.reason).toContain('elected "MIT"');
+  });
+
   test("the target lane does not elect a denied branch either", () => {
     const [verdict] = runEngine(
       [pkgSpec("dual", "GPL-3.0-only OR BUSL-1.1", ["apps/web"])],

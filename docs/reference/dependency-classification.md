@@ -126,7 +126,9 @@ highest to lowest:
    copyleft. The tree below. Election never picks an `OR` branch the deny
    set covers while another branch remains, so `GPL-3.0-only OR BUSL-1.1`
    lands here on its GPL branch; the target-compatibility lane above elects
-   from the same remaining branches.
+   from the same remaining branches. A branch only an
+   `[[allow_source_available]]` exemption lets through is preferred over
+   copyleft: the package then takes the exemption's warn at tier 1.
 8. **The imprecise-family lane** — entered when the finding names only a
    family, with no elected expression.
 9. **The unknown lane** — entered when the finding has no expression and isn't
