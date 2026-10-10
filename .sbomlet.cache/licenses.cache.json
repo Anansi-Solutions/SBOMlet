@@ -2142,12 +2142,6 @@
       "resolvable": true,
       "via": "version-license"
     },
-    "pkg:npm/smol-toml@1.6.1": {
-      "fetchedFrom": "npm",
-      "license": "BSD-3-Clause",
-      "resolvable": true,
-      "via": "version-license"
-    },
     "pkg:npm/smol-toml@1.7.1": {
       "fetchedFrom": "npm",
       "license": "BSD-3-Clause",
