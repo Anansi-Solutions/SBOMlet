@@ -139,15 +139,14 @@ licence-mode deny patterns, so listing `BUSL-1.1`, `SSPL-1.0`, and
 verdict cites the first contributing entry as its rule and names every other
 entry the denial rests on in its reason; none of them is reported unused.
 
-A denied branch is never the one the rest of the policy judges. When an `OR`
-keeps at least one branch outside the deny set, election picks among those
-branches only, even when the remaining one is copyleft: `GPL-3.0-only OR
-BUSL-1.1` is judged on `GPL-3.0-only` and fails as copyleft, rather than
-passing on a branch the tool itself forbids. A branch the deny set covers only
-through a default you exempted in
-[`[[allow_source_available]]`](#allow_source_available) stays electable: it
-ranks below a clean branch but above copyleft, so with `BUSL-1.1` exempted the
-same package elects `BUSL-1.1` and warns, citing the exemption.
+A denied branch is never the one the rest of the policy judges. Election ranks
+each `OR` branch and picks among the best-ranked only: first a branch no deny
+rule covers, then one covered only by a default you exempted in
+[`[[allow_source_available]]`](#allow_source_available), then a copyleft branch,
+then one a deny rule still in force covers. So `GPL-3.0-only OR BUSL-1.1` is
+judged on `GPL-3.0-only` and fails as copyleft, rather than passing on a branch
+the tool itself forbids; with `BUSL-1.1` exempted the same package elects
+`BUSL-1.1` and warns, citing the exemption.
 
 A licence-mode pattern naming a bare id also denies that id under any `WITH`
 exception: an exception only narrows obligations, so

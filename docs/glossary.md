@@ -100,20 +100,19 @@ consumer could legitimately choose, that avoids the obligation or the deny
 rule? A finding is copyleft only if every branch is; a finding is denied only
 when it has no electable branch left — an OR is denied only when every
 branch is denied (an electable branch defeats it), while an AND is denied
-when any conjunct is denied (a conjunct can't be elected away). Election
-never picks a branch the deny set covers while another branch remains: a
-denied branch ranks below every other, copyleft included, so
-`GPL-3.0-only OR BUSL-1.1` elects the GPL branch and is judged as copyleft,
-and `MIT OR BUSL-1.1` elects `MIT`. A branch only an
-`[[allow_source_available]]` exemption lets through ranks below a clean branch
-but above copyleft, so with `BUSL-1.1` exempted `GPL-3.0-only OR BUSL-1.1`
-elects `BUSL-1.1` and takes the exemption's warning. When a
-[target profile](#target-profile) governs the occurrence, election becomes
-target-aware: the preference for a non-copyleft branch can pick a DIFFERENT
-branch than the untargeted walk would, because "non-copyleft" isn't always
-the branch that best serves the declared target — an OR containing a branch
-the target absorbs cleanly is preferred over one that merely avoids
-copyleft in the abstract.
+when any conjunct is denied (a conjunct can't be elected away). The policy
+engine ranks the branches before `elect()` picks: first a branch no deny rule
+covers, then one only an `[[allow_source_available]]` exemption lets through,
+then copyleft, then one a deny rule still in force covers; `elect()` only
+breaks ties within the best rank. So `GPL-3.0-only OR BUSL-1.1` elects the GPL
+branch and is judged as copyleft, `MIT OR BUSL-1.1` elects `MIT`, and with
+`BUSL-1.1` exempted `GPL-3.0-only OR BUSL-1.1` elects `BUSL-1.1` and takes the
+exemption's warning. When a [target profile](#target-profile) governs the
+occurrence, election becomes target-aware: the preference for a non-copyleft
+branch can pick a DIFFERENT branch than the untargeted walk would, because
+"non-copyleft" isn't always the branch that best serves the declared target —
+an OR containing a branch the target absorbs cleanly is preferred over one
+that merely avoids copyleft in the abstract.
 
 ### enrichment and the enrichment cache
 

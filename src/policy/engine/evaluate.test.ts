@@ -2661,6 +2661,22 @@ describe("evaluate — election never picks a branch the deny set covers", () =>
     expect(verdict?.reason).toContain('elected "MIT"');
   });
 
+  test.each([
+    ["BUSL-1.1 OR Elastic-2.0 OR GPL-3.0-only OR MIT", "ok", "default:ok"],
+    ["BUSL-1.1 OR Elastic-2.0 OR GPL-3.0-only", "warn", "allow_source_available[0]"],
+    ["BUSL-1.1 OR GPL-3.0-only", "fail", "default:copyleft"],
+    ["BUSL-1.1", "fail", "default:source-available"],
+  ])("ranks clean over exempted over copyleft over denied: %s", (expression, status, rule) => {
+    const exemptElastic =
+      '[[allow_source_available]]\nlicense = "Elastic-2.0"\nreason = "reviewed"\n';
+    const [verdict] = runEngine(
+      [pkgSpec("dual", expression, ["apps/web"])],
+      exemptElastic,
+    ).verdicts;
+
+    expect([verdict?.status, verdict?.rule]).toEqual([status, rule]);
+  });
+
   test("the target lane does not elect a denied branch either", () => {
     const [verdict] = runEngine(
       [pkgSpec("dual", "GPL-3.0-only OR BUSL-1.1", ["apps/web"])],

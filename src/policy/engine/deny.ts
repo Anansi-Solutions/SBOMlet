@@ -52,8 +52,8 @@
  *   - "GPL-3.0 OR BUSL-1.1" → denied only when the deny set covers both branches, i.e. no branch is
  *     electable out.
  * This keeps deny exactly consistent with the compatible election path while preventing over-denial
- * of a finding that has an acceptable branch. The other lanes then judge the finding without its
- * denied branches (withoutDeniedBranches), so "GPL-3.0 OR BUSL-1.1" is judged as GPL.
+ * of a finding that has an acceptable branch. The other lanes then judge the finding on its
+ * best-ranked branches (withBestRankedBranches), so "GPL-3.0 OR BUSL-1.1" is judged as GPL.
  *
  * One election runs across every license rule, not one per rule (load-bearing): it must run against
  * the union of every match="license" deny allowlist, not each rule's allowlist in isolation. The
@@ -74,7 +74,7 @@ import satisfies from "spdx-satisfies";
 import parseSpdx from "spdx-expression-parse";
 
 import { asSpdxLicenseLeaf, type SpdxLicenseLeaf } from "../../model/dependencies";
-import { type ExpressionNode } from "../../normalize/expression";
+import { isCopyleft, type ExpressionNode } from "../../normalize/expression";
 import { baseLeafId } from "../compat/classify";
 import { BUILTIN_DENY_RULES, BUILTIN_DENY_RULE_ID } from "./builtinDenylist";
 import type { DenyRule } from "../schema/deny";
@@ -184,41 +184,79 @@ function unionAllowlist(rules: ReadonlyArray<IndexedDenyRule>): SpdxLicenseLeaf[
   return rules.flatMap((r) => (r.rule.match === "license" ? r.rule.allowlist : []));
 }
 
-/** The combined allowlist of every license-mode deny rule, policy entries and shipped defaults. */
-export function licenseDenyUnion(policy: Policy): SpdxLicenseLeaf[] {
-  return unionAllowlist(effectiveDenyRules(policy));
+/**
+ * How election ranks an OR branch, best first: covered by no deny rule, covered only by a shipped
+ * default `[[allow_source_available]]` exempts, copyleft, covered by a deny rule still in force. A
+ * leaf takes the worst rank that applies, so an exempted `SSPL-1.0` still ranks as copyleft.
+ */
+export const BranchRank = { clean: 0, exempted: 1, copyleft: 2, denied: 3 } as const;
+export type BranchRank = (typeof BranchRank)[keyof typeof BranchRank];
+
+/** Ranks a parsed expression: an OR by its best branch, an AND by its worst conjunct. */
+export type BranchRanker = (node: ExpressionNode) => BranchRank;
+
+/** The rankers for one policy's deny rules. */
+export interface BranchRankers {
+  /** The untargeted election's ranking. */
+  readonly election: BranchRanker;
+  /** The same ranking without the copyleft tier, which the target lane decides per target. */
+  readonly targetLane: BranchRanker;
 }
 
-/** {@link licenseDenyUnion} without the shipped defaults `[[allow_source_available]]` lifts. */
-export function inForceLicenseDenyUnion(policy: Policy): SpdxLicenseLeaf[] {
-  return unionAllowlist(exemptionAwareDenyRules(policy).inForce);
+/** The branch rankers for a policy's effective deny rules and exemptions. */
+export function branchRankers(policy: Policy): BranchRankers {
+  const all = unionAllowlist(effectiveDenyRules(policy));
+  const inForce = unionAllowlist(exemptionAwareDenyRules(policy).inForce);
+  const ranker = (withCopyleft: boolean): BranchRanker => {
+    const rank = (node: ExpressionNode): BranchRank => {
+      if (!("license" in node)) {
+        const [left, right] = [rank(node.left), rank(node.right)];
+        const [best, worst] = left < right ? [left, right] : [right, left];
+
+        return node.conjunction === "or" ? best : worst;
+      }
+
+      const leaf = asSpdxLicenseLeaf(renderLeaf(node));
+
+      if (leafDenied(leaf, inForce)) {
+        return BranchRank.denied;
+      }
+
+      if (withCopyleft && isCopyleft(node)) {
+        return BranchRank.copyleft;
+      }
+
+      return leafDenied(leaf, all) ? BranchRank.exempted : BranchRank.clean;
+    };
+
+    return rank;
+  };
+
+  return { election: ranker(true), targetLane: ranker(false) };
 }
 
 /**
- * The expression with every OR branch the deny union covers dropped while a sibling branch is not
- * covered, so election ranks a denied branch below every other, copyleft included. An OR whose
- * branches are all denied is kept whole: the deny lane fails it.
+ * The expression with every OR branch ranked worse than its sibling dropped, so only the
+ * best-ranked branches remain electable. An OR whose branches rank equally is kept whole.
  */
-export function withoutDeniedBranches(
-  node: ExpressionNode,
-  union: readonly SpdxLicenseLeaf[],
-): ExpressionNode {
+export function withBestRankedBranches(node: ExpressionNode, rank: BranchRanker): ExpressionNode {
   if ("license" in node) {
     return node;
   }
 
   if (node.conjunction === "or") {
-    const leftDenied = nodeDenied(node.left, union);
+    const left = rank(node.left);
+    const right = rank(node.right);
 
-    if (leftDenied !== nodeDenied(node.right, union)) {
-      return withoutDeniedBranches(leftDenied ? node.right : node.left, union);
+    if (left !== right) {
+      return withBestRankedBranches(left < right ? node.left : node.right, rank);
     }
   }
 
   return {
-    left: withoutDeniedBranches(node.left, union),
+    left: withBestRankedBranches(node.left, rank),
     conjunction: node.conjunction,
-    right: withoutDeniedBranches(node.right, union),
+    right: withBestRankedBranches(node.right, rank),
   };
 }
 
