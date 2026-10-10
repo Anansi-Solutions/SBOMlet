@@ -1021,7 +1021,7 @@ describe("evaluate — staleness-guarded overrides", () => {
       'name = "ipython"',
       'version = "1.0.0"',
       'detected = { registry = "BSD" }',
-      'justification = "contradictory-claims-recorded"',
+      'justification = "license-not-found"',
       'expression = "MIT"',
       'comment = "project says MIT"',
     ].join("\n");
@@ -1174,7 +1174,7 @@ describe("evaluate — a [[clarify]] covering a family of packages", () => {
     'pattern = "@dicts/*"',
     'version = "1.0.0"',
     'detected = { registry = "BSD" }',
-    'justification = "scan-more-precise"',
+    'justification = "license-not-found"',
     'expression = "BSD-3-Clause"',
   ].join("\n");
 
@@ -1204,7 +1204,7 @@ describe("evaluate — a [[clarify]] covering a family of packages", () => {
       'name = "pinned-pkg"',
       'version = ["1.0.0", "2.0.0"]',
       'detected = { registry = "BSD" }',
-      'justification = "scan-more-precise"',
+      'justification = "license-not-found"',
       'expression = "BSD-3-Clause"',
     ].join("\n");
     const covered = runEngine(
@@ -1233,7 +1233,7 @@ describe("evaluate — the reason a cited [[clarify]] surfaces", () => {
       'name = "cited-pkg"',
       'version = "1.0.0"',
       'detected = { registry = "BSD" }',
-      'justification = "scan-more-precise"',
+      'justification = "license-not-found"',
       'expression = "BSD-3-Clause"',
       ...extra,
     ].join("\n");
@@ -1241,7 +1241,7 @@ describe("evaluate — the reason a cited [[clarify]] surfaces", () => {
   test("without a comment the reason is the justification value alone", () => {
     const { verdicts } = runEngine([pkgSpec("cited-pkg", "BSD", ["backend"])], citingClarify([]));
 
-    expect(verdicts[0].reason).toContain("scan-more-precise");
+    expect(verdicts[0].reason).toContain("license-not-found");
     expect(verdicts[0].reason).not.toContain("—");
   });
 
@@ -1252,7 +1252,7 @@ describe("evaluate — the reason a cited [[clarify]] surfaces", () => {
     );
 
     expect(verdicts[0].reason).toContain(
-      "scan-more-precise — the LICENSE file carries the three-clause text",
+      "license-not-found — the LICENSE file carries the three-clause text",
     );
   });
 });
@@ -2499,7 +2499,7 @@ describe("evaluate — deny is terminal OVER OVERRIDES (C#1: deny reads the pre-
       'name = "legit"',
       'version = "1.0.0"',
       'detected = { registry = "Apache" }',
-      'justification = "scan-more-precise"',
+      'justification = "license-not-found"',
       'expression = "Apache-2.0"',
     ].join("\n");
     const { verdicts } = runEngine([pkgSpec("legit", "Apache", ["backend"])], policyText);
@@ -3733,6 +3733,29 @@ describe("evaluate — a clarify entry the current signal disproves", () => {
 // space, indexed within that file. No combined-array position may reach a
 // reader: a citation names the file to open and the table in it.
 // ===========================================================================
+
+describe("evaluate — a scan justification with no scan behind it", () => {
+  test.each(["scan-more-precise", "contradictory-claims-recorded"])(
+    "%s fails as invalid when the scan recorded nothing",
+    (justification) => {
+      const policyText = [
+        "[[clarify]]",
+        'name = "sneaky"',
+        'version = "1.0.0"',
+        'detected = { registry = "GPL-3.0-only" }',
+        `justification = "${justification}"`,
+        'expression = "MIT"',
+      ].join("\n");
+      const [verdict] = runEngine(
+        [pkgSpec("sneaky", "GPL-3.0-only", ["apps/web"])],
+        policyText,
+      ).verdicts;
+
+      expect(verdict?.status).toBe("fail");
+      expect(verdict?.rule).toBe("clarify:invalid[0]");
+    },
+  );
+});
 
 describe("evaluate — the clarifications file's own citation space", () => {
   const importable = (name: string, expression: string): string =>

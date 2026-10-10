@@ -131,7 +131,7 @@ export function validateClarificationsPath(
 const DETECTED_SOURCES = ["registry", "intensive"] as const;
 
 /** One producing lane a `detected` table may record. */
-type DetectedSource = (typeof DETECTED_SOURCES)[number];
+export type DetectedSource = (typeof DETECTED_SOURCES)[number];
 
 /**
  * One lane's recorded detection: the raw value that lane produced as a non-empty string (trimmed)
@@ -235,7 +235,7 @@ function evidenceProblems(entry: Record<string, unknown>): {
  * no lane - each is about the licence text rather than about one source - and `license-not-found`
  * carries its own rule below.
  */
-const JUSTIFICATION_LANES: Readonly<Record<Justification, ReadonlyArray<DetectedSource>>> = {
+export const JUSTIFICATION_LANES: Readonly<Record<Justification, ReadonlyArray<DetectedSource>>> = {
   "contradictory-claims-recorded": ["registry", "intensive"],
   "declared-more-complete": ["registry"],
   "dual-license-choice": [],

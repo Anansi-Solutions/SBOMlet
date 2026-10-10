@@ -1764,7 +1764,7 @@ describe("check — stale-override exit lane", () => {
       'name = "mit-lib"',
       'version = "3.0.0"',
       'detected = { registry = "MIT" }', // still what the registry reports → applies
-      'justification = "contradictory-claims-recorded"',
+      'justification = "declared-more-complete"',
       'expression = "MIT"',
       "",
     ].join("\n");

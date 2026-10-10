@@ -79,8 +79,8 @@ describe("justificationValidity — scan-overdetection", () => {
     expect(result.outcome === "unnecessary" && result.reason).toContain("scan");
   });
 
-  test("a scan that reads nothing is the stale lane's business, not this one's", () => {
-    expect(overdetected("MIT", signal(["MIT"], []))).toEqual({ outcome: "ok" });
+  test("a scan that reads nothing cannot have overdetected anything", () => {
+    expect(overdetected("MIT", signal(["MIT"], [])).outcome).toBe("invalid");
   });
 });
 
@@ -102,8 +102,8 @@ describe("justificationValidity — scan-found-additional-content", () => {
     expect(result.outcome === "invalid" && result.reason).toContain("GPL-3.0-only");
   });
 
-  test("a scan that reads nothing leaves the adopted reading standing", () => {
-    expect(additional("MIT AND WTFPL", signal(["MIT"], []))).toEqual({ outcome: "ok" });
+  test("a scan that reads nothing has no reading to adopt", () => {
+    expect(additional("MIT AND WTFPL", signal(["MIT"], [])).outcome).toBe("invalid");
   });
 });
 
@@ -121,6 +121,13 @@ describe("justificationValidity — scan-more-precise", () => {
     expect(precise("BSD-2-Clause-Views", signal(["BSD-2-Clause"], ["ISC"])).outcome).toBe(
       "invalid",
     );
+  });
+
+  test("no scan reading at all is no more precise reading", () => {
+    const result = precise("MIT", signal(["GPL-3.0-only"], []));
+
+    expect(result.outcome).toBe("invalid");
+    expect(result.outcome === "invalid" && result.reason).toContain("intensive");
   });
 });
 
@@ -175,10 +182,9 @@ describe("justificationValidity — contradictory-claims-recorded", () => {
     ).toBe("unnecessary");
   });
 
-  test("one side silent is no agreement", () => {
-    expect(contradictory("AGPL-3.0-only", signal([], ["AGPL-3.0-only"]))).toEqual({
-      outcome: "ok",
-    });
+  test("one side silent is no contradiction to record", () => {
+    expect(contradictory("AGPL-3.0-only", signal([], ["AGPL-3.0-only"])).outcome).toBe("invalid");
+    expect(contradictory("AGPL-3.0-only", signal(["BSD-3-Clause"], [])).outcome).toBe("invalid");
   });
 });
 

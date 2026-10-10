@@ -167,9 +167,9 @@ describe("target lane — overrideCitation preserved on the compatible outcome",
       'name = "clarified-target-ok"',
       'version = "1.0.0"',
       'detected = { registry = "totally-not-a-license" }',
-      'justification = "contradictory-claims-recorded"',
+      'justification = "license-not-found"',
       'expression = "MIT"',
-      'comment = "misdetected upstream; corrected to MIT"',
+      'comment = "no source states a licence; the LICENSE file is MIT"',
       "",
     ].join("\n");
     const { verdicts } = runEngine(

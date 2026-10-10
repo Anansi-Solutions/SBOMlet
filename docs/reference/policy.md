@@ -265,20 +265,23 @@ fixed list. `comment` carries anything the list cannot.
 
 | Value | Meaning | Proven invalid when |
 |-------|---------|---------------------|
-| `contradictory-claims-recorded` | The sources disagree irreconcilably and the expression is the reading you stand behind. The sanctioned fallback. | never — it becomes unnecessary instead, below |
+| `contradictory-claims-recorded` | The sources disagree irreconcilably and the expression is the reading you stand behind. The sanctioned fallback. | either source reports nothing; otherwise never — it becomes unnecessary instead, below |
 | `declared-more-complete` | The package's own metadata names licences the scan cannot see. | the declared claim no longer names part of the expression |
 | `dual-license-choice` | The package offers a choice of licences that the in-depth scan read as one joined licence; the expression restores the choice it offers, not the branch you took. | the scan's licences are not the recorded choice — nothing was joined — or the declared claim offers none of them |
 | `license-not-found` | No source states a licence; the expression comes from evidence outside detection. | either source now states a licence |
-| `scan-found-additional-content` | The in-depth scan sees further licences that do govern content the package ships. | the expression no longer accounts for what the scan reads |
-| `scan-more-precise` | The in-depth scan resolves an under-specified declared label to the exact licence. | the expression no longer accounts for what the scan reads |
-| `scan-overdetection` | The in-depth scan reports licences from files that do not govern the package. | never — it becomes unnecessary instead, below |
+| `scan-found-additional-content` | The in-depth scan sees further licences that do govern content the package ships. | the scan reports nothing, or the expression no longer accounts for what it reads |
+| `scan-more-precise` | The in-depth scan resolves an under-specified declared label to the exact licence. | the scan reports nothing, or the expression no longer accounts for what it reads |
+| `scan-overdetection` | The in-depth scan reports licences from files that do not govern the package. | the scan reports nothing; otherwise never — it becomes unnecessary instead, below |
 
 Each of these is a claim about what a source reported, so the lane it speaks
 for may not be recorded as `false`. `contradictory-claims-recorded` speaks for
 both lanes, `declared-more-complete` for `registry`, and the three `scan-`
 values for `intensive`; recording `false` there says that source reported
 nothing, which is the opposite of the claim. Leaving a lane out is different
-and stays allowed — `detected` records what you checked. And
+and stays allowed — `detected` records what you checked — but it does not make
+the claim vacuously true: a scan-lane value, or
+`contradictory-claims-recorded`, whose lane reports nothing when the policy
+runs is proven invalid, as in the table. And
 `license-not-found` says no source states a licence, so neither recorded value
 may be one — including a label that names one, such as `MIT License`, which
 the tool resolves to `MIT`. A value that names no licence, such as
