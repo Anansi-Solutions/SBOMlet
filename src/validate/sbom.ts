@@ -133,7 +133,8 @@ export type SbomComponentShape = typeof SbomComponent.infer;
  * Every entry of a components array in document pre-order, descending into each entry's own
  * `components` array (CycloneDX nests sub-components there). Entries are returned unnarrowed.
  *
- * @privateRemarks Iterative, so a deeply nested crafted document cannot overflow the stack.
+ * @privateRemarks Iterative and spread-free, so neither a deeply nested nor a very wide crafted
+ * document can overflow the stack.
  */
 export function componentTreeOf(components: ReadonlyArray<unknown>): unknown[] {
   const walked: unknown[] = [];
@@ -141,12 +142,16 @@ export function componentTreeOf(components: ReadonlyArray<unknown>): unknown[] {
 
   while (pending.length > 0) {
     const raw = pending.pop();
-    const children = recordOf(raw)?.["components"];
+    const children: unknown = recordOf(raw)?.["components"];
 
     walked.push(raw);
 
     if (Array.isArray(children)) {
-      pending.push(...[...(children as unknown[])].reverse());
+      const siblings: readonly unknown[] = children;
+
+      for (let index = siblings.length - 1; index >= 0; index--) {
+        pending.push(siblings[index]);
+      }
     }
   }
 
