@@ -1571,6 +1571,45 @@ describe("mergeSboms — evidence parsing into attribution", () => {
     expect(lines).not.toContain("Copyright (c) 2010 Holder 10");
   });
 
+  test("Test 4e: a NOTICE past the license-text cap is still folded, with its copyright line", () => {
+    const evidenceEntry = (fileName: string, text: string): unknown => ({
+      license: {
+        name: `file: ${fileName}`,
+        text: { content: Buffer.from(text, "utf8").toString("base64"), encoding: "base64" },
+      },
+    });
+    const licenseEntries = Array.from({ length: 8 }, (_, i) =>
+      evidenceEntry(
+        `licenses/LICENSE-dep${i}.txt`,
+        `MIT License\n\nCopyright (c) 2020 Vendor ${i}\n`,
+      ),
+    );
+    const notice = "Big Bundle\nCopyright 2024 The Big Bundle Authors\n";
+    const doc = {
+      components: [
+        {
+          name: "big-bundle",
+          version: "1.0.0",
+          purl: asPurl("pkg:npm/big-bundle@1.0.0"),
+          licenses: [{ license: { id: "Apache-2.0" } }],
+          evidence: {
+            licenses: [
+              ...licenseEntries,
+              evidenceEntry("licenses/LICENSE-dep8.txt", "Copyright (c) 2021 Ninth Vendor\n"),
+              evidenceEntry("NOTICE", notice),
+            ],
+          },
+        },
+      ],
+    };
+    const attribution = mergeSboms([{ sbom: doc, targetIdentity: EV_TARGET }]).packages[0]
+      ?.attribution;
+
+    expect(attribution?.noticeTexts).toEqual([notice]);
+    expect(attribution?.copyrightLines).toContain("Copyright 2024 The Big Bundle Authors");
+    expect(attribution?.copyrightLines).not.toContain("Copyright (c) 2021 Ninth Vendor");
+  });
+
   test("Test 4d: CRLF evidence intake yields LF-only text with no trailing spaces", () => {
     // Pre-fix, \r (0x0D) sat inside the control-character class and became
     // a SPACE: every CRLF-origin "verbatim" text gained a trailing space on
