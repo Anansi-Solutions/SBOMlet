@@ -73,8 +73,9 @@ The policy engine decides one verdict per (package × occurrence). Precedence,
 highest to lowest:
 
 1. **Deny** — a `[[deny]]` match, or a shipped source-available default: fail,
-   unless the consumer exempted that exact license via
-   `[[allow_source_available]]` (then a warn instead). Terminal: nothing below
+   unless only defaults the consumer exempted via `[[allow_source_available]]`
+   deny the finding (then a warn instead; an `AND` with a non-exempted
+   denied licence still fails). Terminal: nothing below
    can license a denied finding back in.
 2. **A stale override** — an override's precondition no longer matches what's
    observed: fail.

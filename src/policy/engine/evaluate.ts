@@ -119,7 +119,14 @@ import { clarifyCitation, clarifyInvalidRuleId, type ClarifyRule } from "../sche
 import { ruleReason } from "../schema/diagnostics";
 import { BUILTIN_DENY_RULE_ID } from "./builtinDenylist";
 import { AGPL_IDS, COPYLEFT_FAMILY } from "./copyleft";
-import { denyRuleFor, licenseDenyUnion, withoutDeniedBranches, type IndexedDenyRule } from "./deny";
+import {
+  denyRuleAmong,
+  exemptionAwareDenyRules,
+  licenseDenyUnion,
+  withoutDeniedBranches,
+  type ExemptionAwareDenyRules,
+  type IndexedDenyRule,
+} from "./deny";
 import { voidedCompatibleEntries, voidedEntryKey, type VoidedEntry } from "./chain";
 import { COULD_BE_COPYLEFT_FAMILIES, WORKSPACE_ABSORBS } from "./copyleftFamily";
 import { justificationValidity, type JustificationValidity } from "./justificationValidity";
@@ -885,11 +892,11 @@ function applyScopeDowngrades(
  * name-mode rule. Defensive: a finding with no observed expressions simply skips check 3.
  */
 function firstDeny(
-  policy: Policy,
+  rules: ReadonlyArray<IndexedDenyRule>,
   entry: PackageEntry,
   expression: string | null,
 ): IndexedDenyRule | undefined {
-  const combined = denyRuleFor(policy, expression, entry.name);
+  const combined = denyRuleAmong(rules, expression, entry.name);
 
   if (combined !== undefined) {
     return combined;
@@ -898,7 +905,7 @@ function firstDeny(
   const observed = entry.finding?.observedExpression;
 
   if (observed !== undefined) {
-    const hit = denyRuleFor(policy, observed, entry.name);
+    const hit = denyRuleAmong(rules, observed, entry.name);
 
     if (hit !== undefined) {
       return hit;
@@ -906,7 +913,7 @@ function firstDeny(
   }
 
   for (const obs of entry.finding?.observedExpressions ?? []) {
-    const hit = denyRuleFor(policy, obs, entry.name);
+    const hit = denyRuleAmong(rules, obs, entry.name);
 
     if (hit !== undefined) {
       return hit;
@@ -914,6 +921,35 @@ function firstDeny(
   }
 
   return undefined;
+}
+
+/** The deny lane's decision for one package. */
+interface DenyDecision {
+  /** The rule cited: one still in force, or an exempted shipped default when `exempted`. */
+  readonly rule: IndexedDenyRule;
+  /** True when only shipped defaults the policy exempts deny the package. */
+  readonly exempted: boolean;
+}
+
+/**
+ * Decides the exemption on the expression, not on one attributed rule: the package fails when the
+ * rules still in force deny it (`SSPL-1.0 AND BUSL-1.1` with only BUSL exempted), and is exempted
+ * only when the denial needs an exempted default.
+ */
+function denyDecision(
+  rules: ExemptionAwareDenyRules,
+  entry: PackageEntry,
+  expression: string | null,
+): DenyDecision | undefined {
+  const inForce = firstDeny(rules.inForce, entry, expression);
+
+  if (inForce !== undefined) {
+    return { rule: inForce, exempted: false };
+  }
+
+  const lifted = firstDeny(rules.exemptedFirst, entry, expression);
+
+  return lifted === undefined ? undefined : { rule: lifted, exempted: true };
 }
 
 /**
@@ -946,13 +982,9 @@ function denyVerdict(
 }
 
 /**
- * Source-available exemption (ADR-0013). When the terminal-0 deny that matched is a shipped
- * source-available default (cited default:source-available - not the consumer's own [[deny]]) and
- * the consumer listed that licence under [[allow_source_available]], the package is not
- * force-failed: it surfaces as a warn citing the exemption, so an accepted source-available licence
- * stays visible rather than silently passing. An explicit [[deny]] still wins - denyRuleFor
- * attributes a policy deny first (policy-first order), so denyRule is never the builtin id when the
- * consumer also denied the licence themselves.
+ * The [[allow_source_available]] entry lifting an exempted shipped default (ADR-0013), or undefined
+ * for any other rule. The package then surfaces as a warn citing the exemption, so an accepted
+ * source-available licence stays visible rather than silently passing.
  */
 function sourceAvailableExemption(
   policy: Policy,
@@ -989,23 +1021,22 @@ function exemptionVerdict(
 }
 
 /**
- * Terminal-0 verdict for a matched deny: a force-fail, unless the match is a shipped
- * source-available default the consumer exempted (ADR-0013), which surfaces as a warn instead. An
- * explicit [[deny]] is never the builtin id (it is attributed first), so this never softens a deny
- * the consumer authored.
+ * Terminal-0 verdict for a deny decision: a force-fail, unless only shipped source-available
+ * defaults the consumer exempted deny the package (ADR-0013), which surfaces as a warn instead. An
+ * explicit [[deny]] stays in force, so this never softens a deny the consumer authored.
  */
 function denyOrExemptVerdict(
   base: { purl: Purl; occurrenceTarget: TargetIdentity },
   policy: Policy,
-  denyRule: IndexedDenyRule,
+  decision: DenyDecision,
 ): Verdict {
-  const exemption = sourceAvailableExemption(policy, denyRule);
+  const exemption = decision.exempted ? sourceAvailableExemption(policy, decision.rule) : undefined;
 
   if (exemption !== undefined) {
     return exemptionVerdict(base, exemption);
   }
 
-  return denyVerdict(base, denyRule);
+  return denyVerdict(base, decision.rule);
 }
 
 /**
@@ -1398,7 +1429,7 @@ function verdictFor(
   assessment: Assessment,
   packageRule: JudgedPackageRule | undefined,
   licenseRule: IndexedRule<CompatibleLicenseRule> | undefined,
-  denyRule: IndexedDenyRule | undefined,
+  denied: DenyDecision | undefined,
   clarifyDecided: ClarifyDecision | undefined,
   policy: Policy,
 ): Verdict {
@@ -1408,8 +1439,8 @@ function verdictFor(
   // Terminal-0: a denied license/rider can never be licensed back in - unless the matched deny is a
   // shipped source-available default the consumer exempted via [[allow_source_available]]
   // (ADR-0013), which surfaces as a warn instead.
-  if (denyRule !== undefined) {
-    return denyOrExemptVerdict(base, policy, denyRule);
+  if (denied !== undefined) {
+    return denyOrExemptVerdict(base, policy, denied);
   }
 
   const stale = entry.finding?.staleOverride;
@@ -1503,6 +1534,7 @@ export function evaluate(
   // target before the walk below reads the answer per occurrence.
   const voided = voidedCompatibleEntries(model, policy, targetsWithDependencyGraph);
   const denyUnion = licenseDenyUnion(policy);
+  const denyRules = exemptionAwareDenyRules(policy);
 
   for (const entry of model.packages) {
     const assessment = assessPackage(entry, denyUnion);
@@ -1527,7 +1559,7 @@ export function evaluate(
     // of how combine rendered the finding (precise/imprecise/unknown), in every scope. Name-mode
     // (passed null here) is inert per observed expression - it already matched via entry.name
     // above.
-    const denyRule = firstDeny(policy, entry, assessment.expression);
+    const denied = denyDecision(denyRules, entry, assessment.expression);
     // Decided once per package: the clarify entry governing it is the same at every occurrence.
     const clarifyDecided = clarifyDecision(entry, policy);
 
@@ -1554,7 +1586,7 @@ export function evaluate(
           assessment,
           packageRule,
           licenseRule,
-          denyRule,
+          denied,
           clarifyDecided,
           policy,
         ),

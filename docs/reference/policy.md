@@ -178,6 +178,11 @@ review.
 | `license` | string | yes | One of the built-in defaults — `BUSL-1.1`, `SSPL-1.0`, `Elastic-2.0`. Any other id is rejected. |
 | `reason` | string (non-empty) | yes | Why this source-available licence is accepted — the audit trail. |
 
+The exemption is decided on the whole expression, not on one licence in it. A
+package still fails when the licences left denied after the exemption deny it:
+with only `BUSL-1.1` exempted, `SSPL-1.0 AND BUSL-1.1` fails on `SSPL-1.0`,
+while `BUSL-1.1` alone, or an `OR` that can elect `BUSL-1.1`, warns.
+
 The exemption is scoped to the defaults only. A licence you deny yourself via
 `[[deny]]` is absolute and is never softened here — an explicit deny still wins.
 See [ADR-0013](../explanation/adr/0013-source-available-deny.md).

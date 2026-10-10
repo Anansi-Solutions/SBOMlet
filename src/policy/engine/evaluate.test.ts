@@ -3322,6 +3322,38 @@ describe("evaluate — [[allow_source_available]] exemption (ADR-0013 opt-out)",
     expect(verdicts[0].status).toBe("fail");
     expect(verdicts[0].rule).toBe("denied[0]");
   });
+
+  test.each(["SSPL-1.0 AND BUSL-1.1", "BUSL-1.1 AND SSPL-1.0", "Elastic-2.0 AND BUSL-1.1"])(
+    "%s still fails on the conjunct the exemption does not name",
+    (expression) => {
+      const { verdicts } = runEngine([pkgSpec("both", expression, ["backend"])], exemptBusl);
+
+      expect(verdicts[0].status).toBe("fail");
+      expect(verdicts[0].rule).toBe("default:source-available");
+      expect(verdicts[0].reason).not.toContain('"BUSL-1.1"');
+    },
+  );
+
+  test("separate BUSL-1.1 and SSPL-1.0 claims still fail on the unexempted one", () => {
+    const { verdicts } = runEngine(
+      [multiClaimSpec("both", ["BUSL-1.1", "SSPL-1.0"], ["backend"])],
+      exemptBusl,
+    );
+
+    expect(verdicts[0].status).toBe("fail");
+    expect(verdicts[0].rule).toBe("default:source-available");
+  });
+
+  test("an OR the exemption makes electable warns, citing the exemption", () => {
+    const policyText = [denyLicenseFixture("Zlib"), "", exemptBusl].join("\n");
+    const { verdicts } = runEngine(
+      [pkgSpec("either", "Zlib OR BUSL-1.1", ["backend"])],
+      policyText,
+    );
+
+    expect(verdicts[0].status).toBe("warn");
+    expect(verdicts[0].rule).toBe("allow_source_available[0]");
+  });
 });
 
 // ---------------------------------------------------------------------------

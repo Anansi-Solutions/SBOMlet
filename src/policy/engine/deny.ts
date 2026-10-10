@@ -107,6 +107,31 @@ function effectiveDenyRules(policy: Policy): IndexedDenyRule[] {
   return rules;
 }
 
+/** The effective deny rules, split by what `[[allow_source_available]]` lifts. */
+export interface ExemptionAwareDenyRules {
+  /** The rules no exemption lifts, in precedence order. */
+  readonly inForce: ReadonlyArray<IndexedDenyRule>;
+  /** Every rule, the exempted shipped defaults first, so attribution names one when it can. */
+  readonly exemptedFirst: ReadonlyArray<IndexedDenyRule>;
+}
+
+/** The effective deny rules split into those in force and those an exemption lifts. */
+export function exemptionAwareDenyRules(policy: Policy): ExemptionAwareDenyRules {
+  const exemptedLicenses = new Set<string>(
+    policy.allowSourceAvailable.map((entry) => entry.license),
+  );
+  const isExempted = (r: IndexedDenyRule): boolean =>
+    r.ruleId === BUILTIN_DENY_RULE_ID &&
+    r.rule.match === "license" &&
+    exemptedLicenses.has(r.rule.pattern);
+  const rules = effectiveDenyRules(policy);
+
+  return {
+    inForce: rules.filter((r) => !isExempted(r)),
+    exemptedFirst: [...rules.filter(isExempted), ...rules.filter((r) => !isExempted(r))],
+  };
+}
+
 /** True iff one leaf form satisfies the deny allowlist (defensive catch). */
 function satisfiesDenyAllowlist(
   form: SpdxLicenseLeaf,
@@ -257,7 +282,15 @@ export function denyRuleFor(
   expression: string | null,
   name: string,
 ): IndexedDenyRule | undefined {
-  const rules = effectiveDenyRules(policy);
+  return denyRuleAmong(effectiveDenyRules(policy), expression, name);
+}
+
+/** {@link denyRuleFor} over an explicit rule list, in that list's precedence order. */
+export function denyRuleAmong(
+  rules: ReadonlyArray<IndexedDenyRule>,
+  expression: string | null,
+  name: string,
+): IndexedDenyRule | undefined {
   let nameMatch: IndexedDenyRule | undefined;
   let namePosition = -1;
 
