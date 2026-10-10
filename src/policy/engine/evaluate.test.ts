@@ -2220,6 +2220,38 @@ describe("denyRuleFor — pure matcher (SPDX + name + OR-election)", () => {
   });
 });
 
+describe("deny reads through a WITH exception", () => {
+  const UNKNOWN_WARN = '[unknown]\nhandling = "warn"\n';
+
+  test("a consumer deny on a bare id covers that id WITH an exception", () => {
+    const policy = parsePolicy(denyLicenseFixture("Zlib"));
+
+    expect(denyRuleFor(policy, "Zlib WITH Classpath-exception-2.0", "x")?.ruleId).toBe("denied[0]");
+  });
+
+  test.each(["BUSL-1.1 WITH Classpath-exception-2.0", "Elastic-2.0 WITH GCC-exception-3.1"])(
+    "%s still fails the shipped source-available default",
+    (expression) => {
+      const [verdict] = runEngine(
+        [pkgSpec("dep", expression, ["apps/web"])],
+        UNKNOWN_WARN,
+      ).verdicts;
+
+      expect(verdict?.status).toBe("fail");
+      expect(verdict?.rule).toBe("default:source-available");
+    },
+  );
+
+  test("a [[compatible]] licence pattern on a bare id does not accept its WITH variants", () => {
+    const [verdict] = runEngine(
+      [pkgSpec("dep", "GPL-2.0-only WITH Classpath-exception-2.0", ["apps/web"])],
+      licenseRuleFixture("GPL-2.0-only"),
+    ).verdicts;
+
+    expect(verdict?.rule).toBe("default:copyleft");
+  });
+});
+
 describe("evaluate — deny is terminal-0 (beats every accept lever)", () => {
   test("deny BEATS compatible: same license denied AND compatible → fail/denied[i]", () => {
     const policyText = [

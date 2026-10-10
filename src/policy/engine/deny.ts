@@ -40,7 +40,8 @@
  * ["BUSL-1.1"]) is true. That would wrongly deny a dependency that can elect MIT instead. The
  * correct rule is the dual of isCopyleft's recursion: a finding is denied only when it has no
  * branch left to elect out of the deny set.
- *   - leaf       → denied iff the leaf satisfies the deny allowlist;
+ *   - leaf       → denied iff the leaf, or its id without a WITH exception, satisfies the deny
+ *                  allowlist;
  *   - OR (l, r) → denied iff both sides are denied (one electable branch
  *                  defeats the denial);
  *   - AND (l, r) → denied iff either side is denied (an AND conjunct cannot be elected away - every
@@ -74,6 +75,7 @@ import parseSpdx from "spdx-expression-parse";
 
 import { asSpdxLicenseLeaf, type SpdxLicenseLeaf } from "../../model/dependencies";
 import { type ExpressionNode } from "../../normalize/expression";
+import { baseLeafId } from "../compat/classify";
 import { BUILTIN_DENY_RULES, BUILTIN_DENY_RULE_ID } from "./builtinDenylist";
 import type { DenyRule } from "../schema/deny";
 import type { Policy } from "../schema";
@@ -105,13 +107,26 @@ function effectiveDenyRules(policy: Policy): IndexedDenyRule[] {
   return rules;
 }
 
-/** True iff a single leaf id satisfies the deny allowlist (defensive catch). */
-function leafDenied(leaf: SpdxLicenseLeaf, allowlist: readonly SpdxLicenseLeaf[]): boolean {
+/** True iff one leaf form satisfies the deny allowlist (defensive catch). */
+function satisfiesDenyAllowlist(
+  form: SpdxLicenseLeaf,
+  allowlist: readonly SpdxLicenseLeaf[],
+): boolean {
   try {
-    return satisfies(leaf, [...allowlist]);
+    return satisfies(form, [...allowlist]);
   } catch {
     return false;
   }
+}
+
+/**
+ * True iff a single leaf, or its base id without the exception and `+`, is denied. An exception
+ * only narrows obligations, so `BUSL-1.1 WITH x` stays denied.
+ */
+function leafDenied(leaf: SpdxLicenseLeaf, allowlist: readonly SpdxLicenseLeaf[]): boolean {
+  return [leaf, asSpdxLicenseLeaf(baseLeafId(leaf))].some((form) =>
+    satisfiesDenyAllowlist(form, allowlist),
+  );
 }
 
 /**

@@ -44,7 +44,7 @@ function isRefLeaf(id: string): boolean {
  * X" (@privateRemarks: an exception only narrows obligations, `plus` only widens the accepted
  * version range, so falling back to the bare id is safe, never permissive-by-omission).
  */
-function baseLeafId(rendered: string): string {
+export function baseLeafId(rendered: string): string {
   const withoutException = rendered.replace(/ WITH .+$/, "");
 
   return withoutException.endsWith("+") ? withoutException.slice(0, -1) : withoutException;

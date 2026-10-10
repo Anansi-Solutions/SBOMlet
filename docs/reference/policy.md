@@ -143,6 +143,12 @@ branches only, even when the remaining one is copyleft: `GPL-3.0-only OR
 BUSL-1.1` is judged on `GPL-3.0-only` and fails as copyleft, rather than
 passing on a branch the tool itself forbids.
 
+A licence-mode pattern naming a bare id also denies that id under any `WITH`
+exception: an exception only narrows obligations, so
+`BUSL-1.1 WITH Classpath-exception-2.0` is denied by `BUSL-1.1`. The
+`[[compatible]]` licence mode does not read through an exception this way;
+see [`[[compatible]]`](#compatible).
+
 Name mode covers things SPDX does not register. A
 [use-restriction rider](../glossary.md#source-available) like Commons-Clause
 rides alongside another licence (`MIT AND Commons-Clause`) and has no registered
@@ -410,6 +416,10 @@ Licence mode allows a whole licence, such as a weak copyleft you have reviewed
 and accepted like `MPL-2.0`. Package mode allows one dependency, a family of
 them, or an explicit bundle of unrelated ones, for when only specific packages'
 obligations have been reviewed rather than a whole licence.
+
+A licence pattern accepts exactly the forms it names: `GPL-2.0-only` does not
+accept `GPL-2.0-only WITH Classpath-exception-2.0`, so list the `WITH` form
+when that is what you reviewed.
 
 ### Versions are required
 
