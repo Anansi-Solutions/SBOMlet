@@ -161,8 +161,10 @@ rides alongside another licence (`MIT AND Commons-Clause`) and has no registered
 SPDX id, and a licence like RSAL has no registered id at all. Such a declared
 value is never corrected into the licence it rides on: a value that names Commons
 Clause or a proprietary or commercial marker, or whose correction would drop a
-family, version, or exception it states, is an unknown finding, handled by
-`[unknown]`. Name mode matches
+family or version it states, is an unknown finding, handled by `[unknown]`. An
+exception a value states is attached only when it names exactly one registered
+SPDX exception id; otherwise the value is the imprecise family it names, or
+unknown. Name mode matches
 the package by exact name, so it catches these even on a package whose finding is
 unknown. The compare is exact and case-sensitive (`foo-bar` never matches
 `Foo_Bar`), so an entry that denies no package is reported as an unused entry on

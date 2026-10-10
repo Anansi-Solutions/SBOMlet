@@ -41,6 +41,7 @@ import {
   renderNode,
   type ExpressionNode,
 } from "./expression";
+import { registeredExceptionNamedBy } from "./statedException";
 
 /**
  * Raw values that must never reach correct(): npm's "UNLICENSED" (any spelling) means proprietary
@@ -80,6 +81,9 @@ const OR_LATER_GRANT = /\w\+|\bor[\s-]+(?:any[\s-]+)?later\b/i;
 
 /** An exception a label attaches: `with Classpath Exception`, `-with-LLVM-exception`, `w/ CPE`. */
 const STATED_EXCEPTION = /\bexceptions?\b|\bwith\b|\bw\//i;
+
+/** The connector that sets a label's exception apart from its license: `with`, `w/`. */
+const EXCEPTION_CONNECTOR = /\bwith\b|\bw\//i;
 
 /**
  * A hedge saying the text only resembles the license it names, in its suffix or parenthetical form:
@@ -267,7 +271,7 @@ function statedFamilies(text: string): ReadonlySet<string> {
 
 /**
  * The terms a label or SPDX expression states about its license: family names, versions with
- * trailing `.0` dropped, an or-later grant, and an exception. `GPLv2+` states gpl, 2, or-later.
+ * trailing `.0` dropped, and an or-later grant. `GPLv2+` states gpl, 2, or-later.
  */
 function statedTerms(text: string): ReadonlySet<string> {
   const unglued = text.replace(FAMILY_NAME, "$1 ");
@@ -275,19 +279,15 @@ function statedTerms(text: string): ReadonlySet<string> {
     unglued.matchAll(STATED_VERSION),
     ([, version = ""]) => `v${version.replace(/(?:\.0)+$/, "")}`,
   );
-  const markers = [
-    ...(OR_LATER_GRANT.test(text) ? ["or-later"] : []),
-    ...(STATED_EXCEPTION.test(text) ? ["exception"] : []),
-  ];
+  const orLater = OR_LATER_GRANT.test(text) ? ["or-later"] : [];
 
-  return new Set([...statedFamilies(text), ...versions, ...markers]);
+  return new Set([...statedFamilies(text), ...versions, ...orLater]);
 }
 
 /**
  * True when `corrected` keeps every term `raw` states, so the correction respelled the label
  * (`Modified BSD License` to BSD-3-Clause) without changing it. A dropped family (`MIT/GPL` to
- * GPL-3.0-or-later), version (`Eclipse Public License 2.0` to EPL-1.0), or-later grant, or
- * exception fails.
+ * GPL-3.0-or-later), version (`Eclipse Public License 2.0` to EPL-1.0), or or-later grant fails.
  */
 function keepsStatedTerms(raw: string, corrected: string): boolean {
   const kept = statedTerms(corrected);
@@ -307,6 +307,59 @@ function hedgedResult(raw: string): NormalizeResult {
 }
 
 /**
+ * The correction of a label that states an exception: the license spdx-correct reads from it, which
+ * must keep the family, version and or-later grant stated before the `with`, `WITH` the one
+ * registered exception id the words after it name. `GPLv2 with Classpath Exception` is
+ * `GPL-2.0-only WITH Classpath-exception-2.0`: the `-only` or `-or-later` is spdx-correct's
+ * reading, never added here. An exception naming no single registered id is the hedged family.
+ */
+function correctedWithStatedException(raw: string, corrected: string): NormalizeResult {
+  const connector = EXCEPTION_CONNECTOR.exec(raw);
+  const licensePart = connector === null ? raw : raw.slice(0, connector.index);
+  const exceptionPart = connector === null ? "" : raw.slice(connector.index + connector[0].length);
+  const license = singleLicense(corrected);
+
+  if (license === undefined || !keepsStatedTerms(licensePart, renderNode(license))) {
+    return { expression: null, source: "generator" }; // unknown
+  }
+
+  const exception = registeredExceptionNamedBy(exceptionPart);
+
+  if (exception === undefined) {
+    return hedgedResult(raw);
+  }
+
+  const expression = renderNode({ ...license, exception });
+
+  try {
+    parse(expression);
+  } catch {
+    return { expression: null, source: "generator" }; // unknown
+  }
+
+  return keepsStatedTerms(raw, expression)
+    ? { expression: canonicalizeExpression(asRawLicense(expression)), source: "corrected" }
+    : { expression: null, source: "generator" };
+}
+
+/** The one license `expression` names, without any exception; undefined for a compound one. */
+function singleLicense(expression: string): { license: string; plus?: true } | undefined {
+  let node: ExpressionNode;
+
+  try {
+    node = parse(canonicalizeExpression(asRawLicense(expression))) as ExpressionNode;
+  } catch {
+    return undefined;
+  }
+
+  if (!("license" in node)) {
+    return undefined;
+  }
+
+  return node.plus ? { license: node.license, plus: true } : { license: node.license };
+}
+
+/**
  * Result of normalizing one raw license string. An imprecise result carries `imprecise: true` +
  * `impreciseFamily` with `expression` null: an ambiguous family label is present-but-imprecise,
  * never a guessed precise id and never silently unknown.
@@ -322,8 +375,9 @@ export interface NormalizeResult {
  * Normalize one raw license string: exact parse first, an imprecise-family intercept, a
  * precise-label fixup for the cases correct() misses, then a guarded spdx-correct fixup, else
  * unknown. Comma lists, riders, proprietary markers, and corrections that drop a family, version,
- * or-later grant, or exception the label states are never accepted; a hedged family label
- * (`BSD-like`) is that imprecise family. `[[clarify]]` is the escape hatch.
+ * or or-later grant the label states are never accepted; a stated exception is kept only as the one
+ * registered exception id it names; a hedged family label (`BSD-like`) is that imprecise family.
+ * `[[clarify]]` is the escape hatch.
  *
  * Every non-null result is CANONICAL: the resolved text flows through {@link
  * canonicalizeExpression} before it leaves, so there is no intermediate verbatim-normalized state
@@ -384,6 +438,10 @@ export function normalizeRaw(raw: RawLicense): NormalizeResult {
   }
 
   const fixed = correct(trimmed); // never throws on non-empty input
+
+  if (fixed !== null && STATED_EXCEPTION.test(trimmed)) {
+    return correctedWithStatedException(trimmed, fixed);
+  }
 
   if (fixed !== null && keepsStatedTerms(trimmed, fixed)) {
     try {

@@ -242,11 +242,15 @@ the honest-residual principle.
 `exact` means the raw value parsed as a valid SPDX expression verbatim.
 `corrected` means `spdx-correct` fixed a sloppy-but-precise value, turning
 `"Apache License, Version 2.0"` into `Apache-2.0`. A correction is kept only
-when the corrected id keeps every family, version, or-later grant, and exception
-the value states; one that would drop any of them, such as `"MIT/GPL"` to
+when the corrected id keeps every family, version, and or-later grant the value
+states; one that would drop any of them, such as `"MIT/GPL"` to
 `GPL-3.0-or-later`, or a value carrying a rider such as `"MIT AND
 Commons-Clause"`, leaves the finding `none`, and a hedged family such as
-`"BSD-like"` is `imprecise`. `none` means genuinely
+`"BSD-like"` is `imprecise`. An exception the value states is attached only
+when it names exactly one registered SPDX exception id, so `"GPLv2 with
+Classpath Exception"` is `GPL-2.0-only WITH Classpath-exception-2.0`; one that
+names none or several, such as `"GPL-2.0 with GCC exception"`, leaves the
+`imprecise` family the value names, or `none`. `none` means genuinely
 unknown: no license could be determined, `expression` is `null`, and
 `impreciseFamily` is absent. `imprecise` means an ambiguous family label was
 observed, such as `"BSD"`, `"Apache Software License"`, or a bare `"GPL"`, that

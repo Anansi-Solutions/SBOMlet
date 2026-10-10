@@ -12,6 +12,7 @@ import {
   type ClarifyInput,
   type NormalizeResult,
 } from "./normalize";
+import { registeredExceptionTerms } from "./statedException";
 import type { LicenseClaim, LicenseClaimKind } from "../model/dependencies";
 
 // ---------------------------------------------------------------------------
@@ -280,16 +281,55 @@ describe("normalizeRaw — a correction must keep what the label states", () => 
   });
 
   test.each([
-    "GPL-2.0-with-classpath",
+    ["GPLv2 with Classpath Exception", "GPL-2.0-only WITH Classpath-exception-2.0"],
+    ["GPLv2 with the Classpath Exception", "GPL-2.0-only WITH Classpath-exception-2.0"],
+    ["GPL-2.0-with-classpath", "GPL-2.0-only WITH Classpath-exception-2.0"],
+    ["Apache-2.0-with-LLVM-exception", "Apache-2.0 WITH LLVM-exception"],
+    ["Apache 2.0 with LLVM exception", "Apache-2.0 WITH LLVM-exception"],
+    ["GPL-2.0 with GCC exception 3.1", "GPL-2.0-only WITH GCC-exception-3.1"],
+  ])("the exception %p states is the one registered exception id it names: %p", (raw, expected) => {
+    expect(normalizeRaw(asRawLicense(raw))).toEqual({
+      expression: canon(expected),
+      source: "corrected",
+    });
+  });
+
+  test.each([
+    ["GPL-2.0 with GCC exception", "GPL"],
+    ["GPL-2.0 with linking exception", "GPL"],
+    ["Apache 2.0 with linking exception", "Apache"],
+  ] as const)(
+    "%p states an exception that names no single registered id, so it is the imprecise %p family",
+    (raw, family) => {
+      expect(normalizeRaw(asRawLicense(raw))).toEqual({
+        expression: null,
+        source: "generator",
+        imprecise: true,
+        impreciseFamily: family,
+      });
+    },
+  );
+
+  test.each([
     "GPL2 w/ CPE",
     "CDDL + GPLv2 with classpath exception",
     "LGPL-2.1-with-linking-exception",
-    "GPLv2 with Classpath Exception",
-    "GPLv2 with the Classpath Exception",
-    "Apache-2.0-with-LLVM-exception",
-    "Apache 2.0 with LLVM exception",
-  ])("%p states an exception the correction drops, so it is unknown", (raw) => {
-    expect(normalizeRaw(asRawLicense(raw))).toEqual(UNKNOWN);
+  ])(
+    "%p states an exception but the correction drops a family or version, so it is unknown",
+    (raw) => {
+      expect(normalizeRaw(asRawLicense(raw))).toEqual(UNKNOWN);
+    },
+  );
+
+  test("every registered SPDX exception id names at least one word to match a label against", () => {
+    const ids = JSON.parse(
+      readFileSync(
+        join(import.meta.dir, "..", "..", "node_modules", "spdx-exceptions", "index.json"),
+        "utf8",
+      ),
+    ) as string[];
+
+    expect(ids.filter((id) => registeredExceptionTerms(id).words.length === 0)).toEqual([]);
   });
 
   test.each(["Dual MIT/GPL", "MIT/GPL", "CDDL/GPLv2+CE", "Unlicense/MIT"])(
