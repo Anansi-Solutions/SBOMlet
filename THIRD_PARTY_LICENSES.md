@@ -476,15 +476,15 @@ The packages listed below need review against the declared target profile.
 | alpine-baselayout      | apk       | 3.7.0-r0    | GPL-2.0-only                              |
 | alpine-baselayout-data | apk       | 3.7.0-r0    | GPL-2.0-only                              |
 | alpine-keys            | apk       | 2.5-r0      | MIT                                       |
-| alpine-release         | apk       | 3.22.5-r0   | MIT                                       |
-| apk-tools              | apk       | 2.14.10-r0  | GPL-2.0-only                              |
+| alpine-release         | apk       | 3.22.6-r0   | MIT                                       |
+| apk-tools              | apk       | 2.14.12-r0  | GPL-2.0-only                              |
 | busybox                | apk       | 1.37.0-r20  | GPL-2.0-only                              |
 | busybox-binsh          | apk       | 1.37.0-r20  | GPL-2.0-only                              |
-| ca-certificates        | apk       | 20260611-r0 | MIT AND MPL-2.0                           |
-| ca-certificates-bundle | apk       | 20260611-r0 | MIT AND MPL-2.0                           |
-| libapk2                | apk       | 2.14.10-r0  | GPL-2.0-only                              |
-| libcrypto3             | apk       | 3.5.7-r0    | Apache-2.0                                |
-| libssl3                | apk       | 3.5.7-r0    | Apache-2.0                                |
+| ca-certificates        | apk       | 20260909-r0 | MIT AND MPL-2.0                           |
+| ca-certificates-bundle | apk       | 20260909-r0 | MIT AND MPL-2.0                           |
+| libapk2                | apk       | 2.14.12-r0  | GPL-2.0-only                              |
+| libcrypto3             | apk       | 3.5.8-r0    | Apache-2.0                                |
+| libssl3                | apk       | 3.5.8-r0    | Apache-2.0                                |
 | musl                   | apk       | 1.2.5-r12   | MIT                                       |
 | musl-utils             | apk       | 1.2.5-r12   | BSD-2-Clause AND GPL-2.0-or-later AND MIT |
 | scanelf                | apk       | 1.3.8-r1    | GPL-2.0-only                              |
