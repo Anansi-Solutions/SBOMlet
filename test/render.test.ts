@@ -11,7 +11,9 @@ import {
 } from "../src/model/dependencies";
 import { canonicalizeExpression } from "../src/normalize/expression";
 import { annotateFindings } from "../src/normalize/normalize";
-import { renderMarkdown, type PolicyView } from "../src/render/markdown";
+import { renderMarkdown, type PolicyView, type TargetProfileSummary } from "../src/render/markdown";
+import { renderNotices } from "../src/render/notices";
+import { TARGET_RULE_INCOMPATIBLE, type TargetProfile } from "../src/policy/compat";
 
 const TARGET = "libraries/iframe-rpc";
 const SYNTHETIC_TARGET = "apps/synthetic";
@@ -2376,7 +2378,167 @@ describe("renderMarkdown — [document] title + preamble", () => {
 });
 
 // ===========================================================================
-// The "## Problematic licenses" roll-up — rendered after the
+// The generated scope-of-assertion + attribution lines: directly after the
+// auto-generated header comment, BEFORE the author preamble - present only
+// when PolicyView.targetProfile is set (the policy declares an active
+// [target] lane). NOTICES never carries either line (it takes no PolicyView
+// at all). Absent [target] renders neither line - the no-target byte-identity
+// contract the existing golden-byte-equality tests already lock.
+// ===========================================================================
+describe("renderMarkdown - target-profile header lines (scope-of-assertion + attribution)", () => {
+  const model: CanonicalDependencies = {
+    packages: [
+      entry({
+        purl: "pkg:npm/a@1.0.0",
+        name: "a",
+        version: "1.0.0",
+        finding: { expression: "MIT", elected: "MIT", source: "generator", confidence: "exact" },
+      }),
+    ],
+  };
+
+  const proprietaryProfile: TargetProfile = {
+    license: { kind: "proprietary" },
+    network: true,
+    distribution: "external",
+  };
+  const mitProfile: TargetProfile = {
+    license: { kind: "oss", id: "MIT" },
+    network: false,
+    distribution: "internal",
+  };
+
+  const viewWith = (targetProfile?: TargetProfileSummary): PolicyView => ({
+    policyPath: "policy.toml",
+    suppressedWorkspaces: [],
+    verdicts: [],
+    ...(targetProfile !== undefined ? { targetProfile } : {}),
+  });
+
+  test("absent PolicyView.targetProfile renders neither line - byte-identical to a no-target render", () => {
+    const withField = renderMarkdown(model, viewWith());
+    const withoutField = renderMarkdown(model, {
+      policyPath: "policy.toml",
+      suppressedWorkspaces: [],
+      verdicts: [],
+    });
+
+    expect(withField).toBe(withoutField);
+    expect(withField.includes("audited against")).toBe(false);
+    expect(withField.includes("OSADL")).toBe(false);
+  });
+
+  test("a project-level profile renders the exact scope-of-assertion line, naming all three profile elements", () => {
+    const output = renderMarkdown(model, viewWith({ project: proprietaryProfile, workspaces: [] }));
+    const lines = output.split("\n");
+
+    expect(lines[3]).toBe(
+      "This report was audited against the declared target: proprietary, network-deployed, " +
+        "distributed externally. Its findings assert license validity against that target and the " +
+        "declared configuration only.",
+    );
+  });
+
+  test("the attribution/disclaimer line follows immediately, naming both data sources and their snapshot timestamps", () => {
+    const output = renderMarkdown(model, viewWith({ project: mitProfile, workspaces: [] }));
+    const lines = output.split("\n");
+
+    expect(lines[4]).toBe(
+      "Compatibility verdicts draw on the OSADL compatibility matrix and copyleft class table " +
+        "(snapshot 2026-08-04T15:39:00+0000, osadl.org) and the ScanCode LicenseDB category index " +
+        "(snapshot 2026-08-10T16:21:01Z, scancode-licensedb.aboutcode.org) - this is automated, " +
+        "data-driven output, not legal advice.",
+    );
+    expect(output.includes("not legal advice")).toBe(true);
+  });
+
+  test("locked order: header comment, then the target line, then the attribution line, then the author preamble", () => {
+    const output = renderMarkdown(model, {
+      policyPath: "policy.toml",
+      suppressedWorkspaces: [],
+      verdicts: [],
+      targetProfile: { project: mitProfile, workspaces: [] },
+      document: { preamble: "Author preamble text." },
+    });
+    const headerIdx = output.indexOf(
+      "<!-- AUTO-GENERATED - do not edit. Regenerate with: task generate -->",
+    );
+    const targetIdx = output.indexOf("This report was audited against");
+    const attributionIdx = output.indexOf("Compatibility verdicts draw on the OSADL");
+    const preambleIdx = output.indexOf("Author preamble text.");
+
+    expect(headerIdx).toBeGreaterThan(-1);
+    expect(targetIdx).toBeGreaterThan(headerIdx);
+    expect(attributionIdx).toBeGreaterThan(targetIdx);
+    expect(preambleIdx).toBeGreaterThan(attributionIdx);
+  });
+
+  test("per-workspace overrides append to the project-level line, deterministically sorted by path regardless of input order", () => {
+    const output = renderMarkdown(
+      model,
+      viewWith({
+        project: mitProfile,
+        workspaces: [
+          { path: "apps/z", profile: proprietaryProfile },
+          { path: "apps/a", profile: mitProfile },
+        ],
+      }),
+    );
+    const line = output.split("\n")[3]!;
+
+    expect(line).toBe(
+      "This report was audited against the declared target: MIT, not network-deployed, internal " +
+        "use only. Per-workspace overrides: apps/a (MIT, not network-deployed, internal use only), " +
+        "apps/z (proprietary, network-deployed, distributed externally). Its findings assert " +
+        "license validity against that target and the declared configuration only.",
+    );
+  });
+
+  test("a workspaces-only profile (no complete project profile) names the per-workspace targets directly as the audited-against subject", () => {
+    const output = renderMarkdown(
+      model,
+      viewWith({
+        workspaces: [{ path: "apps/studio", profile: proprietaryProfile }],
+      }),
+    );
+    const line = output.split("\n")[3]!;
+
+    expect(line).toBe(
+      "This report was audited against the declared per-workspace targets: apps/studio " +
+        "(proprietary, network-deployed, distributed externally). Its findings assert license " +
+        "validity against those targets and the declared configuration only.",
+    );
+  });
+
+  test("a workspace path is escapeCell'd (markdown-injection mitigation, same trust boundary as every other policy-authored string)", () => {
+    const output = renderMarkdown(
+      model,
+      viewWith({
+        workspaces: [{ path: "apps/[evil](x)", profile: proprietaryProfile }],
+      }),
+    );
+
+    expect(output.includes("apps/[evil](x)")).toBe(false);
+    expect(output.includes("apps/\\[evil\\](x)")).toBe(true);
+  });
+
+  test("a workspaces-only summary with no workspace overrides throws rather than rendering a dangling sentence (schema.ts already rejects this shape at parse time; guarded here too)", () => {
+    expect(() => renderMarkdown(model, viewWith({ workspaces: [] }))).toThrow(
+      /at least one workspace override/,
+    );
+  });
+
+  test("renderNotices NEVER carries either generated line - it takes no PolicyView and cannot, by construction", () => {
+    const notices = renderNotices(model);
+
+    expect(notices.includes("audited against")).toBe(false);
+    expect(notices.includes("OSADL")).toBe(false);
+    expect(notices.includes("ScanCode LicenseDB")).toBe(false);
+  });
+});
+
+// ===========================================================================
+// The "## Problematic licenses" roll-up - rendered after the
 // counts block, before the copyleft section, ONLY on a policy run. A BLOCKING
 // table of every fail verdict (grouped by purl+rule+reason), plus a one-line
 // non-blocking warn roll-up. Empty state renders the ✅ line.
@@ -2605,6 +2767,77 @@ describe("renderMarkdown — Problematic licenses summary", () => {
     expect(section.includes("2 copyleft warning(s)")).toBe(true);
     expect(section.includes("1 unknown warning(s)")).toBe(true);
     expect(section.includes("1 deny warning(s)")).toBe(true);
+  });
+
+  test("non-blocking roll-up names a target:* warn under its own category, not the vague 'other' bucket (adversarial gate finding: the pre-registered warnCategory judgment)", () => {
+    const model: CanonicalDependencies = { packages: [warnOnly] };
+    const view: PolicyView = {
+      policyPath: "policy.toml",
+      suppressedWorkspaces: [],
+      verdicts: [
+        {
+          purl: "pkg:npm/warn-pkg@4.0.0",
+          occurrenceTarget: "apps/a",
+          status: "warn",
+          rule: TARGET_RULE_INCOMPATIBLE,
+          reason: "x",
+        },
+      ],
+    };
+    const section = slice(renderMarkdown(model, view));
+
+    // A reviewer scanning the roll-up must see this warn is target-lane, not a bucket vague enough
+    // to make it look unrelated to the license obligation the Target compatibility section details.
+    expect(section.includes("1 target warning(s)")).toBe(true);
+    expect(section.includes("1 other warning(s)")).toBe(false);
+  });
+
+  test("the non-blocking pointer names the section that actually shows each warn, and that section carries the row", () => {
+    // A target-lane warn points the reader at Target compatibility - where the row really is - not
+    // at the immediately-following Copyleft section, which renders empty here (the reviewer finding
+    // this reconciles: a counted warning must be findable where the count says).
+    const targetDoc = renderMarkdown(
+      { packages: [warnOnly] },
+      {
+        policyPath: "policy.toml",
+        suppressedWorkspaces: [],
+        verdicts: [
+          {
+            purl: "pkg:npm/warn-pkg@4.0.0",
+            occurrenceTarget: "apps/a",
+            status: "warn",
+            rule: TARGET_RULE_INCOMPATIBLE,
+            reason: "incompatible with target",
+          },
+        ],
+      },
+    );
+
+    expect(targetDoc).toContain("Detailed under Target compatibility.");
+    expect(targetDoc.slice(targetDoc.indexOf("## Target compatibility"))).toContain("| warn-pkg |");
+
+    // A copyleft-lane warn points at Copyleft and special notices, where its own row lives.
+    const copyleftDoc = renderMarkdown(
+      { packages: [warnOnly] },
+      {
+        policyPath: "policy.toml",
+        suppressedWorkspaces: [],
+        verdicts: [
+          {
+            purl: "pkg:npm/warn-pkg@4.0.0",
+            occurrenceTarget: "apps/a",
+            status: "warn",
+            rule: "default:copyleft",
+            reason: "dev-downgraded copyleft",
+          },
+        ],
+      },
+    );
+
+    expect(copyleftDoc).toContain("Detailed under Copyleft and special notices.");
+    expect(copyleftDoc.slice(copyleftDoc.indexOf("## Copyleft and special notices"))).toContain(
+      "| warn-pkg |",
+    );
   });
 
   test("(d) the summary sits ABOVE the detailed copyleft section; a fail-flagged package is excluded from it by the copyleft-only dedup", () => {
@@ -3579,5 +3812,239 @@ describe("renderMarkdown — Why-cell target scoping", () => {
     expect(section.includes("pkg:pypi/pathparent@2.0.0 → pkg:pypi/hr-pkg@1.0.0")).toBe(true);
     // No ", optional" suffix is ever rendered after the descope.
     expect(section.includes(", optional")).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Target compatibility section - policy runs only, rendered after Copyleft and
+// special notices, only when the lane produced a warn/held-internal row.
+// ---------------------------------------------------------------------------
+
+describe("renderMarkdown — Target compatibility section", () => {
+  test("absent when no target:* row exists at all - no heading, no blank-line drift", () => {
+    const output = renderMarkdown(policyModel, basicView);
+
+    expect(output.includes("## Target compatibility")).toBe(false);
+  });
+
+  test("absent when the only target:* verdict is a clean target:ok", () => {
+    const pkg = entry({
+      purl: "pkg:npm/target-ok-only@1.0.0",
+      name: "target-ok-only",
+      version: "1.0.0",
+      licenseClaims: [{ raw: "MIT", kind: "spdx-id", source: "generator" }],
+      finding: { expression: "MIT", elected: "MIT", source: "generator", confidence: "exact" },
+    });
+    const view: PolicyView = {
+      policyPath: "policy.toml",
+      suppressedWorkspaces: [],
+      verdicts: [
+        {
+          purl: "pkg:npm/target-ok-only@1.0.0",
+          occurrenceTarget: "apps/a",
+          status: "ok",
+          rule: "target:ok",
+          reason: "compatible",
+        },
+      ],
+    };
+    const output = renderMarkdown({ packages: [pkg] }, view);
+
+    expect(output.includes("## Target compatibility")).toBe(false);
+  });
+
+  test("renders after Copyleft and special notices, before Imprecise licenses", () => {
+    const boundaryPkg = entry({
+      purl: "pkg:npm/boundary-pkg@1.0.0",
+      name: "boundary-pkg",
+      version: "1.0.0",
+      licenseClaims: [{ raw: "LGPL-2.1-only", kind: "spdx-id", source: "generator" }],
+      finding: {
+        expression: "LGPL-2.1-only",
+        elected: "LGPL-2.1-only",
+        source: "generator",
+        confidence: "exact",
+      },
+    });
+    const view: PolicyView = {
+      policyPath: "policy.toml",
+      suppressedWorkspaces: [],
+      verdicts: [
+        {
+          purl: "pkg:npm/boundary-pkg@1.0.0",
+          occurrenceTarget: "apps/a",
+          status: "warn",
+          rule: "target:boundary",
+          reason: "weak copyleft under a proprietary target",
+        },
+      ],
+    };
+    const output = renderMarkdown({ packages: [boundaryPkg] }, view);
+    const copyleftIdx = output.indexOf("## Copyleft and special notices");
+    const targetIdx = output.indexOf("## Target compatibility");
+
+    expect(copyleftIdx).toBeGreaterThan(-1);
+    expect(targetIdx).toBeGreaterThan(copyleftIdx);
+  });
+
+  test("flagged table rows target:boundary, target:unknown-pair, and dev-downgraded target:incompatible", () => {
+    const boundaryPkg = entry({
+      purl: "pkg:npm/boundary-pkg@1.0.0",
+      name: "boundary-pkg",
+      version: "1.0.0",
+      licenseClaims: [{ raw: "LGPL-2.1-only", kind: "spdx-id", source: "generator" }],
+      finding: {
+        expression: "LGPL-2.1-only",
+        elected: "LGPL-2.1-only",
+        source: "generator",
+        confidence: "exact",
+      },
+    });
+    const residualPkg = entry({
+      purl: "pkg:npm/residual-pkg@1.0.0",
+      name: "residual-pkg",
+      version: "1.0.0",
+      licenseClaims: [{ raw: "QPL-1.0", kind: "spdx-id", source: "generator" }],
+      finding: {
+        expression: "QPL-1.0",
+        elected: "QPL-1.0",
+        source: "generator",
+        confidence: "exact",
+      },
+    });
+    const devDowngradedPkg = entry({
+      purl: "pkg:npm/dev-downgraded-pkg@1.0.0",
+      name: "dev-downgraded-pkg",
+      version: "1.0.0",
+      occurrences: [{ target: "apps/a", isDevDependency: true }],
+      licenseClaims: [{ raw: "GPL-3.0-only", kind: "spdx-id", source: "generator" }],
+      finding: {
+        expression: "GPL-3.0-only",
+        elected: "GPL-3.0-only",
+        source: "generator",
+        confidence: "exact",
+      },
+    });
+    const view: PolicyView = {
+      policyPath: "policy.toml",
+      suppressedWorkspaces: [],
+      verdicts: [
+        {
+          purl: "pkg:npm/boundary-pkg@1.0.0",
+          occurrenceTarget: "apps/a",
+          status: "warn",
+          rule: "target:boundary",
+          reason: "weak copyleft under a proprietary target",
+        },
+        {
+          purl: "pkg:npm/residual-pkg@1.0.0",
+          occurrenceTarget: "apps/a",
+          status: "warn",
+          rule: "target:unknown-pair",
+          reason: "no vetted compatibility data",
+        },
+        {
+          purl: "pkg:npm/dev-downgraded-pkg@1.0.0",
+          occurrenceTarget: "apps/a",
+          status: "warn",
+          rule: "target:incompatible",
+          reason: "incompatible, downgraded to warn: dev-only occurrence",
+        },
+      ],
+    };
+    const output = renderMarkdown({ packages: [boundaryPkg, residualPkg, devDowngradedPkg] }, view);
+    const start = output.indexOf("## Target compatibility");
+    const end = output.indexOf("## Imprecise licenses");
+    const section = output.slice(start, end === -1 ? undefined : end);
+
+    expect(section.includes("boundary-pkg")).toBe(true);
+    expect(section.includes("residual-pkg")).toBe(true);
+    expect(section.includes("dev-downgraded-pkg")).toBe(true);
+  });
+
+  test("held-for-internal-use list rows every target:internal-use verdict", () => {
+    const heldPkg = entry({
+      purl: "pkg:npm/held-pkg@1.0.0",
+      name: "held-pkg",
+      version: "1.0.0",
+      licenseClaims: [{ raw: "GPL-3.0-only", kind: "spdx-id", source: "generator" }],
+      finding: {
+        expression: "GPL-3.0-only",
+        elected: "GPL-3.0-only",
+        source: "generator",
+        confidence: "exact",
+      },
+    });
+    const view: PolicyView = {
+      policyPath: "policy.toml",
+      suppressedWorkspaces: [],
+      verdicts: [
+        {
+          purl: "pkg:npm/held-pkg@1.0.0",
+          occurrenceTarget: "apps/a",
+          status: "ok",
+          rule: "target:internal-use",
+          reason: "held out of scope for internal use",
+        },
+      ],
+    };
+    const output = renderMarkdown({ packages: [heldPkg] }, view);
+    const section = output.slice(output.indexOf("## Target compatibility"));
+
+    expect(section.includes("held-pkg@1.0.0 in apps/a")).toBe(true);
+    expect(section.includes("held out of scope for internal use")).toBe(true);
+  });
+
+  test("Problematic dedup applies to the flagged table only - a fail at one occurrence never suppresses a held-internal row at a DIFFERENT occurrence of the same purl", () => {
+    const dedupedPkg = entry({
+      purl: "pkg:npm/deduped-pkg@1.0.0",
+      name: "deduped-pkg",
+      version: "1.0.0",
+      occurrences: [
+        { target: "apps/a", isDevDependency: false },
+        { target: "apps/b", isDevDependency: false },
+      ],
+      licenseClaims: [{ raw: "GPL-3.0-only", kind: "spdx-id", source: "generator" }],
+      finding: {
+        expression: "GPL-3.0-only",
+        elected: "GPL-3.0-only",
+        source: "generator",
+        confidence: "exact",
+      },
+    });
+    const view: PolicyView = {
+      policyPath: "policy.toml",
+      suppressedWorkspaces: [],
+      verdicts: [
+        {
+          purl: "pkg:npm/deduped-pkg@1.0.0",
+          occurrenceTarget: "apps/a",
+          status: "fail",
+          rule: "target:incompatible",
+          reason: "incompatible",
+        },
+        {
+          purl: "pkg:npm/deduped-pkg@1.0.0",
+          occurrenceTarget: "apps/b",
+          status: "ok",
+          rule: "target:internal-use",
+          reason: "held out of scope",
+        },
+      ],
+    };
+    const output = renderMarkdown({ packages: [dedupedPkg] }, view);
+    const problematicStart = output.indexOf("## Problematic licenses");
+    const problematicEnd = output.indexOf("## Copyleft and special notices");
+    const targetSection = output.slice(output.indexOf("## Target compatibility"));
+
+    // apps/a's fail routes to Problematic, exactly as before.
+    expect(output.slice(problematicStart, problematicEnd).includes("deduped-pkg")).toBe(true);
+    // apps/b's held-internal row still renders - the dedup never drops a held row for an unrelated
+    // occurrence's fail (the adversarial-gate fix: this used to silently vanish the section entirely).
+    expect(targetSection.includes("deduped-pkg@1.0.0 in apps/b")).toBe(true);
+    expect(targetSection.includes("held out of scope")).toBe(true);
+    // The flagged table (not the held list) still respects the dedup: apps/a's occurrence never
+    // gets a SECOND, flagged-table row here on top of its Problematic one.
+    expect(targetSection.includes("The packages listed below need review")).toBe(false);
   });
 });

@@ -22,6 +22,7 @@ import {
   readFileSync,
   readdirSync,
   rmSync,
+  symlinkSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -31,15 +32,21 @@ import { afterAll, beforeAll, describe, expect, mock, test } from "bun:test";
 import {
   dockerSbomOptionsFrom,
   dockerSbomModeConflict,
+  exitCodeForRefresh,
   optionsFrom,
+  reportRefreshClarifications,
   reportVerifyCache,
 } from "../src/cli";
 import { exitCodeFor, runCheck } from "../src/gate/check";
 import { classifyCoverage, coverageSkipReason } from "../src/pipeline/coverage";
-import { defaultNoticesPath, resolveFrom } from "../src/pipeline/paths";
+import { defaultNoticesPath, resolveContained, resolveFrom } from "../src/pipeline/paths";
 import { buildOutputs, runGenerate } from "../src/pipeline/pipeline";
+import {
+  runRefreshClarifications,
+  type RefreshClarificationsResult,
+} from "../src/pipeline/refreshClarifications";
 import { sanitizeForLog, writePolicySummary } from "../src/pipeline/summary";
-import { parsePolicy } from "../src/policy/schema";
+import { parsePolicy } from "../src/policy/parse/parse";
 import { MAX_BUN_LOCK_BYTES } from "../src/collectors/bunLock";
 import * as cdxgenModule from "../src/collectors/cdxgen";
 import type { VerifyCacheResult } from "../src/pipeline/verifyCache";
@@ -501,6 +508,98 @@ describe("resolveFrom — base-dir path anchoring (CR-01)", () => {
   });
 });
 
+describe("resolveContained — a policy path resolved outside its anchor is refused", () => {
+  test("a path inside the anchor resolves exactly as resolveFrom does", () => {
+    const base = mkdtempSync(join(tmpdir(), "licenses-contained-"));
+
+    expect(resolveContained(base, "policy/clarifications.toml", "clarifications")).toBe(
+      resolveFrom(base, "policy/clarifications.toml"),
+    );
+    expect(resolveContained(base, ".", "clarifications")).toBe(resolve(base));
+  });
+
+  test("a path resolving above the anchor throws, naming the field and the resolved path", () => {
+    const base = mkdtempSync(join(tmpdir(), "licenses-contained-"));
+    const escape = join(base, "..", "elsewhere.toml");
+
+    expect(() => resolveContained(base, escape, "clarifications")).toThrow("clarifications");
+    expect(() => resolveContained(base, escape, "clarifications")).toThrow("outside");
+  });
+
+  test("a link inside the anchor leading out of it is refused", () => {
+    const root = mkdtempSync(join(tmpdir(), "licenses-contained-"));
+    const base = join(root, "repo");
+    const outside = join(root, "outside");
+
+    mkdirSync(base);
+    mkdirSync(outside);
+    // A "junction" is an ordinary directory symlink on POSIX and the
+    // privilege-free form of one on Windows, so this runs wherever the suite does.
+    symlinkSync(outside, join(base, "away"), "junction");
+
+    expect(() => resolveContained(base, "away/clarifications.toml", "clarifications")).toThrow(
+      "outside",
+    );
+    expect(() => resolveContained(base, "away/clarifications.toml", "clarifications")).toThrow(
+      `a link to ${join(outside, "clarifications.toml")}`,
+    );
+
+    writeFileSync(join(outside, "clarifications.toml"), "");
+
+    expect(() => resolveContained(base, "away/clarifications.toml", "clarifications")).toThrow(
+      "outside",
+    );
+  });
+
+  test("an anchor reached through a link still contains the files under it", () => {
+    const root = mkdtempSync(join(tmpdir(), "licenses-contained-"));
+    const real = join(root, "real");
+    const linked = join(root, "repo");
+
+    mkdirSync(real);
+    symlinkSync(real, linked, "junction");
+
+    expect(resolveContained(linked, "clarifications.toml", "clarifications")).toBe(
+      join(linked, "clarifications.toml"),
+    );
+  });
+
+  test("a sibling sharing the anchor's name as a prefix is outside it, not under it", () => {
+    const base = mkdtempSync(join(tmpdir(), "licenses-contained-"));
+
+    expect(() => resolveContained(base, `${base}-sibling/x.toml`, "clarifications")).toThrow(
+      "outside",
+    );
+  });
+});
+
+describe("a policy path may never leave the repository — end to end", () => {
+  test("a drive-lettered clarifications path is a config error (exit 3), and the run writes nothing", () => {
+    const root = mkdtempSync(join(tmpdir(), "licenses-escape-"));
+    const policyPath = join(root, ".sbomlet.policy.toml");
+
+    writeFileSync(policyPath, 'clarifications = "C:/anywhere/evil.toml"\n');
+
+    const spawned = spawnSync(
+      process.execPath,
+      [
+        "src/cli.ts",
+        "refresh-clarifications",
+        "--repo-root",
+        root,
+        "--policy",
+        policyPath,
+        "--write",
+      ],
+      { encoding: "utf8" },
+    );
+
+    expect(spawned.status).toBe(3);
+    expect(spawned.stderr).toContain("must be repository-relative");
+    expect(readdirSync(root)).toEqual([".sbomlet.policy.toml"]);
+  });
+});
+
 describe("runGenerate discovery mode — offline branches", () => {
   test("empty-lockfile target is loudly skipped and the run resolves with a zero-count document", async () => {
     const { root, identity } = makeEmptyLockfileTree();
@@ -954,7 +1053,9 @@ describe("runGenerate --policy", () => {
         "[[compatible]]",
         'match = "license"',
         'pattern = "0BSD"',
-        'reason = "unused-rule-reason-marker"',
+        'rationale = "license-reviewed"',
+        'where = ["/"]',
+        'comment = "unused-rule-reason-marker"',
         "",
       ].join("\n"),
     );
@@ -980,7 +1081,7 @@ describe("runGenerate --policy", () => {
 
     // Unused-entry warning names the rule id and its reason.
     expect(stderr).toContain(
-      "policy warning: unused entry compatible[0] — unused-rule-reason-marker",
+      "policy warning: unused entry compatible[0] — license-reviewed — unused-rule-reason-marker",
     );
   });
 
@@ -996,8 +1097,9 @@ describe("runGenerate --policy", () => {
         "[[compatible]]",
         'match = "license"',
         'pattern = "AGPL-3.0-only"',
-        'reason = "scoped-dead-rule-marker"',
+        'rationale = "license-reviewed"',
         'where = ["docker:nonexistent/Dockerfile"]',
+        'comment = "scoped-dead-rule-marker"',
         "",
       ].join("\n"),
     );
@@ -1014,7 +1116,7 @@ describe("runGenerate --policy", () => {
 
     expect(stderr).toContain("policy fail: pkg:npm/copyleft-lib@1.0.0 in proj — default:copyleft:");
     expect(stderr).toContain(
-      "policy warning: unused entry compatible[0] — scoped-dead-rule-marker",
+      "policy warning: unused entry compatible[0] — license-reviewed — scoped-dead-rule-marker",
     );
   });
 
@@ -1045,7 +1147,7 @@ describe("runGenerate --policy", () => {
     expect(stderr).not.toContain("collecting");
     expect(stderr).not.toContain("warning: skipping");
 
-    // (b) Semantically invalid policy (missing reason) → PolicyError naming
+    // (b) Semantically invalid policy (missing rationale) → PolicyError naming
     // the table path.
     const semanticPath = writePolicy(root, '[[compatible]]\nmatch = "license"\npattern = "MIT"\n');
     let semanticThrown: Error | undefined;
@@ -1065,7 +1167,7 @@ describe("runGenerate --policy", () => {
     });
     expect(semanticThrown).toBeDefined();
     expect(semanticThrown!.message).toContain("compatible[0]");
-    expect(semanticThrown!.message).toContain('"reason"');
+    expect(semanticThrown!.message).toContain('"rationale"');
   });
 
   test("Test 5: annotated dump — findings + verdicts, sorted keys", async () => {
@@ -1148,7 +1250,7 @@ describe("runGenerate --policy", () => {
     const ESC = String.fromCharCode(27);
     const forgedReason =
       "real reason\npolicy: 0 fail, 0 warn, 0 suppressed, 9999 ok " + `(9999 verdicts)${ESC}[2K`;
-    // The 0BSD rule matches nothing in the fixture → its reason is printed
+    // The 0BSD rule matches nothing in the fixture → its comment is printed
     // via the unused-entry warning path.
     const policyPath = writePolicy(
       root,
@@ -1156,7 +1258,9 @@ describe("runGenerate --policy", () => {
         "[[compatible]]",
         'match = "license"',
         'pattern = "0BSD"',
-        `reason = ${JSON.stringify(forgedReason)}`,
+        'rationale = "license-reviewed"',
+        'where = ["/"]',
+        `comment = ${JSON.stringify(forgedReason)}`,
         "",
       ].join("\n"),
     );
@@ -1179,7 +1283,7 @@ describe("runGenerate --policy", () => {
     expect(stderr).not.toContain(ESC);
     // ...and the reason still surfaces, flattened onto ONE warning line.
     expect(stderr).toContain(
-      "policy warning: unused entry compatible[0] — real reason policy: 0 fail",
+      "policy warning: unused entry compatible[0] — license-reviewed — real reason policy: 0 fail",
     );
   });
 
@@ -1450,7 +1554,8 @@ describe("buildOutputs and the generate output set", () => {
         "[[compatible]]",
         'match = "license"',
         'pattern = "AGPL-3.0-only"',
-        'reason = "copyleft accepted for the CR-01 base-dir fixture"',
+        'rationale = "license-reviewed"',
+        'where = ["/"]',
         "",
       ].join("\n"),
     );
@@ -1504,7 +1609,7 @@ describe("buildOutputs and the generate output set", () => {
 // ---------------------------------------------------------------------------
 // End-to-end stale-override exit-lane regression through the
 // real generate → check → exitCodeFor path. The shared FIXTURE_SBOM's mit-lib
-// (a precise MIT package) is the seam: a [[clarify]] expecting "BSD" on it is
+// (a precise MIT package) is the seam: a [[clarify]] recording "BSD" on it is
 // STALE (observed MIT, not BSD) → a fail verdict → exit 1 via the EXISTING
 // violations→exitCodeFor mapping, with no reshaping of the fixed summary
 // shapes. Re-uses the runGenerate --policy stub installed below.
@@ -1548,7 +1653,7 @@ describe("check — stale-override exit lane", () => {
     return { result: result!, checkStderr };
   }
 
-  test("a stale [[clarify]] (expects BSD on a now-MIT dep) makes check exit 1 with an actionable message", async () => {
+  test("a stale [[clarify]] (BSD recorded on a now-MIT dep) makes check exit 1 with an actionable message", async () => {
     const policyText = [
       "[unknown]",
       'handling = "warn"', // isolate: only the stale override gates
@@ -1556,13 +1661,15 @@ describe("check — stale-override exit lane", () => {
       "[[compatible]]",
       'match = "license"',
       'pattern = "AGPL-3.0-only"',
-      'reason = "accept the fixture AGPL so only the stale override gates"',
+      'rationale = "license-reviewed"',
+      'where = ["/"]',
       "",
       "[[clarify]]",
-      'package = { name = "mit-lib" }',
-      'expects = "BSD"',
+      'name = "mit-lib"',
+      'version = "3.0.0"',
+      'detected = { registry = "BSD" }',
+      'justification = "scan-more-precise"',
       'expression = "BSD-3-Clause"',
-      'reason = "was BSD-3-Clause upstream"',
       "",
     ].join("\n");
     const { result, checkStderr } = await generateThenCheck(policyText);
@@ -1584,13 +1691,15 @@ describe("check — stale-override exit lane", () => {
       "[[compatible]]",
       'match = "license"',
       'pattern = "AGPL-3.0-only"',
-      'reason = "accept the fixture AGPL package"',
+      'rationale = "license-reviewed"',
+      'where = ["/"]',
       "",
       "[[clarify]]",
-      'package = { name = "mit-lib" }',
-      'expects = "MIT"', // matches the observed signal → applies, not stale
+      'name = "mit-lib"',
+      'version = "3.0.0"',
+      'detected = { registry = "MIT" }', // still what the registry reports → applies
+      'justification = "contradictory-claims-recorded"',
       'expression = "MIT"',
-      'reason = "confirmed MIT"',
       "",
     ].join("\n");
     const { result } = await generateThenCheck(policyText);
@@ -2474,5 +2583,256 @@ describe("reportVerifyCache — the scancode memo line", () => {
     const mismatchedLines = mismatched.trim().split("\n");
 
     expect(mismatchedLines.at(-1)).toContain("scancode memo: 3 entries");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// refresh-clarifications. The scanner is stubbed to a two-version fixture so
+// the upgrade lane has an uncovered version to ascertain; everything else —
+// policy load, clarifications import, annotate, evaluate, the rewrite — runs
+// for real, offline.
+// ---------------------------------------------------------------------------
+
+/** Two versions of one package, so an entry pinned to the first leaves the second uncovered. */
+const TWO_VERSION_SBOM = {
+  bomFormat: "CycloneDX",
+  specVersion: "1.6",
+  components: [
+    {
+      purl: "pkg:npm/dual-lib@1.0.0",
+      name: "dual-lib",
+      version: "1.0.0",
+      licenses: [{ license: { id: "MIT" } }],
+    },
+    {
+      purl: "pkg:npm/dual-lib@2.0.0",
+      name: "dual-lib",
+      version: "2.0.0",
+      licenses: [{ license: { id: "MIT" } }],
+    },
+  ],
+};
+
+async function fakeTwoVersionScan(): Promise<cdxgenModule.CollectorSbomFile> {
+  const tempDir = mkdtempSync(join(tmpdir(), "licenses-refresh-scan-"));
+  const sbomPath = join(tempDir, "bom.json");
+
+  writeFileSync(sbomPath, JSON.stringify(TWO_VERSION_SBOM));
+  return { sbomPath, cacheKey: "fake", tool: REAL_CDXGEN.CDXGEN_TOOL };
+}
+
+/** An entry over dual-lib, optionally pinned to versions, adopting the declared claim. */
+function dualLibEntry(...versions: string[]): string {
+  return [
+    "[[clarify]]",
+    'name = "dual-lib"',
+    ...(versions.length === 0
+      ? []
+      : [
+          `version = ${versions.length === 1 ? JSON.stringify(versions[0]) : JSON.stringify(versions)}`,
+        ]),
+    'detected = { registry = "MIT" }',
+    'justification = "declared-more-complete"',
+    'expression = "MIT"',
+  ].join("\n");
+}
+
+describe("refresh-clarifications", () => {
+  beforeAll(() => {
+    mock.module("../src/collectors/cdxgen", () => ({
+      ...REAL_CDXGEN,
+      collectWithCdxgen: fakeTwoVersionScan,
+    }));
+  });
+
+  afterAll(() => {
+    mock.module("../src/collectors/cdxgen", () => REAL_CDXGEN);
+  });
+
+  /** A scannable tree whose policy imports `clarifications`, when any text is given for it. */
+  function makeRefreshTree(
+    policyText: string,
+    clarificationsText?: string,
+  ): { root: string; policyPath: string; clarificationsPath: string } {
+    const { root } = makeScannableTree();
+    const clarificationsPath = join(root, "clarifications.toml");
+
+    if (clarificationsText !== undefined) {
+      writeFileSync(clarificationsPath, clarificationsText);
+    }
+
+    return { root, policyPath: writePolicy(root, policyText), clarificationsPath };
+  }
+
+  function refresh(
+    root: string,
+    policyPath: string,
+    write = false,
+  ): Promise<RefreshClarificationsResult> {
+    return runRefreshClarifications({
+      repoRoot: root,
+      baseDir: root,
+      policyPath,
+      enrichmentCachePath: enrichCache(),
+      verbose: false,
+      write,
+    });
+  }
+
+  test("an entry covering every scanned version leaves nothing to suggest, and exits 0", async () => {
+    const { root, policyPath } = makeRefreshTree(dualLibEntry("1.0.0", "2.0.0"));
+    let result: RefreshClarificationsResult | undefined;
+
+    await withCapturedStderr(async () => {
+      result = await refresh(root, policyPath);
+    });
+
+    expect(result?.findings.upgrades).toEqual([]);
+    expect(exitCodeForRefresh(result!)).toBe(0);
+  });
+
+  test("a version the entry does not cover is offered, and exits 1", async () => {
+    const { root, policyPath } = makeRefreshTree(dualLibEntry("1.0.0"));
+    let result: RefreshClarificationsResult | undefined;
+
+    const report = await withCapturedStderr(async () => {
+      result = await refresh(root, policyPath);
+      reportRefreshClarifications(result);
+    });
+
+    expect(result?.findings.upgrades).toEqual([
+      {
+        rule: "clarify[0]",
+        name: "dual-lib",
+        version: "2.0.0",
+        outcome: "extend",
+        detail: "every recorded detection still holds at 2.0.0",
+      },
+    ]);
+    expect(exitCodeForRefresh(result!)).toBe(1);
+    expect(report).toContain("EXTEND   clarify[0]  dual-lib@2.0.0");
+  });
+
+  test("a policy holding its own entries is never rewritten, whatever --write says", async () => {
+    const { root, policyPath } = makeRefreshTree(dualLibEntry("1.0.0"));
+    const before = readFileSync(policyPath, "utf8");
+    let result: RefreshClarificationsResult | undefined;
+
+    const report = await withCapturedStderr(async () => {
+      result = await refresh(root, policyPath, true);
+      reportRefreshClarifications(result);
+    });
+
+    expect(readFileSync(policyPath, "utf8")).toBe(before);
+    expect(result?.applied).toBeUndefined();
+    expect(result?.clarificationsPath).toBeUndefined();
+    expect(report).toContain("none of them applicable without a person");
+  });
+
+  test("--write extends the imported entry's version list, and re-running has nothing left to say", async () => {
+    const { root, policyPath, clarificationsPath } = makeRefreshTree(
+      'clarifications = "clarifications.toml"\n',
+      `${dualLibEntry("1.0.0")}\n`,
+    );
+    let applied: RefreshClarificationsResult | undefined;
+    let again: RefreshClarificationsResult | undefined;
+
+    await withCapturedStderr(async () => {
+      applied = await refresh(root, policyPath, true);
+      again = await refresh(root, policyPath, true);
+    });
+
+    expect(applied?.applied?.extended).toEqual(["clarifications[0]"]);
+    expect(readFileSync(clarificationsPath, "utf8")).toBe(
+      [
+        "[[clarify]]",
+        'name = "dual-lib"',
+        'version = [ "1.0.0", "2.0.0" ]',
+        'detected = { registry = "MIT" }',
+        'justification = "declared-more-complete"',
+        'expression = "MIT"',
+        "",
+      ].join("\n"),
+    );
+    expect(again?.applied).toBeUndefined();
+    expect(exitCodeForRefresh(again!)).toBe(0);
+  });
+
+  test("a second --write over the applied file leaves the same bytes", async () => {
+    const { root, policyPath, clarificationsPath } = makeRefreshTree(
+      'clarifications = "clarifications.toml"\n',
+      `${dualLibEntry("1.0.0")}\n`,
+    );
+
+    await withCapturedStderr(async () => {
+      await refresh(root, policyPath, true);
+    });
+
+    const once = readFileSync(clarificationsPath, "utf8");
+
+    await withCapturedStderr(async () => {
+      await refresh(root, policyPath, true);
+    });
+
+    expect(readFileSync(clarificationsPath, "utf8")).toBe(once);
+  });
+
+  test("a clarifications file carrying a # comment is refused, untouched, and exits 3", async () => {
+    const commented = `# researched in the ticket, do not lose this\n${dualLibEntry("1.0.0")}\n`;
+    const { root, policyPath, clarificationsPath } = makeRefreshTree(
+      'clarifications = "clarifications.toml"\n',
+      commented,
+    );
+    let result: RefreshClarificationsResult | undefined;
+
+    const report = await withCapturedStderr(async () => {
+      result = await refresh(root, policyPath, true);
+      reportRefreshClarifications(result);
+    });
+
+    expect(readFileSync(clarificationsPath, "utf8")).toBe(commented);
+    expect(result?.refused).toContain("# comments a rewrite would destroy");
+    expect(exitCodeForRefresh(result!)).toBe(3);
+    expect(report).toContain("nothing written");
+  });
+
+  test("a # comment refuses nothing when there is nothing to apply", async () => {
+    const settled = `# researched in the ticket, do not lose this\n${dualLibEntry("1.0.0", "2.0.0")}\n`;
+    const { root, policyPath, clarificationsPath } = makeRefreshTree(
+      'clarifications = "clarifications.toml"\n',
+      settled,
+    );
+    let result: RefreshClarificationsResult | undefined;
+
+    await withCapturedStderr(async () => {
+      result = await refresh(root, policyPath, true);
+    });
+
+    expect(readFileSync(clarificationsPath, "utf8")).toBe(settled);
+    expect(result?.refused).toBeUndefined();
+    expect(result?.applied).toBeUndefined();
+    expect(exitCodeForRefresh(result!)).toBe(0);
+  });
+
+  test("without a policy there are no entries to refresh: a config error, never a clean run", () => {
+    const root = mkdtempSync(join(tmpdir(), "licenses-refresh-nopolicy-"));
+    const spawned = spawnSync(
+      process.execPath,
+      ["src/cli.ts", "refresh-clarifications", "--repo-root", root, "--base-dir", root],
+      { encoding: "utf8" },
+    );
+
+    expect(spawned.status).toBe(3);
+    expect(spawned.stderr).toContain("refresh-clarifications needs a policy");
+  });
+
+  test("the usage names the subcommand and what --write may touch", () => {
+    const spawned = spawnSync(process.execPath, ["src/cli.ts", "not-a-subcommand"], {
+      encoding: "utf8",
+    });
+
+    expect(spawned.status).toBe(3);
+    expect(spawned.stderr).toContain("refresh-clarifications [--repo-root <path>]");
+    expect(spawned.stderr).toContain("0 nothing to suggest, 1 suggestions exist or were applied");
   });
 });

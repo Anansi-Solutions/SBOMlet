@@ -14,3 +14,9 @@ THIRD_PARTY_NOTICES.md text eol=lf
 
 # Binary assets are never normalized.
 *.png binary
+
+# Vendored third-party license/compatibility data (github-linguist): upstream
+# snapshots carried verbatim, with provenance in src/policy/compat/PROVENANCE.md.
+# Data, not this project's code -- keep it out of language stats and collapsed
+# in diffs.
+src/policy/compat/*.json linguist-vendored

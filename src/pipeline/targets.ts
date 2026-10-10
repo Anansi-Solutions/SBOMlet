@@ -28,7 +28,7 @@ import { yarnWorkspaceMembers } from "../targets/firstParty";
 import { resolveTarget } from "../targets/target";
 import { classifyCoverage, componentCountOf, coverageSkipReason } from "./coverage";
 import { resolveFrom } from "./paths";
-import { type GenerateOptions } from "./pipeline";
+import type { GenerateOptions } from "./options";
 
 /**
  * Generator wall-clock budget PER SCAN (cold plugin runs hit ~70s on large targets; the first
@@ -276,7 +276,10 @@ async function dispatchAndCollect(
     return undefined;
   }
 
-  return input;
+  // The registration decides whether this target has a dependency graph, and the answer is stamped
+  // HERE rather than inside each collector: one place, so a lane can never declare one thing to the
+  // dispatch and hand the merge another.
+  return { ...input, derivesDependencyGraph: collector.derivesDependencyGraph(rootLockfileText) };
 }
 
 /**

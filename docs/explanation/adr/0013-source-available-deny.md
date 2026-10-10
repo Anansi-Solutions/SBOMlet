@@ -114,8 +114,8 @@ a licence that is not a shipped default.
   lane emits), [ADR-0009](0009-dev-prod-os-scopes.md) (the scope downgraders
   deny sits above), [ADR-0007](0007-honest-residual.md) (the
   imprecise/unknown collapse deny sees through)
-- Code: `src/policy/denylist.ts` (`effectiveDenyRules`, `firstDeny`),
-  `src/policy/builtinDenylist.ts`, `src/policy/evaluate.ts`
-  (`sourceAvailableExemption`), `src/policy/schema.ts`
+- Code: `src/policy/engine/deny.ts` (`effectiveDenyRules`, `firstDeny`),
+  `src/policy/engine/builtinDenylist.ts`, `src/policy/engine/evaluate.ts`
+  (`sourceAvailableExemption`), `src/policy/schema/exemptions.ts`
   (`validateAllowSourceAvailable`), `test/builtinDenylist.test.ts`,
   `policy.example.toml`

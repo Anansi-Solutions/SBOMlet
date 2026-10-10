@@ -28,7 +28,7 @@ import {
   type Occurrence,
   type PackageEntry,
 } from "../model/dependencies";
-import { OS_PACKAGE_ECOSYSTEMS } from "../policy/osEcosystems";
+import { OS_PACKAGE_ECOSYSTEMS } from "../policy/engine/osEcosystems";
 
 /**
  * Re-key `scope` for every still-`"os"` package against the OS-ecosystem allowlist, and dev-mark

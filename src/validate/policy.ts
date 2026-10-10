@@ -18,6 +18,7 @@ export const TOP_LEVEL_KEYS = [
   "workspace",
   "compatible",
   "clarify",
+  "clarifications",
   "deny",
   "unknown",
   "dev_dependencies",
@@ -26,6 +27,7 @@ export const TOP_LEVEL_KEYS = [
   "docker",
   "allow_source_available",
   "cache",
+  "target",
 ] as const;
 
 /**

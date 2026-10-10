@@ -74,4 +74,4 @@ agreement is by discipline, not construction.
 - Related: [ADR-0004](0004-deterministic-output.md) (the deterministic output the
   gate byte-compares), [ADR-0013](0013-source-available-deny.md) (the precedence
   chain the engine walks)
-- Code: `policy/evaluate.ts`, `render/markdown.ts` (`PolicyView`), `gate/check.ts`
+- Code: `policy/engine/evaluate.ts`, `render/markdown.ts` (`PolicyView`), `gate/check.ts`

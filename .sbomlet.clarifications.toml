@@ -1,0 +1,39 @@
+[[clarify]]
+name = "spdx-ranges"
+version = "2.1.1"
+detected = { registry = "(MIT AND CC-BY-3.0)", intensive = "MIT" }
+justification = "declared-more-complete"
+expression = "(MIT AND CC-BY-3.0)"
+comment = "The scan read only the root LICENSE and saw MIT, missing the CC-BY-3.0 that covers the bundled SPDX range data this package ships; the registry reading keeps that data obligation on the inventory."
+
+[[clarify]]
+name = "uri-js"
+version = "4.4.1"
+detected = { registry = "BSD-2-Clause", intensive = "BSD-2-Clause-Views" }
+justification = "scan-more-precise"
+expression = "BSD-2-Clause-Views"
+comment = "The LICENSE file carries the views-and-conclusions advertising sentence, which the registry flattened away."
+
+[[clarify]]
+name = "type-fest"
+version = "5.8.0"
+detected = { registry = "(MIT OR CC0-1.0)", intensive = "CC0-1.0 AND MIT" }
+justification = "dual-license-choice"
+expression = "(MIT OR CC0-1.0)"
+comment = "The scan found both bundled license texts and joined them mechanically with AND; the author offers a choice of either."
+
+[[clarify]]
+name = "@cspell/dict-en-common-misspellings"
+version = "2.1.13"
+detected = { registry = "CC BY-SA 4.0", intensive = "CC-BY-SA-4.0 AND MIT" }
+justification = "scan-found-additional-content"
+expression = "CC-BY-SA-4.0 AND MIT"
+comment = "MIT covers the packaging around the Wikipedia-derived CC-BY-SA-4.0 misspellings data; both obligations stay on the inventory."
+
+[[clarify]]
+name = "@cspell/dict-django"
+version = "4.1.6"
+detected = { registry = "MIT", intensive = "WTFPL" }
+justification = "scan-found-additional-content"
+expression = "MIT AND WTFPL"
+comment = "WTFPL covers the bundled Django word-list data; MIT covers the package around it."

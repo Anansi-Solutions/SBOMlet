@@ -84,5 +84,5 @@ they are.
   offline-`check`/committed-cache contract this organizes),
   [ADR-0012](0012-docker-os-via-syft.md) (the committed Docker OS SBOM that
   now lives here)
-- Code: `src/policy/schema.ts` (`validateCache`), `src/pipeline/pipeline.ts`
+- Code: `src/policy/schema/cache.ts` (`validateCache`), `src/pipeline/pipeline.ts`
   (`cacheDir`, `resolveCacheDir`), `src/pipeline/paths.ts` (`writeArtifact`)

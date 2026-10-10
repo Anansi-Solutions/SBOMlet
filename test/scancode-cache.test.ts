@@ -22,9 +22,9 @@ import {
   ENRICHMENT_CACHE_FILE,
   SCANCODE_CACHE_FILE,
   scancodeCachePath,
-  type GenerateOptions,
 } from "../src/pipeline/pipeline";
 import { optionsFrom } from "../src/cli";
+import type { GenerateOptions } from "../src/pipeline/options";
 
 /** The committed memo filename (kept as a literal so the block above stays module-only). */
 const MEMO_FILE = "scancode.cache.json";

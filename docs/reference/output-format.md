@@ -56,8 +56,34 @@ content change rather than a reordering.
 
 The first two non-blank lines are the title (`# Third-Party Licenses`, taken from
 `[document].title` or the default) and the auto-generated header comment that
-names the regenerate command. When the policy sets `[document].preamble`, that
-paragraph follows. On a policy run a line then points at the policy file:
+names the regenerate command.
+
+When the policy's `[target]` table activates the compatibility lane, two more
+generated lines follow immediately, before anything else — including the
+author preamble:
+
+1. The scope-of-assertion statement: the report was audited against the
+   declared target, and its findings assert licence validity only against
+   that target and configuration. For example: `This report was audited
+   against the declared target: proprietary, network-deployed, distributed
+   externally. Its findings assert license validity against that target and
+   the declared configuration only.` A project-level profile names itself;
+   any declared `[[target.workspace]]` overrides are appended, sorted by
+   path. A workspaces-only `[target]` table (no complete project profile)
+   names its per-workspace profiles as the audited-against subject directly.
+2. The attribution/disclaimer line, naming the OSADL compatibility matrix
+   and copyleft class table plus the ScanCode LicenseDB category index, each
+   with its vendored snapshot timestamp, closing with a
+   not-legal-advice clause.
+
+Both lines are generated, deterministic, and present only when the target
+lane is active — a policy with no `[target]` table renders neither, and the
+document stays byte-identical to one generated before this pair existed.
+Neither line ever appears in `THIRD_PARTY_NOTICES.md`. See
+[policy.md#target](policy.md#target) for the profile shape.
+
+When the policy sets `[document].preamble`, that paragraph follows next. On a
+policy run a line then points at the policy file:
 `Copyleft notice rules are configured in <policy>.`
 
 Sections appear in this order:
@@ -67,6 +93,7 @@ Sections appear in this order:
 | Package counts | `**Package counts:**` | always |
 | Problematic licenses | `## Problematic licenses` | policy run only |
 | Copyleft and special notices | `## Copyleft and special notices` | policy run only |
+| Target compatibility | `## Target compatibility` | policy run only, and only when the target lane produced a warn or held-internal row |
 | Imprecise licenses | `## Imprecise licenses (review / disambiguate)` | any [imprecise](../glossary.md#imprecise-family) package exists |
 | Assessment conflicts | `## Assessment conflicts` | any conflict marker exists |
 | Containers | `## Containers` | always |
@@ -201,7 +228,7 @@ A table with no rows is omitted entirely, so a base-image-only container shows
 just System packages and vice versa. Which container subsection(s) a package
 rows in, including one present in several containers, is placement inventory
 completeness — see
-[report-placement.md](./report-placement.md#inventory-sections-placement-driven-complete-nothing-is-ever-dropped).
+[report-placement.md](./report-placement.md#inventory-sections-placement-driven-complete--nothing-is-ever-dropped).
 There is no standalone Docker section any more: every container package is
 listed under Production or Development-only by that container's
 classification.
@@ -226,9 +253,15 @@ replaced by a single line, `✅ No blocking policy violations.` The columns:
 | Reason | the verdict's reason string |
 
 After the table, when any `warn` verdicts exist, one non-blocking line rolls
-them up by coarse category (copyleft, unknown, deny, other) with a count each,
-for example `_Non-blocking: 12 copyleft warning(s), 3 unknown warning(s) (dev/os-downgraded or suppressed). See the sections below._`
-The line is omitted when there are no warnings.
+them up by coarse category (copyleft, target, unknown, deny, other) with a count
+each, then names the sections that actually show those warnings - so a counted
+warning is never pointed at a section that renders empty. For example
+`_Non-blocking: 12 copyleft warning(s), 3 unknown warning(s) (dev/os-downgraded or suppressed). Detailed under Copyleft and special notices, Imprecise licenses._`
+The named destinations are, in document order: Problematic licenses (a warn on a
+package that also fails), Copyleft and special notices, Target compatibility,
+Imprecise licenses, and the package tables (an os-scope copyleft warn, or an
+unknown/exempted/denied one, that has no dedicated flagged list). The line is
+omitted when there are no warnings.
 
 Whether a package listed here also repeats in the Copyleft section below, and
 where else it keeps a row (its inventory table, its container subsection,
@@ -276,6 +309,34 @@ or, when accepted via [`[[compatible]]`](policy.md#compatible), appears here
 instead as a non-blocking special notice. The exact exclusion and dedup
 rules are [report-placement.md](./report-placement.md#invariants)'s.
 
+### Target compatibility
+
+Rendered only on a policy run whose `[target]` table activates the
+compatibility lane, and only when the lane actually produced a row - an
+absent lane, or one whose every occurrence landed a clean `target:ok` or a
+`target:incompatible`/`target:unknown-pair` fail (routed to
+[Problematic licenses](#problematic-licenses) instead), renders no heading at
+all. See [policy.md#target](policy.md#target) for the profile shape and
+[dependency-classification.md](./dependency-classification.md) for how a
+verdict lands in one of the lane's five outcomes.
+
+Two independent parts, in order, both excluding a purl already in
+Problematic licenses:
+
+- A flagged table, the same five summary columns plus **Why** as the
+  Copyleft table, for every `target:boundary`, `target:unknown-pair`, or
+  dev-downgraded `target:incompatible` (status `warn`) verdict - a package
+  needing review against the declared target.
+- A "held for internal use" bullet list, `- <name>@<version> in <target>
+  - <reason>`, for every `target:internal-use` (status `ok`) verdict: a
+  copyleft or AGPL obligation the usage profile takes out of scope. The
+  distinct rule id and this dedicated list keep the exposure visible - never
+  a silent `ok` - for the day the profile's `distribution` or `network`
+  flag flips back.
+
+Which packages land in either part is placement, normatively defined in
+[report-placement.md](./report-placement.md#narrative-sections-verdict--or-finding-driven-deduped).
+
 ### Assessment conflicts
 
 Rendered whenever any package carries a conflict marker, from either of two
@@ -306,8 +367,8 @@ diverging docker occurrence and that image's own declared claims:
 | Claims by image | every docker occurrence, semicolon-joined as `<target>: <claims>`; an occurrence that declared no claim at all reads `(no declared license)` |
 
 Every comparison this report and the policy gate make — ScanCode vs quick
-check, the cross-image claim sets, and an `[[clarify]]`/`[[override]]`
-`expects` match ([policy.md#clarify](./policy.md#clarify)) — canonicalizes
+check, the cross-image claim sets, and a `[[clarify]]` entry against its
+recorded `detected` values ([policy.md#clarify](./policy.md#clarify)) — canonicalizes
 the boolean-algebra structure on every side before deciding agreement,
 divergence, or staleness, so a spelling-only reordering (`MIT AND CC0-1.0`
 read back as `CC0-1.0 AND MIT`) never manufactures a marker or reopens a
@@ -423,6 +484,13 @@ occurrences cleanly. The per-component property names:
 | `licenses-tool:scope:<target>` | `dev` or `prod` | once per occurrence |
 | `licenses-tool:verdict:<target>` | the verdict status (`ok`, `warn`, `fail`, `suppressed`) | once per matching verdict, policy runs only |
 | `licenses-tool:rule:<target>` | the [policy lane](../glossary.md#policy-lanes) rule | once per matching verdict, policy runs only |
+
+`licenses-tool:rule:<target>` carries whatever rule id decided the verdict,
+unfiltered — a target-compatibility lane verdict (`target:ok`,
+`target:incompatible`, `target:boundary`, `target:unknown-pair`,
+`target:internal-use`) surfaces here exactly like `default:copyleft` or a
+`compatible[i]` acceptance would; there is no separate export surface for
+the target lane.
 
 The determinism guarantees: components are sorted by purl; the JSON is indented
 two spaces with exactly one trailing newline; `JSON.stringify` is the only

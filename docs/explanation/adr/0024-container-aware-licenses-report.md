@@ -88,6 +88,6 @@ identity, not by scope.
   this extends to containers
 - [ADR-0021](0021-per-image-occurrence-identity.md) — the `docker:<source>`
   identity this groups packages by
-- Code: `src/render/markdown.ts`, `src/policy/evaluate.ts`,
-  `src/policy/schema.ts`, `src/pipeline/pipeline.ts`,
-  `src/pipeline/containerScope.ts`, `src/policy/osEcosystems.ts`
+- Code: `src/render/markdown.ts`, `src/policy/engine/evaluate.ts`,
+  `src/policy/schema/`, `src/pipeline/pipeline.ts`,
+  `src/pipeline/containerScope.ts`, `src/policy/engine/osEcosystems.ts`

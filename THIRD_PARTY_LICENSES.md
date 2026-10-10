@@ -1,6 +1,8 @@
 # SBOMlet — Third-Party Licenses
 
 <!-- AUTO-GENERATED - do not edit. Regenerate with: task generate -->
+This report was audited against the declared target: AGPL-3.0-only, network-deployed, distributed externally. Its findings assert license validity against that target and the declared configuration only.
+Compatibility verdicts draw on the OSADL compatibility matrix and copyleft class table (snapshot 2026-08-04T15:39:00+0000, osadl.org) and the ScanCode LicenseDB category index (snapshot 2026-08-10T16:21:01Z, scancode-licensedb.aboutcode.org) - this is automated, data-driven output, not legal advice.
 
 Copyleft notice rules are configured in .sbomlet.policy.toml.
 
@@ -19,11 +21,15 @@ Copyleft notice rules are configured in .sbomlet.policy.toml.
 
 ✅ No blocking policy violations.
 
-_Non-blocking: 5 copyleft warning(s) (dev/os-downgraded or suppressed). See the sections below._
+_Non-blocking: 10 target warning(s) (dev/os-downgraded or suppressed). Detailed under Target compatibility._
 
 ## Copyleft and special notices
 
-The packages listed below carry copyleft or special license obligations in at least one non-suppressed workspace.
+✅ No package carries copyleft or special license obligations.
+
+## Target compatibility
+
+The packages listed below need review against the declared target profile.
 
 | Name                                | Ecosystem | Version | License              | Used in | Why |
 | ----------------------------------- | --------- | ------- | -------------------- | ------- | --- |
@@ -32,6 +38,11 @@ The packages listed below carry copyleft or special license obligations in at le
 | @cspell/dict-en-common-misspellings | npm       | 2.1.13  | CC-BY-SA-4.0 AND MIT | .       | —   |
 | @cspell/dict-en-gb                  | npm       | 5.0.30  | LGPL-3.0-only        | .       | —   |
 | @cspell/dict-en-gb-ise              | npm       | 1.0.30  | LGPL-3.0-only        | .       | —   |
+| spdx-exceptions                     | npm       | 2.5.0   | CC-BY-3.0            | .       | —   |
+| spdx-license-ids                    | npm       | 3.0.23  | CC0-1.0              | .       | —   |
+| spdx-license-list                   | npm       | 6.11.0  | CC0-1.0              | .       | —   |
+| spdx-ranges                         | npm       | 2.1.1   | CC-BY-3.0 AND MIT    | .       | —   |
+| uri-js                              | npm       | 4.4.1   | BSD-2-Clause-Views   | .       | —   |
 
 ## Containers
 
@@ -465,15 +476,15 @@ The packages listed below carry copyleft or special license obligations in at le
 | alpine-baselayout      | apk       | 3.7.0-r0    | GPL-2.0-only                              |
 | alpine-baselayout-data | apk       | 3.7.0-r0    | GPL-2.0-only                              |
 | alpine-keys            | apk       | 2.5-r0      | MIT                                       |
-| alpine-release         | apk       | 3.22.5-r0   | MIT                                       |
-| apk-tools              | apk       | 2.14.10-r0  | GPL-2.0-only                              |
+| alpine-release         | apk       | 3.22.6-r0   | MIT                                       |
+| apk-tools              | apk       | 2.14.12-r0  | GPL-2.0-only                              |
 | busybox                | apk       | 1.37.0-r20  | GPL-2.0-only                              |
 | busybox-binsh          | apk       | 1.37.0-r20  | GPL-2.0-only                              |
-| ca-certificates        | apk       | 20260611-r0 | MIT AND MPL-2.0                           |
-| ca-certificates-bundle | apk       | 20260611-r0 | MIT AND MPL-2.0                           |
-| libapk2                | apk       | 2.14.10-r0  | GPL-2.0-only                              |
-| libcrypto3             | apk       | 3.5.7-r0    | Apache-2.0                                |
-| libssl3                | apk       | 3.5.7-r0    | Apache-2.0                                |
+| ca-certificates        | apk       | 20260909-r0 | MIT AND MPL-2.0                           |
+| ca-certificates-bundle | apk       | 20260909-r0 | MIT AND MPL-2.0                           |
+| libapk2                | apk       | 2.14.12-r0  | GPL-2.0-only                              |
+| libcrypto3             | apk       | 3.5.8-r0    | Apache-2.0                                |
+| libssl3                | apk       | 3.5.8-r0    | Apache-2.0                                |
 | musl                   | apk       | 1.2.5-r12   | MIT                                       |
 | musl-utils             | apk       | 1.2.5-r12   | BSD-2-Clause AND GPL-2.0-or-later AND MIT |
 | scanelf                | apk       | 1.3.8-r1    | GPL-2.0-only                              |

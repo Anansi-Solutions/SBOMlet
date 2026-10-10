@@ -10,7 +10,8 @@ If you want to adopt and run the tool rather than change it, start with the
 [`README.md`](../../README.md) and [getting-started](../getting-started.md). The
 canonical model is laid out in [data-model](data-model.md), the per-stage flow
 in [data-flow](data-flow.md), and the reasoning behind the design in
-[design-principles](design-principles.md).
+[design-principles](design-principles.md), and how the folders depend on one
+another in [module-dependencies](module-dependencies.md).
 
 ## What the tool does
 
@@ -428,8 +429,8 @@ OS package still fails, because deny is terminal above the downgrade.
 The engine also reports compatible and clarify entries that never decided
 anything, as stale-policy hygiene. Those warnings print but never gate.
 
-Source: `src/policy/schema.ts`, `src/policy/evaluate.ts`,
-`src/policy/denylist.ts`.
+Source: `src/policy/schema/`, `src/policy/engine/evaluate.ts`,
+`src/policy/engine/deny.ts`.
 
 ### The renderers
 
@@ -631,4 +632,4 @@ treats each one in full.
    interchange format for both collector inputs and the rendered export.
 
 Source: `src/model/dependencies.ts`, `src/normalize/normalize.ts`,
-`src/collectors/terraform.ts`, `src/policy/evaluate.ts`, `src/merge/merge.ts`.
+`src/collectors/terraform.ts`, `src/policy/engine/evaluate.ts`, `src/merge/merge.ts`.

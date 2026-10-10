@@ -3,3 +3,4 @@ test/fixtures/
 .cache/
 node_modules/
 bun.lock
+src/policy/compat/*.json

@@ -83,5 +83,5 @@ above both, so a denied licence still fails regardless of scope.
   gates on), [ADR-0013](0013-source-available-deny.md) (the deny terminal above both
   downgraders), [ADR-0012](0012-docker-os-via-syft.md) (the committed SBOM feeding
   OS scope)
-- Code: `src/policy/evaluate.ts` (`applyDevScope`, `applyOsScope`,
+- Code: `src/policy/engine/evaluate.ts` (`applyDevScope`, `applyOsScope`,
   `applyScopeDowngrades`)
