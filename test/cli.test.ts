@@ -838,7 +838,7 @@ describe("runGenerate discovery warnings (collision, bun.lockb)", () => {
 
     mkdirSync(binDir);
     writeFileSync(join(binDir, "package.json"), '{ "name": "binproj" }\n');
-    writeFileSync(join(binDir, "bun.lockb"), " binary-lockfile-bytes");
+    writeFileSync(join(binDir, "bun.lockb"), "\0binary-lockfile-bytes");
     // A second, empty-yarn target keeps discovery non-empty so the run
     // resolves (bun.lockb itself is never a target).
     const otherDir = join(root, "other");
