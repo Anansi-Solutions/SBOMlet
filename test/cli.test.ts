@@ -498,7 +498,7 @@ describe("writePolicySummary — assessment conflict count line", () => {
   });
 
   test("cross-image claim conflicts count toward the line like ScanCode conflicts", async () => {
-    const { verdicts } = runEngine(
+    const { verdicts, model } = runEngine(
       [
         crossImagePkgSpec("libdiverge", [
           { target: "docker:a/Dockerfile", claims: ["MIT"] },
@@ -508,7 +508,7 @@ describe("writePolicySummary — assessment conflict count line", () => {
       "",
     );
     const stderr = await withCapturedStderr(async () => {
-      writePolicySummary(parsePolicy(""), verdicts, new Set());
+      writePolicySummary(parsePolicy(""), model, verdicts, new Set());
     });
 
     expect(verdicts.map((verdict) => verdict.rule)).toEqual([
