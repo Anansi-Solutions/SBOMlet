@@ -93,7 +93,7 @@ Sections appear in this order:
 | Package counts | `**Package counts:**` | always |
 | Problematic licenses | `## Problematic licenses` | policy run only |
 | Copyleft and special notices | `## Copyleft and special notices` | policy run only |
-| Target compatibility | `## Target compatibility` | policy run only, and only when the target lane produced a warn or held-internal row |
+| Target compatibility | `## Target compatibility` | policy run only, and only when the target lane held an occurrence for internal use |
 | Imprecise licenses | `## Imprecise licenses (review / disambiguate)` | any [imprecise](../glossary.md#imprecise-family) package exists |
 | Assessment conflicts | `## Assessment conflicts` | any conflict marker exists |
 | Containers | `## Containers` | always |
@@ -246,44 +246,44 @@ classification.
 A self-contained gate report, rendered on a policy run only, before the copyleft
 section so the gate-blocking findings sit near the top.
 
-It opens with a blocking table of every `fail` [verdict](../glossary.md#verdict),
-grouped so one row is one (purl, rule, reason) triple with its targets
-deduplicated and joined. When there are no blocking violations the table is
-replaced by a single line, `✅ No blocking policy violations.` The columns:
+It is a table of every `fail` and `warn` [verdict](../glossary.md#verdict),
+grouped so one row is one (severity, purl, rule, reason) group with its
+targets deduplicated and joined. Fail rows come first, then warn rows; within
+each, rows sort by rule, then package, then targets. A package with a fail at
+one [occurrence](../glossary.md#occurrence) and a warning at another gets one
+row of each, and each row's Used-in cell names only the occurrences its own
+verdicts decided. When there is no `fail`, the line
+`✅ No blocking policy violations.` comes first, followed by the table when
+any warning exists. The columns:
 
 | Column | Contents |
 | --- | --- |
-| Severity | always `fail` in this table |
+| Severity | `fail` (blocks the gate) or `warn` (does not) |
 | Rule | the [policy lane](../glossary.md#policy-lanes) rule that decided the verdict |
 | Name, Ecosystem, Version, License | as in the summary tables |
 | Used in | the group's targets, deduplicated and sorted |
 | Why | per-row [provenance](../glossary.md#dependency-provenance), see below |
 | Reason | the verdict's reason string |
 
-After the table, when any `warn` verdicts exist, one non-blocking line rolls
-them up by coarse category (copyleft, target, unknown, source-available, other)
-with a count each. A parenthetical counts the warnings that
-`[dev_dependencies]` or `[os_dependencies]` downgraded from a fail, and is
-omitted when none were. The line then names the sections that show the warned
-occurrences, in document order: Copyleft and special notices, Target
-compatibility, Imprecise licenses. A warning no section shows is counted as not
-detailed below: the Problematic table lists only failing targets, so a warning
-on a package that fails elsewhere is not in it, and the package tables carry no
-verdict, so an os-downgraded, unknown, or source-available warning is not
-visible there either. `generate` and `check` print every warning on
-stderr as a `policy warn:` line. For example:
+After the table, when any `warn` verdicts exist, the
+[non-blocking summary](../glossary.md#non-blocking-summary) rolls them up by
+coarse category (copyleft, target, unknown, source-available, other) with a
+count each. A parenthetical counts the warnings that `[dev_dependencies]` or
+`[os_dependencies]` downgraded from a fail, and is omitted when none were.
+Every counted warning is a `warn` row of the table above, so the line always
+points there. For example:
 
 ```text
-_Non-blocking: 12 copyleft warning(s), 3 unknown warning(s) (4 dev-downgraded). Detailed under Copyleft and special notices, Imprecise licenses; 3 not detailed below (see the `policy warn:` lines on stderr)._
+_Non-blocking: 12 copyleft warning(s), 3 unknown warning(s) (4 dev-downgraded). Detailed under Problematic licenses._
 ```
 
-When no section shows any of the warnings, the pointer reads
-`Not detailed below` instead. The line is omitted when there are no warnings.
+The line is omitted when there are no warnings. `generate` and `check` also
+print every warning on stderr as a `policy warn:` line.
 
-Whether a package listed here also repeats in the Copyleft section below, and
-where else it keeps a row (its inventory table, its container subsection,
-Assessment conflicts), is the Problematic-over-Copyleft dedup, normatively
-defined in [report-placement.md](./report-placement.md#invariants).
+No other section rows a `fail` or `warn` verdict. Where else a package listed
+here keeps a row (its inventory table, its container subsection, Imprecise
+licenses, Assessment conflicts) is placement, normatively defined in
+[report-placement.md](./report-placement.md#invariants).
 
 This table is also where the AGPL container escalation
 (`default:agpl-container`) always surfaces, scoped to SYSTEM packages — the
@@ -294,64 +294,44 @@ document's.
 
 ### Copyleft and special notices
 
-Rendered on a policy run only. It opens with a one-line summary sentence: _The
-packages listed below carry copyleft or special license obligations in at least
-one non-suppressed workspace._
+Rendered on a policy run only. It holds notices, not verdict rows: a copyleft
+`fail` or `warn` rows in [Problematic licenses](#problematic-licenses) above.
 
-When the policy suppresses any workspaces, the list of them follows. These are
-workspaces themselves distributed under a [copyleft](../glossary.md#copyleft)
+When the policy suppresses any workspaces, the list of them comes first. These
+are workspaces themselves distributed under a [copyleft](../glossary.md#copyleft)
 licence, where in-family copyleft dependencies impose no extra obligation. Each
 renders as `- <path> (<license>) — <description>`, sorted by path. With no
 suppressed workspaces the list is omitted.
 
-Then a table of every package carrying a copyleft or special obligation in at
-least one workspace that policy did not suppress — membership is placement,
-normatively defined in
+Then, when a container system package's AGPL obligation was accepted via
+[`[[compatible]]`](policy.md#compatible), or demoted to `ok` by a declared
+`network = false`, a bullet list of those acceptances, each naming the rule and
+its reason. A package that fails at another occurrence is left out of it; its
+fail is in Problematic licenses.
+
+When neither list renders, the section is the line
+`✅ No copyleft or special notices.` Which packages land in either list is
+placement, normatively defined in
 [report-placement.md](./report-placement.md#narrative-sections-verdict--or-finding-driven-deduped).
-It uses the five summary columns plus a trailing **Why** column:
-
-| Column | Contents |
-| --- | --- |
-| Name, Ecosystem, Version, License | as in the summary tables |
-| Used in | only the flagged, non-suppressed targets |
-| Why | per-row dependency provenance |
-
-The Used-in cell here lists only the flagged targets, not every place the
-package is used. This is how an elected copyleft branch surfaces in the output:
-the leaking workspaces are named.
-
-A container's SYSTEM-package copyleft is routine base-image noise and stays
-out of this table — except AGPL, which fails into Problematic licenses above
-or, when accepted via [`[[compatible]]`](policy.md#compatible), appears here
-instead as a non-blocking special notice. The exact exclusion and dedup
-rules are [report-placement.md](./report-placement.md#invariants)'s.
 
 ### Target compatibility
 
 Rendered only on a policy run whose `[target]` table activates the
-compatibility lane, and only when the lane actually produced a row - an
-absent lane, or one whose every occurrence landed a clean `target:ok` or a
-`target:incompatible`/`target:unknown-pair` fail (routed to
-[Problematic licenses](#problematic-licenses) instead), renders no heading at
-all. See [policy.md#target](policy.md#target) for the profile shape and
+compatibility lane, and only when the lane held at least one occurrence for
+internal use; otherwise no heading renders at all. A `target:boundary`,
+`target:unknown-pair`, or `target:incompatible` verdict, `warn` or `fail`, rows
+in [Problematic licenses](#problematic-licenses) instead. See
+[policy.md#target](policy.md#target) for the profile shape and
 [dependency-classification.md](./dependency-classification.md) for how a
 verdict lands in one of the lane's five outcomes.
 
-Two independent parts, in order, both excluding a purl already in
-Problematic licenses:
-
-- A flagged table, the same five summary columns plus **Why** as the
-  Copyleft table, for every `target:boundary`, `target:unknown-pair`, or
-  dev-downgraded `target:incompatible` (status `warn`) verdict - a package
-  needing review against the declared target.
-- A "held for internal use" bullet list, `- <name>@<version> in <target>
-  - <reason>`, for every `target:internal-use` (status `ok`) verdict: a
-  copyleft or AGPL obligation the usage profile takes out of scope. The
-  distinct rule id and this dedicated list keep the exposure visible - never
-  a silent `ok` - for the day the profile's `distribution` or `network`
-  flag flips back.
-
-Which packages land in either part is placement, normatively defined in
+The section is a "held for internal use" bullet list, `- <name>@<version> in
+<target> - <reason>`, one bullet per `target:internal-use` (status `ok`)
+verdict: a copyleft or AGPL obligation the usage profile takes out of scope.
+The distinct rule id and this dedicated list keep the exposure visible - never
+a silent `ok` - for the day the profile's `distribution` or `network` flag
+flips back. A fail at another occurrence of the same package never removes a
+bullet. Which verdicts land here is placement, normatively defined in
 [report-placement.md](./report-placement.md#narrative-sections-verdict--or-finding-driven-deduped).
 
 ### Assessment conflicts

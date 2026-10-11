@@ -41,7 +41,9 @@ Deny sits above everything because a
 [source-available](../glossary.md#source-available) licence legally cannot be
 redistributed in a shipped artifact, so no accept lever may override it. The
 category defaults are floors rather than lanes that match a specific package.
-They set what happens to a verdict that no override touched.
+They set what happens to a verdict that no override touched. A `warn` does not
+fail the gate: the report lists it as a `warn` row under Problematic licenses
+and counts it in the [non-blocking summary](../glossary.md#non-blocking-summary).
 
 The order matters whenever a package could match more than one lane. A
 package denied by `[[deny]]` fails even though a `[[compatible]]` rule would
@@ -697,9 +699,10 @@ application layer installed. Absent table: defaults to `warn`.
 The expected copyleft in a Debian or Alpine base image, such as glibc under LGPL
 or bash and coreutils under GPL, is the operating system the container ships on,
 not code your project authored. Those obligations are satisfied by shipping the
-image, so by default the gate lists the OS packages under their container's own
-System-packages table (see `[docker.development]` below) rather than failing
-your build on every standard base image. This knob has no effect on an
+image, so by default each one is a warning rather than a failure of your build
+on every standard base image: a `warn` row under Problematic licenses, with the
+package listed in its container's own System-packages table (see
+`[docker.development]` below). This knob has no effect on an
 application-ecosystem package the image scan found — npm, pypi, go, and the
 rest — because installing something via an application package manager makes
 it an application dependency wherever it lives; it gates on

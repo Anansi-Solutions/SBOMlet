@@ -192,6 +192,14 @@ The step that combines every [collector](#collector)'s output into one inventory
 keyed by [purl](#purl). The same package found in two workspaces becomes one
 entry with two [occurrences](#occurrence).
 
+### non-blocking summary
+
+The one-line roll-up of `warn` [verdicts](#verdict) under the Problematic
+licenses table: a count per category, how many a dev or OS downgrade softened
+from a fail, and where they are detailed. Every warning it counts is a `warn`
+row of that table. A warning never fails [the gate](#the-gate-check). See
+[output-format.md](reference/output-format.md#problematic-licenses).
+
 ### normalization
 
 Turning raw [licence claims](#license-claim) into standard SPDX. It corrects

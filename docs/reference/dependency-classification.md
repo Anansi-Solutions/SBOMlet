@@ -267,7 +267,7 @@ surfacing it on the finding).
 
 ## Path index (verified end to end)
 
-The same 50 paths as
+The same 51 paths as
 [report-placement.md](./report-placement.md#path-index-verified-end-to-end),
 one row each, stating the Stage-1/Stage-2 outcome (scope, verdict status,
 rule) instead of the markdown destination — the two tables share one slug
@@ -295,7 +295,8 @@ tables are about slug coverage, not about every classification being unique.
 | `app-copyleft-dev-container` | app-ecosystem copyleft in a `[[docker.development]]` container | `app · warn · default:copyleft` |
 | `app-copyleft-workspace-dev` | workspace dev-dependency copyleft | `app · warn · default:copyleft` |
 | `problematic-dedup-keeps-inventory` | workspace prod copyleft, fails | `app · fail · default:copyleft` |
-| `imprecise-copyleft-family-only-imprecise` | bare `GPL` app package | `app · warn · default:imprecise-copyleft` |
+| `fail-and-warn-one-package` | one workspace copyleft package, a production occurrence in one workspace and a dev occurrence in another, `dev_dependencies = "warn"` | `app · fail · default:copyleft` (production workspace) and `app · warn · default:copyleft` (dev workspace) |
+| `imprecise-copyleft-family` | bare `GPL` app package | `app · warn · default:imprecise-copyleft` |
 | `imprecise-permissive-family` | bare `BSD` app package | `app · warn · default:imprecise` |
 | `unknown-license-counted` | [unknown] handling = "warn", no license | `app · warn · default:unknown` |
 | `licenseref-only-unknown` | a package whose only license content is a LicenseRef | `app · warn · default:unknown` |

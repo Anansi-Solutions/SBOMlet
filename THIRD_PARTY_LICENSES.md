@@ -21,28 +21,24 @@ Copyleft notice rules are configured in .sbomlet.policy.toml.
 
 ✅ No blocking policy violations.
 
-_Non-blocking: 10 target warning(s). Detailed under Target compatibility._
+| Severity | Rule                | Name                                | Ecosystem | Version | License              | Used in | Why | Reason                                                                                                                                                                                                                                                                                                               |
+| -------- | ------------------- | ----------------------------------- | --------- | ------- | -------------------- | ------- | --- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| warn     | target:unknown-pair | @cspell/dict-en-au                  | npm       | 1.1.23  | LGPL-3.0-only        | .       | —   | elected "LGPL-3.0-only" under the "." target profile (AGPL-3.0-only, network-deployed, distributed externally) has no vetted compatibility data - OSADL: Check dependency - not silently passed; accept explicitly via \[\[compatible\]\] or correct the finding via \[\[clarify\]\]                                 |
+| warn     | target:unknown-pair | @cspell/dict-en-ca                  | npm       | 1.0.61  | LGPL-3.0-only        | .       | —   | elected "LGPL-3.0-only" under the "." target profile (AGPL-3.0-only, network-deployed, distributed externally) has no vetted compatibility data - OSADL: Check dependency - not silently passed; accept explicitly via \[\[compatible\]\] or correct the finding via \[\[clarify\]\]                                 |
+| warn     | target:unknown-pair | @cspell/dict-en-common-misspellings | npm       | 2.1.13  | CC-BY-SA-4.0 AND MIT | .       | —   | elected "CC-BY-SA-4.0 AND MIT" under the "." target profile (AGPL-3.0-only, network-deployed, distributed externally) has no vetted compatibility data - ScanCode LicenseDB: Copyleft Limited; OSADL: Yes - not silently passed; accept explicitly via \[\[compatible\]\] or correct the finding via \[\[clarify\]\] |
+| warn     | target:unknown-pair | @cspell/dict-en-gb                  | npm       | 5.0.30  | LGPL-3.0-only        | .       | —   | elected "LGPL-3.0-only" under the "." target profile (AGPL-3.0-only, network-deployed, distributed externally) has no vetted compatibility data - OSADL: Check dependency - not silently passed; accept explicitly via \[\[compatible\]\] or correct the finding via \[\[clarify\]\]                                 |
+| warn     | target:unknown-pair | @cspell/dict-en-gb-ise              | npm       | 1.0.30  | LGPL-3.0-only        | .       | —   | elected "LGPL-3.0-only" under the "." target profile (AGPL-3.0-only, network-deployed, distributed externally) has no vetted compatibility data - OSADL: Check dependency - not silently passed; accept explicitly via \[\[compatible\]\] or correct the finding via \[\[clarify\]\]                                 |
+| warn     | target:unknown-pair | spdx-exceptions                     | npm       | 2.5.0   | CC-BY-3.0            | .       | —   | elected "CC-BY-3.0" under the "." target profile (AGPL-3.0-only, network-deployed, distributed externally) has no vetted compatibility data - OSADL copyleft class: No - not silently passed; accept explicitly via \[\[compatible\]\] or correct the finding via \[\[clarify\]\]                                    |
+| warn     | target:unknown-pair | spdx-license-ids                    | npm       | 3.0.23  | CC0-1.0              | .       | —   | elected "CC0-1.0" under the "." target profile (AGPL-3.0-only, network-deployed, distributed externally) has no vetted compatibility data - ScanCode LicenseDB: Public Domain - not silently passed; accept explicitly via \[\[compatible\]\] or correct the finding via \[\[clarify\]\]                             |
+| warn     | target:unknown-pair | spdx-license-list                   | npm       | 6.11.0  | CC0-1.0              | .       | —   | elected "CC0-1.0" under the "." target profile (AGPL-3.0-only, network-deployed, distributed externally) has no vetted compatibility data - ScanCode LicenseDB: Public Domain - not silently passed; accept explicitly via \[\[compatible\]\] or correct the finding via \[\[clarify\]\]                             |
+| warn     | target:unknown-pair | spdx-ranges                         | npm       | 2.1.1   | CC-BY-3.0 AND MIT    | .       | —   | elected "CC-BY-3.0 AND MIT" under the "." target profile (AGPL-3.0-only, network-deployed, distributed externally) has no vetted compatibility data - OSADL copyleft class: No; OSADL: Yes - not silently passed; accept explicitly via \[\[compatible\]\] or correct the finding via \[\[clarify\]\]                |
+| warn     | target:unknown-pair | uri-js                              | npm       | 4.4.1   | BSD-2-Clause-Views   | .       | —   | elected "BSD-2-Clause-Views" under the "." target profile (AGPL-3.0-only, network-deployed, distributed externally) has no vetted compatibility data - ScanCode LicenseDB: Permissive - not silently passed; accept explicitly via \[\[compatible\]\] or correct the finding via \[\[clarify\]\]                     |
+
+_Non-blocking: 10 target warning(s). Detailed under Problematic licenses._
 
 ## Copyleft and special notices
 
-✅ No package carries copyleft or special license obligations.
-
-## Target compatibility
-
-The packages listed below need review against the declared target profile.
-
-| Name                                | Ecosystem | Version | License              | Used in | Why |
-| ----------------------------------- | --------- | ------- | -------------------- | ------- | --- |
-| @cspell/dict-en-au                  | npm       | 1.1.23  | LGPL-3.0-only        | .       | —   |
-| @cspell/dict-en-ca                  | npm       | 1.0.61  | LGPL-3.0-only        | .       | —   |
-| @cspell/dict-en-common-misspellings | npm       | 2.1.13  | CC-BY-SA-4.0 AND MIT | .       | —   |
-| @cspell/dict-en-gb                  | npm       | 5.0.30  | LGPL-3.0-only        | .       | —   |
-| @cspell/dict-en-gb-ise              | npm       | 1.0.30  | LGPL-3.0-only        | .       | —   |
-| spdx-exceptions                     | npm       | 2.5.0   | CC-BY-3.0            | .       | —   |
-| spdx-license-ids                    | npm       | 3.0.23  | CC0-1.0              | .       | —   |
-| spdx-license-list                   | npm       | 6.11.0  | CC0-1.0              | .       | —   |
-| spdx-ranges                         | npm       | 2.1.1   | CC-BY-3.0 AND MIT    | .       | —   |
-| uri-js                              | npm       | 4.4.1   | BSD-2-Clause-Views   | .       | —   |
+✅ No copyleft or special notices.
 
 ## Containers
 

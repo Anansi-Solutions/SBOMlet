@@ -9,25 +9,24 @@
  * scope-of-assertion line PLUS the compatibility-data attribution/disclaimer line (both generated,
  * both present ONLY when the policy declares an active target lane - PolicyView.targetProfile),
  * author preamble (policy [document].preamble, when configured), policy pointer line (policy runs
- * only), package-counts block, problematic licenses roll-up (policy runs only), copyleft and
- * special notices (policy runs only - container system-package copyleft is excluded as routine, and
- * a package already flagged Problematic never duplicates into this section), target compatibility
- * (policy runs only, and only when the target lane produced a warn or held-internal row - no
- * heading otherwise), imprecise licenses, assessment conflicts, the Containers index
- * (occurrence-derived, rendered with or without a policy view), then Production and
- * Development-only dependencies. Each of those two sections is the app table followed by one "###
- * Container: docker:<source>" subsection per container classified into that half - a container's
- * complete package inventory lists there, grouped by the docker:<source> occurrence identity
- * INDEPENDENT of scope (a package shared with an app workspace lists in both places), with no
- * separate Docker section. Each subsection further splits into a "**System packages**" table (the
- * OS-ecosystem allowlist) and an "**Application packages**" table (everything else), omitting an
- * empty half. The License column shows the full normalized expression when a finding exists,
- * canonicalized (boolean-algebra reordering/dedup/absorption, per {@link canonicalizeExpression})
- * - never only the elected branch; election surfaces through copyleft section membership instead.
- * The Assessment-conflicts evidence columns are the deliberate exception: they quote disagreeing
- * sources and render each claim's as-observed spelling, never canonicalized. Without a policy view
- * there is no policy pointer and no problematic roll-up or copyleft section, and every container
- * classifies production (the conservative default).
+ * only), package-counts block, problematic licenses (policy runs only - every fail and warn
+ * verdict), copyleft and special notices (policy runs only - suppressed workspaces and accepted
+ * AGPL obligations), target compatibility (policy runs only, and only when the target lane held an
+ * occurrence for internal use - no heading otherwise), imprecise licenses, assessment conflicts,
+ * the Containers index (occurrence-derived, rendered with or without a policy view), then
+ * Production and Development-only dependencies. Each of those two sections is the app table
+ * followed by one "Container: docker:<source>" subsection per container classified into that half;
+ * a container's complete package inventory lists there, grouped by the docker:<source> occurrence
+ * identity INDEPENDENT of scope (a package shared with an app workspace lists in both places), with
+ * no separate Docker section. Each subsection further splits into a "**System packages**" table
+ * (the OS-ecosystem allowlist) and an "**Application packages**" table (everything else), omitting
+ * an empty half. The License column shows the full normalized expression when a finding exists,
+ * canonicalized (boolean-algebra reordering/dedup/absorption, per {@link canonicalizeExpression}),
+ * never only the elected branch; election surfaces through the verdict rows in Problematic instead.
+ * The Assessment-conflicts evidence columns are the deliberate
+ * exception: they quote disagreeing sources and render each claim's as-observed spelling, never
+ * canonicalized. Without a policy view there is no policy pointer and no problematic roll-up or
+ * copyleft section, and every container classifies production (the conservative default).
  *
  * This module deliberately does not render the notices companion, emit CycloneDX, or evaluate
  * policy - verdicts and suppressed workspaces arrive pre-computed in the PolicyView projection. The
@@ -596,30 +595,6 @@ function tableRow(pkg: PackageEntry, usedIn: string): string {
 }
 
 /**
- * The copyleft-table head: the summary columns plus a trailing "Why" column carrying per-row
- * dependency provenance. Distinct from TABLE_HEAD so the summary sections
- * (Production/Development/Docker OS) stay byte-identical at five columns; provenance surfaces only
- * where it answers a compliance question.
- */
-const COPYLEFT_HEAD = [
-  "| Name | Ecosystem | Version | License | Used in | Why |",
-  "| --- | --- | --- | --- | --- | --- |",
-];
-
-/**
- * One copyleft-table row: tableRow plus the escapeCell'd "Why" provenance. The Why cell folds over
- * the SAME flagged target set the Used-in cell names - never over the package's out-of-scope
- * occurrences. `shownTargets` is the deduped+sorted flagged-target list whose join is the Used-in
- * cell.
- */
-function copyleftRow(pkg: PackageEntry, shownTargets: readonly string[]): string {
-  const usedIn = shownTargets.join(", ");
-  const scope = new Set(shownTargets);
-
-  return `| ${escapeCell(pkg.name)} | ${escapeCell(purlEcosystem(pkg.purl))} | ${escapeCell(pkg.version)} | ${escapeCell(licenseCellOf(pkg))} | ${escapeCell(usedIn)} | ${escapeCell(whyCellOf(pkg, scope))} |`;
-}
-
-/**
  * The dedicated imprecise-licenses review section: every imprecise package, so a maintainer sees
  * exactly what to disambiguate via a `[[clarify]]` override. Empty (omitted) when no package is
  * imprecise. Input is already comparePackages-sorted; every cell routes through escapeCell via
@@ -800,17 +775,17 @@ function documentTitle(policyView?: PolicyView): string {
 }
 
 /**
- * The blocking-table head for the "## Problematic licenses" roll-up. Distinct from TABLE_HEAD: it
- * carries Severity + Rule + Reason around the package columns so the section is a self-contained
- * gate report.
+ * The "## Problematic licenses" table head. Distinct from TABLE_HEAD: it carries Severity + Rule +
+ * Reason around the package columns so the section is a self-contained gate report.
  */
 const PROBLEMATIC_HEAD = [
   "| Severity | Rule | Name | Ecosystem | Version | License | Used in | Why | Reason |",
   "| --- | --- | --- | --- | --- | --- | --- | --- | --- |",
 ];
 
-/** A grouped blocking verdict: one group = one (purl, rule, reason) triple. */
-interface BlockingGroup {
+/** One Problematic row: the fail or warn verdicts sharing a (purl, rule, reason) triple. */
+interface VerdictGroup {
+  status: "fail" | "warn";
   purl: string;
   rule: string;
   reason: string;
@@ -861,80 +836,22 @@ function warnDowngrade(verdict: Verdict): "dev" | "os" | undefined {
   return verdict.reason.endsWith(OS_DOWNGRADE_REASON_SUFFIX) ? "os" : undefined;
 }
 
-/** The sections that render a warned occurrence, in document order. */
-const WARN_DETAIL_SECTIONS: readonly string[] = [
-  "Copyleft and special notices",
-  "Target compatibility",
-  "Imprecise licenses",
-];
-
 /**
- * The section that renders this warned occurrence, mirroring those sections' own membership rules;
- * undefined when none does. The Problematic table lists failing targets only and the package tables
- * carry no verdict, so neither details a warn.
+ * The non-blocking summary: warn counts by category and how many a scope lever downgraded. Every
+ * counted warn is a row of the Problematic table it sits under.
  */
-function warnDetailSection(
-  verdict: Verdict,
-  pkg: PackageEntry | undefined,
-  isProblematic: boolean,
-): string | undefined {
-  if (
-    (verdict.rule === "default:imprecise-copyleft" || verdict.rule === "default:imprecise") &&
-    pkg !== undefined &&
-    isImprecise(pkg)
-  ) {
-    return "Imprecise licenses";
-  }
-
-  if (isProblematic) {
-    return undefined;
-  }
-
-  if (verdict.rule === "default:copyleft") {
-    return pkg === undefined || pkg.scope === "os" ? undefined : "Copyleft and special notices";
-  }
-
-  if (warnCategory(verdict.rule) === "target") {
-    return "Target compatibility";
-  }
-
-  return undefined;
-}
-
-/**
- * The non-blocking roll-up line: warn counts by category, how many a scope lever downgraded, and
- * where the warned occurrences are detailed - or that they are not, rather than pointing at a
- * section that cannot show them.
- */
-function nonBlockingLine(
-  warns: readonly Verdict[],
-  byPurl: ReadonlyMap<string, PackageEntry>,
-  problematicPurls: ReadonlySet<string>,
-): string {
+function nonBlockingLine(warns: readonly Verdict[]): string {
   const counts = new Map<WarnCategory, number>();
   const downgrades = { dev: 0, os: 0 };
-  const detailedIn = new Set<string>();
-  let undetailed = 0;
 
   for (const verdict of warns) {
     const category = warnCategory(verdict.rule);
     const downgrade = warnDowngrade(verdict);
-    const section = warnDetailSection(
-      verdict,
-      byPurl.get(verdict.purl),
-      problematicPurls.has(verdict.purl),
-    );
 
     counts.set(category, (counts.get(category) ?? 0) + 1);
 
     if (downgrade !== undefined) {
       downgrades[downgrade] += 1;
-    }
-
-    if (section === undefined) {
-      undetailed += 1;
-    } else {
-      detailedIn.add(section);
     }
   }
 
@@ -946,40 +863,32 @@ function nonBlockingLine(
     ...(downgrades.os > 0 ? [`${downgrades.os} os-downgraded`] : []),
   ];
   const note = downgraded.length > 0 ? ` (${downgraded.join(", ")})` : "";
-  const stderrPointer = "(see the `policy warn:` lines on stderr)";
-  const sections = WARN_DETAIL_SECTIONS.filter((section) => detailedIn.has(section)).join(", ");
-  let pointer = `Detailed under ${sections}`;
 
-  if (sections === "") {
-    pointer = `Not detailed below ${stderrPointer}`;
-  } else if (undetailed > 0) {
-    pointer += `; ${undetailed} not detailed below ${stderrPointer}`;
-  }
-
-  return `_Non-blocking: ${tally}${note}. ${pointer}._`;
+  return `_Non-blocking: ${tally}${note}. Detailed under Problematic licenses._`;
 }
 
 /**
- * One blocking-table row for a (purl, rule, reason) group. Name/Ecosystem/ Version/License come
- * from the looked-up PackageEntry; every cell (reason and rule especially) routes through
- * escapeCell. The Used-in cell is the group's deduped, compareCodeUnits-sorted targets joined ", ".
+ * One Problematic row for a verdict group. Name/Ecosystem/Version/License come from the looked-up
+ * PackageEntry; every cell (reason and rule especially) routes through escapeCell. The Used-in cell
+ * is the group's deduped, compareCodeUnits-sorted targets joined ", ".
  */
-function problematicRow(group: BlockingGroup, pkg: PackageEntry): string {
+function problematicRow(group: VerdictGroup, pkg: PackageEntry): string {
   // The Why cell folds over the SAME flagged target set the Used-in cell names - never over the
   // package's out-of-scope occurrences.
   const shownTargets = new Set(group.targets);
   const targets = [...shownTargets].sort(compareCodeUnits).join(", ");
 
-  return `| ${escapeCell("fail")} | ${escapeCell(group.rule)} | ${escapeCell(pkg.name)} | ${escapeCell(purlEcosystem(pkg.purl))} | ${escapeCell(pkg.version)} | ${escapeCell(licenseCellOf(pkg))} | ${escapeCell(targets)} | ${escapeCell(whyCellOf(pkg, shownTargets))} | ${escapeCell(group.reason)} |`;
+  return `| ${escapeCell(group.status)} | ${escapeCell(group.rule)} | ${escapeCell(pkg.name)} | ${escapeCell(purlEcosystem(pkg.purl))} | ${escapeCell(pkg.version)} | ${escapeCell(licenseCellOf(pkg))} | ${escapeCell(targets)} | ${escapeCell(whyCellOf(pkg, shownTargets))} | ${escapeCell(group.reason)} |`;
 }
 
+/** Fail rows sort before warn rows. */
+const SEVERITY_ORDER: Readonly<Record<VerdictGroup["status"], number>> = { fail: 0, warn: 1 };
+
 /**
- * The "## Problematic licenses" roll-up section - rendered AFTER the counts block and BEFORE the
- * copyleft section, on a policy run only. The BLOCKING table is every fail verdict, grouped by
- * (purl, rule, reason) into one row with deduped+sorted targets; rows are sorted by rule, then
- * package (comparePackages on the looked-up entry), then the joined targets. The NON-BLOCKING line
- * summarizes warn verdicts by coarse category. The heading always renders; the empty state is the ✅
- * line.
+ * The "## Problematic licenses" section - rendered AFTER the counts block and BEFORE the copyleft
+ * section, on a policy run only. One row per (severity, purl, rule, reason) group of fail and warn
+ * verdicts, sorted by severity (fail first), rule, package, then the joined targets. The ✅ line
+ * states that no fail exists; the non-blocking summary follows the table when any warn does.
  */
 function problematicSectionLines(
   sorted: readonly PackageEntry[],
@@ -991,24 +900,21 @@ function problematicSectionLines(
     byPurl.set(pkg.purl, pkg);
   }
 
-  // Group fail verdicts by (purl, rule, reason). A fail whose purl has no package entry is
-  // defensively skipped (it can carry no name/version/license).
-  const groups = new Map<string, BlockingGroup>();
+  // A verdict whose purl has no package entry is defensively skipped (it can carry no
+  // name/version/license).
+  const groups = new Map<string, VerdictGroup>();
 
   for (const verdict of verdicts) {
-    if (verdict.status !== "fail") {
+    if ((verdict.status !== "fail" && verdict.status !== "warn") || !byPurl.has(verdict.purl)) {
       continue;
     }
 
-    if (!byPurl.has(verdict.purl)) {
-      continue;
-    }
-
-    const key = `${verdict.purl} ${verdict.rule} ${verdict.reason}`;
+    const key = `${verdict.status} ${verdict.purl} ${verdict.rule} ${verdict.reason}`;
     const existing = groups.get(key);
 
     if (existing === undefined) {
       groups.set(key, {
+        status: verdict.status,
         purl: verdict.purl,
         rule: verdict.rule,
         reason: verdict.reason,
@@ -1019,34 +925,37 @@ function problematicSectionLines(
     }
   }
 
+  const ordered = [...groups.values()].sort((a, b) => {
+    const bySeverity = SEVERITY_ORDER[a.status] - SEVERITY_ORDER[b.status];
+
+    if (bySeverity !== 0) {
+      return bySeverity;
+    }
+
+    const byRule = compareCodeUnits(a.rule, b.rule);
+
+    if (byRule !== 0) {
+      return byRule;
+    }
+
+    const byPkg = comparePackages(byPurl.get(a.purl)!, byPurl.get(b.purl)!);
+
+    if (byPkg !== 0) {
+      return byPkg;
+    }
+
+    const targetsA = [...new Set(a.targets)].sort(compareCodeUnits).join(", ");
+    const targetsB = [...new Set(b.targets)].sort(compareCodeUnits).join(", ");
+
+    return compareCodeUnits(targetsA, targetsB);
+  });
   const lines: string[] = ["## Problematic licenses", ""];
 
-  if (groups.size === 0) {
+  if (!ordered.some((group) => group.status === "fail")) {
     lines.push("✅ No blocking policy violations.", "");
-  } else {
-    // Sort: rule, then package (comparePackages on the looked-up entry), then the joined
-    // deduped+sorted targets. Every grouped purl is in byPurl.
-    const ordered = [...groups.values()].sort((a, b) => {
-      const byRule = compareCodeUnits(a.rule, b.rule);
+  }
 
-      if (byRule !== 0) {
-        return byRule;
-      }
-
-      const pkgA = byPurl.get(a.purl)!;
-      const pkgB = byPurl.get(b.purl)!;
-      const byPkg = comparePackages(pkgA, pkgB);
-
-      if (byPkg !== 0) {
-        return byPkg;
-      }
-
-      const targetsA = [...new Set(a.targets)].sort(compareCodeUnits).join(", ");
-      const targetsB = [...new Set(b.targets)].sort(compareCodeUnits).join(", ");
-
-      return compareCodeUnits(targetsA, targetsB);
-    });
-
+  if (ordered.length > 0) {
     lines.push(...PROBLEMATIC_HEAD);
     for (const group of ordered) {
       lines.push(problematicRow(group, byPurl.get(group.purl)!));
@@ -1055,88 +964,27 @@ function problematicSectionLines(
     lines.push("");
   }
 
-  // Omitted entirely when zero warns exist.
   const warns = verdicts.filter((verdict) => verdict.status === "warn");
 
   if (warns.length > 0) {
-    const problematicPurls = new Set(
-      verdicts.filter((verdict) => verdict.status === "fail").map((verdict) => verdict.purl),
-    );
-
-    lines.push(nonBlockingLine(warns, byPurl, problematicPurls), "");
+    lines.push(nonBlockingLine(warns), "");
   }
 
   return lines;
 }
 
 /**
- * The "## Copyleft and special notices" section - policy runs only. Membership is at least one
- * fail/warn verdict whose rule is exactly "default:copyleft" (the engine's only copyleft-flagging
- * rule), on an APP-scope package not already carrying a fail verdict of any rule - the
- * copyleft-only dedup: a package already named in the Problematic roll-up must never also duplicate
- * into this section, though its inventory row, its Imprecise-review row, and its
- * Assessment-conflicts row are untouched. Container system-package copyleft is routine base-image
- * noise and is excluded here regardless of its verdict status, EXCEPT an accepted AGPL obligation
- * (policyView.acceptedContainerNotices): a failing AGPL container package still escalates to
- * Problematic through the same dedup, but an ACCEPTED one renders here as a non-blocking special
- * notice instead of vanishing - it is neither counted in the warning roll-up above (its verdict
- * status is "ok") nor duplicated when the same purl already carries a fail elsewhere. The Used-in
- * cell lists only the flagged occurrence targets; the Why column carries the per-row provenance.
- * Returns the full section (heading, suppressed-workspaces list, accepted-notices list, table or
- * the ✅ empty state) for the caller to push.
+ * The "## Copyleft and special notices" section - policy runs only. Two notice lists, neither a
+ * verdict row (a copyleft fail or warn rows in Problematic): the suppressed workspaces, and the
+ * accepted AGPL obligations of container system packages (policyView.acceptedContainerNotices),
+ * minus any purl that fails elsewhere. A ✅ line stands in when neither renders.
  */
-function copyleftSectionLines(sorted: readonly PackageEntry[], policyView: PolicyView): string[] {
-  // Group verdicts by purl once - the renderer stays a pure function of its arguments.
-  const verdictsByPurl = new Map<string, Verdict[]>();
-
-  for (const verdict of policyView.verdicts) {
-    const list = verdictsByPurl.get(verdict.purl);
-
-    if (list === undefined) {
-      verdictsByPurl.set(verdict.purl, [verdict]);
-    } else {
-      list.push(verdict);
-    }
-  }
-
-  // Purls carrying at least one fail verdict - excluded from Copyleft membership ONLY (the dedup is
-  // copyleft-scoped, not global).
-  const problematicPurls = new Set(
+function copyleftSectionLines(policyView: PolicyView): string[] {
+  const failingPurls = new Set(
     policyView.verdicts
       .filter((verdict) => verdict.status === "fail")
       .map((verdict) => verdict.purl),
   );
-
-  // Collect the flagged rows first so the EMPTY state can be a ✅ line rather than a bare table
-  // head.
-  const copyleftRows: string[] = [];
-
-  for (const pkg of sorted) {
-    if (pkg.scope === "os") {
-      continue;
-    }
-
-    if (problematicPurls.has(pkg.purl)) {
-      continue;
-    }
-
-    const flagged = (verdictsByPurl.get(pkg.purl) ?? []).filter(
-      (verdict) =>
-        (verdict.status === "fail" || verdict.status === "warn") &&
-        verdict.rule === "default:copyleft",
-    );
-
-    if (flagged.length === 0) {
-      continue;
-    }
-
-    const targets = [...new Set(flagged.map((verdict) => verdict.occurrenceTarget))].sort(
-      compareCodeUnits,
-    );
-
-    copyleftRows.push(copyleftRow(pkg, targets));
-  }
-
   const lines: string[] = ["## Copyleft and special notices", ""];
 
   // Suppressed-workspaces list: every field is policy-authored and routes through escapeCell.
@@ -1160,11 +1008,9 @@ function copyleftSectionLines(sorted: readonly PackageEntry[], policyView: Polic
     lines.push("");
   }
 
-  // Accepted-AGPL container notices: candidates from policy/evaluate.ts, deduped against the SAME
-  // problematicPurls set the flagged rows above use - a purl already failing anywhere is never also
-  // shown as an accepted notice. Sorted by purl already (acceptedContainerNotices' contract).
+  // Already sorted by purl (acceptedContainerNotices' contract).
   const notices = (policyView.acceptedContainerNotices ?? []).filter(
-    (notice) => !problematicPurls.has(notice.purl),
+    (notice) => !failingPurls.has(notice.purl),
   );
 
   if (notices.length > 0) {
@@ -1181,88 +1027,45 @@ function copyleftSectionLines(sorted: readonly PackageEntry[], policyView: Polic
     lines.push("");
   }
 
-  if (copyleftRows.length > 0) {
-    lines.push(
-      "The packages listed below carry copyleft or special license obligations in at least one non-suppressed workspace.",
-      "",
-      ...COPYLEFT_HEAD,
-      ...copyleftRows,
-      "",
-    );
-  } else if (notices.length === 0) {
-    lines.push("✅ No package carries copyleft or special license obligations.", "");
+  if (suppressed.length === 0 && notices.length === 0) {
+    lines.push("✅ No copyleft or special notices.", "");
   }
 
   return lines;
 }
 
-/** The target-lane warn rule ids that row in the flagged table (never a bare `target:ok`). */
-const TARGET_WARN_RULES: ReadonlySet<string> = new Set([
-  TARGET_RULE_BOUNDARY,
-  TARGET_RULE_UNKNOWN_PAIR,
-  TARGET_RULE_INCOMPATIBLE,
-]);
-
 /**
- * The "## Target compatibility" section - policy runs only, rendered after Copyleft and special
- * notices, and ONLY when at least one target:* warn or held-internal row exists (unlike the
- * Copyleft section, an absent lane renders no heading at all - no blank-line drift on a no-target
- * document). Two parts, in order:
- *   - a flagged table (the copyleft-section row shape) for every target:boundary,
- *     target:unknown-pair, or dev-downgraded target:incompatible (status "warn") verdict;
- *   - a "Held for internal use" bullet list for every target:internal-use (status "ok") verdict
- *     - the usage profile takes the obligation out of scope, but the row stays enumerable for the
- *     day the profile flips (the internal-use hold's own repudiation mitigation).
- * The Problematic dedup applies ONLY to the flagged table (a purl carrying a fail verdict anywhere
- * never rows there, matching the Copyleft section's own dedup) - the held list is exempt by design.
- * A held-internal verdict names one SPECIFIC occurrence's out-of-scope obligation; a fail elsewhere
- * on the same purl describes an unrelated occurrence entirely, and the hold's whole purpose (an
- * exposure staying visible for the day the profile flips) breaks if a sibling occurrence's fail can
- * make it vanish with no trace anywhere in the document. Deterministic sort: comparePackages order,
- * already the caller's `sorted` order.
+ * The "## Target compatibility" section - policy runs only, and only when a target:internal-use
+ * verdict exists (no heading otherwise, so a no-target document has no blank-line drift). One
+ * bullet per held occurrence, in package order then target.
+ *
+ * @privateRemarks
+ * A fail at another occurrence of the same purl never drops a held bullet: the hold names one
+ * occurrence's out-of-scope obligation, and it must stay enumerable for the day the profile flips.
  */
 function targetSectionLines(sorted: readonly PackageEntry[], policyView: PolicyView): string[] {
-  const verdictsByPurl = new Map<string, Verdict[]>();
+  const heldByPurl = new Map<string, Verdict[]>();
 
   for (const verdict of policyView.verdicts) {
-    const list = verdictsByPurl.get(verdict.purl);
+    if (verdict.status !== "ok" || verdict.rule !== TARGET_RULE_INTERNAL_USE) {
+      continue;
+    }
+
+    const list = heldByPurl.get(verdict.purl);
 
     if (list === undefined) {
-      verdictsByPurl.set(verdict.purl, [verdict]);
+      heldByPurl.set(verdict.purl, [verdict]);
     } else {
       list.push(verdict);
     }
   }
 
-  const problematicPurls = new Set(
-    policyView.verdicts
-      .filter((verdict) => verdict.status === "fail")
-      .map((verdict) => verdict.purl),
-  );
-
-  const warnRows: string[] = [];
   const heldLines: string[] = [];
 
   for (const pkg of sorted) {
-    const relevant = verdictsByPurl.get(pkg.purl) ?? [];
-
-    if (!problematicPurls.has(pkg.purl)) {
-      const warns = relevant.filter(
-        (verdict) => verdict.status === "warn" && TARGET_WARN_RULES.has(verdict.rule),
-      );
-
-      if (warns.length > 0) {
-        const targets = [...new Set(warns.map((verdict) => verdict.occurrenceTarget))].sort(
-          compareCodeUnits,
-        );
-
-        warnRows.push(copyleftRow(pkg, targets));
-      }
-    }
-
-    const held = relevant
-      .filter((verdict) => verdict.status === "ok" && verdict.rule === TARGET_RULE_INTERNAL_USE)
-      .sort((a, b) => compareCodeUnits(a.occurrenceTarget, b.occurrenceTarget));
+    const held = [...(heldByPurl.get(pkg.purl) ?? [])].sort((a, b) =>
+      compareCodeUnits(a.occurrenceTarget, b.occurrenceTarget),
+    );
 
     for (const verdict of held) {
       heldLines.push(
@@ -1271,32 +1074,18 @@ function targetSectionLines(sorted: readonly PackageEntry[], policyView: PolicyV
     }
   }
 
-  if (warnRows.length === 0 && heldLines.length === 0) {
+  if (heldLines.length === 0) {
     return [];
   }
 
-  const lines: string[] = ["## Target compatibility", ""];
-
-  if (warnRows.length > 0) {
-    lines.push(
-      "The packages listed below need review against the declared target profile.",
-      "",
-      ...COPYLEFT_HEAD,
-      ...warnRows,
-      "",
-    );
-  }
-
-  if (heldLines.length > 0) {
-    lines.push(
-      "Held out of scope for internal use - visible for the day the distribution profile flips:",
-      "",
-      ...heldLines,
-      "",
-    );
-  }
-
-  return lines;
+  return [
+    "## Target compatibility",
+    "",
+    "Held out of scope for internal use - visible for the day the distribution profile flips:",
+    "",
+    ...heldLines,
+    "",
+  ];
 }
 
 /**
@@ -1431,11 +1220,11 @@ export function renderMarkdown(model: CanonicalDependencies, policyView?: Policy
 
   // Copyleft and special notices - policy runs only.
   if (policyView !== undefined) {
-    lines.push(...copyleftSectionLines(sorted, policyView));
+    lines.push(...copyleftSectionLines(policyView));
   }
 
-  // Target compatibility - policy runs only, and only when the lane produced a warn/held-internal
-  // row (targetSectionLines returns [] otherwise - no heading, no blank-line drift).
+  // Target compatibility - policy runs only, and only when the lane held an occurrence for internal
+  // use (targetSectionLines returns [] otherwise - no heading, no blank-line drift).
   if (policyView !== undefined) {
     lines.push(...targetSectionLines(sorted, policyView));
   }

@@ -449,12 +449,12 @@ H1 title (the `[document].title` from the policy, or the default), the dateless
 auto-generated header comment, the optional `[document].preamble` paragraph, the
 `Copyleft notice rules are configured in <policy>.` pointer line, the
 package-counts block (with a per-ecosystem column), the *Problematic licenses*
-roll-up (a blocking table of fail verdicts plus a non-blocking warn summary), the
-*Copyleft and special notices* section (a one-line summary sentence, then the
-suppressed-workspaces list when any, then the table), the *Imprecise licenses*
+table (every fail and warn verdict, then the non-blocking summary of the warns),
+the *Copyleft and special notices* section (the suppressed-workspaces list and
+the accepted container AGPL notices, when any), the *Imprecise licenses*
 review section when any package is imprecise, and finally the summary tables
-split into Production, Development-only, and Docker image packages. The copyleft
-and problematic tables carry a `Why` provenance column; the three summary tables
+split into Production, Development-only, and Docker image packages. The problematic
+table carries a `Why` provenance column; the three summary tables
 carry Name, Ecosystem, Version, License, and Used in. Every value interpolated
 from SBOM data or the policy file routes through one cell-escaping function, a
 Markdown-injection mitigation that escapes pipes, backticks, and brackets,

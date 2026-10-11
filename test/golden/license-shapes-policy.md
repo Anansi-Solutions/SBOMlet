@@ -25,8 +25,6 @@ Workspaces that are themselves distributed under a copyleft license are suppress
 
 - apps/scratch (AGPL-3.0-only) — Scratch fork is itself AGPL-distributed \| upstream \`scratch-gui\` \[GPL-compatible\]
 
-✅ No package carries copyleft or special license obligations.
-
 ## Containers
 
 ✅ No containers are currently tracked.

@@ -222,8 +222,8 @@ const relayAgent = entry({
  * dev-downgraded counterpart to metricsDaemon's production fail: the same
  * default:copyleft rule and the same AGPL family, but the dev-only
  * occurrence warns instead of failing. Precise (unlike relayAgent's bare
- * "AGPL" family label), so it is a default:copyleft warn — it lands in the
- * Copyleft and special notices section, not the Imprecise review section.
+ * "AGPL" family label), so it is a default:copyleft warn row in Problematic
+ * and never in the Imprecise review section.
  */
 const cacheRelay = entry({
   purl: asPurl("pkg:pypi/cache-relay@0.9.0"),
@@ -260,7 +260,7 @@ const chartRender = entry({
   licenseClaims: [{ raw: asRawLicense("LGPL-3.0-or-later"), kind: "spdx-id", source: "generator" }],
 });
 
-/** App-level dev-only copyleft warn — the obligation that must stay in Copyleft. */
+/** App-level dev-only copyleft warn — a Problematic warn row. */
 const docGen = entry({
   purl: asPurl("pkg:npm/doc-gen@1.0.0"),
   name: asDependencyName("doc-gen"),
@@ -366,6 +366,15 @@ function section(doc: string, heading: string): string {
   return nextHeadingOffset === -1 ? rest : rest.slice(0, nextHeadingOffset);
 }
 
+/** The Severity cell of each Problematic licenses row naming package `name`. */
+function problematicSeverities(doc: string, name: string): string[] {
+  return section(doc, "## Problematic licenses")
+    .split("\n")
+    .map((line) => line.split("|").map((cell) => cell.trim()))
+    .filter((cells) => cells[3] === name)
+    .map((cells) => cells[1] ?? "");
+}
+
 describe("containerReport — multi-container golden scenario", () => {
   test("locked byte-golden against the real engine (parsePolicy + evaluate + renderMarkdown + alignTables)", () => {
     expect(renderScenario()).toBe(golden("container-report.md"));
@@ -375,7 +384,7 @@ describe("containerReport — multi-container golden scenario", () => {
     expect(renderScenario()).toBe(renderScenario());
   });
 
-  describe("invariant: at-most-once across {Problematic, Copyleft}", () => {
+  describe("invariant: every fail and warn rows in Problematic, never in Copyleft", () => {
     test("the precise-AGPL container package is in Problematic and NOT in Copyleft", () => {
       const doc = renderScenario();
 
@@ -385,7 +394,7 @@ describe("containerReport — multi-container golden scenario", () => {
       );
     });
 
-    test("the imprecise-AGPL application-ecosystem package (a dev-marked container) warns via default:imprecise-copyleft — it is NOT a fail, so it never reaches Problematic", () => {
+    test("the imprecise-AGPL application-ecosystem package (a dev-marked container) warns via default:imprecise-copyleft, a Problematic warn row", () => {
       // Corrected routing: golang is an application ecosystem, not the
       // OS-package allowlist, so relay-agent gates like an application
       // dependency rather than the routine container AGPL escalation. Its
@@ -406,10 +415,7 @@ describe("containerReport — multi-container golden scenario", () => {
 
       const doc = renderScenario();
 
-      expect(section(doc, "## Problematic licenses").includes("relay-agent")).toBe(false);
-      // Not in the detailed Copyleft table either (that table is scoped to
-      // rule === "default:copyleft" exactly) — it surfaces in the dedicated
-      // Imprecise-licenses review section instead (asserted elsewhere).
+      expect(problematicSeverities(doc, "relay-agent")).toEqual(["warn"]);
       expect(section(doc, "## Copyleft and special notices").includes("relay-agent")).toBe(false);
     });
 
@@ -420,21 +426,20 @@ describe("containerReport — multi-container golden scenario", () => {
       expect(section(doc, "## Copyleft and special notices").includes("chart-render")).toBe(false);
     });
 
-    test("the app-level dev-only warn stays in Copyleft and is NOT in Problematic", () => {
+    test("the app-level dev-only warn is a Problematic warn row and NOT in Copyleft", () => {
       const doc = renderScenario();
 
-      expect(section(doc, "## Copyleft and special notices").includes("doc-gen")).toBe(true);
-      expect(section(doc, "## Problematic licenses").includes("doc-gen")).toBe(false);
+      expect(problematicSeverities(doc, "doc-gen")).toEqual(["warn"]);
+      expect(section(doc, "## Copyleft and special notices").includes("doc-gen")).toBe(false);
     });
 
-    test("routine container copyleft (bash, libc6) never surfaces in Copyleft or Problematic", () => {
+    test("routine container copyleft (bash, libc6) is an os-downgraded Problematic warn row, never in Copyleft", () => {
       const doc = renderScenario();
       const copyleft = section(doc, "## Copyleft and special notices");
-      const problematic = section(doc, "## Problematic licenses");
 
       for (const name of ["bash", "libc6"]) {
         expect(copyleft.includes(name)).toBe(false);
-        expect(problematic.includes(name)).toBe(false);
+        expect(problematicSeverities(doc, name)).toEqual(["warn"]);
       }
     });
 
@@ -445,23 +450,21 @@ describe("containerReport — multi-container golden scenario", () => {
       expect(section(doc, "## Copyleft and special notices").includes("diag-tools")).toBe(false);
     });
 
-    test("the dev-marked application-ecosystem copyleft (cache-relay) is in Copyleft and NOT in Problematic", () => {
+    test("the dev-marked application-ecosystem copyleft (cache-relay) is a Problematic warn row and NOT in Copyleft", () => {
       const doc = renderScenario();
 
-      expect(section(doc, "## Copyleft and special notices").includes("cache-relay")).toBe(true);
-      expect(section(doc, "## Problematic licenses").includes("cache-relay")).toBe(false);
+      expect(problematicSeverities(doc, "cache-relay")).toEqual(["warn"]);
+      expect(section(doc, "## Copyleft and special notices").includes("cache-relay")).toBe(false);
     });
   });
 
-  describe("invariant: an accepted container AGPL obligation is a non-blocking notice, not Problematic and not the copyleft table", () => {
-    test("the precise-AGPL accepted system package (licensed-daemon) is a Copyleft-section notice, NOT in Problematic, and NOT in the flagged copyleft table", () => {
+  describe("invariant: an accepted container AGPL obligation is a non-blocking notice, not Problematic", () => {
+    test("the precise-AGPL accepted system package (licensed-daemon) is a Copyleft-section notice bullet, NOT in Problematic", () => {
       const doc = renderScenario();
       const copyleft = section(doc, "## Copyleft and special notices");
 
       expect(copyleft.includes("licensed-daemon")).toBe(true);
       expect(section(doc, "## Problematic licenses").includes("licensed-daemon")).toBe(false);
-      // Not a flagged-copyleft ROW (that table is scoped to rule ===
-      // "default:copyleft"); it is the special-notice bullet list instead.
       expect(copyleft.includes("accepted via compatible\\[1\\]")).toBe(true);
     });
 
@@ -565,14 +568,14 @@ describe("containerReport — multi-container golden scenario", () => {
       expect(section(doc, "## Problematic licenses").includes("diag-tools")).toBe(true);
     });
 
-    test("the dev-marked application-ecosystem copyleft rows in the build container's Application table AND in Copyleft", () => {
+    test("the dev-marked application-ecosystem copyleft rows in the build container's Application table AND in Problematic", () => {
       const doc = renderScenario();
       const buildSection = section(doc, `### Container: ${BUILD_CONTAINER}`);
       const applicationPos = buildSection.indexOf("**Application packages**");
       const applicationBlock = buildSection.slice(applicationPos);
 
       expect(applicationBlock.includes("cache-relay")).toBe(true);
-      expect(section(doc, "## Copyleft and special notices").includes("cache-relay")).toBe(true);
+      expect(problematicSeverities(doc, "cache-relay")).toEqual(["warn"]);
     });
   });
 

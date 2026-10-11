@@ -388,7 +388,7 @@ pointer line on a policy run, the package counts, the problematic-licenses
 roll-up, the copyleft section, the imprecise-licenses review section, and finally
 the summary tables split into Production, Development-only, and Docker image
 packages. Each table carries `Name`, `Ecosystem`, `Version`, `License`, and `Used in`;
-the copyleft and problematic tables add a `Why` column carrying per-row
+the problematic table adds a `Why` column carrying per-row
 [provenance](../glossary.md#dependency-provenance) — `direct`, an introducer
 chain like `a → b → c`, or the "—" residual when the source carried no usable
 graph. Every interpolated value routes through an escape against Markdown
@@ -405,13 +405,15 @@ per-occurrence properties — a `used-in` and a `scope` per occurrence, and a
 document serial number and the metadata timestamp so the export is deterministic
 and schema-valid by construction.
 
-A `Verdict` reaches the Markdown in three ways. A `fail` verdict is grouped by
-`(purl, rule, reason)` into one row of the problematic-licenses blocking table,
-with deduped and sorted targets. A `fail` or `warn` verdict whose rule is exactly
-`default:copyleft` also adds the package to the copyleft section, where the
-"Used in" and "Why" cells name only the flagged occurrences. A `warn` verdict
-feeds the non-blocking roll-up; `ok` and `suppressed` verdicts gate nothing and
-appear only in the CycloneDX per-occurrence properties.
+A `Verdict` reaches the Markdown in three ways. A `fail` or `warn` verdict is
+grouped by `(severity, purl, rule, reason)` into one row of the
+problematic-licenses table, fail rows first, where the "Used in" and "Why" cells
+name only that row's occurrences. A `warn` verdict is also counted in the
+non-blocking summary under that table. An `ok` verdict renders only when it
+records a decision a reader must keep seeing: an accepted container AGPL
+obligation in the copyleft section, or a `target:internal-use` hold in the
+target-compatibility section. Every other `ok` verdict, and every `suppressed`
+one, gates nothing and appears only in the CycloneDX per-occurrence properties.
 
 Source: `render/markdown.ts` (`renderMarkdown`, `whyCellOf`,
 `problematicSectionLines`, `escapeCell`), `render/notices.ts`,

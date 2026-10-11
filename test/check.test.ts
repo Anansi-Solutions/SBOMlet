@@ -1321,18 +1321,27 @@ describe("the two-Dockerfile scenario end-to-end", () => {
     expect(stderr.includes(`${BUSYBOX_PURL} in docker:a/Dockerfile`)).toBe(false);
     expect(stderr.includes("policy warning: unused entry compatible[0]")).toBe(false);
 
-    // Rendered warn surface: container system-package copyleft is routine and
-    // is never surfaced in the detailed Copyleft table (regardless of which
-    // occurrence carries the warn) — only the non-blocking roll-up names it.
+    // Rendered warn surface: the B occurrence's warn is a Problematic row naming only B; a
+    // container system package's copyleft never rows in Copyleft and special notices.
     const md = outputs.licensesMd;
+    const problematic = squish(
+      md.slice(
+        md.indexOf("## Problematic licenses"),
+        md.indexOf("## Copyleft and special notices"),
+      ),
+    );
     const copyleft = squish(
       md.slice(md.indexOf("## Copyleft and special notices"), md.indexOf("## Containers")),
     );
 
-    expect(copyleft.includes("| busybox |")).toBe(false);
     expect(
-      copyleft.includes("✅ No package carries copyleft or special license obligations."),
+      problematic.includes(
+        "| warn | default:copyleft | busybox | apk | 1.37.0-r19 | GPL-2.0-only | docker:b/Dockerfile |",
+      ),
     ).toBe(true);
+    expect(problematic.includes("docker:a/Dockerfile")).toBe(false);
+    expect(copyleft.includes("| busybox |")).toBe(false);
+    expect(copyleft.includes("✅ No copyleft or special notices.")).toBe(true);
     expect(md.includes("1 copyleft warning(s)")).toBe(true);
 
     // busybox still rows in BOTH containers' own subsections (the flow

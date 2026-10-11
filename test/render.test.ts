@@ -839,7 +839,7 @@ describe("renderMarkdown — the full document", () => {
     expect(output.includes("| legacy | npm | 1.0.0 | ISC | apps/a |")).toBe(true);
   });
 
-  test("Test 5: copyleft membership + copyleft-only dedup — a fail verdict of ANY rule excludes the purl from Copyleft entirely; a warn-only default:copyleft package stays a member; Used-in lists only flagged targets", () => {
+  test("Test 5: every fail and warn verdict rows in Problematic, one row per severity with only that severity's targets; Copyleft carries none of them", () => {
     const warnOnlyCopyleft = entry({
       purl: asPurl("pkg:npm/warn-only-copyleft@1.0.0"),
       name: asDependencyName("warn-only-copyleft"),
@@ -894,10 +894,7 @@ describe("renderMarkdown — the full document", () => {
       policyPath: asRelativePath("policy.toml"),
       suppressedWorkspaces: [],
       verdicts: [
-        // sharp carries BOTH a fail (frontend) and a warn (backend) verdict for
-        // the SAME rule -- the observed duplication defect this dedup fixes:
-        // the purl has a fail verdict, so it is excluded from Copyleft
-        // entirely, even though a warn default:copyleft verdict also exists.
+        // sharp carries BOTH a fail (frontend) and a warn (backend) verdict for the SAME rule.
         {
           purl: asPurl("pkg:npm/sharp@0.33.0"),
           occurrenceTarget: asTargetIdentity("frontend"),
@@ -919,8 +916,6 @@ describe("renderMarkdown — the full document", () => {
           rule: "workspace.copyleft_suppressed[0]",
           reason: "suppressed by workspace rule",
         },
-        // warn-only-copyleft carries ONLY warn default:copyleft verdicts, no
-        // fail anywhere -- it stays a Copyleft member.
         {
           purl: asPurl("pkg:npm/warn-only-copyleft@1.0.0"),
           occurrenceTarget: asTargetIdentity("backend"),
@@ -952,27 +947,26 @@ describe("renderMarkdown — the full document", () => {
       ],
     };
     const output = renderMarkdown(model, view);
+    const problematicStart = output.indexOf("## Problematic licenses");
     const copyleftStart = output.indexOf("## Copyleft and special notices");
     const summaryStart = output.indexOf("## Production dependencies");
+    const problematicRows = output
+      .slice(problematicStart, copyleftStart)
+      .split("\n")
+      .filter((line) => line.startsWith("| fail |") || line.startsWith("| warn |"));
 
-    expect(copyleftStart).toBeGreaterThan(-1);
+    expect(problematicRows.map((row) => row.split(" | ").slice(0, 7).join(" | "))).toEqual([
+      "| fail | default:copyleft | sharp | npm | 0.33.0 | LGPL-3.0-or-later | frontend",
+      "| warn | default:copyleft | sharp | npm | 0.33.0 | LGPL-3.0-or-later | backend",
+      "| warn | default:copyleft | warn-only-copyleft | npm | 1.0.0 | LGPL-3.0-or-later | backend, frontend",
+      "| warn | default:unknown | unknown-pkg | npm | 1.0.0 | unknown | apps/a",
+    ]);
     const copyleftSection = output.slice(copyleftStart, summaryStart);
 
-    // Dedup: sharp has a fail verdict for its purl, so it is excluded from
-    // Copyleft entirely -- the observed duplication defect is gone.
-    expect(copyleftSection.includes("sharp")).toBe(false);
-    // Membership stands for a warn-only default:copyleft package; Used-in
-    // lists ONLY the flagged targets, compareCodeUnits-sorted.
-    expect(
-      copyleftSection.includes(
-        "| warn-only-copyleft | npm | 1.0.0 | LGPL-3.0-or-later | backend, frontend | — |",
-      ),
-    ).toBe(true);
-    // default:unknown warns and suppressed-only packages are omitted.
-    expect(copyleftSection.includes("unknown-pkg")).toBe(false);
-    expect(copyleftSection.includes("suppressed-only")).toBe(false);
-    // Inventory completeness: sharp is EXCLUDED from Copyleft but STILL rows
-    // in its Production/Development table (the dedup never drops inventory).
+    for (const name of ["sharp", "warn-only-copyleft", "unknown-pkg", "suppressed-only"]) {
+      expect(copyleftSection.includes(name)).toBe(false);
+    }
+
     const summary = output.slice(summaryStart);
 
     expect(summary.includes("| sharp | npm | 0.33.0 |")).toBe(true);
@@ -980,7 +974,7 @@ describe("renderMarkdown — the full document", () => {
     expect(summary.includes("| suppressed-only |")).toBe(true);
   });
 
-  test("Test 5b: container system-package copyleft is routine and never surfaces in Copyleft, whatever its verdict status; the same warn on an APP package still surfaces", () => {
+  test("Test 5b: a container system-package copyleft warn rows in Problematic like an app one, and neither surfaces in Copyleft", () => {
     const osCopyleft = entry({
       purl: asPurl("pkg:deb/debian/libssl@3.0"),
       name: asDependencyName("libssl"),
@@ -1033,18 +1027,27 @@ describe("renderMarkdown — the full document", () => {
     };
     const output = renderMarkdown(model, view);
     const copyleftStart = output.indexOf("## Copyleft and special notices");
+    const problematicSection = output.slice(
+      output.indexOf("## Problematic licenses"),
+      copyleftStart,
+    );
     const copyleftSection = output.slice(copyleftStart, output.indexOf("## Containers"));
 
-    // Container copyleft is routine — excluded from the detailed table
-    // regardless of its warn status.
-    expect(copyleftSection.includes("libssl")).toBe(false);
-    // The app copyleft obligation is never dropped.
     expect(
-      copyleftSection.includes("| app-copyleft | npm | 1.0.0 | GPL-3.0-only | backend | — |"),
+      problematicSection.includes(
+        "| warn | default:copyleft | libssl | deb | 3.0 | GPL-3.0-only | docker:img/Dockerfile | — | os-downgraded copyleft |",
+      ),
     ).toBe(true);
+    expect(
+      problematicSection.includes(
+        '| warn | default:copyleft | app-copyleft | npm | 1.0.0 | GPL-3.0-only | backend | — | copyleft license "GPL-3.0-only" |',
+      ),
+    ).toBe(true);
+    expect(copyleftSection.includes("libssl")).toBe(false);
+    expect(copyleftSection.includes("app-copyleft")).toBe(false);
   });
 
-  test("Test 5c: an accepted-AGPL container notice (PolicyView.acceptedContainerNotices) renders as a special-notice bullet, distinct from the flagged copyleft table, and is deduped when the same purl also carries a fail verdict elsewhere", () => {
+  test("Test 5c: an accepted-AGPL container notice (PolicyView.acceptedContainerNotices) renders as a special-notice bullet, never a table row, and is deduped when the same purl also carries a fail verdict elsewhere", () => {
     const model: CanonicalDependencies = { packages: [] };
     const view: PolicyView = {
       policyPath: asRelativePath("policy.toml"),
@@ -1068,9 +1071,7 @@ describe("renderMarkdown — the full document", () => {
           rule: "compatible[0]",
           reason: 'package "agpl-daemon" accepted by compatible package rule: reviewed',
         },
-        // This purl ALSO carries a fail verdict above — must be excluded
-        // from the notice list (the same Problematic dedup the flagged
-        // copyleft rows already apply).
+        // This purl ALSO carries a fail verdict above — must be excluded from the notice list.
         {
           purl: asPurl("pkg:deb/debian/agpl-also-failing@2.0.0"),
           name: "agpl-also-failing",
@@ -1090,12 +1091,10 @@ describe("renderMarkdown — the full document", () => {
     expect(copyleftSection.includes("accepted via compatible\\[0\\]")).toBe(true);
     // Deduped: the purl with a fail verdict elsewhere never surfaces as a notice.
     expect(copyleftSection.includes("agpl-also-failing")).toBe(false);
-    // Never a row in the flagged copyleft TABLE (that table is scoped to
-    // rule === "default:copyleft" fail/warn verdicts, not notices).
     expect(copyleftSection.includes("| agpl-daemon | deb |")).toBe(false);
   });
 
-  test("Test 5d: an accepted-AGPL notice alone (no flagged copyleft rows) makes the section non-empty — the ✅ empty-state line is suppressed", () => {
+  test("Test 5d: an accepted-AGPL notice alone makes the section non-empty — the ✅ empty-state line is suppressed", () => {
     const model: CanonicalDependencies = { packages: [] };
     const view: PolicyView = {
       policyPath: asRelativePath("policy.toml"),
@@ -1118,9 +1117,7 @@ describe("renderMarkdown — the full document", () => {
     const copyleftSection = output.slice(copyleftStart, output.indexOf("## Containers"));
 
     expect(copyleftSection.includes("agpl-daemon")).toBe(true);
-    expect(
-      copyleftSection.includes("✅ No package carries copyleft or special license obligations."),
-    ).toBe(false);
+    expect(copyleftSection.includes("✅ No copyleft or special notices.")).toBe(false);
   });
 
   test("Test 6: suppressed workspaces render path + license + description escaped", () => {
@@ -2722,7 +2719,7 @@ describe("renderMarkdown — Problematic licenses summary", () => {
     expect(section.match(/\| gpl-pkg \|/g)!.length).toBe(1);
   });
 
-  test("(b) zero-fail-with-warns → ✅ line + non-blocking roll-up", () => {
+  test("(b) zero-fail-with-warns → ✅ line, then the warn rows, then the non-blocking roll-up", () => {
     const model: CanonicalDependencies = { packages: [warnOnly] };
     const view: PolicyView = {
       policyPath: asRelativePath("policy.toml"),
@@ -2739,11 +2736,46 @@ describe("renderMarkdown — Problematic licenses summary", () => {
     };
     const section = slice(renderMarkdown(model, view));
 
-    expect(section.includes("✅ No blocking policy violations.")).toBe(true);
-    expect(section.includes("_Non-blocking:")).toBe(true);
-    expect(section.includes("copyleft")).toBe(true);
-    // No blocking table head when there are zero fails.
-    expect(section.includes("| Severity |")).toBe(false);
+    const okLine = section.indexOf("✅ No blocking policy violations.");
+    const row = section.indexOf(
+      "| warn | default:copyleft | warn-pkg | npm | 4.0.0 | LGPL-3.0-or-later | apps/a | — | dev-downgraded copyleft |",
+    );
+    const rollUp = section.indexOf(
+      "_Non-blocking: 1 copyleft warning(s). Detailed under Problematic licenses._",
+    );
+
+    expect(okLine).toBeGreaterThan(-1);
+    expect(row).toBeGreaterThan(okLine);
+    expect(rollUp).toBeGreaterThan(row);
+  });
+
+  test("fail rows sort before warn rows, whatever their rules", () => {
+    const model: CanonicalDependencies = { packages: [denied, warnOnly] };
+    const view: PolicyView = {
+      policyPath: asRelativePath("policy.toml"),
+      suppressedWorkspaces: [],
+      verdicts: [
+        {
+          purl: asPurl("pkg:npm/warn-pkg@4.0.0"),
+          occurrenceTarget: asTargetIdentity("apps/a"),
+          status: "warn",
+          rule: "default:copyleft",
+          reason: "x",
+        },
+        {
+          purl: asPurl("pkg:npm/denied-pkg@1.0.0"),
+          occurrenceTarget: asTargetIdentity("backend"),
+          status: "fail",
+          rule: "deny:license[0]",
+          reason: "y",
+        },
+      ],
+    };
+    const rows = slice(renderMarkdown(model, view))
+      .split("\n")
+      .filter((line) => line.startsWith("| fail |") || line.startsWith("| warn |"));
+
+    expect(rows.map((row) => row.split(" | ")[2])).toEqual(["denied-pkg", "warn-pkg"]);
   });
 
   test("(c) zero-fail-zero-warn → ✅ line only, no roll-up line", () => {
@@ -2836,55 +2868,35 @@ describe("renderMarkdown — Problematic licenses summary", () => {
     expect(section.includes("1 other warning(s)")).toBe(false);
   });
 
-  test("the non-blocking pointer names the section that actually shows each warn, and that section carries the row", () => {
-    // A target-lane warn points the reader at Target compatibility - where the row really is - not
-    // at the immediately-following Copyleft section, which renders empty here (the reviewer finding
-    // this reconciles: a counted warning must be findable where the count says).
-    const targetDoc = renderMarkdown(
-      { packages: [warnOnly] },
-      {
-        policyPath: asRelativePath("policy.toml"),
-        suppressedWorkspaces: [],
-        verdicts: [
-          {
-            purl: asPurl("pkg:npm/warn-pkg@4.0.0"),
-            occurrenceTarget: asTargetIdentity("apps/a"),
-            status: "warn",
-            rule: TARGET_RULE_INCOMPATIBLE,
-            reason: "incompatible with target",
-          },
-        ],
-      },
-    );
+  test("every warn, whatever its lane, rows in Problematic licenses and the roll-up points there", () => {
+    for (const rule of [TARGET_RULE_INCOMPATIBLE, "default:copyleft", "default:unknown"]) {
+      const doc = renderMarkdown(
+        { packages: [warnOnly] },
+        {
+          policyPath: asRelativePath("policy.toml"),
+          suppressedWorkspaces: [],
+          verdicts: [
+            {
+              purl: asPurl("pkg:npm/warn-pkg@4.0.0"),
+              occurrenceTarget: asTargetIdentity("apps/a"),
+              status: "warn",
+              rule,
+              reason: "x",
+            },
+          ],
+        },
+      );
 
-    expect(targetDoc).toContain("Detailed under Target compatibility.");
-    expect(targetDoc.slice(targetDoc.indexOf("## Target compatibility"))).toContain("| warn-pkg |");
-
-    // A copyleft-lane warn points at Copyleft and special notices, where its own row lives.
-    const copyleftDoc = renderMarkdown(
-      { packages: [warnOnly] },
-      {
-        policyPath: asRelativePath("policy.toml"),
-        suppressedWorkspaces: [],
-        verdicts: [
-          {
-            purl: asPurl("pkg:npm/warn-pkg@4.0.0"),
-            occurrenceTarget: asTargetIdentity("apps/a"),
-            status: "warn",
-            rule: "default:copyleft",
-            reason: "dev-downgraded copyleft",
-          },
-        ],
-      },
-    );
-
-    expect(copyleftDoc).toContain("Detailed under Copyleft and special notices.");
-    expect(copyleftDoc.slice(copyleftDoc.indexOf("## Copyleft and special notices"))).toContain(
-      "| warn-pkg |",
-    );
+      expect(doc).toContain("Detailed under Problematic licenses._");
+      expect(slice(doc)).toContain(`| warn | ${rule} | warn-pkg |`);
+      expect(doc.includes("## Target compatibility")).toBe(false);
+      expect(
+        doc.slice(doc.indexOf("## Copyleft and special notices"), doc.indexOf("## Containers")),
+      ).not.toContain("warn-pkg");
+    }
   });
 
-  test("(d) the summary sits ABOVE the detailed copyleft section; a fail-flagged package is excluded from it by the copyleft-only dedup", () => {
+  test("(d) the Problematic section sits ABOVE the copyleft section, which never rows a failing package", () => {
     const model: CanonicalDependencies = { packages: [copyleftFail] };
     const view: PolicyView = {
       policyPath: asRelativePath("policy.toml"),
@@ -2906,15 +2918,10 @@ describe("renderMarkdown — Problematic licenses summary", () => {
 
     expect(countsIdx).toBeLessThan(problIdx);
     expect(problIdx).toBeLessThan(copyleftIdx);
-    // gpl-pkg carries a fail verdict, so the copyleft-only dedup excludes it
-    // from the detailed copyleft table entirely — it stays in Problematic
-    // (asserted above by the section ordering) and in its inventory row.
     const copyleftSection = output.slice(copyleftIdx, output.indexOf("## Production dependencies"));
 
     expect(copyleftSection.includes("gpl-pkg")).toBe(false);
-    expect(
-      copyleftSection.includes("✅ No package carries copyleft or special license obligations."),
-    ).toBe(true);
+    expect(copyleftSection.includes("✅ No copyleft or special notices.")).toBe(true);
   });
 
   test("(e) no-policy run → the section is omitted entirely", () => {
@@ -2960,8 +2967,7 @@ describe("renderMarkdown — Problematic licenses summary", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Dependency provenance "Why" column — problematic table + copyleft
-// section. The per-row aggregation rule (optionality descoped): "—" when
+// Dependency provenance "Why" column of the Problematic licenses table. The per-row aggregation rule (optionality descoped): "—" when
 // no in-scope occurrence carries an introduction OR all in-scope introductions
 // are orphans (direct:false ∧ empty introducedBy ∧ no path); "direct" when ≥1
 // genuine (non-orphan) in-scope occurrence is direct and the rest are orphans;
@@ -2971,13 +2977,7 @@ describe("renderMarkdown — Problematic licenses summary", () => {
 // ---------------------------------------------------------------------------
 
 describe("renderMarkdown — provenance Why column", () => {
-  /**
-   * A copyleft-flagging verdict for a given purl + target. Status is "warn",
-   * never "fail": a fail verdict of ANY rule excludes its purl from Copyleft
-   * membership entirely (the copyleft-only dedup), which would defeat every
-   * Why-cell assertion in this block — these tests exercise Why-cell
-   * computation, not the dedup itself.
-   */
+  /** A copyleft warn verdict for a given purl + target. */
   const copyleftVerdict = (purl: string, target: string): Verdict => ({
     purl: asPurl(purl),
     occurrenceTarget: asTargetIdentity(target),
@@ -2986,16 +2986,16 @@ describe("renderMarkdown — provenance Why column", () => {
     reason: "copyleft",
   });
 
-  /** Render a model+view and slice the copyleft section. */
-  function copyleftSectionOf(model: CanonicalDependencies, view: PolicyView): string {
+  /** Render a model+view and slice the Problematic licenses section. */
+  function problematicSectionOf(model: CanonicalDependencies, view: PolicyView): string {
     const output = renderMarkdown(model, view);
-    const start = output.indexOf("## Copyleft and special notices");
-    const end = output.indexOf("## Production dependencies");
+    const start = output.indexOf("## Problematic licenses");
+    const end = output.indexOf("## Copyleft and special notices");
 
     return output.slice(start, end);
   }
 
-  test("direct in any occurrence → 'direct' in the copyleft Why cell", () => {
+  test("direct in any occurrence → 'direct' in the Why cell", () => {
     const model: CanonicalDependencies = {
       packages: [
         entry({
@@ -3025,7 +3025,7 @@ describe("renderMarkdown — provenance Why column", () => {
     };
 
     expect(
-      copyleftSectionOf(model, view).includes(
+      problematicSectionOf(model, view).includes(
         "| direct-pkg | npm | 1.0.0 | GPL-3.0-only | apps/a | direct |",
       ),
     ).toBe(true);
@@ -3065,7 +3065,7 @@ describe("renderMarkdown — provenance Why column", () => {
     };
 
     expect(
-      copyleftSectionOf(model, view).includes(
+      problematicSectionOf(model, view).includes(
         "| trans-pkg | npm | 1.0.0 | GPL-3.0-only | apps/a | pkg:npm/parent@2.0.0 → pkg:npm/trans-pkg@1.0.0 |",
       ),
     ).toBe(true);
@@ -3105,7 +3105,7 @@ describe("renderMarkdown — provenance Why column", () => {
       suppressedWorkspaces: [],
       verdicts: [copyleftVerdict(asPurl("pkg:pypi/opt-pkg@1.0.0"), "apps/py")],
     };
-    const section = copyleftSectionOf(model, view);
+    const section = problematicSectionOf(model, view);
 
     expect(
       section.includes(
@@ -3143,7 +3143,7 @@ describe("renderMarkdown — provenance Why column", () => {
     };
 
     expect(
-      copyleftSectionOf(model, view).includes(
+      problematicSectionOf(model, view).includes(
         "| libssl-bindings | pypi | 3.0 | GPL-3.0-only | apps/py | — |",
       ),
     ).toBe(true);
@@ -3186,7 +3186,7 @@ describe("renderMarkdown — provenance Why column", () => {
         copyleftVerdict(asPurl("pkg:npm/all-direct@1.0.0"), "apps/b"),
       ],
     };
-    const section = copyleftSectionOf(model, view);
+    const section = problematicSectionOf(model, view);
 
     expect(section.includes("| all-direct |")).toBe(true);
     expect(section.includes(" | direct |")).toBe(true);
@@ -3237,7 +3237,7 @@ describe("renderMarkdown — provenance Why column", () => {
         copyleftVerdict(asPurl("pkg:npm/mixed-pkg@1.0.0"), "apps/b"),
       ],
     };
-    const section = copyleftSectionOf(model, view);
+    const section = problematicSectionOf(model, view);
 
     expect(section.includes("| mixed-pkg |")).toBe(true);
     // The transitive introducer from apps/a is surfaced...
@@ -3286,7 +3286,7 @@ describe("renderMarkdown — provenance Why column", () => {
       suppressedWorkspaces: [],
       verdicts: [copyleftVerdict(asPurl("pkg:npm/deep@1"), "apps/a")],
     };
-    const section = copyleftSectionOf(model, view);
+    const section = problematicSectionOf(model, view);
 
     // First WHY_MAX_ITEMS (4) purls shown, then a stable "(+2 more)" tail.
     expect(section.includes("(+2 more)")).toBe(true);
@@ -3420,7 +3420,7 @@ describe("renderMarkdown — provenance Why column", () => {
         copyleftVerdict(asPurl("pkg:pypi/realdirect@1.0.0"), "ws-b"),
       ],
     };
-    const section = copyleftSectionOf(model, view);
+    const section = problematicSectionOf(model, view);
 
     // The genuine direct is surfaced, NOT hidden behind "—".
     expect(
@@ -3470,7 +3470,7 @@ describe("renderMarkdown — provenance Why column", () => {
     };
 
     expect(
-      copyleftSectionOf(model, view).includes(
+      problematicSectionOf(model, view).includes(
         "| allorphan | pypi | 1.0.0 | GPL-3.0-only | ws-a, ws-b | — |",
       ),
     ).toBe(true);
@@ -3519,7 +3519,7 @@ describe("renderMarkdown — provenance Why column", () => {
         copyleftVerdict(asPurl("pkg:pypi/transorphan@1.0.0"), "ws-b"),
       ],
     };
-    const section = copyleftSectionOf(model, view);
+    const section = problematicSectionOf(model, view);
 
     expect(section.includes(asPurl("pkg:pypi/host@2.0.0 → pkg:pypi/transorphan@1.0.0"))).toBe(true);
     expect(section.includes("| transorphan | pypi | 1.0.0 | GPL-3.0-only")).toBe(true);
@@ -3558,7 +3558,7 @@ describe("renderMarkdown — provenance Why column", () => {
     };
 
     expect(
-      copyleftSectionOf(model, view).includes(
+      problematicSectionOf(model, view).includes(
         "| orphan | npm | 1.0.0 | GPL-3.0-only | apps/a | — |",
       ),
     ).toBe(true);
@@ -3598,7 +3598,7 @@ describe("renderMarkdown — provenance Why column", () => {
       suppressedWorkspaces: [],
       verdicts: [copyleftVerdict(asPurl("pkg:npm/emptypath@1.0.0"), "apps/a")],
     };
-    const section = copyleftSectionOf(model, view);
+    const section = problematicSectionOf(model, view);
 
     expect(section.includes("| emptypath | npm | 1.0.0 | GPL-3.0-only | apps/a | — |")).toBe(true);
     // No empty Why cell: the row must NOT end in "| |".
@@ -3640,7 +3640,7 @@ describe("renderMarkdown — provenance Why column", () => {
       suppressedWorkspaces: [],
       verdicts: [copyleftVerdict(asPurl("pkg:npm/emptypathintro@1.0.0"), "apps/a")],
     };
-    const section = copyleftSectionOf(model, view);
+    const section = problematicSectionOf(model, view);
 
     expect(
       section.includes(
@@ -3666,15 +3666,6 @@ describe("renderMarkdown — Why-cell target scoping", () => {
     const output = renderMarkdown(model, view);
     const start = output.indexOf("## Problematic licenses");
     const end = output.indexOf("## Copyleft and special notices");
-
-    return output.slice(start, end);
-  }
-
-  /** Slice the copyleft section out of a full document render. */
-  function copyleftSectionOf(model: CanonicalDependencies, view: PolicyView): string {
-    const output = renderMarkdown(model, view);
-    const start = output.indexOf("## Copyleft and special notices");
-    const end = output.indexOf("## Production dependencies");
 
     return output.slice(start, end);
   }
@@ -3738,7 +3729,7 @@ describe("renderMarkdown — Why-cell target scoping", () => {
     expect(section.includes(" | direct |")).toBe(false);
   });
 
-  test("(b) copyleft row: flagged occurrence has NO introduction → Why is '—', NOT a borrowed chain from an unflagged occurrence (#2/#3/#5 no-fabrication)", () => {
+  test("(b) warn row: flagged occurrence has NO introduction → Why is '—', NOT a borrowed chain from an unflagged occurrence (#2/#3/#5 no-fabrication)", () => {
     // shared is flagged in apps/flagged (prod, NO introduction) and present in
     // tooling/other (prod, transitive via via@2.0.0, NOT flagged). The copyleft
     // row is scoped to apps/flagged only, so the Why cell is the honest "—"; it
@@ -3783,7 +3774,7 @@ describe("renderMarkdown — Why-cell target scoping", () => {
         },
       ],
     };
-    const section = copyleftSectionOf(model, view);
+    const section = problematicSectionOf(model, view);
 
     expect(section.includes("| shared | npm | 1.0.0 | GPL-3.0-only | apps/flagged | — |")).toBe(
       true,
@@ -3852,7 +3843,7 @@ describe("renderMarkdown — Why-cell target scoping", () => {
         },
       ],
     };
-    const section = copyleftSectionOf(model, view);
+    const section = problematicSectionOf(model, view);
 
     // The smallest-target occurrence carrying a path is surfaced.
     expect(section.includes(asPurl("pkg:pypi/pathparent@2.0.0 → pkg:pypi/hr-pkg@1.0.0"))).toBe(
@@ -3869,7 +3860,7 @@ describe("renderMarkdown — Why-cell target scoping", () => {
 // ---------------------------------------------------------------------------
 
 describe("renderMarkdown — Target compatibility section", () => {
-  test("absent when no target:* row exists at all - no heading, no blank-line drift", () => {
+  test("absent when no target:internal-use verdict exists - no heading, no blank-line drift", () => {
     const output = renderMarkdown(policyModel, basicView);
 
     expect(output.includes("## Target compatibility")).toBe(false);
@@ -3907,14 +3898,14 @@ describe("renderMarkdown — Target compatibility section", () => {
   });
 
   test("renders after Copyleft and special notices, before Imprecise licenses", () => {
-    const boundaryPkg = entry({
-      purl: asPurl("pkg:npm/boundary-pkg@1.0.0"),
-      name: asDependencyName("boundary-pkg"),
+    const heldPkg = entry({
+      purl: asPurl("pkg:npm/held-pkg@1.0.0"),
+      name: asDependencyName("held-pkg"),
       version: asDependencyVersion("1.0.0"),
-      licenseClaims: [{ raw: asRawLicense("LGPL-2.1-only"), kind: "spdx-id", source: "generator" }],
+      licenseClaims: [{ raw: asRawLicense("GPL-3.0-only"), kind: "spdx-id", source: "generator" }],
       finding: {
-        expression: canon("LGPL-2.1-only"),
-        elected: canon("LGPL-2.1-only"),
+        expression: canon("GPL-3.0-only"),
+        elected: canon("GPL-3.0-only"),
         source: "generator",
         confidence: "exact",
       },
@@ -3924,15 +3915,15 @@ describe("renderMarkdown — Target compatibility section", () => {
       suppressedWorkspaces: [],
       verdicts: [
         {
-          purl: asPurl("pkg:npm/boundary-pkg@1.0.0"),
+          purl: asPurl("pkg:npm/held-pkg@1.0.0"),
           occurrenceTarget: asTargetIdentity("apps/a"),
-          status: "warn",
-          rule: "target:boundary",
-          reason: "weak copyleft under a proprietary target",
+          status: "ok",
+          rule: "target:internal-use",
+          reason: "held out of scope for internal use",
         },
       ],
     };
-    const output = renderMarkdown({ packages: [boundaryPkg] }, view);
+    const output = renderMarkdown({ packages: [heldPkg] }, view);
     const copyleftIdx = output.indexOf("## Copyleft and special notices");
     const targetIdx = output.indexOf("## Target compatibility");
 
@@ -3940,7 +3931,7 @@ describe("renderMarkdown — Target compatibility section", () => {
     expect(targetIdx).toBeGreaterThan(copyleftIdx);
   });
 
-  test("flagged table rows target:boundary, target:unknown-pair, and dev-downgraded target:incompatible", () => {
+  test("target:boundary, target:unknown-pair, and dev-downgraded target:incompatible warns row in Problematic, not here", () => {
     const boundaryPkg = entry({
       purl: asPurl("pkg:npm/boundary-pkg@1.0.0"),
       name: asDependencyName("boundary-pkg"),
@@ -4006,13 +3997,15 @@ describe("renderMarkdown — Target compatibility section", () => {
       ],
     };
     const output = renderMarkdown({ packages: [boundaryPkg, residualPkg, devDowngradedPkg] }, view);
-    const start = output.indexOf("## Target compatibility");
-    const end = output.indexOf("## Imprecise licenses");
-    const section = output.slice(start, end === -1 ? undefined : end);
+    const problematic = output.slice(
+      output.indexOf("## Problematic licenses"),
+      output.indexOf("## Copyleft and special notices"),
+    );
 
-    expect(section.includes("boundary-pkg")).toBe(true);
-    expect(section.includes("residual-pkg")).toBe(true);
-    expect(section.includes("dev-downgraded-pkg")).toBe(true);
+    expect(problematic.includes("| warn | target:boundary | boundary-pkg |")).toBe(true);
+    expect(problematic.includes("| warn | target:incompatible | dev-downgraded-pkg |")).toBe(true);
+    expect(problematic.includes("| warn | target:unknown-pair | residual-pkg |")).toBe(true);
+    expect(output.includes("## Target compatibility")).toBe(false);
   });
 
   test("held-for-internal-use list rows every target:internal-use verdict", () => {
@@ -4048,7 +4041,7 @@ describe("renderMarkdown — Target compatibility section", () => {
     expect(section.includes("held out of scope for internal use")).toBe(true);
   });
 
-  test("Problematic dedup applies to the flagged table only - a fail at one occurrence never suppresses a held-internal row at a DIFFERENT occurrence of the same purl", () => {
+  test("a fail at one occurrence never suppresses a held-internal row at a DIFFERENT occurrence of the same purl", () => {
     const dedupedPkg = entry({
       purl: asPurl("pkg:npm/deduped-pkg@1.0.0"),
       name: asDependencyName("deduped-pkg"),
@@ -4090,15 +4083,12 @@ describe("renderMarkdown — Target compatibility section", () => {
     const problematicEnd = output.indexOf("## Copyleft and special notices");
     const targetSection = output.slice(output.indexOf("## Target compatibility"));
 
-    // apps/a's fail routes to Problematic, exactly as before.
     expect(output.slice(problematicStart, problematicEnd).includes("deduped-pkg")).toBe(true);
-    // apps/b's held-internal row still renders - the dedup never drops a held row for an unrelated
-    // occurrence's fail (the adversarial-gate fix: this used to silently vanish the section entirely).
     expect(targetSection.includes("deduped-pkg@1.0.0 in apps/b")).toBe(true);
     expect(targetSection.includes("held out of scope")).toBe(true);
-    // The flagged table (not the held list) still respects the dedup: apps/a's occurrence never
-    // gets a SECOND, flagged-table row here on top of its Problematic one.
-    expect(targetSection.includes("The packages listed below need review")).toBe(false);
+    expect(targetSection.slice(0, targetSection.indexOf("## Containers"))).not.toContain(
+      "| deduped-pkg |",
+    );
   });
 });
 
@@ -4159,21 +4149,28 @@ describe("License column: a corrected finding names the label it was corrected f
 });
 
 describe("the non-blocking roll-up line is derived from the warns it counts", () => {
-  const STDERR_POINTER = "(see the `policy warn:` lines on stderr)";
+  const POINTER = "Detailed under Problematic licenses.";
 
-  function rollUpLine(specs: Parameters<typeof runEngine>[0], policyLines: string[]): string {
+  /** The roll-up line and the Problematic warn rows of a real engine run. */
+  function rollUp(
+    specs: Parameters<typeof runEngine>[0],
+    policyLines: string[],
+  ): { line: string; warnRows: string[] } {
     const { verdicts, model } = runEngine(specs, policyLines.join("\n"));
-    const doc = renderMarkdown(model, {
+    const lines = renderMarkdown(model, {
       policyPath: asRelativePath("policy.toml"),
       suppressedWorkspaces: [],
       verdicts,
-    });
+    }).split("\n");
 
-    return doc.split("\n").find((line) => line.startsWith("_Non-blocking:")) ?? "";
+    return {
+      line: lines.find((line) => line.startsWith("_Non-blocking:")) ?? "",
+      warnRows: lines.filter((line) => line.startsWith("| warn |")),
+    };
   }
 
-  test("a warn whose package fails at another target is not claimed to be detailed under Problematic", () => {
-    const line = rollUpLine(
+  test("a warn on a package that fails at another target is a warn row of its own", () => {
+    const { line, warnRows } = rollUp(
       [
         pkgSpec("gpl-tool", "GPL-3.0-only", [
           { target: "apps/dev-only", dev: true },
@@ -4183,13 +4180,13 @@ describe("the non-blocking roll-up line is derived from the warns it counts", ()
       ["[dev_dependencies]", 'handling = "warn"'],
     );
 
-    expect(line).toBe(
-      `_Non-blocking: 1 copyleft warning(s) (1 dev-downgraded). Not detailed below ${STDERR_POINTER}._`,
-    );
+    expect(line).toBe(`_Non-blocking: 1 copyleft warning(s) (1 dev-downgraded). ${POINTER}_`);
+    expect(warnRows).toHaveLength(1);
+    expect(warnRows[0]).toContain("| gpl-tool | npm | 1.0.0 | GPL-3.0-only | apps/dev-only |");
   });
 
-  test("an os-downgraded system-package warn is not claimed to be detailed in the package tables", () => {
-    const line = rollUpLine(
+  test("an os-downgraded system-package warn is a warn row", () => {
+    const { line, warnRows } = rollUp(
       [
         osPkgSpec("pkg:apk/alpine/libgpl@1.0.0", "libgpl", "GPL-2.0-only", [
           "docker:img/Dockerfile",
@@ -4198,13 +4195,13 @@ describe("the non-blocking roll-up line is derived from the warns it counts", ()
       ["[os_dependencies]", 'handling = "warn"'],
     );
 
-    expect(line).toBe(
-      `_Non-blocking: 1 copyleft warning(s) (1 os-downgraded). Not detailed below ${STDERR_POINTER}._`,
-    );
+    expect(line).toBe(`_Non-blocking: 1 copyleft warning(s) (1 os-downgraded). ${POINTER}_`);
+    expect(warnRows).toHaveLength(1);
+    expect(warnRows[0]).toContain("| libgpl | apk |");
   });
 
-  test("detailed and undetailed warns are both accounted for", () => {
-    const line = rollUpLine(
+  test("every category counts toward the line and rows in the table", () => {
+    const { line, warnRows } = rollUp(
       [
         pkgSpec("dev-gpl", "GPL-3.0-only", [{ target: "apps/a", dev: true }]),
         pkgSpec("mystery", null, ["apps/a"]),
@@ -4213,30 +4210,27 @@ describe("the non-blocking roll-up line is derived from the warns it counts", ()
     );
 
     expect(line).toBe(
-      "_Non-blocking: 1 copyleft warning(s), 1 unknown warning(s) (1 dev-downgraded). Detailed " +
-        `under Copyleft and special notices; 1 not detailed below ${STDERR_POINTER}._`,
+      `_Non-blocking: 1 copyleft warning(s), 1 unknown warning(s) (1 dev-downgraded). ${POINTER}_`,
     );
+    expect(warnRows).toHaveLength(2);
   });
 
   test("a warn that no scope lever downgraded carries no downgrade note", () => {
-    const line = rollUpLine(
+    const { line } = rollUp(
       [pkgSpec("mystery", null, ["apps/a"])],
       ["[unknown]", 'handling = "warn"'],
     );
 
-    expect(line).toBe(
-      `_Non-blocking: 1 unknown warning(s). Not detailed below ${STDERR_POINTER}._`,
-    );
+    expect(line).toBe(`_Non-blocking: 1 unknown warning(s). ${POINTER}_`);
   });
 
   test("an [[allow_source_available]] exemption counts as a source-available warning", () => {
-    const line = rollUpLine(
+    const { line, warnRows } = rollUp(
       [pkgSpec("busl-thing", "BUSL-1.1", ["apps/a"])],
       ["[[allow_source_available]]", 'license = "BUSL-1.1"', 'reason = "internal only"'],
     );
 
-    expect(line).toBe(
-      `_Non-blocking: 1 source-available warning(s). Not detailed below ${STDERR_POINTER}._`,
-    );
+    expect(line).toBe(`_Non-blocking: 1 source-available warning(s). ${POINTER}_`);
+    expect(warnRows).toHaveLength(1);
   });
 });
