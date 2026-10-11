@@ -764,9 +764,10 @@ outside the repo.
 
 An optional array of tables marking whole containers as development-only in the
 rendered report. Every analyzed container defaults to production; a container
-whose `docker:<source>` identity matches an entry's `source` glob is instead
-listed under `## Development-only dependencies` and its own `### Container:`
-subsection, rather than under `## Production dependencies`.
+whose `docker:<source>` identity matches an entry's `source` glob is a
+[development container](../glossary.md#development-container), listed under
+`## Development-only dependencies` and its own `### Container:` subsection
+rather than under `## Production dependencies`.
 
 | Field | Type | Required | Meaning |
 |-------|------|----------|---------|

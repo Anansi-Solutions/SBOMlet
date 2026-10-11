@@ -208,8 +208,10 @@ regardless of whether the run used a policy. One row per analyzed container:
 | Classification | `production` or `development` |
 | Packages | how many packages that container's image scan found |
 
-A container classifies `development` when a policy [`[[docker.development]]`](policy.md#docker)
-entry's `source` glob matches its identity; every other container classifies
+A container classifies `development`, a
+[development container](../glossary.md#development-container), when a policy
+[`[[docker.development]]`](policy.md#docker) entry's `source` glob matches its
+identity; every other container classifies
 `production`, the conservative default — a run with no policy, or with no
 `[[docker.development]]` entries, marks every container production. Whether,
 and how, this classification affects a package's verdict is classification,
@@ -492,8 +494,9 @@ occurrences cleanly. The per-component property names:
 | `licenses-tool:rule:<target>` | the [policy lane](../glossary.md#policy-lanes) rule | once per matching verdict, policy runs only |
 
 `licenses-tool:scope:<target>` follows the same partition as the Markdown's
-Production and Development-only sections: an occurrence in a container marked
-`[[docker.development]]` is `dev`, a system package included, and outside
+Production and Development-only sections: an occurrence in a
+[development container](../glossary.md#development-container) is `dev`, a
+system package included, and outside
 containers an occurrence is `dev` when it is a development dependency. It
 describes placement, not gating: a system package in a development container
 reads `dev` here while its verdict still comes from `[os_dependencies]`.

@@ -81,6 +81,17 @@ and the in-depth scan's. The entry applies only while every source it records
 still reports what was written down, so a later relicence reopens the judgment
 instead of being masked by an old answer.
 
+### development container
+
+A Docker image the policy declares under `[[docker.development]]` because it
+never ships, such as a CI runner or a test harness. Its
+[occurrences](#occurrence) count as
+[development-only](#development-only-and-production): the report lists its
+packages under Development-only dependencies, and an application package baked
+into it gets the [verdict](#verdict) a dev dependency would. A system package
+in it keeps the verdict `[os_dependencies]` gives it. See
+[policy.md](reference/policy.md#dockerdevelopment).
+
 ### development-only and production
 
 A dependency is **development-only** when every place it's used is a dev

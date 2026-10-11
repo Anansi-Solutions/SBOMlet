@@ -526,7 +526,8 @@ everyday `generate` and `check` commands never discover Dockerfiles, so an
 
 One of your Dockerfiles builds an image that only runs in CI — a lint
 runner, a test harness — and never ships to a user, but its packages
-currently render under `## Production dependencies`.
+currently render under `## Production dependencies`. Declare it a
+[development container](../glossary.md#development-container):
 
 ```toml
 [[docker.development]]
