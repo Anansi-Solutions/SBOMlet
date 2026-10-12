@@ -47,9 +47,11 @@ import {
 } from "../src/pipeline/refreshClarifications";
 import { sanitizeForLog, writePolicySummary } from "../src/pipeline/summary";
 import { parsePolicy } from "../src/policy/parse/parse";
+import { OS_DOWNGRADE_REASON_SUFFIX } from "../src/policy/engine/evaluate";
 import { MAX_BUN_LOCK_BYTES } from "../src/collectors/bunLock";
 import * as cdxgenModule from "../src/collectors/cdxgen";
 import { asTargetIdentity, type Verdict } from "../src/model/dependencies";
+import { crossImagePkgSpec, runEngine } from "./policyTestSupport";
 import { asPurl, widen } from "./brandTestSupport";
 import type { VerifyCacheResult } from "../src/pipeline/verifyCache";
 
@@ -405,6 +407,29 @@ describe("sanitizeForLog — stderr injection boundary", () => {
   });
 });
 
+describe("writePolicySummary — os-downgraded count line", () => {
+  test("os-downgraded warns get their own count line, as dev-downgraded ones do", async () => {
+    const verdicts: Verdict[] = [
+      {
+        purl: asPurl("pkg:deb/debian/libfoo@1.0"),
+        occurrenceTarget: asTargetIdentity("docker:app"),
+        status: "warn",
+        rule: "default:copyleft",
+        reason: `copyleft license "GPL-2.0-only"${OS_DOWNGRADE_REASON_SUFFIX}`,
+      },
+    ];
+    const stderr = await withCapturedStderr(async () => {
+      writePolicySummary(parsePolicy(""), { packages: [] }, verdicts, new Set());
+    });
+
+    expect(stderr).toContain(
+      "policy: 1 os-downgraded (would-be fail on an os-scope base-image package → warn) " +
+        "(1 verdicts)\n",
+    );
+    expect(stderr).not.toContain("dev-downgraded");
+  });
+});
+
 describe("writePolicySummary — imprecise count line", () => {
   const impreciseVerdict = (rule: string): Verdict => ({
     purl: asPurl("pkg:pypi/imp@1.0.0"),
@@ -420,7 +445,7 @@ describe("writePolicySummary — imprecise count line", () => {
       impreciseVerdict("default:imprecise-copyleft"),
     ];
     const stderr = await withCapturedStderr(async () => {
-      writePolicySummary(parsePolicy(""), verdicts, new Set());
+      writePolicySummary(parsePolicy(""), { packages: [] }, verdicts, new Set());
     });
 
     // The locked counts-line shape is intact (both imprecise verdicts are warns).
@@ -444,7 +469,7 @@ describe("writePolicySummary — imprecise count line", () => {
       },
     ];
     const stderr = await withCapturedStderr(async () => {
-      writePolicySummary(parsePolicy(""), verdicts, new Set());
+      writePolicySummary(parsePolicy(""), { packages: [] }, verdicts, new Set());
     });
 
     expect(stderr).toContain("policy: 0 fail, 0 warn, 0 suppressed, 1 ok (1 verdicts)\n");
@@ -467,7 +492,7 @@ describe("writePolicySummary — assessment conflict count line", () => {
       conflictVerdict("pkg:npm/b@1.0.0"),
     ];
     const stderr = await withCapturedStderr(async () => {
-      writePolicySummary(parsePolicy(""), verdicts, new Set());
+      writePolicySummary(parsePolicy(""), { packages: [] }, verdicts, new Set());
     });
 
     // The locked counts-line shape is intact (both conflicts are fails).
@@ -490,10 +515,33 @@ describe("writePolicySummary — assessment conflict count line", () => {
       },
     ];
     const stderr = await withCapturedStderr(async () => {
-      writePolicySummary(parsePolicy(""), verdicts, new Set());
+      writePolicySummary(parsePolicy(""), { packages: [] }, verdicts, new Set());
     });
 
     expect(stderr).not.toContain("assessment conflict");
+  });
+
+  test("cross-image claim conflicts count toward the line like ScanCode conflicts", async () => {
+    const { verdicts, model } = runEngine(
+      [
+        crossImagePkgSpec("libdiverge", [
+          { target: "docker:a/Dockerfile", claims: ["MIT"] },
+          { target: "docker:b/Dockerfile", claims: ["GPL-2.0-only"] },
+        ]),
+      ],
+      "",
+    );
+    const stderr = await withCapturedStderr(async () => {
+      writePolicySummary(parsePolicy(""), model, verdicts, new Set());
+    });
+
+    expect(verdicts.map((verdict) => verdict.rule)).toEqual([
+      "conflict:cross-image-claims",
+      "conflict:cross-image-claims",
+    ]);
+    expect(stderr).toContain(
+      "policy: 2 assessment conflict(s) — resolve via [[clarify]] (2 verdicts)\n",
+    );
   });
 });
 
@@ -648,6 +696,54 @@ describe("runGenerate discovery mode — offline branches", () => {
     expect(stderr).not.toContain("collecting");
   });
 
+  test("a purl-less maven row is inventoried under a minted purl; one without a group is reported", async () => {
+    const root = mkdtempSync(join(tmpdir(), "licenses-cli-maven-skip-"));
+    const projDir = join(root, "svc");
+
+    mkdirSync(projDir);
+    writeFileSync(
+      join(projDir, "maven.sbom.json"),
+      JSON.stringify({
+        bomFormat: "CycloneDX",
+        specVersion: "1.6",
+        metadata: { component: { purl: "pkg:maven/com.example/svc@1.0.0?type=jar" } },
+        components: [
+          {
+            group: "junit",
+            name: "junit",
+            version: "4.13.2",
+            purl: "pkg:maven/junit/junit@4.13.2",
+          },
+          {
+            group: "com.oracle.database.jdbc",
+            name: "ojdbc8",
+            version: "19.3.0.0",
+            licenses: [{ license: { name: "Oracle Free Use Terms and Conditions (FUTC)" } }],
+          },
+          { name: "driver", version: "19.3.0.0" },
+        ],
+      }),
+    );
+    const outputPath = join(root, "out.md");
+
+    const stderr = await withCapturedStderr(async () => {
+      await runGenerate({
+        repoRoot: root,
+        outputPath,
+        noticesPath: join(root, "notices.md"),
+        verbose: false,
+      });
+    });
+    const report = readFileSync(outputPath, "utf8");
+
+    expect(report).toContain("- Total packages: 2");
+    expect(report).toContain("com.oracle.database.jdbc/ojdbc8");
+    expect(stderr).toContain(
+      "warning: svc: counted 3 components, inventoried 2 " +
+        "(1 purl minted from group/name/version) (1 skipped: 1 without a purl)\n",
+    );
+  });
+
   test("zero discovered targets rejects naming --repo-root and the resolved path", async () => {
     const root = mkdtempSync(join(tmpdir(), "licenses-cli-empty-"));
     const outputPath = join(root, "out.md");
@@ -775,7 +871,7 @@ describe("runGenerate discovery warnings (collision, bun.lockb)", () => {
 
     mkdirSync(binDir);
     writeFileSync(join(binDir, "package.json"), '{ "name": "binproj" }\n');
-    writeFileSync(join(binDir, "bun.lockb"), " binary-lockfile-bytes");
+    writeFileSync(join(binDir, "bun.lockb"), "\0binary-lockfile-bytes");
     // A second, empty-yarn target keeps discovery non-empty so the run
     // resolves (bun.lockb itself is never a target).
     const otherDir = join(root, "other");
@@ -1472,9 +1568,11 @@ describe("buildOutputs and the generate output set", () => {
       });
     });
 
-    // The named raw "Apache License 2.0" was normalized for display.
-    expect(squish(md)).toContain("| apache-lib | npm | 4.0.0 | Apache-2.0 |");
-    expect(md).not.toContain("Apache License 2.0");
+    // The named raw "Apache License 2.0" is normalized for display and quoted only as its origin.
+    expect(squish(md)).toContain(
+      '| apache-lib | npm | 4.0.0 | Apache-2.0 (corrected from "Apache License 2.0") |',
+    );
+    expect(md).not.toMatch(/\| Apache License 2\.0 *\|/);
 
     // Dump packages all carry finding objects; no verdicts key without a
     // policy (the policy-gated surface stays absent).
@@ -1699,7 +1797,7 @@ describe("check — stale-override exit lane", () => {
       'name = "mit-lib"',
       'version = "3.0.0"',
       'detected = { registry = "MIT" }', // still what the registry reports → applies
-      'justification = "contradictory-claims-recorded"',
+      'justification = "declared-more-complete"',
       'expression = "MIT"',
       "",
     ].join("\n");
@@ -2054,7 +2152,7 @@ describe("dispatch wiring: bun branch + per-kind firstPartyNames", () => {
     // The collector line printed; the cdxgen path was NEVER involved for
     // this target (zero subprocess by construction — the stub registry
     // recorded no call).
-    expect(stderr).toContain("collecting bunproj via bun-lock-collector@1");
+    expect(stderr).toContain("collecting bunproj via bun-lock-collector@2");
     expect(kindAwareScanIdentities.length).toBe(scansBefore);
 
     const md = readFileSync(outputPath, "utf8");

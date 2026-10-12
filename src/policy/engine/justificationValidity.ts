@@ -18,7 +18,7 @@ import { type CanonicalLicense, type RawLicense } from "../../model/dependencies
 import { leafIds, orLeaves, type ExpressionNode } from "../../normalize/expression";
 import { accountsFor, type ObservedSignal } from "../../normalize/normalize";
 import { statedLicense } from "../statedLicense";
-import { type Justification } from "../schema/clarify";
+import { JUSTIFICATION_LANES, type DetectedSource, type Justification } from "../schema/clarify";
 
 /** What a validity check reads off an entry: its stated reason and the expression it records. */
 export interface JustifiedExpression {
@@ -238,6 +238,20 @@ function licenseNotFound(rule: JustifiedExpression, signal: ObservedSignal): Jus
 }
 
 /**
+ * The lane a justification about the in-depth scan speaks for that reports nothing, or undefined.
+ * Mirrors the schema rule rejecting a `false` record for such a lane: a lane left out of `detected`
+ * and silent at run time says the same.
+ */
+function silentLaneOfScanClaim(
+  justification: Justification,
+  signal: ObservedSignal,
+): DetectedSource | undefined {
+  const lanes = JUSTIFICATION_LANES[justification];
+
+  return lanes.includes("intensive") ? lanes.find((lane) => signal[lane].length === 0) : undefined;
+}
+
+/**
  * Whether an entry's stated justification still holds against the partitioned signal.
  *
  * Pure, and the single authority on what each justification value asserts: the gate reads it for
@@ -247,6 +261,15 @@ export function justificationValidity(
   rule: JustifiedExpression,
   signal: ObservedSignal,
 ): JustificationValidity {
+  const silent = silentLaneOfScanClaim(rule.justification, signal);
+
+  if (silent !== undefined) {
+    return invalid(
+      `the ${silent} source reports nothing for it to speak about`,
+      rule.justification,
+    );
+  }
+
   switch (rule.justification) {
     case "contradictory-claims-recorded":
       return contradictoryClaims(rule, signal);

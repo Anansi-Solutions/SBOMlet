@@ -31,7 +31,7 @@
   },
   "dependencies": {
     "arktype": "2.2.0",
-    "smol-toml": "1.6.1",
+    "smol-toml": "1.7.1",
     "spdx-correct": "3.2.0",
     "spdx-expression-parse": "4.0.0",
     "spdx-license-list": "6.11.0",

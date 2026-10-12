@@ -15,7 +15,7 @@ import {
   assertDependencyGraphCoverage,
   targetsWithDependencyGraph,
 } from "../merge/dependencyGraphs";
-import { mergeSboms, type CollectedSbom } from "../merge/merge";
+import { mergeSbomsWithIntake, type CollectedSbom, type SbomIntake } from "../merge/merge";
 import {
   parseClarificationsAt,
   withImportedClarifications,
@@ -49,6 +49,7 @@ import { renderMarkdown, type PolicyView, type TargetProfileSummary } from "../r
 import { renderNotices } from "../render/notices";
 import { globToRegExp } from "../targets/discover";
 import { applyContainerScopes } from "./containerScope";
+import { inventoryIntakeWarning } from "./coverage";
 import { resolveContained, resolveFrom } from "./paths";
 import { sanitizeForLog, writePolicySummary } from "./summary";
 import { collectTargets } from "./targets";
@@ -621,7 +622,7 @@ function projectPolicyView(
     suppressedWorkspaces: policy.suppressedWorkspaces,
     verdicts,
     developmentContainers,
-    acceptedContainerNotices: acceptedContainerNotices(model, verdicts),
+    acceptedContainerNotices: acceptedContainerNotices(model, policy, verdicts),
     ...(policy.document !== undefined ? { document: policy.document } : {}),
     ...(targetProfile !== undefined ? { targetProfile } : {}),
   };
@@ -651,6 +652,27 @@ function checkedDependencyGraphTargets(
 
   assertDependencyGraphCoverage(model, targets);
   return targets;
+}
+
+/**
+ * Print, per merge input, the counted-vs-inventoried gap, the purls the merge minted, and the
+ * components it skipped, so a component the merge cannot identify is reported rather than silently
+ * missing from the inventory.
+ */
+function reportInventoryIntake(
+  inputs: ReadonlyArray<CollectedSbom>,
+  intake: ReadonlyArray<SbomIntake>,
+  log: (line: string) => void,
+): void {
+  for (const [index, input] of inputs.entries()) {
+    const inputIntake = intake[index];
+    const warning =
+      inputIntake === undefined ? undefined : inventoryIntakeWarning(input.sbom, inputIntake);
+
+    if (warning !== undefined) {
+      log(warning);
+    }
+  }
 }
 
 export async function buildOutputs(opts: GenerateOptions): Promise<BuiltOutputs> {
@@ -684,9 +706,10 @@ export async function buildOutputs(opts: GenerateOptions): Promise<BuiltOutputs>
 
   // The collect loop owns the per-target stderr lines; the sink is provided here so the pipeline
   // stays the single place wiring stderr.
-  const { inputs, targetDirs } = await collectTargets(opts, (line): void => {
+  const log = (line: string): void => {
     process.stderr.write(`${line}\n`);
-  });
+  };
+  const { inputs, targetDirs } = await collectTargets(opts, log);
 
   // Thread the committed docker SBOM into the merge when it exists - one scope:"os" input per
   // attributed image. A missing file is the offline cache-miss equivalent - no os entries, no
@@ -699,7 +722,9 @@ export async function buildOutputs(opts: GenerateOptions): Promise<BuiltOutputs>
 
   // One merged model from all targets: shared packages appear once with every consumer in their
   // occurrences.
-  const model = mergeSboms(inputs);
+  const { model, intake } = mergeSbomsWithIntake(inputs);
+
+  reportInventoryIntake(inputs, intake, log);
 
   const graphTargets = checkedDependencyGraphTargets(model, inputs);
 
@@ -763,7 +788,7 @@ export async function buildOutputs(opts: GenerateOptions): Promise<BuiltOutputs>
     // an "os-package-unmodified" entry may legitimately describe.
     crossValidatePolicy(scoped, policy, graphTargets);
     verdicts = evaluate(scoped, policy, graphTargets);
-    writePolicySummary(policy, verdicts, usedClarifyIndices);
+    writePolicySummary(policy, scoped, verdicts, usedClarifyIndices);
     writeTargetHygieneNotices(scoped, policy);
     policyView = projectPolicyView(
       policy,
@@ -784,7 +809,7 @@ export async function buildOutputs(opts: GenerateOptions): Promise<BuiltOutputs>
     licensesMd: alignTables(renderMarkdown(scoped, policyView)),
     noticesMd: renderNotices(scoped),
     ...(opts.cyclonedxPath !== undefined
-      ? { cyclonedxJson: renderCyclonedx(scoped, verdicts) }
+      ? { cyclonedxJson: renderCyclonedx(scoped, verdicts, developmentContainers) }
       : {}),
     dumpJson,
     ...(verdicts !== undefined ? { verdicts } : {}),

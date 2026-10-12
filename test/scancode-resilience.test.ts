@@ -276,6 +276,72 @@ describe("per-package scan failure containment (assess.ts analyzeOne)", () => {
     expect(getMemoEntry(memo, asPurl("pkg:npm/first-victim@1.0.0"))).toBeUndefined();
     expect(getMemoEntry(memo, asPurl("pkg:npm/never-reached@1.0.0"))).toBeUndefined();
   });
+
+  test("a scan error on the package's own LICENSE is a contained failure, not a no-answer: counted under failed, never memoized, and rescanned on the next run", async () => {
+    const repo = newRepo();
+
+    writeNpmSource(repo, "left-pad", "1.3.0");
+    const path = newMemoPath();
+    let licenseTimesOut = true;
+
+    // ScanCode's per-file timeout: the run exits 1 but still writes a complete, correctly versioned
+    // output in which the LICENSE entry carries the error and no detected expression.
+    const perFileTimeoutExecTool = (
+      cmd: string,
+      args: string[],
+    ): Promise<{ stdout: string; stderr: string }> => {
+      invocations.push([cmd, ...args]);
+      const output = {
+        headers: [{ tool_name: "scancode-toolkit", tool_version: "32.5.0" }],
+        files: [
+          {
+            path: "left-pad/LICENSE",
+            type: "file",
+            detected_license_expression_spdx: licenseTimesOut ? null : "MIT",
+            copyrights: [],
+            scan_errors: licenseTimesOut
+              ? ["ERROR: for scanner: licenses:\nERROR: Processing interrupted: timeout"]
+              : [],
+          },
+        ],
+      };
+
+      writeFileSync(args[args.indexOf("--json-pp") + 1] as string, JSON.stringify(output));
+
+      return licenseTimesOut
+        ? Promise.reject(new Error("scancode exited with code 1"))
+        : Promise.resolve({ stdout: "", stderr: "" });
+    };
+
+    mock.module("../src/collectors/exec", () => ({
+      ...REAL_EXEC,
+      execTool: perFileTimeoutExecTool,
+    }));
+
+    const model = { packages: [npmPackage("left-pad", "1.3.0")] };
+    const opts = {
+      mode: "generate" as const,
+      memoPath: path,
+      verbose: false,
+      now: (): Date => new Date("2026-01-01T00:00:00.000Z"),
+      intensive: { targetDirs: [repo] },
+    };
+
+    const stderr = await withCapturedStderr(() => assessPackages(model as never, opts));
+
+    expect(stderr).toContain("intensive failed: pkg:npm/left-pad@1.3.0");
+    expect(stderr).toContain(
+      "intensive: scanned 0, memoized 0 (hits), no local sources 0, unsupported 0, failed 1",
+    );
+    expect(getMemoEntry(readScancodeMemo(path), asPurl("pkg:npm/left-pad@1.3.0"))).toBeUndefined();
+
+    licenseTimesOut = false;
+    invocations = [];
+    const { model: rescanned } = await assessPackages(model as never, opts);
+
+    expect(invocations.length).toBe(1);
+    expect(scancodeClaim(rescanned.packages[0])?.raw).toBe(asRawLicense("MIT"));
+  });
 });
 
 describe("memo persistence across a fatal abort (assessPackages's finally-block write)", () => {

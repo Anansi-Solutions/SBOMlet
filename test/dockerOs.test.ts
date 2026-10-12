@@ -322,7 +322,7 @@ describe("filterOsComponents (full image contents by default)", () => {
   });
 
   test("double-emit of the full-contents doc is byte-identical, with no volatile fields", () => {
-    const full = unionOsComponents([
+    const [full] = unionOsComponents([
       {
         image: "local/scan-image:built",
         components: filterOsComponents(builtFixture),
@@ -347,9 +347,8 @@ describe("filterOsComponents (full image contents by default)", () => {
 // ---------------------------------------------------------------------------
 // unionOsComponents (sidecar v2 membership union) — the cross-image dedup no
 // longer DISCARDS membership: a purl shared between images stays ONE row, but
-// that row now lists every containing image. The retained name/version/licenses
-// are still the first-seen values (callers pass images in sorted order, so the
-// license posture stays first-wins-by-sorted-image — unchanged, just visible).
+// that row now lists every containing image. The retained licenses are the
+// union of every image's claims, so no image order can drop a claim.
 // ---------------------------------------------------------------------------
 
 describe("unionOsComponents (cross-image membership union, sidecar v2)", () => {
@@ -375,7 +374,7 @@ describe("unionOsComponents (cross-image membership union, sidecar v2)", () => {
       name: asDependencyName("busybox"),
       version: asDependencyVersion("1.37.0-r19"),
       purl: asPurl("pkg:apk/alpine/busybox@1.37.0-r19"),
-      // A DIFFERENT claim set for the same purl: the first-seen set must win.
+      // A DIFFERENT claim set for the same purl: both sets are kept.
       licenses: [{ license: { name: "GPL" } }],
     },
     {
@@ -388,7 +387,7 @@ describe("unionOsComponents (cross-image membership union, sidecar v2)", () => {
   ];
 
   test("a purl present in two images yields ONE row whose images lists BOTH tags sorted", () => {
-    const merged = unionOsComponents([
+    const [merged] = unionOsComponents([
       { image: "img/a", components: sharedInA },
       { image: "img/b", components: sharedInB },
     ]);
@@ -397,12 +396,15 @@ describe("unionOsComponents (cross-image membership union, sidecar v2)", () => {
     expect(busybox?.images).toEqual(["img/a", "img/b"]);
     // One row per purl — the dedup posture is unchanged, only more visible.
     expect(merged.filter((c) => c.name === "busybox")).toHaveLength(1);
-    // The retained licenses are the FIRST-SEEN (image a) claim set.
-    expect(busybox?.licenses).toEqual([{ license: { id: "GPL-2.0-only" } }]);
+    // The retained licenses are the union of both images' claims, deduped and sorted.
+    expect(busybox?.licenses).toEqual([
+      { license: { id: "GPL-2.0-only" } },
+      { license: { name: "GPL" } },
+    ]);
   });
 
   test("a purl unique to one image carries exactly that one membership entry", () => {
-    const merged = unionOsComponents([
+    const [merged] = unionOsComponents([
       { image: "img/a", components: sharedInA },
       { image: "img/b", components: sharedInB },
     ]);
@@ -412,7 +414,7 @@ describe("unionOsComponents (cross-image membership union, sidecar v2)", () => {
   });
 
   test("membership arrays are sorted even when inputs arrive unsorted", () => {
-    const merged = unionOsComponents([
+    const [merged] = unionOsComponents([
       { image: "img/b", components: sharedInB },
       { image: "img/a", components: sharedInA },
     ]);
@@ -421,7 +423,7 @@ describe("unionOsComponents (cross-image membership union, sidecar v2)", () => {
   });
 
   test("a duplicate image in the scan set never double-counts one membership", () => {
-    const merged = unionOsComponents([
+    const [merged] = unionOsComponents([
       { image: "img/a", components: sharedInA },
       { image: "img/a", components: sharedInA },
     ]);
@@ -429,8 +431,66 @@ describe("unionOsComponents (cross-image membership union, sidecar v2)", () => {
     expect(merged.find((c) => c.name === "busybox")?.images).toEqual(["img/a"]);
   });
 
+  const LIBSSL_PURL = "pkg:deb/debian/libssl3@3.0.15-1~deb12u1?arch=amd64&distro=debian-12";
+  const libssl = (licenses?: unknown[]): unknown => ({
+    specVersion: "1.6",
+    components: [
+      {
+        name: "libssl3",
+        version: "3.0.15-1~deb12u1",
+        purl: LIBSSL_PURL,
+        ...(licenses !== undefined ? { licenses } : {}),
+      },
+    ],
+  });
+  const slimImage = { image: "a-slim", components: filterOsComponents(libssl()) };
+  const fullImage = {
+    image: "b-full",
+    components: filterOsComponents(libssl([{ expression: "Apache-2.0" }])),
+  };
+
+  test("a claim only a later image carries survives the union, whatever the image order", () => {
+    for (const order of [
+      [slimImage, fullImage],
+      [fullImage, slimImage],
+    ]) {
+      const [[merged]] = unionOsComponents(order);
+
+      expect(merged?.images).toEqual(["a-slim", "b-full"]);
+      expect(merged?.licenses).toEqual([{ expression: "Apache-2.0" }]);
+    }
+  });
+
+  test("differing claim sets are reported once per purl, naming each image's claims", () => {
+    const [, divergences] = unionOsComponents([
+      slimImage,
+      fullImage,
+      { image: "c-full", components: fullImage.components },
+    ]);
+
+    expect(divergences).toEqual([
+      {
+        purl: asPurl(LIBSSL_PURL),
+        claimsByImage: [
+          { image: "a-slim", licenses: [] },
+          { image: "b-full", licenses: [{ expression: "Apache-2.0" }] },
+          { image: "c-full", licenses: [{ expression: "Apache-2.0" }] },
+        ],
+      },
+    ]);
+  });
+
+  test("identical claim sets across images report no divergence", () => {
+    const [, divergences] = unionOsComponents([
+      { image: "img/a", components: sharedInA },
+      { image: "img/c", components: sharedInA },
+    ]);
+
+    expect(divergences).toEqual([]);
+  });
+
   test("merged rows stay purl-sorted via compareCodeUnits", () => {
-    const merged = unionOsComponents([
+    const [merged] = unionOsComponents([
       { image: "img/b", components: sharedInB },
       { image: "img/a", components: sharedInA },
     ]);
@@ -444,7 +504,9 @@ describe("unionOsComponents (cross-image membership union, sidecar v2)", () => {
 describe("emitDockerOsDoc (deterministic emit, sidecar v2)", () => {
   const DIGESTS = [{ image: "postgres:18", digest: "sha256:abc", source: "postgres:18" }];
   const postgresAttributed = (): AttributedOsComponent[] =>
-    unionOsComponents([{ image: "postgres:18", components: filterOsComponents(postgresFixture) }]);
+    unionOsComponents([
+      { image: "postgres:18", components: filterOsComponents(postgresFixture) },
+    ])[0];
 
   test("emits ONLY {bomFormat, specVersion, components, dockerImages}", () => {
     const json = emitDockerOsDoc(postgresAttributed(), DIGESTS);
@@ -505,7 +567,7 @@ describe("emitDockerOsDoc (deterministic emit, sidecar v2)", () => {
   });
 
   test("double-emit from the same components+digests is byte-identical", () => {
-    const components = unionOsComponents([
+    const [components] = unionOsComponents([
       {
         image: "nginx:stable-alpine",
         components: filterOsComponents(nginxFixture),

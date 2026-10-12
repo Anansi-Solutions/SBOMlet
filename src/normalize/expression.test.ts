@@ -56,8 +56,17 @@ describe("COPYLEFT_IDS membership", () => {
     expect(COPYLEFT_IDS.has(leaf("MS-PL"))).toBe(false);
   });
 
-  test("is the verbatim 94-id literal (54 from research + 40 CR-01 additions)", () => {
-    expect(COPYLEFT_IDS.size).toBe(94);
+  test("holds every CC ShareAlike id and port spdx-license-ids registers, NonCommercial included", () => {
+    const dataDir = join(import.meta.dir, "..", "..", "node_modules", "spdx-license-ids");
+    const current = JSON.parse(readFileSync(join(dataDir, "index.json"), "utf8")) as string[];
+    const shareAlike = current.filter((id) => /^CC-BY-(NC-)?SA-/.test(id));
+
+    expect(shareAlike).toContain("CC-BY-NC-SA-4.0");
+    expect(shareAlike.filter((id) => !COPYLEFT_IDS.has(leaf(id)))).toEqual([]);
+  });
+
+  test("is the verbatim 105-id literal", () => {
+    expect(COPYLEFT_IDS.size).toBe(105);
   });
 
   test("every member is a real SPDX id — current or deprecated (typo-proof)", () => {
@@ -271,6 +280,25 @@ describe("canonicalizeExpression — conservative boolean-algebra simplification
 
     expect(widen(canonical)).toBe("GPL-2.0-only WITH Classpath-exception-2.0");
     assertRoundTripAndIdempotent(canonical);
+  });
+
+  test.each([
+    ["BSD-2-Clause-FreeBSD OR MIT", "BSD-2-Clause-Views OR MIT"],
+    ["BSD-2-Clause-NetBSD OR MIT", "BSD-2-Clause OR MIT"],
+    ["StandardML-NJ AND MIT", "MIT AND SMLNJ"],
+    ["bzip2-1.0.5 AND MIT", "MIT AND bzip2-1.0.6"],
+    ["Nunit OR MIT", "MIT OR zlib-acknowledgement"],
+  ])("a deprecated id SPDX renamed is respelled: %s", (noisy, expected) => {
+    const canonical = canonicalizeExpression(asRawLicense(noisy));
+
+    expect(widen(canonical)).toBe(expected);
+    assertRoundTripAndIdempotent(canonical);
+  });
+
+  test("a deprecated id with no single successor stays as declared", () => {
+    expect(widen(canonicalizeExpression(asRawLicense("wxWindows OR MIT")))).toBe(
+      "MIT OR wxWindows",
+    );
   });
 
   test("deep mixed nesting: both absorption directions fire inside a shared AND", () => {
@@ -547,5 +575,20 @@ describe("canonicalizeExpression — adversarial property suite (truth-table ora
     // A sanity floor: the seeded pairs must exercise the agreement branch at least once, or the
     // kill-test above is vacuous.
     expect(agreementsChecked).toBeGreaterThan(0);
+  });
+});
+
+describe("canonicalizeExpression — deprecated SPDX ids read in their current spelling", () => {
+  test.each([
+    ["GPL-3.0", "GPL-3.0-only"],
+    ["GPL-2.0+", "GPL-2.0-or-later"],
+    ["LGPL-2.1+ OR MIT", "LGPL-2.1-or-later OR MIT"],
+    ["GFDL-1.3", "GFDL-1.3-only"],
+    ["GPL-2.0-with-classpath-exception", "GPL-2.0-only WITH Classpath-exception-2.0"],
+    ["GPL-2.0-with-classpath-exception+", "GPL-2.0-or-later WITH Classpath-exception-2.0"],
+    ["GPL-3.0 WITH GCC-exception-3.1", "GPL-3.0-only WITH GCC-exception-3.1"],
+    ["eCos-2.0", "eCos-2.0"],
+  ])("%p reads as %p", (declared, current) => {
+    expect(widen(canonicalizeExpression(asRawLicense(declared)))).toBe(current);
   });
 });

@@ -22,6 +22,8 @@ import {
   asTargetIdentity,
 } from "../model/dependencies";
 import { canon, asPurl, asDependencyName, asDependencyVersion } from "../../test/brandTestSupport";
+import { makeModel, osMultiSpec } from "../../test/policyTestSupport";
+import { annotateFindings } from "../normalize/normalize";
 import { renderCyclonedx } from "./cyclonedx";
 
 function golden(name: string): string {
@@ -187,11 +189,7 @@ describe("renderCyclonedx — license dispatch", () => {
     expect(doc2.components[0]!["licenses"]).toEqual([{ license: { name: "Custom License" } }]);
   });
 
-  // #9: an os-scope partial finding carries unrecognizedTokens that the
-  // machine-readable CycloneDX must NOT silently drop — they appear in the
-  // Markdown render, so the SBOM must match. Emit each as an additional
-  // {license:{name}} entry after the expression tuple.
-  test("#9: an os-partial finding emits the expression tuple PLUS each unrecognized token as a named entry", () => {
+  test("an os-partial finding keeps the lone expression entry and carries each unrecognized token as a property", () => {
     const osPartial = entry({
       purl: asPurl("pkg:deb/debian/os-partial@1.0"),
       name: asDependencyName("os-partial"),
@@ -205,16 +203,18 @@ describe("renderCyclonedx — license dispatch", () => {
         unrecognizedTokens: ["Artistic", "public-domain"],
       },
     });
-    const doc2 = parse(renderCyclonedx({ packages: [osPartial] }));
+    const component = parse(renderCyclonedx({ packages: [osPartial] })).components[0]!;
 
-    expect(doc2.components[0]!["licenses"]).toEqual([
-      { expression: "BSD-3-Clause AND GPL-2.0-only" },
-      { license: { name: "Artistic" } },
-      { license: { name: "public-domain" } },
+    expect(component["licenses"]).toEqual([{ expression: "BSD-3-Clause AND GPL-2.0-only" }]);
+    expect(component["properties"]).toEqual([
+      { name: "licenses-tool:used-in", value: "apps/a" },
+      { name: "licenses-tool:scope:apps/a", value: "prod" },
+      { name: "licenses-tool:unrecognized-license", value: "Artistic" },
+      { name: "licenses-tool:unrecognized-license", value: "public-domain" },
     ]);
   });
 
-  test("#9: an IMPRECISE os-partial (null expression) still emits its unrecognized tokens as named entries", () => {
+  test("an imprecise os-partial (null expression) emits its unrecognized tokens as named entries", () => {
     const imprecisePartial = entry({
       purl: asPurl("pkg:deb/debian/os-imprecise@1.0"),
       name: asDependencyName("os-imprecise"),
@@ -229,15 +229,74 @@ describe("renderCyclonedx — license dispatch", () => {
         unrecognizedTokens: ["some-custom-token"],
       },
     });
-    const doc2 = parse(renderCyclonedx({ packages: [imprecisePartial] }));
+    const component = parse(renderCyclonedx({ packages: [imprecisePartial] })).components[0]!;
 
-    expect(doc2.components[0]!["licenses"]).toEqual([{ license: { name: "some-custom-token" } }]);
+    expect(component["licenses"]).toEqual([{ license: { name: "some-custom-token" } }]);
   });
 
-  test("#9: a finding WITHOUT unrecognizedTokens emits exactly the expression tuple (no regression)", () => {
+  test("a token that is also a raw claim is named once, not twice", () => {
+    const { model } = annotateFindings(
+      makeModel([osMultiSpec("libbar", ["BSD", "Custom-Thing"])]),
+      [],
+    );
+    const component = parse(renderCyclonedx(model)).components[0]!;
+
+    expect(component["licenses"]).toEqual([
+      { license: { name: "BSD" } },
+      { license: { name: "Custom-Thing" } },
+    ]);
+  });
+
+  test("a finding WITHOUT unrecognizedTokens emits exactly the expression tuple (no regression)", () => {
     const component = byPurl.get(asPurl("pkg:npm/expr-pkg@3.0.0"))!;
 
     expect(component["licenses"]).toEqual([{ expression: "Apache-2.0 OR MIT" }]);
+  });
+});
+
+/**
+ * CycloneDX 1.6 `licenseChoice` is either an array of `{license}` objects or a single-item
+ * `[{expression}]` tuple, never a mix. Returns one message per component breaking that rule.
+ */
+function licenseChoiceViolations(json: string): string[] {
+  const violations: string[] = [];
+
+  for (const component of parse(json).components) {
+    const licenses = component["licenses"] as Array<Record<string, unknown>> | undefined;
+
+    if (licenses === undefined) {
+      continue;
+    }
+
+    const keySets = licenses.map((choice) => Object.keys(choice).join(","));
+    const named = keySets.every((keys) => keys === "license");
+    const expression = keySets.length === 1 && keySets[0] === "expression";
+
+    if (!named && !expression) {
+      violations.push(`${String(component["purl"])}: ${JSON.stringify(licenses)}`);
+    }
+  }
+
+  return violations;
+}
+
+describe("renderCyclonedx — licenseChoice is named entries XOR one expression", () => {
+  test("every component of the golden document", () => {
+    expect(licenseChoiceViolations(golden("cyclonedx.json"))).toEqual([]);
+  });
+
+  test("every component of a model carrying precise and imprecise os-partial findings", () => {
+    const { model } = annotateFindings(
+      makeModel([
+        osMultiSpec("libfoo", ["GPL-2.0-only", "Custom-Thing"]),
+        osMultiSpec("libbar", ["BSD", "Custom-Thing"]),
+      ]),
+      [],
+    );
+    const json = renderCyclonedx(model);
+
+    expect(json).toContain("Custom-Thing");
+    expect(licenseChoiceViolations(json)).toEqual([]);
   });
 });
 

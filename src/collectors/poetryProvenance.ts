@@ -25,17 +25,9 @@
 import { parse as parseToml } from "smol-toml";
 
 import { recordOf, stringOf } from "../validate/record";
-import { asPurl, type DependencyIntroduction, type Purl } from "../model/dependencies";
+import { type DependencyIntroduction, type Purl } from "../model/dependencies";
+import { normalizePep503, pypiPurl } from "./poetryLock";
 import { addToSetMap, deriveIntroductions, sortSetMap, type PurlGraph } from "./provenanceGraph";
-
-/**
- * PEP 503 name normalization - the exact transform cdxgen applies before emitting a
- * `pkg:pypi/<name>` purl: lowercase, and replace every run of `[-_.]+` with a single hyphen. Shared
- * contract with poetryLock.ts.
- */
-function normalizePep503(name: string): string {
-  return name.replace(/[-_.]+/g, "-").toLowerCase();
-}
 
 /**
  * Add every name key of a poetry dependency TABLE (keyed by name) to the root set, PEP-503
@@ -193,7 +185,7 @@ function parseLockPackages(lockfileText: string): LockPackage[] {
     const normalizedName = normalizePep503(name);
 
     out.push({
-      purl: asPurl(`pkg:pypi/${normalizedName}@${version}`),
+      purl: pypiPurl(name, version),
       normalizedName,
       dependencies: recordOf(pkg["dependencies"]) ?? {},
     });

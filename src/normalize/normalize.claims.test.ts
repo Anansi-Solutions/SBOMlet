@@ -6,7 +6,13 @@ import parse from "spdx-expression-parse";
 
 import { claim, pkg, osPkg, modelOf } from "../../test/normalizeTestSupport";
 import { asRawLicense, canon, widen } from "../../test/brandTestSupport";
-import { annotateFindings, normalizeRaw, type ClarifyInput } from "./normalize";
+import {
+  annotateFindings,
+  normalizeRaw,
+  type ClarifyInput,
+  type NormalizeResult,
+} from "./normalize";
+import { registeredExceptionTerms } from "./statedException";
 import type { LicenseClaim, LicenseClaimKind } from "../model/dependencies";
 
 // ---------------------------------------------------------------------------
@@ -256,6 +262,156 @@ describe("normalizeRaw — guards", () => {
 
   test("comma lists are not correctable — correct() would drop MIT", () => {
     expect(normalizeRaw(asRawLicense("MIT,Apache-2.0")).expression).toBeNull();
+  });
+});
+
+describe("normalizeRaw — a correction must keep what the label states", () => {
+  const UNKNOWN: NormalizeResult = { expression: null, source: "generator" };
+
+  test.each([
+    "MIT AND Commons-Clause",
+    "Apache-2.0 WITH Commons-Clause",
+    "MIT (non-commercial)",
+    "MIT, non-commercial use only",
+    "UNLICENCED",
+    "UNLICENSED - proprietary",
+    "Unlicensed, see LICENSE.txt",
+  ])("a use-restriction rider or proprietary marker makes %p unknown", (raw) => {
+    expect(normalizeRaw(asRawLicense(raw))).toEqual(UNKNOWN);
+  });
+
+  test.each([
+    ["GPLv2 with Classpath Exception", "GPL-2.0-only WITH Classpath-exception-2.0"],
+    ["GPLv2 with the Classpath Exception", "GPL-2.0-only WITH Classpath-exception-2.0"],
+    ["GPL-2.0-with-classpath", "GPL-2.0-only WITH Classpath-exception-2.0"],
+    ["Apache-2.0-with-LLVM-exception", "Apache-2.0 WITH LLVM-exception"],
+    ["Apache 2.0 with LLVM exception", "Apache-2.0 WITH LLVM-exception"],
+    ["GPL-2.0 with GCC exception 3.1", "GPL-2.0-only WITH GCC-exception-3.1"],
+  ])("the exception %p states is the one registered exception id it names: %p", (raw, expected) => {
+    expect(normalizeRaw(asRawLicense(raw))).toEqual({
+      expression: canon(expected),
+      source: "corrected",
+    });
+  });
+
+  test.each([
+    ["GPL-2.0 with GCC exception", "GPL"],
+    ["GPL-2.0 with linking exception", "GPL"],
+    ["Apache 2.0 with linking exception", "Apache"],
+  ] as const)(
+    "%p states an exception that names no single registered id, so it is the imprecise %p family",
+    (raw, family) => {
+      expect(normalizeRaw(asRawLicense(raw))).toEqual({
+        expression: null,
+        source: "generator",
+        imprecise: true,
+        impreciseFamily: family,
+      });
+    },
+  );
+
+  test.each([
+    "GPL2 w/ CPE",
+    "CDDL + GPLv2 with classpath exception",
+    "LGPL-2.1-with-linking-exception",
+  ])(
+    "%p states an exception but the correction drops a family or version, so it is unknown",
+    (raw) => {
+      expect(normalizeRaw(asRawLicense(raw))).toEqual(UNKNOWN);
+    },
+  );
+
+  test("every registered SPDX exception id names at least one word to match a label against", () => {
+    const ids = JSON.parse(
+      readFileSync(
+        join(import.meta.dir, "..", "..", "node_modules", "spdx-exceptions", "index.json"),
+        "utf8",
+      ),
+    ) as string[];
+
+    expect(ids.filter((id) => registeredExceptionTerms(id).words.length === 0)).toEqual([]);
+  });
+
+  test.each(["Dual MIT/GPL", "MIT/GPL", "CDDL/GPLv2+CE", "Unlicense/MIT"])(
+    "%p names a family the correction drops, so it is unknown",
+    (raw) => {
+      expect(normalizeRaw(asRawLicense(raw))).toEqual(UNKNOWN);
+    },
+  );
+
+  test.each([
+    "Eclipse Public License 2.0",
+    "Eclipse Public License - v 2.0",
+    "GNU General Public License v2.0 or later",
+    "GNU Lesser General Public License v2 or later (LGPLv2+)",
+  ])("%p states a version or or-later grant the correction drops, so it is unknown", (raw) => {
+    expect(normalizeRaw(asRawLicense(raw))).toEqual(UNKNOWN);
+  });
+
+  test.each([
+    ["BSD-like", "BSD"],
+    ["BSD-style", "BSD"],
+    ["Apache-2.0 (modified)", "Apache"],
+    ["BSD-3-Clause-Modified", "BSD"],
+  ] as const)("the hedged label %p is the imprecise %p family", (raw, family) => {
+    expect(normalizeRaw(asRawLicense(raw))).toEqual({
+      expression: null,
+      source: "generator",
+      imprecise: true,
+      impreciseFamily: family,
+    });
+  });
+
+  test.each(["MIT-like", "Artistic-Custom-Text"])(
+    "the hedged label %p names no imprecise family, so it is unknown",
+    (raw) => {
+      expect(normalizeRaw(asRawLicense(raw))).toEqual(UNKNOWN);
+    },
+  );
+
+  test.each(["MIT*", "MIT?", "~MIT~"])(
+    "the punctuation hedge %p is unknown, not corrected",
+    (raw) => {
+      expect(normalizeRaw(asRawLicense(raw))).toEqual(UNKNOWN);
+    },
+  );
+
+  test.each([
+    ["Apache License 2.0", "Apache-2.0"],
+    ["Apache Software License 2.0", "Apache-2.0"],
+    ["Apache Public License 2.0", "Apache-2.0"],
+    ["Apache License Version 2.0, January 2004", "Apache-2.0"],
+    ["The MIT License", "MIT"],
+    ["MIT (X11)", "MIT"],
+    ["BSD 3-Clause License", "BSD-3-Clause"],
+    ["New BSD License", "BSD-3-Clause"],
+    ["Modified BSD License", "BSD-3-Clause"],
+    ["GPLv2+", "GPL-2.0-or-later"],
+    ["Mozilla Public License 2.0 (MPL 2.0)", "MPL-2.0"],
+    ["CC BY-SA 4.0", "CC-BY-SA-4.0"],
+    ["Zlib/libpng", "Zlib"],
+    ["zlib/libpng License", "Zlib"],
+  ])("spdx-correct resolves the alias or respelling %p to %p", (raw, expected) => {
+    expect(normalizeRaw(asRawLicense(raw))).toEqual({
+      expression: canon(expected),
+      source: "corrected",
+    });
+  });
+
+  test("a corrected finding records the raw labels the correction rewrote", () => {
+    const claims = [claim("MIT", "spdx-id"), claim("Apache License, Version 2.0", "name")];
+    const { model } = annotateFindings(modelOf(pkg("two-claims", "1.0.0", claims)), []);
+
+    const finding = model.packages[0]!.finding!;
+
+    expect(finding.confidence).toBe("corrected");
+    expect(finding.correctedFrom).toEqual([asRawLicense("Apache License, Version 2.0")]);
+  });
+
+  test("a valid expression naming a commercial LicenseRef is kept exactly", () => {
+    expect(
+      widen(normalizeRaw(asRawLicense("GPL-3.0-only OR LicenseRef-Commercial")).expression),
+    ).toBe("GPL-3.0-only OR LicenseRef-Commercial");
   });
 });
 
@@ -577,10 +733,9 @@ describe("annotateFindings — coverage, immutability, election", () => {
 // spdx-license-ids below — a typo'd target would silently re-create the unknown.
 // [shorthand, expectedExpression, source]. The "+" forms with a NON-SPDX base
 // ("GPL-2+", "LGPL-2+", "LGPL-3+", "GPL-3+") are mapped to the precise -or-later
-// id; "LGPL-2.1+" is ALREADY valid SPDX (LGPL-2.1 is a real base id) so it is
-// preserved verbatim by the exact-parse path (source "generator") — rewriting an
-// already-valid SPDX id would violate the verbatim-preservation invariant. Both
-// forms mean GPL/LGPL "or-later", so the OS section renders a real license.
+// id; "LGPL-2.1" and "LGPL-2.1+" are deprecated but valid SPDX, so the exact-parse
+// path keeps them (source "generator") and canonicalization respells them to the
+// current -only / -or-later id. Every form renders a real license in the OS section.
 const DEBIAN_SHORTHAND_CASES: ReadonlyArray<
   [shorthand: string, expected: string, source: "corrected" | "generator"]
 > = [
@@ -591,8 +746,8 @@ const DEBIAN_SHORTHAND_CASES: ReadonlyArray<
   ["GPL-3+", "GPL-3.0-or-later", "corrected"],
   ["LGPL-2", "LGPL-2.0-only", "corrected"],
   ["LGPL-2+", "LGPL-2.0-or-later", "corrected"],
-  ["LGPL-2.1", "LGPL-2.1", "generator"], // deprecated-but-valid SPDX id — preserved verbatim
-  ["LGPL-2.1+", "LGPL-2.1+", "generator"], // already valid SPDX — preserved verbatim
+  ["LGPL-2.1", "LGPL-2.1-only", "generator"],
+  ["LGPL-2.1+", "LGPL-2.1-or-later", "generator"],
   ["LGPL-3", "LGPL-3.0-only", "corrected"],
   ["LGPL-3+", "LGPL-3.0-or-later", "corrected"],
   ["BSD-2-clause", "BSD-2-Clause", "corrected"],
@@ -620,8 +775,7 @@ describe("normalizeRaw — Debian/DEP-5 shorthand map", () => {
     ) as string[];
     const known = new Set([...current, ...deprecated]);
     // Strip a trailing "+" (the SPDX or-later operator) to recover the base id
-    // that must exist in spdx-license-ids — "LGPL-2.1+" is a valid expression
-    // whose base "LGPL-2.1" is the listed id.
+    // that must exist in spdx-license-ids.
     const targets = DEBIAN_SHORTHAND_CASES.map(([, t]) => t.replace(/\+$/, ""));
 
     expect(targets.filter((t) => !known.has(t))).toEqual([]);

@@ -38,15 +38,14 @@
  *      profile, or on an imprecise/null finding, this lane is a no-op and today's walk is
  *      byte-identical.
  *   4. copyleft-flagged (isCopyleft on the elected branch - an OR with a permissive branch elects
- *      the permissive branch and is not copyleft) and the occurrence target is or is under a
- *      suppressed path and the suppression is family-justified (the elected expression satisfies
- *      the workspace's declared license, or every copyleft leaf in it is in a finding-family the
- *      workspace license family absorbs per the literal WORKSPACE_ABSORBS relation - an AGPL-3.0
- *      workspace absorbs GNU-family GPL/LGPL deps and MPL deps it bundles, but never SSPL or
- *      CC-BY-SA) → suppressed, workspace.copyleft_suppressed[i]. A path match without family
- *      justification falls through to the normal default chain. A target-governed occurrence never
- *      reaches this tier at all (tier 3 above decides it first), so a suppression entry a target
- *      governs is effectively dead there - see policy/target.ts's suppressionOverlapNotices.
+ *      the permissive branch and is not copyleft; a deny-covered branch is never elected while
+ *      another remains) and the occurrence target is or is under a suppressed path and the
+ *      suppression is justified (the elected expression satisfies the workspace's declared license,
+ *      or that license absorbs every copyleft leaf in it per workspaceAbsorbs) → suppressed,
+ *      workspace.copyleft_suppressed[i]. A path match without that justification falls through to
+ *      the normal default chain. A target-governed occurrence never reaches this tier at all (tier
+ *      3 above decides it first), so a suppression entry a target governs is effectively dead there
+ *      - see policy/target.ts's suppressionOverlapNotices.
  *   5. Defaults: copyleft → fail (default:copyleft, reason names the elected expression and the
  *      occurrence target; an os-scope AGPL leaf escalates to default:agpl-container unless a
  *      complete project target profile declares network = false, which demotes it to the routine
@@ -74,7 +73,6 @@ import parseSpdx from "spdx-expression-parse";
 import satisfies from "spdx-satisfies";
 
 import {
-  asSpdxLicenseLeaf,
   compareCodeUnits,
   matchesIdentityPrefix,
   type AssessmentConflict,
@@ -116,10 +114,19 @@ import {
 import { clarifyCitation, clarifyInvalidRuleId, type ClarifyRule } from "../schema/clarify";
 import { ruleReason } from "../schema/diagnostics";
 import { BUILTIN_DENY_RULE_ID } from "./builtinDenylist";
-import { AGPL_IDS, COPYLEFT_FAMILY } from "./copyleft";
-import { denyRuleFor, type IndexedDenyRule } from "./deny";
+import { AGPL_IDS } from "./copyleft";
+import {
+  branchRankers,
+  denyRuleAmong,
+  exemptionAwareDenyRules,
+  withBestRankedBranches,
+  type BranchRankers,
+  type DenyMatch,
+  type ExemptionAwareDenyRules,
+  type IndexedDenyRule,
+} from "./deny";
 import { voidedCompatibleEntries, voidedEntryKey, type VoidedEntry } from "./chain";
-import { COULD_BE_COPYLEFT_FAMILIES, WORKSPACE_ABSORBS } from "./copyleftFamily";
+import { COULD_BE_COPYLEFT_FAMILIES, workspaceAbsorbs } from "./copyleftFamily";
 import { justificationValidity, type JustificationValidity } from "./justificationValidity";
 import { matchesPackage, scopeCoversTarget } from "./match";
 import { resolveTargetProfile } from "./target";
@@ -143,12 +150,13 @@ interface Assessment {
    */
   electedNode: ExpressionNode | null;
   /**
-   * The PRE-election parsed node - null exactly when `electedNode` is null. The target lane's
-   * classifyExpression needs the raw tree, never the already-elected branch: elect()'s own
-   * non-target-aware preference can discard the branch a target-aware election would have picked
-   * (the Apache-2.0-vs-GPL-2.0-only counterexample - see compat/classify.ts's module doc), so
-   * feeding it the post-election node would silently pre-discard what the lane exists to recover.
-   * Inert when no target is declared - nothing else reads it.
+   * The PRE-election parsed node pruned to its best-ranked branches, copyleft left unranked - null
+   * exactly when `electedNode` is null. The target lane's classifyExpression needs the raw tree,
+   * never the already-elected branch: elect()'s own non-target-aware preference can discard the
+   * branch a target-aware election would have picked (the Apache-2.0-vs-GPL-2.0-only counterexample
+   * in compat/classify.ts's module doc), so feeding it the post-election node would silently
+   * pre-discard what the lane exists to recover. Inert when no target is declared - nothing else
+   * reads it.
    */
   rawNode: ExpressionNode | null;
   /** isCopyleft on the elected node - the elected branch decides. */
@@ -170,17 +178,19 @@ const UNKNOWN_ASSESSMENT: Assessment = {
 };
 
 /**
- * Parse the finding's expression once and derive election + copyleft flag. The expression was
- * produced by the normalizer (or validated policy schema via clarify), so it parses by
- * construction; the defensive catch keeps the never-throws posture by degrading to unknown instead
- * of crashing the run.
+ * Parse the finding's expression once and derive election + copyleft flag. Election ranks each OR
+ * branch clean, exempted, copyleft, then denied ({@link BranchRank}) and takes the best-ranked one,
+ * so `GPL-3.0-only OR BUSL-1.1` is judged on its GPL branch unless the policy exempts BUSL-1.1;
+ * {@link elect} breaks ties among equally ranked branches. The expression was produced by the
+ * normalizer (or validated policy schema via clarify), so it parses by construction; the defensive
+ * catch keeps the never-throws posture by degrading to unknown instead of crashing the run.
  *
  * An imprecise finding (confidence "imprecise", expression null) branches out before the
  * null-expression unknown fallback so its family is carried to the present-but-needs-clarify lane
  * - it must never be conflated with genuine unknown and never reach satisfies() (it has no valid
  * expression).
  */
-function assessPackage(entry: PackageEntry): Assessment {
+function assessPackage(entry: PackageEntry, rankers: BranchRankers): Assessment {
   const finding = entry.finding;
 
   if (finding?.confidence === "imprecise") {
@@ -194,14 +204,14 @@ function assessPackage(entry: PackageEntry): Assessment {
   }
 
   try {
-    const node = parseSpdx(expression) as ExpressionNode;
-    const electedNode = elect(node);
+    const parsed = parseSpdx(expression) as ExpressionNode;
+    const electedNode = elect(withBestRankedBranches(parsed, rankers.election));
 
     return {
       expression,
       elected: renderNode(electedNode),
       electedNode,
-      rawNode: node,
+      rawNode: withBestRankedBranches(parsed, rankers.targetLane),
       copyleft: isCopyleft(electedNode),
     };
   } catch {
@@ -346,24 +356,16 @@ function suppressionFor(
 }
 
 /**
- * Family-aware suppression justification: a path match alone is not enough - the finding's copyleft
- * obligations must be absorbable by the workspace's own declared license. Returns the
- * verified-relationship text for the audit-trail reason, or undefined when suppression is
- * unjustified (the verdict then falls through the normal default chain).
+ * Suppression justification: a path match alone is not enough - the finding's copyleft obligations
+ * must be absorbable by the workspace's own declared license. Returns the relationship text for the
+ * audit-trail reason, or undefined when suppression is unjustified (the verdict then falls through
+ * the normal default chain).
  *
- * Minimal sound rule, two branches:
- *   (a) the elected expression satisfies the workspace license itself
- *       (spdx-satisfies against the single-ID allowlist [rule.license]);
- *   (b) absorb-all: every copyleft leaf of the elected expression
- *       is in a finding-family the workspace's license family absorbs, per the literal
- *       WORKSPACE_ABSORBS relation (COPYLEFT_FAMILY exact-ID lookups, never substring). A workspace
- *       re-released under strong copyleft absorbs the inbound-compatible weaker copyleft it bundles
- *       - an AGPL-3.0-only (GNU-family) workspace absorbs GNU (GPL/LGPL/AGPL) and MPL findings, but
- *       the safety floor (absence from the absorbed set) still excludes SSPL and CC-BY-SA.
- *       Absorption is directional/declared, not symmetric: a non-AGPL workspace family absorbs only
- *       what WORKSPACE_ABSORBS declares for it.
- * The catches are defensive (never-throws posture); rule.license was validated as a single SPDX ID
- * by the schema.
+ * Two branches:
+ *   (a) the elected expression satisfies the workspace license itself;
+ *   (b) the workspace license absorbs every copyleft leaf of the elected expression
+ *       ({@link workspaceAbsorbs}, directional: an LGPL-2.1-only workspace never absorbs AGPL, and
+ *       GPL-2.0-only never absorbs GPL-3.0-only).
  */
 function suppressionJustification(
   electedNode: ExpressionNode,
@@ -375,60 +377,18 @@ function suppressionJustification(
       return `elected "${elected}" satisfies the workspace license ${rule.license}`;
     }
   } catch {
-    // defensive: fall through to the family check
-  }
-
-  let workspaceLeaf: string | undefined;
-
-  try {
-    const node = parseSpdx(rule.license) as ExpressionNode;
-
-    if ("license" in node) {
-      workspaceLeaf = node.license;
-    }
-  } catch {
-    workspaceLeaf = undefined;
-  }
-
-  if (workspaceLeaf === undefined) {
-    return undefined;
-  }
-
-  const workspaceFamily = COPYLEFT_FAMILY.get(asSpdxLicenseLeaf(workspaceLeaf));
-
-  if (workspaceFamily === undefined) {
-    return undefined;
-  }
-
-  const absorbed = WORKSPACE_ABSORBS.get(workspaceFamily);
-
-  if (absorbed === undefined) {
-    return undefined;
+    // defensive: fall through to the matrix check
   }
 
   const leaves = copyleftLeafIds(electedNode);
 
-  if (leaves.length === 0) {
+  if (leaves.length === 0 || !leaves.every((leaf) => workspaceAbsorbs(rule.license, leaf))) {
     return undefined;
-  }
-
-  const leafFamilies = leaves.map((id) => COPYLEFT_FAMILY.get(id));
-
-  if (!leafFamilies.every((family) => family !== undefined && absorbed.has(family))) {
-    return undefined;
-  }
-
-  if (leafFamilies.every((family) => family === workspaceFamily)) {
-    return (
-      `every copyleft obligation in elected "${elected}" is in the same ` +
-      `${workspaceFamily} family as the workspace license ${rule.license}`
-    );
   }
 
   return (
-    `every copyleft obligation in elected "${elected}" is in an ` +
-    `inbound-compatible family absorbed by the ${workspaceFamily} workspace ` +
-    `license ${rule.license}`
+    `every copyleft obligation in elected "${elected}" can be absorbed into a work ` +
+    `under the workspace license ${rule.license}`
   );
 }
 
@@ -448,13 +408,12 @@ function clarifyIndexFor(entry: PackageEntry, policy: Policy): number {
  *     network-copyleft obligation and must never be parked at a warn). An application-ecosystem
  *     container package is scope "app" here (re-keyed upstream) and falls through to the next
  *     branch instead.
- *   - family in the set (bare GPL/AGPL/LGPL) → flagged-for-review, a warn that surfaces, rule
- *     "default:imprecise-copyleft". Conservative: an imprecise copyleft family is never silently
- *     passed.
+ *   - family in the set (bare GPL/AGPL/LGPL) → flagged-for-review under `[unknown]` handling, rule
+ *     "default:imprecise-copyleft": a warn, or a fail with the same scope downgrades
+ *     default:unknown gets. Never silently passed.
  *   - family not in the set (a known-permissive family like BSD) → a non-gating warn, rule
  *     "default:imprecise". Surfaced for optional `[[clarify]]` disambiguation, but never a hard
  *     fail purely for being imprecise.
- * The latter two are status "warn": visible in the summary, non-gating by default.
  */
 /**
  * The declared-network basis clause appended to a demoted AGPL-container reason: a complete project
@@ -518,12 +477,16 @@ function impreciseVerdict(
   }
 
   if (COULD_BE_COPYLEFT_FAMILIES.has(family)) {
-    return {
+    const verdict: Verdict = {
       ...base,
-      status: "warn",
+      status: policy.unknownHandling,
       rule: "default:imprecise-copyleft",
       reason: `imprecise license family "${family}" in "${target}" could carry a copyleft obligation — disambiguate via a [[clarify]] override (not silently passed)`,
     };
+
+    return policy.unknownHandling === "fail"
+      ? applyScopeDowngrades(verdict, entry, occurrence, policy)
+      : verdict;
   }
 
   return {
@@ -759,6 +722,14 @@ function overrideCitation(
   return undefined;
 }
 
+/** Reason suffix of a would-be fail that `[dev_dependencies] handling = "warn"` downgraded. */
+export const DEV_DOWNGRADE_REASON_SUFFIX =
+  " — downgraded to warn: dev-only occurrence (dev_dependencies=warn)";
+
+/** Reason suffix of a would-be fail that `[os_dependencies] handling = "warn"` downgraded. */
+export const OS_DOWNGRADE_REASON_SUFFIX =
+  " — downgraded to warn: os-scope base-image package (os_dependencies=warn)";
+
 /**
  * Per-occurrence dev-scope downgrade, applied only to a verdict that would otherwise be a default
  * fail (default:copyleft, or default:unknown when unknownHandling="fail"). Keyed strictly on
@@ -795,7 +766,7 @@ function applyDevScope(failVerdict: Verdict, occurrence: Occurrence, policy: Pol
   return {
     ...failVerdict,
     status: "warn",
-    reason: `${failVerdict.reason} — downgraded to warn: dev-only occurrence (dev_dependencies=warn)`,
+    reason: `${failVerdict.reason}${DEV_DOWNGRADE_REASON_SUFFIX}`,
   };
 }
 
@@ -838,7 +809,7 @@ function applyOsScope(failVerdict: Verdict, entry: PackageEntry, policy: Policy)
   return {
     ...failVerdict,
     status: "warn",
-    reason: `${failVerdict.reason} — downgraded to warn: os-scope base-image package (os_dependencies=warn)`,
+    reason: `${failVerdict.reason}${OS_DOWNGRADE_REASON_SUFFIX}`,
   };
 }
 
@@ -872,11 +843,11 @@ function applyScopeDowngrades(
  * name-mode rule. Defensive: a finding with no observed expressions simply skips check 3.
  */
 function firstDeny(
-  policy: Policy,
+  rules: ReadonlyArray<IndexedDenyRule>,
   entry: PackageEntry,
   expression: string | null,
-): IndexedDenyRule | undefined {
-  const combined = denyRuleFor(policy, expression, entry.name);
+): DenyMatch | undefined {
+  const combined = denyRuleAmong(rules, expression, entry.name);
 
   if (combined !== undefined) {
     return combined;
@@ -885,7 +856,7 @@ function firstDeny(
   const observed = entry.finding?.observedExpression;
 
   if (observed !== undefined) {
-    const hit = denyRuleFor(policy, observed, entry.name);
+    const hit = denyRuleAmong(rules, observed, entry.name);
 
     if (hit !== undefined) {
       return hit;
@@ -893,7 +864,7 @@ function firstDeny(
   }
 
   for (const obs of entry.finding?.observedExpressions ?? []) {
-    const hit = denyRuleFor(policy, obs, entry.name);
+    const hit = denyRuleAmong(rules, obs, entry.name);
 
     if (hit !== undefined) {
       return hit;
@@ -904,28 +875,80 @@ function firstDeny(
 }
 
 /**
+ * The exemption decision for an elected branch only an exempted shipped default denies, so the
+ * package takes the exemption's warn instead of passing on that branch.
+ */
+function exemptedElection(
+  rules: ExemptionAwareDenyRules,
+  entry: PackageEntry,
+  elected: string | null,
+): DenyDecision | undefined {
+  const match =
+    elected === null ? undefined : denyRuleAmong(rules.exemptedFirst, elected, entry.name);
+
+  return match === undefined ? undefined : { rule: match, exempted: true };
+}
+
+/** The deny lane's decision for one package. */
+interface DenyDecision {
+  /** The rule cited: one still in force, or an exempted shipped default when `exempted`. */
+  readonly rule: DenyMatch;
+  /** True when only shipped defaults the policy exempts deny the package. */
+  readonly exempted: boolean;
+}
+
+/**
+ * Decides the exemption on the expression, not on one attributed rule: the package fails when the
+ * rules still in force deny it (`SSPL-1.0 AND BUSL-1.1` with only BUSL exempted), and is exempted
+ * only when the denial needs an exempted default.
+ */
+function denyDecision(
+  rules: ExemptionAwareDenyRules,
+  entry: PackageEntry,
+  expression: string | null,
+): DenyDecision | undefined {
+  const inForce = firstDeny(rules.inForce, entry, expression);
+
+  if (inForce !== undefined) {
+    return { rule: inForce, exempted: false };
+  }
+
+  const lifted = firstDeny(rules.exemptedFirst, entry, expression);
+
+  return lifted === undefined ? undefined : { rule: lifted, exempted: true };
+}
+
+/** How a deny rule's pattern reads in a verdict reason. */
+function denyPatternText({ rule }: IndexedDenyRule): string {
+  return rule.match === "license"
+    ? `license pattern "${rule.pattern}"`
+    : `package name "${rule.pattern}"`;
+}
+
+/**
  * Terminal-0 deny verdict. A matched deny rule force-fails the package with the `denied[i]` rule id
- * and a reason naming the matched license/pattern and the source-available rationale. It is a
- * `fail` → mapped to a violation (exit 1) by the existing violations → exitCodeFor mapping. This
- * sits above every other lane (incl. stale), so applyDevScope is never reached for a denied verdict
+ * and a reason naming the matched license/pattern, every other rule the denial rests on (an OR the
+ * deny union covers only across rules), and the source-available rationale. It is a `fail` → mapped
+ * to a violation (exit 1) by the existing violations → exitCodeFor mapping. This sits above every
+ * other lane (incl. stale), so applyDevScope is never reached for a denied verdict
  * - a dev-only occurrence of a denied license still fails.
  */
 function denyVerdict(
   base: { purl: Purl; occurrenceTarget: TargetIdentity },
-  denyRule: IndexedDenyRule,
+  denyMatch: DenyMatch,
 ): Verdict {
-  const { ruleId, rule } = denyRule;
-  const what =
-    rule.match === "license"
-      ? `license pattern "${rule.pattern}"`
-      : `package name "${rule.pattern}"`;
+  const { ruleId, rule } = denyMatch;
+  const others = denyMatch.contributing
+    .slice(1)
+    .map((other) => `${other.ruleId} (${denyPatternText(other)})`);
+  const together = others.length > 0 ? `, together with ${others.join(", ")}` : "";
 
   return {
     ...base,
     status: "fail",
     rule: ruleId,
     reason:
-      `DENIED by ${what}: ${rule.reason} — a use-restricted / ` +
+      `DENIED by ${denyPatternText(denyMatch)}: ${rule.reason}${together} — a use-restricted / ` +
       `source-available license cannot be redistributed in client-shipped ` +
       `artifacts, so no compatible rule, workspace suppression, dev-scope ` +
       `downgrade, or override can license it back in (deny is terminal).`,
@@ -933,13 +956,9 @@ function denyVerdict(
 }
 
 /**
- * Source-available exemption (ADR-0013). When the terminal-0 deny that matched is a shipped
- * source-available default (cited default:source-available - not the consumer's own [[deny]]) and
- * the consumer listed that licence under [[allow_source_available]], the package is not
- * force-failed: it surfaces as a warn citing the exemption, so an accepted source-available licence
- * stays visible rather than silently passing. An explicit [[deny]] still wins - denyRuleFor
- * attributes a policy deny first (policy-first order), so denyRule is never the builtin id when the
- * consumer also denied the licence themselves.
+ * The [[allow_source_available]] entry lifting an exempted shipped default (ADR-0013), or undefined
+ * for any other rule. The package then surfaces as a warn citing the exemption, so an accepted
+ * source-available licence stays visible rather than silently passing.
  */
 function sourceAvailableExemption(
   policy: Policy,
@@ -976,23 +995,22 @@ function exemptionVerdict(
 }
 
 /**
- * Terminal-0 verdict for a matched deny: a force-fail, unless the match is a shipped
- * source-available default the consumer exempted (ADR-0013), which surfaces as a warn instead. An
- * explicit [[deny]] is never the builtin id (it is attributed first), so this never softens a deny
- * the consumer authored.
+ * Terminal-0 verdict for a deny decision: a force-fail, unless only shipped source-available
+ * defaults the consumer exempted deny the package (ADR-0013), which surfaces as a warn instead. An
+ * explicit [[deny]] stays in force, so this never softens a deny the consumer authored.
  */
 function denyOrExemptVerdict(
   base: { purl: Purl; occurrenceTarget: TargetIdentity },
   policy: Policy,
-  denyRule: IndexedDenyRule,
+  decision: DenyDecision,
 ): Verdict {
-  const exemption = sourceAvailableExemption(policy, denyRule);
+  const exemption = decision.exempted ? sourceAvailableExemption(policy, decision.rule) : undefined;
 
   if (exemption !== undefined) {
     return exemptionVerdict(base, exemption);
   }
 
-  return denyVerdict(base, denyRule);
+  return denyVerdict(base, decision.rule);
 }
 
 /**
@@ -1385,7 +1403,7 @@ function verdictFor(
   assessment: Assessment,
   packageRule: JudgedPackageRule | undefined,
   licenseRule: IndexedRule<CompatibleLicenseRule> | undefined,
-  denyRule: IndexedDenyRule | undefined,
+  denied: DenyDecision | undefined,
   clarifyDecided: ClarifyDecision | undefined,
   policy: Policy,
 ): Verdict {
@@ -1395,8 +1413,8 @@ function verdictFor(
   // Terminal-0: a denied license/rider can never be licensed back in - unless the matched deny is a
   // shipped source-available default the consumer exempted via [[allow_source_available]]
   // (ADR-0013), which surfaces as a warn instead.
-  if (denyRule !== undefined) {
-    return denyOrExemptVerdict(base, policy, denyRule);
+  if (denied !== undefined) {
+    return denyOrExemptVerdict(base, policy, denied);
   }
 
   const stale = entry.finding?.staleOverride;
@@ -1489,9 +1507,11 @@ export function evaluate(
   // Which package entries the recorded introduction chains contradict, decided once per entry and
   // target before the walk below reads the answer per occurrence.
   const voided = voidedCompatibleEntries(model, policy, targetsWithDependencyGraph);
+  const rankers = branchRankers(policy);
+  const denyRules = exemptionAwareDenyRules(policy);
 
   for (const entry of model.packages) {
-    const assessment = assessPackage(entry);
+    const assessment = assessPackage(entry, rankers);
     // Terminal-0 deny match computed once per package: license-mode reads the assessment
     // expression, electing over the deny allowlists (see docs/glossary.md#election); name-mode
     // reads the package name (works even when the expression is null - the use-restriction rider
@@ -1513,14 +1533,16 @@ export function evaluate(
     // of how combine rendered the finding (precise/imprecise/unknown), in every scope. Name-mode
     // (passed null here) is inert per observed expression - it already matched via entry.name
     // above.
-    const denyRule = firstDeny(policy, entry, assessment.expression);
+    const denied =
+      denyDecision(denyRules, entry, assessment.expression) ??
+      exemptedElection(denyRules, entry, assessment.elected);
     // Decided once per package: the clarify entry governing it is the same at every occurrence.
     const clarifyDecided = clarifyDecision(entry, policy);
 
     for (const occurrence of entry.occurrences) {
       // Compatible matches are per occurrence: an unscoped rule accepts the package at every
       // occurrence; a `where`-scoped rule only at the occurrences its identity prefixes cover.
-      // First match in TOML order wins per occurrence, package form before license form.
+      // Package form is consulted before license form, each in TOML order; the first match wins.
       const packageRule = judgedPackageRule(
         entry,
         occurrence,
@@ -1540,7 +1562,7 @@ export function evaluate(
           assessment,
           packageRule,
           licenseRule,
-          denyRule,
+          denied,
           clarifyDecided,
           policy,
         ),
@@ -1616,8 +1638,10 @@ function acceptsAgplObligation(rule: string): boolean {
  */
 export function acceptedContainerNotices(
   model: CanonicalDependencies,
+  policy: Policy,
   verdicts: ReadonlyArray<Verdict>,
 ): AcceptedContainerNotice[] {
+  const rankers = branchRankers(policy);
   const verdictByKey = new Map<string, Verdict>();
 
   for (const verdict of verdicts) {
@@ -1631,7 +1655,7 @@ export function acceptedContainerNotices(
       continue;
     }
 
-    const assessment = assessPackage(entry);
+    const assessment = assessPackage(entry, rankers);
 
     if (!carriesAgplObligation(assessment)) {
       continue;
@@ -1677,28 +1701,96 @@ export function acceptedContainerNotices(
   return notices.sort((a, b) => compareCodeUnits(a.purl, b.purl));
 }
 
+/** Ids of every deny rule some package's denial rests on, the cited one or not. */
+function denyingRuleIds(model: CanonicalDependencies, policy: Policy): Set<string> {
+  const rules = exemptionAwareDenyRules(policy);
+  const rankers = branchRankers(policy);
+  const ids = new Set<string>();
+
+  for (const entry of model.packages) {
+    const decision = denyDecision(rules, entry, assessPackage(entry, rankers).expression);
+
+    for (const rule of decision?.rule.contributing ?? []) {
+      ids.add(rule.ruleId);
+    }
+  }
+
+  return ids;
+}
+
 /**
- * Rule ids of compatible/clarify entries that never decided anything -
- * stale-policy hygiene. Compatible usage is read from cited verdict rules;
- * clarify usage comes from annotateFindings' usedClarifyIndices (a clarify rule is "used" when it
- * replaced a finding, even if a higher-precedence compatible rule decided the final verdict).
- * Suppression entries are never reported. Returned in TOML array order: compatible first, then
- * clarify.
+ * Indices of license-form compatible rules that matched an occurrence a package-form rule decided
+ * first: they would have accepted it, so they are not unused.
+ */
+function outrankedLicenseRules(
+  model: CanonicalDependencies,
+  policy: Policy,
+  verdicts: ReadonlyArray<Verdict>,
+): Set<number> {
+  const packageDecided = /^compatible(?::voided)?\[(\d+)\]$/;
+  const decidedBy = new Map(verdicts.map((v) => [`${v.purl}\u0000${v.occurrenceTarget}`, v.rule]));
+  const rankers = branchRankers(policy);
+  const outranked = new Set<number>();
+
+  for (const entry of model.packages) {
+    const expression = assessPackage(entry, rankers).expression;
+
+    if (expression === null) {
+      continue;
+    }
+
+    for (const occurrence of entry.occurrences) {
+      const decided = packageDecided.exec(
+        decidedBy.get(`${entry.purl}\u0000${occurrence.target}`) ?? "",
+      );
+
+      if (decided === null || policy.compatible[Number(decided[1])]?.match !== "package") {
+        continue;
+      }
+
+      const licenseRule = licenseRuleFor(expression, occurrence.target, policy);
+
+      if (licenseRule !== undefined) {
+        outranked.add(licenseRule.index);
+      }
+    }
+  }
+
+  return outranked;
+}
+
+/**
+ * Rule ids of deny/compatible/clarify entries that never decided anything - stale-policy hygiene.
+ * Deny usage counts every rule a denial rests on, cited or not. Compatible usage is read from cited
+ * verdict rules (a license-form compatible rule also counts when a package-form rule outranked it
+ * on an occurrence it matched); clarify usage comes from annotateFindings' usedClarifyIndices (a
+ * clarify rule is "used" when it replaced a finding, even if a higher-precedence compatible rule
+ * decided the final verdict). Suppression entries are never reported. Returned in TOML array order:
+ * deny first, then compatible, then clarify.
  */
 export function unusedRuleIds(
   policy: Policy,
+  model: CanonicalDependencies,
   verdicts: ReadonlyArray<Verdict>,
   usedClarifyIndices: ReadonlySet<number>,
 ): string[] {
   const cited = new Set(verdicts.map((v) => v.rule));
+  const outranked = outrankedLicenseRules(model, policy, verdicts);
   const unused: string[] = [];
 
+  const denying = denyingRuleIds(model, policy);
+
+  policy.deny.forEach((_, index) => {
+    if (!cited.has(`denied[${index}]`) && !denying.has(`denied[${index}]`)) {
+      unused.push(`denied[${index}]`);
+    }
+  });
   policy.compatible.forEach((_, index) => {
     const id = `compatible[${index}]`;
 
     // An entry whose judgment the chains contradicted decided every occurrence it governs - as a
     // failure. Reporting it "unused" beside those failures would contradict them.
-    if (!cited.has(id) && !cited.has(`compatible:voided[${index}]`)) {
+    if (!cited.has(id) && !cited.has(`compatible:voided[${index}]`) && !outranked.has(index)) {
       unused.push(id);
     }
   });

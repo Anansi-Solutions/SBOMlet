@@ -5,11 +5,12 @@
  * official bom-1.6.schema.json: the only required top-level fields are `bomFormat` and
  * `specVersion` - `serialNumber`, `version`, and all of `metadata` (including `timestamp`) are
  * optional, so the no-serial/no-timestamp document emitted here is schema-valid by construction.
- * Components require only `type` + `name`; the expression form of licenseChoice is a single-item
- * tuple whose object is `additionalProperties: false` (only
- * `expression`/`acknowledgement`/`bom-ref` allowed - a stray id/name key invalidates the document);
- * property objects are `{name, value}` where duplicate names are explicitly spec-legal, which
- * carries one `licenses-tool:used-in` property per occurrence cleanly.
+ * Components require only `type` + `name`; licenseChoice is EITHER an array of `{license}` entries
+ * OR a single-item tuple whose object is `additionalProperties: false` (only
+ * `expression`/`acknowledgement`/`bom-ref` allowed), never a mix - so an os-scope token that an
+ * expression cannot name travels as a property instead; property objects are `{name, value}` where
+ * duplicate names are explicitly spec-legal, which carries one `licenses-tool:used-in` property per
+ * occurrence cleanly.
  *
  * Determinism: the document object is built with keys already in the intended emission order and
  * serialized with a single JSON.stringify - deliberately not via sortedKeyReplacer, which would
@@ -29,6 +30,7 @@ import {
   type PackageEntry,
   type Verdict,
 } from "../model/dependencies";
+import { isDevelopmentOccurrence } from "./developmentOccurrence";
 
 type CdxLicense = { expression: string } | { license: { name: string } };
 
@@ -47,58 +49,56 @@ interface CdxComponent {
   properties?: CdxProperty[];
 }
 
-/**
- * #9: os-scope partial unrecognized tokens as named license entries. The tokens arrive deduped +
- * sorted from normalize; each becomes a spec-legal {license:{name}} entry so the machine-readable
- * inventory matches the Markdown render (which surfaces them in the "(+ ...)" suffix). Empty → [].
- */
-function unrecognizedLicenses(pkg: PackageEntry): CdxLicense[] {
-  const tokens = pkg.finding?.unrecognizedTokens;
-
-  if (tokens === undefined || tokens.length === 0) {
-    return [];
-  }
-
-  return tokens.map((name) => ({ license: { name } }));
+/** The finding's unrecognized os-scope tokens, as normalize left them (deduped, sorted). */
+function unrecognizedTokensOf(pkg: PackageEntry): readonly string[] {
+  return pkg.finding?.unrecognizedTokens ?? [];
 }
 
 /**
- * License dispatch: a normalized expression wins and emits the single-item expression tuple
- * carrying only the expression key; otherwise non-empty raw claims emit named entries deduped by
- * raw in first-seen order; otherwise the licenses key is omitted entirely (valid per schema
- * - components require only type + name).
- *
- * #9: os-scope partial unrecognizedTokens are appended as additional named entries in EVERY branch
- * (after the expression tuple, or alongside the imprecise null-expression finding) so the CycloneDX
- * inventory never silently drops what the Markdown render shows.
+ * License dispatch, honoring licenseChoice's XOR (named entries, or exactly one expression entry):
+ * a normalized expression emits the single expression tuple, its unrecognized tokens going to
+ * properties instead; otherwise the raw claims plus unrecognized tokens emit named entries, deduped
+ * in first-seen order; with neither, the key is omitted.
  */
 function licensesOf(pkg: PackageEntry): CdxLicense[] | undefined {
-  const extra = unrecognizedLicenses(pkg);
-
   if (pkg.finding !== undefined && pkg.finding.expression !== null) {
-    return [{ expression: pkg.finding.expression }, ...extra];
+    return [{ expression: pkg.finding.expression }];
   }
 
-  if (pkg.licenseClaims.length > 0) {
-    const raws = [...new Set(pkg.licenseClaims.map((claim) => claim.raw))];
+  const names = new Set<string>([
+    ...pkg.licenseClaims.map((claim) => claim.raw),
+    ...unrecognizedTokensOf(pkg),
+  ]);
 
-    return [...raws.map((raw) => ({ license: { name: raw } })), ...extra];
+  return names.size === 0 ? undefined : [...names].map((name) => ({ license: { name } }));
+}
+
+/**
+ * Unrecognized tokens that {@link licensesOf} could not name because an expression took the
+ * licenses key: one `licenses-tool:unrecognized-license` property per token.
+ */
+function unrecognizedLicenseProperties(pkg: PackageEntry): CdxProperty[] {
+  if (pkg.finding === undefined || pkg.finding.expression === null) {
+    return [];
   }
 
-  // No expression and no raw claims: an imprecise os-partial may still carry surfaced tokens
-  // (expression null, claims empty after connective filtering).
-  return extra.length > 0 ? extra : undefined;
+  return unrecognizedTokensOf(pkg).map((value) => ({
+    name: "licenses-tool:unrecognized-license",
+    value,
+  }));
 }
 
 /**
  * Provenance + verdict properties, deterministic order: one `licenses-tool:used-in` per occurrence
  * (stored order is already target-sorted), then one `licenses-tool:scope:<target>` per occurrence,
- * then - only when verdicts are provided - per matching verdict in given (already sorted) order the
- * `licenses-tool:verdict:` and `licenses-tool:rule:` pair. Empty arrays are omitted, never emitted.
+ * then the unrecognized-license tokens, then - only when verdicts are provided - per matching
+ * verdict in given (already sorted) order the `licenses-tool:verdict:` and `licenses-tool:rule:`
+ * pair. Empty arrays are omitted, never emitted.
  */
 function propertiesOf(
   pkg: PackageEntry,
   verdicts: ReadonlyArray<Verdict> | undefined,
+  developmentContainers: ReadonlySet<string>,
 ): CdxProperty[] | undefined {
   const properties: CdxProperty[] = [];
 
@@ -112,9 +112,11 @@ function propertiesOf(
   for (const occurrence of pkg.occurrences) {
     properties.push({
       name: `licenses-tool:scope:${occurrence.target}`,
-      value: occurrence.isDevDependency ? "dev" : "prod",
+      value: isDevelopmentOccurrence(occurrence, developmentContainers) ? "dev" : "prod",
     });
   }
+
+  properties.push(...unrecognizedLicenseProperties(pkg));
 
   if (verdicts !== undefined) {
     for (const verdict of verdicts) {
@@ -139,9 +141,10 @@ function propertiesOf(
 function toComponent(
   pkg: PackageEntry,
   verdicts: ReadonlyArray<Verdict> | undefined,
+  developmentContainers: ReadonlySet<string>,
 ): CdxComponent {
   const licenses = licensesOf(pkg);
-  const properties = propertiesOf(pkg, verdicts);
+  const properties = propertiesOf(pkg, verdicts, developmentContainers);
 
   // Keys in the intended emission order; optional keys spread in conditionally so absent values
   // OMIT the key rather than emit null.
@@ -159,11 +162,13 @@ function toComponent(
 /**
  * Emit the merged, policy-annotated inventory as deterministic CycloneDX 1.6 JSON. No serialNumber,
  * no timestamp, components purl-sorted (defensive - the emitter never trusts input order), indent
- * 2, exactly one trailing LF.
+ * 2, exactly one trailing LF. Occurrences in `developmentContainers` (the `[[docker.development]]`
+ * containers) export scope `dev`.
  */
 export function renderCyclonedx(
   model: CanonicalDependencies,
   verdicts?: ReadonlyArray<Verdict>,
+  developmentContainers: ReadonlySet<string> = new Set(),
 ): string {
   const sorted = [...model.packages].sort((a, b) => compareCodeUnits(a.purl, b.purl));
   const doc = {
@@ -175,7 +180,7 @@ export function renderCyclonedx(
         components: [{ type: "application", name: "licenses-tool" }],
       },
     },
-    components: sorted.map((pkg) => toComponent(pkg, verdicts)),
+    components: sorted.map((pkg) => toComponent(pkg, verdicts, developmentContainers)),
   };
 
   return JSON.stringify(doc, null, 2) + "\n";

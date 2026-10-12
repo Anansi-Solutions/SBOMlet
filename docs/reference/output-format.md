@@ -93,7 +93,7 @@ Sections appear in this order:
 | Package counts | `**Package counts:**` | always |
 | Problematic licenses | `## Problematic licenses` | policy run only |
 | Copyleft and special notices | `## Copyleft and special notices` | policy run only |
-| Target compatibility | `## Target compatibility` | policy run only, and only when the target lane produced a warn or held-internal row |
+| Target compatibility | `## Target compatibility` | policy run only, and only when the target lane held an occurrence for internal use |
 | Imprecise licenses | `## Imprecise licenses (review / disambiguate)` | any [imprecise](../glossary.md#imprecise-family) package exists |
 | Assessment conflicts | `## Assessment conflicts` | any conflict marker exists |
 | Containers | `## Containers` | always |
@@ -157,7 +157,14 @@ comparisons. The variations:
 
 - A precise finding renders its canonicalized expression, for example
   `Apache-2.0 AND LGPL-3.0-or-later`; a registry declaring redundant noise like
-  `(MIT OR Apache-2.0) AND (Apache-2.0 AND MIT)` renders as `Apache-2.0 AND MIT`.
+  `(MIT OR Apache-2.0) AND (Apache-2.0 AND MIT)` renders as `Apache-2.0 AND MIT`,
+  and a deprecated SPDX id renders in its current spelling (`LGPL-3.0` as
+  `LGPL-3.0-only`, `GPL-2.0+` as `GPL-2.0-or-later`).
+- A finding that `spdx-correct` or a built-in fixup rewrote from a non-SPDX
+  label appends that label, for example
+  `Apache-2.0 (corrected from "Apache License, Version 2.0")`, so the rewrite
+  can be audited against what the package declared. Each label is cut to 80
+  characters with `…`, and at most three are named, followed by `+N more`.
 - An [imprecise](../glossary.md#imprecise-family) finding renders its family
   token plus a marker, for example `BSD (imprecise)` — a family token is not an
   expression and is never canonicalized.
@@ -170,9 +177,10 @@ comparisons. The variations:
   commas, as-declared — there is no finding yet to canonicalize.
 
 The raw, as-declared expression survives unchanged in the
-[enrichment cache](#the-committed-sidecars) and the
-[CycloneDX export](#the-cyclonedx-export); only the rendered License column is
-canonicalized.
+[enrichment cache](#the-committed-sidecars). The
+[CycloneDX export](#the-cyclonedx-export) carries the same canonical expression
+as the License column whenever a finding has one, and lists the raw claims as
+named licenses only when it does not.
 
 Which packages row in these two tables versus a container's own subsection —
 including a package that ships both ways — is placement, normatively defined
@@ -200,8 +208,10 @@ regardless of whether the run used a policy. One row per analyzed container:
 | Classification | `production` or `development` |
 | Packages | how many packages that container's image scan found |
 
-A container classifies `development` when a policy [`[[docker.development]]`](policy.md#docker)
-entry's `source` glob matches its identity; every other container classifies
+A container classifies `development`, a
+[development container](../glossary.md#development-container), when a policy
+[`[[docker.development]]`](policy.md#docker) entry's `source` glob matches its
+identity; every other container classifies
 `production`, the conservative default — a run with no policy, or with no
 `[[docker.development]]` entries, marks every container production. Whether,
 and how, this classification affects a package's verdict is classification,
@@ -238,35 +248,44 @@ classification.
 A self-contained gate report, rendered on a policy run only, before the copyleft
 section so the gate-blocking findings sit near the top.
 
-It opens with a blocking table of every `fail` [verdict](../glossary.md#verdict),
-grouped so one row is one (purl, rule, reason) triple with its targets
-deduplicated and joined. When there are no blocking violations the table is
-replaced by a single line, `✅ No blocking policy violations.` The columns:
+It is a table of every `fail` and `warn` [verdict](../glossary.md#verdict),
+grouped so one row is one (severity, purl, rule, reason) group with its
+targets deduplicated and joined. Fail rows come first, then warn rows; within
+each, rows sort by rule, then package, then targets. A package with a fail at
+one [occurrence](../glossary.md#occurrence) and a warning at another gets one
+row of each, and each row's Used-in cell names only the occurrences its own
+verdicts decided. When there is no `fail`, the line
+`✅ No blocking policy violations.` comes first, followed by the table when
+any warning exists. The columns:
 
 | Column | Contents |
 | --- | --- |
-| Severity | always `fail` in this table |
+| Severity | `fail` (blocks the gate) or `warn` (does not) |
 | Rule | the [policy lane](../glossary.md#policy-lanes) rule that decided the verdict |
 | Name, Ecosystem, Version, License | as in the summary tables |
 | Used in | the group's targets, deduplicated and sorted |
 | Why | per-row [provenance](../glossary.md#dependency-provenance), see below |
 | Reason | the verdict's reason string |
 
-After the table, when any `warn` verdicts exist, one non-blocking line rolls
-them up by coarse category (copyleft, target, unknown, deny, other) with a count
-each, then names the sections that actually show those warnings - so a counted
-warning is never pointed at a section that renders empty. For example
-`_Non-blocking: 12 copyleft warning(s), 3 unknown warning(s) (dev/os-downgraded or suppressed). Detailed under Copyleft and special notices, Imprecise licenses._`
-The named destinations are, in document order: Problematic licenses (a warn on a
-package that also fails), Copyleft and special notices, Target compatibility,
-Imprecise licenses, and the package tables (an os-scope copyleft warn, or an
-unknown/exempted/denied one, that has no dedicated flagged list). The line is
-omitted when there are no warnings.
+After the table, when any `warn` verdicts exist, the
+[non-blocking summary](../glossary.md#non-blocking-summary) rolls them up by
+coarse category (copyleft, target, unknown, source-available, other) with a
+count each. A parenthetical counts the warnings that `[dev_dependencies]` or
+`[os_dependencies]` downgraded from a fail, and is omitted when none were.
+Every counted warning is a `warn` row of the table above, so the line always
+points there. For example:
 
-Whether a package listed here also repeats in the Copyleft section below, and
-where else it keeps a row (its inventory table, its container subsection,
-Assessment conflicts), is the Problematic-over-Copyleft dedup, normatively
-defined in [report-placement.md](./report-placement.md#invariants).
+```text
+_Non-blocking: 12 copyleft warning(s), 3 unknown warning(s) (4 dev-downgraded). Detailed under Problematic licenses._
+```
+
+The line is omitted when there are no warnings. `generate` and `check` also
+print every warning on stderr as a `policy warn:` line.
+
+No other section rows a `fail` or `warn` verdict. Where else a package listed
+here keeps a row (its inventory table, its container subsection, Imprecise
+licenses, Assessment conflicts) is placement, normatively defined in
+[report-placement.md](./report-placement.md#invariants).
 
 This table is also where the AGPL container escalation
 (`default:agpl-container`) always surfaces, scoped to SYSTEM packages — the
@@ -277,64 +296,44 @@ document's.
 
 ### Copyleft and special notices
 
-Rendered on a policy run only. It opens with a one-line summary sentence: _The
-packages listed below carry copyleft or special license obligations in at least
-one non-suppressed workspace._
+Rendered on a policy run only. It holds notices, not verdict rows: a copyleft
+`fail` or `warn` rows in [Problematic licenses](#problematic-licenses) above.
 
-When the policy suppresses any workspaces, the list of them follows. These are
-workspaces themselves distributed under a [copyleft](../glossary.md#copyleft)
+When the policy suppresses any workspaces, the list of them comes first. These
+are workspaces themselves distributed under a [copyleft](../glossary.md#copyleft)
 licence, where in-family copyleft dependencies impose no extra obligation. Each
 renders as `- <path> (<license>) — <description>`, sorted by path. With no
 suppressed workspaces the list is omitted.
 
-Then a table of every package carrying a copyleft or special obligation in at
-least one workspace that policy did not suppress — membership is placement,
-normatively defined in
+Then, when a container system package's AGPL obligation was accepted via
+[`[[compatible]]`](policy.md#compatible), or demoted to `ok` by a declared
+`network = false`, a bullet list of those acceptances, each naming the rule and
+its reason. A package that fails at another occurrence is left out of it; its
+fail is in Problematic licenses.
+
+When neither list renders, the section is the line
+`✅ No copyleft or special notices.` Which packages land in either list is
+placement, normatively defined in
 [report-placement.md](./report-placement.md#narrative-sections-verdict--or-finding-driven-deduped).
-It uses the five summary columns plus a trailing **Why** column:
-
-| Column | Contents |
-| --- | --- |
-| Name, Ecosystem, Version, License | as in the summary tables |
-| Used in | only the flagged, non-suppressed targets |
-| Why | per-row dependency provenance |
-
-The Used-in cell here lists only the flagged targets, not every place the
-package is used. This is how an elected copyleft branch surfaces in the output:
-the leaking workspaces are named.
-
-A container's SYSTEM-package copyleft is routine base-image noise and stays
-out of this table — except AGPL, which fails into Problematic licenses above
-or, when accepted via [`[[compatible]]`](policy.md#compatible), appears here
-instead as a non-blocking special notice. The exact exclusion and dedup
-rules are [report-placement.md](./report-placement.md#invariants)'s.
 
 ### Target compatibility
 
 Rendered only on a policy run whose `[target]` table activates the
-compatibility lane, and only when the lane actually produced a row - an
-absent lane, or one whose every occurrence landed a clean `target:ok` or a
-`target:incompatible`/`target:unknown-pair` fail (routed to
-[Problematic licenses](#problematic-licenses) instead), renders no heading at
-all. See [policy.md#target](policy.md#target) for the profile shape and
+compatibility lane, and only when the lane held at least one occurrence for
+internal use; otherwise no heading renders at all. A `target:boundary`,
+`target:unknown-pair`, or `target:incompatible` verdict, `warn` or `fail`, rows
+in [Problematic licenses](#problematic-licenses) instead. See
+[policy.md#target](policy.md#target) for the profile shape and
 [dependency-classification.md](./dependency-classification.md) for how a
 verdict lands in one of the lane's five outcomes.
 
-Two independent parts, in order, both excluding a purl already in
-Problematic licenses:
-
-- A flagged table, the same five summary columns plus **Why** as the
-  Copyleft table, for every `target:boundary`, `target:unknown-pair`, or
-  dev-downgraded `target:incompatible` (status `warn`) verdict - a package
-  needing review against the declared target.
-- A "held for internal use" bullet list, `- <name>@<version> in <target>
-  - <reason>`, for every `target:internal-use` (status `ok`) verdict: a
-  copyleft or AGPL obligation the usage profile takes out of scope. The
-  distinct rule id and this dedicated list keep the exposure visible - never
-  a silent `ok` - for the day the profile's `distribution` or `network`
-  flag flips back.
-
-Which packages land in either part is placement, normatively defined in
+The section is a "held for internal use" bullet list, `- <name>@<version> in
+<target> - <reason>`, one bullet per `target:internal-use` (status `ok`)
+verdict: a copyleft or AGPL obligation the usage profile takes out of scope.
+The distinct rule id and this dedicated list keep the exposure visible - never
+a silent `ok` - for the day the profile's `distribution` or `network` flag
+flips back. A fail at another occurrence of the same package never removes a
+bullet. Which verdicts land here is placement, normatively defined in
 [report-placement.md](./report-placement.md#narrative-sections-verdict--or-finding-driven-deduped).
 
 ### Assessment conflicts
@@ -365,6 +364,11 @@ diverging docker occurrence and that image's own declared claims:
 | --- | --- |
 | Package | the package name |
 | Claims by image | every docker occurrence, semicolon-joined as `<target>: <claims>`; an occurrence that declared no claim at all reads `(no declared license)` |
+
+This sub-table is not reached from the committed `docker.sbom.json`: `generate-docker-sbom`
+stores one unioned claim set per package, so every image's occurrence carries the same
+claims. Images that disagree are reported when the SBOM is generated, as a `docker:` line on
+stderr ([cli.md](./cli.md#generate-docker-sbom)).
 
 Every comparison this report and the policy gate make — ScanCode vs quick
 check, the cross-image claim sets, and a `[[clarify]]` entry against its
@@ -471,8 +475,11 @@ Each component is a `library` with `type`, `name`, `version`, `purl`, and a
 expression entry, `[{ "expression": "MIT OR Apache-2.0" }]`. When there is no
 expression, the raw [license claims](../glossary.md#license-claim) emit named
 entries, `{ "license": { "name": "Public Domain" } }`. A package with neither
-omits the key. OS-scope unrecognized tokens are appended as additional named
-entries, so the export never drops what the Markdown shows in its `(+ …)` suffix.
+omits the key. CycloneDX 1.6 allows either named entries or one expression entry,
+never both, so OS-scope unrecognized tokens (the Markdown's `(+ …)` suffix) are
+carried by the form that fits: beside an expression, each token becomes a
+`licenses-tool:unrecognized-license` property; without one, each becomes a named
+entry. A name is emitted once even when a token repeats a raw claim.
 
 `properties` carries provenance and verdicts as `{name, value}` pairs. CycloneDX
 allows duplicate property names, which is how one package records several
@@ -482,8 +489,17 @@ occurrences cleanly. The per-component property names:
 | --- | --- | --- |
 | `licenses-tool:used-in` | a target | once per [occurrence](../glossary.md#occurrence) |
 | `licenses-tool:scope:<target>` | `dev` or `prod` | once per occurrence |
+| `licenses-tool:unrecognized-license` | an OS-scope token no SPDX id covers | once per token, only beside an expression |
 | `licenses-tool:verdict:<target>` | the verdict status (`ok`, `warn`, `fail`, `suppressed`) | once per matching verdict, policy runs only |
 | `licenses-tool:rule:<target>` | the [policy lane](../glossary.md#policy-lanes) rule | once per matching verdict, policy runs only |
+
+`licenses-tool:scope:<target>` follows the same partition as the Markdown's
+Production and Development-only sections: an occurrence in a
+[development container](../glossary.md#development-container) is `dev`, a
+system package included, and outside
+containers an occurrence is `dev` when it is a development dependency. It
+describes placement, not gating: a system package in a development container
+reads `dev` here while its verdict still comes from `[os_dependencies]`.
 
 `licenses-tool:rule:<target>` carries whatever rule id decided the verdict,
 unfiltered — a target-compatibility lane verdict (`target:ok`,

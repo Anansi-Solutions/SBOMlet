@@ -32,9 +32,8 @@ import {
   type TargetIdentity,
 } from "../model/dependencies";
 import {
+  documentComponentsOf,
   rootPurlOf,
-  SbomComponent,
-  SbomDocument,
   SbomEvidenceEntry,
   SbomExpressionClaim,
   SbomIdClaim,
@@ -86,6 +85,34 @@ export interface CollectedSbom {
    * occurrence creation and rides through the merge unchanged (no cross-purl reconciliation).
    */
   introductions?: ReadonlyMap<Purl, DependencyIntroduction>;
+}
+
+/** Why the merge could not identify a component; `malformed` is a failed component narrow. */
+export type ComponentSkipReason =
+  | "no-purl"
+  | "no-name"
+  | "no-version"
+  | "blank-name"
+  | "blank-version"
+  | "malformed";
+
+/** What the merge did with the components of one input. */
+export interface SbomIntake {
+  target: TargetIdentity;
+  /** Components that became, or folded into, an inventory entry. */
+  inventoried: number;
+  /** Inventoried components whose purl was minted from group/name/version. */
+  minted: number;
+  /** Components deliberately left out: the document's own root and first-party members. */
+  excluded: number;
+  /** Components the merge could not identify, counted by reason. */
+  skipped: Partial<Record<ComponentSkipReason, number>>;
+}
+
+/** The merged model plus one {@link SbomIntake} per input, in input order. */
+export interface MergeResult {
+  model: CanonicalDependencies;
+  intake: SbomIntake[];
 }
 
 /** Property name cdxgen uses to mark JS dev dependencies. */
@@ -144,8 +171,11 @@ function licenseClaimsOf(component: SbomComponentShape): LicenseClaim[] {
  */
 const MAX_EVIDENCE_DECODED_BYTES = 1024 * 1024;
 
-/** Cap on evidence entries folded per component. */
-const MAX_EVIDENCE_ENTRIES = 8;
+/** Cap on license-text evidence entries folded per component. */
+const MAX_LICENSE_TEXT_EVIDENCE_ENTRIES = 8;
+
+/** Cap on NOTICE evidence entries folded per component, counted apart from license texts. */
+const MAX_NOTICE_EVIDENCE_ENTRIES = 8;
 
 /** Cap on copyright lines per package, matching the extractor's cap. */
 const MAX_COPYRIGHT_LINES = 20;
@@ -171,10 +201,19 @@ export function sanitizeEvidenceText(value: string): string {
   );
 }
 
-/** One decoded evidence file: basename + sanitized utf8 text. */
+/**
+ * NOTICE-file classifier: any basename starting with "notice", case-insensitive - NOTICE,
+ * NOTICE.md, NOTICES, NOTICE-2.0. This mirrors the yarn plugin's own gather semantics (it collects
+ * by ^NOTICE filename prefix and emits the basename verbatim), so a variant can never fall into the
+ * license-text branch - where, for any package with a parseable claim, its body would be dropped
+ * from the legal document entirely (Apache-2.0 §4(d) requires reproducing NOTICE contents).
+ */
+const NOTICE_FILE_RE = /^notice/i;
+
+/** One decoded evidence file: sanitized utf8 text, classified NOTICE or license text. */
 interface EvidenceAttachment {
-  fileName: string;
   text: string;
+  isNotice: boolean;
 }
 
 /**
@@ -193,12 +232,10 @@ function evidenceAttachmentsOf(component: SbomComponentShape): EvidenceAttachmen
   }
 
   const out: EvidenceAttachment[] = [];
+  let licenseTextEntries = 0;
+  let noticeEntries = 0;
 
   for (const raw of licenses) {
-    if (out.length >= MAX_EVIDENCE_ENTRIES) {
-      break;
-    }
-
     // Any deviation from the exact verified shape skips the entry - the same continue every failed
     // step of the old guard chain took.
     const entry = SbomEvidenceEntry(raw);
@@ -209,6 +246,16 @@ function evidenceAttachmentsOf(component: SbomComponentShape): EvidenceAttachmen
 
     const { name, text } = entry.license;
     const fileName = name.startsWith("file: ") ? name.slice("file: ".length) : name;
+    const isNotice = NOTICE_FILE_RE.test(fileName);
+
+    if (
+      isNotice
+        ? noticeEntries >= MAX_NOTICE_EVIDENCE_ENTRIES
+        : licenseTextEntries >= MAX_LICENSE_TEXT_EVIDENCE_ENTRIES
+    ) {
+      continue;
+    }
+
     const content = text.content;
     // Decoded byte count from the base64 length (3 bytes per 4 chars, minus padding) - over-cap
     // entries are skipped without decoding.
@@ -221,21 +268,17 @@ function evidenceAttachmentsOf(component: SbomComponentShape): EvidenceAttachmen
 
     const decoded = Buffer.from(content, "base64").toString("utf8");
 
-    out.push({ fileName, text: sanitizeEvidenceText(decoded) });
+    out.push({ text: sanitizeEvidenceText(decoded), isNotice });
+
+    if (isNotice) {
+      noticeEntries++;
+    } else {
+      licenseTextEntries++;
+    }
   }
 
   return out;
 }
-
-/**
- * NOTICE-file classifier: stem "notice" plus an optional single extension,
- * case-insensitive - NOTICE, NOTICE.txt, NOTICE.md, NOTICE.markdown all
- * classify as NOTICE files. This mirrors the yarn plugin's own gather semantics (it collects by
- * ^NOTICE filename prefix and emits the basename verbatim), so an extension variant can never fall
- * into the license-text branch - where, for any package with a parseable claim, its body would be
- * dropped from the legal document entirely (Apache-2.0 §4(d) requires reproducing NOTICE contents).
- */
-const NOTICE_FILE_RE = /^notice(\.[a-z0-9]+)?$/i;
 
 /**
  * Fold decoded attachments into the per-package attribution: extracted artifacts only - copyright
@@ -261,7 +304,7 @@ function attributionOf(
   let hasVerbatimText = false;
 
   for (const attachment of attachments) {
-    if (NOTICE_FILE_RE.test(attachment.fileName)) {
+    if (attachment.isNotice) {
       noticeTexts.push(attachment.text);
     } else {
       hasVerbatimText = true;
@@ -373,26 +416,15 @@ function hasWorkspaceMarker(component: SbomComponentShape): boolean {
 }
 
 /**
- * Every string purl in components[], for the dual-run prod diff. Same tolerant walk as mergeSboms:
- * malformed entries are skipped, never thrown on.
+ * Every component purl, nested and minted ones included, for the dual-run prod diff. Same tolerant
+ * walk as mergeSboms: malformed entries are skipped, never thrown on.
  */
 export function purlSetOf(sbom: unknown): Set<Purl> {
   const purls = new Set<Purl>();
-  const doc = SbomDocument(sbom);
 
-  if (doc instanceof type.errors) {
-    return purls;
-  }
-
-  for (const raw of doc.components ?? []) {
-    const component = SbomComponent(raw);
-
-    if (component instanceof type.errors) {
-      continue;
-    }
-
-    if (component.purl !== undefined) {
-      purls.add(component.purl);
+  for (const entry of documentComponentsOf(sbom)) {
+    if (entry !== "malformed" && entry.component.purl !== undefined) {
+      purls.add(entry.component.purl);
     }
   }
 
@@ -666,6 +698,12 @@ function assertNotReservedIdentity(input: CollectedSbom): void {
  * bom-ref).
  */
 export function mergeSboms(inputs: ReadonlyArray<CollectedSbom>): CanonicalDependencies {
+  return mergeSbomsWithIntake(inputs).model;
+}
+
+/** {@link mergeSboms}, also reporting per input which components it inventoried or skipped. */
+export function mergeSbomsWithIntake(inputs: ReadonlyArray<CollectedSbom>): MergeResult {
+  const intake: SbomIntake[] = [];
   const byPurl = new Map<string, PackageEntry>();
   // Side accumulator for cross-image claim divergence, populated only from docker inputs; consumed
   // in the finishing pass below and never otherwise exposed.
@@ -678,35 +716,41 @@ export function mergeSboms(inputs: ReadonlyArray<CollectedSbom>): CanonicalDepen
   }
 
   for (const input of inputs) {
-    // A malformed document is skipped, never thrown on.
-    const doc = SbomDocument(input.sbom);
+    const tally: SbomIntake = {
+      target: input.targetIdentity,
+      inventoried: 0,
+      minted: 0,
+      excluded: 0,
+      skipped: {},
+    };
 
-    if (doc instanceof type.errors) {
-      continue;
-    }
-
+    intake.push(tally);
     // The scanned root's purl excludes first-party leaks - read via an independent tolerant narrow,
     // so malformed metadata leaves the root simply absent (every component still walks and emits).
     const rootPurl = rootPurlOf(input.sbom);
-    const components = doc.components;
-
-    if (components === undefined) {
-      continue;
-    }
-
     const isDockerInput = input.targetIdentity.startsWith(DOCKER_IDENTITY_PREFIX);
 
-    for (const raw of components) {
-      const component = SbomComponent(raw);
+    // A malformed document yields no components, never a throw.
+    for (const documentComponent of documentComponentsOf(input.sbom)) {
+      const entry =
+        documentComponent === "malformed"
+          ? "malformed"
+          : packageEntryOf(input, documentComponent.component, rootPurl);
 
-      if (component instanceof type.errors) {
+      if (entry === undefined) {
+        tally.excluded++;
         continue;
       }
 
-      const entry = packageEntryOf(input, component, rootPurl);
-
-      if (entry === undefined) {
+      if (typeof entry === "string") {
+        tally.skipped[entry] = (tally.skipped[entry] ?? 0) + 1;
         continue;
+      }
+
+      tally.inventoried++;
+
+      if (documentComponent !== "malformed" && documentComponent.purlMinted) {
+        tally.minted++;
       }
 
       if (isDockerInput) {
@@ -745,7 +789,7 @@ export function mergeSboms(inputs: ReadonlyArray<CollectedSbom>): CanonicalDepen
     }
   }
 
-  return { packages: [...byPurl.values()].sort(comparePackages) };
+  return { model: { packages: [...byPurl.values()].sort(comparePackages) }, intake };
 }
 
 /**
@@ -768,37 +812,54 @@ function isFirstPartyMember(
 }
 
 /**
- * The required identity triple, or undefined when the component is missing any of purl/name/version
- * OR carries a blank name/version. Malformed entries are skipped, never thrown on - this is the
- * tolerant boundary that keeps the downstream DependencyName/DependencyVersion mints seeing only
- * valid-by-construction values (a blank name/version drops the package rather than crashing).
+ * The required identity triple, or why it is missing: an absent purl/name/version, or a blank
+ * name/version. Malformed entries are skipped, never thrown on - this is the tolerant boundary that
+ * keeps the downstream DependencyName/DependencyVersion mints seeing only valid-by-construction
+ * values (a blank name/version drops the package rather than crashing).
  */
 function requiredIdentityOf(
   component: SbomComponentShape,
-): { purl: Purl; name: string; version: string } | undefined {
+): { purl: Purl; name: string; version: string } | ComponentSkipReason {
   const { purl, name, version } = component;
 
-  if (purl === undefined || name === undefined || version === undefined) {
-    return undefined;
+  if (purl === undefined) {
+    return "no-purl";
   }
 
-  if (name.trim() === "" || version.trim() === "") {
-    return undefined;
+  if (name === undefined) {
+    return "no-name";
+  }
+
+  if (version === undefined) {
+    return "no-version";
+  }
+
+  if (name.trim() === "") {
+    return "blank-name";
+  }
+
+  if (version.trim() === "") {
+    return "blank-version";
   }
 
   return { purl, name, version };
 }
 
-/** One narrowed component → its PackageEntry, or undefined for every skip. */
+/**
+ * One narrowed component → its PackageEntry.
+ *
+ * @returns undefined for a deliberate exclusion (the scanned root, a first-party member), or the
+ * reason the component cannot be identified.
+ */
 function packageEntryOf(
   input: CollectedSbom,
   component: SbomComponentShape,
   rootPurl: Purl | undefined,
-): PackageEntry | undefined {
+): PackageEntry | ComponentSkipReason | undefined {
   const identity = requiredIdentityOf(component);
 
-  if (identity === undefined) {
-    return undefined;
+  if (typeof identity === "string") {
+    return identity;
   }
 
   const { purl, name, version } = identity;

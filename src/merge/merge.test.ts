@@ -19,7 +19,7 @@ import {
   type Purl,
 } from "../../test/brandTestSupport";
 import { assertDependencyGraphCoverage, targetsWithDependencyGraph } from "./dependencyGraphs";
-import { mergeSboms, purlSetOf } from "./merge";
+import { mergeSboms, mergeSbomsWithIntake, purlSetOf } from "./merge";
 
 const TARGET = asTargetIdentity("libraries/iframe-rpc");
 const SYNTHETIC_TARGET = asTargetIdentity("apps/synthetic");
@@ -451,6 +451,15 @@ describe("mergeSboms — field-level tolerance at the boundary (C1, W1, I1)", ()
       asPurl("pkg:npm/a@1.0.0"),
       asPurl("pkg:npm/b@2.0.0"),
     ]);
+  });
+
+  test("purlSetOf with dependencies: null still collects every component purl", () => {
+    const doc = {
+      components: [{ name: "a", version: "1.0.0", purl: asPurl("pkg:npm/a@1.0.0") }],
+      dependencies: null,
+    };
+
+    expect([...purlSetOf(doc)]).toEqual([asPurl("pkg:npm/a@1.0.0")]);
   });
 
   test("purlSetOf keeps a component's purl even when a sibling optional field is wrong-typed", () => {
@@ -1571,6 +1580,97 @@ describe("mergeSboms — evidence parsing into attribution", () => {
     expect(lines).not.toContain("Copyright (c) 2010 Holder 10");
   });
 
+  const evidenceEntry = (fileName: string, text: string): unknown => ({
+    license: {
+      name: `file: ${fileName}`,
+      text: { content: Buffer.from(text, "utf8").toString("base64"), encoding: "base64" },
+    },
+  });
+
+  test("Test 4e: a NOTICE past the license-text cap is still folded, with its copyright line", () => {
+    const licenseEntries = Array.from({ length: 8 }, (_, i) =>
+      evidenceEntry(
+        `licenses/LICENSE-dep${i}.txt`,
+        `MIT License\n\nCopyright (c) 2020 Vendor ${i}\n`,
+      ),
+    );
+    const notice = "Big Bundle\nCopyright 2024 The Big Bundle Authors\n";
+    const doc = {
+      components: [
+        {
+          name: "big-bundle",
+          version: "1.0.0",
+          purl: asPurl("pkg:npm/big-bundle@1.0.0"),
+          licenses: [{ license: { id: "Apache-2.0" } }],
+          evidence: {
+            licenses: [
+              ...licenseEntries,
+              evidenceEntry("licenses/LICENSE-dep8.txt", "Copyright (c) 2021 Ninth Vendor\n"),
+              evidenceEntry("NOTICE", notice),
+            ],
+          },
+        },
+      ],
+    };
+    const attribution = mergeSboms([{ sbom: doc, targetIdentity: EV_TARGET }]).packages[0]
+      ?.attribution;
+
+    expect(attribution?.noticeTexts).toEqual([notice]);
+    expect(attribution?.copyrightLines).toContain("Copyright 2024 The Big Bundle Authors");
+    expect(attribution?.copyrightLines).not.toContain("Copyright (c) 2021 Ninth Vendor");
+  });
+
+  test("NOTICE entries are capped at 8 per component, and license texts never displace them", () => {
+    const notices = Array.from({ length: 12 }, (_, i) =>
+      evidenceEntry(`NOTICE.${i}`, `Notice ${i}\nCopyright 2024 Vendor ${i}\n`),
+    );
+    const licenseTexts = Array.from({ length: 12 }, (_, i) =>
+      evidenceEntry(`LICENSE.${i}`, `MIT License\n\nCopyright (c) 2020 Author ${i}\n`),
+    );
+    const doc = {
+      components: [
+        {
+          name: "many-notices",
+          version: "1.0.0",
+          purl: asPurl("pkg:npm/many-notices@1.0.0"),
+          licenses: [{ license: { id: "Apache-2.0" } }],
+          evidence: { licenses: [...licenseTexts, ...notices] },
+        },
+      ],
+    };
+    const attribution = mergeSboms([{ sbom: doc, targetIdentity: EV_TARGET }]).packages[0]
+      ?.attribution;
+
+    expect(attribution?.noticeTexts?.length).toBe(8);
+    expect(attribution?.noticeTexts?.[0]).toBe("Notice 0\nCopyright 2024 Vendor 0\n");
+  });
+
+  test.each(["NOTICES", "NOTICE-2.0", "NOTICE.md", "NOTICE.txt.txt"])(
+    "%p is a NOTICE file; LICENSE-NOTICE is license text",
+    (fileName) => {
+      const doc = {
+        components: [
+          {
+            name: "notice-names",
+            version: "1.0.0",
+            purl: asPurl("pkg:npm/notice-names@1.0.0"),
+            licenses: [{ license: { id: "Apache-2.0" } }],
+            evidence: {
+              licenses: [
+                evidenceEntry(fileName, "Notice body\n"),
+                evidenceEntry("LICENSE-NOTICE", "License body\n"),
+              ],
+            },
+          },
+        ],
+      };
+      const attribution = mergeSboms([{ sbom: doc, targetIdentity: EV_TARGET }]).packages[0]
+        ?.attribution;
+
+      expect(attribution?.noticeTexts).toEqual(["Notice body\n"]);
+    },
+  );
+
   test("Test 4d: CRLF evidence intake yields LF-only text with no trailing spaces", () => {
     // Pre-fix, \r (0x0D) sat inside the control-character class and became
     // a SPACE: every CRLF-origin "verbatim" text gained a trailing space on
@@ -2371,5 +2471,147 @@ describe("dependency-graph coverage", () => {
     ]);
 
     expect(() => assertDependencyGraphCoverage(model, new Set([GRAPH_TARGET]))).not.toThrow();
+  });
+});
+
+describe("mergeSbomsWithIntake — components the merge cannot identify", () => {
+  const INTAKE_TARGET = asTargetIdentity("svc");
+
+  test("nested component.components[] entries are inventoried", () => {
+    const doc = {
+      components: [
+        {
+          name: "bundle",
+          version: "1.0.0",
+          purl: "pkg:maven/g/bundle@1.0.0",
+          components: [{ name: "inner", version: "3.0.0", purl: "pkg:maven/g/inner@3.0.0" }],
+        },
+      ],
+    };
+    const model = mergeSboms([{ sbom: doc, targetIdentity: INTAKE_TARGET }]);
+
+    expect(model.packages.map((p) => widen(p.purl))).toEqual([
+      "pkg:maven/g/bundle@1.0.0",
+      "pkg:maven/g/inner@3.0.0",
+    ]);
+    expect([...purlSetOf(doc)].map((purl) => widen(purl))).toEqual([
+      "pkg:maven/g/bundle@1.0.0",
+      "pkg:maven/g/inner@3.0.0",
+    ]);
+  });
+
+  test("each skipped component is tallied by reason; the root and first-party are exclusions", () => {
+    const doc = {
+      metadata: { component: { purl: "pkg:npm/root@1.0.0" } },
+      components: [
+        { name: "ok", version: "1.0.0", purl: "pkg:npm/ok@1.0.0" },
+        { name: "root", version: "1.0.0", purl: "pkg:npm/root@1.0.0" },
+        { name: "member", version: "0.0.0-use.local", purl: "pkg:npm/member@0.0.0-use.local" },
+        { group: "com.example", name: "no-purl", version: "1.0.0" },
+        { name: "no-version", purl: "pkg:npm/no-version@1.0.0" },
+        { name: "blank-version", version: " ", purl: "pkg:npm/blank-version@1.0.0" },
+        { name: "numeric-version", version: 2, purl: "pkg:npm/numeric-version@2" },
+      ],
+    };
+    const { model, intake } = mergeSbomsWithIntake([
+      { sbom: doc, targetIdentity: INTAKE_TARGET, firstPartyNames: new Set(["member"]) },
+    ]);
+
+    expect(model.packages.map((p) => widen(p.name))).toEqual(["ok"]);
+    expect(intake).toEqual([
+      {
+        target: INTAKE_TARGET,
+        inventoried: 1,
+        minted: 0,
+        excluded: 2,
+        skipped: { "no-purl": 1, "no-version": 1, "blank-version": 1, malformed: 1 },
+      },
+    ]);
+  });
+
+  describe("purl-less rows of a Maven module's BOM", () => {
+    const MAVEN_ROOT = { component: { purl: "pkg:maven/com.example/svc@1.0.0?type=jar" } };
+    const OJDBC8 = {
+      group: "com.oracle.database.jdbc",
+      name: "ojdbc8",
+      version: "19.3.0.0",
+      licenses: [{ license: { name: "Oracle Free Use Terms and Conditions (FUTC)" } }],
+    };
+    const MINTED_OJDBC8 = "pkg:maven/com.oracle.database.jdbc/ojdbc8@19.3.0.0";
+
+    function intakeOf(sbom: unknown): ReturnType<typeof mergeSbomsWithIntake> {
+      return mergeSbomsWithIntake([{ sbom, targetIdentity: INTAKE_TARGET }]);
+    }
+
+    test("a row with group, name and version is inventoried under a minted purl", () => {
+      const doc = { metadata: MAVEN_ROOT, components: [OJDBC8] };
+      const { model, intake } = intakeOf(doc);
+
+      expect(model.packages.map((p) => [widen(p.purl), widen(p.name)])).toEqual([
+        [MINTED_OJDBC8, "com.oracle.database.jdbc/ojdbc8"],
+      ]);
+      expect(model.packages[0]?.licenseClaims).toEqual([
+        {
+          raw: asRawLicense("Oracle Free Use Terms and Conditions (FUTC)"),
+          kind: "name",
+          source: "generator",
+        },
+      ]);
+      expect(intake).toEqual([
+        { target: INTAKE_TARGET, inventoried: 1, minted: 1, excluded: 0, skipped: {} },
+      ]);
+      expect([...purlSetOf(doc)].map((purl) => widen(purl))).toEqual([MINTED_OJDBC8]);
+    });
+
+    test("a purl that is not a package URL is replaced by the minted one", () => {
+      const doc = { metadata: MAVEN_ROOT, components: [{ ...OJDBC8, purl: "ojdbc8.jar" }] };
+
+      expect(intakeOf(doc).model.packages.map((p) => widen(p.purl))).toEqual([MINTED_OJDBC8]);
+    });
+
+    test("each coordinate is percent-encoded as one purl segment, `:` kept", () => {
+      const doc = {
+        metadata: MAVEN_ROOT,
+        components: [{ group: "com.example", name: "my lib", version: "2.0+local:1" }],
+      };
+
+      expect(intakeOf(doc).model.packages.map((p) => widen(p.purl))).toEqual([
+        "pkg:maven/com.example/my%20lib@2.0%2Blocal:1",
+      ]);
+    });
+
+    test("a row without a usable group is still skipped without a purl", () => {
+      const doc = {
+        metadata: MAVEN_ROOT,
+        components: [
+          { name: "ojdbc8", version: "19.3.0.0" },
+          { ...OJDBC8, group: " " },
+        ],
+      };
+      const { model, intake } = intakeOf(doc);
+
+      expect(model.packages).toEqual([]);
+      expect(intake).toEqual([
+        {
+          target: INTAKE_TARGET,
+          inventoried: 0,
+          minted: 0,
+          excluded: 0,
+          skipped: { "no-purl": 2 },
+        },
+      ]);
+      expect(purlSetOf(doc).size).toBe(0);
+    });
+
+    test("a document whose root is not a Maven module never mints", () => {
+      for (const metadata of [{ component: { purl: "pkg:npm/svc@1.0.0" } }, undefined]) {
+        const doc = { metadata, components: [OJDBC8] };
+        const { model, intake } = intakeOf(doc);
+
+        expect(model.packages).toEqual([]);
+        expect(intake[0]?.skipped).toEqual({ "no-purl": 1 });
+        expect(purlSetOf(doc).size).toBe(0);
+      }
+    });
   });
 });

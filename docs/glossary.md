@@ -81,6 +81,17 @@ and the in-depth scan's. The entry applies only while every source it records
 still reports what was written down, so a later relicence reopens the judgment
 instead of being masked by an old answer.
 
+### development container
+
+A Docker image the policy declares under `[[docker.development]]` because it
+never ships, such as a CI runner or a test harness. Its
+[occurrences](#occurrence) count as
+[development-only](#development-only-and-production): the report lists its
+packages under Development-only dependencies, and an application package baked
+into it gets the [verdict](#verdict) a dev dependency would. A system package
+in it keeps the verdict `[os_dependencies]` gives it. See
+[policy.md](reference/policy.md#dockerdevelopment).
+
 ### development-only and production
 
 A dependency is **development-only** when every place it's used is a dev
@@ -100,13 +111,19 @@ consumer could legitimately choose, that avoids the obligation or the deny
 rule? A finding is copyleft only if every branch is; a finding is denied only
 when it has no electable branch left — an OR is denied only when every
 branch is denied (an electable branch defeats it), while an AND is denied
-when any conjunct is denied (a conjunct can't be elected away). When a
-[target profile](#target-profile) governs the occurrence, election becomes
-target-aware: the preference for a non-copyleft branch can pick a DIFFERENT
-branch than the untargeted walk would, because "non-copyleft" isn't always
-the branch that best serves the declared target — an OR containing a branch
-the target absorbs cleanly is preferred over one that merely avoids
-copyleft in the abstract.
+when any conjunct is denied (a conjunct can't be elected away). The policy
+engine ranks the branches before `elect()` picks: first a branch no deny rule
+covers, then one only an `[[allow_source_available]]` exemption lets through,
+then copyleft, then one a deny rule still in force covers; `elect()` only
+breaks ties within the best rank. So `GPL-3.0-only OR BUSL-1.1` elects the GPL
+branch and is judged as copyleft, `MIT OR BUSL-1.1` elects `MIT`, and with
+`BUSL-1.1` exempted `GPL-3.0-only OR BUSL-1.1` elects `BUSL-1.1` and takes the
+exemption's warning. When a [target profile](#target-profile) governs the
+occurrence, election becomes target-aware: the preference for a non-copyleft
+branch can pick a DIFFERENT branch than the untargeted walk would, because
+"non-copyleft" isn't always the branch that best serves the declared target —
+an OR containing a branch the target absorbs cleanly is preferred over one
+that merely avoids copyleft in the abstract.
 
 ### enrichment and the enrichment cache
 
@@ -185,6 +202,14 @@ its [claims](#license-claim): a precise SPDX expression, an
 The step that combines every [collector](#collector)'s output into one inventory,
 keyed by [purl](#purl). The same package found in two workspaces becomes one
 entry with two [occurrences](#occurrence).
+
+### non-blocking summary
+
+The one-line roll-up of `warn` [verdicts](#verdict) under the Problematic
+licenses table: a count per category, how many a dev or OS downgrade softened
+from a fail, and where they are detailed. Every warning it counts is a `warn`
+row of that table. A warning never fails [the gate](#the-gate-check). See
+[output-format.md](reference/output-format.md#problematic-licenses).
 
 ### normalization
 

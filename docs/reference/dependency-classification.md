@@ -73,8 +73,9 @@ The policy engine decides one verdict per (package × occurrence). Precedence,
 highest to lowest:
 
 1. **Deny** — a `[[deny]]` match, or a shipped source-available default: fail,
-   unless the consumer exempted that exact license via
-   `[[allow_source_available]]` (then a warn instead). Terminal: nothing below
+   unless only defaults the consumer exempted via `[[allow_source_available]]`
+   deny the finding (then a warn instead; an `AND` with a non-exempted
+   denied licence still fails). Terminal: nothing below
    can license a denied finding back in.
 2. **A stale override** — an override's precondition no longer matches what's
    observed: fail.
@@ -122,7 +123,12 @@ highest to lowest:
    governs this occurrence *and* the finding has a parseable, non-imprecise
    expression. The tree below.
 7. **The copyleft lane** — entered only when the elected SPDX branch is
-   copyleft. The tree below.
+   copyleft. The tree below. Election never picks an `OR` branch the deny
+   set covers while another branch remains, so `GPL-3.0-only OR BUSL-1.1`
+   lands here on its GPL branch; the target-compatibility lane above elects
+   from the same remaining branches. A branch only an
+   `[[allow_source_available]]` exemption lets through is preferred over
+   copyleft: the package then takes the exemption's warn at tier 1.
 8. **The imprecise-family lane** — entered when the finding names only a
    family, with no elected expression.
 9. **The unknown lane** — entered when the finding has no expression and isn't
@@ -185,9 +191,10 @@ still never governs `os`-scope packages.
   `[[workspace.copyleft_suppressed]]` entry a target governs is effectively
   dead there (surfaced by `policy/engine/target.ts`'s `suppressionOverlapNotices`,
   never silently).
-- A family-justified workspace copyleft suppression (the occurrence sits under
-  the suppressed path, and the elected copyleft is absorbed by that
-  workspace's own declared license family) → `suppressed`. Checked *before*
+- A justified workspace copyleft suppression (the occurrence sits under the
+  suppressed path, and the workspace's own declared license absorbs every
+  copyleft leaf of the elected expression, read from the OSADL matrix with the
+  workspace license leading — see [policy.md](./policy.md#workspacecopyleft_suppressed)) → `suppressed`. Checked *before*
   the AGPL check below, ahead of every scope — in practice this only matters
   for a workspace-identity occurrence, since a suppression path is authored
   against workspace paths, not `docker:` ones.
@@ -214,8 +221,9 @@ still never governs `os`-scope packages.
 - Scope `os` and the family is the bare `AGPL` token → fail
   `default:agpl-container` (the same escalation as the precise case, and the
   same network=false demotion reconciliation).
-- Family is a could-be-copyleft token (bare `GPL`, `AGPL`, `LGPL`) → warn
-  `default:imprecise-copyleft`.
+- Family is a could-be-copyleft token (bare `GPL`, `AGPL`, `LGPL`, `EUPL`) →
+  `default:imprecise-copyleft`, following `[unknown]` handling exactly like the
+  unknown lane below (a `fail` takes the same os/development downgrades).
 - Any other family (a known-permissive one like bare `BSD`) → warn
   `default:imprecise`.
 
@@ -259,7 +267,7 @@ surfacing it on the finding).
 
 ## Path index (verified end to end)
 
-The same 50 paths as
+The same 51 paths as
 [report-placement.md](./report-placement.md#path-index-verified-end-to-end),
 one row each, stating the Stage-1/Stage-2 outcome (scope, verdict status,
 rule) instead of the markdown destination — the two tables share one slug
@@ -287,11 +295,12 @@ tables are about slug coverage, not about every classification being unique.
 | `app-copyleft-dev-container` | app-ecosystem copyleft in a `[[docker.development]]` container | `app · warn · default:copyleft` |
 | `app-copyleft-workspace-dev` | workspace dev-dependency copyleft | `app · warn · default:copyleft` |
 | `problematic-dedup-keeps-inventory` | workspace prod copyleft, fails | `app · fail · default:copyleft` |
-| `imprecise-copyleft-family-only-imprecise` | bare `GPL` app package | `app · warn · default:imprecise-copyleft` |
+| `fail-and-warn-one-package` | one workspace copyleft package, a production occurrence in one workspace and a dev occurrence in another, `dev_dependencies = "warn"` | `app · fail · default:copyleft` (production workspace) and `app · warn · default:copyleft` (dev workspace) |
+| `imprecise-copyleft-family` | bare `GPL` app package | `app · warn · default:imprecise-copyleft` |
 | `imprecise-permissive-family` | bare `BSD` app package | `app · warn · default:imprecise` |
 | `unknown-license-counted` | [unknown] handling = "warn", no license | `app · warn · default:unknown` |
 | `licenseref-only-unknown` | a package whose only license content is a LicenseRef | `app · warn · default:unknown` |
-| `suppressed-workspace-copyleft` | family-justified `[[workspace.copyleft_suppressed]]` | `app · suppressed · workspace.copyleft_suppressed[0]` |
+| `suppressed-workspace-copyleft` | absorption-justified `[[workspace.copyleft_suppressed]]` | `app · suppressed · workspace.copyleft_suppressed[0]` |
 | `denied-license-terminal` | a `[[deny]]` match with a `[[compatible]]` rule that would otherwise accept it | `app · fail · denied[0]` |
 | `system-package-in-dev-container-counts-dev` | apk permissive package whose only container is dev-marked | `os · ok · default:ok` |
 | `conflict-scancode` | npm workspace package whose in-depth scan answer disagrees with the declared claim, no `[[clarify]]` resolving it | `app · fail · conflict:scancode` |
@@ -314,7 +323,7 @@ tables are about slug coverage, not about every classification being unique.
 | `target-os-agpl-network-true-escalates` | apk AGPL-3.0-only, project target `network = true` | `os · fail · default:agpl-container` |
 | `target-os-agpl-network-false-routine` | same package (precise and imprecise), project target `network = false`, `os_dependencies = "warn"` | `os · warn · default:copyleft` |
 | `target-os-scope-untouched` | apk GPL-2.0-only under any target profile | `os · warn · default:copyleft` (byte-identical reason to the no-target run) |
-| `target-supersedes-suppression` | a governed occurrence matching a family-justified `[[workspace.copyleft_suppressed]]` | `app · ok · target:ok` (never `suppressed`) |
+| `target-supersedes-suppression` | a governed occurrence matching an absorption-justified `[[workspace.copyleft_suppressed]]` | `app · ok · target:ok` (never `suppressed`) |
 | `target-os-agpl-network-false-ignored-notice` | apk AGPL-3.0-only, project target `network = false`, `os_dependencies = "ignore"` | `os · ok · default:copyleft` |
 | `target-held-survives-purl-fail` | one purl, two workspace occurrences: one fails (project MIT/external target), the other holds (a `[[target.workspace]]` MIT/internal override) | `app · fail · target:incompatible` (workspace A) and `app · ok · target:internal-use` (workspace B) |
 | `voided-compatible` | a `[[compatible]]` package entry judged under one introducer, in a workspace where a package it accepts also arrives through another | `app · fail · compatible:voided[0]` — for every package the entry governs there, not only the one that arrives around it |

@@ -419,7 +419,7 @@ description = "apps/reporting is itself distributed under AGPL-3.0-only; its bun
 This only suppresses a workspace, never a container — a container's copyleft
 package needs a
 [`[[compatible]]`](#allow-a-licence-pattern-or-an-exact-package) rule instead.
-Field meaning, the family-aware check, and the path-matching rules are
+Field meaning, the direction-aware absorption check, and the path-matching rules are
 [policy.md#workspacecopyleft_suppressed](../reference/policy.md#workspacecopyleft_suppressed).
 
 ## Deny a source-available licence or a named package
@@ -526,7 +526,8 @@ everyday `generate` and `check` commands never discover Dockerfiles, so an
 
 One of your Dockerfiles builds an image that only runs in CI — a lint
 runner, a test harness — and never ships to a user, but its packages
-currently render under `## Production dependencies`.
+currently render under `## Production dependencies`. Declare it a
+[development container](../glossary.md#development-container):
 
 ```toml
 [[docker.development]]

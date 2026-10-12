@@ -5,7 +5,14 @@
  */
 import { type } from "arktype";
 
-import { asRawLicense, tryAsPurl, type Purl } from "../model/dependencies";
+import {
+  asPurl,
+  asRawLicense,
+  encodePurlSegment,
+  tryAsPurl,
+  type Purl,
+} from "../model/dependencies";
+import { ArrayOrAbsent, recordOf } from "./record";
 
 /**
  * The external SBOM is the parse boundary for its purls and license claims, so both are branded
@@ -35,7 +42,7 @@ export const SbomDocument = type({
    * present-but-malformed) value is simply absent - never a document drop. Per-edge narrowing
    * happens entry-by-entry via SbomDependencyEdge.
    */
-  "dependencies?": "unknown[]",
+  "dependencies?": ArrayOrAbsent,
 });
 
 /**
@@ -67,11 +74,6 @@ export function rootPurlOf(sbom: unknown): Purl | undefined {
 const StringOrAbsent = type("string")
   .or("unknown")
   .pipe((value) => (typeof value === "string" ? value : undefined));
-
-/** An array field that coerces a present-but-non-array value to undefined. */
-const ArrayOrAbsent = type("unknown[]")
-  .or("unknown")
-  .pipe((value) => (Array.isArray(value) ? value : undefined));
 
 /**
  * The evidence field: coerces any non-record value to undefined, and inside a record coerces a
@@ -127,6 +129,121 @@ export const SbomComponent = type({
 });
 
 export type SbomComponentShape = typeof SbomComponent.infer;
+
+/**
+ * Every entry of a components array in document pre-order, descending into each entry's own
+ * `components` array (CycloneDX nests sub-components there). Entries are returned unnarrowed.
+ *
+ * @privateRemarks Iterative and spread-free, so neither a deeply nested nor a very wide crafted
+ * document can overflow the stack.
+ */
+export function componentTreeOf(components: ReadonlyArray<unknown>): unknown[] {
+  const walked: unknown[] = [];
+  const pending = [...components].reverse();
+
+  while (pending.length > 0) {
+    const raw = pending.pop();
+    const children: unknown = recordOf(raw)?.["components"];
+
+    walked.push(raw);
+
+    if (Array.isArray(children)) {
+      const siblings: readonly unknown[] = children;
+
+      for (let index = siblings.length - 1; index >= 0; index--) {
+        pending.push(siblings[index]);
+      }
+    }
+  }
+
+  return walked;
+}
+
+/** One narrowed component of a document, and how its purl was obtained. */
+export interface DocumentComponent {
+  component: SbomComponentShape;
+  /** The document carried no usable purl, so one was minted from group/name/version. */
+  purlMinted: boolean;
+}
+
+/**
+ * Whether the document is a Maven module's BOM, read from its root purl type.
+ *
+ * @privateRemarks
+ * Keyed on document content rather than a tag from the collector, so every reader of the same bytes
+ * (the merge, the prod purl set, the coverage count) reaches the same verdict, and the merge stays
+ * free of collector knowledge.
+ */
+export function isMavenModuleRoot(rootPurl: Purl | undefined): boolean {
+  return rootPurl?.startsWith("pkg:maven/") === true;
+}
+
+/**
+ * The `pkg:maven/<group>/<name>@<version>` purl for a Maven row without one, such as a
+ * `system`-scoped or hand-added jar.
+ *
+ * @returns undefined when any of the three coordinates is absent or blank.
+ * @privateRemarks
+ * No `?type=` qualifier: the packaging of a hand-added row is unknown, so the minted purl never
+ * folds with a plugin-emitted `?type=jar` purl of the same coordinates.
+ */
+function mintedMavenPurlOf(component: SbomComponentShape): Purl | undefined {
+  const { group, name, version } = component;
+
+  if (group === undefined || name === undefined || version === undefined) {
+    return undefined;
+  }
+
+  if ([group, name, version].some((coordinate) => coordinate.trim() === "")) {
+    return undefined;
+  }
+
+  return asPurl(
+    `pkg:maven/${encodePurlSegment(group)}/${encodePurlSegment(name)}@${encodePurlSegment(version)}`,
+  );
+}
+
+/**
+ * Narrow one raw component, minting its purl when the document is a Maven module's BOM (see {@link
+ * isMavenModuleRoot}) and the component carries no usable purl.
+ *
+ * @returns `"malformed"` when the component narrow fails.
+ */
+export function documentComponentOf(
+  raw: unknown,
+  mintsMavenPurls: boolean,
+): DocumentComponent | "malformed" {
+  const component = SbomComponent(raw);
+
+  if (component instanceof type.errors) {
+    return "malformed";
+  }
+
+  const minted =
+    mintsMavenPurls && component.purl === undefined ? mintedMavenPurlOf(component) : undefined;
+
+  return minted === undefined
+    ? { component, purlMinted: false }
+    : { component: { ...component, purl: minted }, purlMinted: true };
+}
+
+/**
+ * Every component of a document, nested ones included, in document pre-order, through {@link
+ * documentComponentOf}. Empty for a malformed document or one without components.
+ */
+export function documentComponentsOf(sbom: unknown): Array<DocumentComponent | "malformed"> {
+  const doc = SbomDocument(sbom);
+
+  if (doc instanceof type.errors) {
+    return [];
+  }
+
+  const mintsMavenPurls = isMavenModuleRoot(rootPurlOf(sbom));
+
+  return componentTreeOf(doc.components ?? []).map((raw) =>
+    documentComponentOf(raw, mintsMavenPurls),
+  );
+}
 
 // The three CycloneDX license claim shapes, tried in this order - expression, then license.id, then
 // license.name (the merge.ts fall-through contract; a mistyped field falls through to the next

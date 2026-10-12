@@ -23,7 +23,12 @@ import {
   type SpdxLicenseLeaf,
 } from "../model/dependencies";
 import { COPYLEFT_IDS } from "../policy/engine/copyleft";
-import { CANONICAL_EXCEPTION_ID, CANONICAL_LICENSE_ID } from "./spdxCasing";
+import {
+  CANONICAL_EXCEPTION_ID,
+  CANONICAL_LICENSE_ID,
+  DEPRECATED_ID_RENAME,
+  DEPRECATED_ID_SUCCESSOR,
+} from "./spdxCasing";
 
 export type ExpressionNode =
   | { license: string; plus?: true; exception?: string }
@@ -36,8 +41,8 @@ type Leaf = Extract<ExpressionNode, { license: string }>;
 
 /** Leaf rendering: `id[+][ WITH exception]` - the one leaf format, never duplicated. */
 function renderLeaf(leaf: Leaf): string {
-  const plus = leaf.plus === true ? "+" : "";
-  const withPart = leaf.exception !== undefined ? ` WITH ${leaf.exception}` : "";
+  const plus = leaf.plus ? "+" : "";
+  const withPart = leaf.exception ? ` WITH ${leaf.exception}` : "";
 
   return `${leaf.license}${plus}${withPart}`;
 }
@@ -103,7 +108,7 @@ export function leafIds(node: ExpressionNode): {
   if ("license" in node) {
     return {
       ids: [node.license],
-      exceptions: node.exception !== undefined ? [node.exception] : [],
+      exceptions: node.exception ? [node.exception] : [],
     };
   }
 
@@ -289,25 +294,37 @@ function buildSet(op: "and" | "or", rawItems: CanonicalNode[]): CanonicalNode {
 }
 
 /**
- * Canonicalizes one parsed node bottom-up: a leaf passes through untouched; a compound FLATTENs any
- * same-operator child into its own item set (`A AND (B AND C)` becomes one AND over {A, B, C})
- * before {@link buildSet} applies dedupe, absorption, and sort. Conservative by construction
- * - FLATTEN, IDEMPOTENCE, ABSORPTION, COMMUTATIVITY only, never distribution or any other
- * cross-operator rewrite.
+ * One leaf with its license id and exception in their registered SPDX casing, and a deprecated id
+ * in its current spelling: `GPL-3.0` reads as `GPL-3.0-only`, `GPL-2.0+` as `GPL-2.0-or-later`,
+ * `GPL-2.0-with-classpath-exception` as `GPL-2.0-only WITH Classpath-exception-2.0`,
+ * `BSD-2-Clause-NetBSD` as `BSD-2-Clause`.
  */
-/** One leaf with its license id and exception normalized to their registered SPDX casing. */
 function canonicalLeafId(leaf: Leaf): Leaf {
-  const license = CANONICAL_LICENSE_ID.get(leaf.license.toLowerCase()) ?? leaf.license;
+  const registered = CANONICAL_LICENSE_ID.get(leaf.license.toLowerCase()) ?? leaf.license;
+  const license = DEPRECATED_ID_RENAME.get(registered) ?? registered;
+  const exception =
+    leaf.exception && (CANONICAL_EXCEPTION_ID.get(leaf.exception.toLowerCase()) ?? leaf.exception);
+  const successor = DEPRECATED_ID_SUCCESSOR.get(license);
 
-  if (leaf.exception === undefined) {
-    return license === leaf.license ? leaf : { ...leaf, license };
+  if (!successor || (exception && successor.exception)) {
+    return exception ? { ...leaf, license, exception } : { ...leaf, license };
   }
 
-  const exception = CANONICAL_EXCEPTION_ID.get(leaf.exception.toLowerCase()) ?? leaf.exception;
+  const current = `${successor.base}-${leaf.plus ? "or-later" : "only"}`;
+  const currentException = exception ?? successor.exception;
 
-  return { ...leaf, license, exception };
+  return currentException
+    ? { license: current, exception: currentException }
+    : { license: current };
 }
 
+/**
+ * Canonicalizes one parsed node bottom-up: a leaf takes its {@link canonicalLeafId} spelling; a
+ * compound FLATTENs any same-operator child into its own item set (`A AND (B AND C)` becomes one
+ * AND over {A, B, C}) before {@link buildSet} applies dedupe, absorption, and sort. Conservative by
+ * construction: FLATTEN, IDEMPOTENCE, ABSORPTION, COMMUTATIVITY only, never distribution or any
+ * other cross-operator rewrite.
+ */
 function canonicalizeNode(node: ExpressionNode): CanonicalNode {
   if ("license" in node) {
     return canonicalLeafId(node);

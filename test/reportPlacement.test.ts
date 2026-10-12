@@ -74,7 +74,8 @@ const PLACEMENT_PATHS = [
   "app-copyleft-dev-container",
   "app-copyleft-workspace-dev",
   "problematic-dedup-keeps-inventory",
-  "imprecise-copyleft-family-only-imprecise",
+  "fail-and-warn-one-package",
+  "imprecise-copyleft-family",
   "imprecise-permissive-family",
   "unknown-license-counted",
   "licenseref-only-unknown",
@@ -383,7 +384,7 @@ function buildScenario(inputs: ReadonlyArray<ScenarioInput>, policyToml: string)
     suppressedWorkspaces: policy.suppressedWorkspaces,
     verdicts,
     developmentContainers,
-    acceptedContainerNotices: acceptedContainerNotices(scoped, verdicts),
+    acceptedContainerNotices: acceptedContainerNotices(scoped, policy, verdicts),
   };
 
   return {
@@ -482,6 +483,25 @@ function containerPartition(block: string): {
         system: block.slice(0, applicationOffset),
         application: block.slice(applicationOffset),
       };
+}
+
+/** The Problematic licenses rows naming package `name`, each split into its trimmed cells. */
+function problematicRows(doc: string, name: string): string[][] {
+  return section(doc, "## Problematic licenses")
+    .split("\n")
+    .filter((line) => line.startsWith("| "))
+    .map((line) =>
+      line
+        .slice(1, -1)
+        .split("|")
+        .map((cell) => cell.trim()),
+    )
+    .filter((cells) => cells[2] === name);
+}
+
+/** True when Problematic licenses carries a row of this severity for package `name`. */
+function hasProblematicRow(doc: string, name: string, severity: "fail" | "warn"): boolean {
+  return problematicRows(doc, name).some((cells) => cells[0] === severity);
 }
 
 const UNKNOWN_WARN = ["[unknown]", 'handling = "warn"', ""].join("\n");
@@ -751,9 +771,9 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
       "default:copyleft",
     );
     assertPlacement(
-      !section(doc, "## Problematic licenses").includes("gpl-tool"),
+      hasProblematicRow(doc, "gpl-tool", "warn"),
       slug,
-      "an os-downgraded warn must not row in Problematic",
+      "an os-downgraded warn rows in Problematic licenses with Severity warn",
     );
     assertPlacement(
       !section(doc, "## Copyleft and special notices").includes("gpl-tool"),
@@ -1138,9 +1158,10 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
       "default:copyleft",
     );
     assertPlacement(
-      section(doc, "## Copyleft and special notices").includes("dev-tool-lib"),
+      hasProblematicRow(doc, "dev-tool-lib", "warn") &&
+        !section(doc, "## Copyleft and special notices").includes("dev-tool-lib"),
       slug,
-      "an app-ecosystem copyleft package in a [[docker.development]] container dev-downgrades to a Copyleft flagged row",
+      "an app-ecosystem copyleft package in a [[docker.development]] container dev-downgrades to a Problematic warn row, not a Copyleft row",
     );
     const devSection = section(doc, "## Development-only dependencies");
 
@@ -1182,19 +1203,15 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
       "default:copyleft",
     );
     assertPlacement(
-      section(doc, "## Copyleft and special notices").includes("doc-tool"),
+      hasProblematicRow(doc, "doc-tool", "warn") &&
+        !section(doc, "## Copyleft and special notices").includes("doc-tool"),
       slug,
-      "a workspace dev-dependency copyleft package dev-downgrades to warn and rows in Copyleft and special notices",
+      "a workspace dev-dependency copyleft package dev-downgrades to warn and rows in Problematic licenses, not in Copyleft and special notices",
     );
     assertPlacement(
       appTableOnly(doc, "## Development-only dependencies").includes("doc-tool"),
       slug,
       "it rows in the Development-only dependencies app table",
-    );
-    assertPlacement(
-      !section(doc, "## Problematic licenses").includes("doc-tool"),
-      slug,
-      "a dev-downgraded warn must not row in Problematic",
     );
   },
 
@@ -1229,7 +1246,7 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
     assertPlacement(
       !section(doc, "## Copyleft and special notices").includes("prod-copyleft"),
       slug,
-      "a purl already in Problematic is deduped out of the Copyleft flagged rows",
+      "a failing package never rows in Copyleft and special notices",
     );
     assertPlacement(
       appTableOnly(doc, "## Production dependencies").includes("prod-copyleft"),
@@ -1238,8 +1255,59 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
     );
   },
 
-  "imprecise-copyleft-family-only-imprecise": () => {
-    const slug = "imprecise-copyleft-family-only-imprecise";
+  "fail-and-warn-one-package": () => {
+    const slug = "fail-and-warn-one-package";
+    const purl = asPurl("pkg:npm/split-copyleft@1.0.0");
+    const component = { name: "split-copyleft", purl, license: "GPL-3.0-only" };
+    const { doc, verdicts, scoped } = buildScenario(
+      [
+        { targetIdentity: WORKSPACE, components: [component] },
+        { targetIdentity: WORKSPACE_B, components: [{ ...component, dev: true }] },
+      ],
+      [UNKNOWN_WARN, "[dev_dependencies]", 'handling = "warn"', ""].join("\n"),
+    );
+
+    assertClassificationOutcome(
+      scoped,
+      verdicts,
+      purl,
+      WORKSPACE,
+      slug,
+      "app",
+      "fail",
+      "default:copyleft",
+    );
+    assertClassificationOutcome(
+      scoped,
+      verdicts,
+      purl,
+      WORKSPACE_B,
+      slug,
+      "app",
+      "warn",
+      "default:copyleft",
+    );
+    const rows = problematicRows(doc, "split-copyleft");
+
+    assertPlacement(
+      rows.length === 2 &&
+        rows[0]?.[0] === "fail" &&
+        rows[0][6] === WORKSPACE &&
+        rows[1]?.[0] === "warn" &&
+        rows[1][6] === WORKSPACE_B,
+      slug,
+      "the package gets a fail row naming only the production workspace, then a warn row naming only the dev workspace",
+    );
+    assertPlacement(
+      appTableOnly(doc, "## Production dependencies").includes("split-copyleft") &&
+        !section(doc, "## Copyleft and special notices").includes("split-copyleft"),
+      slug,
+      "it keeps its Production dependencies row and never rows in Copyleft and special notices",
+    );
+  },
+
+  "imprecise-copyleft-family": () => {
+    const slug = "imprecise-copyleft-family";
     const purl = asPurl("pkg:npm/bare-gpl-lib@1.0.0");
     const { doc, verdicts, scoped } = buildScenario(
       [
@@ -1267,9 +1335,10 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
       'a bare "GPL" app package warns "default:imprecise-copyleft" and rows in Imprecise licenses',
     );
     assertPlacement(
-      !section(doc, "## Copyleft and special notices").includes("bare-gpl-lib"),
+      hasProblematicRow(doc, "bare-gpl-lib", "warn") &&
+        !section(doc, "## Copyleft and special notices").includes("bare-gpl-lib"),
       slug,
-      'an imprecise-copyleft warn never qualifies for a Copyleft flagged row — only the exact "default:copyleft" rule does',
+      "the imprecise-copyleft warn also rows in Problematic licenses, and never in Copyleft and special notices",
     );
   },
 
@@ -1299,13 +1368,13 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
     assertPlacement(
       section(doc, "## Imprecise licenses (review / disambiguate)").includes("bare-bsd-lib"),
       slug,
-      'a bare "BSD" app package warns "default:imprecise" and rows in Imprecise licenses only',
+      'a bare "BSD" app package warns "default:imprecise" and rows in Imprecise licenses',
     );
     assertPlacement(
-      !section(doc, "## Copyleft and special notices").includes("bare-bsd-lib") &&
-        !section(doc, "## Problematic licenses").includes("bare-bsd-lib"),
+      hasProblematicRow(doc, "bare-bsd-lib", "warn") &&
+        !section(doc, "## Copyleft and special notices").includes("bare-bsd-lib"),
       slug,
-      "a known-permissive imprecise family never rows in Copyleft or Problematic",
+      "the warn also rows in Problematic licenses, never in Copyleft and special notices",
     );
   },
 
@@ -1336,6 +1405,11 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
       doc.includes("- Unknown license: 1"),
       slug,
       'a package with no license claim under [unknown] handling = "warn" counts under Unknown license',
+    );
+    assertPlacement(
+      hasProblematicRow(doc, "unknown-lib", "warn"),
+      slug,
+      "its default:unknown warn rows in Problematic licenses",
     );
     assertPlacement(
       appTableOnly(doc, "## Production dependencies").includes("unknown-lib"),
@@ -1384,11 +1458,11 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
       "it still keeps its inventory row in the Production dependencies app table",
     );
     assertPlacement(
-      !section(doc, "## Problematic licenses").includes("licenseref-only-lib") &&
+      hasProblematicRow(doc, "licenseref-only-lib", "warn") &&
         !section(doc, "## Copyleft and special notices").includes("licenseref-only-lib") &&
         !doc.includes("## Imprecise licenses (review / disambiguate)"),
       slug,
-      "an unassessed LicenseRef is a warn under the unknown lane, not a flagged copyleft/imprecise/problematic row — the Problematic/Copyleft sections render their no-findings placeholder and the empty Imprecise section is omitted entirely",
+      "an unassessed LicenseRef is a warn under the unknown lane: a Problematic warn row, never a Copyleft or Imprecise row (the empty Imprecise section is omitted entirely)",
     );
   },
 
@@ -1754,19 +1828,15 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
       "target:incompatible",
     );
     assertPlacement(
-      section(doc, "## Target compatibility").includes("target-dev-downgrade"),
+      hasProblematicRow(doc, "target-dev-downgrade", "warn") &&
+        !doc.includes("## Target compatibility"),
       slug,
-      "a dev-downgraded target:incompatible (warn) rows in the Target compatibility flagged table",
+      "a dev-downgraded target:incompatible (warn) rows in Problematic licenses, and no Target compatibility section renders for it",
     );
     assertPlacement(
       appTableOnly(doc, "## Development-only dependencies").includes("target-dev-downgrade"),
       slug,
       "it also rows in the Development-only dependencies app table",
-    );
-    assertPlacement(
-      !section(doc, "## Problematic licenses").includes("target-dev-downgrade"),
-      slug,
-      "a dev-downgraded warn must not row in Problematic",
     );
   },
 
@@ -1868,9 +1938,10 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
       "target:boundary",
     );
     assertPlacement(
-      section(doc, "## Target compatibility").includes("target-proprietary-boundary"),
+      hasProblematicRow(doc, "target-proprietary-boundary", "warn") &&
+        !doc.includes("## Target compatibility"),
       slug,
-      "weak copyleft under a proprietary target warns target:boundary and rows in the Target compatibility flagged table",
+      "weak copyleft under a proprietary target warns target:boundary and rows in Problematic licenses, not Target compatibility",
     );
     assertPlacement(
       appTableOnly(doc, "## Production dependencies").includes("target-proprietary-boundary"),
@@ -1900,9 +1971,9 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
       "target:unknown-pair",
     );
     assertPlacement(
-      section(warnRun.doc, "## Target compatibility").includes("target-unknown-pair"),
+      hasProblematicRow(warnRun.doc, "target-unknown-pair", "warn"),
       slug,
-      "a matrix-uncovered pair warns target:unknown-pair by default (the D4 residual knob) and rows in the Target compatibility flagged table",
+      "a matrix-uncovered pair warns target:unknown-pair by default and rows in Problematic licenses as a warn",
     );
 
     const failPolicy = [
@@ -1930,9 +2001,9 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
       "target:unknown-pair",
     );
     assertPlacement(
-      section(failRun.doc, "## Problematic licenses").includes("target-unknown-pair"),
+      hasProblematicRow(failRun.doc, "target-unknown-pair", "fail"),
       slug,
-      'unknown_pair = "fail" routes the same residual to Problematic licenses instead',
+      'unknown_pair = "fail" turns the same residual into a Problematic fail row',
     );
   },
 
@@ -2297,10 +2368,14 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
     assertPlacement(
       system.includes("target-os-agpl-false-precise") &&
         system.includes("target-os-agpl-false-imprecise") &&
-        !section(doc, "## Problematic licenses").includes("target-os-agpl-false-precise") &&
+        hasProblematicRow(doc, "target-os-agpl-false-precise", "warn") &&
+        hasProblematicRow(doc, "target-os-agpl-false-imprecise", "warn") &&
+        problematicRows(doc, "target-os-agpl-false-precise").every(
+          (cells) => cells[1] === "default:copyleft",
+        ) &&
         !section(doc, "## Copyleft and special notices").includes("target-os-agpl-false-precise"),
       slug,
-      "the demoted warn rows only in its container's System packages table, exactly like routine non-AGPL system copyleft",
+      "the demoted warn rows in its container's System packages table and as a default:copyleft warn in Problematic licenses, exactly like routine non-AGPL system copyleft",
     );
   },
 
@@ -2335,6 +2410,13 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
       noTargetVerdict.reason === targetVerdictFound.reason,
       slug,
       "a non-AGPL os-scope copyleft package's verdict reason is byte-identical with or without a declared target — only the AGPL-container escalation ever consults the network flag",
+    );
+    assertPlacement(
+      hasProblematicRow(targetRun.doc, "target-os-scope-untouched", "warn") &&
+        section(targetRun.doc, "## Problematic licenses") ===
+          section(noTargetRun.doc, "## Problematic licenses"),
+      slug,
+      "its warn row in Problematic licenses is byte-identical with or without a declared target",
     );
   },
 
@@ -2427,10 +2509,8 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
     );
   },
 
-  // Adversarial gate finding: a held-internal row was silently dropped whenever the same
-  // purl also carried a fail at a DIFFERENT occurrence - the Problematic dedup was purl-wide, not
-  // per-occurrence, so a genuine out-of-scope exposure vanished from the report entirely instead
-  // of staying enumerable per report-placement.md's own held-row invariant.
+  // A held-internal row must survive a fail at a DIFFERENT occurrence of the same purl: dropping
+  // it would make a genuine out-of-scope exposure vanish from the report entirely.
   "target-held-survives-purl-fail": () => {
     const slug = "target-held-survives-purl-fail";
     const purl = asPurl("pkg:npm/target-held-survives-purl-fail@1.0.0");
@@ -2488,7 +2568,7 @@ const SCENARIOS: Record<PlacementPath, () => void> = {
       section(doc, "## Target compatibility").includes("target-held-survives-purl-fail") &&
         section(doc, "## Target compatibility").includes("Held out of scope"),
       slug,
-      "workspace B's held-internal row still rows in Target compatibility's held-for-internal-use list, even though the same purl fails at workspace A - the Problematic dedup must never drop a held row for an unrelated occurrence",
+      "workspace B's held-internal row still rows in Target compatibility's held-for-internal-use list, even though the same purl fails at workspace A - a fail at an unrelated occurrence must never drop a held row",
     );
     assertPlacement(
       appTableOnly(doc, "## Production dependencies").includes("target-held-survives-purl-fail"),

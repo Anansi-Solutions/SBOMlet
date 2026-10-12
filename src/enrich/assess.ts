@@ -166,9 +166,9 @@ interface ScanCounts {
   unsupported: number;
   /**
    * A per-package scan that rejected (timeout, non-zero exit with no usable output, oversized or
-   * malformed output) and was CONTAINED rather than aborting the run - see {@link
-   * ScancodeEnvironmentError} for the fatal class this excludes. Never memoized, so the package is
-   * retried on the next run.
+   * malformed output, scan errors on a legal file or manifest) and was CONTAINED rather than
+   * aborting the run - see {@link ScancodeEnvironmentError} for the fatal class this excludes.
+   * Never memoized, so the package is retried on the next run.
    */
   failed: number;
 }

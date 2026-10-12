@@ -171,7 +171,29 @@ Source: `collectors/registry.ts`, `pipeline/targets.ts`, `pipeline/coverage.ts`
 `bom-ref`. The consumed subset of each component is narrowed by an arktype
 boundary, and a malformed component is skipped rather than thrown on. That is the
 same skip-rather-than-throw handling the tool uses everywhere it reads
-third-party data.
+third-party data. Nested components (a component's own `components` array) are
+walked like top-level ones. In a Maven module's BOM (a `pkg:maven/` root purl),
+a component with a group, name and version but no usable purl, such as a
+`system`-scoped jar, is inventoried under a minted
+`pkg:maven/<group>/<name>@<version>` purl, without a `?type=` qualifier since
+its packaging is unknown.
+
+A skipped component is never silent. The merge counts, per target, the components
+it could not identify (no purl, no name, no version, a blank name or version, or a
+malformed entry), and `buildOutputs` prints one stderr line per affected target
+with the component count the target reported, the number inventoried, and the
+skips by reason:
+
+```text
+warning: svc: counted 2 components, inventoried 1 (1 skipped: 1 without a purl)
+```
+
+The same line reports minted purls, as
+`inventoried 2 (1 purl minted from group/name/version)`, even when nothing was
+skipped.
+
+The document's own root and first-party workspace members are deliberate
+exclusions, not skips. The warning does not change the exit code.
 
 For each surviving component it produces a
 [`PackageEntry`](../glossary.md#package-entry) carrying the purl, name, version,
@@ -333,8 +355,9 @@ It is denied when it cannot elect out of the deny set, so an `X OR MIT` finding
 does not escape a deny on `X` by electing MIT.
 
 Workspace [suppression](../glossary.md#policy-lanes) needs more than a path
-match. The workspace's own license must absorb the copyleft family before
-in-family copyleft inside it stops being flagged; a path alone is never enough.
+match. The workspace's own license must be able to absorb the copyleft licence,
+read directionally from the OSADL compatibility matrix, before copyleft inside
+it stops being flagged; a path alone is never enough.
 
 A would-be default `fail` — copyleft, or unknown when the policy fails on
 unknown — passes through two scope downgrades before it is final. The `os`
@@ -365,7 +388,7 @@ pointer line on a policy run, the package counts, the problematic-licenses
 roll-up, the copyleft section, the imprecise-licenses review section, and finally
 the summary tables split into Production, Development-only, and Docker image
 packages. Each table carries `Name`, `Ecosystem`, `Version`, `License`, and `Used in`;
-the copyleft and problematic tables add a `Why` column carrying per-row
+the problematic table adds a `Why` column carrying per-row
 [provenance](../glossary.md#dependency-provenance) — `direct`, an introducer
 chain like `a → b → c`, or the "—" residual when the source carried no usable
 graph. Every interpolated value routes through an escape against Markdown
@@ -382,13 +405,15 @@ per-occurrence properties — a `used-in` and a `scope` per occurrence, and a
 document serial number and the metadata timestamp so the export is deterministic
 and schema-valid by construction.
 
-A `Verdict` reaches the Markdown in three ways. A `fail` verdict is grouped by
-`(purl, rule, reason)` into one row of the problematic-licenses blocking table,
-with deduped and sorted targets. A `fail` or `warn` verdict whose rule is exactly
-`default:copyleft` also adds the package to the copyleft section, where the
-"Used in" and "Why" cells name only the flagged occurrences. A `warn` verdict
-feeds the non-blocking roll-up; `ok` and `suppressed` verdicts gate nothing and
-appear only in the CycloneDX per-occurrence properties.
+A `Verdict` reaches the Markdown in three ways. A `fail` or `warn` verdict is
+grouped by `(severity, purl, rule, reason)` into one row of the
+problematic-licenses table, fail rows first, where the "Used in" and "Why" cells
+name only that row's occurrences. A `warn` verdict is also counted in the
+non-blocking summary under that table. An `ok` verdict renders only when it
+records a decision a reader must keep seeing: an accepted container AGPL
+obligation in the copyleft section, or a `target:internal-use` hold in the
+target-compatibility section. Every other `ok` verdict, and every `suppressed`
+one, gates nothing and appears only in the CycloneDX per-occurrence properties.
 
 Source: `render/markdown.ts` (`renderMarkdown`, `whyCellOf`,
 `problematicSectionLines`, `escapeCell`), `render/notices.ts`,

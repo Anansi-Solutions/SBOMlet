@@ -22,15 +22,16 @@ before Imprecise, for instance, because that's how
 [output-format.md](../reference/output-format.md) lays the page out. Triage a
 red gate in this order instead:
 
-1. **Problematic licenses** — what's actually failing the build.
+1. **Problematic licenses** — what's failing the build, then the warnings
+   that don't.
 2. **Assessment conflicts** — always a failure too, resolved with a specific
    override.
 3. **Imprecise licenses** — not a failure by itself, but flagged for you to
    pin down.
-4. **Copyleft and special notices** — the obligations you might owe, failing
-   or not.
+4. **Copyleft and special notices** — copyleft decisions already recorded in
+   your policy.
 5. **Target compatibility** — only when you declare a `[target]` profile:
-   what that profile decided short of a failure.
+   what that profile holds out of scope.
 
 Package counts and the Production/Development-only inventory are context for
 the rows above, not findings of their own — see
@@ -38,10 +39,13 @@ the rows above, not findings of their own — see
 
 ### 1. Problematic licenses: what's failing the build
 
-Every row here carries a `fail` verdict; this is why `check` exits non-zero.
-**Rule** names the policy lane that decided it and **Reason** is that lane's
-explanation — read those two first, then **Why** to see how the package got
-in. What to do depends on the rule:
+Every row here carries a `fail` or `warn` verdict, in its **Severity** column.
+The `fail` rows come first, and they are why `check` exits non-zero; the
+`warn` rows below them don't block the gate, and the line under the table
+counts them. **Rule** names the policy lane that decided a row and **Reason**
+is that lane's explanation — read those two first, then **Why** to see how the
+package got in. What to do depends on the rule, and is the same for a `warn`
+row as for a `fail` one, at a lower urgency:
 
 - `denied[N]` — the license or package is on your deny list. Deny is
   terminal: nothing else can un-fail it, so don't reach for `[[compatible]]`.
@@ -83,17 +87,28 @@ in. What to do depends on the rule:
   matrix can — accept it with
   [Accept a package only where you reviewed it](./writing-policy.md#accept-a-package-only-where-you-reviewed-it).
   See [Adopting a target](./writing-policy.md#adopting-a-target).
-- `target:unknown-pair` — no vetted data covers this license pair and you set
-  `[target]` `unknown_pair = "fail"`. It is a residual, not a judgment: pin the
+- `target:unknown-pair` — no vetted data covers this license pair. It is a
+  `warn` by default and a `fail` once you set `[target]`
+  `unknown_pair = "fail"`. It is a residual, not a judgment: pin the
   dependency's license down with
   [Correct a wrongly-detected or imprecise licence](./writing-policy.md#correct-a-wrongly-detected-or-imprecise-licence)
-  if it is imprecise, or accept the package explicitly. On the default `warn`
-  it lands in Target compatibility below instead.
+  if it is imprecise, or accept the package explicitly.
+- `target:boundary` — always a `warn`: weak copyleft under a proprietary
+  target, usable behind a compliant linking boundary and nowhere else. Confirm
+  the boundary and record that you did with
+  [Accept a package only where you reviewed it](./writing-policy.md#accept-a-package-only-where-you-reviewed-it).
 - `conflict:scancode` — this row also appears in Assessment conflicts below;
   resolve it there.
-- `default:unknown` — only shows here once you've set `[unknown]` to `fail`.
-  See
+- `default:unknown` — a `warn` row by default, a `fail` once you've set
+  `[unknown]` to `fail`. See
   [Set how unknown, dev, and OS dependencies are handled](./writing-policy.md#set-how-unknown-dev-and-os-dependencies-are-handled).
+
+A `warn` row whose **Reason** ends in `downgraded to warn` would have failed,
+and `[dev_dependencies]` or `[os_dependencies]` softened it: a
+development-only occurrence, or a base-image package. The routine copyleft of
+a Debian or Alpine base image lands here this way, one row per package; if a
+whole image never ships, see
+[Mark a container development-only](./writing-policy.md#mark-a-container-development-only).
 
 ### 2. Assessment conflicts: the in-depth scan disagrees
 
@@ -113,35 +128,25 @@ precise id with a `[[clarify]]` entry, the same lane as Assessment
 conflicts:
 [Correct a wrongly-detected or imprecise licence](./writing-policy.md#correct-a-wrongly-detected-or-imprecise-licence).
 
-### 4. Copyleft and special notices: the obligation you might owe
+### 4. Copyleft and special notices: decisions already made
 
-Two different things live in this section. Most rows are `warn` copyleft
-findings the policy chose to surface rather than block — read and resolve them
-the same way as a `default:copyleft` failure above. An **accepted-AGPL
-container notice**, by contrast, is the record of a past decision, not a new
-finding: someone already accepted that obligation with `[[compatible]]`.
-There's nothing to do with it.
+This section lists records, not findings; a copyleft warning or failure is a
+row in Problematic licenses above. It names the workspaces your policy
+suppresses copyleft in, and each **accepted-AGPL container notice**: someone
+already accepted that obligation with `[[compatible]]`, or declared
+`network = false`. There's nothing to do with either while the decision
+holds.
 
-### 5. Target compatibility: what the declared profile decided
+### 5. Target compatibility: what the declared profile holds out of scope
 
-This section exists only on a run whose `[target]` profile governs at least
-one occurrence, and only for the outcomes that are not already failing above.
-It has two parts:
-
-- A flagged table, for `target:boundary`, a warning `target:unknown-pair`, and
-  a `target:incompatible` that a development-only occurrence downgraded to a
-  warning. A `target:boundary` row is weak copyleft under a proprietary
-  target: it is usable behind a compliant linking boundary and nowhere else,
-  so confirm the boundary and record that you did with
-  [Accept a package only where you reviewed it](./writing-policy.md#accept-a-package-only-where-you-reviewed-it).
-  The other two are the same fixes as their failing forms above, at a lower
-  volume.
-- A "held for internal use" list, for `target:internal-use`: a copyleft or
-  AGPL obligation your profile's `distribution = "internal"` (or
-  `network = false`) takes out of scope. These pass, and there is nothing to
-  do while the profile holds. Read the list the day you flip either flag —
-  every entry on it becomes a live obligation again. See
-  [The declared profile must be true](./writing-policy.md#the-declared-profile-must-be-true).
+This section exists only on a run whose `[target]` profile holds at least one
+occurrence out of scope. Its "held for internal use" list names each
+`target:internal-use` verdict: a copyleft or AGPL obligation your profile's
+`distribution = "internal"` (or `network = false`) takes out of scope. These
+pass, and there is nothing to do while the profile holds. Read the list the day
+you flip either flag — every entry on it becomes a live obligation again. See
+[The declared profile must be true](./writing-policy.md#the-declared-profile-must-be-true).
+Every other `target:*` finding is a row in Problematic licenses.
 
 ## Counts and inventories
 
@@ -161,8 +166,8 @@ the tool the image never ships:
 
 ## Reading the Why column
 
-Where a **Why** column appears, in Problematic and Copyleft, it answers how a
-package got into the workspaces named in **Used in**:
+The **Why** column of Problematic licenses answers how a package got into the
+workspaces named in **Used in**:
 
 - `direct` — you declared it yourself; drop or swap it there.
 - a chain, for example

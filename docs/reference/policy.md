@@ -41,7 +41,9 @@ Deny sits above everything because a
 [source-available](../glossary.md#source-available) licence legally cannot be
 redistributed in a shipped artifact, so no accept lever may override it. The
 category defaults are floors rather than lanes that match a specific package.
-They set what happens to a verdict that no override touched.
+They set what happens to a verdict that no override touched. A `warn` does not
+fail the gate: the report lists it as a `warn` row under Problematic licenses
+and counts it in the [non-blocking summary](../glossary.md#non-blocking-summary).
 
 The order matters whenever a package could match more than one lane. A
 package denied by `[[deny]]` fails even though a `[[compatible]]` rule would
@@ -135,14 +137,39 @@ elect an acceptable branch. With a deny covering `BUSL-1.1`,
 `MIT OR BUSL-1.1` is not denied, because the package can elect `MIT`; a finding
 whose every branch is denied is. The election runs against the union of all
 licence-mode deny patterns, so listing `BUSL-1.1`, `SSPL-1.0`, and
-`Elastic-2.0` as three entries still denies `BUSL-1.1 OR SSPL-1.0`.
+`Elastic-2.0` as three entries still denies `BUSL-1.1 OR SSPL-1.0`. Such a
+verdict cites the first contributing entry as its rule and names every other
+entry the denial rests on in its reason; none of them is reported unused.
+
+A denied branch is never the one the rest of the policy judges. Election ranks
+each `OR` branch and picks among the best-ranked only: first a branch no deny
+rule covers, then one covered only by a default you exempted in
+[`[[allow_source_available]]`](#allow_source_available), then a copyleft branch,
+then one a deny rule still in force covers. So `GPL-3.0-only OR BUSL-1.1` is
+judged on `GPL-3.0-only` and fails as copyleft, rather than passing on a branch
+the tool itself forbids; with `BUSL-1.1` exempted the same package elects
+`BUSL-1.1` and warns, citing the exemption.
+
+A licence-mode pattern naming a bare id also denies that id under any `WITH`
+exception: an exception only narrows obligations, so
+`BUSL-1.1 WITH Classpath-exception-2.0` is denied by `BUSL-1.1`. The
+`[[compatible]]` licence mode does not read through an exception this way;
+see [`[[compatible]]`](#compatible).
 
 Name mode covers things SPDX does not register. A
 [use-restriction rider](../glossary.md#source-available) like Commons-Clause
-rides alongside another licence (`MIT AND Commons-Clause`) and is not a
-parseable SPDX value, and a licence like RSAL has no registered id at all. Name
-mode matches the package by exact name, so it catches these even on a package
-whose finding is unknown.
+rides alongside another licence (`MIT AND Commons-Clause`) and has no registered
+SPDX id, and a licence like RSAL has no registered id at all. Such a declared
+value is never corrected into the licence it rides on: a value that names Commons
+Clause or a proprietary or commercial marker, or whose correction would drop a
+family or version it states, is an unknown finding, handled by `[unknown]`. An
+exception a value states is attached only when it names exactly one registered
+SPDX exception id; otherwise the value is the imprecise family it names, or
+unknown. Name mode matches
+the package by exact name, so it catches these even on a package whose finding is
+unknown. The compare is exact and case-sensitive (`foo-bar` never matches
+`Foo_Bar`), so an entry that denies no package is reported as an unused entry on
+stderr, like an unused `[[compatible]]` rule.
 
 Deny also sees through an override: if a `[[clarify]]` rewrote a denied
 licence into something benign, deny still fires on the original, pre-override
@@ -162,6 +189,11 @@ review.
 |-------|------|----------|---------|
 | `license` | string | yes | One of the built-in defaults — `BUSL-1.1`, `SSPL-1.0`, `Elastic-2.0`. Any other id is rejected. |
 | `reason` | string (non-empty) | yes | Why this source-available licence is accepted — the audit trail. |
+
+The exemption is decided on the whole expression, not on one licence in it. A
+package still fails when the licences left denied after the exemption deny it:
+with only `BUSL-1.1` exempted, `SSPL-1.0 AND BUSL-1.1` fails on `SSPL-1.0`,
+while `BUSL-1.1` alone, or an `OR` that can elect `BUSL-1.1`, warns.
 
 The exemption is scoped to the defaults only. A licence you deny yourself via
 `[[deny]]` is absolute and is never softened here — an explicit deny still wins.
@@ -243,20 +275,23 @@ fixed list. `comment` carries anything the list cannot.
 
 | Value | Meaning | Proven invalid when |
 |-------|---------|---------------------|
-| `contradictory-claims-recorded` | The sources disagree irreconcilably and the expression is the reading you stand behind. The sanctioned fallback. | never — it becomes unnecessary instead, below |
+| `contradictory-claims-recorded` | The sources disagree irreconcilably and the expression is the reading you stand behind. The sanctioned fallback. | either source reports nothing; otherwise never — it becomes unnecessary instead, below |
 | `declared-more-complete` | The package's own metadata names licences the scan cannot see. | the declared claim no longer names part of the expression |
 | `dual-license-choice` | The package offers a choice of licences that the in-depth scan read as one joined licence; the expression restores the choice it offers, not the branch you took. | the scan's licences are not the recorded choice — nothing was joined — or the declared claim offers none of them |
 | `license-not-found` | No source states a licence; the expression comes from evidence outside detection. | either source now states a licence |
-| `scan-found-additional-content` | The in-depth scan sees further licences that do govern content the package ships. | the expression no longer accounts for what the scan reads |
-| `scan-more-precise` | The in-depth scan resolves an under-specified declared label to the exact licence. | the expression no longer accounts for what the scan reads |
-| `scan-overdetection` | The in-depth scan reports licences from files that do not govern the package. | never — it becomes unnecessary instead, below |
+| `scan-found-additional-content` | The in-depth scan sees further licences that do govern content the package ships. | the scan reports nothing, or the expression no longer accounts for what it reads |
+| `scan-more-precise` | The in-depth scan resolves an under-specified declared label to the exact licence. | the scan reports nothing, or the expression no longer accounts for what it reads |
+| `scan-overdetection` | The in-depth scan reports licences from files that do not govern the package. | the scan reports nothing; otherwise never — it becomes unnecessary instead, below |
 
 Each of these is a claim about what a source reported, so the lane it speaks
 for may not be recorded as `false`. `contradictory-claims-recorded` speaks for
 both lanes, `declared-more-complete` for `registry`, and the three `scan-`
 values for `intensive`; recording `false` there says that source reported
 nothing, which is the opposite of the claim. Leaving a lane out is different
-and stays allowed — `detected` records what you checked. And
+and stays allowed — `detected` records what you checked — but it does not make
+the claim vacuously true: a scan-lane value, or
+`contradictory-claims-recorded`, whose lane reports nothing when the policy
+runs is proven invalid, as in the table. And
 `license-not-found` says no source states a licence, so neither recorded value
 may be one — including a label that names one, such as `MIT License`, which
 the tool resolves to `MIT`. A value that names no licence, such as
@@ -309,8 +344,9 @@ The two files have separate citation spaces. The policy's own entries are
 `clarify[i]`; the imported ones are `clarifications[j]`, numbered within the
 imported file. Every id derived from an entry follows: the citation on an
 accepted verdict, `clarifications:invalid[j]`, the unused-entry warning, and
-the entry a stale-override failure tells you to update. A citation therefore
-names both which file to open and which table in it.
+the entry a stale-override failure tells you to update, and the position a
+validation error names. A citation therefore names both which file to open and
+which table in it.
 
 The entries are combined policy-first, and the first entry matching a package
 decides it. A policy entry naming a package an imported entry also names
@@ -400,6 +436,10 @@ Licence mode allows a whole licence, such as a weak copyleft you have reviewed
 and accepted like `MPL-2.0`. Package mode allows one dependency, a family of
 them, or an explicit bundle of unrelated ones, for when only specific packages'
 obligations have been reviewed rather than a whole licence.
+
+A licence pattern accepts exactly the forms it names: `GPL-2.0-only` does not
+accept `GPL-2.0-only WITH Classpath-exception-2.0`, so list the `WITH` form
+when that is what you reviewed.
 
 ### Versions are required
 
@@ -544,9 +584,12 @@ the reserved element `/` covers every occurrence. No target identity can be
 `/`, since a leading or trailing slash is rejected wherever a path is
 validated, so the token is unambiguous.
 
-Rules are consulted in file order per occurrence, and the first whose match and
-scope both hold decides. A rule that matches no occurrence is reported as an
-unused entry on stderr.
+Per occurrence, package-mode rules are consulted before licence-mode rules,
+wherever they sit in the file: a rule about one package is more specific than a
+rule about a licence. Within each mode the first rule in file order whose match
+and scope both hold decides. A rule that matches no occurrence is reported as
+an unused entry on stderr; a licence rule that matched an occurrence a package
+rule decided first is not unused.
 
 ### Migrating from the previous schema
 
@@ -583,14 +626,24 @@ it starts with `docker:` — a container image is not a workspace, so accept a
 container's copyleft package with a scoped [`[[compatible]]`](#compatible) rule
 instead.
 
-It is also family-aware. A finding is suppressed only when it satisfies the
-workspace `license`, or when every copyleft obligation in it belongs to a family
-the workspace's own licence family absorbs. The GNU family spans AGPL, GPL, and
-LGPL, and a GNU-family workspace also absorbs MPL, so an `AGPL-3.0-only`
-workspace suppresses AGPL, GPL, LGPL, and MPL findings. It does not suppress
-SSPL, CC-BY-SA, or any other out-of-family copyleft, which falls through to the
-normal fail default. The `license` must be a single id because that family check
-has no single identity to compare against for a compound expression.
+It is also direction-aware. A finding is suppressed only when it satisfies the
+workspace `license`, or when the workspace licence can absorb every copyleft
+licence in it. Absorption is read from the
+[OSADL compatibility matrix](../explanation/adr/0025-target-license-compatibility-lane.md),
+with the workspace licence as the leading licence: a `Yes` or `Same` cell
+absorbs, anything else does not. One supplement applies: an `AGPL-3.0-only`
+workspace also absorbs the GPL and LGPL ids the matrix marks
+`Check dependency` and GPLv3 section 13 resolves (`GPL-3.0-only`, the LGPL-2.1
+and LGPL-3.0 ids, and the `-or-later` GPL ids).
+
+So an `AGPL-3.0-only` workspace suppresses AGPL-3.0, GPL-3.0, LGPL, and
+`MPL-2.0` findings, but not `GPL-2.0-only`; an `LGPL-2.1-only` workspace never
+suppresses AGPL or GPL; a `GPL-2.0-only` workspace never suppresses
+`GPL-3.0-only`. A licence the matrix does not cover, as workspace or as finding
+(SSPL, CC-BY-SA, or a deprecated spelling such as `GPL-3.0`), is never absorbed
+and falls through to the normal fail default; write a `[[compatible]]` rule for
+a pairing you have reviewed. The `license` must be a single id because the
+matrix is keyed by one.
 
 ## `[unknown]`
 
@@ -601,6 +654,13 @@ defaults to `warn`.
 | Field | Type | Required | Meaning |
 |-------|------|----------|---------|
 | `handling` | `"warn"` \| `"fail"` | yes (if table present) | `warn` reports unknowns without failing; `fail` treats every unknown as a violation. |
+
+The same knob governs a finding that names only a copyleft family, such as a
+bare `GPL` or the Maven label `GNU General Public License`
+(`default:imprecise-copyleft`): it could carry a copyleft obligation the tool
+cannot pin down, so it warns or fails with the unknowns, and a `fail` takes the
+same dev and OS downgrades. A permissive family such as bare `BSD`
+(`default:imprecise`) stays a warning either way.
 
 Start with `warn` while you burn down the unknown population, then switch to
 `fail` once the inventory is clean. The knob is global; per-ecosystem handling
@@ -639,9 +699,10 @@ application layer installed. Absent table: defaults to `warn`.
 The expected copyleft in a Debian or Alpine base image, such as glibc under LGPL
 or bash and coreutils under GPL, is the operating system the container ships on,
 not code your project authored. Those obligations are satisfied by shipping the
-image, so by default the gate lists the OS packages under their container's own
-System-packages table (see `[docker.development]` below) rather than failing
-your build on every standard base image. This knob has no effect on an
+image, so by default each one is a warning rather than a failure of your build
+on every standard base image: a `warn` row under Problematic licenses, with the
+package listed in its container's own System-packages table (see
+`[docker.development]` below). This knob has no effect on an
 application-ecosystem package the image scan found — npm, pypi, go, and the
 rest — because installing something via an application package manager makes
 it an application dependency wherever it lives; it gates on
@@ -703,9 +764,10 @@ outside the repo.
 
 An optional array of tables marking whole containers as development-only in the
 rendered report. Every analyzed container defaults to production; a container
-whose `docker:<source>` identity matches an entry's `source` glob is instead
-listed under `## Development-only dependencies` and its own `### Container:`
-subsection, rather than under `## Production dependencies`.
+whose `docker:<source>` identity matches an entry's `source` glob is a
+[development container](../glossary.md#development-container), listed under
+`## Development-only dependencies` and its own `### Container:` subsection
+rather than under `## Production dependencies`.
 
 | Field | Type | Required | Meaning |
 |-------|------|----------|---------|

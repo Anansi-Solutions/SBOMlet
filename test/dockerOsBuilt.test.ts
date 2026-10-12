@@ -153,13 +153,16 @@ function makeFailingPullExec(): ExecFn {
  * DIFFERENT license claims per image — a review probe for silent cross-image claim mixing. Every
  * docker call resolves with "[]" (present, digest "").
  */
-function makePerImageExecTool(licenseByImage: Readonly<Record<string, string>>): ExecFn {
+function makePerImageExecTool(
+  licenseByImage: Readonly<Record<string, string | undefined>>,
+): ExecFn {
   return (cmd, args) => {
     invocations.push([cmd, ...args]);
     const outFile = syftOutFile(args);
 
     if (outFile !== undefined) {
       const image = args[args.length - 1] as string;
+      const licenseId = licenseByImage[image];
       const doc = {
         bomFormat: "CycloneDX",
         specVersion: "1.6",
@@ -169,7 +172,7 @@ function makePerImageExecTool(licenseByImage: Readonly<Record<string, string>>):
             name: "shared",
             version: "1.0.0",
             purl: "pkg:npm/shared@1.0.0",
-            licenses: [{ license: { id: licenseByImage[image] } }],
+            ...(licenseId !== undefined ? { licenses: [{ license: { id: licenseId } }] } : {}),
           },
         ],
       };
@@ -384,6 +387,42 @@ describe("collectDockerOsSbom one posture (full contents, generalized digest, pr
     };
 
     expect(licenseOf(docAB)).toBe(licenseOf(docBA));
+  });
+
+  test("runGenerateDockerSbom keeps a claim only one image carries and prints one divergence line for it", async () => {
+    currentExec = makePerImageExecTool({ "local/a-slim": undefined, "local/b-full": "Apache-2.0" });
+    const outDir = mkdtempSync(join(tmpdir(), "licenses-docker-divergence-"));
+    const original = process.stderr.write.bind(process.stderr);
+    let stderr = "";
+
+    process.stderr.write = ((chunk: unknown): boolean => {
+      stderr += String(chunk);
+      return true;
+    }) as typeof process.stderr.write;
+    try {
+      await runGenerateDockerSbom({
+        images: ["local/a-slim", "local/b-full"],
+        dockerSbomPath: "docker.sbom.json",
+        baseDir: outDir,
+      });
+    } finally {
+      process.stderr.write = original;
+    }
+
+    try {
+      const parsed = JSON.parse(readFileSync(join(outDir, "docker.sbom.json"), "utf8")) as {
+        components: { purl: string; licenses?: unknown[] }[];
+      };
+      const divergenceLines = stderr.split("\n").filter((line) => line.includes("differ"));
+
+      expect(parsed.components[0]?.licenses).toEqual([{ license: { id: "Apache-2.0" } }]);
+      expect(divergenceLines).toEqual([
+        "docker: pkg:npm/shared@1.0.0 license claims differ across images: " +
+          "local/a-slim (none); local/b-full (Apache-2.0)",
+      ]);
+    } finally {
+      rmSync(outDir, { recursive: true, force: true });
+    }
   });
 
   // The daemon-free end-to-end write test relocated from the removed

@@ -10,9 +10,9 @@ inputs:
     required: false
     default: check
   policy:
-    description: "Path to the policy file, relative to the repo root. Defaults to .sbomlet.policy.toml (also auto-discovered when present); omit or point elsewhere for a custom path or no gate."
+    description: "Path to the policy file, relative to the repo root. Leave empty (the default) to use .sbomlet.policy.toml when present and run without a policy gate otherwise; a path that does not exist fails the run (exit 3)."
     required: false
-    default: .sbomlet.policy.toml
+    default: ""
   docker:
     description: "Set to any non-empty value to build and scan the repository's Dockerfiles and refresh the committed docker OS SBOM before generating. Needs a Docker daemon; pair with `mode: generate`."
     required: false
@@ -39,7 +39,7 @@ runs:
     # dependency brings in the tool's packages, so there is no separate install
     # step. Inputs flow in through the environment (never template interpolation)
     # and become Task vars: REPO_ROOT — off which the Taskfile derives the
-    # absolute output paths — POLICY, added only when the file exists, and
+    # absolute output paths — POLICY, added whenever the input is set, and
     # DOCKER=1 when the docker input is set.
     - name: Run SBOMlet
       shell: bash
@@ -52,7 +52,7 @@ runs:
         SBOMLET_WS: ${{ github.workspace }}
       run: |
         vars=("REPO_ROOT=$SBOMLET_WS")
-        if [ -n "$SBOMLET_POLICY" ] && [ -f "$SBOMLET_WS/$SBOMLET_POLICY" ]; then
+        if [ -n "$SBOMLET_POLICY" ]; then
           vars+=("POLICY=$SBOMLET_WS/$SBOMLET_POLICY")
         fi
         if [ -n "$SBOMLET_DOCKER" ]; then

@@ -25,7 +25,7 @@ import {
   mavenRootPurlOf,
 } from "../src/collectors/mavenSbom";
 import { collectors } from "../src/collectors/registry";
-import { mergeSboms } from "../src/merge/merge";
+import { mergeSboms, mergeSbomsWithIntake } from "../src/merge/merge";
 import { asAbsolutePath, asPurl, asTargetIdentity } from "../src/model/dependencies";
 import { widen } from "./brandTestSupport";
 import type { Target } from "../src/targets/target";
@@ -904,6 +904,48 @@ describe("collectWithMavenSbom — dual-document composed inventory", () => {
 
     expect(compileLib?.occurrences[0]?.isDevDependency).toBe(false);
     expect(testOnlyLib?.occurrences[0]?.isDevDependency).toBe(true);
+  });
+});
+
+describe("collectWithMavenSbom — dual-document purl-less rows", () => {
+  const OJDBC8 = { group: "com.oracle.database.jdbc", name: "ojdbc8", version: "19.3.0.0" };
+  const H2 = { group: "com.h2database", name: "h2", version: "2.2.224" };
+
+  function withRows(sbom: string, rows: unknown[]): string {
+    const doc = JSON.parse(sbom) as { components: unknown[] };
+
+    return JSON.stringify({ ...doc, components: [...doc.components, ...rows] });
+  }
+
+  test("a row in both docs is inventoried once, prod; a test-only row is dev", async () => {
+    const target = makeDualMavenTarget(
+      withRows(CLEAN_SUPERSET_DEFAULT_SBOM, [OJDBC8]),
+      withRows(CLEAN_SUPERSET_TEST_SBOM, [OJDBC8, H2]),
+    );
+    const result = await collectWithMavenSbom(target, { tempDir: makeOutDir() });
+    const sbom = JSON.parse(readFileSync(result.sbomPath, "utf8")) as {
+      components: Array<Record<string, unknown>>;
+    };
+    const { model, intake } = mergeSbomsWithIntake([
+      { sbom, targetIdentity: target.identity, prodPurlSet: result.prodPurlSet },
+    ]);
+    const devByPurl = Object.fromEntries(
+      model.packages.map((p) => [widen(p.purl), p.occurrences[0]?.isDevDependency]),
+    );
+
+    expect(sbom.components.map((c) => c["name"])).toEqual([
+      "compile-lib",
+      "test-only-lib",
+      "ojdbc8",
+      "h2",
+    ]);
+    expect(devByPurl).toEqual({
+      "pkg:maven/com.example.dual/compile-lib@1.0.0?type=jar": false,
+      "pkg:maven/com.example.dual/test-only-lib@1.0.0?type=jar": true,
+      "pkg:maven/com.oracle.database.jdbc/ojdbc8@19.3.0.0": false,
+      "pkg:maven/com.h2database/h2@2.2.224": true,
+    });
+    expect(intake[0]?.minted).toBe(2);
   });
 });
 

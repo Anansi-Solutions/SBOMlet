@@ -136,20 +136,19 @@ const MALFORMED_ENTRIES_LOCK = `{
 `;
 
 /**
- * Belt-and-braces first-party exclusion: "libb" appears in packages WITHOUT
- * the @workspace: protocol but IS a workspaces[*].name member — it must
- * still never be emitted (plan must_have: bun first-party exclusion lives
- * in the collector).
+ * A workspace member "utils@0.0.1" beside a registry "utils@1.2.3" that bun nests under the
+ * dependent whose range the member does not satisfy. Only the @workspace: entry is first-party.
  */
-const NAME_ONLY_MEMBER_LOCK = `{
+const MEMBER_NAME_COLLISION_LOCK = `{
   "lockfileVersion": 1,
   "workspaces": {
-    "": { "name": "belt-root" },
-    "packages/libb": { "name": "libb", "version": "0.1.0" }
+    "": { "name": "collision-root", "dependencies": { "some-lib": "^1.0.0" } },
+    "packages/utils": { "name": "utils", "version": "0.0.1" }
   },
   "packages": {
-    "libb": ["libb@1.0.0", "", {}, "sha512-iii"],
-    "smol-toml": ["smol-toml@1.6.1", "", {}, "sha512-bbb"]
+    "utils": ["utils@workspace:packages/utils"],
+    "some-lib": ["some-lib@1.0.0", "", { "dependencies": { "utils": "^1.2.0" } }, "sha512-aaa"],
+    "some-lib/utils": ["utils@1.2.3", "", {}, "sha512-bbb"]
   }
 }
 `;
@@ -242,7 +241,7 @@ describe("BUN_COLLECTOR_TOOL", () => {
   test("identity the CLI prints as name@version", () => {
     expect(BUN_COLLECTOR_TOOL).toEqual({
       name: "bun-lock-collector",
-      version: "1",
+      version: "2",
     });
   });
 });
@@ -375,10 +374,14 @@ describe("collectWithBunLock — identity and emission", () => {
     expect(componentNames(components)).toEqual(["array-find-index", "smol-toml", "typescript"]);
   });
 
-  test("workspaces[*].name members are never emitted even without the @workspace: protocol (belt-and-braces)", async () => {
-    const { components } = await scanLock(NAME_ONLY_MEMBER_LOCK);
+  test("a registry package sharing a workspace member's name is emitted; the member is not", async () => {
+    const { components } = await scanLock(MEMBER_NAME_COLLISION_LOCK);
 
-    expect(componentNames(components)).toEqual(["smol-toml"]);
+    expect(components.map((c) => c["purl"])).toEqual([
+      "pkg:npm/some-lib@1.0.0",
+      "pkg:npm/utils@1.2.3",
+    ]);
+    expect(bunThirdPartyEntryCount(MEMBER_NAME_COLLISION_LOCK)).toBe(components.length);
   });
 
   test("malformed individual entries are skipped silently (tolerant walk)", async () => {
@@ -493,7 +496,7 @@ describe("collectWithBunLock — contract and cache key", () => {
     expect(typeof result.cacheKey).toBe("string");
   });
 
-  test("cacheKey reuses computeCacheKey with the locked framing (bun-collector-v1 + bun.lock/package.json)", async () => {
+  test("cacheKey reuses computeCacheKey with the locked framing (bun-collector-v2 + bun.lock/package.json)", async () => {
     const target = makeBunTarget(WORKSPACE_LOCK);
     const result = await collectWithBunLock(target, { tempDir: makeOutDir() });
 
@@ -501,7 +504,7 @@ describe("collectWithBunLock — contract and cache key", () => {
       computeCacheKey(
         target,
         BUN_COLLECTOR_TOOL,
-        ["bun-collector-v1"],
+        ["bun-collector-v2"],
         ["bun.lock", "package.json"],
       ),
     );

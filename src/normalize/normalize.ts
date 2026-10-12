@@ -41,12 +41,68 @@ import {
   renderNode,
   type ExpressionNode,
 } from "./expression";
+import { registeredExceptionNamedBy } from "./statedException";
 
 /**
- * Raw values that must never reach correct(): npm's "UNLICENSED" means proprietary (correct() maps
- * it to public-domain "Unlicense"), and "SEE LICENSE IN <file>" is a pointer, not a license.
+ * Raw values that must never reach correct(): npm's "UNLICENSED" (any spelling) means proprietary
+ * (correct() maps it to public-domain "Unlicense"), "SEE LICENSE IN <file>" is a pointer, not a
+ * license, and a proprietary, commercial, or Commons Clause marker restricts whatever license it
+ * rides on, which correct() would drop. `*`, `?` and `~` hedge a label (`MIT*` is a guess from the
+ * license text), which correct() would accept as the plain id.
  */
-const NEVER_CORRECT = [/^UNLICENSED$/i, /^SEE LICEN[CS]E IN /i];
+const NEVER_CORRECT = [
+  /\bunlicen[cs]ed\b/i,
+  /^see licen[cs]e in /i,
+  /\bproprietary\b/i,
+  /\b(?:non)?commercial\b/i,
+  /\bcommons[\s-]*clause\b/i,
+  /[*?~]/,
+];
+
+/**
+ * A license family a label or SPDX id names, as written in either: `GPLv2`, `GPL-2.0-only`,
+ * `Apache2`, `(MPL 2.0)`. `Lesser`, `Library` and `Affero` spell out the LGPL and AGPL.
+ */
+const FAMILY_NAME =
+  /(?<![a-z])(mit|bsd|apache|mpl|epl|cddl|isc|zlib|eupl|[al]?gpl|lesser|library|affero)(?=v?\d|[^a-z]|$)/gi;
+
+/** Spelled-out GNU family words, keyed to the short family name they stand for. */
+const SPELLED_GNU_FAMILY: ReadonlyMap<string, string> = new Map([
+  ["affero", "agpl"],
+  ["lesser", "lgpl"],
+  ["library", "lgpl"],
+]);
+
+/** A version a label or id states (`v2`, `2.0`, `3-Clause`); a four-digit year is not one. */
+const STATED_VERSION = /\bv?(\d{1,2}(?:\.\d+)*)\b/gi;
+
+/** A grant of later versions: `GPLv2+`, `2.0-or-later`, `v2 or any later version`. */
+const OR_LATER_GRANT = /\w\+|\bor[\s-]+(?:any[\s-]+)?later\b/i;
+
+/** An exception a label attaches: `with Classpath Exception`, `-with-LLVM-exception`, `w/ CPE`. */
+const STATED_EXCEPTION = /\bexceptions?\b|\bwith\b|\bw\//i;
+
+/** The connector that sets a label's exception apart from its license: `with`, `w/`. */
+const EXCEPTION_CONNECTOR = /\bwith\b|\bw\//i;
+
+/**
+ * A hedge saying the text only resembles the license it names, in its suffix or parenthetical form:
+ * `X-like`, `X-style`, `X-Modified`, `X (modified)`, or the words `custom` and `variant`. A hedge
+ * outranks a clause count or version (`BSD-3-Clause-Modified` is the BSD family). A leading
+ * `Modified` is no hedge: "Modified BSD" is a registered name of BSD-3-Clause.
+ */
+const RESEMBLANCE_HEDGE =
+  /[\s-](?:like|style)\b|-modified\b|\(\s*modified\s*\)|\bcustom\b|\bvariant\b/i;
+
+/** Imprecise families a hedged label may resolve to, keyed by short family name. */
+const HEDGEABLE_FAMILY: ReadonlyMap<string, LicenseFamily> = new Map([
+  ["agpl", "AGPL"],
+  ["apache", "Apache"],
+  ["bsd", "BSD"],
+  ["eupl", "EUPL"],
+  ["gpl", "GPL"],
+  ["lgpl", "LGPL"],
+]);
 
 /**
  * Ambiguous license FAMILY labels: a bare family with no clause count or version that spdx-correct
@@ -95,18 +151,13 @@ const AMBIGUOUS_FAMILY: ReadonlyMap<string, LicenseFamily> = new Map([
 ]);
 
 /**
- * Precise label fixups spdx-correct MISSES (correct() returns null) that ARE unambiguously
- * resolvable to a single SPDX id - the "ISC license"/"ISC License" suffix false-negative that
- * dropped pexpect to unknown (bare "ISC"
- * already parses). Keyed by case-folded trimmed raw. Kept tiny and reviewable;
- * adding a family-ambiguous label here would re-introduce a false guess, so only unambiguous
- * single-id labels belong.
+ * Labels that name one SPDX expression exactly but that spdx-correct cannot resolve, keyed by the
+ * case-folded trimmed label: `ISC license` (correct() returns null) and MySQL's Universal FOSS
+ * exception label (correct() drops its version and exception). Alias resolution belongs upstream in
+ * spdx-correct: a label it already resolves never belongs here, nor does a family-ambiguous one.
  */
 const PRECISE_LABEL_FIXUP: ReadonlyMap<string, string> = new Map([
   ["isc license", "ISC"],
-  // MySQL's standard license label: it states BOTH the version (v2) and the exception, and each has
-  // an exact SPDX spelling - correct() instead resolved the label to GPL-3.0-or-later,
-  // contradicting the stated v2 and dropping the exception clause.
   [
     "the gnu general public license, v2 with universal foss exception, v1.0",
     "GPL-2.0-only WITH Universal-FOSS-exception-1.0",
@@ -207,6 +258,107 @@ function isCommaLicenseList(value: string): boolean {
   });
 }
 
+/** The short family names `text` states: `MIT/GPLv2` states mit and gpl. */
+function statedFamilies(text: string): ReadonlySet<string> {
+  return new Set(
+    Array.from(text.matchAll(FAMILY_NAME), ([, name = ""]) => {
+      const short = name.toLowerCase();
+
+      return SPELLED_GNU_FAMILY.get(short) ?? short;
+    }),
+  );
+}
+
+/**
+ * The terms a label or SPDX expression states about its license: family names, versions with
+ * trailing `.0` dropped, and an or-later grant. `GPLv2+` states gpl, 2, or-later.
+ */
+function statedTerms(text: string): ReadonlySet<string> {
+  const unglued = text.replace(FAMILY_NAME, "$1 ");
+  const versions = Array.from(
+    unglued.matchAll(STATED_VERSION),
+    ([, version = ""]) => `v${version.replace(/(?:\.0)+$/, "")}`,
+  );
+  const orLater = OR_LATER_GRANT.test(text) ? ["or-later"] : [];
+
+  return new Set([...statedFamilies(text), ...versions, ...orLater]);
+}
+
+/**
+ * True when `corrected` keeps every term `raw` states, so the correction respelled the label
+ * (`Modified BSD License` to BSD-3-Clause) without changing it. A dropped family (`MIT/GPL` to
+ * GPL-3.0-or-later), version (`Eclipse Public License 2.0` to EPL-1.0), or or-later grant fails.
+ */
+function keepsStatedTerms(raw: string, corrected: string): boolean {
+  const kept = statedTerms(corrected);
+
+  return [...statedTerms(raw)].every((term) => kept.has(term));
+}
+
+/** A hedged label is the one imprecise family it names (`BSD-like`), else unknown (`MIT-like`). */
+function hedgedResult(raw: string): NormalizeResult {
+  const [family, ...others] = statedFamilies(raw);
+  const imprecise =
+    others.length === 0 && family !== undefined ? HEDGEABLE_FAMILY.get(family) : undefined;
+
+  return imprecise === undefined
+    ? { expression: null, source: "generator" }
+    : { expression: null, source: "generator", imprecise: true, impreciseFamily: imprecise };
+}
+
+/**
+ * The correction of a label that states an exception: the license spdx-correct reads from it, which
+ * must keep the family, version and or-later grant stated before the `with`, `WITH` the one
+ * registered exception id the words after it name. `GPLv2 with Classpath Exception` is
+ * `GPL-2.0-only WITH Classpath-exception-2.0`: the `-only` or `-or-later` is spdx-correct's
+ * reading, never added here. An exception naming no single registered id is the hedged family.
+ */
+function correctedWithStatedException(raw: string, corrected: string): NormalizeResult {
+  const connector = EXCEPTION_CONNECTOR.exec(raw);
+  const licensePart = connector === null ? raw : raw.slice(0, connector.index);
+  const exceptionPart = connector === null ? "" : raw.slice(connector.index + connector[0].length);
+  const license = singleLicense(corrected);
+
+  if (license === undefined || !keepsStatedTerms(licensePart, renderNode(license))) {
+    return { expression: null, source: "generator" }; // unknown
+  }
+
+  const exception = registeredExceptionNamedBy(exceptionPart);
+
+  if (exception === undefined) {
+    return hedgedResult(raw);
+  }
+
+  const expression = renderNode({ ...license, exception });
+
+  try {
+    parse(expression);
+  } catch {
+    return { expression: null, source: "generator" }; // unknown
+  }
+
+  return keepsStatedTerms(raw, expression)
+    ? { expression: canonicalizeExpression(asRawLicense(expression)), source: "corrected" }
+    : { expression: null, source: "generator" };
+}
+
+/** The one license `expression` names, without any exception; undefined for a compound one. */
+function singleLicense(expression: string): { license: string; plus?: true } | undefined {
+  let node: ExpressionNode;
+
+  try {
+    node = parse(canonicalizeExpression(asRawLicense(expression))) as ExpressionNode;
+  } catch {
+    return undefined;
+  }
+
+  if (!("license" in node)) {
+    return undefined;
+  }
+
+  return node.plus ? { license: node.license, plus: true } : { license: node.license };
+}
+
 /**
  * Result of normalizing one raw license string. An imprecise result carries `imprecise: true` +
  * `impreciseFamily` with `expression` null: an ambiguous family label is present-but-imprecise,
@@ -221,8 +373,10 @@ export interface NormalizeResult {
 
 /**
  * Normalize one raw license string: exact parse first, an imprecise-family intercept, a
- * precise-label fixup for the cases correct() misses, then
- * a guarded spdx-correct fixup, else unknown. Comma lists are never correctable;
+ * precise-label fixup for the cases correct() misses, then a guarded spdx-correct fixup, else
+ * unknown. Comma lists, riders, proprietary markers, and corrections that drop a family, version,
+ * or or-later grant the label states are never accepted; a stated exception is kept only as the one
+ * registered exception id it names; a hedged family label (`BSD-like`) is that imprecise family.
  * `[[clarify]]` is the escape hatch.
  *
  * Every non-null result is CANONICAL: the resolved text flows through {@link
@@ -233,7 +387,7 @@ export interface NormalizeResult {
 export function normalizeRaw(raw: RawLicense): NormalizeResult {
   const trimmed = raw.trim();
 
-  if (trimmed === "" || NEVER_CORRECT.some((re) => re.test(trimmed))) {
+  if (trimmed === "") {
     return { expression: null, source: "generator" }; // unknown
   }
 
@@ -267,21 +421,28 @@ export function normalizeRaw(raw: RawLicense): NormalizeResult {
 
   // Debian/DEP-5 copyright shorthands → canonical SPDX. MUST run BEFORE correct(): correct() either
   // drops these to unknown or mis-guesses them (e.g. "GPL-2+" → "GPL-2.0-only", dropping the
-  // or-later). Exact-token only,
-  // case-folded; bare GPL/LGPL/AGPL already returned above via AMBIGUOUS_FAMILY.
+  // or-later). Exact-token, case-folded; bare GPL/LGPL/AGPL returned above via AMBIGUOUS_FAMILY.
   const debian = DEBIAN_SHORTHAND.get(folded);
 
   if (debian !== undefined) {
     return { expression: canonicalizeExpression(asRawLicense(debian)), source: "corrected" };
   }
 
-  if (isCommaLicenseList(trimmed)) {
+  if (NEVER_CORRECT.some((re) => re.test(trimmed)) || isCommaLicenseList(trimmed)) {
     return { expression: null, source: "generator" }; // unknown
+  }
+
+  if (RESEMBLANCE_HEDGE.test(trimmed)) {
+    return hedgedResult(trimmed);
   }
 
   const fixed = correct(trimmed); // never throws on non-empty input
 
-  if (fixed !== null) {
+  if (fixed !== null && STATED_EXCEPTION.test(trimmed)) {
+    return correctedWithStatedException(trimmed, fixed);
+  }
+
+  if (fixed !== null && keepsStatedTerms(trimmed, fixed)) {
     try {
       parse(fixed); // belt-and-braces: corrected output must parse
       return { expression: canonicalizeExpression(asRawLicense(fixed)), source: "corrected" };
@@ -362,7 +523,7 @@ function findingFromClaims(
     if (scope === "os" && (hasNormalizable || hasImprecise)) {
       const surfaced = [...new Set(unknownTokens)].sort(compareCodeUnits);
 
-      return { ...combineKnown(results), unrecognizedTokens: surfaced };
+      return { ...combineKnown(results, distinct), unrecognizedTokens: surfaced };
     }
 
     // Every non-os scope (and os with zero known members): conservative all-or-nothing - a
@@ -371,7 +532,7 @@ function findingFromClaims(
     return UNKNOWN_FINDING;
   }
 
-  return combineKnown(results);
+  return combineKnown(results, distinct);
 }
 
 /**
@@ -391,15 +552,20 @@ function findingFromClaims(
  *      could-be-copyleft review lane is reached order-independently.
  *   3. Else AND-combine the (all-permissive) precise claims.
  */
-function combineKnown(results: ReadonlyArray<NormalizeResult>): LicenseFinding {
+function combineKnown(
+  results: ReadonlyArray<NormalizeResult>,
+  claims: ReadonlyArray<LicenseClaim>,
+): LicenseFinding {
   const preciseExpressions = results
     .map((r) => r.expression)
     .filter((expression): expression is CanonicalLicense => expression !== null);
-  const anyCorrected = results.some((r) => r.expression !== null && r.source === "corrected");
+  const correctedFrom = claims
+    .filter((_, i) => results[i]!.expression !== null && results[i]!.source === "corrected")
+    .map((c) => asRawLicense(c.raw.trim()));
   const hasPreciseCopyleft = preciseExpressions.some(expressionIsCopyleft);
 
   if (hasPreciseCopyleft) {
-    return combinePrecise(preciseExpressions, anyCorrected);
+    return combinePrecise(preciseExpressions, correctedFrom);
   }
 
   const impreciseFamily = electImpreciseFamily(results);
@@ -414,7 +580,7 @@ function combineKnown(results: ReadonlyArray<NormalizeResult>): LicenseFinding {
     };
   }
 
-  return combinePrecise(preciseExpressions, anyCorrected);
+  return combinePrecise(preciseExpressions, correctedFrom);
 }
 
 /** True if a parseable SPDX expression elects a copyleft branch (defensive). */
@@ -462,7 +628,7 @@ function electedOf(node: ExpressionNode): CanonicalLicense {
 /** AND-combine the precise (already-canonical) claim expressions into one finding. */
 function combinePrecise(
   preciseExpressions: ReadonlyArray<CanonicalLicense>,
-  anyCorrected: boolean,
+  correctedFrom: ReadonlyArray<RawLicense>,
 ): LicenseFinding {
   // Dedupe expressions: an spdx-id claim and a name claim may normalize to the same expression.
   const expressions = [...new Set(preciseExpressions)];
@@ -492,8 +658,11 @@ function combinePrecise(
   return {
     expression,
     elected: electedOf(canonicalNode),
-    source: anyCorrected ? "corrected" : "generator",
-    confidence: anyCorrected ? "corrected" : "exact",
+    source: correctedFrom.length > 0 ? "corrected" : "generator",
+    confidence: correctedFrom.length > 0 ? "corrected" : "exact",
+    ...(correctedFrom.length > 0 && {
+      correctedFrom: [...new Set(correctedFrom)].sort(compareCodeUnits),
+    }),
   };
 }
 
@@ -658,8 +827,8 @@ function signalMatches(signal: ReadonlyArray<RawLicense>, recorded: RawLicense):
  * counts as a divergence) OR their raw folds are equal (so a non-SPDX registry label that
  * canonicalizeExpression passes through verbatim, `" bsd "` against `"BSD"`, still reconciles). The
  * comparison is `===` on {@link CanonicalLicense} values - never string-operated: canonicalization
- * normalizes id casing as well as structure, so a canonical form is genuinely
- * case-invariant. The fold stays on the RAW inputs, where case/whitespace folding belongs.
+ * normalizes id casing as well as structure, so a canonical form is genuinely case-invariant. The
+ * fold stays on the RAW inputs, where case/whitespace folding belongs.
  */
 function signalMatchesCanonical(signal: ReadonlyArray<RawLicense>, recorded: RawLicense): boolean {
   const wantCanonical = canonicalizeExpression(recorded);
@@ -1127,10 +1296,9 @@ function assessPrecise(
 
 /**
  * The in-depth answer is IMPRECISE (a bare family): it never upgrades anything. A precise base
- * whose leaves are out-of-family is a
- * conflict (fail closed - a disagreement in any direction is surfaced);
- * everything else stands unchanged, including an out-of-family imprecise base (nothing precise on
- * either side to weigh).
+ * whose leaves are out-of-family is a conflict (fail closed - a disagreement in any direction is
+ * surfaced); everything else stands unchanged, including an out-of-family imprecise base (nothing
+ * precise on either side to weigh).
  */
 function assessImprecise(family: LicenseFamily, base: LicenseFinding): LicenseFinding {
   if (base.expression !== null && !expressionInFamily(base.expression, family)) {

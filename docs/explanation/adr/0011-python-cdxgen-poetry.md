@@ -66,17 +66,25 @@ production.
 
 Names are matched after PEP 503 normalization (lowercase, `-_.` collapsed to a
 hyphen), the transform cdxgen applies before emitting a `pkg:pypi/<name>` purl;
-against the dogfood all 114 lockfile names map one-to-one. An absent or
-malformed `groups` value defaults to `["main"]`, honouring the
+against the dogfood all 114 lockfile names map one-to-one. The version is
+percent-encoded the way cdxgen's purl library encodes it, so a PEP 440 local
+version `2.1.0+cpu` matches the component purl `pkg:pypi/torch@2.1.0%2Bcpu`.
+An absent or malformed `groups` value defaults to `["main"]`, honouring the
 conservative-on-uncertainty driver.
+
+An empty or mismatched production set would classify every package of the
+target as development-only, so neither is left silent: a `poetry.lock` that
+is not TOML stops the scan with an error naming the file, and a production set
+with purls that match no scanned component prints a `warning:` line on stderr
+(a stronger wording when none match).
 
 ## Consequences
 
 - **Good:** poetry dev-group dependencies now classify dev-only; the
   `jinja2-ansible-filters` exception was deleted, the dev-scope rule owns it.
   Twelve poetry dev-group packages moved from production to development-only
-  in the dogfood. The recovery is one pure function over untrusted text — it
-  returns an empty set on garbage — and adds no dependency.
+  in the dogfood. The recovery is one pure function over the lockfile text
+  and adds no dependency.
 - **Bad / cost:** the Python dev/prod signal now depends on the shape of
   `poetry.lock` rather than the generator's output, so a lockfile format
   change needs a matching update.

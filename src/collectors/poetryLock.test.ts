@@ -14,14 +14,21 @@
  * - package in both "main" and "dev" → in the prod set (prod-wins);
  * - a name needing PEP-503 normalization (underscore/dot/uppercase run →
  *   single hyphen, lowercased) maps to the same purl cdxgen emits;
+ * - a version is percent-encoded the way cdxgen's purl library spells it
+ *   (`2.1.0+cpu` → `2.1.0%2Bcpu`), so a PEP 440 local version still matches;
  * - absent `groups` key defaults to ["main"] (prod);
- * - garbage / non-TOML text yields an empty set, never throws.
+ * - non-TOML text throws, naming the lockfile; a lock with no main-group
+ *   package yields an empty set.
  */
 
 import { describe, expect, test } from "bun:test";
 
-import { asPurl } from "../../test/brandTestSupport";
-import { poetryProdPurlSet } from "./poetryLock";
+import { asPurl, asTargetIdentity, widen } from "../../test/brandTestSupport";
+import { mergeSboms } from "../merge/merge";
+import { poetryProdPurlSet, unmatchedProdPurlSetWarning } from "./poetryLock";
+import { poetryIntroductions } from "./poetryProvenance";
+
+const LOCK_PATH = "/repo/services/ml/poetry.lock";
 
 /** Minimal poetry.lock with main-only, dev-only, and main+dev packages. */
 const POETRY_LOCK = [
@@ -57,32 +64,157 @@ const POETRY_LOCK = [
 
 describe("poetryProdPurlSet", () => {
   test("includes main-only and excludes dev-only packages", () => {
-    const set = poetryProdPurlSet(POETRY_LOCK);
+    const set = poetryProdPurlSet(POETRY_LOCK, LOCK_PATH);
 
     expect(set.has(asPurl("pkg:pypi/anyio@4.12.1"))).toBe(true);
     expect(set.has(asPurl("pkg:pypi/jinja2-ansible-filters@1.3.2"))).toBe(false);
   });
 
   test("a package in both main and dev is prod (prod-wins)", () => {
-    const set = poetryProdPurlSet(POETRY_LOCK);
+    const set = poetryProdPurlSet(POETRY_LOCK, LOCK_PATH);
 
     expect(set.has(asPurl("pkg:pypi/shared-tool@2.0.0"))).toBe(true);
   });
 
   test("normalizes names per PEP 503 to match cdxgen's purl", () => {
-    const set = poetryProdPurlSet(POETRY_LOCK);
+    const set = poetryProdPurlSet(POETRY_LOCK, LOCK_PATH);
 
     expect(set.has(asPurl("pkg:pypi/underscore-and-dots@3.1.0"))).toBe(true);
   });
 
   test("a package with no groups key defaults to prod", () => {
-    const set = poetryProdPurlSet(POETRY_LOCK);
+    const set = poetryProdPurlSet(POETRY_LOCK, LOCK_PATH);
 
     expect(set.has(asPurl("pkg:pypi/groupless-pkg@1.0.0"))).toBe(true);
   });
 
-  test("garbage text yields an empty set without throwing", () => {
-    expect(poetryProdPurlSet("not a lockfile }{ :::").size).toBe(0);
-    expect(poetryProdPurlSet("").size).toBe(0);
+  test("non-TOML text throws, naming the lockfile", () => {
+    expect(() => poetryProdPurlSet('[[package]\nname = "broken', LOCK_PATH)).toThrow(
+      `poetry.lock at ${LOCK_PATH} is not valid TOML`,
+    );
+  });
+
+  test("a package key that is not an array of tables throws, naming the lockfile", () => {
+    expect(() => poetryProdPurlSet('package = "torch"\n', LOCK_PATH)).toThrow(
+      `poetry.lock at ${LOCK_PATH} has a "package" key that is not an array of tables`,
+    );
+  });
+
+  test("a lock with no main-group package yields an empty set", () => {
+    const devOnly = '[[package]]\nname = "pytest"\nversion = "8.0.0"\ngroups = ["dev"]\n';
+
+    expect(poetryProdPurlSet(devOnly, LOCK_PATH).size).toBe(0);
+    expect(poetryProdPurlSet("", LOCK_PATH).size).toBe(0);
+  });
+});
+
+/** A main-group package with a PEP 440 local version, beside a plain main and a dev package. */
+const LOCAL_VERSION_LOCK = [
+  "[[package]]",
+  'name = "torch"',
+  'version = "2.1.0+cpu"',
+  'groups = ["main"]',
+  "",
+  "[[package]]",
+  'name = "requests"',
+  'version = "2.32.3"',
+  'groups = ["main"]',
+  "",
+  "[[package]]",
+  'name = "pytest"',
+  'version = "8.0.0"',
+  'groups = ["dev"]',
+  "",
+].join("\n");
+
+/** The components cdxgen emits for LOCAL_VERSION_LOCK: "+" in a version is spelled %2B. */
+const LOCAL_VERSION_SBOM = {
+  components: [
+    { name: "torch", version: "2.1.0+cpu", purl: "pkg:pypi/torch@2.1.0%2Bcpu" },
+    { name: "requests", version: "2.32.3", purl: "pkg:pypi/requests@2.32.3" },
+    { name: "pytest", version: "8.0.0", purl: "pkg:pypi/pytest@8.0.0" },
+  ],
+};
+
+describe("poetry purls match the scanned component purls", () => {
+  test("a PEP 440 local version is percent-encoded like the component purl", () => {
+    const set = poetryProdPurlSet(LOCAL_VERSION_LOCK, LOCK_PATH);
+
+    expect(widen([...set].sort())).toEqual([
+      "pkg:pypi/requests@2.32.3",
+      "pkg:pypi/torch@2.1.0%2Bcpu",
+    ]);
+  });
+
+  test("a main-group package with a local version merges as production and keeps its provenance", () => {
+    const model = mergeSboms([
+      {
+        sbom: LOCAL_VERSION_SBOM,
+        targetIdentity: asTargetIdentity("services/ml"),
+        prodPurlSet: poetryProdPurlSet(LOCAL_VERSION_LOCK, LOCK_PATH),
+        introductions: poetryIntroductions(
+          LOCAL_VERSION_LOCK,
+          '[project]\nname = "ml"\ndependencies = ["torch", "requests"]\n',
+        ),
+      },
+    ]);
+    const torch = model.packages.find((pkg) => widen(pkg.name) === "torch");
+    const pytest = model.packages.find((pkg) => widen(pkg.name) === "pytest");
+
+    expect(torch?.occurrences[0]?.isDevDependency).toBe(false);
+    expect(torch?.occurrences[0]?.introduction).toBeDefined();
+    expect(pytest?.occurrences[0]?.isDevDependency).toBe(true);
+  });
+});
+
+describe("unmatchedProdPurlSetWarning", () => {
+  const scanned = new Set([asPurl("pkg:pypi/requests@2.32.3")]);
+
+  test("a non-empty prod set matching none of the scanned purls produces a warning", () => {
+    const prod = new Set([asPurl("pkg:pypi/requests@2.32.3+local")]);
+
+    expect(unmatchedProdPurlSetWarning(asTargetIdentity("services/ml"), prod, scanned)).toBe(
+      "services/ml: none of the 1 production packages in poetry.lock matches a scanned component" +
+        " purl, so every package of this target is classified development-only",
+    );
+  });
+
+  test("a prod set fully contained in the scan produces no warning", () => {
+    const prod = new Set([asPurl("pkg:pypi/requests@2.32.3")]);
+
+    expect(unmatchedProdPurlSetWarning(asTargetIdentity("svc"), prod, scanned)).toBeUndefined();
+  });
+
+  test("a partial miss lists exactly the unmatched purls, sorted", () => {
+    const prod = new Set([
+      asPurl("pkg:pypi/requests@2.32.3"),
+      asPurl("pkg:pypi/zeta@1.0.0"),
+      asPurl("pkg:pypi/alpha@2.0.0"),
+    ]);
+
+    expect(unmatchedProdPurlSetWarning(asTargetIdentity("svc"), prod, scanned)).toBe(
+      "svc: 2 of 3 production packages in poetry.lock matched no scanned component:" +
+        " pkg:pypi/alpha@2.0.0, pkg:pypi/zeta@1.0.0",
+    );
+  });
+
+  test("more than ten misses list the first ten and count the rest", () => {
+    const missing = Array.from({ length: 13 }, (_, index) =>
+      asPurl(`pkg:pypi/pkg-${String(index).padStart(2, "0")}@1.0.0`),
+    );
+    const prod = new Set([asPurl("pkg:pypi/requests@2.32.3"), ...missing]);
+
+    expect(unmatchedProdPurlSetWarning(asTargetIdentity("svc"), prod, scanned)).toBe(
+      "svc: 13 of 14 production packages in poetry.lock matched no scanned component: " +
+        `${missing.slice(0, 10).join(", ")}, +3 more`,
+    );
+  });
+
+  test("an empty prod set or an empty scan produces no warning", () => {
+    const prod = new Set([asPurl("pkg:pypi/requests@9.9.9")]);
+    const svc = asTargetIdentity("svc");
+
+    expect(unmatchedProdPurlSetWarning(svc, new Set(), scanned)).toBeUndefined();
+    expect(unmatchedProdPurlSetWarning(svc, prod, new Set())).toBeUndefined();
   });
 });

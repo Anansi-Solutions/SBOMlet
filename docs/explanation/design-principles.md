@@ -161,7 +161,8 @@ before `correct()` sees them and records the package as an imprecise
 the faithful family token rides alongside it. The renderer shows
 `"<family> (imprecise)"` and gathers every such package into its own review
 section, and the policy routes a bare GPL/AGPL/LGPL/EUPL token to a surfacing
-`imprecise-copyleft` warn rather than letting it pass silently. The cure is a
+`imprecise-copyleft` verdict, a warning or a failure per `[unknown]` handling,
+rather than letting it pass silently. The cure is a
 [`[[clarify]]`](../glossary.md#policy-lanes) override, which is itself auditable.
 
 The Terraform gate keys on a filesystem signal, not a hand-lexed HCL parse. The

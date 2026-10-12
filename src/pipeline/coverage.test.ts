@@ -25,7 +25,14 @@ import { join } from "node:path";
 import { afterEach, describe, expect, test } from "bun:test";
 
 import { MAX_TERRAFORM_LOCK_BYTES } from "../collectors/terraform";
-import { classifyCoverage, coverageSkipReason } from "./coverage";
+import { mergeSbomsWithIntake } from "../merge/merge";
+import { asTargetIdentity } from "../../test/brandTestSupport";
+import {
+  classifyCoverage,
+  componentCountOf,
+  coverageSkipReason,
+  inventoryIntakeWarning,
+} from "./coverage";
 
 const tempDirs: string[] = [];
 
@@ -372,5 +379,93 @@ describe("classifyCoverage — maven.sbom.json warn+skip vs hard-fail split", ()
 
   test("a real module sidecar with a positive component count is included", () => {
     expect(classifyCoverage("liba", "maven.sbom.json", MAVEN_MODULE_SBOM, 1)).toBe("include");
+  });
+});
+
+describe("inventoryIntakeWarning — counted vs inventoried reconciliation", () => {
+  const SVC = asTargetIdentity("svc");
+  const OK = { name: "ok", version: "1.0.0", purl: "pkg:maven/g/ok@1.0.0" };
+
+  function warningFor(sbom: unknown, firstPartyNames?: ReadonlySet<string>): string | undefined {
+    const [intake] = mergeSbomsWithIntake([
+      { sbom, targetIdentity: SVC, ...(firstPartyNames !== undefined ? { firstPartyNames } : {}) },
+    ]).intake;
+
+    return intake === undefined ? undefined : inventoryIntakeWarning(sbom, intake);
+  }
+
+  test("a purl-less component is reported in one line with the counted/inventoried gap", () => {
+    const sbom = {
+      components: [OK, { group: "com.example", name: "driver", version: "19.3.0.0" }],
+    };
+
+    expect(warningFor(sbom)).toBe(
+      "warning: svc: counted 2 components, inventoried 1 (1 skipped: 1 without a purl)",
+    );
+  });
+
+  test("first-party exclusions are named alongside the skips", () => {
+    const member = { name: "member", version: "0.0.0-use.local", purl: "pkg:npm/member@0.0.0" };
+    const sbom = { components: [OK, member, { name: "c", purl: "pkg:npm/c@1" }] };
+
+    expect(warningFor(sbom, new Set(["member"]))).toBe(
+      "warning: svc: counted 3 components, inventoried 1, excluded 1 as first-party " +
+        "(1 skipped: 1 without a version)",
+    );
+  });
+
+  test("several reasons are listed in a fixed order", () => {
+    const sbom = {
+      components: [
+        { name: "a", version: "", purl: "pkg:npm/a@1" },
+        { name: "b", version: 2, purl: "pkg:npm/b@2" },
+        { name: "c", purl: "pkg:npm/c@1" },
+      ],
+    };
+
+    expect(warningFor(sbom)).toBe(
+      "warning: svc: counted 3 components, inventoried 0 " +
+        "(3 skipped: 1 without a version, 1 with a blank version, 1 malformed)",
+    );
+  });
+
+  test("a fully inventoried document, nested components included, warns nothing", () => {
+    const sbom = { components: [{ ...OK, components: [{ ...OK, name: "inner" }] }] };
+
+    expect(componentCountOf(sbom)).toBe(2);
+    expect(warningFor(sbom)).toBeUndefined();
+  });
+
+  test("the scanned root is an exclusion, not a shortfall", () => {
+    const sbom = { metadata: { component: { purl: OK.purl } }, components: [OK] };
+
+    expect(warningFor(sbom)).toBeUndefined();
+  });
+
+  test("a purl minted from group/name/version is reported even when nothing is skipped", () => {
+    const sbom = {
+      metadata: { component: { purl: "pkg:maven/g/svc@1.0.0?type=jar" } },
+      components: [OK, { group: "com.example", name: "driver", version: "19.3.0.0" }],
+    };
+
+    expect(warningFor(sbom)).toBe(
+      "warning: svc: counted 2 components, inventoried 2 (1 purl minted from group/name/version)",
+    );
+  });
+
+  test("minted purls and skips are reported together", () => {
+    const sbom = {
+      metadata: { component: { purl: "pkg:maven/g/svc@1.0.0?type=jar" } },
+      components: [
+        { group: "g", name: "a", version: "1" },
+        { group: "g", name: "b", version: "1" },
+        { name: "c", version: "1" },
+      ],
+    };
+
+    expect(warningFor(sbom)).toBe(
+      "warning: svc: counted 3 components, inventoried 2 " +
+        "(2 purls minted from group/name/version) (1 skipped: 1 without a purl)",
+    );
   });
 });

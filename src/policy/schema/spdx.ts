@@ -41,16 +41,17 @@ export const spdxExpression = type("string").pipe(
 );
 
 /**
- * The OR-leaf satisfies allowlist decomposed from a license pattern, or the one fault that ruled it
- * out: an unparseable pattern, or an AND pattern (a satisfies allowlist holds single ids,
- * optionally WITH, never AND expressions). Shared by the `[[compatible]]` and `[[deny]]` license
- * forms, which decompose their pattern identically.
+ * The OR-leaf satisfies allowlist decomposed from a license pattern, in the canonical spelling
+ * findings carry (a deprecated id reads as its current one), or the one fault that ruled it out: an
+ * unparseable pattern, or an AND pattern (a satisfies allowlist holds single ids, optionally WITH,
+ * never AND expressions). Shared by the `[[compatible]]` and `[[deny]]` license forms, which
+ * decompose their pattern identically.
  */
 export function licenseAllowlist(pattern: string): {
   allowlist?: ReadonlyArray<SpdxLicenseLeaf>;
   problem?: string;
 } {
-  const node = parseSpdxNode(pattern);
+  const node = parseSpdxNode(canonicalizeExpression(asRawLicense(pattern)));
 
   if (node === undefined) {
     return { problem: `"${pattern}" is not a valid SPDX expression` };

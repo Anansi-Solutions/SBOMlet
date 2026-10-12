@@ -4,8 +4,12 @@
  * erased.
  */
 
-import { type Verdict } from "../model/dependencies";
-import { unusedRuleIds } from "../policy/engine/evaluate";
+import { type CanonicalDependencies, type Verdict } from "../model/dependencies";
+import {
+  DEV_DOWNGRADE_REASON_SUFFIX,
+  OS_DOWNGRADE_REASON_SUFFIX,
+  unusedRuleIds,
+} from "../policy/engine/evaluate";
 import { clarifyCitation } from "../policy/schema/clarify";
 import { ruleReason } from "../policy/schema/diagnostics";
 import type { Policy } from "../policy/schema";
@@ -14,9 +18,15 @@ import type { Policy } from "../policy/schema";
  * Reason text of an unused rule id - surfaced in the unused-entry warning so the stale policy line
  * is self-explanatory. A clarify id is resolved by citation rather than by position: an imported
  * entry is numbered within its own file, not within the combined list. Defensive empty string for
- * an unrecognized id shape (unusedRuleIds only emits these three shapes).
+ * an unrecognized id shape (unusedRuleIds only emits these four shapes).
  */
 function unusedRuleReason(policy: Policy, ruleId: string): string {
+  const denied = /^denied\[(\d+)\]$/.exec(ruleId);
+
+  if (denied !== null) {
+    return policy.deny[Number(denied[1])]?.reason ?? "";
+  }
+
   const compatible = /^compatible\[(\d+)\]$/.exec(ruleId);
   const rule =
     compatible === null
@@ -76,6 +86,7 @@ export function sanitizeForLog(value: string): string {
  */
 export function writePolicySummary(
   policy: Policy,
+  model: CanonicalDependencies,
   verdicts: ReadonlyArray<Verdict>,
   usedClarifyIndices: ReadonlySet<number>,
 ): void {
@@ -109,10 +120,11 @@ export function writePolicySummary(
   }
 
   // Surface the assessment-conflict count on its OWN line (the counts-line shape above is
-  // unchanged). A conflict:scancode verdict is a FAIL (a subset of the fail count) - the in-depth
-  // scan disagrees with the quick check and a human must resolve it via [[clarify]]. Printed only
-  // when any exist, so policies with no conflicts keep byte-identical output.
-  const conflictCount = verdicts.filter((v) => v.rule === "conflict:scancode").length;
+  // unchanged). Every conflict:* verdict is a FAIL (a subset of the fail count) - the in-depth scan
+  // disagrees with the quick check, or images disagree on the declared license - and a human must
+  // resolve it via [[clarify]]. Printed only when any exist, so policies with no conflicts keep
+  // byte-identical output.
+  const conflictCount = verdicts.filter((v) => v.rule.startsWith("conflict:")).length;
 
   if (conflictCount > 0) {
     process.stderr.write(
@@ -127,13 +139,24 @@ export function writePolicySummary(
   // policies with no dev downgrades keep byte-identical output. Matched on the auditable
   // dev-downgrade marker that evaluate.applyDevScope appends to the reason.
   const devDowngradedCount = verdicts.filter(
-    (v) => v.status === "warn" && v.reason.includes("downgraded to warn: dev-only occurrence"),
+    (v) => v.status === "warn" && v.reason.includes(DEV_DOWNGRADE_REASON_SUFFIX),
   ).length;
 
   if (devDowngradedCount > 0) {
     process.stderr.write(
       `policy: ${devDowngradedCount} dev-downgraded (would-be fail on a ` +
         `dev-only occurrence → warn) (${devDowngradedCount} verdicts)\n`,
+    );
+  }
+
+  const osDowngradedCount = verdicts.filter(
+    (v) => v.status === "warn" && v.reason.includes(OS_DOWNGRADE_REASON_SUFFIX),
+  ).length;
+
+  if (osDowngradedCount > 0) {
+    process.stderr.write(
+      `policy: ${osDowngradedCount} os-downgraded (would-be fail on an ` +
+        `os-scope base-image package → warn) (${osDowngradedCount} verdicts)\n`,
     );
   }
 
@@ -149,7 +172,7 @@ export function writePolicySummary(
     }
   }
 
-  for (const ruleId of unusedRuleIds(policy, verdicts, usedClarifyIndices)) {
+  for (const ruleId of unusedRuleIds(policy, model, verdicts, usedClarifyIndices)) {
     process.stderr.write(
       `policy warning: unused entry ${sanitizeForLog(ruleId)} — ` +
         `${sanitizeForLog(unusedRuleReason(policy, ruleId))}\n`,

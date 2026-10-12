@@ -232,6 +232,7 @@ run; without `--policy` the field is absent.
 | `observedExpressions?` | `readonly string[]`  | The set of every observed per-claim precise expression, deduped and sorted. The deny terminal also reads this so a denied member is seen even when combination elected an imprecise family or collapsed to unknown. |
 | `conflict?`            | `AssessmentConflict` | Set when the in-depth ScanCode assessment disagrees with a quick-check claim. Carries the assessed expression and the disagreeing members, and drives a `conflict:scancode` fail. Absent when no ScanCode claim exists or the assessment agrees. |
 | `unrecognizedTokens?`  | `readonly string[]`  | Non-normalizable tokens surfaced for a non-gating `os`-scope partial finding only. Advisory: never enters `expression`, never gates.                                                |
+| `correctedFrom?`       | `readonly string[]`  | The raw labels a correction rewrote into `expression`, sorted. Present only when `confidence` is `"corrected"`; the License column shows them. |
 
 ### Why `imprecise` is not `none`
 
@@ -240,7 +241,16 @@ the honest-residual principle.
 
 `exact` means the raw value parsed as a valid SPDX expression verbatim.
 `corrected` means `spdx-correct` fixed a sloppy-but-precise value, turning
-`"Apache License, Version 2.0"` into `Apache-2.0`. `none` means genuinely
+`"Apache License, Version 2.0"` into `Apache-2.0`. A correction is kept only
+when the corrected id keeps every family, version, and or-later grant the value
+states; one that would drop any of them, such as `"MIT/GPL"` to
+`GPL-3.0-or-later`, or a value carrying a rider such as `"MIT AND
+Commons-Clause"`, leaves the finding `none`, and a hedged family such as
+`"BSD-like"` is `imprecise`. An exception the value states is attached only
+when it names exactly one registered SPDX exception id, so `"GPLv2 with
+Classpath Exception"` is `GPL-2.0-only WITH Classpath-exception-2.0`; one that
+names none or several, such as `"GPL-2.0 with GCC exception"`, leaves the
+`imprecise` family the value names, or `none`. `none` means genuinely
 unknown: no license could be determined, `expression` is `null`, and
 `impreciseFamily` is absent. `imprecise` means an ambiguous family label was
 observed, such as `"BSD"`, `"Apache Software License"`, or a bare `"GPL"`, that
@@ -416,7 +426,7 @@ about. There is exactly one verdict per occurrence, and `evaluate` sorts them by
 `(purl, occurrenceTarget)`.
 
 `status` is `ok` (passes), `warn` (surfaced but non-gating), `fail` (gates the
-build), or `suppressed` (a family-justified workspace copyleft suppression).
+build), or `suppressed` (an absorption-justified workspace copyleft suppression).
 
 `rule` is the machine-readable deciding rule id, such as `compatible[1]`,
 `clarify[0]`, `clarifications[0]`, `denied[2]`,

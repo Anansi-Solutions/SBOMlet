@@ -166,6 +166,17 @@ export function asPurl(text: string): Purl {
 }
 
 /**
+ * Percent-encode one purl namespace, name or version segment.
+ *
+ * @privateRemarks
+ * Mirrors the packageurl-js encoding the generators spell their purls with (`encodeURIComponent`,
+ * then `:` restored), so a PEP 440 local version `2.1.0+cpu` becomes `2.1.0%2Bcpu` on both sides.
+ */
+export function encodePurlSegment(segment: string): string {
+  return encodeURIComponent(segment).replaceAll("%3A", ":");
+}
+
+/**
  * Tolerantly mint a {@link Purl} at an EXTERNAL boundary (a parsed SBOM component / metadata purl).
  *
  * @returns the branded purl, or undefined when `text` is not a {@link PURL_SHAPE} package URL - the
@@ -276,8 +287,8 @@ export type FindingConfidence = "exact" | "corrected" | "none" | "imprecise";
  * compound expression. Exactly the distinct VALUES the normalizer's AMBIGUOUS_FAMILY map elects.
  * The could-be-copyleft subset (GPL/AGPL/LGPL/EUPL) routes to review; the permissive rest
  * (BSD/Apache) is non-gating. Distinct from the copyleft-grouping family vocabulary
- * (CopyleftFamily, copyleft.ts) that keys COPYLEFT_FAMILY / WORKSPACE_ABSORBS - those are exact-id
- * groupings (GNU/MPL/...), never these imprecise labels.
+ * (CopyleftFamily, copyleft.ts) that keys COPYLEFT_FAMILY - those are exact-id groupings
+ * (GNU/MPL/...), never these imprecise labels.
  */
 export type LicenseFamily = "AGPL" | "Apache" | "BSD" | "EUPL" | "GPL" | "LGPL";
 
@@ -370,6 +381,10 @@ export interface LicenseFinding {
    * over the KNOWN member). Absent for every finding that is not an os-scope partial.
    */
   unrecognizedTokens?: readonly string[];
+  /**
+   * The raw labels a correction rewrote into `expression`, sorted; only on a "corrected" finding.
+   */
+  correctedFrom?: readonly RawLicense[];
 }
 
 /** A stale-override condition surfaced to the policy engine. */

@@ -4,6 +4,7 @@ import { sanitizeEvidenceText } from "../../merge/merge";
 import { asRawLicense, compareCodeUnits, type RawLicense } from "../../model/dependencies";
 import { canonicalizeExpression } from "../../normalize/expression";
 import { SCANCODE_TOOL } from "./tool";
+import type { ScancodeFile } from "../../validate/scancode";
 
 /** Cap on copyright lines returned per scanned package (extractor-cap parity). */
 const MAX_SCANCODE_COPYRIGHT_LINES = 20;
@@ -33,16 +34,20 @@ function isRootLevelManifestPath(path: string): boolean {
   return !path.includes("\\") && path.split("/").length === 2;
 }
 
-/** One narrowed `files[]` entry we read from scancode's `--json-pp` output. */
-interface RawScancodeFile {
-  path?: unknown;
-  detected_license_expression_spdx?: unknown;
-  copyrights?: unknown;
+/** The license expression ScanCode election picked for a scanned package. */
+export interface ElectedExpression {
+  /** The canonicalized SPDX expression. */
+  raw: RawLicense;
+  /** The pinned tool and the lane that produced it, as `<tool>@<version>/<lane>`. */
+  via: string;
 }
 
-/** True iff a raw files[] entry is a well-shaped object we can read fields from. */
-function isRawScancodeFile(raw: unknown): raw is RawScancodeFile {
-  return typeof raw === "object" && raw !== null;
+/** The outcome of one election lane. */
+export interface LaneElection {
+  /** The lane's winner; absent when no file in the lane qualified. */
+  elected?: ElectedExpression;
+  /** The first lane file whose scan errored without an expression; absent when none did. */
+  erroredPath?: string;
 }
 
 /**
@@ -54,17 +59,22 @@ function isRawScancodeFile(raw: unknown): raw is RawScancodeFile {
  * `electExpression`). Either way, this function only ever asks the predicate it is given - it
  * carries no layout knowledge of its own, not which ecosystem, not where a package's own files
  * live.
+ *
+ * @returns The winner, or the first matching admissible path whose scan errored without an
+ * expression.
  */
 function electFromPattern(
-  entries: RawScancodeFile[],
+  files: readonly ScancodeFile[],
   pattern: RegExp,
   lane: string,
   isAdmissiblePath: (path: string) => boolean,
-): { raw: RawLicense; via: string } | undefined {
-  for (const entry of entries) {
-    const path = entry.path;
+): LaneElection {
+  let erroredPath: string | undefined;
 
-    if (typeof path !== "string") {
+  for (const file of files) {
+    const path = file.path;
+
+    if (path === undefined) {
       continue;
     }
 
@@ -76,9 +86,13 @@ function electFromPattern(
       continue;
     }
 
-    const expression = entry.detected_license_expression_spdx;
+    const expression = file.detected_license_expression_spdx;
 
-    if (typeof expression !== "string" || expression.length === 0) {
+    if (expression === undefined) {
+      if ((file.scan_errors?.length ?? 0) > 0) {
+        erroredPath ??= path;
+      }
+
       continue;
     }
 
@@ -87,12 +101,28 @@ function electFromPattern(
     }
 
     return {
-      raw: asRawLicense(canonicalizeExpression(asRawLicense(expression))),
-      via: `${SCANCODE_TOOL.name}@${SCANCODE_TOOL.version}/${lane}`,
+      elected: {
+        raw: asRawLicense(canonicalizeExpression(asRawLicense(expression))),
+        via: `${SCANCODE_TOOL.name}@${SCANCODE_TOOL.version}/${lane}`,
+      },
     };
   }
 
-  return undefined;
+  return { erroredPath };
+}
+
+/**
+ * Reject a lane that ended without a winner on a failed scan.
+ *
+ * @throws When a lane found no winner past a file whose scan errored: its missing expression is a
+ * failed scan, not evidence of no license.
+ */
+function rejectFailedScan(erroredPath: string | undefined): void {
+  if (erroredPath !== undefined) {
+    throw new Error(
+      `scancode reported scan errors on ${JSON.stringify(erroredPath)}, a file election reads`,
+    );
+  }
 }
 
 /**
@@ -110,34 +140,32 @@ function electFromPattern(
  * than accepted as noise - the caller falls through to the next lane, or to a clean no-answer if
  * both lanes reject. The winning expression is simplified via {@link canonicalizeExpression} before
  * it is returned, so ScanCode's own boolean-algebra noise never reaches the memo or a claim.
+ *
+ * @throws When a lane ends without a winner and one of its files errored without an expression;
+ * an errored legal file also blocks the manifest fallback.
  */
 export function electExpression(
-  files: unknown,
+  files: readonly ScancodeFile[],
   isPackageOwnLegalPath: (path: string) => boolean,
-): { raw: RawLicense; via: string } | undefined {
-  if (!Array.isArray(files)) {
-    return undefined;
+): ElectedExpression | undefined {
+  const legal = electFromPattern(files, LEGAL_FILE_PATTERN, "license-file", isPackageOwnLegalPath);
+
+  if (legal.elected !== undefined) {
+    return legal.elected;
   }
 
-  const entries = files.filter(isRawScancodeFile);
+  rejectFailedScan(legal.erroredPath);
 
-  const legal = electFromPattern(
-    entries,
-    LEGAL_FILE_PATTERN,
-    "license-file",
-    isPackageOwnLegalPath,
+  const manifest = electFromPattern(
+    files,
+    MANIFEST_FILE_PATTERN,
+    "manifest",
+    isRootLevelManifestPath,
   );
 
-  if (legal !== undefined) {
-    return legal;
-  }
+  rejectFailedScan(manifest.erroredPath);
 
-  return electFromPattern(entries, MANIFEST_FILE_PATTERN, "manifest", isRootLevelManifestPath);
-}
-
-/** One narrowed copyrights[] entry. */
-interface RawCopyrightEntry {
-  copyright?: unknown;
+  return manifest.elected;
 }
 
 /**
@@ -146,39 +174,11 @@ interface RawCopyrightEntry {
  * merge.ts), deduped, {@link compareCodeUnits}-sorted, and capped at {@link
  * MAX_SCANCODE_COPYRIGHT_LINES}.
  */
-export function electCopyrights(files: unknown): string[] {
-  if (!Array.isArray(files)) {
-    return [];
-  }
-
+export function electCopyrights(files: readonly ScancodeFile[]): string[] {
   const seen = new Set<string>();
 
-  for (const raw of files) {
-    if (!isRawScancodeFile(raw)) {
-      continue;
-    }
-
-    const copyrights = (raw as { copyrights?: unknown }).copyrights;
-
-    if (!Array.isArray(copyrights)) {
-      continue;
-    }
-
-    for (const entry of copyrights) {
-      // Tolerant narrowing, matching the rest of this parse path: a null or mistyped element is
-      // skipped, never a TypeError mid-scan.
-      if (typeof entry !== "object" || entry === null) {
-        continue;
-      }
-
-      const text = (entry as RawCopyrightEntry).copyright;
-
-      if (typeof text !== "string" || text.length === 0) {
-        continue;
-      }
-
-      seen.add(sanitizeEvidenceText(text));
-    }
+  for (const text of files.flatMap((file) => file.copyrights ?? [])) {
+    seen.add(sanitizeEvidenceText(text));
   }
 
   return [...seen].sort(compareCodeUnits).slice(0, MAX_SCANCODE_COPYRIGHT_LINES);

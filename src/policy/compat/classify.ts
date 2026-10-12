@@ -44,7 +44,7 @@ function isRefLeaf(id: string): boolean {
  * X" (@privateRemarks: an exception only narrows obligations, `plus` only widens the accepted
  * version range, so falling back to the bare id is safe, never permissive-by-omission).
  */
-function baseLeafId(rendered: string): string {
+export function baseLeafId(rendered: string): string {
   const withoutException = rendered.replace(/ WITH .+$/, "");
 
   return withoutException.endsWith("+") ? withoutException.slice(0, -1) : withoutException;
@@ -57,6 +57,19 @@ function leafKeys(leaf: string): readonly SpdxLicenseLeaf[] {
   return base === leaf
     ? [asSpdxLicenseLeaf(leaf)]
     : [asSpdxLicenseLeaf(leaf), asSpdxLicenseLeaf(base)];
+}
+
+/**
+ * The OSADL matrix cell for a work under `leading` absorbing one subordinate leaf, the leaf tried
+ * under its exact form then its base id; undefined when the matrix has no row for `leading` or no
+ * cell for the leaf.
+ */
+export function absorptionCell(leading: string, leaf: string): OsadlMatrixCell | undefined {
+  const row = OSADL_MATRIX.get(leading);
+
+  return leafKeys(leaf)
+    .map((key) => row?.get(key))
+    .find((cell) => cell !== undefined);
 }
 
 /** Maps a raw OSADL matrix cell to an axis class (OSS targets only - proprietary has no rows). */

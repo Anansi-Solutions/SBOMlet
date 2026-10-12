@@ -343,40 +343,95 @@ export function filterOsComponents(sbom: unknown): OsComponent[] {
   return [...byPurl.values()].sort((a, b) => compareCodeUnits(a.purl, b.purl));
 }
 
+/** One purl whose license claims differ between the images that contain it. */
+export interface OsClaimDivergence {
+  purl: Purl;
+  /** Every containing image with its own claims (empty when it carried none), image-sorted. */
+  claimsByImage: { image: string; licenses: OsLicense[] }[];
+}
+
+/** Dedupe claims by shape and value, sorted by {@link licenseSortKey}. */
+function unionLicenses(a: readonly OsLicense[], b: readonly OsLicense[]): OsLicense[] {
+  const byKey = new Map<string, OsLicense>();
+
+  for (const license of [...a, ...b]) {
+    byKey.set(licenseSortKey(license), license);
+  }
+
+  return [...byKey.entries()]
+    .sort(([keyA], [keyB]) => compareCodeUnits(keyA, keyB))
+    .map(([, license]) => license);
+}
+
+/** The divergence for one purl when its images' claim sets are not all identical. */
+function claimDivergenceOf(
+  purl: Purl,
+  claimsByImage: Map<string, OsLicense[]>,
+): OsClaimDivergence | undefined {
+  const entries = [...claimsByImage.entries()].sort(([a], [b]) => compareCodeUnits(a, b));
+  const distinct = new Set(entries.map(([, licenses]) => licenses.map(licenseSortKey).join("\0")));
+
+  if (distinct.size < 2) {
+    return undefined;
+  }
+
+  return { purl, claimsByImage: entries.map(([image, licenses]) => ({ image, licenses })) };
+}
+
 /**
  * Cross-image membership UNION: fold each image's filtered components into one purl-keyed set where
- * a purl shared between images is ONE row whose `images` lists every containing image (sorted
- * before return). The retained name/version/licenses are the FIRST-SEEN values - callers pass
- * images in compareCodeUnits-sorted order (collectDockerOsSbom's scan discipline), so the license
- * posture stays first-wins-by-sorted-image: unchanged from the pre-membership dedup, just visible
- * now that the row names both images.
+ * a purl shared between images is ONE row whose `images` lists every containing image and whose
+ * `licenses` is the union of every image's claims, so no image order can drop a claim. Name and
+ * version are the first-seen values (the purl pins both).
+ *
+ * @returns The purl-sorted rows, and one divergence per purl whose claim sets differ between
+ * images (the single unioned row can no longer say which image carried which claim).
  */
 export function unionOsComponents(
   perImage: ReadonlyArray<{ image: string; components: OsComponent[] }>,
-): AttributedOsComponent[] {
+): [AttributedOsComponent[], OsClaimDivergence[]] {
   const byPurl = new Map<string, AttributedOsComponent>();
+  const claimsByPurl = new Map<Purl, Map<string, OsLicense[]>>();
 
   for (const { image, components } of perImage) {
     for (const component of components) {
       const existing = byPurl.get(component.purl);
+      const claimsByImage = claimsByPurl.get(component.purl) ?? new Map<string, OsLicense[]>();
+
+      claimsByPurl.set(component.purl, claimsByImage);
+      claimsByImage.set(image, component.licenses ?? []);
 
       if (existing === undefined) {
         byPurl.set(component.purl, { ...component, images: [image] });
-      } else if (!existing.images.includes(image)) {
-        // Purl hit: union the membership, keep the first-seen fields. The includes guard keeps a
-        // duplicated ref in the scan set from double-counting one image.
+        continue;
+      }
+
+      // The includes guard keeps a duplicated ref in the scan set from double-counting one image.
+      if (!existing.images.includes(image)) {
         existing.images.push(image);
+      }
+
+      const licenses = unionLicenses(existing.licenses ?? [], component.licenses ?? []);
+
+      if (licenses.length > 0) {
+        existing.licenses = licenses;
       }
     }
   }
 
   const merged = [...byPurl.values()].sort((a, b) => compareCodeUnits(a.purl, b.purl));
+  const divergences: OsClaimDivergence[] = [];
 
   for (const entry of merged) {
     entry.images.sort(compareCodeUnits);
+    const divergence = claimDivergenceOf(entry.purl, claimsByPurl.get(entry.purl) ?? new Map());
+
+    if (divergence !== undefined) {
+      divergences.push(divergence);
+    }
   }
 
-  return merged;
+  return [merged, divergences];
 }
 
 /**
@@ -419,6 +474,8 @@ export interface DockerOsCollectOptions {
 export interface DockerOsResult {
   doc: string;
   sbomPaths: string[];
+  /** Purls whose license claims differ across the scanned images, purl-sorted. */
+  claimDivergences: OsClaimDivergence[];
 }
 
 /**
@@ -594,21 +651,6 @@ export function parseRepoDigests(stdout: string, invocation: string): string[] {
 }
 
 /**
- * Orchestrate per-image scan + digest + filter, union all images' components into one purl-keyed
- * sorted list carrying per-image membership, build the sorted dockerImages sidecar (each entry
- * carrying its source identity), and
- * return the deterministic doc plus the per-image SBOM temp paths. Async for
- * interface symmetry with the other collectors.
- *
- * Images are scanned in compareCodeUnits-SORTED order (never the caller's argv order): the
- * cross-image union keeps the FIRST-SEEN license claims, so when two images share a purl with
- * DIFFERENT claims, whichever image is scanned first decides the committed license - an unsorted
- * walk makes that choice a function of argv order, breaking the byte-determinism contract for
- * `--image b a` vs `--image a b` over the identical image SET. Sorting here matches the existing
- * resolveDiscoveredImages / resolveTargetedDockerfiles convention (both already
- * compareCodeUnits-sort before scanning); this closes the one caller path (--image) that did not.
- */
-/**
  * Scan + filter + identify ONE image with the single posture: probe local presence, implicitly pull
  * when absent, scan the FULL contents, then resolve the digest (pinned when RepoDigests exist, ""
  * when they do not). Extracted from collectDockerOsSbom to keep that orchestrator under the
@@ -660,6 +702,16 @@ async function imageIsPresentLocally(
   }
 }
 
+/**
+ * Orchestrate per-image scan + digest + filter, union all images' components into one purl-keyed
+ * sorted list carrying per-image membership, build the sorted dockerImages sidecar (each entry
+ * carrying its source identity), and return the deterministic doc, the per-image SBOM temp paths,
+ * and any cross-image claim divergences. Async for interface symmetry with the other collectors.
+ *
+ * Images are scanned in compareCodeUnits-SORTED order (never the caller's argv order), so the temp
+ * file names and every first-seen field are a function of the image SET, matching the
+ * resolveDiscoveredImages / resolveTargetedDockerfiles convention.
+ */
 export async function collectDockerOsSbom(
   images: readonly ScanImage[],
   opts: DockerOsCollectOptions = {},
@@ -693,8 +745,7 @@ export async function collectDockerOsSbom(
     dockerImages.push({ image, digest: result.digest, source });
   }
 
-  return {
-    doc: emitDockerOsDoc(unionOsComponents(perImage), dockerImages),
-    sbomPaths,
-  };
+  const [components, claimDivergences] = unionOsComponents(perImage);
+
+  return { doc: emitDockerOsDoc(components, dockerImages), sbomPaths, claimDivergences };
 }

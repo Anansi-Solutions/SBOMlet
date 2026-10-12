@@ -176,6 +176,11 @@ const WARN_ONLY_POLICY = [
   'where = ["/"]',
   'comment = "unused-entry-marker"',
   "",
+  "[[deny]]",
+  'match = "name"',
+  'pattern = "no-such-package"',
+  'reason = "dead-deny-marker"',
+  "",
 ].join("\n");
 
 const squish = (s: string): string => s.replace(/ {2,}/g, " ");
@@ -327,6 +332,32 @@ describe("runCheck + exitCodeFor — the CI gate", () => {
     // Both report classes are visible on stderr.
     expect(stderr).toContain("policy fail:");
     expect(stderr).toContain("check stale:");
+    expect(stderr).toContain(
+      `check: FAIL (${result!.violations} policy violation(s); 1 outputs current)`,
+    );
+  });
+
+  test("Test 5b: a policy violation over current outputs never ends with check: ok", async () => {
+    const { root } = makeScannableTree();
+    const paths = pathsFor(root, false);
+    const policyPath = writePolicy(root, '[unknown]\nhandling = "warn"\n');
+
+    await withCapturedStderr(async () => {
+      await runGenerate({ repoRoot: root, ...paths, policyPath, verbose: false });
+    });
+
+    let result: Awaited<ReturnType<typeof runCheck>> | undefined;
+    const stderr = await withCapturedStderr(async () => {
+      result = await runCheck({ repoRoot: root, ...paths, policyPath, verbose: false });
+    });
+
+    expect(result!.violations).toBeGreaterThanOrEqual(1);
+    expect(result!.staleFiles).toEqual([]);
+    expect(exitCodeFor(result!)).toBe(1);
+    expect(stderr).not.toContain("check: ok");
+    expect(stderr.trimEnd().split("\n").at(-1)).toBe(
+      `check: FAIL (${result!.violations} policy violation(s); 2 outputs current)`,
+    );
   });
 
   test("Test 6: warn verdicts and unused-entry warnings print but never gate — exit 0", async () => {
@@ -362,6 +393,7 @@ describe("runCheck + exitCodeFor — the CI gate", () => {
     expect(stderr).toContain(
       "policy warning: unused entry compatible[1] — license-reviewed — unused-entry-marker",
     );
+    expect(stderr).toContain("policy warning: unused entry denied[0] — dead-deny-marker");
     // ...and zero fail lines exist to gate on.
     expect(stderr).not.toContain("policy fail:");
   });
@@ -1289,18 +1321,27 @@ describe("the two-Dockerfile scenario end-to-end", () => {
     expect(stderr.includes(`${BUSYBOX_PURL} in docker:a/Dockerfile`)).toBe(false);
     expect(stderr.includes("policy warning: unused entry compatible[0]")).toBe(false);
 
-    // Rendered warn surface: container system-package copyleft is routine and
-    // is never surfaced in the detailed Copyleft table (regardless of which
-    // occurrence carries the warn) — only the non-blocking roll-up names it.
+    // Rendered warn surface: the B occurrence's warn is a Problematic row naming only B; a
+    // container system package's copyleft never rows in Copyleft and special notices.
     const md = outputs.licensesMd;
+    const problematic = squish(
+      md.slice(
+        md.indexOf("## Problematic licenses"),
+        md.indexOf("## Copyleft and special notices"),
+      ),
+    );
     const copyleft = squish(
       md.slice(md.indexOf("## Copyleft and special notices"), md.indexOf("## Containers")),
     );
 
-    expect(copyleft.includes("| busybox |")).toBe(false);
     expect(
-      copyleft.includes("✅ No package carries copyleft or special license obligations."),
+      problematic.includes(
+        "| warn | default:copyleft | busybox | apk | 1.37.0-r19 | GPL-2.0-only | docker:b/Dockerfile |",
+      ),
     ).toBe(true);
+    expect(problematic.includes("docker:a/Dockerfile")).toBe(false);
+    expect(copyleft.includes("| busybox |")).toBe(false);
+    expect(copyleft.includes("✅ No copyleft or special notices.")).toBe(true);
     expect(md.includes("1 copyleft warning(s)")).toBe(true);
 
     // busybox still rows in BOTH containers' own subsections (the flow

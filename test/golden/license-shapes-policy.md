@@ -25,8 +25,6 @@ Workspaces that are themselves distributed under a copyleft license are suppress
 
 - apps/scratch (AGPL-3.0-only) — Scratch fork is itself AGPL-distributed \| upstream \`scratch-gui\` \[GPL-compatible\]
 
-✅ No package carries copyleft or special license obligations.
-
 ## Containers
 
 ✅ No containers are currently tracked.
@@ -35,7 +33,7 @@ Workspaces that are themselves distributed under a copyleft license are suppress
 
 | Name | Ecosystem | Version | License | Used in |
 | --- | --- | --- | --- | --- |
-| apache-name-pkg | npm | 2.0.0 | Apache-2.0 | apps/synthetic |
+| apache-name-pkg | npm | 2.0.0 | Apache-2.0 (corrected from "Apache License 2.0") | apps/synthetic |
 | dup-pkg | npm | 1.2.3 | MIT | apps/synthetic |
 | empty-group-pkg | npm | 1.0.0 | BSD-3-Clause | apps/synthetic |
 | evil&lt;img src=x&gt;\[click me\](https://evil.example)pkg | npm | 1.0.0 | MIT | apps/synthetic |

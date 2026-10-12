@@ -108,7 +108,7 @@ Source: `model/dependencies.ts`.
 | `src/render/` | The three pure renderers — `THIRD_PARTY_LICENSES.md`, `THIRD_PARTY_NOTICES.md`, and the [CycloneDX](./glossary.md#cyclonedx) export. |
 | `src/pipeline/` | The write-free orchestration core that runs the stages in order. |
 | `src/gate/` | The [check](./glossary.md#the-gate-check) gate: re-run the pipeline, byte-compare against committed files, map to exit codes. |
-| `src/validate/` | arktype input boundaries for untrusted inputs (consumed SBOMs, the policy file, lockfiles, registry responses). |
+| `src/validate/` | arktype input boundaries for untrusted inputs (consumed SBOMs, the policy file, lockfiles, registry responses, ScanCode output). |
 
 ## Running the tests
 

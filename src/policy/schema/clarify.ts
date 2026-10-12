@@ -59,9 +59,14 @@ export interface ClarifyIdentity {
   index: number;
 }
 
+/** The citation every surface spells for one entry position. */
+export function clarifyIdentityCitation(identity: ClarifyIdentity): string {
+  return `${identity.space}[${identity.index}]`;
+}
+
 /** The citation every surface spells for one entry. */
 export function clarifyCitation(rule: ClarifyRule): string {
-  return `${rule.identity.space}[${rule.identity.index}]`;
+  return clarifyIdentityCitation(rule.identity);
 }
 
 /** The rule id of a fail on an entry whose stated justification the signal disproved. */
@@ -126,7 +131,7 @@ export function validateClarificationsPath(
 const DETECTED_SOURCES = ["registry", "intensive"] as const;
 
 /** One producing lane a `detected` table may record. */
-type DetectedSource = (typeof DETECTED_SOURCES)[number];
+export type DetectedSource = (typeof DETECTED_SOURCES)[number];
 
 /**
  * One lane's recorded detection: the raw value that lane produced as a non-empty string (trimmed)
@@ -230,7 +235,7 @@ function evidenceProblems(entry: Record<string, unknown>): {
  * no lane - each is about the licence text rather than about one source - and `license-not-found`
  * carries its own rule below.
  */
-const JUSTIFICATION_LANES: Readonly<Record<Justification, ReadonlyArray<DetectedSource>>> = {
+export const JUSTIFICATION_LANES: Readonly<Record<Justification, ReadonlyArray<DetectedSource>>> = {
   "contradictory-claims-recorded": ["registry", "intensive"],
   "declared-more-complete": ["registry"],
   "dual-license-choice": [],
@@ -377,8 +382,8 @@ function validateClarifyEntry(
 /**
  * The `[[clarify]]` array of ONE file, validated into entries citable in `space`. Shared by the
  * policy proper and the separate clarifications file so both mean exactly the same thing by an
- * entry; problem paths name the TOML position (`clarify[i]`) and the imported file's reader
- * prefixes them with its own path.
+ * entry; problem paths cite the entry as every other surface does (`clarifications[i]` in the
+ * imported file), and that file's reader prefixes them with its own path.
  */
 export function validateClarifyTables(
   raw: unknown,
@@ -397,7 +402,7 @@ export function validateClarifyTables(
   }
 
   raw.forEach((rawEntry, index) => {
-    const where = `clarify[${index}]`;
+    const where = clarifyIdentityCitation({ space, index });
     const entry = recordOf(rawEntry);
 
     if (entry === undefined) {

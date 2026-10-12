@@ -119,7 +119,7 @@ function ascertain(rule: ClarifyRule, entry: PackageEntry): UpgradeAscertainment
       ...row,
       outcome: nothingRecorded ? "unknown" : "review",
       detail: nothingRecorded
-        ? `${staleDivergence(stale)} — run generate to record it, with --intensive for the in-depth lane`
+        ? `${staleDivergence(stale)} — either generate has not looked ${entry.version} up yet (run it, with --intensive for the in-depth lane) or the source reports no license for it`
         : staleDivergence(stale),
     };
   }
@@ -184,7 +184,9 @@ export function refreshFindings(
 
   return {
     upgrades: upgradeAscertainments(model, policy),
-    unused: unusedRuleIds(policy, verdicts, usedClarifyIndices).filter((id) => clarifyIds.has(id)),
+    unused: unusedRuleIds(policy, model, verdicts, usedClarifyIndices).filter((id) =>
+      clarifyIds.has(id),
+    ),
     unnecessary: unnecessaryClarifyEntries(model, policy),
     shadowed: shadowedClarifications(model, policy),
   };
