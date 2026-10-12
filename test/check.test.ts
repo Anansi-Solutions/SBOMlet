@@ -1372,6 +1372,42 @@ describe("per-image license claims from the committed docker.sbom.json", () => {
       label: "a format-2 row carrying licensesByImage",
       doc: sidecarDoc([{ ...ROW, licensesByImage: { "a-slim": [], "b-full": [APACHE] } }], TWO),
     },
+    {
+      label: "a format-3 row listing one image twice",
+      doc: {
+        ...sidecarDoc(
+          [
+            {
+              ...ROW,
+              images: ["a-slim", "a-slim"],
+              licensesByImage: { "a-slim": [], "b-full": [] },
+            },
+          ],
+          TWO,
+        ),
+        formatVersion: 3,
+      },
+    },
+    {
+      label: "a format-3 row listing one image twice to admit a foreign licensesByImage key",
+      doc: {
+        ...sidecarDoc(
+          [
+            {
+              ...ROW,
+              images: ["a-slim", "a-slim"],
+              licensesByImage: { "a-slim": [APACHE], "b-full": [OPENSSL] },
+            },
+          ],
+          TWO,
+        ),
+        formatVersion: 3,
+      },
+    },
+    {
+      label: "a format-2 row listing one image twice",
+      doc: sidecarDoc([{ ...ROW, images: ["a-slim", "a-slim"], licenses: [APACHE] }], TWO),
+    },
   ];
 
   for (const { label, doc } of MALFORMED) {
@@ -1383,6 +1419,25 @@ describe("per-image license claims from the committed docker.sbom.json", () => {
       await expect(buildAgainst(root)).rejects.toThrow(/re-run the docker scan/);
     });
   }
+
+  test("a malformed row is named in the failure", async () => {
+    const { root } = makeScannableTree();
+
+    writeSidecar(
+      root,
+      sidecarDoc(
+        [
+          { ...sidecarComponent("only-a"), images: ["img-a"] },
+          { ...sidecarComponent("twice"), images: ["img-a", "img-a"] },
+        ],
+        [IMG_A],
+      ),
+    );
+
+    await expect(buildAgainst(root)).rejects.toThrow(
+      /components\[1\] "twice@1\.0\.0"\) — re-run the docker scan/,
+    );
+  });
 });
 
 // ===========================================================================

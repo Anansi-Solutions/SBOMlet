@@ -195,9 +195,10 @@ function narrowSidecarImages(value: unknown): Array<{ image: string; source: str
 }
 
 /**
- * A row's `images` → its memberships, or undefined when missing, empty, or naming anything but an
- * image listed in dockerImages. An EMPTY membership is a flaw too - it would drop the component
- * from every fan-out input, and dropped inventory is the one failure this reader must never allow.
+ * A row's `images` → its memberships, or undefined when missing, empty, repeating an image, or
+ * naming anything but an image listed in dockerImages. An EMPTY membership is a flaw too - it would
+ * drop the component from every fan-out input, and dropped inventory is the one failure this reader
+ * must never allow.
  */
 function narrowMemberships(value: unknown, listed: ReadonlySet<string>): string[] | undefined {
   if (!Array.isArray(value) || value.length === 0) {
@@ -207,7 +208,7 @@ function narrowMemberships(value: unknown, listed: ReadonlySet<string>): string[
   const memberships: string[] = [];
 
   for (const entry of value) {
-    if (!isNonEmptyString(entry) || !listed.has(entry)) {
+    if (!isNonEmptyString(entry) || !listed.has(entry) || memberships.includes(entry)) {
       return undefined;
     }
 
@@ -230,8 +231,9 @@ function narrowClaimsByImage(
   }
 
   const byImage = value as Record<string, unknown>;
+  const keys = Object.keys(byImage);
 
-  if (Object.keys(byImage).length !== images.length) {
+  if (keys.length !== images.length || !keys.every((key) => images.includes(key))) {
     return undefined;
   }
 
@@ -284,25 +286,39 @@ function narrowSidecarComponent(
   return { row, images, claimsByImage };
 }
 
+/** A flawed row as an error names it: its index, plus `"name@version"` when both are strings. */
+function sidecarRowLabel(raw: unknown, index: number): string {
+  const { name, version } = (typeof raw === "object" && raw !== null ? raw : {}) as {
+    name?: unknown;
+    version?: unknown;
+  };
+  const position = `components[${index}]`;
+
+  return typeof name === "string" && typeof version === "string"
+    ? `${position} ${JSON.stringify(sanitizeForLog(`${name}@${version}`))}`
+    : position;
+}
+
 /**
- * components → attributed components, or undefined when it is not an array or any row is flawed.
+ * components → attributed components, or the label of the first flawed row; undefined when it is
+ * not an array.
  */
 function narrowSidecarComponents(
   value: unknown,
   listed: ReadonlySet<string>,
   format: SidecarFormat,
-): AttributedSidecarComponent[] | undefined {
+): AttributedSidecarComponent[] | { flawedRow: string } | undefined {
   if (!Array.isArray(value)) {
     return undefined;
   }
 
   const components: AttributedSidecarComponent[] = [];
 
-  for (const raw of value) {
+  for (const [index, raw] of value.entries()) {
     const component = narrowSidecarComponent(raw, listed, format);
 
     if (component === undefined) {
-      return undefined;
+      return { flawedRow: sidecarRowLabel(raw, index) };
     }
 
     components.push(component);
@@ -324,27 +340,27 @@ function componentForImage(
 
 /**
  * All-or-nothing narrowing: the typed sidecar when EVERY component and EVERY dockerImages entry
- * narrows cleanly, undefined otherwise - the caller then fails the whole run, never building a
- * partial per-image model.
+ * narrows cleanly, otherwise the first flawed row's label (undefined for a document-level flaw)
+ * - the caller then fails the whole run, never building a partial per-image model.
  */
 function narrowAttributedSidecar(
   doc: Record<string, unknown>,
   format: SidecarFormat,
-): AttributedSidecar | undefined {
+): AttributedSidecar | { flawedRow: string | undefined } {
   const images = narrowSidecarImages(doc["dockerImages"]);
 
   if (images === undefined) {
-    return undefined;
+    return { flawedRow: undefined };
   }
 
   const listed = new Set(images.map((entry) => entry.image));
   const components = narrowSidecarComponents(doc["components"], listed, format);
 
   if (components === undefined) {
-    return undefined;
+    return { flawedRow: undefined };
   }
 
-  return { doc, components, images };
+  return Array.isArray(components) ? { doc, components, images } : components;
 }
 
 /** The committed file's format: 2 when `formatVersion` is absent, undefined when unreadable. */
@@ -422,9 +438,11 @@ function readCommittedDockerSbom(opts: GenerateOptions, dir: string): CollectedS
 
   const attributed = narrowAttributedSidecar(doc, format);
 
-  if (attributed === undefined) {
+  if ("flawedRow" in attributed) {
+    const where = attributed.flawedRow === undefined ? "" : ` (${attributed.flawedRow})`;
+
     throw new Error(
-      `${osSbomPath} is not a per-image attributed docker SBOM — ` +
+      `${osSbomPath} is not a per-image attributed docker SBOM${where} — ` +
         `re-run the docker scan (task generate DOCKER=1) to regenerate it`,
     );
   }
