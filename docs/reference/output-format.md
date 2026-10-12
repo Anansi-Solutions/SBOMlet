@@ -585,9 +585,9 @@ CycloneDX-shaped document holding `bomFormat`, `specVersion`, `formatVersion`
 component carries an `images` list naming the scanned image(s) it was found in,
 and `licensesByImage`, the license claims syft found for it in each of those
 images, keyed by image (an empty list for an image that carried none). A file
-without `formatVersion` is format 2, written by earlier versions, with one
-combined `licenses` list per component instead; it is still read, and the next
-scan rewrites it. Each `dockerImages` entry pins a
+without `formatVersion`, or with `formatVersion` 2, is format 2, written by
+earlier versions, with one combined `licenses` list per component instead; it is
+still read, and the next scan rewrites it. Each `dockerImages` entry pins a
 scanned image to its content digest (empty for a locally built, never-pushed
 image, which has none) and records its `source` — the Dockerfile's repo-relative
 path for a built image, the reference as requested for an `--image` scan —

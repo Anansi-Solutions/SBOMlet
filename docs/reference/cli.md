@@ -419,10 +419,10 @@ a disagreement on its own
 ([output-format.md](./output-format.md#assessment-conflicts)).
 
 The file records its format as `formatVersion`; this version writes format 3,
-which keeps each image's claims apart. A file without `formatVersion` is format
-2, written by earlier versions with one combined claim list per package. It keeps
-working: `generate` and `check` read it and give every image that combined list,
-so it cannot show images disagreeing. The next `generate-docker-sbom` run writes
+which keeps each image's claims apart. A file without `formatVersion`, or with
+`formatVersion` 2, is format 2, written by earlier versions with one combined
+claim list per package. It keeps working: `generate` and `check` read it and give
+every image that combined list, so it cannot show images disagreeing. The next `generate-docker-sbom` run writes
 format 3; commit the rewritten file. A `formatVersion` this version does not know
 fails the run, naming the regenerate remedy.
 

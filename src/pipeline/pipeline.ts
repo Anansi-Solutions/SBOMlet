@@ -133,8 +133,8 @@ export interface BuiltOutputs {
 }
 
 /**
- * The docker SBOM formats this version reads: 2, a file with no `formatVersion` whose rows carry
- * one `licenses` array shared by every member image, and the current per-image format.
+ * The docker SBOM formats this version reads: 2, a file with no `formatVersion` (or `2`) whose rows
+ * carry one `licenses` array shared by every member image, and the current per-image format.
  */
 type SidecarFormat = 2 | typeof DOCKER_SBOM_FORMAT_VERSION;
 
@@ -363,9 +363,11 @@ function narrowAttributedSidecar(
   return Array.isArray(components) ? { doc, components, images } : components;
 }
 
-/** The committed file's format: 2 when `formatVersion` is absent, undefined when unreadable. */
+/**
+ * The committed file's format: 2 when `formatVersion` is absent or 2, undefined when unreadable.
+ */
 function sidecarFormatOf(formatVersion: unknown): SidecarFormat | undefined {
-  if (formatVersion === undefined) {
+  if (formatVersion === undefined || formatVersion === 2) {
     return 2;
   }
 
@@ -391,8 +393,8 @@ function sidecarFormatOf(formatVersion: unknown): SidecarFormat | undefined {
  *
  * @remarks
  * Format 3 hands each image exactly its own claims, so images that disagree reach the merge as a
- * cross-image conflict. A format-2 file (no `formatVersion`) is still read: its one claim set per
- * row goes to every member image, so it cannot show such a conflict. The next
+ * cross-image conflict. A format-2 file (no `formatVersion`, or `2`) is still read: its one claim
+ * set per row goes to every member image, so it cannot show such a conflict. The next
  * `generate-docker-sbom` run rewrites it as format 3. Any other `formatVersion` fails the run.
  */
 function readCommittedDockerSbom(opts: GenerateOptions, dir: string): CollectedSbom[] | undefined {

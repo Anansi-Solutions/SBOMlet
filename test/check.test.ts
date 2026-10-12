@@ -1307,6 +1307,28 @@ describe("per-image license claims from the committed docker.sbom.json", () => {
     expect(outputs.licensesMd).not.toContain("### Cross-image license claims");
   });
 
+  test("an explicit formatVersion 2 reads as format 2", async () => {
+    const { root } = makeScannableTree();
+
+    writeSidecar(root, {
+      ...sidecarDoc(
+        [{ ...LIBSSL3, images: ["a-slim", "b-full"], licenses: [APACHE, OPENSSL] }],
+        [IMG_SLIM, IMG_FULL],
+      ),
+      formatVersion: 2,
+    });
+    const policyPath = writePolicy(root, CROSS_IMAGE_POLICY);
+
+    const { outputs } = await buildAgainst(root, policyPath);
+    const libssl = outputs.model.packages.find((p) => p.purl === LIBSSL3.purl);
+
+    expect(libssl?.occurrences.map((o) => o.target)).toEqual([
+      asTargetIdentity("docker:a-slim"),
+      asTargetIdentity("docker:b-full"),
+    ]);
+    expect(libsslConflicts(outputs.verdicts)).toEqual([]);
+  });
+
   test("a format-3 image that declared nothing is not a conflict against one claiming image", async () => {
     const { root } = makeScannableTree();
 
