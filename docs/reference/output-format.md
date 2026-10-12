@@ -385,8 +385,9 @@ diverging docker occurrence and that image's own declared claims:
 
 A row needs two images whose own claim sets differ. An image that declared no
 license for the package does not by itself disagree with one that did; it is
-listed as `(no declared license)` when two other images disagree. The per-image
-claims come from a format-3 `docker.sbom.json`. A format-2 file, written by
+listed as `(no declared license)` when two other images disagree. Claims compare
+by license value, not by CycloneDX shape: `MIT` given as a license id, a license
+name, or an expression is the same claim. The per-image claims come from a format-3 `docker.sbom.json`. A format-2 file, written by
 earlier versions, holds one combined claim list per package that every image
 reads, so it never reaches this sub-table; the next `generate-docker-sbom` run
 rewrites it as format 3 ([cli.md](./cli.md#generate-docker-sbom)).

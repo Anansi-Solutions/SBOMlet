@@ -2347,6 +2347,36 @@ describe("mergeSboms — cross-image claim divergence (dockerClaimDivergence)", 
       ],
     });
   });
+
+  test("the same license in three claim shapes across images is NOT a divergence", () => {
+    const shapes = [
+      { license: { id: "MIT" } },
+      { expression: "MIT" },
+      { license: { name: "MIT" } },
+    ];
+    const model = mergeSboms(
+      shapes.map((claim, index) => ({
+        sbom: {
+          bomFormat: "CycloneDX",
+          specVersion: "1.6",
+          components: [
+            {
+              type: "library",
+              name: "busybox",
+              version: "1.37.0-r20",
+              purl: SHARED,
+              licenses: [claim],
+            },
+          ],
+        },
+        targetIdentity: asTargetIdentity(`docker:image-${index}`),
+        scope: "os",
+      })),
+    );
+    const pkg = model.packages.find((p) => p.purl === SHARED);
+
+    expect(pkg?.dockerClaimDivergence).toBeUndefined();
+  });
 });
 
 const GRAPH_TARGET = asTargetIdentity("apps/web");

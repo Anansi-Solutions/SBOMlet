@@ -1319,6 +1319,28 @@ describe("per-image license claims from the committed docker.sbom.json", () => {
     expect(outputs.licensesMd).not.toContain("### Cross-image license claims");
   });
 
+  test("format-3 images declaring one license in different claim shapes are not a conflict", async () => {
+    const { root } = makeScannableTree();
+
+    writeSidecar(
+      root,
+      perImageSidecar(
+        {
+          "a-slim": [{ license: { id: "MIT" } }],
+          "b-full": [{ expression: "MIT" }],
+          "c-alt": [{ license: { name: "MIT" } }],
+        },
+        [IMG_SLIM, IMG_FULL, IMG_ALT],
+      ),
+    );
+    const policyPath = writePolicy(root, CROSS_IMAGE_POLICY);
+
+    const { outputs } = await buildAgainst(root, policyPath);
+
+    expect(libsslConflicts(outputs.verdicts)).toEqual([]);
+    expect(outputs.licensesMd).not.toContain("### Cross-image license claims");
+  });
+
   const ROW = { ...LIBSSL3, images: ["a-slim", "b-full"] };
   const TWO = [IMG_SLIM, IMG_FULL];
   const MALFORMED: ReadonlyArray<{ label: string; doc: unknown }> = [
