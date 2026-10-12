@@ -26,7 +26,13 @@ import { ArrayOrAbsent, recordOf } from "./record";
  * the rest of this file uses for wrong-typed fields.
  */
 const SbomPurl = type("string").pipe((value) => tryAsPurl(value));
-const SbomRawLicense = type("string").pipe((value) => asRawLicense(value));
+
+/**
+ * A license-claim string; a blank one fails the narrow, so its claim shape is skipped as absent.
+ */
+const SbomRawLicense = type("string")
+  .narrow((value) => value.trim() !== "")
+  .pipe((value) => asRawLicense(value));
 
 /**
  * Whole-document subset: ONLY the components array is a document-level drop gate. The root purl is

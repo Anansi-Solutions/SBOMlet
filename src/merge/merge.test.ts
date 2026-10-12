@@ -165,6 +165,51 @@ describe("mergeSboms — purl-keyed dedup and root exclusion", () => {
     ]);
   });
 
+  const BLANK_CLAIMS: ReadonlyArray<{ label: string; claim: unknown }> = [
+    { label: "an empty expression", claim: { expression: "" } },
+    { label: "an empty license id", claim: { license: { id: "" } } },
+    { label: "an empty license name", claim: { license: { name: "" } } },
+    { label: "a whitespace-only expression", claim: { expression: "   " } },
+  ];
+
+  for (const { label, claim } of BLANK_CLAIMS) {
+    test(`${label} is skipped as an absent claim`, () => {
+      const doc = {
+        components: [
+          {
+            name: "blank-pkg",
+            version: "1.0.0",
+            purl: asPurl("pkg:npm/blank-pkg@1.0.0"),
+            licenses: [claim, { license: { id: "MIT" } }],
+          },
+        ],
+      };
+      const model = mergeSboms([{ sbom: doc, targetIdentity: SYNTHETIC_TARGET }]);
+
+      expect(model.packages[0]?.licenseClaims).toEqual([
+        { raw: asRawLicense("MIT"), kind: "spdx-id", source: "generator" },
+      ]);
+    });
+  }
+
+  test("an empty expression falls through to the entry's license id", () => {
+    const doc = {
+      components: [
+        {
+          name: "blank-pkg",
+          version: "1.0.0",
+          purl: asPurl("pkg:npm/blank-pkg@1.0.0"),
+          licenses: [{ expression: "", license: { id: "MIT" } }],
+        },
+      ],
+    };
+    const model = mergeSboms([{ sbom: doc, targetIdentity: SYNTHETIC_TARGET }]);
+
+    expect(model.packages[0]?.licenseClaims).toEqual([
+      { raw: asRawLicense("MIT"), kind: "spdx-id", source: "generator" },
+    ]);
+  });
+
   test("the same document merged for two targets does not duplicate claims", () => {
     // The multi-target merge shape: every shared dependency with a known
     // license would otherwise render "MIT, MIT".
