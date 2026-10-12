@@ -365,10 +365,14 @@ diverging docker occurrence and that image's own declared claims:
 | Package | the package name |
 | Claims by image | every docker occurrence, semicolon-joined as `<target>: <claims>`; an occurrence that declared no claim at all reads `(no declared license)` |
 
-This sub-table is not reached from the committed `docker.sbom.json`: `generate-docker-sbom`
-stores one unioned claim set per package, so every image's occurrence carries the same
-claims. Images that disagree are reported when the SBOM is generated, as a `docker:` line on
-stderr ([cli.md](./cli.md#generate-docker-sbom)).
+A row needs two images whose own claim sets differ. An image that declared no
+license for the package does not by itself disagree with one that did; it is
+listed as `(no declared license)` when two other images disagree. Claims compare
+by license value, not by CycloneDX shape: `MIT` given as a license id, a license
+name, or an expression is the same claim. The per-image claims come from a format-3 `docker.sbom.json`. A format-2 file, written by
+earlier versions, holds one combined claim list per package that every image
+reads, so it never reaches this sub-table; the next `generate-docker-sbom` run
+rewrites it as format 3 ([cli.md](./cli.md#generate-docker-sbom)).
 
 Every comparison this report and the policy gate make — ScanCode vs quick
 check, the cross-image claim sets, and a `[[clarify]]` entry against its
@@ -559,9 +563,15 @@ when a fetch resolves a new licence, so a warm run rewrites identical bytes.
 [`scope:os`](../glossary.md#scope-app-and-os) merge input. It holds the full
 contents of each scanned image: every component the image carries, OS and
 application packages alike. It is a minimal
-CycloneDX-shaped document holding `bomFormat`, `specVersion`, `components`, and a
-`dockerImages` array, and nothing else. Each component carries an `images` list
-naming the scanned image(s) it was found in. Each `dockerImages` entry pins a
+CycloneDX-shaped document holding `bomFormat`, `specVersion`, `formatVersion`,
+`components`, and a `dockerImages` array, and nothing else. This version writes
+format 3 and reads formats 2 and 3. In format 3, each component carries an
+`images` list naming the scanned image(s) it was found in, and
+`licensesByImage`, the license claims syft found for it in each of those images,
+keyed by image (an empty list for an image that carried none). A file without
+`formatVersion`, or with `formatVersion` 2, is format 2, written by earlier
+versions, with one combined `licenses` list per component instead; it is still
+read, and the next scan rewrites it. Each `dockerImages` entry pins a
 scanned image to its content digest (empty for a locally built, never-pushed
 image, which has none) and records its `source` — the Dockerfile's repo-relative
 path for a built image, the reference as requested for an `--image` scan —

@@ -20,7 +20,8 @@ import * as cdxgenModule from "../src/collectors/cdxgen";
 import { imageTag } from "../src/collectors/dockerBuild";
 import { exitCodeFor, runCheck } from "../src/gate/check";
 import { buildOutputs, runGenerate } from "../src/pipeline/pipeline";
-import { asPurl } from "../src/model/dependencies";
+import { asPurl, type Verdict } from "../src/model/dependencies";
+import { asTargetIdentity } from "./brandTestSupport";
 
 /** Original exports captured BEFORE any mock.module call (restore target). */
 const REAL_CDXGEN = { ...cdxgenModule };
@@ -1196,6 +1197,290 @@ describe("sidecar fan-out and the malformed-sidecar failure", () => {
 
     expect(second.outputs.licensesMd).toBe(first.outputs.licensesMd);
     expect(second.outputs.noticesMd).toBe(first.outputs.noticesMd);
+  });
+});
+
+// ===========================================================================
+// Per-image license claims. A format-3 docker.sbom.json stores each image's
+// own claims (licensesByImage), so the fan-out hands every image exactly what
+// syft found in it and the merge can see images disagree. A format-2 file
+// (no formatVersion, one unioned licenses array per row) cannot say which
+// image carried which claim, so every image reads the same set.
+// ===========================================================================
+
+const LIBSSL3 = {
+  type: "library",
+  name: "libssl3",
+  version: "3.0.15-1~deb12u1",
+  purl: "pkg:deb/debian/libssl3@3.0.15-1~deb12u1?arch=amd64&distro=debian-12",
+};
+const IMG_SLIM = { image: "a-slim", digest: "", source: "a-slim" };
+const IMG_FULL = { image: "b-full", digest: "", source: "b-full" };
+const IMG_ALT = { image: "c-alt", digest: "", source: "c-alt" };
+const APACHE = { expression: "Apache-2.0" };
+const OPENSSL = { license: { id: "OpenSSL" } };
+
+/** A format-3 sidecar over the given images, one libssl3 row carrying per-image claims. */
+function perImageSidecar(
+  licensesByImage: Record<string, readonly unknown[]>,
+  dockerImages: ReadonlyArray<Record<string, unknown>>,
+): Record<string, unknown> {
+  return {
+    ...sidecarDoc(
+      [{ ...LIBSSL3, images: Object.keys(licensesByImage), licensesByImage }],
+      dockerImages,
+    ),
+    formatVersion: 3,
+  };
+}
+
+const CROSS_IMAGE_POLICY = ["[unknown]", 'handling = "warn"', ""].join("\n");
+
+describe("per-image license claims from the committed docker.sbom.json", () => {
+  beforeAll(() => {
+    mock.module("../src/collectors/cdxgen", () => ({
+      ...REAL_CDXGEN,
+      collectWithCdxgen: fakeScanWithCdxgen,
+    }));
+  });
+  afterAll(() => {
+    mock.module("../src/collectors/cdxgen", () => REAL_CDXGEN);
+  });
+
+  /** The cross-image conflict verdicts for libssl3, one per occurrence. */
+  function libsslConflicts(verdicts: readonly Verdict[] | undefined): Verdict[] {
+    return (verdicts ?? []).filter(
+      (v) => v.purl === LIBSSL3.purl && v.rule === "conflict:cross-image-claims",
+    );
+  }
+
+  test("a format-3 file whose images declare different licenses fails conflict:cross-image-claims and renders every image's own claims", async () => {
+    const { root } = makeScannableTree();
+
+    writeSidecar(
+      root,
+      perImageSidecar({ "a-slim": [], "b-full": [APACHE], "c-alt": [OPENSSL] }, [
+        IMG_SLIM,
+        IMG_FULL,
+        IMG_ALT,
+      ]),
+    );
+    const policyPath = writePolicy(root, CROSS_IMAGE_POLICY);
+
+    const { outputs, stderr } = await buildAgainst(root, policyPath);
+    const conflicts = libsslConflicts(outputs.verdicts);
+
+    expect(conflicts.map((v) => v.occurrenceTarget)).toEqual([
+      asTargetIdentity("docker:a-slim"),
+      asTargetIdentity("docker:b-full"),
+      asTargetIdentity("docker:c-alt"),
+    ]);
+    expect(conflicts.every((v) => v.status === "fail")).toBe(true);
+    expect(stderr).toContain("policy: 3 assessment conflict(s)");
+
+    const md = outputs.licensesMd;
+    const section = md.slice(md.indexOf("### Cross-image license claims"));
+
+    expect(md).toContain("### Cross-image license claims");
+    // The slim image carried no claim: it is shown without one, not with the full image's.
+    expect(section).toContain(
+      "| libssl3 | docker:a-slim: (no declared license); docker:b-full: Apache-2.0; docker:c-alt: OpenSSL |",
+    );
+  });
+
+  test("a format-2 file with the same package reads one unioned claim set: no conflict", async () => {
+    const { root } = makeScannableTree();
+
+    writeSidecar(
+      root,
+      sidecarDoc(
+        [{ ...LIBSSL3, images: ["a-slim", "b-full", "c-alt"], licenses: [APACHE, OPENSSL] }],
+        [IMG_SLIM, IMG_FULL, IMG_ALT],
+      ),
+    );
+    const policyPath = writePolicy(root, CROSS_IMAGE_POLICY);
+
+    const { outputs, stderr } = await buildAgainst(root, policyPath);
+
+    expect(libsslConflicts(outputs.verdicts)).toEqual([]);
+    expect(stderr).not.toContain("assessment conflict(s)");
+    expect(outputs.licensesMd).not.toContain("### Cross-image license claims");
+  });
+
+  test("an explicit formatVersion 2 reads as format 2", async () => {
+    const { root } = makeScannableTree();
+
+    writeSidecar(root, {
+      ...sidecarDoc(
+        [{ ...LIBSSL3, images: ["a-slim", "b-full"], licenses: [APACHE, OPENSSL] }],
+        [IMG_SLIM, IMG_FULL],
+      ),
+      formatVersion: 2,
+    });
+    const policyPath = writePolicy(root, CROSS_IMAGE_POLICY);
+
+    const { outputs } = await buildAgainst(root, policyPath);
+    const libssl = outputs.model.packages.find((p) => p.purl === LIBSSL3.purl);
+
+    expect(libssl?.occurrences.map((o) => o.target)).toEqual([
+      asTargetIdentity("docker:a-slim"),
+      asTargetIdentity("docker:b-full"),
+    ]);
+    expect(libsslConflicts(outputs.verdicts)).toEqual([]);
+  });
+
+  test("a format-3 image that declared nothing is not a conflict against one claiming image", async () => {
+    const { root } = makeScannableTree();
+
+    writeSidecar(root, perImageSidecar({ "a-slim": [], "b-full": [APACHE] }, [IMG_SLIM, IMG_FULL]));
+    const policyPath = writePolicy(root, CROSS_IMAGE_POLICY);
+
+    const { outputs } = await buildAgainst(root, policyPath);
+
+    expect(libsslConflicts(outputs.verdicts)).toEqual([]);
+    expect(outputs.licensesMd).not.toContain("### Cross-image license claims");
+  });
+
+  test("format-3 images declaring one license in different claim shapes are not a conflict", async () => {
+    const { root } = makeScannableTree();
+
+    writeSidecar(
+      root,
+      perImageSidecar(
+        {
+          "a-slim": [{ license: { id: "MIT" } }],
+          "b-full": [{ expression: "MIT" }],
+          "c-alt": [{ license: { name: "MIT" } }],
+        },
+        [IMG_SLIM, IMG_FULL, IMG_ALT],
+      ),
+    );
+    const policyPath = writePolicy(root, CROSS_IMAGE_POLICY);
+
+    const { outputs } = await buildAgainst(root, policyPath);
+
+    expect(libsslConflicts(outputs.verdicts)).toEqual([]);
+    expect(outputs.licensesMd).not.toContain("### Cross-image license claims");
+  });
+
+  const ROW = { ...LIBSSL3, images: ["a-slim", "b-full"] };
+  const TWO = [IMG_SLIM, IMG_FULL];
+  const MALFORMED: ReadonlyArray<{ label: string; doc: unknown }> = [
+    {
+      label: "an unknown formatVersion",
+      doc: { ...perImageSidecar({ "a-slim": [], "b-full": [] }, TWO), formatVersion: 4 },
+    },
+    {
+      label: "a non-numeric formatVersion",
+      doc: { ...perImageSidecar({ "a-slim": [], "b-full": [] }, TWO), formatVersion: "3" },
+    },
+    {
+      label: "a format-3 row without licensesByImage",
+      doc: { ...sidecarDoc([ROW], TWO), formatVersion: 3 },
+    },
+    {
+      label: "a format-3 row still carrying a unioned licenses array",
+      doc: {
+        ...sidecarDoc(
+          [{ ...ROW, licenses: [APACHE], licensesByImage: { "a-slim": [], "b-full": [APACHE] } }],
+          TWO,
+        ),
+        formatVersion: 3,
+      },
+    },
+    {
+      label: "a format-3 row whose licensesByImage misses a member image",
+      doc: {
+        ...sidecarDoc([{ ...ROW, licensesByImage: { "b-full": [APACHE] } }], TWO),
+        formatVersion: 3,
+      },
+    },
+    {
+      label: "a format-3 row whose licensesByImage names an image outside its membership",
+      doc: {
+        ...sidecarDoc(
+          [{ ...ROW, licensesByImage: { "a-slim": [], "b-full": [], "c-alt": [] } }],
+          TWO,
+        ),
+        formatVersion: 3,
+      },
+    },
+    {
+      label: "a format-3 row whose per-image claims are not an array",
+      doc: {
+        ...sidecarDoc([{ ...ROW, licensesByImage: { "a-slim": [], "b-full": APACHE } }], TWO),
+        formatVersion: 3,
+      },
+    },
+    {
+      label: "a format-2 row carrying licensesByImage",
+      doc: sidecarDoc([{ ...ROW, licensesByImage: { "a-slim": [], "b-full": [APACHE] } }], TWO),
+    },
+    {
+      label: "a format-3 row listing one image twice",
+      doc: {
+        ...sidecarDoc(
+          [
+            {
+              ...ROW,
+              images: ["a-slim", "a-slim"],
+              licensesByImage: { "a-slim": [], "b-full": [] },
+            },
+          ],
+          TWO,
+        ),
+        formatVersion: 3,
+      },
+    },
+    {
+      label: "a format-3 row listing one image twice to admit a foreign licensesByImage key",
+      doc: {
+        ...sidecarDoc(
+          [
+            {
+              ...ROW,
+              images: ["a-slim", "a-slim"],
+              licensesByImage: { "a-slim": [APACHE], "b-full": [OPENSSL] },
+            },
+          ],
+          TWO,
+        ),
+        formatVersion: 3,
+      },
+    },
+    {
+      label: "a format-2 row listing one image twice",
+      doc: sidecarDoc([{ ...ROW, images: ["a-slim", "a-slim"], licenses: [APACHE] }], TWO),
+    },
+  ];
+
+  for (const { label, doc } of MALFORMED) {
+    test(`${label} fails LOUDLY naming the regenerate remedy`, async () => {
+      const { root } = makeScannableTree();
+
+      writeSidecar(root, doc);
+
+      await expect(buildAgainst(root)).rejects.toThrow(/re-run the docker scan/);
+    });
+  }
+
+  test("a malformed row is named in the failure", async () => {
+    const { root } = makeScannableTree();
+
+    writeSidecar(
+      root,
+      sidecarDoc(
+        [
+          { ...sidecarComponent("only-a"), images: ["img-a"] },
+          { ...sidecarComponent("twice"), images: ["img-a", "img-a"] },
+        ],
+        [IMG_A],
+      ),
+    );
+
+    await expect(buildAgainst(root)).rejects.toThrow(
+      /components\[1\] "twice@1\.0\.0"\) — re-run the docker scan/,
+    );
   });
 });
 

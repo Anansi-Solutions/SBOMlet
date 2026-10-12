@@ -484,16 +484,17 @@ function recordDockerOccurrenceClaims(
 }
 
 /**
- * Comparison-only key for the divergence claim SET, spelling-blind on the expression component:
+ * Comparison-only key for the divergence claim SET, blind to spelling and to claim shape:
  * canonicalizeExpression normalizes claim.raw before it joins the key, so two images that declare
  * the SAME compound license reordered or reduced differently (`MIT AND CC0-1.0` vs
- * `CC0-1.0 AND MIT`) are the same set member, never a spurious divergence. This key exists only for
- * {@link crossImageClaimDivergence}'s set-equality check - the recorded/rendered `byTarget` claims
- * below still come from each claim's own `raw`, so the marker always shows what each image actually
- * said, never the canonicalized form.
+ * `CC0-1.0 AND MIT`) are the same set member, never a spurious divergence; claim.kind is left out,
+ * so `MIT` as a license id, a license name, or an expression is one member too. This key exists
+ * only for {@link crossImageClaimDivergence}'s set-equality check - the recorded/rendered
+ * `byTarget` claims below still come from each claim's own `raw`, so the marker always shows what
+ * each image actually said, never the canonicalized form.
  */
 function canonicalClaimKey(claim: LicenseClaim): string {
-  return `${claim.kind}\0${claim.source}\0${canonicalizeExpression(claim.raw)}`;
+  return `${claim.source}\0${canonicalizeExpression(claim.raw)}`;
 }
 
 /** Order/duplicate-insensitive canonical key for one occurrence's claim SET. */

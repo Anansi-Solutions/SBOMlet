@@ -354,10 +354,7 @@ function osLicenseValue(license: OsLicense): string {
   return "id" in license.license ? license.license.id : license.license.name;
 }
 
-/**
- * The stderr line for a purl whose claims differ across images. The committed row carries the union
- * of their claims, so this line is the only record of which image carried which.
- */
+/** The stderr line for a purl whose claims differ across images, naming each image's claims. */
 function claimDivergenceLine({ purl, claimsByImage }: OsClaimDivergence): string {
   const perImage = claimsByImage.map(({ image, licenses }) => {
     const values = licenses.length > 0 ? licenses.map(osLicenseValue).join(", ") : "none";

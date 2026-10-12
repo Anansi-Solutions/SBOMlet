@@ -197,7 +197,8 @@ downstream.
 
 `kind` is which of the three CycloneDX license shapes the value came from: an
 SPDX expression, an SPDX id, or a free-text name. The three shapes are tried in
-that order and the first that narrows wins.
+that order and the first that narrows wins. A blank value does not narrow, so an
+entry whose only value is blank carries no claim.
 
 `source` records provenance, for auditability. Collectors emit `"generator"`.
 The enrichment stage appends `"registry"` when a registry response supplies a

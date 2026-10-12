@@ -67,10 +67,10 @@ acceptances reviewed for an image.
   visible conflict, failing the gate as `conflict:cross-image-claims` until a
   `[[clarify]]` records the decision — the same model as the ScanCode
   assessment conflict. Workspace suppression is not extended to image
-  identities. In practice that conflict does not fire from the committed
-  `docker.sbom.json`: `generate-docker-sbom` stores one unioned claim set per
-  package, so every image's occurrence reads the same claims, and a per-image
-  difference is reported at scan time as a `docker:` stderr line instead.
+  identities. The conflict needs each image's own claims: a format-3
+  `docker.sbom.json` stores them per image, while a format-2 file, written by
+  earlier versions, holds one combined claim list per package that every image
+  reads, so it cannot raise the conflict until `generate-docker-sbom` rewrites it.
 - **Bad / cost:** consumers regenerate once — every docker row's Used-in cell
   and every docker-scoped `where` entry changes — and until they do, generate
   and check fail with the remedy rather than proceed without docker rows.
