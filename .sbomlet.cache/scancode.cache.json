@@ -2837,7 +2837,7 @@
       "copyrights": [
         "Copyright (c) Sindre Sorhus <sindresorhus@gmail.com> (https://sindresorhus.com)"
       ],
-      "license": "MIT AND CC0-1.0",
+      "license": "CC0-1.0 AND MIT",
       "scannedAt": "2026-08-01T06:02:29.932Z",
       "via": "scancode-toolkit@32.5.0/manifest"
     },
